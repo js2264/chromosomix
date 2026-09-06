@@ -32,7 +32,31 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import type { AnnotationEntry, BaseRegion, FeatureSet } from '../annotations/types'
+import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
+import { ReadCache } from '../annotations/reads'
+import {
+  packPile,
+  pileBands,
+  rowsAcross,
+  type PileLayout,
+  drawReads,
+  pileDetail,
+  READ_ROW,
+  READ_ROW_GAP,
+  readAt,
+  readColoursFor,
+  readRungFor,
+  rowsFor,
+  type ReadRung,
+} from '../render/alignments'
+import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
+import type {
+  AnnotationEntry,
+  BaseRegion,
+  FeatureSet,
+  ReadPile,
+  ReadWindow,
+} from '../annotations/types'
 import {
   assemblyAxis,
   findContig,
@@ -105,6 +129,7 @@ import {
   resolveLimits,
   scaledTo,
   type PixelProfile,
+  laneNote,
 } from '../render/tracks'
 import { button, el, fmt } from './dom'
 import { GroupsCard } from './GroupsCard'
@@ -118,6 +143,8 @@ import {
 import { LaneEditor } from './LaneEditor'
 import { Modal } from './Modal'
 import { openFeatureDialog } from './FeatureDialog'
+import { openReadDialog } from './ReadDialog'
+import { FLAG } from '../annotations/bam/format'
 import {
   NAME_COLUMN_DEFAULT,
   clampNameColumn,
@@ -261,6 +288,29 @@ interface Lane {
    * from the frame itself (`basesAreDrawable`).
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
+  /**
+   * The reads to draw, for a pile lane zoomed in far enough (§8.13).
+   *
+   * Empty rather than falling back to anything when the lane is too wide for a
+   * read to be a shape: a pile lane's only picture is the pile, and the depth a
+   * reader wants out here is the row beside this one.
+   *
+   * The rung is carried alongside so the paint and the hit test cannot come to
+   * different conclusions about which picture is on screen.
+   */
+  reads: Array<{
+    entry: AnnotationEntry
+    window: ReadWindow
+    rung: ReadRung
+    /**
+     * Where every read of the window sits, packed for the window on screen.
+     *
+     * One layout per pile, sharing one row space — see `packPile`. Resolved
+     * here so the paint and the hit test use the same one, and so the caption
+     * can say how much of the pile did not fit.
+     */
+    placed: PileLayout[]
+  }>
 }
 
 export class BrowserView {
@@ -310,6 +360,8 @@ export class BrowserView {
   private readonly exportStatus = el('span', { class: 'clip-note export-note' })
   private readonly cache: SampleCache
   private readonly bases: BaseCache
+  /** The reads each alignment lane is drawing, kept between frames. */
+  private readonly piles: ReadCache
   private readonly unsubscribes: Array<() => void> = []
   private readonly observer: ResizeObserver | null
 
@@ -320,6 +372,18 @@ export class BrowserView {
   private lanes: Lane[] = []
   /** Feature layouts from the last draw, for hit testing without a re-layout. */
   private readonly layouts = new Map<string, { frame: LaneFrame; layout: ReturnType<typeof layoutFeatures> }>()
+  /**
+   * The band each pile lane's reads were drawn in, for the same reason.
+   *
+   * The pile sits under the lane's name strip, and recomputing that split at
+   * click time would be the geometry written twice, which §8.4 exists to
+   * forbid. What is kept is the frame the paint actually used, so a click
+   * cannot land on a different row from the one under the pointer.
+   */
+  private readonly piled = new Map<
+    string,
+    { frame: LaneFrame; window: ReadWindow; placed: PileLayout[] }
+  >()
   private hover: { x: number; y: number } | null = null
   /** The lane whose lower border the pointer is on, so the grip can be drawn. */
   private gripping: string | null = null
@@ -592,6 +656,7 @@ export class BrowserView {
 
     this.cache = new SampleCache(props.client, () => this.schedule())
     this.bases = new BaseCache(props.client, () => this.schedule())
+    this.piles = new ReadCache(props.client, () => this.schedule())
     this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
     this.unsubscribes.push(
@@ -640,6 +705,7 @@ export class BrowserView {
     this.observer?.disconnect()
     this.cache.destroy()
     this.bases.destroy()
+    this.piles.destroy()
     setReadout('')
   }
 
@@ -907,7 +973,7 @@ export class BrowserView {
    */
   autoscaleAll(): void {
     for (const entry of this.props.store.entries) {
-      if (entry.kind !== 'track' || entry.style.limits.auto) continue
+      if (!hasTrackControls(entry.kind) || entry.style.limits.auto) continue
       this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
     }
   }
@@ -1068,6 +1134,7 @@ export class BrowserView {
       frame: this.frameAt(slot.acrossFrom, slot.thickness),
       profiles: [],
       residues: [],
+      reads: [],
     }))
   }
 
@@ -1172,9 +1239,28 @@ export class BrowserView {
   }
 
   private draw(): void {
+    // The plot options *before* the lanes are filled, not only before they are
+    // painted. `fill` reads `this.text`: the name strip is one of an alignment
+    // lane's fixed bands, so whether the lane is labelled decides whether a
+    // read row fits at all and therefore which rung the lane fetches for. Read
+    // after the fill, it would fetch against the previous frame's answer and
+    // paint against this one — the two disagreeing for a frame on every toggle.
+    const options = getPlotOptions()
+    this.text = options.text
+    this.fills = options.fills
+    this.outline = options.outline
+    this.baseline = options.baseline
+    this.crosshair = options.crosshair
+
     const live = new Set(this.props.store.entries.map((entry) => entry.id))
     this.cache.prune(live)
     this.bases.prune(live)
+    // The third cache, and it was missed when it was added. Its `prune` and
+    // `destroy` were written, documented and never called — so a BAM removed
+    // mid-decode left the worker inflating BGZF blocks for a lane that no
+    // longer existed, in front of every other lane's `sample`, and left the
+    // largest payload this worker sends alive for the life of the tab.
+    this.piles.prune(live)
     this.dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     const width = Math.max(1, this.stage.clientWidth)
     this.canvasWidth = width
@@ -1182,7 +1268,6 @@ export class BrowserView {
     // the axis begins, so it has to be settled before the scale knows how many
     // pixels it has. Capped at a third of the window — a column wider than that
     // is a panel, and the tracks are what this view is.
-    const options = getPlotOptions()
     this.nameColumn =
       options.gutter && options.text
         ? clampNameColumn(this.pinnedColumn ?? Math.round(this.wantGutter), width)
@@ -1238,7 +1323,9 @@ export class BrowserView {
     chrome = true,
   ): void {
     // Read once for the whole frame: every lane asks the same question, and the
-    // export asks it too so that what is saved is what was on screen.
+    // export asks it too so that what is saved is what was on screen. `draw`
+    // has already done this for its own pass; the export enters here directly,
+    // which is why it is read in both places rather than only in `draw`.
     const options = getPlotOptions()
     this.text = options.text
     this.fills = options.fills
@@ -1280,6 +1367,7 @@ export class BrowserView {
     drawBoundaries(ctx, ruler, this.rulerHeight, foot)
 
     this.layouts.clear()
+    this.piled.clear()
     this.rangeHits = []
     this.nameHits = []
     this.marks = []
@@ -1445,6 +1533,59 @@ export class BrowserView {
     })
   }
 
+  /**
+   * Draw a pile lane: the name strip, then the reads under it (§8.13).
+   *
+   * Two bands out of one lane frame, cut by `laneBands`. It used to be four —
+   * a depth curve and a consensus above the pile — and both are gone: the depth
+   * is the row beside this one, with its own height, its own axis and its own
+   * close button, and the consensus was a picture nobody asked for.
+   */
+  private paintPile(
+    ctx: CanvasRenderingContext2D,
+    lane: Lane,
+    palette: ReturnType<typeof readCanvasPalette>,
+  ): { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' } | null {
+    const row = lane.reads[0]
+    // The row's own entry, not the lane's. They are the same for a lane of one,
+    // and they are not for an overlaid group — where taking the lane's would
+    // paint the first member's reads in a second member's colour and file the
+    // hit-test band under the wrong id.
+    const entry = row.entry
+    const style = entry.style
+    const reads = readsOf(style)
+    // The label's strip first, so the name and the read count are not read
+    // through the pile — see `NAME_BAND`. Through `pileBands` because the row
+    // budget `fill` sent to the worker and the hit test behind a click both
+    // measure the second of these, and three expressions of one split is how
+    // they came to disagree (§8.4).
+    const [, pile] = pileBands(lane.frame, this.nameBand())
+    this.piled.set(entry.id, { frame: pile, window: row.window, placed: row.placed })
+
+    const colours = readColoursFor(row.window, style.colour)
+    for (let i = 0; i < row.window.piles.length; i++) {
+      const placed = row.placed[i]
+      if (placed === undefined) continue
+      drawReads(ctx, pile, this.axis, row.window.piles[i], placed, {
+        colours,
+        rowHeight: READ_ROW,
+        rowGap: READ_ROW_GAP,
+        layout: reads.layout,
+        diffs: row.window.diffs !== 'none',
+        opacity: style.opacity,
+        font: scaleFont(LANE_FONT),
+        guideColour: palette.labelColor,
+      }, row.rung)
+    }
+
+    if (!this.text) return null
+    return {
+      entries: [entry],
+      detail: { kind: 'text', text: pileDetail(row.window, row.placed) },
+      at: 'near',
+    }
+  }
+
   private paintLane(
     ctx: CanvasRenderingContext2D,
     lane: Lane,
@@ -1461,7 +1602,9 @@ export class BrowserView {
       at: 'near' | 'far'
     } | null = null
     clipLane(ctx, frame)
-    if (lane.residues.length > 0) {
+    if (lane.reads.length > 0) {
+      label = this.paintPile(ctx, lane, palette)
+    } else if (lane.residues.length > 0) {
       for (const { entry: member, regions } of lane.residues) {
         drawSequence(ctx, frame, this.axis, regions, {
           font: scaleFont(BASE_FONT),
@@ -1501,7 +1644,9 @@ export class BrowserView {
               ? member.style.opacity * OVERLAY_DIM
               : member.style.opacity,
         }
-        if (dragged === null || member.kind !== 'track') drawTrack(ctx, frame, profile, paint)
+        if (dragged === null || !hasTrackControls(member.kind)) {
+          drawTrack(ctx, frame, profile, paint)
+        }
         else drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
       }
       const first = lane.profiles[0]
@@ -1524,8 +1669,28 @@ export class BrowserView {
               ? { ...row.entry, label: `${row.entry.label} · GC` }
               : row.entry,
           ),
-          detail: { kind: 'limits', ...limits },
+          // A note wins the detail line. It is only ever set where the lane
+          // drew *nothing* (§8.13) — a window of alignments too deep to read at
+          // this width — and a pair of limits under an empty lane would be
+          // describing an axis with no data on it, which reads as "there is
+          // nothing here" rather than "there is too much here to draw".
+          detail: laneNote(lane.profiles) ?? { kind: 'limits', ...limits },
           at: labelEndFor(frame, limits, first.entry.style.flip),
+        }
+      }
+    } else if (entry.kind === 'reads') {
+      // A pile lane with nothing to pile: too far out for a read to be wider
+      // than the ink it would take, or the window is still on its way. Drawn as
+      // its name and a sentence rather than as an empty rectangle — a lane that
+      // says nothing looks like a lane that is broken, and this one is neither
+      // broken nor going to fill in by itself. The depth over the same reads is
+      // the row beside it and is drawn at every zoom (§8.13), so the reader is
+      // not being asked to zoom in to see *nothing*.
+      if (this.text) {
+        label = {
+          entries: [entry],
+          detail: { kind: 'text', text: 'zoom in to see reads' },
+          at: 'near',
         }
       }
     } else if (entry.payload?.kind === 'pairs') {
@@ -1545,8 +1710,10 @@ export class BrowserView {
       // its features. Below that height the band is refused and the names go
       // back inside, which is what a lane dragged very short should do.
       const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-      const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows)
+      const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
+      const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows, least)
       this.layouts.set(entry.id, { frame, layout })
+      const set = entry.payload.data
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
@@ -1556,13 +1723,27 @@ export class BrowserView {
         labels: this.text,
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
+        // A variant lane, and only a variant lane, draws each record in the ink
+        // of the base it substitutes to and gives a single base a floor to be
+        // seen and hit at (§8.14). Every other feature lane keeps the one path
+        // and the one-pixel floor it always had.
+        ...(entry.kind === 'variants'
+          ? {
+              colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
+            }
+          : {}),
       }
-      if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
-      else drawSegments(ctx, frame, entry.payload.data, layout, paint)
+      if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
+      else drawSegments(ctx, frame, set, layout, paint)
       if (this.text) {
         label = {
           entries: [entry],
-          detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+          detail: layout.dense
+            ? {
+                kind: 'text',
+                text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
+              }
+            : null,
           at: 'near',
         }
       }
@@ -1639,7 +1820,7 @@ export class BrowserView {
       const owner = entries.find((entry) => entry.id === swatch.id)
       if (owner !== undefined) this.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
     }
-    if (boxes.auto !== null && entries.some((entry) => entry.kind === 'track')) {
+    if (boxes.auto !== null && entries.some((entry) => hasTrackControls(entry.kind))) {
       this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
   }
@@ -1706,13 +1887,58 @@ export class BrowserView {
 
   /** The pair a track's axis is drawn with right now, group included. */
   private shownLimits(id: string): { min: number; max: number } | null {
-    const groups = this.groupRanges()
+    const extent = this.extentOf(id)
     for (const lane of this.lanes) {
-      const row = lane.profiles.find((profile) => profile.entry.id === id)
-      if (row === undefined) continue
-      return resolveLimits(row.entry.style.limits, extentFor(row.entry, row.profile.extent, groups))
+      const entry = this.memberOf(lane, id)
+      if (entry === null) continue
+      return resolveLimits(entry.style.limits, extent)
     }
     return null
+  }
+
+  /**
+   * The strip a pile lane keeps clear at its top for its own two lines.
+   *
+   * Measured from the label's own metrics rather than taken as a constant:
+   * `nameTop`, `detailDrop` and `nameLine` all move with the reader's text
+   * size, and a fixed strip wrote the read count through the top row of reads
+   * the moment the type grew. Zero where this surface draws no text at all —
+   * an exported figure has no name on it and the whole lane is pile.
+   */
+  /**
+   * A token for the reference sequences currently open, for the two caches
+   * whose answers depend on them (§8.13).
+   *
+   * The ids of the loaded FASTA rows, in the store's own order. It addresses
+   * nothing — the worker looks up its own residues — and exists only so that a
+   * FASTA dropped *after* a BAM invalidates the windows already in hand.
+   * Without it the mismatch marks appear on the reader's next pan and not on
+   * the drop, which reads as the file not having worked.
+   */
+  private referenceKey(): string {
+    return this.props.store.entries
+      .filter((entry) => entry.kind === 'sequence' && entry.status === 'ready')
+      .map((entry) => entry.id)
+      .join(',')
+  }
+
+  private nameBand(): number {
+    return this.text ? scaleLength(NAME_TOP + DETAIL_DROP + NAME_LINE) : 0
+  }
+
+  /**
+   * One member of a lane by id, whether it is drawing a profile or a pile.
+   *
+   * A pile lane has no `profiles` row at all, so a lookup written over
+   * `profiles` alone would not find one — and the hit test, the readout and the
+   * card's own highlight all go through here.
+   */
+  private memberOf(lane: Lane, id: string): AnnotationEntry | null {
+    return (
+      lane.profiles.find((row) => row.entry.id === id)?.entry ??
+      lane.reads.find((row) => row.entry.id === id)?.entry ??
+      null
+    )
   }
 
   /** Resolve every lane's samples and profiles for this frame. */
@@ -1733,7 +1959,51 @@ export class BrowserView {
         lane.residues.push({ entry: member, regions: regions ?? [] })
         continue
       }
-      if (member.kind !== 'track' && member.kind !== 'sequence') continue
+      // A pile lane draws reads or it draws nothing (§8.13) — the depth is the
+      // row beside it, not a rung of this one — so it never falls through to
+      // the sampled road below.
+      if (member.kind === 'reads') {
+        // `this.text` because the name strip is a fixed band, so whether the
+        // lane is labelled changes whether a read row fits at all.
+        const rung = readRungFor(lane.frame, 'browser', 1, this.nameBand())
+        if (rung === 'none') continue
+        const window = this.piles.readsFor({
+          entry: member.id,
+          scope: 'browser',
+          axis: this.axis,
+          domain: lane.frame.domain,
+          rows: rowsFor(lane.frame, this.nameBand()),
+          // The browser's axis is one unit per base (§5.8), so the domain
+          // span over the pixel span *is* bases per pixel.
+          basesPerPixel:
+            (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels),
+          style: readsOf(member.style),
+          reference: this.referenceKey(),
+        })
+        // Nothing in hand yet — the lane stays empty for this frame and the
+        // reads land in the next, which is the contract every other cache here
+        // keeps.
+        if (window === null) continue
+        // The band the pile will be drawn into, so the packing knows how many
+        // rows will actually be shown — the same split the paint uses.
+        const band = pileBands(lane.frame, this.nameBand())[1]
+        lane.reads.push({
+          entry: member,
+          window,
+          rung,
+          placed: packPile(
+            window.piles,
+            this.axis,
+            lane.frame,
+            lane.frame.domain[0],
+            lane.frame.domain[1],
+            readsOf(member.style).layout,
+            rowsAcross(band.thickness, READ_ROW, READ_ROW_GAP),
+          ),
+        })
+        continue
+      }
+      if (!drawnFromSamples(member.kind)) continue
       const samples = this.cache.samplesFor({
         entry: member.id,
         scope: 'browser',
@@ -1741,6 +2011,9 @@ export class BrowserView {
         domain: lane.frame.domain,
         pixels: this.scale.pixels,
         ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
+        ...(member.kind === 'alignments'
+          ? { reads: readsOf(member.style), reference: this.referenceKey() }
+          : {}),
       })
       lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
     }
@@ -1756,12 +2029,12 @@ export class BrowserView {
    */
   private groupRanges(): Map<string, { min: number; max: number }> {
     return resolveGroupExtents(
-      this.lanes.flatMap((lane) =>
-        lane.profiles.map(({ entry, profile }) => ({
+      this.lanes.flatMap((lane) => [
+        ...lane.profiles.map(({ entry, profile }) => ({
           group: entry.style.group,
           extent: profile.extent,
         })),
-      ),
+      ]),
       (group) => this.props.groups.scalingOf(group),
     )
   }
@@ -2540,7 +2813,7 @@ export class BrowserView {
     this.schedule()
     if (held === null || held.factor === 1) return
     for (const member of members) {
-      if (member.kind !== 'track') continue
+      if (!hasTrackControls(member.kind)) continue
       const next = nudgedLimits(member.style.limits, this.extentOf(member.id), held.factor)
       if (next !== null) this.props.store.restyle(member.id, { limits: next })
     }
@@ -2557,10 +2830,16 @@ export class BrowserView {
   }
 
   private nudgeCeiling(lane: Lane, factor: number): void {
+    const groups = this.groupRanges()
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
     const target = row?.entry ?? lane.entry
-    if (target.kind !== 'track') return
-    const next = nudgedLimits(target.style.limits, row?.profile.extent ?? null, factor)
+    if (!hasTrackControls(target.kind)) return
+    // Through the group, as the drag does. Nudging from the lane's *own* peak
+    // while its axis is showing the group's is one notch moving the ceiling by
+    // a factor of the wrong number — a lane peaking at 5 in a group drawn to
+    // 100 jumps to 6.25 instead of 125.
+    const extent = extentFor(target, row?.profile.extent ?? null, groups)
+    const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }
 
@@ -2582,6 +2861,26 @@ export class BrowserView {
         // is the only thing that is.
         const band = this.bandNameAt(x, y) ?? (this.bands.length === 1 ? this.bandAt(x) : null)
         if (band !== null) this.goTo(band.contig)
+        return
+      }
+      // Reads first. A pile fills the lane it is in, so every click inside one
+      // would otherwise fall through to "reveal this track" — which is the
+      // right answer for the gaps between reads and the wrong one for the reads
+      // themselves.
+      const read = this.readAtPoint(x, y)
+      if (read !== null) {
+        this.featureDialog?.close()
+        const span = paddedSpan(read.pile.refStart[read.index], read.pile.refEnd[read.index])
+        const contig = read.pile.contig
+        this.featureDialog = openReadDialog({
+          pile: read.pile,
+          index: read.index,
+          source: read.source,
+          onGoTo: () => this.goTo(`${contig}:${Math.max(1, span.start + 1)}-${span.end}`),
+          onClose: () => {
+            this.featureDialog = null
+          },
+        })
         return
       }
       const hit = this.featureAtPoint(x, y)
@@ -2621,6 +2920,34 @@ export class BrowserView {
         },
       })
     }, DOUBLE_CLICK_MS)
+  }
+
+  /**
+   * The read under a canvas point, or `null`.
+   *
+   * {@link featureAtPoint}'s twin, over the bands the last paint recorded. It
+   * asks `readAt` — the drawing module's own inverse — rather than reimplementing
+   * the row arithmetic here, which is what keeps the click and the rectangle
+   * agreeing (§8.4).
+   */
+  private readAtPoint(
+    x: number,
+    y: number,
+  ): { pile: ReadPile; index: number; source: string } | null {
+    for (const lane of this.lanes) {
+      const band = this.piled.get(lane.entry.id)
+      if (band === undefined) continue
+      // Backwards, so a lane drawn over another answers first — the same
+      // last-drawn-wins rule `featureAt` follows within one lane.
+      for (let i = band.window.piles.length - 1; i >= 0; i--) {
+        const pile = band.window.piles[i]
+        const placed = band.placed[i]
+        if (placed === undefined) continue
+        const at = readAt(band.frame, this.axis, pile, placed, READ_ROW, READ_ROW_GAP, x, y)
+        if (at !== null) return { pile, index: at, source: lane.entry.label }
+      }
+    }
+    return null
   }
 
   private featureAtPoint(
@@ -2771,6 +3098,24 @@ export class BrowserView {
         )
         parts.push(`${entry.label} ${letter}`)
       }
+    }
+    const read = this.readAtPoint(x, y)
+    if (read !== null) {
+      const { pile, index } = read
+      const name = pile.names[index] ?? ''
+      const strand = (pile.flags[index] & FLAG.REVERSE) !== 0 ? '−' : '+'
+      rows.push(
+        el('div', { class: 'cell-tip-row' }, el('span', {
+          class: 'cell-tip-key',
+          text: `${name === '' ? 'read' : name}   ${pile.contig}:${fmt.int(pile.refStart[index] + 1)}–${fmt.int(pile.refEnd[index])} (${strand})`,
+        })),
+      )
+      rows.push(
+        el('div', { class: 'cell-tip-row' }, el('span', {
+          class: 'hint',
+          text: `MAPQ ${pile.mapq[index]} · click for the whole record`,
+        })),
+      )
     }
     const feature = this.featureAtPoint(x, y)
     if (feature !== null) {
@@ -2972,6 +3317,9 @@ export class BrowserView {
 
 /** Where the track name sits inside its lane, from the lane's top edge. */
 const NAME_TOP = 9
+/** From that line's centre to the detail line's, and one line's room under it. */
+const NAME_LINE = 13
+const DETAIL_DROP = 14
 
 /**
  * The sizes this view writes its small print at.
@@ -2996,8 +3344,8 @@ function browserLabelStyle(): LaneLabelStyle {
     // larger.
     swatch: scaleLength(9),
     nameTop: scaleLength(NAME_TOP),
-    nameLine: scaleLength(13),
-    detailDrop: scaleLength(14),
+    nameLine: scaleLength(NAME_LINE),
+    detailDrop: scaleLength(DETAIL_DROP),
     inset: scaleLength(5),
     hitHeight: scaleLength(15),
     autoSlot: scaleLength(16),
@@ -3018,9 +3366,12 @@ const NO_OFFSET = { left: 0, top: 0 }
  */
 function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   if (lane === null) return null
+  // `profiles` alone, which is now the whole of it: a pile lane has no value
+  // axis at all, and the depth a reader drags the ceiling of is the row beside
+  // it (§8.13).
   const tracks = lane.profiles
     .map((row) => row.entry)
-    .filter((entry) => entry.kind === 'track')
+    .filter((entry) => hasTrackControls(entry.kind))
   return tracks.length === 0 ? null : tracks
 }
 
@@ -3048,6 +3399,7 @@ const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
  * be seen without hunting.
  */
 const GRIP_IDLE = 0.45
+
 
 
 /** Clear space between the end of a name and the start of the data. */

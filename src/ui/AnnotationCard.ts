@@ -30,21 +30,30 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
+import { hasTrackControls, readsAlignments } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
+import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
 import { bucketBrowseButton } from './browseButton'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
 import {
+  colourByField,
+  colourLegend,
+  fillLegend,
   flipButton,
   heightField,
+  layoutField,
   limitsField,
+  mapqField,
   modeField,
   opacityField,
+  duplicatesToggle,
+  splitsToggle,
 } from './laneSettings'
 
 /**
@@ -390,10 +399,21 @@ export class AnnotationCard {
         text: `computed by ${entry.source.task} · run it again from the Analysis panel to redraw it`,
       })
     }
+    // `multiple`, because some formats are a *pair*. A BAM without its index
+    // re-attaches and immediately refuses (§8.13), and a bgzipped feature file
+    // without its `.tbi` re-attaches and silently reads itself whole — so the
+    // picker takes both and `pairIndexes` sorts out which is which, exactly as
+    // a drop of the two does.
     const input = el('input', { class: 'hidden-input', type: 'file' })
+    input.multiple = true
     input.addEventListener('change', () => {
-      const file = input.files?.[0]
-      if (file !== undefined) this.props.loader.reattach(entry.id, file)
+      const chosen = [...(input.files ?? [])]
+      if (chosen.length === 0) return
+      // The pair whose file is the one this row is waiting for, where the
+      // reader picked several; otherwise simply the first.
+      const paired = pairIndexes(chosen)
+      const match = paired.find((pair) => pair.file.name === entry.source.name) ?? paired[0]
+      this.props.loader.reattach(entry.id, match.file, match.index)
     })
     const pick = button('re-open this file', () => input.click(), {
       class: 'btn btn-quiet',
@@ -846,11 +866,51 @@ export class AnnotationCard {
     // A lane has a thickness; an overlay is drawn on the map and has no lane.
     if (entry.card === 'linear') out.push(this.laneRow(entry))
     // Which edge of the map — a choice a 1D browser does not have, since there
-    // is one axis and everything is drawn along it.
-    if (entry.card === 'linear' && this.props.context !== 'browser') {
+    // is one axis and everything is drawn along it. And not offered for a pile
+    // either: reads are 1D-only (§8.13), so beside a map the row is there to be
+    // closed and renamed and nothing else. A control that silently does nothing
+    // is worse than an absent one.
+    if (entry.card === 'linear' && entry.kind !== 'reads' && this.props.context !== 'browser') {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
-    if (entry.kind === 'track') out.push(this.limits(entry), this.group(entry))
+    if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))
+    // Which reads count, on both of a BAM's rows (§8.13). Written through to
+    // the other one — a mapping-quality floor applied to the pile and not to
+    // the depth beside it is two pictures of two different files under one name
+    // — which `patchReads` does, so the two controls need not know about each
+    // other.
+    if (readsAlignments(entry.kind)) {
+      out.push(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          mapqField(this.props.store, entry),
+          duplicatesToggle(this.props.store, entry),
+        ),
+      )
+    }
+    // …and how the pile is drawn, which only the pile has. A colouring and a
+    // pairing mean nothing to a depth curve, so they are not offered on the row
+    // that draws one.
+    if (entry.kind === 'reads') {
+      // The key is built first and handed to the picker, so a colouring chosen
+      // with the focus still on the select refreshes it immediately — this card
+      // defers its own rebuild while a control holds focus, and the lane does
+      // not.
+      const key = colourLegend(entry)
+      out.push(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          colourByField(this.props.store, entry, (by) =>
+            fillLegend(key, entry.style.colour, by),
+          ),
+          layoutField(this.props.store, entry),
+        ),
+        key,
+        splitsToggle(this.props.store, entry),
+      )
+    }
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No
     // group, though — GC shares no units with anything else on the stack, so
@@ -898,7 +958,7 @@ export class AnnotationCard {
       'div',
       { class: 'ann-inline' },
       heightField(this.props.store, entry),
-      ...(entry.kind === 'track' ? [this.mode(entry), this.flip(entry)] : []),
+      ...(hasTrackControls(entry.kind) ? [this.mode(entry), this.flip(entry)] : []),
       ...(entry.kind === 'sequence' ? [this.mode(entry)] : []),
     )
   }
@@ -995,7 +1055,7 @@ export class AnnotationCard {
   private groupNames(): string[] {
     const names = new Set<string>()
     for (const row of this.props.store.entries) {
-      if (row.kind === 'track' && row.style.group !== '') names.add(row.style.group)
+      if (hasTrackControls(row.kind) && row.style.group !== '') names.add(row.style.group)
     }
     return [...names].sort((a, b) => a.localeCompare(b))
   }
@@ -1180,7 +1240,7 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', {
       class: 'ann-drop-hint',
       text:
-        'bigWig, bigBed, GTF, BED, BEDPE or FASTA. Click to choose, or drop one anywhere on ' +
+        'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or an indexed BAM. Click to choose, or drop one anywhere on ' +
         'this card — what it is and where it is drawn come from the file itself.',
     }),
   )

@@ -259,8 +259,38 @@ So that the absence of each is legible as a decision rather than as an oversight
 - **KR balancing** — `render/derive.ts:80` and SPECS §7.5 settle it; ICE is the same answer.
 - **Variable-bin files, non-`genome-then-length` orderings** — §3.3, §14. The judgement call recorded
   at §14 (whether the refusal message alone is enough) is a question for first users, unchanged.
-- **BAM / CRAM / VCF** — real formats, wrong app. A contact-map browser that reads alignments is two
-  applications.
+- **CRAM** — refused on its own ground rather than as collateral, and the ground is stronger than
+  "wrong app". A CRAM cannot be decoded without the exact reference its records were compressed
+  against, identified by an M5 checksum and conventionally fetched from a third-party registry — which
+  C1 and C5 forbid outright — or supplied as a second required file, which is the rule §1 has been at
+  pains to keep narrow. Converting with `samtools view -b` is the answer and the folder view says so.
+
+*(**VCF** was on this list, and is not any more.* The entry read: "it is a small indexed text format
+that this app already has the machinery for (`annotations/tabix.ts`), and what it is missing is a
+picture — a variant lane is not a track and not a segment set, and nobody has said what it should
+look like beside a contact map." Both halves turned out to be answerable. The picture is a
+**segment set**, in the sense that matters: a variant is an interval, so it packs, draws,
+hit-tests, exports and collapses through the code a peak set already uses, and what a variant lane
+needs of its own is a kind rather than a renderer. Beside a contact map it collapses to density,
+which is the one reduction of a point set that is exact at any interval width — so a bin's worth
+of variants is a true reading rather than a smear, which is what a *pile* of reads could never be
+and why that one is 1D-only. Specified at §8.14, with what is still refused inside the scope —
+the genotype matrix above all — listed at the end of it.)*
+
+*(BAM was on this list, and is not any more.* The line read "real formats, wrong app — a contact-map
+browser that reads alignments is two applications", and the strongest part of it was never the
+formats but the *scope*: a viewer that reads alignments in order to build contact matrices from them
+would indeed be a second application. That is still refused, at SPECS §13. What is *specified*
+instead is narrower and is an annotation like any other: a BAM imports as two rows — a coverage
+track over the genome the map is already about, and a pile of individual reads that lives only where
+a base can have a pixel (§8.13). Both are built, with the pile's own controls, its per-read card,
+mates and split reads. What is still refused inside that scope is listed at the end
+of §8.13, and the one worth repeating here is that **no matrix is ever built from alignments** —
+that was the second application this entry was drawing a line against, and it still is.
+The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` collides with the
+C1/C3 corollary, so that corollary is now *scoped* — it protects the contact map's opening path,
+which is what makes the no-preprocessing claim true — and the narrow rule that replaces it is stated
+positively at §8.13 rather than left as an exception.)*
 - **WebGL rendering** — the technique at §7.2 re-rasterises on three events and never on pan or zoom.
   There is nothing here for a GPU to fix; G5 is where the real cost is.
 - **Accounts, sharing, collaboration** — C1.

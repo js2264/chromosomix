@@ -10,9 +10,20 @@ between *two* MAGs, which is where phage–host, plasmid–host and HGT signal l
 
 Several files at once, as tabs. Two coolers in one square, split on the diagonal, when the question
 is how they differ. And a plain 1D genome browser for when there is no contact map at all — a
-`chrom.sizes`, a bigWig or a FASTA is enough to start one, and dropping a `.cool` on it turns the
+`chrom.sizes`, a bigWig, a FASTA, a VCF or an indexed BAM is enough to start one, and dropping a `.cool` on it turns the
 same tab into its map. Tick a few chromosomes and the axis becomes those chromosomes; open a FASTA
-and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in.
+and the sequence is a lane of its own, GC content zoomed out and the bases themselves zoomed in. A VCF draws
+the variants somebody called — each over the reference bases its record is about,
+with structural ones at their real size, and a substitution in the colour of the
+base it substitutes to, so it lines up with the sequence and the reads under it.
+An
+indexed BAM opens as **two** lanes: its depth, which is a coverage track like any other, and the
+reads themselves in packed rows — coloured by strand, pair, insert size, mate or mapping quality,
+with mates joined, split reads outlined, and a click on any read opening its flags, its CIGAR, its
+clips, where its mate went and how far away. Close either one and keep the other; the filters that
+decide which reads count are kept in step across both. Open a FASTA beside them
+and the positions where the reads disagree with the reference are coloured in
+the pile and marked on the depth, at the share of the depth that differs.
 
 And then the analysis. An **Analysis** panel — the fourth panel, outermost on the right, `j` — lists fifteen tasks:
 P(s), coverage, diamond insulation, virtual 4C, compartments with their saddle, **pattern detection**
@@ -271,11 +282,11 @@ not the plan.
 | M3 | Render and first visible app | **done** — canvas heatmap with matplotlib's own LUTs, `metacooler show` defaults, genomes table, genome/pair/region views, breadcrumb, URL-hash state |
 | M4 | Interaction | **done** — pan, zoom, level toggle and cross-navigation; a gesture still costs nothing, and a *settled* zoom past the block's own grid reads the window again (`src/ui/refine.ts`). The mmetacool and mcool resolution ladders are wired to it: a coarse read comes from the coarsest rung whose bins still fill a cell, which is fewer pixels for the same picture and the only honest way to draw a balanced map at a coarse grid |
 | M5 | Remote sources | **done** — `RemoteRangeSource` (range probe, LRU chunk cache, the two distinct §10 refusals), `docs/hosting.md`, and the §12 request-budget regression tests in `test/budgets/` |
-| M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), GTF/GFF, BED/narrowPeak/broadPeak/BED12, BEDPE and FASTA in a worker of their own; `src/render/` draws them as lanes on any of the map’s four edges and as overlays on it; three sidebar cards drive them. Restricted to cool/mcool (§8.5) |
+| M6 | bigWig tracks | **done, and wider than the milestone** — `src/annotations/` reads bigWig (`@gmod/bbi` v10), bedGraph/wig, GTF/GFF, BED/narrowPeak/broadPeak/BED12, BEDPE, FASTA and BAM in a worker of their own; `src/render/` draws them as lanes on any of the map’s four edges and as overlays on it; three sidebar cards drive them. Offered on every container (§8.5) |
 | M7 | cool / mcool | **done** — opened natively, not as a synthesised one-genome metacool: a cooler's `/chroms` is the contig table, `genomes` is `null`, and its chromosomes are the landing view. Genome-wide is a first-class view whenever the size estimate says this machine can hold it (a yeast genome at 1 kb is 12,100 bins and opens in one read); balancing from `/bins/weight` is wired to a toggle. An `.mcool` root is refused by name and the app opens its finest resolution |
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
-| — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA or a feature file (§5.8) |
-| — | Metadata annotations (§8.12) | **done** — the columns a file already carries about its own genomes, sequences and bins, discovered from its `/genomes`, `/contigs` and `/bins` tables and drawn as lanes beside the map: bars for a measurement, runs of colour for a set of labels. Indexed by the map's own cells rather than by base pairs, so a MAG's completeness draws on a genome × genome overview where no other lane can — and offered only where its own table is no finer than the axis. The one annotation a `.metacool` gets, since a column of its own tables cannot be matched to the wrong sequence |
+| — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA, a BAM or a feature file (§5.8) |
+| — | Metadata annotations (§8.12) | **done** — the columns a file already carries about its own genomes, sequences and bins, discovered from its `/genomes`, `/contigs` and `/bins` tables and drawn as lanes beside the map: bars for a measurement, runs of colour for a set of labels. Indexed by the map's own cells rather than by base pairs, so a MAG's completeness draws on a genome × genome overview where no other lane can — and offered only where its own table is no finer than the axis. The one annotation that never needed the §8.5 gate lifted, since a column of a file's own tables *is* the map's axis and has nothing to be matched against |
 | — | Analysis (§18) | **done** — every task in `TASKS_PLAN.md`'s catalogue, in a fourth worker so a whole-file scan never blocks the view; a resizable drawer; results that come back as synthetic tracks in the Annotations panel, indistinguishable from a loaded bigWig; and a bigWig writer of this repo's own. Goldened against cooltools, coolpuppy, pyBigWig and numpy on the demo micro-C map |
 
 Other gaps worth naming rather than discovering:
@@ -328,12 +339,14 @@ is one read-only QC statistic in the file info panel — *"unassigned: 67,058 co
 bins"* — because that fraction is a direct diagnostic of binning quality that a metagenomics reader
 will look for. It is a number, not a view: it opens nothing and selects nothing.
 
-**Annotations are for one assembly at a time.** Gene models, tracks, peak sets, loop calls and
-hand-drawn marks are offered on a cooler — and on a genome opened with no map at all — and are
-*absent*, not disabled, on a `.metacool`. A metagenome's axis is contigs from thousands of
-independently assembled organisms, so a file keyed on contig names either coincides with it or
-misleads, and a gene model drawn across a MAG boundary would assert a coordinate system that does not
-exist. See SPECS §8.5.
+**Annotations are for one assembly at a time, and every container has one.** Gene models, tracks,
+peak sets, loop calls and hand-drawn marks are offered on a cooler, on a `.metacool`, and on a genome
+opened with no map at all. They used to be *absent* on a metacool, on the grounds that a metagenome's
+axis is contigs from thousands of independently assembled organisms — but the premise was wrong about
+the files people have: a metagenomic Hi-C dataset is *one* co-assembly, so `/contigs` is one
+namespace and a bigWig over it is keyed on exactly those names. What a metagenome needed was not a
+gate but an honest overlap report, in **MAGs** rather than in sequence counts, since `794 of 20,566`
+is arithmetically true and reads exactly like a file that failed to match. See SPECS §8.5.
 
 **Two files compared, not N.** The second map goes in the half of the square the first one was
 mirroring, and there is no third half. It must be a cooler with the same chromosomes and the same bin

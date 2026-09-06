@@ -123,6 +123,61 @@ export function canvasToAcross(frame: LaneFrame, canvas: number): number {
 }
 
 /**
+ * A band inside a lane, as a frame of its own.
+ *
+ * `from` and `span` are across-offsets in the parent's coordinates, so `from`
+ * of 0 is the band against the map and `from + span === frame.thickness` is the
+ * lane's far border. Everything *along* the genomic axis is the parent's,
+ * untouched — the same `toPixel`, the same `domain`, the same `alongFrom` and
+ * `alongTo` — which is what keeps a coverage band, a consensus strip and a pile
+ * of reads registered with each other and with whatever is above them (§8.13).
+ *
+ * Through {@link acrossToCanvas} rather than `acrossFrom + from`, because on a
+ * top or left stack `across` runs *backwards* against the canvas: a bare
+ * addition puts every band on the wrong side of its own lane, and does it on
+ * exactly two of the four edges, which is the hardest kind of wrong to notice.
+ *
+ * The parent frame stays the lane's own. The label, the grip, the resize drag
+ * and the hit test all read `Lane.frame`, and re-pointing it at a band would
+ * shrink the lane's handle to the height of its first stripe.
+ */
+export function laneBand(frame: LaneFrame, from: number, span: number): LaneFrame {
+  return {
+    ...frame,
+    acrossFrom: acrossToCanvas(frame, from),
+    thickness: Math.max(0, span),
+  }
+}
+
+/** One part of a lane: a fixed thickness, or a share of what is left. */
+export type LanePart = { fixed: number } | { fill: true }
+
+/**
+ * Divide a lane into bands, outward from the map, with `gap` between them.
+ *
+ * In one place rather than at each caller for the same reason the runs of a
+ * group are: the arithmetic is small and getting it slightly different in two
+ * places is how two bands come to overlap by a pixel.
+ */
+export function laneBands(
+  frame: LaneFrame,
+  parts: readonly LanePart[],
+  gap = 0,
+): LaneFrame[] {
+  const fixed = parts.reduce((sum, part) => sum + ('fixed' in part ? part.fixed : 0), 0)
+  const fills = parts.filter((part) => !('fixed' in part)).length
+  const spare = Math.max(0, frame.thickness - fixed - gap * Math.max(0, parts.length - 1))
+  const each = fills === 0 ? 0 : spare / fills
+  let at = 0
+  return parts.map((part) => {
+    const span = 'fixed' in part ? part.fixed : each
+    const band = laneBand(frame, at, span)
+    at += span + gap
+    return band
+  })
+}
+
+/**
  * The across-offset a normalised value sits at.
  *
  * A lane grows towards the map or away from it, and {@link laneGrowsInward} is

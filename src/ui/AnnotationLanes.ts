@@ -71,6 +71,7 @@ import {
   type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
+import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
 import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
@@ -81,15 +82,18 @@ import {
   resolveLimits,
   scaledTo,
   type PixelProfile,
+  laneNote,
 } from '../render/tracks'
 import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
   LANE_EDGES,
+  drawnFromSamples,
   drawsAProfile,
   hasAMovableAxis,
   isMetadata,
+  readsOf,
   type AnnotationEntry,
   type FeatureSet,
   type LaneEdge,
@@ -667,8 +671,15 @@ export class AnnotationLanes {
     // belongs beside.
     const locus = this.axisFor(edge) !== null
     const cells = this.metaAxisFor(edge) !== null
-    if (locus && cells) return entries
-    return entries.filter((entry) => (isMetadata(entry.kind) ? cells : locus))
+    // A pile is 1D-only (§8.13), whatever axis this edge has. Beside a heatmap
+    // the finest unit on the axis is a matrix bin, and a read is not a number
+    // of bins — there is nothing here for one to be drawn on. Filtered out
+    // before the axis question rather than answered `coverage` by it, because
+    // the row that *is* the coverage is a row of its own now and is already in
+    // this list.
+    const placeable = entries.filter((entry) => entry.kind !== 'reads')
+    if (locus && cells) return placeable
+    return placeable.filter((entry) => (isMetadata(entry.kind) ? cells : locus))
   }
 
   /**
@@ -1033,7 +1044,7 @@ export class AnnotationLanes {
         // A sequence is a value track from here: beside a map, where a pixel is
         // a whole bin, a FASTA can only ever be its GC content — the residues
         // need a base per pixel and a bin is a thousand of them.
-        if (axis === null || (member.kind !== 'track' && member.kind !== 'sequence')) continue
+        if (axis === null || !drawnFromSamples(member.kind)) continue
         profiles.push({
           entry: member,
           profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
@@ -1103,6 +1114,11 @@ export class AnnotationLanes {
         domain: frame.domain,
         pixels: Math.abs(frame.alongTo - frame.alongFrom),
         ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
+        // The lane's read controls reach the coverage beside the map too. A
+        // MAPQ floor set in the browser is a claim about which alignments count,
+        // not about one view of them, and a lane that answered it in one place
+        // and not the other would be two different numbers under one name.
+        ...(entry.kind === 'alignments' ? { reads: readsOf(entry.style) } : {}),
       }) ?? null
     )
   }
@@ -1188,7 +1204,11 @@ export class AnnotationLanes {
                 ? { ...member, label: `${member.label} · GC` }
                 : member,
             ),
-            detail: { kind: 'limits', ...shown },
+            // A note wins the detail line, for the reason `BrowserView` gives
+            // at its own copy of this: it is only ever set where the lane drew
+            // nothing, and limits under an empty lane read as "there is nothing
+            // here" rather than "there is too much here to draw" (§8.13).
+            detail: laneNote(profiles) ?? { kind: 'limits', ...shown },
             at: labelEndFor(frame, shown, first.entry.style.flip),
           }
         }
@@ -1253,8 +1273,10 @@ export class AnnotationLanes {
         // down to sixteen pixels still falls back to names inside the wide
         // features — the rule is one rule, and the lane's height decides.
         const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-        const layout = layoutFeatures(frame, axis, entry.payload.data, rows)
+        const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
+        const layout = layoutFeatures(frame, axis, entry.payload.data, rows, least)
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
+        const set = entry.payload.data
         const paint = {
           colour: entry.style.colour,
           guideColour: geometry.palette.guide,
@@ -1264,13 +1286,28 @@ export class AnnotationLanes {
           labels: text,
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
+          // The same rule as the browser's, on the same lane drawn beside a map
+          // (§8.14). A variant lane belongs on both surfaces — unlike a pile,
+          // which needs a base to have a pixel — because a variant is an
+          // interval and a bin is a range of them, so the density this collapses
+          // to at bin resolution is a true reading rather than a smear.
+          ...(entry.kind === 'variants'
+            ? {
+                colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
+              }
+            : {}),
         }
-        if (entry.kind === 'gtf') drawGenes(ctx, frame, entry.payload.data, layout, paint)
-        else drawSegments(ctx, frame, entry.payload.data, layout, paint)
+        if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
+        else drawSegments(ctx, frame, set, layout, paint)
         if (text) {
           label = {
             entries: [entry],
-            detail: layout.dense ? { kind: 'text', text: `${fmt.int(layout.total)} in view` } : null,
+            detail: layout.dense
+              ? {
+                  kind: 'text',
+                  text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
+                }
+              : null,
             at: 'near',
           }
         }

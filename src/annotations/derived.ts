@@ -202,6 +202,7 @@ function refine(left: TrackSamples, right: TrackSamples, op: TrackOp): TrackSamp
     // its line and nothing else.
     min: null,
     max: null,
+    variant: null,
     summary: left.summary || right.summary,
   }
 }

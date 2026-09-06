@@ -14,6 +14,11 @@
 
 import { BigBed, BigWig } from '@gmod/bbi'
 import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
+import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
+import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
+import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
+import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
+import { pileOf } from '../bam/reads'
 import {
   IntervalTrack,
   parseBedGraph,
@@ -27,6 +32,7 @@ import { BlobFile, RemoteFile } from 'generic-filehandle2'
 import { signS3Request } from '../../s3/sigv4'
 
 import { transfersFor } from '../../worker/protocol'
+import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
@@ -54,6 +60,9 @@ import type {
   BaseRegion,
   ContigOverlap,
   FeatureSet,
+  ReadPile,
+  ReadStyle,
+  ReadWindow,
   Region,
   TrackSamples,
   TrackSampleSet,
@@ -225,6 +234,83 @@ const sequences = new Map<string, SequenceStore>()
 const vectors = new Map<string, BinVector>()
 
 /**
+ * An open BAM, and everything about it that is worth not reading twice.
+ *
+ * The fifth store, and it is a *handle* store like the bigWigs rather than a
+ * parsed-payload one like the feature sets — for the reason §8.2 gives and then
+ * one of its own. A window of alignments is not merely large, it is unbounded:
+ * there is no zoom level in the file and no summary layer, so what a lane can
+ * afford depends on the window it is looking at, and that is a question only
+ * this side of the boundary can answer.
+ *
+ * The index is held because it is read once and consulted per frame; the header
+ * because the reference table is how a refId becomes a name; and `refIdOf`
+ * because resolving a map's spelling to this file's is the §5.9 ladder and a
+ * pan asks it sixty times a second.
+ */
+interface OpenBam {
+  handle: BlobFile | RemoteFile
+  header: BamHeader
+  index: BamIndex
+  /** The file's own length, for bounding the last block of a span. */
+  size: number
+  /** The map's name for a sequence → this file's reference id. */
+  refIdOf: Map<string, number>
+  /** The file's own reference names, in file order, for the ladder. */
+  refNames: string[]
+}
+
+/**
+ * Every entry's open BAM — and, behind them, one open file per *file*.
+ *
+ * A BAM now opens as two rows, a coverage track and a pile of reads (§8.13), and
+ * they are the same bytes. Keyed by entry alone, the second row would open a
+ * second filehandle and parse the index again — and an index is the one part of
+ * opening a BAM that is not small: §12 budgets it in *bytes* precisely because a
+ * BAI for a human WGS file is single-digit megabytes. So the entry map holds a
+ * reference to a shared record, and the record is reference-counted: the last
+ * row to be dropped is the one that lets the file go.
+ */
+const alignments = new Map<string, OpenBam>()
+
+/** One record per file, by {@link fileKey}, with the rows holding it. */
+const openFiles = new Map<string, { open: OpenBam; holders: Set<string> }>()
+
+/**
+ * An open BAM's identity, for sharing one handle and one parsed index between
+ * the two rows a BAM imports as.
+ *
+ * Name and size for a local file, the URL for a remote one — the same key
+ * {@link cacheKey} uses, and for the same reason: two `File` objects for one
+ * file are not `===`, so identity has to be something the file itself carries.
+ *
+ * **And its index**, because both halves are what a row actually reads through:
+ * a `.bai` and a `.csi` beside the same reads are two index formats over one
+ * file, and a key naming only the reads would hand the second row an index the
+ * first one built from a different sidecar.
+ */
+function fileKey(source: WireSource, index: WireSource): string {
+  return `${cacheKey(source)}|${cacheKey(index)}`
+}
+
+/**
+ * How many compressed bytes one window may cost before it is refused.
+ *
+ * The number that makes an alignment lane bounded, and it is spent against a
+ * forecast made from the index alone — so a window too deep to draw costs zero
+ * data requests to refuse (§12), rather than being discovered part-way through
+ * a fetch.
+ *
+ * Eight mebibytes is about a second of inflation on the measurements behind
+ * §8.13, which is the point past which a lane stops being a picture and starts
+ * being a job. It is deliberately a *byte* budget rather than a base-pair one:
+ * the same 50 kb window is a handful of blocks over an intergenic region and
+ * hundreds over an rDNA repeat, and a limit expressed in base pairs would
+ * refuse the first and accept the second.
+ */
+const WINDOW_BYTE_CAP = 8 << 20
+
+/**
  * How large a FASTA this reads.
  *
  * It is read whole and held whole, which is what makes a pan free — and what
@@ -274,9 +360,68 @@ setInterval(() => {
   ;(self as unknown as Worker).postMessage(response)
 }, LOAD_REPORT_MS)
 
+/**
+ * Requests the main thread has called off.
+ *
+ * Ids rather than a flag per handler, so a `cancel` can arrive before the work
+ * it names has reached its first check — which is the common case, since the
+ * pan that cancels is the frame after the one that asked.
+ */
+const cancelled = new Set<number>()
+
+/**
+ * Ids currently being handled, so a `cancel` for a settled one can be dropped.
+ *
+ * Without it the set only ever shrinks through the target's own `finally`, and
+ * a cancel that arrives *after* its target finished — which is the ordinary
+ * case, since every `cancellable` caller in this codebase cancels a superseded
+ * handle whether or not it has already answered — leaves its id behind for the
+ * life of the tab. The counter is monotonic, so that is a slow leak rather than
+ * a bounded one.
+ */
+const inFlight = new Set<number>()
+
+/**
+ * The largest id that has been handled, so a cancel can tell "not yet started"
+ * from "long finished". Ids are allotted in order by one client, so anything
+ * above this has not arrived and anything at or below it is over.
+ */
+let highestSettled = 0
+
+/** Whether this request has been called off since it started. */
+function isCancelled(id: number): boolean {
+  return cancelled.has(id)
+}
+
+/**
+ * Give the thread back, then say whether to carry on.
+ *
+ * The yield is the point: a `cancel` message cannot be *read* without one, so a
+ * loop that checked `cancelled` without yielding would find it empty every time
+ * however long it ran. `yieldToEventLoop` is a real task rather than a
+ * microtask for exactly this reason — see `async.ts`, where the same mistake is
+ * recorded against the overview scan.
+ */
+async function stillWanted(id: number): Promise<boolean> {
+  await yieldToEventLoop()
+  return !cancelled.has(id)
+}
+
+/** Raised when a request is called off; the client maps it to a quiet no-op. */
+function abortError(): Error {
+  const err = new Error('cancelled')
+  err.name = 'AbortError'
+  return err
+}
+
 async function handle(request: AnnotationRequest): Promise<void> {
+  inFlight.add(request.id)
   try {
     const payload = await dispatch(request)
+    // Asked for and then not wanted: the answer is thrown away rather than
+    // posted, because a lane that has already moved on would otherwise paint a
+    // window the reader has left.
+    if (isCancelled(request.id)) throw abortError()
     const response: AnnotationResponse = { type: 'result', id: request.id, payload }
     ;(self as unknown as Worker).postMessage(response, transfersFor(payload))
   } catch (err) {
@@ -284,8 +429,16 @@ async function handle(request: AnnotationRequest): Promise<void> {
       type: 'error',
       id: request.id,
       message: err instanceof Error ? err.message : String(err),
+      ...(err instanceof Error && err.name === 'AbortError' ? { cancelled: true } : {}),
     }
     ;(self as unknown as Worker).postMessage(response)
+  } finally {
+    // Whatever happened, this id is settled and must not hold an entry in
+    // either set: the counter is monotonic, so a set that only grew would be a
+    // slow leak for the life of the tab.
+    inFlight.delete(request.id)
+    cancelled.delete(request.id)
+    if (request.id > highestSettled) highestSettled = request.id
   }
 }
 
@@ -294,7 +447,7 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'load':
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
-      return sample(request.entry, request.regions, request.basesPerPixel)
+      return sample(request.entry, request.regions, request.basesPerPixel, request.reads, request.id)
     case 'register':
       vectors.set(request.entry, request.vector)
       return null
@@ -304,6 +457,25 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return bases(request.entry, request.regions)
     case 'assembly':
       return assemblyOf(request.source)
+    case 'reads':
+      return readsFor(
+        request.entry,
+        request.regions,
+        request.maxRows,
+        request.basesPerPixel,
+        request.reads,
+        request.id,
+      )
+    case 'cancel':
+      // Recorded for anything that has not already settled — which includes an
+      // id that has not *started*, because a `cancel` routinely overtakes the
+      // request it names while that one is still awaiting its first read. What
+      // is dropped is a cancel for an id already finished with: it can change
+      // nothing, and remembering it forever is how the set leaks.
+      if (inFlight.has(request.target) || request.target > highestSettled) {
+        cancelled.add(request.target)
+      }
+      return null
     case 'drop': {
       tracks.delete(request.entry)
       // …and let go of the parse behind it. A sequence store is up to three
@@ -315,6 +487,17 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       sequences.delete(request.entry)
       vectors.delete(request.entry)
       signals.delete(request.entry)
+      // A BAI for a human WGS file is single-digit megabytes and the handle
+      // behind it is a live filehandle; neither should outlive the *last* row
+      // holding it. Two rows share one open file, so this is a release rather
+      // than a delete — dropping the coverage track while the pile is still on
+      // screen must not close the file under it.
+      alignments.delete(request.entry)
+      for (const [key, held] of openFiles) {
+        if (!held.holders.delete(request.entry)) continue
+        if (held.holders.size === 0) openFiles.delete(key)
+        break
+      }
       return null
     }
   }
@@ -369,7 +552,14 @@ async function runTask(
     note: (text) => {
       notes.push(text)
     },
-    sample: (entry, regions, basesPerPixel) => sample(entry, regions, basesPerPixel),
+    // Under the *task's* id, so cancelling the analysis cancels the reads it
+    // is waiting on rather than leaving them to finish into nothing.
+    // No read style: a task asks a track for values, and the lane controls it
+    // would otherwise inherit are a property of a *view*. An analysis over a
+    // BAM therefore reads the default filter, which is the one `bam/pile.ts`
+    // defends and the only one reproducible from the recorded provenance.
+    sample: (entry, regions, basesPerPixel) =>
+      sample(entry, regions, basesPerPixel, undefined, request.id),
     lengthOf: (contig) => request.inputs.contigLengths?.[contig],
   }
   const outputs = await runner(job)
@@ -413,7 +603,9 @@ async function runTask(
  */
 async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   const handle = handleFor(source)
-  const head = await handle.read(8, 0)
+  // Sixty-four, for the same reason `load` reads sixty-four: eight settles the
+  // HDF5 question and a BGZF member header is longer than that.
+  const head = await handle.read(64, 0)
   if (isHdf5(head)) return { format: 'hdf5', contigs: [], origin: 'features', exact: true }
 
   const magic = bbiMagic(head)
@@ -428,6 +620,28 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
       contigs: contigsOfHeader(header),
       origin: magic,
       exact: true,
+    }
+  }
+
+  // A BAM's `@SQ` table is every sequence and its exact length, so a dropped
+  // `.bam` can start a browser session on its own — the same claim a FASTA
+  // makes below, and the reason both are answered here rather than routed to
+  // the reader worker. No index is needed to read a header, so this question is
+  // answerable for a file that {@link load} would go on to refuse.
+  if (isBgzf(head)) {
+    const size = await sizeOf(handle)
+    const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
+    if (header !== null) {
+      return {
+        format: 'bam',
+        contigs: header.refs.map((ref) => ({ name: ref.name, length: ref.length })),
+        // Its own origin, not `features`. `lengthsAreExact` reads this, and a
+        // BAM's `@SQ` table carries a length per reference — so calling it a
+        // feature file made the browser tell a reader its chromosomes end at
+        // their last read, when they end where the header says.
+        origin: 'bam',
+        exact: true,
+      }
     }
   }
 
@@ -454,11 +668,34 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
     return { format: 'sizes', contigs: parseChromSizes(text), origin: 'sizes', exact: true }
   }
 
-  // Same order as `load`, and for the same reason: a bedGraph is BED-shaped and
-  // would otherwise declare its assembly as a feature file's. The lengths are a
-  // lower bound either way, so the answer is the same shape — but the *format*
-  // is what routes the drop, and getting it wrong here sends a signal file to
-  // the segments path.
+  // Same order as `load`, and for the same reason: `sniffFormat` answers `bed`
+  // for anything it does not know, so every sniffer stricter than it has to be
+  // asked first or the file is routed as a BED. Getting this wrong here does
+  // not merely mislabel the row — it decides which road the *drop* takes.
+  //
+  // A VCF is the one text format that can answer this question **exactly**. Its
+  // `##contig=<ID=…,length=…>` lines are a chrom.sizes written inside the file:
+  // declared rather than inferred, which is the tier a BAM's `@SQ` table and a
+  // bigWig's header sit at, and a tier above the "ends at its last feature"
+  // lower bound every other feature file can offer. So a dropped VCF opens a
+  // browser session over its real chromosomes (§5.8) — and where it declares
+  // none, which is legal and common, it falls back to that lower bound like any
+  // other feature file rather than claiming a precision it has not got.
+  if (sniffVcf(text)) {
+    const declared = vcfContigs(text)
+    if (declared.length > 0) {
+      // `origin`, not `exact`, is what `lengthsAreExact` reads. Reporting
+      // `features` here would put "lengths inferred from the features in this
+      // file" under a genome whose lengths the file states outright — which is
+      // the mistake the `bam` origin was added to undo, made a second time.
+      return { format: 'vcf', contigs: declared, origin: 'vcf', exact: true }
+    }
+    const data = parseVcf(text)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'vcf', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   const signal = sniffSignal(text)
   if (signal !== null) {
     const set = signal === 'wig' ? parseWig(text) : parseBedGraph(text)
@@ -654,11 +891,30 @@ async function sizeOf(handle: BlobFile | RemoteFile): Promise<number | null> {
  */
 async function load(entry: string, source: WireSource, mapContigs: NamedSequence[]): Promise<LoadResult> {
   const handle = handleFor(source)
-  const head = await handle.read(4, 0)
+  // Sixty-four rather than four. A BBI magic number is four bytes and was all
+  // this ever needed; recognising a BGZF member takes twelve plus its extra
+  // field, and it is the same range request either way.
+  const head = await handle.read(64, 0)
   const magic = bbiMagic(head)
 
   if (magic === 'bigwig') return loadBigWig(entry, source, mapContigs)
   if (magic === 'bigbed') return loadBigBed(source, mapContigs)
+  // Asked before the text road, and only for a BGZF file: a BAM is a BGZF
+  // container, so the question is one inflate of the first block deep. A
+  // bgzipped *text* file falls through it and takes the tabix path it always
+  // did.
+  if (isBgzf(head)) {
+    const size = await sizeOf(handle)
+    const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
+    // A BGZF file that is not a BAM is a bgzipped text file, and takes the
+    // tabix road below exactly as it always did.
+    if (header !== null) {
+      if (size === null) {
+        throw new Error(`${source.name} cannot be measured, and a BAM is read by byte range.`)
+      }
+      return loadBam(entry, source, handle, mapContigs, header, size)
+    }
+  }
   if (looksLikeFasta(head)) return loadFasta(entry, await readFasta(source, handle), mapContigs)
 
   // The parse this file already had, when the browser asked what genome it was
@@ -691,12 +947,20 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   const text = indexed ?? new TextDecoder().decode(bytes as Uint8Array)
   if (text.trim() === '') throw new Error('This file is empty.')
 
-  // Asked before the feature sniffer, because the two overlap: a four-column
-  // bedGraph is BED-shaped and `sniffFormat` would call it a BED, putting its
-  // value column in `name` and drawing a lane of featureless boxes. The signal
-  // sniffer is the stricter of the two — exactly four columns, numeric on every
-  // row it looks at, or a declaration line saying so — which is what lets it go
-  // first without capturing anything that is really a BED.
+  // Both asked before the feature sniffer, and for the one reason: `sniffFormat`
+  // never answers "not one of mine" — its last line is `return 'bed'` — so any
+  // format it does not know is silently parsed as a BED. That is what a
+  // four-column bedGraph did before `sniffSignal` existed (its value column
+  // landed in `name`), and it is what a VCF did before `sniffVcf` did: refused
+  // with a message naming a format the reader never handed over.
+  //
+  // Both are stricter than the sniffer they precede, which is what lets them go
+  // first without capturing anything that is really a BED. `sniffVcf` is asked
+  // first of the two only because it is the cheaper question on a file that is
+  // neither: a VCF has at least eight columns and a bedGraph has exactly four,
+  // so neither can capture the other whichever order they are asked in.
+  if (sniffVcf(text)) return loadVcf(text, mapContigs)
+
   const signal = sniffSignal(text)
   if (signal !== null) return loadSignal(entry, signal, text, mapContigs)
 
@@ -719,6 +983,33 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   // could read it — the cache exists for the other order, where a genome was
   // identified from this file a moment ago and the parse can be reused.
   return featureResult(format, data, mapContigs)
+}
+
+/**
+ * A VCF, as intervals (§8.14).
+ *
+ * Its own arm rather than a line in {@link featureResult}, because two things
+ * about the summary are the format's alone. A variant file's rows are
+ * *variants* and not *features* — the word a reader is looking for under the
+ * lane's name is the word their file uses. And the **samples are counted and
+ * said**: a VCF's genotype columns are a matrix of variants × samples, which is
+ * a picture this app does not draw (§13), so a reader who brought a
+ * thousand-genome file is told what the lane is showing them rather than left to
+ * work it out from a lane that looks complete.
+ */
+function loadVcf(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseVcf(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  const samples = samplesIn(text)
+  return {
+    format: 'vcf',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary:
+      `${count(data.length)} variant${data.length === 1 ? '' : 's'}` +
+      (samples === 0 ? '' : ` · ${count(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
+    payload: { kind: 'features', data },
+  }
 }
 
 /** One shape of answer for every format that resolves to intervals. */
@@ -865,6 +1156,7 @@ function gcSamples(
       values: bins.values,
       min: null,
       max: null,
+      variant: null,
       summary: true,
     })
   }
@@ -1068,7 +1360,9 @@ function signalSamples(
       if (value < min) min = value
       if (value > max) max = value
     }
-    out.push({ contig: region.contig, start: region.start, end: region.end, ...got })
+    // A bigWig has no reference to disagree with; only an alignment lane fills
+    // this in, and it is `null` rather than empty so the two states stay apart.
+    out.push({ contig: region.contig, start: region.start, end: region.end, variant: null, ...got })
   }
   return { basesPerPixel, regions: out, extent: min <= max ? { min, max } : null }
 }
@@ -1095,7 +1389,15 @@ async function sample(
   entry: string,
   regions: Region[],
   basesPerPixel: number,
+  style: ReadStyle | undefined,
+  id: number,
 ): Promise<TrackSampleSet> {
+  // Asked first, because it is the only probe that can decline and the only one
+  // that can be called off — and because an alignment entry is in no other
+  // store, so reaching any of them would mean it had already gone wrong.
+  const open = alignments.get(entry)
+  if (open !== undefined) return alignmentSamples(id, open, regions, basesPerPixel, style)
+
   // A FASTA answers the same question with the same shape of answer, and this
   // is where the two formats part company: one has zoom levels on disk, the
   // other computes its summary from the residues it is holding.
@@ -1173,6 +1475,7 @@ async function sample(
       values,
       min: packed.isSummary ? packed.minScores.slice(from, to) : null,
       max: packed.isSummary ? packed.maxScores.slice(from, to) : null,
+      variant: null,
       summary: packed.isSummary,
     })
   }
@@ -1182,6 +1485,582 @@ async function sample(
     regions: out,
     extent: min <= max ? { min, max } : null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Alignments (§8.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * How much of the file to inflate looking for the end of the header.
+ *
+ * Grown rather than guessed, because the reference table is not small on the
+ * files this viewer exists for: a co-assembly of twenty thousand contigs writes
+ * about a megabyte of names and lengths, spanning a dozen BGZF blocks. "Inflate
+ * the first block and parse" is wrong on precisely those, and wrong silently —
+ * it reads as a corrupt file.
+ */
+const HEADER_FIRST_READ = 1 << 18
+const HEADER_MAX_READ = 1 << 24
+
+/**
+ * Whether a BGZF file's first block begins a BAM.
+ *
+ * One block, which is always enough: `BAM\\1` is the first four bytes of the
+ * first block's *inflated* content, and no BGZF block exceeds 64 KiB
+ * compressed. A bgzipped GTF answers `false` here and goes down the tabix road
+ * it always did.
+ */
+/**
+ * The front of a BGZF file, inflated once and answered twice.
+ *
+ * *Is this a BAM* and *what is in its header* are two questions about the same
+ * bytes, and asking them separately cost two range requests over the same span
+ * — plus a third, because `load` had already read the first sixty-four bytes to
+ * decide the file was BGZF at all. On a remote file that is §12's whole budget
+ * for opening one, spent before the index is even fetched.
+ *
+ * `null` means the file is BGZF and is not a BAM, which is an ordinary answer:
+ * a bgzipped GTF takes the tabix road from here.
+ */
+async function readBamFront(
+  handle: BlobFile | RemoteFile,
+  size: number,
+): Promise<BamHeader | null> {
+  let want = HEADER_FIRST_READ
+  for (;;) {
+    let inflated: Uint8Array
+    try {
+      inflated = await inflateBgzf(await handle.read(Math.min(want, size), 0))
+    } catch {
+      // Not inflatable is not a BAM, and is not this function's error to raise:
+      // the road it falls through to reads the file whole and reports properly.
+      return null
+    }
+    if (!isBam(inflated)) return null
+    const header = readHeader(inflated)
+    if (header !== null) return header
+    // `null` from `readHeader` means the buffer stopped mid-table — the
+    // multi-block header of a co-assembly — and nothing else does.
+    if (want >= size || want >= HEADER_MAX_READ) {
+      throw new Error('This BAM\'s header is truncated: its reference table does not end.')
+    }
+    want = Math.min(want * 4, HEADER_MAX_READ)
+  }
+}
+
+/**
+ * Open a BAM, or say exactly why not.
+ *
+ * Two refusals, and both name the command that fixes them (§10). They are the
+ * price of §8.13's carve-out from §13 and they have to be legible, because a
+ * reader who is told only "this file cannot be opened" will reasonably conclude
+ * the app cannot read BAMs at all.
+ */
+async function loadBam(
+  entry: string,
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+  mapContigs: NamedSequence[],
+  /** Already read, by whichever branch decided this was a BAM — never re-read. */
+  header: BamHeader,
+  size: number,
+): Promise<LoadResult> {
+  if (header.sortOrder === 'queryname' || header.sortOrder === 'unsorted') {
+    // Not a technicality: every byte this reader fetches is addressed by an
+    // index that only describes a coordinate-sorted file, so a name-sorted one
+    // handed to a region query answers with whatever was in those blocks.
+    throw new Error(
+      `${source.name} is sorted by ${header.sortOrder === 'queryname' ? 'read name' : 'nothing'}, ` +
+        'and reads are drawn by region. Run ' +
+        `\`samtools sort -o sorted.bam ${source.name}\` and index the result.`,
+    )
+  }
+
+  const indexSource = indexSourceFor(source)
+  if (indexSource === null) {
+    throw new Error(
+      `${source.name} has no index beside it. Unlike every other format here a BAM has no ` +
+        'whole-file fallback — it is read by region, and the index is the only thing that ' +
+        `makes that bounded. Drop \`${source.name}.bai\` alongside it, or run ` +
+        `\`samtools index ${source.name}\`.`,
+    )
+  }
+  const key = fileKey(source, indexSource)
+  const shared = openFiles.get(key)
+  let index: BamIndex
+  // Read once per file, not once per row. A BAI for a human WGS alignment is
+  // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
+  // the depth and the pile — so paying that twice and throwing the second copy
+  // away is the whole cost of the second row.
+  if (shared !== undefined) index = shared.open.index
+  else
+    try {
+      index = await parseBamIndex(await handleFor(indexSource).readFile())
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err)
+      // Three different fixes, so three different messages. A reader who has just
+      // dropped a file wants to know which of them happened.
+      //
+      // The remote case is the one worth separating: the sidecar URL there was
+      // **guessed** — `<url>.bai`, never probed, because §12 has no request to
+      // spend finding out that a file has no index — so the commonest failure is
+      // not a corrupt index but no index at that address at all. Saying "could
+      // not be read" would send a reader looking for a broken file that does not
+      // exist, when what they need is the `#index=` convention or a `samtools
+      // index` run on the host.
+      if (source.kind === 'remote') {
+        throw new Error(
+          `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
+            'A BAM is read by region and cannot be opened without one. If the index is published ' +
+            `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+        )
+      }
+      throw new Error(
+        `${source.name}'s index could not be read: ${why} ` +
+          `Re-make it with \`samtools index ${source.name}\`.`,
+      )
+    }
+
+  // Renamed into the map's vocabulary at the door (§5.9), exactly as a bigWig
+  // is and for the same reason: the contig list this reports, the overlap it is
+  // judged by and the regions it is later asked for are then all in one
+  // spelling. **With the lengths** the `@SQ` table carries, because a matcher
+  // given names alone has nothing to check its own guesses against — an hg19
+  // alignment on an hg38 map would rename `MT` onto `chrM` and report it as an
+  // ordinary match.
+  const renaming = renameInto(header.refs, mapContigs)
+  const contigs = renaming.names
+
+  // The map's spelling to this file's reference id. `renameInto` preserves the
+  // source order, so index *is* the id; the file's own spellings are added
+  // after and never overwrite a rename, for the deck companion that asks by a
+  // third convention.
+  const refIdOf = new Map<string, number>()
+  for (let id = 0; id < contigs.length; id++) refIdOf.set(contigs[id], id)
+  for (let id = 0; id < header.refs.length; id++) {
+    if (!refIdOf.has(header.refs[id].name)) refIdOf.set(header.refs[id].name, id)
+  }
+
+  // A second row over a file already open takes the record the first one made,
+  // rather than the handle and index this call just built. The renaming above
+  // is per *load* and identical for both rows — same header, same map — so
+  // nothing about the first row's record is stale for the second.
+  const open: OpenBam = shared?.open ?? {
+    handle,
+    header,
+    index,
+    size,
+    refIdOf,
+    refNames: header.refs.map((ref) => ref.name),
+  }
+  if (shared === undefined) openFiles.set(key, { open, holders: new Set([entry]) })
+  else shared.holders.add(entry)
+  alignments.set(entry, open)
+
+  return {
+    format: 'bam',
+    contigs,
+    overlap: overlapReport(contigs, mapContigs, renaming),
+    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${index.format.toUpperCase()}`,
+  }
+}
+
+/**
+ * Depth per pixel over the regions a lane is drawing (§8.13).
+ *
+ * The fifth probe in {@link sample}, and the one that can decline. Every other
+ * kind can answer any window: a bigWig picks a zoom level, a FASTA is held
+ * whole, a computed vector spans what it was computed over. A BAM has no
+ * summary layer at all, so depth over a window is a full read of the reads
+ * under it — and the honest behaviour above what that can cost is to draw
+ * nothing and say why, rather than to draw an estimate of a different quantity.
+ *
+ * The estimate that was considered and rejected is the BAI linear index's byte
+ * density. It is compressed *bytes* per 16 kb, not depth; it is wrong wherever
+ * read length or compressibility varies; and CSI has no linear index at all, so
+ * it would simply be absent on the files with the longest chromosomes. Drawing
+ * it on a depth axis would be the first quantitative lane here that means
+ * something other than what it says — the rule `__unbinned__` and the bigBed
+ * truncation notice are both instances of.
+ */
+/**
+ * The record filter a lane's controls come to, for **depth**.
+ *
+ * The part of a `ReadStyle` that decides what is *counted*, read on every
+ * request rather than stored: see the note on the `sample` request in
+ * `protocol.ts` for why the controls travel rather than being configured.
+ *
+ * `hideDuplicates` adds to the default exclusions rather than replacing them,
+ * so turning it on cannot quietly re-admit the secondary and supplementary
+ * alignments that `bam/pile.ts` argues out of every count. Nothing here can
+ * admit a supplementary alignment at all — see {@link pileFilterOf}.
+ *
+ * Which is why the depth is a row of its own and not a band of the pile: the
+ * two rows over one BAM (§8.13) are filtered by these two functions, and a
+ * split read drawn in the pile must not appear as a second molecule in the
+ * curve beside it.
+ */
+function filterOf(style: ReadStyle | undefined): PileFilter {
+  if (style === undefined) return DEFAULT_FILTER
+  return {
+    exclude: DEFAULT_EXCLUDE | (style.hideDuplicates ? FLAG.DUPLICATE : 0),
+    minMapq: style.minMapq,
+  }
+}
+
+/**
+ * The same, for the **pile** — where one switch more is allowed.
+ *
+ * `splits` admits supplementary alignments, and this is the only place in the
+ * application where they are admitted. The asymmetry is the point and it is
+ * not an oversight: a supplementary record is a second piece of one molecule,
+ * so drawing it shows a reader where the molecule went, and counting it would
+ * report one fragment as two. The depth row therefore never sees them, however
+ * the pile beside it is set — and `readFilterKey` leaves `splits` out, so
+ * flipping the switch does not even invalidate the depth's cached samples.
+ */
+function pileFilterOf(style: ReadStyle): PileFilter {
+  const base = filterOf(style)
+  return style.splits ? { ...base, exclude: base.exclude & ~FLAG.SUPPLEMENTARY } : base
+}
+
+async function alignmentSamples(
+  id: number,
+  open: OpenBam,
+  regions: Region[],
+  basesPerPixel: number,
+  style: ReadStyle | undefined,
+): Promise<TrackSampleSet> {
+  const refIdOf = (name: string): number | undefined => {
+    const held = open.refIdOf.get(name)
+    if (held !== undefined) return held
+    const at = contigIndexOf(open.refNames, name)
+    if (at < 0) return undefined
+    open.refIdOf.set(name, at)
+    return at
+  }
+
+  const wanted = regions.filter(
+    (region) => refIdOf(region.contig) !== undefined && region.end > region.start,
+  )
+  if (wanted.length === 0) return { basesPerPixel, regions: [], extent: null }
+
+  // The forecast, before a byte of alignment data is read. Every region at
+  // once, because a whole-genome view asks for one window per contig and
+  // refusing them one at a time would draw a lane that is partly there.
+  const plans = wanted.map((region) => ({
+    region,
+    refId: refIdOf(region.contig) as number,
+    spans: chunksFor(
+      open.index,
+      refIdOf(region.contig) as number,
+      Math.max(0, Math.floor(region.start)),
+      Math.ceil(region.end),
+      open.size,
+    ),
+  }))
+  const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
+  if (forecast > WINDOW_BYTE_CAP) {
+    return {
+      basesPerPixel,
+      regions: [],
+      extent: null,
+      // Short on purpose. It is drawn where a lane's value range goes, and that
+      // sits in the name column's gutter: a sentence of advice there widens the
+      // gutter for every lane in the stack. The number and the way out are what
+      // a reader can act on; the bigWig-sidecar suggestion lives in §8.13.
+      note: `${formatBytes(forecast)} of reads — zoom in`,
+    }
+  }
+
+  const out: TrackSamples[] = []
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const plan of plans) {
+    const span = plan.region.end - plan.region.start
+    const bins = Math.max(1, Math.min(4096, Math.round(span / Math.max(1, basesPerPixel))))
+    const depth = new Float64Array(bins)
+    // Residues for this window, if some FASTA in this worker happens to hold
+    // them — the same free source the pile's mismatches use. Only below
+    // `VARIANT_BELOW`: finding the disagreements is a walk over every aligned
+    // base, which is the one thing here that scales with depth times read
+    // length, and a bin a kilobase wide would report the genome's background
+    // mismatch rate as a variant at every pixel.
+    const reference = basesPerPixel <= VARIANT_BELOW ? residuesFor(plan.region) : undefined
+    const variant = reference === undefined ? null : new Float64Array(bins)
+    for (const byteSpan of plan.spans) {
+      // Between blocks, so a pan that has moved on stops this rather than
+      // holding the one thread every other lane's `sample` is waiting on.
+      if (!(await stillWanted(id))) throw abortError()
+      const compressed = await open.handle.read(byteSpan.to - byteSpan.from, byteSpan.from)
+      const inflated = await inflateBgzf(compressed, byteSpan.lastBlock - byteSpan.from)
+      const result = coverageOf(
+        inflated,
+        // Not zero. A BGZF block boundary is not a record boundary, so the
+        // first wanted record starts wherever the chunk's virtual offset says
+        // inside this block — see `bam/index.ts`'s `ByteSpan.dataFrom`.
+        byteSpan.dataFrom,
+        plan.refId,
+        Math.floor(plan.region.start),
+        Math.ceil(plan.region.end),
+        bins,
+        filterOf(style),
+        reference,
+      )
+      // Summed across spans rather than concatenated: a read overlapping the
+      // window may live in any of them, and the bins are the same bins.
+      for (let i = 0; i < bins; i++) depth[i] += result.depth[i]
+      if (variant !== null && result.variant !== null) {
+        for (let i = 0; i < bins; i++) variant[i] += result.variant[i]
+      }
+    }
+
+    const starts = new Int32Array(bins)
+    const ends = new Int32Array(bins)
+    const values = new Float32Array(bins)
+    const differing = variant === null ? null : new Float32Array(bins)
+    const width = span / bins
+    for (let i = 0; i < bins; i++) {
+      starts[i] = Math.round(plan.region.start + i * width)
+      ends[i] = Math.round(plan.region.start + (i + 1) * width)
+      values[i] = depth[i]
+      if (differing !== null && variant !== null) differing[i] = variant[i]
+      if (depth[i] < min) min = depth[i]
+      if (depth[i] > max) max = depth[i]
+    }
+    out.push({
+      contig: plan.region.contig,
+      start: plan.region.start,
+      end: plan.region.end,
+      starts,
+      ends,
+      values,
+      variant: differing,
+      min: null,
+      max: null,
+      // Depth *is* the summary — there is no finer value behind it to have
+      // rolled up, so claiming one would put a min/max band on a lane that has
+      // none.
+      summary: false,
+    })
+  }
+
+  return {
+    basesPerPixel,
+    regions: out,
+    // Two decisions in one line.
+    //
+    // The floor is a real zero rather than the smallest value sampled, because
+    // depth is a count: a lane autoscaled from 3 to 40 draws a region with
+    // three reads on it as though it had none, and one with forty as though it
+    // were saturated.
+    //
+    // And an all-zero window has **no** extent rather than `{0, 0}`. A region
+    // with no reads in it is still answered — the lane draws a flat line on its
+    // baseline, which is the honest picture and is distinguishable from a lane
+    // that was never asked — but a zero-height axis is not a range, and handing
+    // one to `resolveLimits` is how a lane ends up rescaled to nothing the
+    // moment a reader pans across an empty contig.
+    extent: min <= max && max > 0 ? { min: 0, max } : null,
+  }
+}
+
+/**
+ * How many compressed bytes a *read* window may cost.
+ *
+ * Lower than the coverage cap, and deliberately. A coverage band answers a
+ * question about a whole region and is worth waiting a moment for; a pile is
+ * only legible at a width where the bytes under it are few, so a pile that
+ * needs four megabytes is a pile nobody can read anyway. Refusing early is
+ * kinder than drawing twenty thousand one-pixel rectangles.
+ */
+const READ_BYTE_CAP = 4 << 20
+
+/**
+ * The widest window that is offered reads at all.
+ *
+ * Independent of the byte cap and needed beside it: a sparse region can be
+ * cheap in bytes and still be a megabase wide, where a 100 bp read is a fifth
+ * of a pixel. Reads stop meaning anything long before the bytes run out.
+ */
+const READ_MAX_SPAN = 200_000
+
+/**
+ * The bases-per-pixel at which a read's *name* could be read off the screen.
+ *
+ * Names are the largest thing in a pile — one string per read — and they are
+ * only ever wanted for a dialog. But they are also what joins two records into
+ * one template, so they are always *read* in the worker and only sometimes
+ * shipped (`bam/reads.ts`).
+ */
+const NAMES_BELOW = 40
+
+/**
+ * The reads under a window, packed and ready to draw (§8.13).
+ *
+ * The second road out of an open BAM, standing to {@link alignmentSamples}
+ * exactly as `bases` stands to `sample`: a different kind of answer over a
+ * narrower window, asked for only by a surface that can draw it.
+ */
+async function readsFor(
+  entry: string,
+  regions: Region[],
+  maxRows: number,
+  basesPerPixel: number,
+  style: ReadStyle,
+  id: number,
+): Promise<ReadWindow> {
+  const open = alignments.get(entry)
+  if (open === undefined) {
+    throw new Error('This track is no longer open. Drop the file again.')
+  }
+  const empty: ReadWindow = {
+    piles: [], total: 0, kept: 0, capped: false, rows: 0, diffs: 'none',
+  }
+
+  const refIdOf = (name: string): number | undefined => {
+    const held = open.refIdOf.get(name)
+    if (held !== undefined) return held
+    const at = contigIndexOf(open.refNames, name)
+    if (at < 0) return undefined
+    open.refIdOf.set(name, at)
+    return at
+  }
+
+  const wanted = regions.filter(
+    (region) => refIdOf(region.contig) !== undefined && region.end > region.start,
+  )
+  if (wanted.length === 0) return empty
+
+  const span = wanted.reduce((sum, region) => sum + (region.end - region.start), 0)
+  if (span > READ_MAX_SPAN) {
+    return { ...empty, note: `${trim(span / 1000)} kb — too wide to draw reads` }
+  }
+
+  const plans = wanted.map((region) => ({
+    region,
+    refId: refIdOf(region.contig) as number,
+    spans: chunksFor(
+      open.index,
+      refIdOf(region.contig) as number,
+      Math.max(0, Math.floor(region.start)),
+      Math.ceil(region.end),
+      open.size,
+    ),
+  }))
+  const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
+  if (forecast > READ_BYTE_CAP) {
+    return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
+  }
+
+  const piles: ReadPile[] = []
+  let total = 0
+  let kept = 0
+  let capped = false
+  let rows = 0
+  let usedMd = false
+  let usedCigar = false
+  let usedReference = false
+
+  for (const plan of plans) {
+    // Residues for this window, if some FASTA in this worker happens to hold
+    // them. Free where it answers, and the only mismatch source that works on
+    // an assembly nobody has published — see `bam/reads.ts`.
+    const reference = residuesFor(plan.region)
+    if (reference !== undefined) usedReference = true
+
+    for (const byteSpan of plan.spans) {
+      if (!(await stillWanted(id))) throw abortError()
+      const compressed = await open.handle.read(byteSpan.to - byteSpan.from, byteSpan.from)
+      const inflated = await inflateBgzf(compressed, byteSpan.lastBlock - byteSpan.from)
+      const result = pileOf(
+        inflated,
+        byteSpan.dataFrom,
+        plan.region.contig,
+        plan.refId,
+        Math.floor(plan.region.start),
+        Math.ceil(plan.region.end),
+        {
+          // The pile's own filter, which is the only one that admits a
+          // supplementary alignment. What is *counted* is the depth row beside
+          // this one, and it goes through `filterOf` on its own road.
+          filter: pileFilterOf(style),
+          maxRows,
+          maxReads: MAX_READS,
+          colourBy: style.colourBy,
+          withNames: basesPerPixel <= NAMES_BELOW,
+          // The header's own table, which is the only place a `next_refID`
+          // means anything. Held here rather than sent: `nameMates` asks it for
+          // the handful of ids a window's mates actually land on.
+          refNameOf: (id: number) => open.refNames[id],
+          ...(reference === undefined ? {} : { reference }),
+        },
+      )
+      total += result.total
+      kept += result.kept
+      capped = capped || result.capped
+      rows = Math.max(rows, result.rows)
+      usedMd = usedMd || result.usedMd
+      usedCigar = usedCigar || result.usedCigar
+      if (result.pile.length > 0 || piles.length === 0) piles.push(result.pile)
+    }
+  }
+
+  return {
+    piles,
+    total,
+    kept,
+    capped,
+    rows,
+    // In the order `bam/reads.ts` tries them, so the lane names the most direct
+    // source that actually answered.
+    diffs: usedCigar ? 'cigar' : usedMd ? 'md' : usedReference ? 'reference' : 'none',
+  }
+}
+
+/** A hard ceiling on reads, whatever the rows allow. */
+const MAX_READS = 20_000
+
+/**
+ * The bases-per-pixel below which the depth row is checked against a reference.
+ *
+ * Two limits meet here and both point the same way. The cost: finding the
+ * disagreements means walking every *aligned base* of every kept read rather
+ * than the blocks of its CIGAR, and the depth scan is the most expensive read
+ * in this application (§12) — it must not grow that way at whole-genome widths.
+ * The meaning: a variant is a claim about a *position*, and a bin holding two
+ * hundred bases reports the genome's background mismatch rate as a coloured
+ * pixel everywhere. Sixteen is about the width at which a pixel is still a
+ * handful of bases, which is where a reader starts looking for one.
+ */
+const VARIANT_BELOW = 16
+
+/**
+ * Residues covering a region, from any FASTA this worker already holds.
+ *
+ * A scan across the open sequence stores rather than one lookup, because they
+ * are keyed by the *entry* that owns them and an alignment lane has no idea
+ * which row a genome was dropped as. Cheap: there is rarely more than one, and
+ * this runs once per fetched window rather than per frame.
+ */
+function residuesFor(region: Region): { start: number; bases: Uint8Array } | undefined {
+  for (const store of sequences.values()) {
+    const held = basesOf(store, region.contig)
+    if (held === undefined) continue
+    const start = Math.max(0, Math.floor(region.start))
+    const end = Math.min(held.length, Math.ceil(region.end))
+    if (end <= start) continue
+    return { start, bases: held.subarray(start, end) }
+  }
+  return undefined
+}
+
+/** `8.4 MB`, for a refusal that has to name a number a reader can act on. */
+function formatBytes(bytes: number): string {
+  if (bytes >= 1 << 30) return `${(bytes / (1 << 30)).toFixed(1)} GB`
+  if (bytes >= 1 << 20) return `${(bytes / (1 << 20)).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} kB`
 }
 
 // ---------------------------------------------------------------------------

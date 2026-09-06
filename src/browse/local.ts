@@ -52,6 +52,7 @@ import {
   type FolderListing,
   type PickedFile,
 } from './folder'
+import { indexNamesFor } from '../annotations/sidecar'
 
 /** `true` where this browser can hold a directory at all — the grant shape. */
 export function directoryPickerSupported(): boolean {
@@ -185,11 +186,27 @@ export function handleFolder(
       const slash = entry.path.lastIndexOf('/')
       const directory = await walk(slash === -1 ? '' : entry.path.slice(0, slash + 1))
       const file = await (await directory.getFileHandle(entry.name)).getFile()
+      // The sidecar beside it, if the folder holds one. Picking a `.bam` whose
+      // `.bai` is one row down and greyed out, and then being told to run
+      // `samtools index`, is the least useful thing this could do.
+      let index: File | undefined
+      for (const name of indexNamesFor(entry.name)) {
+        try {
+          index = await (await directory.getFileHandle(name)).getFile()
+          break
+        } catch {
+          // Not there. The next candidate spelling, then no index at all.
+        }
+      }
       // The bare name, as every other local open in this app uses: a URI is what
       // a session is *of*, `state/handles.ts` keys grants by it, and a relative
       // path would make `rep1.cool` from a connected folder a different file
       // from the same `rep1.cool` dropped on the window.
-      return { uri: file.name, source: { kind: 'local', file } }
+      return {
+        uri: file.name,
+        source: { kind: 'local', file },
+        ...(index === undefined ? {} : { index }),
+      }
     },
   }
 }
@@ -248,7 +265,18 @@ export function snapshotFolder(id: string, label: string, files: readonly File[]
     async pick(entry: FolderEntry): Promise<PickedFile> {
       const file = byPath.get(entry.path)
       if (file === undefined) throw new Error(`${entry.name} is no longer in this folder.`)
-      return { uri: file.name, source: { kind: 'local', file } }
+      const slash = entry.path.lastIndexOf('/')
+      const at = slash === -1 ? '' : entry.path.slice(0, slash + 1)
+      let index: File | undefined
+      for (const name of indexNamesFor(entry.name)) {
+        index = byPath.get(`${at}${name}`)
+        if (index !== undefined) break
+      }
+      return {
+        uri: file.name,
+        source: { kind: 'local', file },
+        ...(index === undefined ? {} : { index }),
+      }
     },
   }
 }

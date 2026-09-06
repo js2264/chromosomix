@@ -16,6 +16,8 @@ import { featureAt, layoutFeatures, rowsThatFit } from '../../src/render/feature
 import type { LaneFrame } from '../../src/render/lane'
 import { locusAxisFrom, type LocusAxis } from '../../src/render/locus'
 import { formatLimit, normaliser, profileOf, resolveLimits } from '../../src/render/tracks'
+import { FeatureBuilder } from '../../src/annotations/featureset'
+import type { FeatureSet } from '../../src/annotations/types'
 
 const BINSIZE = 1000
 
@@ -51,6 +53,8 @@ function frameOf(domain: [number, number], pixels: number): LaneFrame {
 function samples(
   intervals: Array<[number, number, number]>,
   band?: Array<[number, number]>,
+  /** The disagreeing share of each interval, for an alignment lane (§8.13). */
+  variant?: number[],
 ): TrackSampleSet {
   return {
     basesPerPixel: 1,
@@ -64,6 +68,7 @@ function samples(
         values: Float32Array.from(intervals.map((row) => row[2])),
         min: band === undefined ? null : Float32Array.from(band.map((row) => row[0])),
         max: band === undefined ? null : Float32Array.from(band.map((row) => row[1])),
+        variant: variant === undefined ? null : Float32Array.from(variant),
         summary: band !== undefined,
       },
     ],
@@ -182,6 +187,66 @@ describe('per-pixel reduction', () => {
   })
 })
 
+/**
+ * The disagreeing share of a depth lane, reduced the same way the depth is.
+ *
+ * The whole point of the column is the *ratio* of the two, so the two have to
+ * come through `profileOf` under the same weights: reduced any other way the
+ * fraction is right at one pixel per interval and wrong everywhere else, which
+ * is the width nobody tests at.
+ */
+describe('a lane that disagrees with its reference', () => {
+  it('carries no variant column at all where nothing carried one', () => {
+    // `null` and zeros are different claims and must stay different: "these
+    // reads agree with the reference" against "no reference was loaded".
+    const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples([[0, 1000, 4]]))
+    expect(profile.variant).toBeNull()
+  })
+
+  it('reduces the disagreement under the same weights as the depth', () => {
+    // Two intervals into one pixel each: the fraction out is the fraction in.
+    const profile = profileOf(
+      frameOf([0, 2], 2),
+      yeastAxis(),
+      samples(
+        [
+          [0, 1000, 8],
+          [1000, 2000, 4],
+        ],
+        undefined,
+        [2, 0],
+      ),
+    )
+    const variant = profile.variant as Float32Array
+    expect(variant).not.toBeNull()
+    expect(variant[0] / profile.mean[0]).toBeCloseTo(0.25, 6)
+    expect(variant[1]).toBeCloseTo(0, 6)
+  })
+
+  it('keeps the fraction when several intervals fall into one pixel', () => {
+    // The case a naive sum gets wrong. Four bins into one pixel, half of the
+    // depth disagreeing in each: the pixel's fraction is still a half, not four
+    // halves.
+    const profile = profileOf(
+      frameOf([0, 4], 1),
+      yeastAxis(),
+      samples(
+        [
+          [0, 1000, 4],
+          [1000, 2000, 4],
+          [2000, 3000, 4],
+          [3000, 4000, 4],
+        ],
+        undefined,
+        [2, 2, 2, 2],
+      ),
+    )
+    const variant = profile.variant as Float32Array
+    expect(profile.mean[0]).toBeCloseTo(4, 6)
+    expect(variant[0] / profile.mean[0]).toBeCloseTo(0.5, 6)
+  })
+})
+
 describe('the value axis', () => {
   it('anchors a one-signed autoscale at zero', () => {
     expect(resolveLimits({ auto: true, min: 0, max: 1 }, { min: 3, max: 90 })).toEqual({
@@ -239,6 +304,82 @@ describe('the value axis', () => {
     expect(formatLimit(2.5)).toBe('2.5')
     expect(formatLimit(0.16046)).toBe('0.16')
     expect(formatLimit(1e-9)).toBe('1.0e-9')
+  })
+})
+
+/**
+ * When a lane stops trying to resolve individual features.
+ *
+ * The rule is not "more features than pixels" — it is *more features than the
+ * lane can draw apart*, and those differ the moment a lane gives its features a
+ * minimum drawn width. A variant is one base, drawn at a floor of three pixels
+ * so it can be seen and hit; at the old threshold a stretch of variants seven
+ * bases apart at whole-contig zoom drew as several hundred three-pixel marks
+ * that merged into one solid bar, in whichever ink was laid down last. That
+ * reads as one three-kilobase variant, which is a claim the file does not make.
+ * Collapsing says the true thing instead: there are many here.
+ */
+describe('collapsing to density', () => {
+  /** `n` one-base features spread evenly across `span` bases. */
+  function points(n: number, span: number): TrackSampleSet['regions'][number] {
+    return samples(Array.from({ length: n }, (_, i) => {
+      const at = Math.round((i * span) / n)
+      return [at, at + 1, 1] as [number, number, number]
+    })).regions[0]
+  }
+
+  function setOf(n: number, span: number): FeatureSet {
+    const region = points(n, span)
+    const builder = new FeatureBuilder()
+    for (let i = 0; i < region.starts.length; i++) {
+      builder.add('I', region.starts[i], region.ends[i])
+    }
+    return builder.finish()
+  }
+
+  it('keeps the old rule exactly where no minimum width is asked for', () => {
+    // A peak that is one pixel wide *is* one pixel of genome, and every caller
+    // but the variant lane still gets `span / 2`.
+    const frame = frameOf([0, 100_000], 1000)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(400, 100_000), 4).dense).toBe(false)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(600, 100_000), 4).dense).toBe(true)
+  })
+
+  it('collapses sooner once each feature is given room to be seen', () => {
+    // 400 marks across 1000 pixels is 2.5 pixels apart — under the three a
+    // variant is drawn at, so they merge. The old threshold called this sparse.
+    const frame = frameOf([0, 100_000], 1000)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(400, 100_000), 4, 3).dense).toBe(true)
+    // …and still resolves them where there is genuinely room.
+    expect(layoutFeatures(frame, yeastAxis(), setOf(100, 100_000), 4, 3).dense).toBe(false)
+  })
+
+  it('counts the whole window even where it stops placing', () => {
+    // `LAYOUT_CAP` bounds the *work*, not the truth. The loop used to stop dead
+    // at the cap, which stopped the count with it — so a collapsed lane's
+    // caption reported the cap rather than the window, silently under-reporting
+    // by however much a dense file exceeded it. The count is the one thing a
+    // collapsed picture can still carry, so it has to be the real number.
+    const many = 100_001
+    const builder = new FeatureBuilder()
+    // Inside the contig, so every one of them is genuinely in the window — the
+    // point is the cap, not the clipping.
+    for (let i = 0; i < many; i++) builder.add('I', i % 99_000, (i % 99_000) + 1)
+    const layout = layoutFeatures(frameOf([0, 100_000], 1000), yeastAxis(), builder.finish(), 4)
+    expect(layout.dense).toBe(true)
+    expect(layout.placements.length).toBeLessThanOrEqual(100_000)
+    expect(layout.total).toBe(many)
+  })
+
+  it('collapses at the width the marks actually need, not at a chosen number', () => {
+    // Stated from the constants: one mark needs its drawn floor plus the gap
+    // that makes two read as two. A test that pinned a count would pass while
+    // the floor and the threshold drifted apart.
+    const frame = frameOf([0, 100_000], 1000)
+    const each = 3 + 2
+    const fits = Math.floor(1000 / each)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(fits, 100_000), 4, 3).dense).toBe(false)
+    expect(layoutFeatures(frame, yeastAxis(), setOf(fits + 40, 100_000), 4, 3).dense).toBe(true)
   })
 })
 

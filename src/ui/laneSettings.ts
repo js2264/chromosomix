@@ -16,7 +16,17 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import type { AnnotationEntry } from '../annotations/types'
+import {
+  COLOUR_BY,
+  PAIR_LAYOUTS,
+  readsOf,
+  type AnnotationEntry,
+  type ColourBy,
+  type PairLayout,
+  type ReadStyle,
+} from '../annotations/types'
+import { groupsFor } from '../annotations/bam/reads'
+import { readPalette } from '../render/alignments'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
 
@@ -227,5 +237,309 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     },
     el('span', { class: 'field-label', text: 'limits' }),
     el('div', { class: 'ann-limits' }, min, max, auto),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The alignment lane's own controls (§8.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a colouring means, in the words that go under it.
+ *
+ * Written out rather than left to the name, because four of the six are only
+ * obvious once you already know what they do: `mate` and `pair` sound like the
+ * same control, and `insert` sounds like an insertion in a CIGAR when what it
+ * colours is the distance between two ends of a template.
+ */
+const COLOUR_HINTS: Record<ColourBy, string> = {
+  strand: 'Forward and reverse, which is the default and the one that costs nothing to read.',
+  pair: 'Proper pairs against the ones the aligner could not place as a pair — where discordant reads are.',
+  insert: 'Template length: pairs further apart than a normal library are picked out.',
+  mate: 'Where the mate went — the same sequence, a different one, or nowhere.',
+  mapq: 'Mapping quality, banded, so an ambiguous pile-up is visible as one.',
+  none: 'One colour, when the point is the shape of the pile rather than the reads in it.',
+}
+
+/**
+ * The read controls **as the store holds them now**, and the write that follows.
+ *
+ * Every other control on this card patches one top-level field — `{ size }`,
+ * `{ mode }`, `{ limits }` — and lets `restyle` merge it over whatever the store
+ * currently has. A nested record cannot do that: writing `{ reads: {...} }`
+ * replaces the whole record, so the other four fields come from wherever the
+ * caller read them.
+ *
+ * Read from the *store* rather than from the `entry` the field was built with,
+ * because that snapshot goes stale in a way peculiar to this card:
+ * `AnnotationCard.render` defers rebuilding while a control holds focus, so
+ * after typing in the MAPQ box the row on screen is older than the store. A
+ * write built from it silently reverts the reader's previous edit — set a floor
+ * of 30, then pick a colouring, and the floor is gone.
+ */
+function patchReads(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  patch: Partial<ReadStyle>,
+): void {
+  const live = store.byId(entry.id) ?? entry
+  store.restyle(entry.id, { reads: { ...readsOf(live.style), ...patch } })
+  // …and through to the other row over the same BAM, for the settings that are
+  // about which reads *count* rather than how they are drawn (§8.13). A
+  // mapping-quality floor on the pile and not on the depth above it is two
+  // pictures of two different files under one name.
+  const shared: Partial<ReadStyle> = {}
+  for (const key of LINKED) if (key in patch) shared[key] = patch[key] as never
+  if (Object.keys(shared).length === 0) return
+  const other = live.partner === undefined ? undefined : store.byId(live.partner)
+  if (other === undefined) return
+  store.restyle(other.id, { reads: { ...readsOf(other.style), ...shared } })
+}
+
+/**
+ * The read settings a BAM's two rows share.
+ *
+ * Which reads count, and nothing about how they are drawn: a colouring and a
+ * pairing describe a pile and mean nothing to a depth curve, and `splits` is
+ * deliberately one-sided — see {@link splitsToggle}. Those three are not
+ * offered on the depth row at all, so this list is the whole of the link.
+ */
+const LINKED = ['minMapq', 'hideDuplicates'] as const satisfies ReadonlyArray<keyof ReadStyle>
+
+/** The same, for reading a control's current value back. */
+function liveReads(store: AnnotationStore, entry: AnnotationEntry): ReadStyle {
+  return readsOf((store.byId(entry.id) ?? entry).style)
+}
+
+/**
+ * How the pile is coloured.
+ *
+ * The one control on this lane a reader is expected to reach for often, so it
+ * is a select rather than a menu: the six answers are short and the difference
+ * between them is the whole reason to look at reads instead of coverage.
+ *
+ * It refetches. The category each read falls into is decided in the worker and
+ * comes back as a column of the pile (`bam/reads.ts`), so a different colouring
+ * is a different reply — which is why this lives in the style the caches are
+ * keyed on rather than in the renderer.
+ *
+ * It is a *colouring* and not a grouping: the rows are packed by position
+ * alone, so the categories are interleaved down the pile rather than banded.
+ * Grouping — a band per category — is a separate thing this lane does not do.
+ */
+export function colourByField(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  onPicked?: (by: ColourBy) => void,
+): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', { class: 'select' })
+  for (const by of COLOUR_BY) {
+    select.appendChild(el('option', { value: by, text: by, title: COLOUR_HINTS[by] }))
+  }
+  select.value = reads.colourBy
+  select.title = COLOUR_HINTS[reads.colourBy]
+  const field = el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'colour by' }),
+    select,
+  )
+  select.addEventListener('change', () => {
+    const by = select.value as ColourBy
+    select.title = COLOUR_HINTS[by]
+    patchReads(store, entry, { colourBy: by })
+    // The key is refreshed here rather than left to the card's own rebuild.
+    // `AnnotationCard.render` defers while a control holds focus, and picking
+    // from a select leaves the focus on it — so the lane repainted in the new
+    // colours while the legend under the picker went on naming the old ones,
+    // until the reader happened to click somewhere else.
+    onPicked?.(by)
+  })
+  return field
+}
+
+/**
+ * The key: which colour is which category.
+ *
+ * Here rather than on the canvas, and that is a decision rather than a
+ * shortcut. A legend drawn in the lane has to go somewhere, and every place in
+ * an alignment lane is already something — the pile fills it, the coverage band
+ * is a curve, the gutter is the name. Drawn in the card it sits directly under
+ * the control that decides it, it can be read at any lane height, and it is
+ * selectable text rather than pixels.
+ *
+ * It is built from `groupsFor` and `readPalette` — the same two functions the
+ * worker and the renderer use — so it cannot drift from the picture. Nothing
+ * about it depends on data being loaded, which is why it is right even while
+ * the first window of reads is still being fetched.
+ */
+export function colourLegend(entry: AnnotationEntry, by?: ColourBy): HTMLElement {
+  const host = el('div', { class: 'ann-key' })
+  fillLegend(host, entry.style.colour, by ?? readsOf(entry.style).colourBy)
+  return host
+}
+
+/** Redraw a key in place, for {@link colourByField}'s change handler. */
+export function fillLegend(host: HTMLElement, colour: string, by: ColourBy): void {
+  const groups = groupsFor(by)
+  // One category is not a key, it is a restatement of the lane's own colour.
+  if (groups.length <= 1) {
+    host.replaceChildren()
+    return
+  }
+  const colours = readPalette(groups, colour)
+  host.replaceChildren(
+    ...groups.map((name, i) =>
+      el(
+        'span',
+        { class: 'ann-key-item' },
+        el('span', { class: 'ann-key-chip', style: { background: colours[i] } }),
+        el('span', { text: name }),
+      ),
+    ),
+  )
+}
+
+/**
+ * The mapping-quality floor, in the same shape as the height box.
+ *
+ * A number rather than a slider or a set of presets, because MAPQ is a number a
+ * reader arrives already holding: pipelines are written against 20, 30 or 60,
+ * and a control that could not express the one in the protocol would be a
+ * control nobody trusted.
+ *
+ * It changes what is *counted*, not only what is drawn — the coverage band and
+ * the depth beside the map move with it — which is the reason it is worth
+ * having here rather than as a rendering trick.
+ */
+export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const box = el('input', {
+    class: 'input input-num ann-size',
+    type: 'number',
+    value: String(reads.minMapq),
+    title:
+      'Skip alignments below this mapping quality. It changes the depth as well as the pile, ' +
+      'so the coverage here agrees with what the reads show. 0 keeps everything.',
+  })
+  box.min = '0'
+  box.max = '255'
+  box.step = '1'
+  box.addEventListener('change', () => {
+    const typed = Math.round(Number(box.value))
+    if (!Number.isFinite(typed)) {
+      box.value = String(liveReads(store, entry).minMapq)
+      return
+    }
+    const clamped = Math.max(0, Math.min(255, typed))
+    box.value = String(clamped)
+    patchReads(store, entry, { minMapq: clamped })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'min MAPQ' }),
+    box,
+  )
+}
+
+/**
+ * Hide the alignments a pipeline marked as duplicates.
+ *
+ * A text button rather than an icon, because it has no picture anyone would
+ * recognise and it is a state the lane is *in*; it carries `aria-pressed` for
+ * the same reason the flip does. It reads as what it *hides* rather than as
+ * what it keeps, which is the way round the reader is thinking about it — and
+ * it is off by default, on the argument `bam/pile.ts` makes: marking duplicates
+ * is a pipeline's decision, and hiding them unasked would make this app
+ * disagree with every other reading of the same file.
+ *
+ * On **both** of a BAM's rows, because it is about which reads count.
+ */
+export function duplicatesToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).hideDuplicates
+  const chip = button(
+    'hide duplicates',
+    () => patchReads(store, entry, { hideDuplicates: !liveReads(store, entry).hideDuplicates }),
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Skip alignments flagged as PCR or optical duplicates, in the pile and in the depth ' +
+        'beside it. Off by default: whether they are marked at all is the pipeline’s decision, ' +
+        'not this viewer’s.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  return el('div', { class: 'ann-chips' }, chip)
+}
+
+/**
+ * Draw the further pieces of a read the aligner split across a breakpoint.
+ *
+ * The pile's alone, and that is the whole asymmetry: a supplementary record is
+ * a second piece of one molecule, so drawing it shows a reader where the
+ * molecule went and counting it would report one fragment as two. The depth row
+ * never sees them however this is set — `pileFilterOf` is the only place in the
+ * application that admits one.
+ */
+export function splitsToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = readsOf(entry.style).splits
+  const chip = button(
+    'split reads',
+    () => patchReads(store, entry, { splits: !liveReads(store, entry).splits }),
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Also draw supplementary alignments — the further pieces of a read the aligner had to ' +
+        'split across a breakpoint. They are outlined, and they are never counted in the depth.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  return el(
+    'div',
+    { class: 'field field-block' },
+    el('span', { class: 'field-label', text: 'reads' }),
+    el('div', { class: 'ann-chips' }, chip),
+  )
+}
+
+/**
+ * How the two ends of a template are laid out.
+ *
+ * A select rather than a switch, because it is three answers and not two — and
+ * because which one a reader wants is a property of their library, not a thing
+ * they toggle back and forth. Paired is the default: it is what a paired-end
+ * file is, and drawing the two ends on separate rows joined by nothing made a
+ * fragment read as two unrelated reads.
+ */
+const LAYOUT_HINTS: Record<PairLayout, string> = {
+  pairs:
+    'Both ends of a template on one row, joined by a dotted thread across the part that was not ' +
+    'sequenced. The default, and what a paired-end library is.',
+  fragments:
+    'The whole template as one bar, gap filled. For reading fragment coverage rather than reads.',
+  reads:
+    'Every record packed on its own, mates unjoined. What a single-ended library wants.',
+}
+
+export function layoutField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const reads = readsOf(entry.style)
+  const select = el('select', { class: 'select' })
+  for (const mode of PAIR_LAYOUTS) {
+    select.appendChild(el('option', { value: mode, text: mode, title: LAYOUT_HINTS[mode] }))
+  }
+  select.value = reads.layout
+  select.title = LAYOUT_HINTS[reads.layout]
+  select.addEventListener('change', () => {
+    const mode = select.value as PairLayout
+    select.title = LAYOUT_HINTS[mode]
+    patchReads(store, entry, { layout: mode })
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'draw as' }),
+    select,
   )
 }

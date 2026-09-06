@@ -15,7 +15,15 @@
  * needs at the resolution it needs them (spec §8.2, §8.4).
  */
 
-import type { AnnotationPayload, BaseRegion, ContigOverlap, Region, TrackSampleSet } from '../types'
+import type {
+  AnnotationPayload,
+  BaseRegion,
+  ContigOverlap,
+  ReadStyle,
+  ReadWindow,
+  Region,
+  TrackSampleSet,
+} from '../types'
 import type { BinVector } from './binVector'
 import type { AnalysisFraming, Params, TaskResult } from '../../analysis/types'
 import type { TaskInputs } from '../../analysis/worker/protocol'
@@ -47,9 +55,17 @@ export type DetectedFormat =
   | 'gtf'
   | 'bed'
   | 'bedpe'
+  // Called variants (§8.14). Its own member rather than a `bed`, because what a
+  // reader means by a row is different — and because `kindFor` sends it to a
+  // kind with its own controls and its own card.
+  | 'vcf'
   | 'sizes'
   | 'hdf5'
   | 'fasta'
+  // Aligned reads (§8.13). Named `bam` and not `alignments` because this is
+  // what the *bytes* turned out to be, and CRAM — which is refused, and for its
+  // own reasons — would be a second member here rather than the same one.
+  | 'bam'
 
 /**
  * How to reach the bytes, in the shape that survives `postMessage`.
@@ -111,6 +127,8 @@ export interface AnnotationResultMap {
   register: null
   run: TaskResult
   drop: null
+  cancel: null
+  reads: ReadWindow
 }
 
 export type AnnotationRequestKind = keyof AnnotationResultMap
@@ -143,6 +161,21 @@ export type AnnotationRequest =
       regions: Region[]
       /** Drives the file's own zoom-level choice; `basesPerSpan` in bbi's terms. */
       basesPerPixel: number
+      /**
+       * The lane's read controls, for the one kind that has any.
+       *
+       * On the request rather than held per entry in the worker, which is the
+       * decision worth recording. A `configure` message setting `OpenBam.filter`
+       * would be one message where this is a field — but it makes the answer to
+       * a `sample` depend on the order two messages happened to arrive in, and
+       * it leaves the cached samples on this side keyed on nothing that changed.
+       * Carrying the controls means a request states in full what it is asking,
+       * and a cache mismatch is a mismatched key rather than a race.
+       *
+       * Optional because no other kind has these controls; absent means the
+       * defaults, which is what every non-alignment lane sends.
+       */
+      reads?: ReadStyle
     }
   // The residues themselves, which only a FASTA can answer and only a view
   // zoomed in far enough to draw them ever asks for. Separate from `sample`
@@ -167,7 +200,55 @@ export type AnnotationRequest =
       framing: AnalysisFraming
       inputs: TaskInputs
     }
+  /**
+   * The reads themselves, and the base counts under them (§8.13).
+   *
+   * Its own request rather than a wider `sample`, and for the reason `bases`
+   * is: it is a different *kind* of answer. `sample` returns a value per pixel
+   * and every lane in the application draws it the same way; this returns
+   * individual molecules with rows, mates, CIGARs and disagreements, over a
+   * window a screen of readable reads covers rather than a chromosome.
+   *
+   * Only the 1D browser ever sends one. A read is drawn along the axis at its
+   * own extent, and beside a heatmap the axis is an axis of matrix bins where
+   * the finest unit is a bin — there is nothing there for a read to be drawn
+   * *on*.
+   */
+  | {
+      id: number
+      kind: 'reads'
+      entry: string
+      regions: Region[]
+      /** Rows the lane can draw, which is what the thinning is budgeted against. */
+      maxRows: number
+      /** Bases per pixel, so the worker knows whether names could be read. */
+      basesPerPixel: number
+      /**
+       * The lane's read controls. Required here, unlike on `sample`: only an
+       * alignment lane ever sends this request, so there is no caller for whom
+       * the field would be meaningless.
+       */
+      reads: ReadStyle
+    }
   | { id: number; kind: 'drop'; entry: string }
+  /**
+   * Call off a request that is still running.
+   *
+   * This worker went without one for a long time, and the reason is written in
+   * `client.ts`: the longest request was a third of a second, and the shortest
+   * was the one a pan would cancel a hundred of. Alignments end that. A window
+   * of alignment records is tens of BGZF blocks to inflate before a single
+   * record is decoded, and a fast drag across a deep region queues one of those
+   * per frame — behind which every bigWig's `sample` waits, because this thread
+   * answers them all and `onmessage` fires each `handle` without a queue.
+   *
+   * Cooperative, exactly as `reader.worker.ts`'s is: the worker checks between
+   * units of work and stops at the next boundary rather than being killed
+   * mid-write, and the check is only reached because the work yields with
+   * `yieldToEventLoop()` — a microtask would drain inside the same task and
+   * this message would sit unread until the work it cancels had finished.
+   */
+  | { id: number; kind: 'cancel'; target: number }
 
 export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
   Extract<AnnotationRequest, { kind: K }>,
@@ -176,7 +257,12 @@ export type AnnotationRequestOf<K extends AnnotationRequestKind> = Omit<
 
 export type AnnotationResponse =
   | { type: 'result'; id: number; payload: unknown }
-  | { type: 'error'; id: number; message: string }
+  /**
+   * `cancelled` distinguishes "you called this off" from "this went wrong", so
+   * a lane that has moved on can drop the answer silently instead of drawing a
+   * failure the reader caused by panning.
+   */
+  | { type: 'error'; id: number; message: string; cancelled?: boolean }
   // Only an analysis task reports progress from here. A `load` or a `sample` is
   // over in milliseconds and a bar for one would flicker; a metaplot over five
   // thousand features and four tracks is a job, and §18.3 says a job reports.

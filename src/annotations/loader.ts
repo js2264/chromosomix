@@ -24,6 +24,27 @@ import type {
 import type { AnnotationClient } from './worker/client'
 import type { DetectedFormat, WireSource } from './worker/protocol'
 import { hasHandle, rememberHandle, resolveHandle } from '../state/handles'
+import {
+  basesForIndex,
+  indexNamesFor,
+  isIndexName,
+  leadOf,
+  pairIndexes,
+  splitIndexFragment,
+  type PairedDrop,
+} from './sidecar'
+
+// Re-exported because the pairing rules used to live here and three layers
+// import them from here. See `annotations/sidecar.ts` for why they moved.
+export {
+  basesForIndex,
+  indexNamesFor,
+  isIndexName,
+  leadOf,
+  pairIndexes,
+  splitIndexFragment,
+  type PairedDrop,
+}
 import { grantFor } from '../ui/chooseFiles'
 
 /**
@@ -40,6 +61,8 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.(bdg|bedgraph|wig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
   if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
+  if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
+  if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   return { card: 'linear', kind: 'segments' }
 }
 
@@ -53,7 +76,46 @@ export class AnnotationLoader {
      * thing that can veto a match made across two nomenclatures.
      */
     private readonly mapContigs: NamedSequence[],
-  ) {}
+  ) {
+    // Tell the worker when a row goes. Nothing did, before this: `client.drop`
+    // had exactly one caller — the refusal path below — and `AnnotationStore.remove`
+    // dropped the row, its lanes and its placements and said nothing to the
+    // thread holding the file. So closing a bigWig left its open handle, and
+    // closing a BAM left its parsed index — single-digit megabytes for a human
+    // WGS file — alive for the life of the tab.
+    //
+    // Reconciled against the store rather than driven by a removal event, which
+    // is the same choice `SampleCache.prune` makes and for the same reason: the
+    // worker's stores are *derived*, and a subscription that fires on every
+    // change cannot miss one, where an event somebody forgets to send is a leak
+    // nobody sees.
+    // Never unsubscribed, and nothing to unsubscribe *from*: a loader is built
+    // beside the store it watches and the client it speaks to, and a session
+    // that changes genome replaces all three at once (`Session.setUpBrowser-
+    // Annotations`), destroying the worker as it goes.
+    store.subscribe(() => this.release())
+  }
+
+  /** Entries this loader has told the worker about, so it can say when they go. */
+  private readonly held = new Set<string>()
+
+  /**
+   * Drop what the store no longer has.
+   *
+   * By id rather than by count, because a row can come *back* under the same id
+   * — `reattach` re-issues `load` for a detached local file — and a reference
+   * count over a channel that can repeat itself is a count that never reaches
+   * zero.
+   */
+  private release(): void {
+    if (this.held.size === 0) return
+    const live = new Set(this.store.entries.map((entry) => entry.id))
+    for (const id of [...this.held]) {
+      if (live.has(id)) continue
+      this.held.delete(id)
+      this.client.drop(id)
+    }
+  }
 
   /**
    * Load one or more files, whatever they are.
@@ -84,25 +146,23 @@ export class AnnotationLoader {
     // "select both and drag" the whole of the gesture. A `.tbi` dropped alone
     // has nothing to index and is passed through to be refused by name, which
     // is more use than silently doing nothing.
-    const indexes = new Map<string, File>()
-    for (const file of files) {
-      if (/\.tbi$/i.test(file.name)) indexes.set(file.name.replace(/\.tbi$/i, ''), file)
-    }
-    const paired = files.filter((file) => !(/\.tbi$/i.test(file.name) && hasBase(files, file)))
-    for (const file of paired) {
-      const held = this.store.entries.find(
+    for (const { file, index } of pairIndexes(files)) {
+      // Every detached row of that name, not the first. A BAM comes back from a
+      // reload as two of them (§8.13), and reattaching one would leave a reader
+      // who dropped the file again looking at a depth lane with the pile still
+      // asking to be pointed at the same file they had just pointed at.
+      const held = this.store.entries.filter(
         (entry) => entry.status === 'detached' && entry.source.name === file.name,
       )
-      if (held !== undefined) {
-        this.reattach(held.id, file)
+      if (held.length > 0) {
+        for (const row of held) this.reattach(row.id, file, index)
         continue
       }
       this.begin(
-        { kind: 'local', file, name: file.name },
+        { kind: 'local', file, name: file.name, ...(index === undefined ? {} : { index }) },
         undefined,
         undefined,
         placement,
-        indexes.get(file.name),
       )
     }
   }
@@ -119,8 +179,14 @@ export class AnnotationLoader {
   addUrl(url: string, label?: string, placement?: Placement): void {
     const trimmed = url.trim()
     if (trimmed === '') return
-    const name = trimmed.split('/').pop() ?? trimmed
-    this.begin({ kind: 'remote', url: trimmed, name }, label, undefined, placement)
+    const { address, index } = splitIndexFragment(trimmed)
+    const name = address.split('/').pop() ?? address
+    this.begin(
+      { kind: 'remote', url: address, name, ...(index === undefined ? {} : { index }) },
+      label,
+      undefined,
+      placement,
+    )
   }
 
   /**
@@ -149,7 +215,15 @@ export class AnnotationLoader {
       if (row.source.kind === 'metadata') continue
       if (row.source.kind === 'remote' && row.source.url !== undefined) {
         this.begin(
-          { kind: 'remote', url: row.source.url, name: row.source.name },
+          {
+            kind: 'remote',
+            url: row.source.url,
+            name: row.source.name,
+            // A named sidecar comes back with the row. Without it a restored
+            // BAM on a presigned URL reopens with a guessed `<url>.bai` that
+            // cannot exist, and refuses.
+            ...(row.source.index === undefined ? {} : { index: row.source.index }),
+          },
           row.label,
           row,
         )
@@ -195,6 +269,10 @@ export class AnnotationLoader {
         // As on the remote road above: where the *lead* draws it, which is not
         // the same question as which edge the track defaults to.
         lead: row.lead,
+        // …and the other row over the same BAM. A pair that came back unlinked
+        // would look right and behave as two files, so a filter set on the pile
+        // would stop reaching the depth beside it.
+        ...(row.partner === undefined ? {} : { partner: row.partner }),
       })
       this.store.update(row.id, {
         status: 'detached',
@@ -229,7 +307,20 @@ export class AnnotationLoader {
       this.store.update(id, { summary: 'dropped file — re-open it to draw it again' })
       return
     }
-    this.reattach(id, file)
+    // And the sidecar, under whichever name it was remembered by. Re-attaching
+    // the file alone is why a reloaded `.gz` used to come back reading itself
+    // whole; for a BAM it is the difference between a row that reopens and one
+    // that reopens refusing, since there is no whole-file fallback (§8.13).
+    let index: File | undefined
+    for (const candidate of indexNamesFor(name)) {
+      const held = await resolveHandle(candidate)
+      if (held !== null) {
+        index = held
+        break
+      }
+    }
+    if (this.store.byId(id)?.status !== 'detached') return
+    this.reattach(id, file, index)
   }
 
   /**
@@ -238,15 +329,17 @@ export class AnnotationLoader {
    * The id is kept, so the row does not jump to the bottom of the card and the
    * settings the reader chose stay attached to the thing they chose them for.
    */
-  reattach(id: string, file: File): void {
+  reattach(id: string, file: File, index?: File): void {
     const entry = this.store.byId(id)
     if (entry === undefined) return
-    this.store.update(id, {
-      status: 'loading',
-      source: { kind: 'local', file, name: file.name },
-      error: undefined,
-    })
-    void this.read(id, { kind: 'local', file, name: file.name }, false)
+    const source: AnnotationSource = {
+      kind: 'local',
+      file,
+      name: file.name,
+      ...(index === undefined ? {} : { index }),
+    }
+    this.store.update(id, { status: 'loading', source, error: undefined })
+    void this.read(id, toWire(source), false)
   }
 
   /**
@@ -280,12 +373,21 @@ export class AnnotationLoader {
       label: entry.label,
       source:
         entry.source.kind === 'remote'
-          ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
+          ? {
+              kind: 'remote',
+              name: entry.source.name,
+              url: entry.source.url,
+              ...(entry.source.index === undefined ? {} : { index: entry.source.index }),
+            }
           : { kind: 'local', name: entry.source.name },
       visible: entry.visible,
       placement: entry.placement,
       style: entry.style,
       ...(entry.primary === true ? { primary: true } : {}),
+      // A BAM's two rows are carried one at a time, and each brings the other's
+      // id. Both are in the list being carried — `carry` is called for every
+      // row — so the link points at a row that is arriving too.
+      ...(entry.partner === undefined ? {} : { partner: entry.partner }),
     })
   }
 
@@ -300,20 +402,25 @@ export class AnnotationLoader {
     label?: string,
     stored?: StoredEntry,
     placement?: Placement,
-    index?: File,
   ): AnnotationEntry {
     // Where the browser gave a grant for this file, write it down: a track is as
     // worth remembering as the map it is drawn beside, and eight bigWigs to
     // re-drop is the larger share of what a reload used to cost. Keyed on the
     // file's name, which is what a restored row carries and looks itself up by.
     if (source.kind === 'local') {
-      const file = source.file
-      void grantFor(file).then(
-        (handle) => {
-          if (handle !== null) void rememberHandle(source.name, handle, file)
-        },
-        () => undefined,
-      )
+      // The sidecar as well as the file. Remembering only the file is why a
+      // reloaded `.gz` used to come back having lost its `.tbi` and read
+      // itself whole — and for a BAM the same omission is the difference
+      // between a row that reopens and one that reopens refusing (§8.13).
+      for (const file of [source.file, source.index]) {
+        if (file === undefined) continue
+        void grantFor(file).then(
+          (handle) => {
+            if (handle !== null) void rememberHandle(file.name, handle, file)
+          },
+          () => undefined,
+        )
+      }
     }
     const guess = guessOf(source.name)
     const entry = this.store.begin({
@@ -337,13 +444,58 @@ export class AnnotationLoader {
             // through even when absent, which the store reads as "on the lead,
             // as `placement` says" — the behaviour every restore has had.
             lead: stored.lead,
+            // The other row over the same BAM, where this row had one. A pair
+            // that came back unlinked would look right and behave as two files:
+            // a filter set on the pile would stop reaching the depth above it.
+            ...(stored.partner === undefined ? {} : { partner: stored.partner }),
           }),
       ...(label === undefined ? {} : { label }),
     })
     // `stored === undefined` is what makes the style a *guess*: a restored row
     // brings the settings a reader chose, and those are never re-derived.
-    void this.read(entry.id, toWire(source, index), stored === undefined)
+    void this.read(entry.id, toWire(source), stored === undefined)
     return entry
+  }
+
+  /**
+   * Open the pile beside a BAM's depth (§8.13).
+   *
+   * A second row over the same file, and deliberately a *row* rather than a
+   * second band of the first one. The two are different pictures with nothing
+   * in common — one is a curve against a value axis, drawn at every zoom and on
+   * both surfaces; the other is a stack of rectangles that exists only in the
+   * 1D browser and only once a read is wider than a pixel — and sharing a lane
+   * made every question about them conditional: how tall is this, what does the
+   * ceiling drag do, which band did that click land in. As two rows each is
+   * resized, moved, hidden and closed like any other track, and the reader who
+   * wants only the depth closes the other one.
+   *
+   * The colour is the depth row's, because they are one file. Everything about
+   * *which reads count* is kept in step through {@link AnnotationEntry.partner}.
+   */
+  private pileFor(id: string): void {
+    const entry = this.store.byId(id)
+    if (entry === undefined) return
+    const source = entry.source
+    // Only a row with bytes behind it. Nothing else reaches here today — a
+    // `derived` or `computed` row is never a BAM — but `toWire` throws on one,
+    // and this is the call that would do it.
+    if (source.kind !== 'local' && source.kind !== 'remote') return
+    const pile = this.store.begin({
+      card: 'linear',
+      kind: 'reads',
+      source,
+      // Named apart, because the Tracks list is a list of names and two rows
+      // called `H3K9me3` differ there only by the picture beside them.
+      label: `${entry.label} · reads`,
+      placement: entry.placement,
+      style: defaultStyle('reads', entry.style.colour),
+      partner: entry.id,
+    })
+    this.store.update(entry.id, { partner: pile.id })
+    // `guessed: false`: this row's kind is not a guess to be corrected, and a
+    // pile that forked again would open a third row for every second one.
+    void this.read(pile.id, toWire(source), false)
   }
 
   /**
@@ -360,6 +512,10 @@ export class AnnotationLoader {
     guessed: boolean,
   ): Promise<void> {
     try {
+      // Noted before the request rather than after it: a row removed while its
+      // own load is still in flight must still be released, and the reply may
+      // never come.
+      this.held.add(id)
       const result = await this.client.request<'load'>({
         kind: 'load',
         entry: id,
@@ -367,7 +523,18 @@ export class AnnotationLoader {
         mapContigs: this.mapContigs,
       })
       const card = cardFor(result.format)
-      const kind = card === null ? null : kindFor(card, result.format)
+      // What a *file* of this format is, which for a BAM is its depth — and the
+      // row's own kind wins where the row is the second one over that file. A
+      // pile is a BAM read a second way (§8.13), so re-deriving its kind from
+      // the format would fold it back into the coverage row it was made beside,
+      // on every restore and every reattach.
+      const already = this.store.byId(id)?.kind
+      const kind =
+        card === null
+          ? null
+          : already === 'reads' && result.format === 'bam'
+            ? 'reads'
+            : kindFor(card, result.format)
       if (card === null || kind === null) {
         this.store.update(id, { status: 'error', error: refusal(result.format) })
         this.client.drop(id)
@@ -390,12 +557,30 @@ export class AnnotationLoader {
         kind,
         ...restyle,
         status: 'ready',
-        summary: result.summary,
+        // A BAM's two rows come back from the same file with the same sentence
+        // under them — "2 references · BAI" — and in the Tracks panel their
+        // names are one truncated string apart. So each says which picture it
+        // is, first, where the column shows it (§8.13).
+        summary:
+          kind === 'alignments'
+            ? `coverage · ${result.summary}`
+            : kind === 'reads'
+              ? `reads · ${result.summary}`
+              : result.summary,
         overlap: result.overlap,
         ...(result.payload === undefined ? {} : { payload: result.payload }),
         ...(result.fileExtent === undefined ? {} : { fileExtent: result.fileExtent }),
         error: undefined,
       })
+      // A BAM is two pictures and they are now two rows. Made here rather than
+      // in `begin`, because until the bytes came back this was a file whose
+      // name ended in `.bam` — and a second row for a file that turns out to be
+      // something else is a row with nothing in it.
+      //
+      // `guessed` is what keeps this to *fresh imports*: a restored or carried
+      // row brings its own partner, and a reader who closed the pile and kept
+      // the depth would otherwise be handed the pile again on every reload.
+      if (guessed && kind === 'alignments') this.pileFor(id)
     } catch (err) {
       this.store.update(id, {
         status: 'error',
@@ -415,35 +600,49 @@ export class AnnotationLoader {
  * source with an `undefined` URL, which is what the previous two-case ternary
  * would have done the moment the third case existed.
  */
-/** Whether the file this `.tbi` names was dropped alongside it. */
-function hasBase(files: readonly File[], index: File): boolean {
-  const base = index.name.replace(/\.tbi$/i, '')
-  return files.some((file) => file.name === base)
-}
 
-function toWire(source: AnnotationSource, index?: File): WireSource {
+function toWire(source: AnnotationSource): WireSource {
   if (source.kind === 'local') {
     return {
       kind: 'local',
       file: source.file,
       name: source.name,
-      ...(index === undefined ? {} : { index }),
+      ...(source.index === undefined ? {} : { index: source.index }),
     }
   }
   if (source.kind === 'remote') {
+    const index = remoteIndexFor(source)
     return {
       kind: 'remote',
       url: source.url,
       name: source.name,
-      // Named optimistically rather than probed. A `HEAD` to find out costs the
-      // same round trip as the miss does, and the worker treats *every* index
-      // failure — absent, corrupt, for another file — as "read it whole", which
-      // is what would have happened anyway. Only offered for a `.gz`, so an
-      // uncompressed file never asks.
-      ...(/\.gz$/i.test(source.url) ? { index: `${source.url}.tbi` } : {}),
+      ...(index === undefined ? {} : { index }),
     }
   }
   throw new Error(`${source.name} is a computed track and has no file to load.`)
+}
+
+/**
+ * The sidecar URL for a remote file, guessed or given.
+ *
+ * A given one always wins: a presigned URL, or one carrying a query string,
+ * can never usefully have `.bai` appended to it, so `#index=<url>` is the way
+ * a reader says where the index really is — and it is the only way, because
+ * there is no second place to put it (§8.13).
+ *
+ * Otherwise it is **guessed optimistically and never probed**. A `HEAD` to find
+ * out costs the same round trip the miss does, and §12 does not have a request
+ * to spend on finding out that a file has no index. For a `.gz` the guess is
+ * free either way — the worker treats every index failure as "read it whole",
+ * which is what would have happened anyway. For a `.bam` the guess is the whole
+ * of how the pair is found, so both spellings `samtools index` writes are
+ * offered, the exact one first.
+ */
+function remoteIndexFor(source: { url: string; index?: string }): string | undefined {
+  if (source.index !== undefined) return source.index
+  if (/\.gz$/i.test(source.url)) return `${source.url}.tbi`
+  if (/\.bam$/i.test(source.url)) return `${source.url}.bai`
+  return undefined
 }
 
 /**
@@ -464,7 +663,9 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'wig':
     case 'gtf':
     case 'bed':
+    case 'vcf':
     case 'fasta':
+    case 'bam':
       return 'linear'
     default:
       return null
@@ -485,7 +686,11 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // and every other affordance a bigWig lane already has.
     if (format === 'bigwig' || format === 'bedgraph' || format === 'wig') return 'track'
     if (format === 'fasta') return 'sequence'
+    if (format === 'bam') return 'alignments'
     if (format === 'gtf') return 'gtf'
+    // Called variants (§8.14). A `FeatureSet` like the two below, and its own
+    // kind because a reader means something different by a row of it.
+    if (format === 'vcf') return 'variants'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
     if (format === 'bed' || format === 'bigbed') return 'segments'

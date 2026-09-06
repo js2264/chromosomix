@@ -77,6 +77,23 @@ export function layoutFeatures(
   axis: LocusAxis,
   set: FeatureSet,
   maxRows: number,
+  /**
+   * The narrowest one feature will be *drawn* — {@link FeaturePaint.minWidth}.
+   *
+   * It belongs here as well as in the paint because it changes the answer to
+   * "can these be told apart", which is the question the collapse below asks. A
+   * variant is one base, which is a hairline at every zoom a chromosome is
+   * browsed at, so it is drawn at a floor of three pixels — and the moment
+   * records are closer together than that floor plus the gap between them, the
+   * marks *merge*. Merged, a stretch of mixed substitutions draws as one solid
+   * bar in whichever ink was laid down last, which reads as a single
+   * three-kilobase variant: a claim the file does not make. Collapsing to
+   * density instead says the true thing, which is that there are many here.
+   *
+   * Zero — every caller but the variant lane — leaves the rule exactly as it
+   * was: a peak that is one pixel wide *is* one pixel of genome.
+   */
+  leastWidth = 0,
 ): FeatureLayout {
   const placements: FeaturePlacement[] = []
   const span = Math.abs(frame.alongTo - frame.alongFrom)
@@ -91,9 +108,16 @@ export function layoutFeatures(
     const segment = axis.segmentOf(window.contig)
     if (segment === null || !(segment.bpPerUnit > 0)) continue
     const [from, to] = featureRange(set, contig, window.start, window.end)
-    for (let i = from; i < to && placements.length < LAYOUT_CAP; i++) {
+    for (let i = from; i < to; i++) {
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue
+      // Counted before the cap is consulted, not after it. The loop used to
+      // stop dead at `LAYOUT_CAP`, which stopped the *count* with it — so the
+      // caption a collapsed lane writes ("17,400 features here") reported the
+      // cap rather than the window, and under-reported by however much a dense
+      // file exceeded it. The count is the one thing the picture can still
+      // carry once it has stopped resolving individuals; it must be the truth.
       total++
+      if (placements.length >= LAYOUT_CAP) continue
       const u0 = segment.unitStart + (set.start[i] - segment.bpStart) / segment.bpPerUnit
       const u1 = segment.unitStart + (set.end[i] - segment.bpStart) / segment.bpPerUnit
       const along0 = frame.toPixel(u0)
@@ -102,10 +126,31 @@ export function layoutFeatures(
     }
   }
 
-  // More features than pixels: no packing exists that separates them, so say so
-  // and draw one row. The count is kept, because "17,400 features here" is the
-  // information the picture can still carry.
-  const dense = placements.length > span / 2
+  // More features than the lane can draw apart: no packing exists that separates
+  // them, so say so and draw one row. The count is kept, because "17,400
+  // features here" is the information the picture can still carry.
+  //
+  // The width one feature needs is its drawn floor plus the gap that makes two
+  // read as two — which for everything but a variant lane is the two pixels it
+  // has always been.
+  const dense = placements.length > span / Math.max(2, leastWidth + ROW_GAP)
+
+  // Widened **into the placement**, here, once — so the box that is drawn, the
+  // box that is clicked and the box the packing keeps a row clear for are one
+  // number (§8.4). It was applied in the paint alone, which left a variant
+  // three pixels wide on screen and a fraction of a pixel wide to the pointer:
+  // two thirds of every mark was dead to hover and to click, and the spec said
+  // "three pixels to be seen and to be hit" while only the first was true.
+  //
+  // After the density decision and not before: a collapsed lane bins by
+  // position, and widening there would spread one variant's count over three
+  // pixels and inflate the profile.
+  if (leastWidth > 0 && !dense) {
+    for (const placement of placements) {
+      placement.along1 = Math.max(placement.along1, placement.along0 + leastWidth)
+    }
+  }
+
   if (dense || maxRows <= 1) {
     return { placements, rows: 1, dense, total }
   }
@@ -169,6 +214,19 @@ export interface FeaturePaint {
    * while the name in it grew would clip the name it exists to hold.
    */
   labelBand?: number
+  /**
+   * A colour per feature, where one feature's ink is not the lane's.
+   *
+   * Only a variant lane has one today (§8.14): a substitution is drawn in the
+   * colour of the base it substitutes to, so the row agrees in a column with the
+   * sequence above it and the pile below it. Absent — which is every other
+   * caller — draws the whole set in {@link colour}, in one path, exactly as it
+   * always did.
+   *
+   * The index is into the {@link FeatureSet}, not into the layout, because that
+   * is what a placement carries and what the label pass already uses.
+   */
+  colourOf?: (index: number) => string
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -197,20 +255,41 @@ export function drawSegments(
   const boxHeight = Math.max(3, rowHeight - band - 2)
   ctx.save()
   ctx.globalAlpha = paint.opacity
-  ctx.fillStyle = paint.colour
-  ctx.beginPath()
+  // Grouped by ink rather than one rectangle per fill: a lane of ten thousand
+  // boxes in one colour is one path, and a variant lane's five inks are five —
+  // which is the difference between one state change and ten thousand of them.
+  // The common case, no `colourOf`, is the single group it always was.
+  //
+  // It does reorder the painting, and where two features in one row overlap the
+  // one on top is now the one whose *ink* was laid down last rather than the one
+  // later in the set — so it can differ from the feature `featureAt` names. That
+  // is bounded to a lane with more than one ink, which is a variant lane, where
+  // two records overlapping in one row means two calls at the same position;
+  // the hit test's answer is a real record at the place that was clicked either
+  // way, and the card names which.
+  const byInk = new Map<string, FeaturePlacement[]>()
   for (const placement of layout.placements) {
-    const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
-    const [x, y, width, height] = laneRect(
-      frame,
-      placement.along0,
-      placement.along1,
-      top,
-      top + boxHeight,
-    )
-    ctx.rect(x, y, width, height)
+    const ink = paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index)
+    const held = byInk.get(ink)
+    if (held === undefined) byInk.set(ink, [placement])
+    else held.push(placement)
   }
-  ctx.fill()
+  for (const [ink, placements] of byInk) {
+    ctx.fillStyle = ink
+    ctx.beginPath()
+    for (const placement of placements) {
+      const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
+      const [x, y, width, height] = laneRect(
+        frame,
+        placement.along0,
+        placement.along1,
+        top,
+        top + boxHeight,
+      )
+      ctx.rect(x, y, width, height)
+    }
+    ctx.fill()
+  }
 
   if (paint.labels && !layout.dense) {
     labelFeatures(ctx, frame, set, layout, paint, rowHeight)

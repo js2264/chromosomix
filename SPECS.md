@@ -19,9 +19,18 @@ These are hard, and everything below follows from them.
 | C4 | `genome-then-length` ordering only | Every genome is one contiguous bin range; no scattered-run handling exists |
 | C5 | Static hosting only | Public files are objects on a bucket; private files never leave the machine. The desktop build changes only where the *app* comes from, never where the data comes from |
 
-C3 and C1 together mean the app can never *require* a companion file. C4 means a whole class of
-code — run gathering, fallback query planners, `genome_extent` failure paths — is deleted rather
-than written.
+C3 and C1 together mean the app can never *require* a companion file **for a contact map**. That
+scope is the whole of what the rule was ever protecting: a file straight from `metacooler create`
+must open with nothing beside it, and that is what makes the no-preprocessing claim true. It is not
+a claim about every byte the app will ever read. An annotation format arrives with conventions of
+its own, and one of them — a BAM — has no whole-file fallback that respects §12 at all: it is read
+by region, and the index is the only thing that makes reading by region bounded. The narrow rule
+that follows is stated positively at §8.13 rather than left as an exception: **a format whose index
+is its only bounded read may refuse without one, and the refusal names the command that fixes it.**
+Every other format keeps the rule unchanged, and the opportunism at §8.11 is unaffected.
+
+C4 means a whole class of code — run gathering, fallback query planners, `genome_extent` failure
+paths — is deleted rather than written.
 
 ---
 
@@ -1070,7 +1079,8 @@ them.
 
 **Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
 on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
-comparison), **tracks** (bigWig, any number, resolved as lines or areas), and **bed-like files** (any
+comparison), **tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number,
+resolved as lines or areas), and **bed-like files** (any
 number, resolved as genomic segments). Each is placed on any of the map's four edges — above, below,
 or down either side — or on several at once; each carries its own limits, style, colour and value
 scaling; and any set of tracks may share one autoscale group.
@@ -1292,7 +1302,14 @@ It is **opportunistic in exactly §3.4's sense**, and the fallbacks are the
 feature: a plain GTF still works, a bgzipped one with no index still works, and
 an index that is absent, corrupt, truncated or for another assembly falls back to
 the whole-file read rather than refusing the track. An index that can prevent a
-file from opening is worse than no index. Two further guards follow from that: a
+file from opening is worse than no index.
+
+That rule is about an index which makes a *working* read faster, and it stands
+unchanged for every format it was written about. Where the index is the only
+bounded read a format has, its absence is a property of **the file** rather than
+of the index, and there is no read to fall back to — so the refusal is the honest
+answer and it names the command. See §8.13, which is the one format that is in
+that position. Two further guards follow from that: a
 sidecar is only *asked* for when the file is a `.gz`, and a span set that would
 read more than four fifths of the file is abandoned, because a saving that is not
 one costs a round trip to discover and nothing else.
@@ -1555,6 +1572,380 @@ table under `#` comment lines naming the file, the table and the column: a lane 
 level the view is, and a reader checking a bar against the file needs the rows the file actually
 wrote (§18.7).
 
+### 8.13 Alignments
+
+A `.bam` opens as a lane, and it is the first kind here that arrives with a rule of its own attached
+to it (§1). Everything below is that rule and what follows from it.
+
+**What is built is the reader, the depth track and the pile of reads**, with their controls, the
+per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
+this section, each with its own reason.
+
+**The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
+file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
+gigabytes and the demo yeast one is not the case worth designing for. The index is the only thing
+that makes reading by region bounded, so a BAM without one is refused **by name**, and the refusal
+says `samtools index`. That is the narrow carve-out §1 states positively, and it costs nothing
+anywhere else: §8.11's opportunism is about an index that makes a working read *faster*, and it is
+unchanged for every format it was written about. A `.bai` and a `.csi` are both read, decided by
+their magic bytes rather than their suffix, and both spellings `samtools index` writes are paired
+with the file they belong to. A remote file names its own — `<url>.bai`, guessed and never probed,
+since §12 has no request to spend discovering that a file has no index — and where the guess cannot
+work, a presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+
+The second refusal is **sort order**, and it is not a technicality. Every byte this reader fetches is
+addressed by an index that describes a coordinate-sorted file; a name-sorted one handed to a region
+query answers with whatever happened to be in those blocks, which is worse than refusing because it
+looks like an answer. The `@HD SO:` line is read and the refusal says `samtools sort`.
+
+**A BAM imports as two rows, and only one of them is anywhere but the browser.** One is *depth* — a
+value per pixel, and therefore a track in every sense §8.2 means: it goes through `sample`, inherits
+`profileOf`, the readout, the four edges and the figure, and joins an autoscale group with any other
+track over the same assembly. The other is the *pile* of individual reads, which exists only in the
+1D browser. The rule is geometry rather than policy: a read is drawn along the axis at its own
+extent, and beside a heatmap the axis is an axis of matrix bins where the finest unit is a bin and
+not a base. There is nothing for a read to be drawn *on* there, so a pile row is never placed on a
+map, at any zoom.
+
+Two **rows** rather than two bands of one lane, and that is the shape the whole of the rest of this
+section follows from. They are two pictures with nothing in common — a curve against a value axis
+against a stack of rectangles — and sharing a lane made every question about them conditional: how
+tall is this, what does a ceiling drag do here, which band did that click land in, which of the two
+does a resize grow. As two rows each is resized, reordered, hidden, exported and **closed** like any
+other track, and a reader who wants the depth without the pile closes the pile. The lane machinery
+needed no case for either.
+
+What has to be paid for that is one link. The two rows point at each other, and everything that is
+about *which reads count* — the mapping-quality floor and the duplicate switch — is written through
+to both: a floor applied to the pile and not to the depth beside it is two pictures of two different
+files under one name, and nothing on screen would say so. How the pile is *drawn* — the colouring,
+the pair layout, the split-read switch — is the pile's alone, because none of it means anything to a
+curve. Closing one row clears the other's link, so a write-through cannot chase a row that has gone.
+In the worker the two rows share one open handle and one parsed index, keyed on the file **and its
+index**: a BAI for a human alignment is single-digit megabytes to fetch and to parse, and the second
+row must not pay that again to throw the result away.
+
+The pair is made when the bytes come back rather than when the file is dropped (§8.3), so a file
+named `.bam` that turns out to be something else gets one row; and it is made only for a **fresh
+import**, so a reader who closed the pile and kept the depth is not handed the pile again on every
+reload. The link is stored with the session, and the pile's kind survives its own load — a `bam` is
+`alignments` by format, and re-deriving the second row's kind from the format would fold it back
+into the first.
+
+The same two-pictures-one-file shape is already true of the FASTA lane, which is GC content beside a
+map and residues only in the browser (§8.8). Alignments differ in that the two pictures are far
+enough apart to be worth two rows.
+
+**Above what it can afford, the lane draws nothing and says why.** This is the one place an
+alignment lane differs from every other kind, and it follows from having no summary layer: depth over
+a window is a full read of the reads under it, so a window can be legitimately unanswerable. The
+forecast comes from the index alone — the byte spans a region resolves to, summed before anything is
+fetched — so a window too deep to draw is refused at **zero data requests** rather than discovered
+part-way through a fetch. What the lane then shows is its name, an empty band, and a sentence naming
+the number and the way forward.
+
+The estimate that would have filled that space was considered and refused. The BAI linear index
+gives compressed **bytes** per 16 kb window, which is not depth: it varies with read length and with
+how well the reads compressed, it is floored at 16 kb, and CSI carries no linear index at all — so on
+the files with the longest chromosomes it would simply be absent. Drawn on a depth axis it would be
+the first quantitative lane in this application that means something other than what it says, which
+is the rule `__unbinned__` (§7.4) and the bigBed truncation notice (§8.7) are both instances of. A
+bigWig of the coverage is the honest answer at that width and the message names it, because
+`@gmod/bbi` is already here and reads one.
+
+**What a bin holds is mean depth**, and three decisions inside that are worth writing down because
+each is a place a viewer can quietly disagree with `samtools` and never say so. A CIGAR `N` is not
+covered: it is reference the read is aligned *across* rather than *over*, and counting it draws an
+RNA-seq gene as a solid block and erases the only thing the picture was for. A `D` is covered,
+because a deletion is a base the read asserts something about. Secondary and supplementary
+alignments are excluded, because they are one molecule reported twice and they cluster at repeats and
+breakpoints — the loci where the number is being read most carefully. Duplicates are **kept**: marking them is a
+pipeline's decision, and hiding them silently would make this app disagree with every other reading
+of the same file. It is offered as a switch instead, and it is off until a reader turns it on. And
+the value is covered bases per bin divided by bin width rather than a count of reads touching the
+bin, which is the same number at base resolution and an order of magnitude smaller at any other.
+
+**The lane's controls travel on the request that needs them.** Colouring, a mapping-quality floor,
+the duplicate switch and the split-read switch are a per-lane style like a colour or a ceiling, and
+they are stored with the session and validated on the way back in. What is worth stating is where
+they are *read*: they are fields on the `sample` and `reads` requests rather than state configured
+once per open file. State would make the answer to a request depend on the order two messages
+happened to arrive in, and it would leave the caches on the main thread keyed on nothing that
+changed — so a reader's click would do nothing until they panned. Carried on the request, a cache
+miss is a mismatched key rather than a race.
+
+The two keys those caches use are deliberately different widths. Four of the five fields change what
+comes back — the colouring decides the category column the worker sends, and the floor, the duplicate
+switch and the split switch decide which reads exist — so the pile refetches on any of those. The
+fifth, joining mates, is drawn from columns the pile already carries and is in no key at all. Depth
+is a *count*, and a count does not care how the reads that made it were coloured — so the coverage
+cache watches only the floor and the duplicate switch. Without that split, trying a colouring would
+discard a whole-genome coverage scan, which is the most expensive read in the application, for a
+change that cannot move the line by a pixel.
+
+A change made while the previous window is still decoding **replaces** it. What is decoding was asked
+under controls nobody is looking at any more, and this worker has no queue — so leaving it in place
+holds up every other lane's `sample` behind an answer that will be thrown away. The test is against
+the *running request's* controls and never against the drawn window's: written the other way it is
+permanently unequal between the change and the first landing, so every frame cancels the request the
+frame before issued, and on a real file the new pile never arrives at all.
+
+What the colouring is **not** is a grouping. The rows are packed by position alone, so the categories
+are interleaved down the pile rather than banded; a band per category is a separate feature and is
+not built.
+
+**The rows are packed for the window on screen, on the main thread.** They were packed in the worker,
+over the window that was *fetched* — and that window is three view-widths, so a reader who zoomed in
+was shown a packing made for a picture three times wider. Two more things followed from it: a window
+read as several byte spans came back as several piles each numbering its rows from zero, which
+collided when they were drawn into one band; and a template could not be packed as a unit at all,
+because which reads share a row is a question about the picture and answering it in the worker would
+mean re-reading the file to change a drawing.
+
+What is given up is row stability under a pan, which the worker's packing had and this does not. It
+is worth it because that stability was already a half-truth — the packer only ever saw the reads that
+survived thinning, so any change of row budget re-packed everything — and because a row that is
+stable and wrong is not the better failure.
+
+**A template is the unit, and the layout says what is drawn between its ends.** `pairs` is the
+default: both ends on one row, joined by a dotted thread across the part nobody sequenced. It
+replaced a switch that drew a solid thread and left the packing to position, so at any real depth the
+two ends of a fragment landed on different rows and the thread ran from one of them towards a mate
+that was not there — the picture read as a scatter of unrelated reads. `fragments` fills that gap
+instead of threading it; `reads` packs every record on its own, for a single-ended library.
+
+**Each row is resized by its own floor**, which is what two rows bought and is the whole of the
+gesture: there is no boundary inside a lane to drag any more. A pile lane is cut into two bands and
+only two — a strip for its name and its read count, and the pile under it — and the strip is sized
+from the label's own metrics rather than from a constant, because those metrics grow with the
+reader's text size and a fixed strip wrote the read count through the top row of reads the moment
+the type did.
+
+A lane too short for a single read row draws **nothing**, and says *zoom in* rather than showing an
+empty rectangle. That is the same answer it gives when the reader is too far out for a read to be
+wider than the ink it would take, and it costs no fetch: the rung is decided from the frame, and the
+depth over the same reads is the row beside it, drawn at every zoom.
+
+**A position the reads disagree with the reference at is coloured, on both
+rows.** In the pile it is the mismatch mark that was always there — a coloured
+column per read, from `=`/`X`, from `MD`, or from a FASTA open in the same
+session, and the lane names which of the three answered. On the depth row it is
+the *share of the bin* that disagrees, drawn from the baseline up in one colour
+so a quarter-height mark under a full-height curve reads as a quarter of the
+reads.
+
+One colour there and not four, because the pile beside it already says which
+base was seen at exactly the zooms where this is drawn, and a pixel is one
+column: what the depth row adds is *where* and *how much*, which is the question
+the curve alone cannot answer. And that colour is deliberately **not one of the
+four bases**: it shipped as the sequence palette's own T, which put one red in
+one column under two opposite claims — *the reads disagree here* on the depth,
+and *this read has a T here* in the pile. The rule the test pins is a hue
+distance rather than a literal, because the fault was never the constant. It
+was that nobody compared it to the palette. Only above a fifth of the depth, which is IGV's
+own threshold and is roughly where a position stops looking like sequencing
+error and starts looking like an allele — under it, every pileup is speckled and
+a reader learns to ignore the mark.
+
+Two limits decide when it is computed at all, and they point the same way. The
+cost: finding the disagreements is a walk over every *aligned base* rather than
+over the CIGAR's blocks, and the depth scan is the most expensive read in this
+application (§12). The meaning: a variant is a claim about a position, and a bin
+holding two hundred bases reports the genome's background mismatch rate as a
+coloured pixel everywhere. So it is done only below sixteen bases per pixel, and
+only where a FASTA covering the window is already open — never fetched for, and
+never a second request.
+
+What it is **not** is a variant call, and the distinction is the same one §18.9
+makes about a half-good caller inside a viewer. It reports substitutions and
+short deletions against whatever residues happen to be loaded. An insertion has
+no reference position to be *at*, a soft clip is not aligned, and an `N` in
+either sequence is an absence of information rather than a disagreement — so
+none of the three is counted. Nothing here is filtered by base quality, tested
+for strand bias, or given a score.
+
+A FASTA dropped *after* the BAM has to reach the windows already in hand, or the
+marks appear on the reader's next pan and not on the drop — which reads as the
+file not having worked. Both caches therefore key on which reference rows are
+open, alongside the window and the controls. It is a token and not an address:
+the worker looks up its own residues, and this exists only to invalidate.
+
+**Thinning is a property of the zoom, so the cache key carries one.** The pile is thinned in the
+worker against the lane's row budget over the fetched window, so a window fetched for a wide view
+holds about a third of a narrow view's reads. Answering a zoom from it drew a third of the pile while
+the caption reported the wide window's numbers. The held window now carries the octave of view span
+it was thinned for, and a zoom of one octave refetches — the same shape §8.4 already requires of a
+sampled track, bounded at one refetch per halving, and unmoved by a pan (§2).
+
+**Split reads are drawn and never counted.** A supplementary alignment is a further piece of one
+molecule that the aligner could not place in a single run — across a breakpoint, a fusion, or a
+junction a long read spans — so showing it is how a reader sees a split, and counting it would report
+one fragment as two. The switch therefore reaches what is *drawn* and cannot reach what is
+*counted*, which is the one asymmetry between a BAM's two rows and is deliberate. It is held by the
+split itself: the depth is its own row on its own road, and `readFilterKey` leaves the switch out
+entirely — so flipping it does not even invalidate the depth's cached samples. It used to be held by
+a second, narrower filter inside the function that builds the pile, because that function also
+counted bases; those counts are gone with the consensus they fed, and with them the one place a
+filter widened for drawing could leak into a number. Such a read is drawn outlined rather than faded, since
+faded already means "soft clip" here; and it is never joined to the primary as though it were a
+mate, because it is the same end of the template rather than the other one.
+
+**A click on a read opens a card, and the card fetches nothing.** Every field on it — the flags in
+words, the CIGAR, the clips, the mate's locus, the insert size, the category it was coloured as —
+is already in the pile the lane drew, which is why it answers at once and why it cannot disagree with
+the rectangle that was clicked. The fields a BAM uses to mean "not recorded" are shown as that
+rather than as numbers: `tlen: 0` is no insert size, `MAPQ 255` is not a mapping quality, and a mate
+with no position is not a mate at position zero.
+
+**The reader is written here**, as `hic/format.ts` and `annotations/tabix.ts` are and for the reason
+they both give at length: every read in this application goes through a source that counts its
+requests, caches its chunks and signs them where a bucket needs it, and a parser that fetches for
+itself sits outside all three. `@gmod/bam` is a devDependency and the fixtures are read with it,
+exactly as `hic-straw` reads the `.hic` ones — because a round trip against our own writer proves the
+two agree and cannot prove they are right, and the first thing that oracle caught was a record prefix
+off by four bytes in both halves at once.
+
+Most of the byte layer was already written. `annotations/tabix.ts` has BGZF, virtual offsets, span
+coalescing and the §5.9 name ladder, and a `.bai` is the same binning index a `.tbi` is. What it does
+*not* have is the part this needs: it collapses every bin to one span per sequence and drops the low
+sixteen bits of every offset, deliberately and for a reason that holds there — a feature lane holds a
+whole `FeatureSet` and draws the visible part (§8.4). A contig's worth of BAM cannot work that way,
+so `annotations/bam/index.ts` keeps bin-level chunks, both halves of every offset, the linear index
+and the forecast.
+
+**Not built, and each for its own reason.** No **mate fetching**: a mate lives at `PNEXT`, which is
+off-screen by definition for anything but a short insert, so following them is one uncoalescable
+range request per visible read with no locality at all. The mate's coordinates are decoded and shown;
+the bytes are not chased. No **`SA` walk**: a split read's other pieces are drawn where the window
+already holds them, from the supplementary records themselves, and the tag naming pieces *outside*
+the window is not followed — for the same locality reason the mate is not. No **consensus band**: it was built, and it was a picture nobody asked for — a bar chart of the
+commonest base, then a sequence logo, occupying the height that made the pile useful and repeating
+what the mismatch marks in the reads already say. It is removed rather than deprecated, and with it
+the per-position base counts that fed it. No **variant calling** — §18.9's argument about a half-good
+caller inside a viewer applies here with more force, not less. No **contact matrix derived from alignments**: that is
+the second application GAPS' original refusal was drawing a line against, and it still is. And no
+**CRAM**, which is refused on stronger ground than "wrong app": it cannot be decoded without the
+exact reference its records were compressed against, identified by an M5 checksum and conventionally
+fetched from somebody else's registry — which C1 and C5 forbid outright — or supplied as a second
+required file, which is the rule §1 has just been at pains to keep narrow.
+
+### 8.14 Called variants
+
+A `.vcf` opens as a lane of the variants somebody called. It is a **`FeatureSet`
+like a BED and a GTF are** — no new payload, no new renderer, no new cache — and
+that is the whole design: a variant lane packs, draws, hit-tests, exports,
+searches, collapses and feeds an analysis through the code a peak set already
+uses. What it has of its own is a `kind`, because the *controls* and the *card*
+differ. A peak has a score; a variant has a REF, an ALT, and a thing that
+happened.
+
+The alternative was a payload arm of its own, and it was refused on the shape of
+its failure rather than on its size. `payload.kind === 'features'` is tested at a
+dozen sites across the browser, the map lanes, the search box, the export and the
+analysis inputs. A third arm breaks none of them — it makes every one of them
+*skip* the lane, silently, to be discovered one call site at a time.
+
+**A VCF was already being read, wrongly.** `sniffFormat`'s last line is
+`return 'bed'`, and `forEachRow` strips every `#` line — so a VCF arrived at the
+sniffer as `chrV 1000 rs100 A G …`, matched nothing, and was parsed as a BED
+whose every row failed the contig/start/end test. The refusal named a format the
+reader never handed over. That is the same failure a four-column bedGraph had
+before §8.11's sniffer existed, and it is why both sniffers are asked *before*
+the one that cannot say no.
+
+**The interval is the one thing that can lie.** A record spans the reference
+bases it is about, which is `POS .. POS + len(REF)` for a substitution, an MNV
+and an indel — VCF's padding base included, because that is what the record says
+and what every browser draws. The fourth shape is not spelled out: a symbolic
+ALT (`<DEL>`, `<DUP>`, `<INV>`) writes a single `N` in REF whatever the event's
+size, so `INFO/END` and `INFO/SVLEN` are read, and without them a forty-kilobase
+deletion draws as a one-pixel tick. That is a wrong answer that looks like an
+answer, which §10 does not permit anywhere else either.
+
+**A substitution is drawn in the colour of the base it substitutes to**, from the
+one table `render/sequence.ts` holds and `render/alignments.ts` already borrows.
+That is the whole of the ink rule and it buys the picture vertically: over one
+locus a heterozygous A>G reads as one column in inks that agree — the sequence
+row writes a green `A`, the pile puts orange `G` marks through half its reads,
+the depth row's mark rises to half, and the variant row draws an orange box
+saying somebody called it. A record with no single base behind it — an insertion,
+a deletion, a symbolic ALT, several ALTs at once — takes the palette's fifth
+slot, the grey an `N` is already drawn in, which in this application already
+means *no single-base answer*. The lane's own colour was tried there and is
+wrong visibly: the first colour `ANNOTATION_PALETTE` hands out is `#0072b2` and
+C is `#2f6fb5`, ten degrees of hue apart, so on a stock lane an insertion and a
+substitution to C were one blue. The reader's colour is what the *density* rung
+is drawn in instead, which is where it does the work of telling two variant files
+apart.
+
+What the ink deliberately does not separate is an insertion from a deletion.
+**Extent** does, and it is exact and free: a forty-kilobase deletion is a
+forty-kilobase box and a SNV is one base, so the two classes worth separating are
+separated by the strongest channel on the lane. The rest is in the card behind a
+click, where `A>AGGT` and `AT>A` are two strings nobody confuses.
+
+**A single base is given three pixels to be seen and to be hit**, written into
+the placement rather than applied at paint time — so the box that is drawn, the
+box the pointer finds and the box the packing keeps a row clear for are one
+number (§8.4). Applied in the paint alone, as it first was, two thirds of every
+mark was dead to hover and to click. The floor also changes when the lane stops
+resolving individuals. The collapse rule is not "more
+features than pixels" — it is *more features than the lane can draw apart*, which
+is the drawn floor plus the gap that makes two read as two. At the old threshold
+a stretch of variants seven bases apart at whole-contig zoom drew as several
+hundred three-pixel marks that merged into one solid bar in whichever ink was
+laid down last, reading as a single three-kilobase variant. Collapsing says the
+true thing: there are many here. For every other feature lane the floor is zero
+and the rule is the `span / 2` it has always been — a peak one pixel wide *is*
+one pixel of genome.
+
+**A VCF can say what genome it is on, exactly.** Its
+`##contig=<ID=…,length=…>` block is a `chrom.sizes` written inside the file:
+declared rather than inferred, which is the tier a BAM's `@SQ` table and a
+bigWig's header sit at, and a tier above the "ends at its last feature" lower
+bound every other text feature format offers. So a dropped VCF opens a browser
+session over its real chromosomes (§5.8). The origin is its own member of
+`AssemblyOrigin` for the reason `bam` is one — `lengthsAreExact` reads that field
+and nothing else, so a VCF reporting `features` would tell a reader its
+chromosomes end at their last variant while an `exact: true` sat beside it being
+correct and being ignored. A file declaring no contigs is `features`, correctly.
+
+**Reading part of one is free.** A bgzipped VCF with a `.tbi` beside it takes
+`annotations/tabix.ts`'s road unchanged, because that road serves *text* and does
+not know what format the text is (§8.11). Which is also why the sniffer cannot
+depend on the header: `spansFor` starts at the first record's block, so the
+indexed path — the one the index exists for — delivers a VCF with every `#` line
+in the part of the file that was deliberately not fetched. The sniffer therefore
+has two roads, the declaration and the column shape, and the shape one is
+load-bearing rather than a fallback.
+
+**How large a VCF this reads is the same question every text format here
+answers, and the answer is the same.** The file is decoded into one string and
+parsed whole, so a single-sample human call set — four to five million records,
+a gigabyte or two of text — is past what a JavaScript string can hold before it
+is past what the machine can. That is not a property of this format: it is
+§8.11's whole-file road, and the index is the same mitigation it always was,
+serving one contig at a time. A per-chromosome human VCF opens; a whole-genome
+one does not, and the honest place to say so is here rather than in a lane that
+falls over. Streaming the parse is the fix, it is a project rather than a patch,
+and nothing in this section pretends otherwise.
+
+**Not built.** The **genotype matrix**. A VCF's sample columns are a matrix of
+variants × samples, and that is a second application's worth of picture for a
+question a contact map is not asking — the same argument §13 makes about a
+viewer that builds matrices from alignments. The columns are *counted* and the
+count is said out loud in the lane's summary — *"1,284 variants · 2,504 samples
+not drawn"* — because a reader who brought a thousand-genome file should be told
+what the lane is showing them rather than left to infer it from a lane that looks
+complete. No **allele-frequency height**: AF is in the card and in the detail,
+and drawing it as a bar height would put three different measurements (AF from
+`INFO`, AF computed from genotypes, no AF at all) in one channel with nothing on
+screen saying which answered. No **BCF**, which is the binary encoding of the
+same file and needs its own header dictionary decoder for no picture that differs
+by a pixel; `bcftools view` writes the text, and the name guess claims no `.bcf`
+so one is refused by its bytes like anything else. And no **variant calling**, which is
+§18.9's argument and not a new one.
+
 ---
 
 ## 9. cool and mcool
@@ -1638,6 +2029,10 @@ Every refusal names the file's actual state and the concrete fix.
 | Range refers to unknown label | List genomes and contigs, truncated |
 | Coordinate suffix on a genome name | State that genome ranges are whole-genome |
 | Remote: ranges unsupported / CORS blocked | Distinguish the two; name the host |
+| BAM with no index beside it | State that a BAM is read by region and has no whole-file fallback, name the sidecar to drop, and give `samtools index <file>`. Distinct from the row below: "there is no index" and "the index you gave me is not one" have different fixes (§8.13) |
+| BAM whose index cannot be read | Name what went wrong reading it, and give `samtools index <file>` to re-make it |
+| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>` |
+| CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name; a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
 
 ---
 
@@ -1677,6 +2072,20 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Genome-pair block | ≤ 5 range requests |
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 
+And for an alignment lane (§8.13), where the open cost is separated from the window cost for the same
+reason the table above separates opening a file from loading one MAG's matrix — a `.bai` for a human
+WGS file is single-digit megabytes read once, and folding that into a per-window budget would hide
+the cost it exists to police:
+
+| Operation | Budget |
+|---|---|
+| Open a BAM: header + index | ≤ 3 range requests, **once for both rows** — the depth and the pile share one open handle and one parsed index — identify, header, index — and the index read is additionally reported in **bytes**, because a request count says nothing useful about a whole-file read. Three and not two: *is this a BAM* and *what is in its header* are one read (they are the same bytes, and asking twice was the first thing measuring this found), but the file's length is a request of its own on a source that must ask for it, and the index is a request of its own by construction |
+| One alignment window | ≤ 5 coalesced range requests |
+| Pan inside the window already fetched | 0 requests |
+| Change a lane control | one window's reads again, and **0** for the depth row beside it — unless the change was the mapping-quality floor or the duplicate switch, which are the only two that alter a count and the only two written through to both rows. Joining mates costs **nothing**: it is drawn from columns the pile already carries. Depth is a count and does not care how the reads were coloured, which is why the two caches watch keys of different widths (§8.13) |
+| A window above the byte cap | **0 data requests** — refused from the index alone, which is the whole point of forecasting before fetching |
+| Colour the depth by variant | **0 extra requests** — the residues are read from a FASTA already open in the same worker, and never fetched for. It is bounded in CPU instead, by the sixteen-bases-per-pixel gate (§8.13) |
+
 And for the analysis tasks (§18), where the first row is the one the whole threading design exists to
 satisfy and is therefore the one that is tested first:
 
@@ -1702,7 +2111,9 @@ chromatin files. Held in reserve — adopting it would not change any file forma
 ## 13. Explicit non-features
 
 Stated so they are decisions rather than omissions: tile server; user accounts; file upload; server-side
-computation of any kind; required companion files; required preprocessing; support for orderings other
+computation of any kind; required companion files **for a contact map** (§1 states the scope, and
+§8.13 the one format that falls outside it: where an index is a format's only bounded read, its
+absence is refused by name); required preprocessing; support for orderings other
 than `genome-then-length`; whole-genome views that do not fit in memory (§9 — the limit is measured,
 not a category); write access of any kind, in either target; an auto-update service; and a desktop
 build with a feature set of its own — the package is a delivery mechanism, and the formats, views
@@ -1718,6 +2129,16 @@ second is refused.
 Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
 contact-based contig reordering or scaffolding; **no writing of `.cool`, `.mcool` or `.metacool`** —
 a decision rather than a limitation, since h5wasm could create one; and no differential APA.
+
+Five more arrive with §8.13, each with its own reason rather than one shared one: no **mate
+fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
+**`SA` walk** — a split read's other pieces are drawn where the window already holds them, and
+following the tag out of the window is the mate problem again under another name; no **variant
+calling** (§18.9's argument about a half-good caller, which applies here with more force);
+no **contact matrix derived from alignments** (the second application the original refusal was
+drawing a line against); and no **CRAM** — which is refused on stronger ground than the others,
+since it cannot be decoded without the exact reference its records name, fetched from a third-party
+registry (C1, C5) or supplied as a second required file.
 
 There is exactly **one** observable difference between them, and it is a host-compatibility
 difference rather than a feature: the desktop build can ask a host not to compress, which a page is
@@ -3285,6 +3706,12 @@ login node with no route to the website; a reviewer who will not install an unsi
 should not have to; a laptop holding unpublished patient-derived data, which is the reader §11 was
 written for. §11's promise — nothing is uploaded — holds in every build, but only in this one is it
 structural rather than a claim, because there is no origin to upload to.
+
+A remote file cannot be opened here at all — there is no origin to read one from — which is a
+property of the target and not a bug in any format. It matters most for a `.bam`, since a dropped
+one and its index are the *only* way to get alignments into this build, so the interface says so
+rather than failing at it: the URL box is what is absent, and a dropped pair works exactly as it
+does everywhere else.
 
 **Four things a `file://` page cannot do.** Each was measured in Chromium before the config was
 written, and each is absolute rather than a degradation:

@@ -69,6 +69,8 @@ interface State {
   textAlign: CanvasTextAlign
   textBaseline: CanvasTextBaseline
   lineJoin: CanvasLineJoin
+  /** The dash pattern, in CSS pixels; empty is a solid line. */
+  lineDash: number[]
 }
 
 /**
@@ -160,6 +162,8 @@ export type VectorTarget = Pick<
   | 'textAlign'
   | 'textBaseline'
   | 'lineJoin'
+  | 'setLineDash'
+  | 'getLineDash'
 >
 
 /**
@@ -207,6 +211,7 @@ export class VectorPage {
       textAlign: 'start',
       textBaseline: 'alphabetic',
       lineJoin: 'miter',
+      lineDash: [],
     }
     // Measured against a real canvas, because the *layout* above this — which
     // name fits, where a label is centred — was decided with the screen's font.
@@ -282,6 +287,18 @@ export class VectorPage {
     this.emit(`${round(r)} ${round(g)} ${round(b)} RG`)
     this.emit(`${round(Math.max(0.05, this.state.lineWidth * scaleOf(this.state.matrix)))} w`)
     this.emit(`${this.state.lineJoin === 'round' ? 1 : this.state.lineJoin === 'bevel' ? 2 : 0} j`)
+    // PDF's dash operator takes the same array the canvas does, scaled by the
+    // same matrix the width is: `[] 0 d` is solid, which is what an empty
+    // pattern means on a canvas too. Without this an exported figure drew the
+    // alignment lane's mate threads solid, and a pair became indistinguishable
+    // from a fragment in the one artefact that leaves the application.
+    const dash = this.state.lineDash
+    const scale = scaleOf(this.state.matrix)
+    this.emit(
+      dash.length === 0
+        ? '[] 0 d'
+        : `[${dash.map((on) => round(Math.max(0.05, on * scale))).join(' ')}] 0 d`,
+    )
   }
 
   private flushPath(): void {
@@ -437,6 +454,13 @@ export class VectorPage {
         self.flushPath()
         self.emit('S')
       },
+      setLineDash: (pattern: Iterable<number>) => {
+        // Copied, and non-finite entries dropped: the canvas ignores a pattern
+        // containing one, and a `NaN` reaching the operator stream is a PDF no
+        // reader will open.
+        self.state.lineDash = [...pattern].filter((on) => Number.isFinite(on) && on >= 0)
+      },
+      getLineDash: () => [...self.state.lineDash],
       clip: () => {
         self.flushPath()
         self.emit('W n')

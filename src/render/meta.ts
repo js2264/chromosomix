@@ -96,7 +96,7 @@ export function profileFromCells(
   const mean = new Float32Array(slots).fill(Number.NaN)
   const low = new Float32Array(slots).fill(Number.NaN)
   const high = new Float32Array(slots).fill(Number.NaN)
-  const empty: PixelProfile = { from, mean, low, high, envelope: false, extent: null }
+  const empty: PixelProfile = { from, mean, low, high, envelope: false, variant: null, extent: null }
   if (cells.length === 0) return empty
 
   const sum = new Float64Array(slots)
@@ -145,6 +145,7 @@ export function profileFromCells(
     // the same information the means already are wherever a pixel holds one
     // cell, which is most of the time.
     envelope: false,
+    variant: null,
     extent: min > max ? null : { min, max },
   }
 }

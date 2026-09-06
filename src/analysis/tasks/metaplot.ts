@@ -17,6 +17,7 @@
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { READY, waitingFor } from '../types'
+import { isIntervalSet } from '../../annotations/types'
 
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -231,7 +232,7 @@ export const METAPLOT_TASK: AnalysisTask = {
   // session exactly as it is beside a map.
   availability: (context) => {
     const tracks = context.entries.some((entry) => entry.kind === 'track')
-    const sets = context.entries.some((entry) => entry.kind === 'gtf' || entry.kind === 'segments')
+    const sets = context.entries.some((entry) => isIntervalSet(entry.kind))
     if (tracks && sets) return READY
     if (!tracks && !sets) {
       return waitingFor('Load a bigWig to average, and a BED or GTF of positions to average it at.')

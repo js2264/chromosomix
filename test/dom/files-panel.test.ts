@@ -145,18 +145,41 @@ describe('a connected bucket', () => {
    * one thing it is for.
    */
   it('draws what it cannot open, dimmed, with the reason on it', async () => {
-    serve(listing([], [['collections/reads.bam', 10], ['collections/map.mcool', 10]]))
+    serve(listing([], [['collections/notes.txt', 10], ['collections/map.mcool', 10]]))
     writeScopes([scope()])
     const { el } = card()
 
     await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(2))
     const inert = all(el, '.folder-entry-inert')
     expect(inert).toHaveLength(1)
-    expect(inert[0].textContent).toContain('reads.bam')
+    expect(inert[0].textContent).toContain('notes.txt')
     expect(inert[0].getAttribute('title')).toContain('Not a format this viewer opens')
     // No arrow on a row that cannot be loaded: a verb offered and refused is
     // worse than no verb.
     expect(all(inert[0], '.folder-entry-load')).toHaveLength(0)
+  })
+
+  it('offers a BAM, and explains the index sitting beside it', async () => {
+    // The pair as a reader sees it in a bucket: one row to load, one row that
+    // says what it is for. A `.bai` drawn as "not a format this viewer opens"
+    // is one step from concluding the pair cannot be opened at all.
+    serve(
+      listing(
+        [],
+        [
+          ['collections/reads.bam', 10],
+          ['collections/reads.bam.bai', 10],
+        ],
+      ),
+    )
+    writeScopes([scope()])
+    const { el } = card()
+
+    await vi.waitFor(() => expect(all(el, '.folder-entry')).toHaveLength(2))
+    const inert = all(el, '.folder-entry-inert')
+    expect(inert).toHaveLength(1)
+    expect(inert[0].textContent).toContain('reads.bam.bai')
+    expect(inert[0].getAttribute('title')).toContain('BAM index')
   })
 })
 

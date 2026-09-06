@@ -46,7 +46,7 @@ import type {
   SeedParam,
   ToggleParam,
 } from '../analysis/types'
-import { DETAIL_SEP } from '../annotations/types'
+import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { button, el, fmt } from './dom'
 import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
@@ -141,14 +141,27 @@ export interface ParamFormOptions {
 // Resolving what the form points at
 // ---------------------------------------------------------------------------
 
+/**
+ * The interval kinds, resolved once from the predicate that defines them.
+ *
+ * Derived rather than listed, so this and {@link isIntervalSet} cannot
+ * disagree — which is the whole reason the predicate exists.
+ */
+const INTERVAL_SETS: readonly AnnotationKind[] = ANNOTATION_KINDS.filter(isIntervalSet)
+
 /** Which annotation kinds one entry parameter may name. */
 function kindsFor(spec: EntryParam): readonly AnnotationKind[] {
   switch (spec.kind) {
-    // A gene model and a peak set are one shape and two meanings (§8.1), and a
-    // task that wants intervals wants both: the distinction is which drop area
-    // the file landed in, which is the reader's business rather than a task's.
+    // A gene model, a peak set and a variant set are one shape and three
+    // meanings (§8.1, §8.14), and a task that wants intervals wants all of
+    // them: the distinction is what the reader means by a row, which is their
+    // business rather than a task's.
+    //
+    // Through `isIntervalSet` rather than a list, so this and the availability
+    // gates of the tasks that read it cannot answer differently — which they
+    // did, leaving a VCF selectable in a form behind a gate that never opened.
     case 'featureSet':
-      return ['gtf', 'segments']
+      return INTERVAL_SETS
     case 'pairSet':
       return ['pairs']
     // `track` is deliberately not filtered by card. A synthetic lane is a track

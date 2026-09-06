@@ -1311,3 +1311,31 @@ describe('what the lead map says about a track', () => {
     expect(back[0].id).toBe(id)
   })
 })
+
+/**
+ * The name a dropped file gives its row.
+ *
+ * `cleanLabel` is the default for every import, and its suffix list had drifted
+ * behind the formats the app reads: a `.vcf`, a `.bam`, a `.bw`-spelled
+ * `.bigbed` and every bedGraph landed as a lane called `NA12878.vcf` while a
+ * `.bed` beside it was called `peaks`. Asserted against the formats rather than
+ * against a list, so the next one added has somewhere to fail.
+ */
+describe('the label a file lands under', () => {
+  it('takes the suffix off every format the app reads', () => {
+    for (const name of [
+      'ATAC.bw', 'ATAC.bigwig', 'genes.bb', 'genes.bigbed',
+      'genes.gtf', 'genes.gff3', 'peaks.bed', 'loops.bedpe',
+      'NA12878.vcf', 'NA12878.vcf.gz', 'reads.bam',
+      'peaks.narrowPeak', 'signal.bdg', 'signal.bedgraph', 'signal.wig',
+      'genome.fa', 'genome.fasta',
+    ]) {
+      expect(cleanLabel(name), name).not.toContain('.')
+    }
+  })
+
+  it('leaves a name that is not a suffix alone', () => {
+    // A dot is not a suffix. `Pf3D7.v3.calls` keeps every part of its name.
+    expect(cleanLabel('Pf3D7.v3.calls.vcf')).toBe('Pf3D7.v3.calls')
+  })
+})

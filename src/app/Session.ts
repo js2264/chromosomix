@@ -21,7 +21,7 @@
  * one URL hash (spec §5.5).
  */
 
-import { AnnotationLoader } from '../annotations/loader'
+import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { ManualStore } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
@@ -292,6 +292,8 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   fasta: 'the sequences themselves',
   features: 'inferred from the features',
   cooler: 'from the cooler’s /chroms',
+  bam: 'from the BAM’s @SQ header',
+  vcf: 'declared by the VCF’s ##contig lines',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */
@@ -1780,39 +1782,46 @@ export class Session {
       // alongside it, which is exactly the two-step the note asks for done in
       // one gesture.
       await this.openConfigFile(config)
-      for (const file of files) {
-        if (file !== config) this.dropped(file)
-      }
+      this.droppedAll(files.filter((file) => file !== config))
       return
     }
     if (files.length === 1) {
       await this.open(files[0].name, { kind: 'local', file: files[0] })
       return
     }
+    // Paired *before* a lead is chosen, which matters for exactly one gesture
+    // and it is the central one: `reads.bam` and `reads.bam.bai` dropped on an
+    // empty window. Choosing the lead from the raw list picks the `.bam`,
+    // opens it without its index, and leaves the `.bai` to be routed on its
+    // own — a browser on the BAM's reference table, the BAM refused for want of
+    // an index, and an orphan row for the index that was right there.
+    const paired = pairIndexes(files)
     const maps = files.filter((file) => this.routeOf(file.name) === 'map')
-    const lead = maps[0] ?? files.find((file) => this.routeOf(file.name) === 'genome') ?? files[0]
-    await this.open(lead.name, { kind: 'local', file: lead })
+    const leadPair = leadOf(paired, (name) => this.routeOf(name))
+    if (leadPair === undefined) return
+    const lead = leadPair.file
+    await this.open(lead.name, { kind: 'local', file: lead }, undefined, leadPair.index)
     if (this.destroyed) return
-    for (const file of files) {
-      if (file === lead) continue
+    for (const pair of paired) {
+      if (pair.file === lead) continue
       // Every spare map, and in the order they were selected — the deck is a
       // list and the reader's order is the only one that means anything.
-      if (maps.includes(file)) {
-        this.addCompanion(file)
+      if (maps.includes(pair.file)) {
+        this.addCompanion(pair.file)
         continue
       }
-      this.dropped(file)
+      this.dropped(pair.file, undefined, undefined, pair.index)
     }
   }
 
-  async open(uri: string, source: SourceSpec, carry?: ViewState): Promise<void> {
+  async open(uri: string, source: SourceSpec, carry?: ViewState, index?: File): Promise<void> {
     if (this.opening === uri) return
     // A file that is not a contact map starts a genome browser instead. Decided
     // by name first, and by the bytes when the name does not say — see
     // {@link routeOf}.
     const route = this.routeOf(uri)
     if (route === 'genome') {
-      await this.openGenome(uri, source, carry?.locus)
+      await this.openGenome(uri, source, carry?.locus, false, index)
       return
     }
     // The tracks this session is holding, before anything is torn down. A map
@@ -2056,6 +2065,16 @@ export class Session {
      * `view=browser` link to a cooler silently opened the map instead.
      */
     insist = false,
+    /**
+     * The sidecar dropped alongside, where there was one.
+     *
+     * Threaded this far because the file that names the genome becomes its own
+     * first track, and for a BAM that track cannot open without its index
+     * (§8.13). Dropping `reads.bam` and `reads.bam.bai` on an empty window is
+     * *the* gesture for this feature, and without this it opened a browser on
+     * the BAM's own `@SQ` table and then refused the BAM.
+     */
+    index?: File,
   ): Promise<void> {
     if (this.opening === uri) return
     this.opening = uri
@@ -2115,8 +2134,13 @@ export class Session {
       // genome. Adding it again gives the same track twice, under one name, with
       // one of the two carrying the settings.
       if (result.format !== 'sizes' && this.annotations !== null && !this.alreadyLoaded(source)) {
-        if (source.kind === 'local') this.annotations.loader.addFiles([source.file])
-        else this.annotations.loader.addUrl(source.url)
+        if (source.kind === 'local') {
+          // Both halves, so `addFiles` can pair them. One is how a BAM opens a
+          // browser on its own reference table and is then refused as a track.
+          this.annotations.loader.addFiles(
+            index === undefined ? [source.file] : [source.file, index],
+          )
+        } else this.annotations.loader.addUrl(source.url)
       }
       const target: ViewState = {
         uri,
@@ -2467,14 +2491,16 @@ export class Session {
       await this.open(seat.name, { kind: 'local', file: seat })
       if (this.destroyed) return
     }
+    const rest: File[] = []
     for (const file of files) {
       if (file === seat) continue
       if (maps.includes(file)) {
         this.addCompanion(file)
         continue
       }
-      this.dropped(file)
+      rest.push(file)
     }
+    this.droppedAll(rest)
   }
 
   /**
@@ -2538,14 +2564,19 @@ export class Session {
 
   async addPicked(picked: PickedFile, placement?: Placement, map?: string): Promise<void> {
     if (picked.source.kind === 'local') {
+      // The sidecar the folder found beside it travels with the file, on both
+      // roads. Without it a `.bam` picked from a listing is refused for want of
+      // an index that is one row down in the same listing (§8.13).
+      const both =
+        picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index]
       // No placement means a drop with no aim behind it — the panel's arrow, or
       // the content area — and that is exactly `dropFiles`'s case, including the
       // empty seat it fills rather than adds to.
       if (placement === undefined && map === undefined) {
-        await this.dropFiles([picked.source.file])
+        await this.dropFiles(both)
         return
       }
-      this.dropped(picked.source.file, placement, map)
+      this.dropped(picked.source.file, placement, map, picked.index)
       return
     }
     await this.addRemote(picked.uri, picked.source, placement, map)
@@ -2635,7 +2666,31 @@ export class Session {
    * through the routing rather than around it: a `.cool` aimed at the bottom of
    * the map is still a map, not a track drawn along the bottom.
    */
-  private dropped(file: File, placement?: Placement, map?: string): void {
+  /**
+   * Route a whole drop, having first paired each sidecar with what it indexes.
+   *
+   * The pairing has to happen *here*, before anything is routed, and that is
+   * the whole reason this exists. `dropped` decides what one file is — a
+   * workspace, a map, a `chrom.sizes`, a track — and it can only be asked about
+   * one file at a time; but a sidecar is not a file *about* itself, it is half
+   * of a pair, and every caller was looping `dropped` over the batch and so
+   * handing the loader one file at a time. `AnnotationLoader.addFiles` pairs
+   * what it is given, and it was never given both.
+   *
+   * That was a live bug for `.tbi` before a BAM existed: dropping a bgzipped
+   * GTF and its index together read the GTF whole and drew the `.tbi` as a
+   * refused row. For a BAM it would not be a slow path but a broken one, since
+   * there is no whole-file fallback to land in (§8.13).
+   *
+   * A sidecar whose file is *not* in the batch is passed through untouched, so
+   * it reaches the loader alone and is refused by name — which is more use than
+   * silently doing nothing.
+   */
+  private droppedAll(files: readonly File[], placement?: Placement, map?: string): void {
+    for (const { file, index } of pairIndexes(files)) this.dropped(file, placement, map, index)
+  }
+
+  private dropped(file: File, placement?: Placement, map?: string, index?: File): void {
     // A saved workspace, before anything else looks at it: it is not a track,
     // it is the window it was saved from.
     if (looksLikeConfig(file.name)) {
@@ -2664,7 +2719,7 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
-    held.loader.addFiles([file], placement)
+    held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -4274,7 +4329,7 @@ export class Session {
           // is what importing has always meant and is right for every drop but
           // this one.
           loadOnEdge: (files, edge) => {
-            for (const file of files) this.dropped(file, placementOn(edge), map)
+            this.droppedAll(files, placementOn(edge), map)
           },
           // The same aim, at a row out of the Files panel. Resolved here rather
           // than in the panel that took the drop, because reading the file is a

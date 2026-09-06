@@ -41,7 +41,15 @@ import type {
   Placement,
   StoredEntry,
 } from './types'
-import { LANE_EDGES, defaultStyle, normalisePlacement, placementOn } from './types'
+import {
+  ANNOTATION_KINDS,
+  LANE_EDGES,
+  defaultStyle,
+  hasTrackControls,
+  normalisePlacement,
+  placementOn,
+  readStyleOf,
+} from './types'
 
 /**
  * The colour a newly loaded annotation gets, cycled.
@@ -570,6 +578,8 @@ export class AnnotationStore {
      * first as well, every time the row was begun again.
      */
     lead?: StoredEntry['lead']
+    /** The other row over the same file; see {@link AnnotationEntry.partner}. */
+    partner?: string
   }): AnnotationEntry {
     const placement =
       options.placement === undefined
@@ -611,6 +621,7 @@ export class AnnotationStore {
             ? { ...base, flip: !base.flip }
             : base
         })(),
+      ...(options.partner === undefined ? {} : { partner: options.partner }),
     }
     // Only a *handed-in* id can already be here — a minted one is reserved past
     // everything this session has seen — and one that is, is this row arriving a
@@ -804,7 +815,18 @@ export class AnnotationStore {
       if (next.length === 0) break
       for (const entry of next) gone.add(entry.id)
     }
-    this.items = this.items.filter((entry) => !gone.has(entry.id))
+    this.items = this.items
+      .filter((entry) => !gone.has(entry.id))
+      // A BAM's two rows point at each other (§8.13), and closing one leaves
+      // the other holding an id nothing answers to. Cleared rather than left to
+      // be ignored on read: the link is what the settings card offers to write
+      // through, and a row that still claims a partner would be offering to
+      // change a lane that is not on screen.
+      .map((entry) =>
+        entry.partner !== undefined && gone.has(entry.partner)
+          ? { ...entry, partner: undefined }
+          : entry,
+      )
     // A lane naming a track that has gone would draw nothing and hold a slot in
     // every stack it was in, so the placements go with the import.
     this.lanes = this.lanes.filter((lane) => !gone.has(lane.track))
@@ -887,7 +909,7 @@ export class AnnotationStore {
   scaleGroups(): Map<string, AnnotationEntry[]> {
     const out = new Map<string, AnnotationEntry[]>()
     for (const entry of this.items) {
-      if (entry.kind !== 'track' || entry.style.group === '') continue
+      if (!hasTrackControls(entry.kind) || entry.style.group === '') continue
       const bucket = out.get(entry.style.group)
       if (bucket === undefined) out.set(entry.style.group, [entry])
       else bucket.push(entry)
@@ -1002,7 +1024,18 @@ export class AnnotationStore {
       // over it would cost the import. See {@link readLead}.
       const { lead: raw, ...rest } = value
       const lead = readLead(raw)
-      rows.push(lead === undefined ? rest : { ...rest, lead })
+      const row = lead === undefined ? rest : { ...rest, lead }
+      // The second field normalised here rather than checked in the guard, and
+      // for the opposite reason to `lead`'s: this one has a *safe* reading of
+      // every malformed value, so clamping it costs nothing and refusing the
+      // row would cost the file. The guard checks only that `style` is an
+      // object, which is enough to hand a renderer a negative MAPQ floor or a
+      // colouring it has never heard of — see {@link readStyleOf}.
+      rows.push(
+        row.style.reads === undefined
+          ? row
+          : { ...row, style: { ...row.style, reads: readStyleOf(row.style.reads) } },
+      )
     }
     return rows
   }
@@ -1020,8 +1053,21 @@ const STORE_SCOPE = 'annotations'
  */
 const LANES_SCOPE = 'deck:lanes'
 
-/** An entry worth remembering: one that finished loading from a nameable source. */
+/**
+ * An entry worth remembering: one that finished loading from a nameable source.
+ *
+ * A **derived** row is not one, and saying so here is what stops it coming back
+ * as something it never was. It is computed from two other rows
+ * (`annotations/derived.ts`) and holds no bytes and no recipe that
+ * {@link StoredEntry} can carry — so it used to fall through {@link toStored}'s
+ * last arm and be written as `{ kind: 'local' }`, which restored a *detached
+ * local file* under the derived row's label: a row offering to re-open a file
+ * that has never existed, on a disk where it cannot be found. Losing the row
+ * across a reload is the smaller wrong, and it is the honest one until there is
+ * a stored shape that can name an operation and its two operands.
+ */
 function persistable(entry: AnnotationEntry): boolean {
+  if (entry.source.kind === 'derived') return false
   return entry.status === 'ready' || entry.status === 'detached'
 }
 
@@ -1038,7 +1084,15 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
     label: entry.label,
     source:
       entry.source.kind === 'remote'
-        ? { kind: 'remote', name: entry.source.name, url: entry.source.url }
+        ? {
+            kind: 'remote',
+            name: entry.source.name,
+            url: entry.source.url,
+            // Only where it was named. A guessed sidecar is re-derived on every
+            // load; a named one is the only way to index a presigned URL, and
+            // losing it across a reload reopens a BAM that cannot be read.
+            ...(entry.source.index === undefined ? {} : { index: entry.source.index }),
+          }
         : entry.source.kind === 'computed'
           ? {
               kind: 'computed',
@@ -1058,7 +1112,15 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
                 table: entry.source.table,
                 column: entry.source.column,
               }
-            : { kind: 'local', name: entry.source.name },
+            : // `local` and `detached`, which are one case here on purpose: a
+              // detached row *is* a local file whose handle this browser no
+              // longer holds, and writing it as one is what brings it back with
+              // its colours and its limits, waiting to be pointed at the same
+              // file again (§8.6). `derived` never reaches this arm — see
+              // {@link persistable}. The `File` itself is not written, and nor
+              // is `index`: neither survives storage, so a restored row asks
+              // for the pair again.
+              { kind: 'local', name: entry.source.name },
     visible: entry.visible,
     placement: entry.placement,
     style: entry.style,
@@ -1074,6 +1136,7 @@ function toStored(entry: AnnotationEntry, lead: Lane | undefined): StoredEntry {
         ? {}
         : { lead: { placement: lead.placement, ...(lead.style === undefined ? {} : { style: lead.style }) } }),
     ...(entry.primary === true ? { primary: true } : {}),
+    ...(entry.partner === undefined ? {} : { partner: entry.partner }),
   }
 }
 
@@ -1082,15 +1145,8 @@ function samePlacement(a: Placement, b: Placement): boolean {
   return LANE_EDGES.every((edge) => a[edge] === b[edge])
 }
 
-const KINDS: AnnotationKind[] = [
-  'gtf',
-  'track',
-  'segments',
-  'pairs',
-  'sequence',
-  'metadata',
-  'classes',
-]
+/** Every kind, from the one place that lists them (`annotations/types.ts`). */
+const KINDS: readonly AnnotationKind[] = ANNOTATION_KINDS
 const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
@@ -1105,6 +1161,16 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   if (kind !== 'local' && kind !== 'remote' && kind !== 'computed' && kind !== 'metadata') {
     return false
   }
+  // Same reason as `index` below: stored state is untrusted input, and a
+  // `partner` that is not a string would be compared against row ids and
+  // written through to by the settings card.
+  const partner = row['partner']
+  if (partner !== undefined && typeof partner !== 'string') return false
+  // Stored state outlives the build that wrote it and reaches here from a share
+  // link, so it is untrusted input. An `index` that is not a string would be
+  // handed to `fetch` as a URL.
+  const index = (source as Record<string, unknown>)['index']
+  if (index !== undefined && typeof index !== 'string') return false
   // A metadata row that lost either half of its address names no column, and a
   // row that names no column can only come back as an empty lane.
   if (kind === 'metadata') {
@@ -1163,7 +1229,7 @@ function sideOf(placement: Placement): LaneEdge | 'neither' {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|peaks|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
     '',
   )
 }

@@ -886,6 +886,7 @@ function toSamples(
     values,
     min: null,
     max: null,
+    variant: null,
     summary: false,
   }
 }

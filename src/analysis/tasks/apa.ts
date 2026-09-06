@@ -21,6 +21,7 @@ import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } f
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { CHROMOSIGHT_PRESETS } from '../chromosightPresets'
 import { BALANCE_PARAM } from './shared'
+import { isIntervalSet } from '../../annotations/types'
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
@@ -69,7 +70,7 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'features',
         label: 'Feature set',
-        needsKinds: ['gtf', 'segments'],
+        needsKinds: ['gtf', 'segments', 'variants'],
         hint: 'On the diagonal, at each feature.',
       },
     ],
@@ -390,7 +391,7 @@ export const APA_TASK: AnalysisTask = {
   availability: (context) => {
     if (!context.hasMap) return waitingFor(NEEDS_MAP)
     const anchors = context.entries.some(
-      (entry) => entry.kind === 'pairs' || entry.kind === 'gtf' || entry.kind === 'segments',
+      (entry) => entry.kind === 'pairs' || isIntervalSet(entry.kind),
     )
     return anchors
       ? READY

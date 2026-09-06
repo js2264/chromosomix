@@ -49,10 +49,31 @@ export type AnnotationKind =
   | 'gtf'
   | 'track'
   | 'segments'
+  // Called variants (§8.14). A `FeatureSet` like `segments` and `gtf` are, and
+  // its own kind for the reason those two are each other's: they differ in what
+  // the reader *means* by a row, and that is what decides the controls, the
+  // card behind a click, and the colours the lane is drawn in. A peak has a
+  // score; a variant has a REF, an ALT and a thing that happened.
+  | 'variants'
   | 'pairs'
   | 'sequence'
   | 'metadata'
   | 'classes'
+  // A BAM's depth (§8.13): one value per pixel, an axis, a ceiling — a track in
+  // every sense except that its values are counted from reads rather than read
+  // out of a file.
+  | 'alignments'
+  // The pile those reads make, which is a *second row* over the same file.
+  //
+  // Two kinds rather than two rungs of one, because they are two pictures with
+  // nothing in common: one is a curve against an axis and is drawn at every
+  // zoom on both surfaces, the other is a stack of rectangles that exists only
+  // in the 1D browser and only once a read is wider than a pixel. Sharing a
+  // lane made every question about it conditional — how tall is it, what does
+  // the ceiling drag do, which band did the click land in — and a reader who
+  // wanted the depth without the pile, or the pile without the depth, could ask
+  // for neither.
+  | 'reads'
 
 /**
  * Which card an entry belongs to; see §8.1.
@@ -75,10 +96,18 @@ export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata'
  * Where the bytes come from. The same two-case split as the reader's
  * `SourceSpec` (§6.1), and for the same reason: a dropped `File` is handed
  * around by reference and never uploaded (§11), a URL is fetched in ranges.
+ *
+ * `index` is the sidecar — a `.tbi`, a `.bai` or a `.csi` — and it lives *here*
+ * rather than being handed to the loader alongside the source, because a
+ * sidecar is not a fact about one load: it is part of how these bytes are
+ * reached. Every road that carries a source forward therefore carries the index
+ * with it, which is the difference between a BAM that survives a resolution
+ * change and one that comes back refusing to open (§8.13). It is never
+ * persisted — a `File` cannot be — so a restored row asks for the pair again.
  */
 export type AnnotationSource =
-  | { kind: 'local'; file: File; name: string }
-  | { kind: 'remote'; url: string; name: string }
+  | { kind: 'local'; file: File; name: string; index?: File }
+  | { kind: 'remote'; url: string; name: string; index?: string }
   | ComputedSource
   | MetadataSource
 
@@ -164,7 +193,9 @@ export const LANE_EDGES: readonly LaneEdge[] = ['top', 'right', 'bottom', 'left'
  * because at a bin per pixel a sequence can only be its GC content.
  */
 export function drawsAProfile(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'sequence' || kind === 'metadata'
+  return (
+    kind === 'track' || kind === 'sequence' || kind === 'metadata' || kind === 'alignments'
+  )
 }
 
 /**
@@ -176,7 +207,112 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
  * ⌘-scroll and the autoscale button all ask this.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'metadata'
+  return kind === 'track' || kind === 'metadata' || kind === 'alignments'
+}
+
+/**
+ * Whether a lane of this kind is filled from the annotations worker's `sample`.
+ *
+ * The question `BrowserView.fill` and `AnnotationLanes.buildEdge` ask before
+ * they go and fetch anything, and it used to be spelled `kind !== 'track' &&
+ * kind !== 'sequence'` at both. That is the most dangerous shape a kind test
+ * takes here, because a kind missing from it is not drawn *badly* — it is not
+ * drawn at all, and the lane is simply empty with no error anywhere.
+ *
+ * `metadata` is deliberately not in this list even though it draws a profile
+ * and has a movable axis: its values are columns of the open file's own tables
+ * and come from `cellsFor`, not from the worker (§8.12). Two roads to a
+ * profile, and this names the one that goes over the wire.
+ *
+ * `reads` is not in it either, and for a third reason: it goes over the wire,
+ * but by its own request. A `sample` answers one number per pixel and a pile is
+ * not a number per pixel, so the road is `reads` — see `ReadCache`.
+ */
+export function drawnFromSamples(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'sequence' || kind === 'alignments'
+}
+
+/**
+ * Every {@link AnnotationKind}, once.
+ *
+ * A union cannot be enumerated at run time, so somewhere a list has to be
+ * written out — and it was written out three times: in the store's stored-row
+ * validator, in the kind tests, and very nearly in the analysis form. Three
+ * copies of a list whose whole job is to be complete is three chances for a new
+ * kind to be missing from one of them, which is the silent failure
+ * `annotation-kinds.test.ts` exists to catch.
+ *
+ * The `satisfies` is what makes this a *check* rather than a fourth copy: a
+ * kind added to the union and not to this array fails to compile here, and one
+ * here that is not in the union fails too.
+ */
+export const ANNOTATION_KINDS = [
+  'gtf',
+  'track',
+  'segments',
+  'variants',
+  'pairs',
+  'sequence',
+  'metadata',
+  'classes',
+  'alignments',
+  'reads',
+] as const satisfies readonly AnnotationKind[]
+
+/**
+ * Whether this kind is a set of intervals a task can aggregate over.
+ *
+ * A gene model, a peak set and a variant set are one shape and three meanings
+ * (§8.1, §8.14): they are all `FeatureSet`s, and which one a file is depends on
+ * what the reader means by a row rather than on anything a task cares about.
+ * Every task that takes "a BED or a GTF" takes all three.
+ *
+ * A function rather than a list spelled at each site, for the reason
+ * {@link hasTrackControls} is one and in the same words: four literals is not a
+ * rule, it is a rule spelled four times. It was spelled four times here — the
+ * form picker's `kindsFor`, and the availability gates of overlap, metaplot and
+ * APA — and adding `variants` to the first without the other three produced
+ * exactly the failure that shape produces: a task whose parameter would accept
+ * a VCF, sitting behind a gate that would not open for one, telling the reader
+ * to *load a BED or a GTF* while a variant set was on screen.
+ */
+export function isIntervalSet(kind: AnnotationKind): boolean {
+  return kind === 'gtf' || kind === 'segments' || kind === 'variants'
+}
+
+/**
+ * Whether this kind reads a BAM, and so carries a {@link ReadStyle}.
+ *
+ * The two rows an imported BAM makes: the depth and the pile. They are one
+ * file, one open handle in the worker and one set of filters — a minimum
+ * mapping quality applied to the pile and not to the depth under it would be
+ * two pictures of two different files under one name — so everything that is
+ * about *which reads count* is asked of both through this.
+ */
+export function readsAlignments(kind: AnnotationKind): boolean {
+  return kind === 'alignments' || kind === 'reads'
+}
+
+/**
+ * Whether a lane of this kind gets the *whole* set of a track's controls:
+ * typed limits, autoscale-group membership, the mode and flip switches, and the
+ * ceiling drag.
+ *
+ * A third predicate rather than a fourth spelling of `kind === 'track'`, and it
+ * is here because those four behaviours were gated by that literal at four
+ * scattered call sites — `store.scaleGroups`, two arms of `AnnotationCard`, and
+ * `BrowserView.scalableLane`. Four literals is not a rule, it is a rule spelled
+ * four times, and the way it fails is instructive: setting
+ * {@link hasAMovableAxis} reaches none of them, so a new kind gets a ceiling
+ * drag that works beside the map and silently does nothing in the browser.
+ *
+ * Deliberately narrower than {@link hasAMovableAxis}. A metadata column may be
+ * rescaled and may not join a group: it is a column of the open file rather
+ * than a measurement, and putting one on a shared axis with a bigWig would be
+ * asserting they are in the same units.
+ */
+export function hasTrackControls(kind: AnnotationKind): boolean {
+  return kind === 'track' || kind === 'alignments'
 }
 
 /** Whether this kind is one of the file's own columns (§8.12). */
@@ -340,6 +476,20 @@ export interface TrackSamples {
   values: Float32Array
   min: Float32Array | null
   max: Float32Array | null
+  /**
+   * The share of {@link values} that disagrees with a reference, or `null`.
+   *
+   * Only an alignment lane ever carries this, and only where a FASTA covering
+   * the window is open in the same session and the bins are narrow enough for
+   * "there is a variant here" to name a place (§8.13). Same units and same
+   * intervals as `values`, so the ratio of the two is the non-reference
+   * fraction.
+   *
+   * `null` rather than zeros wherever there was nothing to compare against:
+   * "these reads agree with the reference" and "no reference was loaded" are
+   * different claims, and an array of zeros would draw them alike.
+   */
+  variant: Float32Array | null
   /** `true` when these came from a zoom level rather than from base resolution. */
   summary: boolean
 }
@@ -371,6 +521,21 @@ export interface TrackSampleSet {
   regions: TrackSamples[]
   /** Value extent across every region returned, ignoring NaN. `null` if empty. */
   extent: { min: number; max: number } | null
+  /**
+   * Why there is nothing here, when there is nothing here.
+   *
+   * Every other kind answers this question by not being asked it: a bigWig has
+   * zoom levels all the way out, a FASTA is held whole, a computed vector spans
+   * whatever it was computed over. An alignment file has none of those, so a
+   * window can be *legitimately unanswerable* — too many bytes to read at this
+   * width — and an empty lane and a lane over a region with no reads in it
+   * would otherwise look identical (§8.13).
+   *
+   * A sentence for the reader, not a code: it goes under the lane's name, and
+   * the doctrine at §10 is that a refusal names the actual state and the
+   * concrete fix. Absent means the answer is simply the answer.
+   */
+  note?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +592,12 @@ export type OverlayShape = 'border' | 'element'
  * mean widening a union that three other call sites switch on.
  */
 export interface AnnotationStyle {
+  /**
+   * The controls only an alignment lane has (§8.13).
+   *
+   * Optional, so nothing else changes shape — see {@link ReadStyle}.
+   */
+  reads?: ReadStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
@@ -483,7 +654,16 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
               ? 56
               : kind === 'classes'
                 ? 20
-                : 16,
+                : // A depth lane is a bigWig's picture and takes a bigWig's
+                  // height. The pile beside it is a stack of rows, and 180 is
+                  // about a dozen of them — enough that a heterozygous site
+                  // shows two alleles rather than a coin flip. Both are what a
+                  // reader *starts* at; a stored session keeps what they set.
+                  kind === 'alignments'
+                  ? 90
+                  : kind === 'reads'
+                    ? 180
+                    : 16,
     // Bars, because one cell is one unit: a metadata column has a value per
     // genome, per contig or per bin and nothing in between, so a line drawn
     // through the tops of them would interpolate between two MAGs that have no
@@ -499,6 +679,10 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     radius: 7,
     opacity: kind === 'pairs' ? 0.9 : 1,
     flip: false,
+    // Present only where it means something, which is the whole point of it
+    // being optional — see {@link ReadStyle}. `readsOf` supplies the same
+    // defaults for a lane whose stored style predates this field.
+    ...(readsAlignments(kind) ? { reads: defaultReadStyle() } : {}),
   }
 }
 
@@ -615,6 +799,21 @@ export interface AnnotationEntry {
    * and the others carry an empty one that makes them it.
    */
   primary?: boolean
+  /**
+   * The other row over the same file, where this row has one (§8.13).
+   *
+   * A BAM imports as two: its depth and its pile. They are separate rows all
+   * the way down — separate lanes, separate heights, either closable without
+   * the other — and what this holds together is the one thing that would be a
+   * lie if they drifted, *which reads are being counted*. A minimum mapping
+   * quality applied to the pile and not to the depth drawn above it is two
+   * pictures of two different files under one name, so `readStyleKey`'s
+   * settings are written through to both (`ui/laneSettings.ts`).
+   *
+   * Symmetric: each row names the other. Cleared on the survivor when one of
+   * them is closed, so a write-through cannot chase an id that has gone.
+   */
+  partner?: string
 }
 
 /** The part of an entry that is worth remembering across a reload (§8.6). */
@@ -631,6 +830,17 @@ export interface StoredEntry {
     kind: 'local' | 'remote' | 'computed' | 'metadata'
     name: string
     url?: string
+    /**
+     * `remote` only: the sidecar index, where it was *named* rather than guessed.
+     *
+     * A guessed one (`<url>.bai`) is re-derived on every load and needs no
+     * storage. A named one cannot be: `#index=` exists precisely for the URLs
+     * where appending a suffix means nothing — a presigned URL, or one carrying
+     * a query string — so dropping it here would make a share link and a
+     * reloaded tab open a BAM this app cannot index (§8.13). A local `File`
+     * still cannot be written down and is not.
+     */
+    index?: string
     task?: string
     recipe?: Record<string, unknown>
     framing?: string
@@ -679,4 +889,334 @@ export interface StoredEntry {
   lead?: { placement: Placement; style?: Partial<Pick<AnnotationStyle, 'limits' | 'flip'>> } | null
   /** Which feature set the search reads; see {@link AnnotationEntry.primary}. */
   primary?: boolean
+  /**
+   * The other row over the same BAM; see {@link AnnotationEntry.partner}.
+   *
+   * Written down because the pair is a *decision*, not a derivation. A reader
+   * who closed the pile and kept the depth must get back a lone depth row, and
+   * a restore that re-derived the pairing from "this row is a BAM" would hand
+   * them the pile again on every reload. Ids survive a restore intact, so the
+   * link comes back pointing at the same two rows.
+   */
+  partner?: string
+}
+
+// ---------------------------------------------------------------------------
+// Alignments: a window of reads (§8.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * The reads under one window, packed as parallel arrays.
+ *
+ * The same shape, for the same reason, as {@link FeatureSet}: twenty thousand
+ * reads as an array of objects is megabytes of pointer-chasing to draw a
+ * picture that is a few thousand rectangles, and none of it survives
+ * `postMessage` without being copied. Everything here is a typed array or a
+ * `string[]`, so `transfersFor` moves the buffers rather than cloning them.
+ *
+ * Unlike a `FeatureSet` this is **not** the whole file. It is one window,
+ * fetched for one view and thrown away when the view moves, because a BAM has
+ * no bounded whole-file form to hold (§8.13). That is also why the rows are
+ * packed here rather than at paint time: row assignment depends on which *other*
+ * reads are present, so packing per frame would make reads jump rows under the
+ * hand.
+ */
+export interface ReadPile {
+  /** The map's spelling for the sequence these are on. */
+  contig: string
+  /** The window packed, which is wider than the view by `FETCH_PAD`. */
+  start: number
+  end: number
+  /** Number of reads. Every per-read array below is this long. */
+  length: number
+  /** First aligned reference base. Soft clips are *not* included. */
+  refStart: Int32Array
+  /** One past the last aligned reference base. */
+  refEnd: Int32Array
+  /** Soft-clipped bases before `refStart` and after `refEnd`, for drawing them. */
+  clipStart: Int32Array
+  clipEnd: Int32Array
+  /** Which packed row this read is drawn in. */
+  row: Int16Array
+  /** The SAM flag, whole — strand, pairing and the rest are read off it. */
+  flags: Uint16Array
+  mapq: Uint8Array
+  /**
+   * Index into {@link contigs} for the mate, or `-1` where there is none.
+   *
+   * An index into that compact table rather than the file's own reference id:
+   * see `nameMates`, which does the remapping and is also what puts the *map's*
+   * spelling on the read's own sequence.
+   */
+  mateContig: Int32Array
+  /** The mate's leftmost position, or `-1`. */
+  matePos: Int32Array
+  /** Observed template length; `0` where the file carries none. */
+  tlen: Int32Array
+  /** Index into {@link groups} — which colour this read takes. */
+  group: Uint8Array
+  /**
+   * The other end of this template, as an index into this pile, or `-1`.
+   *
+   * Resolved here and not by the renderer, because it is a join over the whole
+   * window and doing it per frame is a map rebuilt sixty times a second. `-1`
+   * covers both "not paired" and "the mate is outside this window", which are
+   * drawn the same way: a stub, not a line to nowhere.
+   */
+  mate: Int32Array
+  /**
+   * The read's CIGAR, flattened: ops `opAt[i] … opAt[i + 1]`.
+   *
+   * The same `n + 1` offset array a `FeatureSet` flattens its exons with. A
+   * read needs its ops rather than only its extent because an insertion, a
+   * deletion and a spliced gap are three different marks, and the gap in
+   * particular is most of what an RNA-seq pile is *for*.
+   */
+  opAt: Int32Array
+  opCode: Uint8Array
+  opLen: Int32Array
+  /**
+   * Where this read disagrees with the reference, flattened the same way.
+   *
+   * Empty for every read when {@link ReadWindow.diffs} is `'none'` — which is
+   * the common case, since neither `bwa` nor `minimap2` writes an `MD` tag by
+   * default and `=`/`X` operations are rarer still.
+   */
+  diffAt: Int32Array
+  /** Reference position of each disagreement. */
+  diffPos: Int32Array
+  /** The base the *read* has there, as a `BASE_CODE` value. */
+  diffBase: Uint8Array
+  /**
+   * Contig names this pile refers to, for mates on another sequence.
+   *
+   * Only the ones some mate in this window actually lands on — a header's whole
+   * `@SQ` list is a hundred thousand strings on a scaffolded assembly, and it
+   * would be sent per window. Empty when nothing here has a mate.
+   */
+  contigs: string[]
+  /** Category labels, indexed by {@link group}. */
+  groups: string[]
+  /** Read names, kept only where a reader could ask for one. `[]` otherwise. */
+  names: string[]
+}
+
+/**
+ * How a pile is coloured.
+ *
+ * Not how it is *grouped*: `place` in `bam/reads.ts` packs rows by position and
+ * has never looked at the category, so the colours are interleaved down the
+ * pile. A band per category is a separate feature this lane does not have, and
+ * saying otherwise here was the doc describing an intention rather than a
+ * function.
+ *
+ * Here rather than in `bam/reads.ts` because it crosses the worker boundary
+ * *and* is written into a stored session: a type in either position cannot live
+ * in a module that imports this one.
+ */
+export type ColourBy = 'strand' | 'mapq' | 'pair' | 'mate' | 'insert' | 'none'
+
+/**
+ * The controls an alignment lane has that no other kind does (§8.13).
+ *
+ * A nested optional record rather than fields on {@link AnnotationStyle}
+ * itself. The doc there defends one flat shape for every kind, and it is right
+ * to: a `mode` or a `colour` means something for all of them. These do not —
+ * a MAPQ floor is meaningless on a bedGraph — and being optional means no
+ * existing kind, no `defaultStyle` arm and no stored row changes shape.
+ */
+export interface ReadStyle {
+  colourBy: ColourBy
+  /** Reads below this mapping quality are not drawn, and not counted. */
+  minMapq: number
+  /**
+   * Hide reads a pipeline marked as duplicates.
+   *
+   * Off by default, and that is the decision §8.13 records: marking them is a
+   * pipeline's choice, and hiding them silently would make this app disagree
+   * with every other reading of the same file.
+   */
+  hideDuplicates: boolean
+  /**
+   * How a template is laid out, and what is drawn between its two ends.
+   *
+   * `pairs` is the default and is what a paired library wants: both ends on one
+   * row, joined by a dotted thread. It replaced a `pairs: boolean` that drew a
+   * solid thread and left the packing to position alone — so the two ends of a
+   * fragment landed on different rows at any real depth, and the thread ran
+   * from one of them towards a mate that was not there. The picture read as a
+   * scatter of unrelated reads.
+   *
+   * `fragments` fills the gap instead of threading it, for a reader who wants
+   * the fragment as one object; `reads` packs every record on its own, which is
+   * what a single-ended library wants and what this lane did originally.
+   */
+  layout: PairLayout
+  /**
+   * Show supplementary alignments — the other pieces of a split read.
+   *
+   * Off by default and separate from everything else here, because it is the
+   * one switch that changes what an alignment *is*. A supplementary record is a
+   * second piece of one molecule that the aligner could not place in one run:
+   * across a structural breakpoint, across a fusion, or across the junction a
+   * long read spans. Showing them is how a reader sees a split; counting them
+   * would be counting the same molecule twice.
+   *
+   * So it reaches what is *drawn* and never what is *counted*: `readFilterKey`
+   * deliberately does not mention it, so the depth row beside the pile never
+   * sees it, and `pileOf` takes two filters so the base counts made alongside
+   * the pile do not see it either.
+   */
+  splits: boolean
+}
+
+/** What an alignment lane starts with. */
+export function defaultReadStyle(): ReadStyle {
+  return {
+    colourBy: 'strand',
+    minMapq: 0,
+    hideDuplicates: false,
+    layout: 'pairs',
+    splits: false,
+  }
+}
+
+/**
+ * One lane's read controls, whether or not its style carries any.
+ *
+ * The accessor every reader of the field goes through, so that `reads` being
+ * optional costs one call rather than a `??` at each of a dozen sites — and so
+ * that a session stored before this field existed opens with the defaults
+ * instead of with `undefined` reaching a renderer.
+ *
+ * It does **not** validate, and that is worth being explicit about: the
+ * clamping happens once, at the boundary, in `AnnotationStore.stored`. That is
+ * enough only because `reads` is not among the per-map style overrides and no
+ * caller resolves a lane style before reaching here. If either changes, this is
+ * where {@link readStyleOf} has to be called instead.
+ */
+export function readsOf(style: AnnotationStyle): ReadStyle {
+  return style.reads ?? defaultReadStyle()
+}
+
+/**
+ * Read a stored read style back, clamping every field.
+ *
+ * Stored state outlives the build that wrote it and arrives from a share link,
+ * so this is untrusted input: `isStoredEntry` checks that `style` is an object
+ * and no more, which is enough to hand a renderer a negative MAPQ or a colouring
+ * it has never heard of.
+ */
+export function readStyleOf(value: unknown): ReadStyle {
+  const fallback = defaultReadStyle()
+  if (typeof value !== 'object' || value === null) return fallback
+  const row = value as Record<string, unknown>
+  const by = row['colourBy']
+  const mapq = row['minMapq']
+  return {
+    colourBy: COLOUR_BY.includes(by as ColourBy) ? (by as ColourBy) : fallback.colourBy,
+    minMapq:
+      typeof mapq === 'number' && Number.isFinite(mapq)
+        ? Math.max(0, Math.min(255, Math.round(mapq)))
+        : fallback.minMapq,
+    hideDuplicates: row['hideDuplicates'] === true,
+    // A session stored before this was a mode carries `pairs: false`, which
+    // meant "do not join them" — which is `reads`.
+    layout: PAIR_LAYOUTS.includes(row['layout'] as PairLayout)
+      ? (row['layout'] as PairLayout)
+      : row['pairs'] === false
+        ? 'reads'
+        : fallback.layout,
+    splits: row['splits'] === true,
+  }
+}
+
+/** Every colouring, in the order they are offered. */
+export const COLOUR_BY: ColourBy[] = ['strand', 'pair', 'insert', 'mate', 'mapq', 'none']
+
+/**
+ * How the two ends of a template are laid out. See {@link ReadStyle.layout}.
+ *
+ * Here rather than in `render/alignments.ts` for the reason {@link ColourBy} is:
+ * it is persisted into a stored session, so it cannot live in a module that
+ * imports this one.
+ */
+export type PairLayout = 'pairs' | 'fragments' | 'reads'
+
+/** Every layout, in the order they are offered. */
+export const PAIR_LAYOUTS: PairLayout[] = ['pairs', 'fragments', 'reads']
+
+/**
+ * The style as a cache key, for the caches that hold *reads*.
+ *
+ * Four of the five fields are in it, because each changes what comes back: the
+ * colouring decides the category column the worker sends back, and the floor,
+ * the duplicate switch and the split switch decide which reads exist at all.
+ *
+ * `pairs` is deliberately **out**. It is the one field the worker never reads —
+ * a mate thread is drawn from columns the pile already carries, so the reply is
+ * byte-identical with it on or off — and putting it in the key spends a whole
+ * window of BGZF decoding on a switch that only changes what the renderer does
+ * with what it already has. If that ever stops being true, this is the line
+ * that has to change with it.
+ */
+export function readStyleKey(style: ReadStyle): string {
+  const flags = `${style.hideDuplicates ? 'd' : ''}${style.splits ? 's' : ''}`
+  return `${style.colourBy}|${style.minMapq}|${flags}`
+}
+
+/**
+ * The lane's own reading of a stored `pairs` boolean, for the one caller that
+ * still has to understand the old spelling. See {@link ReadStyle.layout}.
+ */
+export function joinsPairs(style: ReadStyle): boolean {
+  return style.layout !== 'reads'
+}
+
+/**
+ * The style as a cache key, for the caches that hold *coverage*.
+ *
+ * Deliberately narrower than {@link readStyleKey}: depth is a count, and a
+ * count does not care how the reads that made it were coloured or whether their
+ * mates were joined. Using the wider key here would throw away a whole-genome
+ * coverage scan every time a reader tried a different colouring — the most
+ * expensive read in the application, discarded for a change that cannot move
+ * the line by a pixel.
+ */
+export function readFilterKey(style: ReadStyle): string {
+  return `${style.minMapq}|${style.hideDuplicates ? 'd' : ''}`
+}
+
+/** Where a lane's disagreements came from, or why there are none. */
+export type DiffSource =
+  /** The aligner wrote `=`/`X` operations, which say it outright. */
+  | 'cigar'
+  /** Derived from the `MD` tag against the read's own bases. */
+  | 'md'
+  /** Compared against a FASTA already open in this worker. */
+  | 'reference'
+  /** Nothing to compare against — *not* "no differences here". */
+  | 'none'
+
+/** The answer to a `reads` request: what to draw, and what was left out. */
+export interface ReadWindow {
+  piles: ReadPile[]
+  /** Reads the window held before filtering and downsampling. */
+  total: number
+  /** Reads actually returned. */
+  kept: number
+  /** `true` when reads were dropped to fit — the lane says so (§8.13). */
+  capped: boolean
+  /** How many rows the packing used, so a lane can size itself. */
+  rows: number
+  /**
+   * Where the disagreements came from.
+   *
+   * Surfaced rather than inferred, because "no mismatches in this window" and
+   * "mismatches cannot be computed for this file" are the same empty picture
+   * and must not read as the same claim.
+   */
+  diffs: DiffSource
+  /** Why nothing was returned, when nothing was — the same contract as `TrackSampleSet.note`. */
+  note?: string
 }

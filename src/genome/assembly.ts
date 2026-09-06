@@ -26,7 +26,25 @@ export interface Contig {
 }
 
 /** Where an assembly's lengths came from, which decides how far to trust them. */
-export type AssemblyOrigin = 'sizes' | 'bigwig' | 'bigbed' | 'fasta' | 'features' | 'cooler'
+export type AssemblyOrigin =
+  | 'sizes'
+  | 'bigwig'
+  | 'bigbed'
+  | 'fasta'
+  | 'features'
+  | 'cooler'
+  // A BAM's `@SQ` table, which carries a length per reference and is therefore
+  // exact — the same standing as a bigWig's header, and not the lower bound a
+  // feature file gives (§8.13).
+  | 'bam'
+  // A VCF's `##contig=<ID=…,length=…>` block, which is a `chrom.sizes` written
+  // inside the file: **declared**, not inferred, so it stands where a BAM's
+  // `@SQ` table stands (§8.14). Its own member for the reason `bam` is one —
+  // {@link lengthsAreExact} reads this and nothing else, so a VCF that reported
+  // `features` would have the browser tell a reader its chromosomes end at
+  // their last variant when the file says where they really end. A VCF that
+  // declares no contigs is `features`, correctly, and gets the lower bound.
+  | 'vcf'
 
 export interface Assembly {
   /** What names it: the URI of the file its lengths were read from. */
