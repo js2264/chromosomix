@@ -36,6 +36,7 @@ import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
 import { createSource, releaseSources } from '../../worker/sources'
 import { correlationField, type CorrelationField } from '../compartments'
+import { serpentineBin } from '../../render/serpentine'
 import { abortError, type JobContext } from '../job'
 import { RUNNERS } from '../run/index'
 import type { TaskResult } from '../types'
@@ -44,6 +45,7 @@ import {
   type AnalysisRequest,
   type AnalysisResponse,
   type AnalysisResultMap,
+  type SerpentineField,
 } from './protocol'
 
 /**
@@ -256,6 +258,48 @@ async function handleCorrelate(request: Extract<AnalysisRequest, { kind: 'correl
  */
 const CORRELATE_BATCH_ROWS = 64
 
+/**
+ * Bin a block into serpentine regions, breathing between passes.
+ *
+ * A pass is one sweep over the live regions and there is no consistent state
+ * halfway through a merge, so that is where the yield goes — tens of
+ * milliseconds apart, which is the same granularity the correlation's
+ * sixty-four rows buy. The cancel is checked on the same beat and once more at
+ * the end, as `handleRun` does: a partition whose last pass finished just as the
+ * cancel landed would otherwise deliver a picture to a reader who has already
+ * moved the picker.
+ */
+async function handleSerpentine(
+  request: Extract<AnalysisRequest, { kind: 'serpentine' }>,
+): Promise<SerpentineField> {
+  const id = request.id
+  const block = {
+    nrows: request.nrows,
+    ncols: request.ncols,
+    values: request.values,
+    rowExtent: request.rowExtent,
+    colExtent: request.colExtent,
+  }
+  let passes = 0
+  const binned = await serpentineBin(
+    block,
+    request.counts,
+    request.spec,
+    request.over ?? undefined,
+    async (_pass, live) => {
+      await yieldToEventLoop()
+      if (cancelled.has(id)) throw abortError()
+      passes++
+      // No total to report against: the pass count is not known in advance and
+      // depends on how far the regions have to grow. The note carries what there
+      // is, which is how far it has got.
+      post({ type: 'progress', id, done: passes, total: 0, note: `binning · ${live.toLocaleString()} regions` })
+    },
+  )
+  if (cancelled.has(id)) throw abortError()
+  return { values: binned.values, over: binned.over, regions: binned.regions }
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -268,6 +312,8 @@ async function dispatch(request: AnalysisRequest): Promise<unknown> {
       return handleRun(request)
     case 'correlate':
       return handleCorrelate(request)
+    case 'serpentine':
+      return handleSerpentine(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

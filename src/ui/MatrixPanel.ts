@@ -92,6 +92,8 @@ import {
   deriveBlock,
   preferredTransform,
   type AxisRun,
+  type BinnedField,
+  type BinningRequest,
   type DerivedValues,
   type Derivation,
   type Normalisation,
@@ -654,6 +656,19 @@ export interface DerivePresentation {
    * message describes something that is over.
    */
   onCorrelateFailure?(message: string): void
+  /**
+   * Bin a block into serpentine regions, off this thread.
+   *
+   * A callback rather than a client, exactly as {@link correlateBlock} is and for
+   * its reason: the session owns the worker, the panel owns the block and the
+   * cache, and the seam is the arrays in and the arrays out. Absent where nothing
+   * can compute one, in which case a `serpentine ·` setting draws the unbinned
+   * map — which is the honest picture, and the caption does not claim otherwise.
+   */
+  binBlock?(
+    request: BinningRequest,
+    onProgress?: (done: number, total: number, note?: string) => void,
+  ): Cancellable<BinnedField>
 }
 
 /**
@@ -1055,6 +1070,12 @@ export class MatrixPanel {
    * looking finished and then changed under the reader some seconds later.
    */
   private correlationNote: string | null = null
+  /** A serpentine binning already computed, for the block and setting it names. */
+  private binned: { key: string; field: BinnedField } | null = null
+  /** The binning on its way, so a superseded one can be cancelled. */
+  private binning: { key: string; job: Cancellable<BinnedField> } | null = null
+  /** The binning's own line on the veil, kept apart from the correlation's. */
+  private binningNote: string | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /** The room the box has, measured once per resize. See {@link measureRoom}. */
@@ -2670,6 +2691,31 @@ export class MatrixPanel {
     return null
   }
 
+  /**
+   * What identifies the block a binning was computed for.
+   *
+   * Everything upstream of the binning in `deriveBlock`'s pipeline is in it, and
+   * the baseline is in it through `expected`: a partition grown against one
+   * normalisation is not the partition another would have grown, and the O/E
+   * decides whether a second field was binned alongside the first at all. The
+   * `smooth` token carries the target and the merge rule.
+   */
+  private binningKey(data: MatrixResult, derivation: Derivation): string {
+    return [
+      this.blockGeneration,
+      data.nrows,
+      data.ncols,
+      data.rowExtent[0],
+      data.rowExtent[1],
+      data.colExtent[0],
+      data.colExtent[1],
+      derivation.normalise ?? '',
+      String(derivation.expected === true),
+      String(derivation.baseline === true),
+      derivation.smooth ?? '0',
+    ].join('|')
+  }
+
   /** What identifies the square a correlation was measured on. */
   private correlationKey(data: MatrixResult, derivation: Derivation): string {
     return [
@@ -2764,6 +2810,25 @@ export class MatrixPanel {
   /** Put the correlation's own wait on the veil, or take it off. */
   private showCorrelating(note: string | null): void {
     this.correlationNote = note
+    this.refreshBusy()
+  }
+
+  /** Put the binning's wait on the veil, or take it off. */
+  private showBinning(note: string | null): void {
+    this.binningNote = note
+    this.refreshBusy()
+  }
+
+  /**
+   * Whichever wait is outstanding, with the correlation's winning.
+   *
+   * Both can be outstanding at once — a reader may pick the correlation score
+   * *and* a serpentine setting, and the binning runs before the correlation does
+   * — and two notes cannot share one veil. The correlation's is shown because it
+   * is the longer job and the one whose progress a reader is actually waiting on.
+   */
+  private refreshBusy(): void {
+    const note = this.correlationNote ?? this.binningNote
     if (note === null) this.setBusy(false)
     else this.setBusy(true, note)
   }
@@ -2774,6 +2839,60 @@ export class MatrixPanel {
     this.correlating = null
     this.correlation = null
     this.showCorrelating(null)
+  }
+
+  /** The same for a binning, and it is dropped on the same events. */
+  private forgetBinning(): void {
+    this.binning?.job.cancel()
+    this.binning = null
+    this.binned = null
+    this.showBinning(null)
+  }
+
+  /**
+   * Ask for a binning, unless the same one is already on its way.
+   *
+   * `startCorrelation`'s shape throughout, including the two things that are easy
+   * to leave out: a superseded job is cancelled rather than left to finish for a
+   * block nobody is looking at, and a late answer to a superseded question is
+   * dropped rather than cached, because the key it belongs to may never be asked
+   * for again.
+   */
+  private startBinning(key: string, request: BinningRequest): void {
+    if (this.binning?.key === key) return
+    const run = this.options.derive?.binBlock
+    if (run === undefined) return
+    this.binning?.job.cancel()
+
+    const job = run(request, (_done, _total, note) => {
+      if (this.binning?.key !== key) return
+      this.showBinning(note ?? 'binning…')
+    })
+    this.binning = { key, job }
+    this.showBinning('binning…')
+
+    job.promise.then(
+      (field) => {
+        if (this.binning?.key !== key) return
+        this.binning = null
+        this.binned = { key, field }
+        this.showBinning(null)
+        this.redraw()
+      },
+      (err: unknown) => {
+        if (this.binning?.key !== key) return
+        this.binning = null
+        this.showBinning(null)
+        // A cancelled binning is a reader who moved the picker, which is not an
+        // error and must not draw one (`worker/client.ts`). A real failure leaves
+        // the unbinned map standing, which is a true picture of the same region.
+        if (!isCancellation(err)) {
+          this.options.derive?.onCorrelateFailure?.(
+            err instanceof Error ? err.message : String(err),
+          )
+        }
+      },
+    )
   }
 
   /**
@@ -2806,6 +2925,7 @@ export class MatrixPanel {
     // left to resolve into a dead panel, and the client itself is the session's
     // to close.
     this.forgetCorrelation()
+    this.forgetBinning()
     setReadout('')
     this.featureDialog?.close()
     this.featureDialog = null
@@ -5280,7 +5400,33 @@ export class MatrixPanel {
       // (`render/smooth.ts`).
       smooth: this.options.derive?.smooth ?? '0',
     }
+    // Why a binning cannot happen here, if it cannot. A compared pair is refused
+    // outright rather than half-done: the partition is grown on one block, so
+    // binning the lead and not its companion would draw a binned map over an
+    // unbinned one and call the result a ratio.
+    const aligned = second !== undefined && alignable(data, second) ? second : undefined
+    const binningUnavailable =
+      this.options.derive?.binBlock === undefined
+        ? 'serpentine not applied — no analysis thread'
+        : aligned !== undefined
+          ? 'serpentine not applied — two files compared'
+          : undefined
+    if (binningUnavailable !== undefined) derivation.binningUnavailable = binningUnavailable
+
+    // The binning is keyed on the block and on everything upstream of it in the
+    // pipeline, so a held answer is only reused for the derivation it was
+    // computed for. Supplied *before* `deriveBlock` runs, because it stands in
+    // for a step in the middle of it rather than replacing the result.
+    const binKey = this.binningKey(data, derivation)
+    if (this.binned !== null && this.binned.key !== binKey) this.binned = null
+    if (this.binned?.key === binKey) derivation.binned = this.binned.field
+
     const derived = deriveBlock(data, derivation, runs)
+    // Asked for and not held: start one, and draw the unbinned field meanwhile.
+    // Exactly the correlation's arrangement — the operand is a real picture of
+    // the same region, and the caption does not claim it is the binned one.
+    if (derived.pending !== undefined) this.startBinning(binKey, derived.pending)
+    else if (this.binning !== null && this.binning.key !== binKey) this.forgetBinning()
     // The correlation replaces the whole field, which is why it is applied here
     // rather than inside `deriveBlock`: every step in there is synchronous and
     // this one is not, so the panel is the only place that can hold the answer
@@ -5296,9 +5442,14 @@ export class MatrixPanel {
           { ...derived, scope: `correlation not drawn — ${refusal}` }
     if (!correlating && this.correlating !== null) this.forgetCorrelation()
     this.derived = mine
-    const aligned = second !== undefined && alignable(data, second) ? second : undefined
     const theirs =
-      aligned === undefined ? undefined : deriveBlock(aligned, derivation, runs)
+      aligned === undefined
+        ? undefined
+        : // Its own derivation object, and the difference is the two binning
+          // fields: a partition grown on the lead's cells says nothing about
+          // this file's, and `binned` left in place would put the lead's values
+          // into the companion's half of the ratio.
+          deriveBlock(aligned, { ...derivation, binned: undefined }, runs)
 
     const op = this.options.compare?.op ?? 'split'
     // Measured on the *derived* blocks, not the raw ones: a normalisation may

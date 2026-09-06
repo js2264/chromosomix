@@ -116,6 +116,10 @@ export interface SerpentineSpec {
  * despeckle and the caption says so. A whole-genome view is pooled from
  * thousands of contacts per cell and is not short of evidence in the first
  * place, which is the same argument `smooth.ts` makes for its own cap.
+ *
+ * This runs on the analysis thread (§18.3), so the cap is about **the wait**
+ * rather than about a blocked frame — the same thing the correlation's own cap
+ * measures, and the reason both are stated in seconds rather than in cells.
  */
 export const MAX_SERPENTINE_CELLS = 1_500_000
 
@@ -126,9 +130,11 @@ export const MAX_SERPENTINE_CELLS = 1_500_000
  * whole of `evidence`: it has no compaction to lean on while it is picking
  * uniformly, and it coalesces much further, so it does more merges into much
  * larger regions. Multiplied by the iterations that make the average mean
- * anything, that is seconds of a blocked main thread, and this cap is what keeps
- * it off one. The deterministic rule reaches a comparable picture inside the
- * bigger cap, and it is what a reader gets here instead.
+ * anything, the full cap would be a wait of ten seconds or more — and unlike the
+ * correlation, which is cubic and has nowhere else to go, there is a cheaper rule
+ * right beside it that reaches a comparable picture. So the faithful merge is
+ * offered over the range where its wait is a few seconds, and the deterministic
+ * one covers the rest.
  */
 export const MAX_SAMPLED_CELLS = 500_000
 
@@ -157,7 +163,7 @@ function seeded(seed: number): () => number {
  * of it rather than being handed a partition object, because averaging several
  * partitions is the only thing anyone does with one.
  */
-function partition(
+async function partition(
   domain: Int32Array,
   neighbours: (id: number, out: Int32Array) => number,
   criterion: Float64Array,
@@ -168,7 +174,19 @@ function partition(
   rule: MergeRule,
   random: () => number,
   n: number,
-): { parent: Int32Array; sums: Float64Array; live: number } {
+  /**
+   * Called before each pass, so a caller on a worker can report where it is and
+   * a cancel can actually land.
+   *
+   * Between passes rather than inside one, and that is as fine-grained as this
+   * loop can honestly be: a pass is one sweep over the live regions and there is
+   * no consistent state to stop at halfway through a merge. A pass is tens of
+   * milliseconds, which is the granularity a reader experiences as "it stopped
+   * when I asked" — the same trade `analysis.worker.ts` makes every 64 rows of a
+   * correlation.
+   */
+  breathe?: (pass: number, live: number) => Promise<void>,
+): Promise<{ parent: Int32Array; sums: Float64Array; live: number }> {
   const parent = new Int32Array(n).fill(-1)
   const sums = new Float64Array(n)
   const sumsB = criterionB === null ? null : new Float64Array(n)
@@ -274,8 +292,11 @@ function partition(
     return at < 0 ? 0 : at >= BUCKETS ? BUCKETS - 1 : at
   }
 
+  let passes = 0
   while (live !== previous) {
     previous = live
+    if (breathe !== undefined) await breathe(passes, live)
+    passes++
     // Live regions only. After a couple of passes this is a small fraction of
     // the block and sweeping every original slot is most of the work.
     let write = 0
@@ -416,12 +437,18 @@ function partition(
  * Off-diagonal and rectangular blocks have no such constraint and are binned
  * whole.
  */
-export function serpentineBin(
+export async function serpentineBin(
   block: Cells,
   counts: Float32Array,
   spec: SerpentineSpec,
   over?: Float32Array,
-): { values: Float32Array; over: Float32Array | null; regions: number; scope: string | null } {
+  breathe?: (pass: number, live: number) => Promise<void>,
+): Promise<{
+  values: Float32Array
+  over: Float32Array | null
+  regions: number
+  scope: string | null
+}> {
   const { nrows, ncols, values } = block
   const n = nrows * ncols
   if (nrows === 0 || ncols === 0) return { values, over: over ?? null, regions: 0, scope: null }
@@ -500,7 +527,7 @@ export function serpentineBin(
   let regions = 0
 
   for (let pass = 0; pass < runs; pass++) {
-    const { parent, live } = partition(
+    const { parent, live } = await partition(
       domain,
       neighbours,
       critA,
@@ -510,6 +537,7 @@ export function serpentineBin(
       spec.merge,
       random,
       n,
+      breathe,
     )
     regions = live
 

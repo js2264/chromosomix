@@ -66,7 +66,7 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import type { CompareOp, Transform, ViewState } from '../types'
-import type { Normalisation } from '../render/derive'
+import type { BinnedField, BinningRequest, Normalisation } from '../render/derive'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
@@ -4613,6 +4613,7 @@ export class Session {
         this.rederive()
       },
       correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+      binBlock: (request, onProgress) => this.bin(request, onProgress),
       onCorrelateFailure: (message) => {
         // The panel has already asked for the score to move, so this only says
         // what happened. Without the move the next render would ask for the
@@ -4661,6 +4662,35 @@ export class Session {
   ): Cancellable<CorrelationField> {
     this.correlator ??= new AnalysisClient()
     return this.correlator.cancellable<'correlate'>({ kind: 'correlate', values, n }, onProgress)
+  }
+
+  /**
+   * Bin a block into serpentine regions on the analysis thread.
+   *
+   * {@link correlate}'s twin, on the same client and for the same reason: the
+   * work is measured in hundreds of milliseconds to seconds, and §18.3 gives
+   * that thread exactly this shape of job so the thread answering frames never
+   * queues behind one.
+   */
+  private bin(
+    request: BinningRequest,
+    onProgress?: (done: number, total: number, note?: string) => void,
+  ): Cancellable<BinnedField> {
+    this.correlator ??= new AnalysisClient()
+    return this.correlator.cancellable<'serpentine'>(
+      {
+        kind: 'serpentine',
+        values: request.values,
+        counts: request.counts,
+        over: request.over,
+        nrows: request.nrows,
+        ncols: request.ncols,
+        rowExtent: request.rowExtent,
+        colExtent: request.colExtent,
+        spec: request.spec,
+      },
+      onProgress,
+    )
   }
 
   /** What every map view needs to build its score picker. */

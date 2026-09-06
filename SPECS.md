@@ -987,7 +987,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
-| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, ~0.4 s at 841²; ~1.4 s per partition under the reference's random merge |
+| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, **on the analysis thread**: ~0.4 s at 841², ~1.4 s per partition under the reference's random merge |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1141,8 +1141,23 @@ again. Randomness hides this in the reference, because a random neighbour is usu
 one. A needy region ringed entirely by satisfied ones merges into the **smallest** of them, which
 cannot cascade and keeps it from being stranded below the threshold for good.
 
+**It runs on the analysis thread** (§18.3), which is the one place in `render/derive.ts` that is not
+a pass or two over the cells: hundreds of milliseconds to seconds, against the ~100 ms the adaptive
+filter costs. So `deriveBlock` does not compute it. It runs the pipeline up to the point the binning
+would happen, hands the caller the arrays it would have used, and carries on with the **unbinned**
+field; when the answer comes back the caller derives again and the step is a lookup. That is the
+correlation's arrangement and it is here for the correlation's reason — every other step in that
+module is synchronous, and a promise for the sake of one of them would make every caller wait on
+arithmetic already finished. While it waits the map is the unbinned picture and **the caption says
+`counts`, not `binned`**: a figure exported mid-wait must not claim a binning it does not have.
+
 Blocks are capped at **1.5 M cells**, and at **500 k** under the random merge, above which the
-adaptive filter — the same criterion without the partition — is used and the caption says so. A square
+adaptive filter — the same criterion without the partition — is used and the caption says so. Two
+other things take the same fallback and say why: a panel with no analysis thread behind it, and
+**either file of a compared pair**. The partition is grown on one block, so binning the lead and not
+its companion would put a binned map over an unbinned one and call the result a ratio. Serpentine's
+own answer to a pair is to grow *one* partition on both maps at once, which the engine already does —
+it is what the second field is for — and which nothing yet asks it for. A square
 block on the diagonal is binned on one triangle and mirrored, because growing regions over the whole
 square would grow two independent partitions of the same data and draw a map that disagreed with its
 own transpose.
@@ -2233,6 +2248,7 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
+| Serpentine binning of a block | 0 range requests; the arrays go over and back. ~0.4 s deterministic at 841², ~1.4 s *per partition* sampled; a pass boundary is where it yields, so a cancel lands in tens of milliseconds. The map draws **unbinned** meanwhile — never blank, and never captioned as binned |
 | Analysis worker mount | opened on first use, never at session open |
 
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;

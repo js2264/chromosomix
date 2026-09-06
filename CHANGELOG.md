@@ -629,6 +629,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Serpentine binning runs on the analysis thread, not on the one drawing
+  frames.** It is the one step of the derivation measured in hundreds of
+  milliseconds to seconds rather than in passes over the cells, so `deriveBlock`
+  no longer computes it: it runs the pipeline up to the point the binning would
+  happen, hands back the arrays a binning would need, and carries on with the
+  **unbinned** field. The panel starts a job, and derives again when the answer
+  lands — the correlation's arrangement, for the correlation's reason.
+
+  While it waits the map is the honest unbinned picture and the caption says
+  `counts`, not `binned`: a figure exported mid-wait must not claim a binning it
+  does not have. The wait shows on the veil with the region count as it falls,
+  the job is cancelled when the reader moves the picker or the block changes, and
+  a superseded answer is dropped rather than cached. The engine yields between
+  passes, so a cancel lands within tens of milliseconds.
+
+  Two cases now take the adaptive fallback and say why, rather than being
+  silently ignored: a panel with no analysis thread behind it, and **either file
+  of a compared pair**. The partition is grown on one block, so binning the lead
+  and not its companion would put a binned map over an unbinned one and call the
+  result a ratio — which is what the code did before this was noticed, because
+  both files were derived through the same object and the lead's binning was
+  still in it. Serpentine's own answer to a pair is to grow one partition on both
+  maps at once, which the engine already does and nothing yet asks it for.
+
 - **The adaptive window may now grow to radius 192, up from 64.** At 64 every one
   of the three adaptive settings ran into the cap beyond about 200 bins of
   separation on a yeast map at 500 bp, so `light`, `medium` and `strong` drew the
