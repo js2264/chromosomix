@@ -192,49 +192,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   by four bytes in this repo's reader *and* its fixture builder at once, which
   is precisely the mutual misunderstanding a round trip cannot see.
 
-### Fixed
-
-- **A file and its index dropped together are now actually paired.** The loader
-  has always paired a `.tbi` with the file it indexes, and `Session.dropped` —
-  which decides what a single file *is* — could only ever be asked about one
-  file at a time, so every caller looped it over the batch and the loader was
-  handed one file at a time. A plain drop of a bgzipped GTF and its `.tbi` onto
-  the window therefore read the GTF whole and drew the index as a refused row.
-  The pairing rule now lives in one function that both roads go through.
-
-- **A re-opened local track keeps its index.** A grant was remembered for the
-  file and not for the sidecar, so a reload re-attached the `.gz` and lost the
-  `.tbi`, quietly going back to reading the whole file. Changing resolution did
-  the same thing by a different route: `carry` rebuilt the source without it.
-  The index now lives on the source rather than beside it, so every road that
-  carries a source forward carries the index too.
-
-- **A derived track is no longer restored as a file that never existed.** It is
-  computed from two other rows and holds no bytes and no recipe the stored shape
-  can carry, so it fell through to `{ kind: 'local' }` and came back as a
-  detached local row under the derived track's label, offering to re-open a file
-  that has never been on any disk. It is not persisted now, which is the smaller
-  wrong until there is a stored shape that can name an operation and its
-  operands.
-
-- **A BAM's chromosomes are no longer described as guesses.** Its `@SQ` table
-  carries a length per reference, so the lengths are exact — but the assembly
-  was reported with origin `features`, which is what `lengthsAreExact` reads,
-  so the Genome card said they were *inferred from the features* and that each
-  sequence ended at its last read. It has its own origin now, and the card says
-  *from the BAM's @SQ header*.
-
-- **The three places that list what this app opens now mention BAM.** The
-  landing page, the Tracks card and — the one worth spelling out — the landing
-  page's note that a file dropped with its index beside it is one track and not
-  two.
-
-- **The README no longer states a rule SPECS overturned.** It said in two
-  places that annotations were *absent* on a `.metacool` — once in prose and
-  once in the milestone table, where the Metadata card was still described as
-  the only annotation such a file gets. §8.5 replaced that gate with an honest
-  overlap report in MAGs some time ago.
-
 - **Tabs can be called something.** A tab is labelled by its file, which is the
   right default and a poor name for the work: four tabs reading
   `matrix_1000.mcool` off four runs are four identical labels whose only
@@ -454,6 +411,47 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **A file and its index dropped together are now actually paired.** The loader
+  has always paired a `.tbi` with the file it indexes, and `Session.dropped` —
+  which decides what a single file *is* — could only ever be asked about one
+  file at a time, so every caller looped it over the batch and the loader was
+  handed one file at a time. A plain drop of a bgzipped GTF and its `.tbi` onto
+  the window therefore read the GTF whole and drew the index as a refused row.
+  The pairing rule now lives in one function that both roads go through.
+
+- **A re-opened local track keeps its index.** A grant was remembered for the
+  file and not for the sidecar, so a reload re-attached the `.gz` and lost the
+  `.tbi`, quietly going back to reading the whole file. Changing resolution did
+  the same thing by a different route: `carry` rebuilt the source without it.
+  The index now lives on the source rather than beside it, so every road that
+  carries a source forward carries the index too.
+
+- **A derived track is no longer restored as a file that never existed.** It is
+  computed from two other rows and holds no bytes and no recipe the stored shape
+  can carry, so it fell through to `{ kind: 'local' }` and came back as a
+  detached local row under the derived track's label, offering to re-open a file
+  that has never been on any disk. It is not persisted now, which is the smaller
+  wrong until there is a stored shape that can name an operation and its
+  operands.
+
+- **A BAM's chromosomes are no longer described as guesses.** Its `@SQ` table
+  carries a length per reference, so the lengths are exact — but the assembly
+  was reported with origin `features`, which is what `lengthsAreExact` reads,
+  so the Genome card said they were *inferred from the features* and that each
+  sequence ended at its last read. It has its own origin now, and the card says
+  *from the BAM's @SQ header*.
+
+- **The three places that list what this app opens now mention BAM.** The
+  landing page, the Tracks card and — the one worth spelling out — the landing
+  page's note that a file dropped with its index beside it is one track and not
+  two.
+
+- **The README no longer states a rule SPECS overturned.** It said in two
+  places that annotations were *absent* on a `.metacool` — once in prose and
+  once in the milestone table, where the Metadata card was still described as
+  the only annotation such a file gets. §8.5 replaced that gate with an honest
+  overlap report in MAGs some time ago.
 
 - **`metacooler-run apa --window 8` set the half-width and then died.** The CLI
   reserves `--window` for the framing locus, and `apa` declares a parameter of
