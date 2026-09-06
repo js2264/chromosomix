@@ -132,8 +132,8 @@ describe('serialiseViewState / parseViewState', () => {
     const at = (hash: string): unknown => (parseViewState(hash) as { smooth?: string }).smooth
     expect(at('#uri=a&view=region&region=c1&smooth=1')).toBe('1')
     expect(at('#uri=a&view=region&region=c1&smooth=3')).toBe('3')
-    // The adaptive settings share the key, and are read by the same rule.
-    expect(at('#uri=a&view=region&region=c1&smooth=a200')).toBe('a200')
+    // The adaptive setting shares the key, and is read by the same rule.
+    expect(at('#uri=a&view=region&region=c1&smooth=a50')).toBe('a50')
     expect(at('#uri=a&view=region&region=c1&smooth=a999')).toBeUndefined()
     // `0` is off and off is *absent*: a hash saying it had chosen the default
     // would round-trip to a key the serialiser never writes.

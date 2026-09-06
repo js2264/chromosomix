@@ -33,7 +33,6 @@ import type { FeatureSet, PairSet } from '../../annotations/types'
 import type { SerialisedError, SourceSpec } from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
 import type { AnalysisFraming, Params, TaskResult } from '../types'
-import type { SerpentineSpec } from '../../render/serpentine'
 
 // ---------------------------------------------------------------------------
 // Inputs a job carries with it
@@ -127,20 +126,10 @@ export interface TaskInputs {
 // Requests
 // ---------------------------------------------------------------------------
 
-/** What a serpentine binning gives back: two binned fields and the count. */
-export interface SerpentineField {
-  values: Float32Array
-  /** The baseline binned over the same regions, when one was sent. */
-  over: Float32Array | null
-  /** Regions in the final partition — the resolution of the picture. */
-  regions: number
-}
-
 export interface AnalysisResultMap {
   open: { nBins: number; binsize: number }
   run: TaskResult
   correlate: CorrelationField
-  serpentine: SerpentineField
   cancel: null
   close: null
 }
@@ -182,34 +171,6 @@ export type AnalysisRequest =
    * transferring would neuter the array the heatmap is drawing from.
    */
   | { id: number; kind: 'correlate'; values: Float32Array; n: number }
-  /**
-   * A serpentine binning of a block the **view already holds**, for the map's
-   * `serpentine ·` smoothing settings.
-   *
-   * Beside `correlate` and for its reasons. It is not a `run`, because a task is
-   * a measurement of a *file* with a mount, a framing and provenance, and this is
-   * one block's cells going out and coming back. And it is off the reader's
-   * thread because it is the one step of `render/derive.ts` measured in hundreds
-   * of milliseconds rather than in passes over the cells — 0.4 s for a
-   * deterministic 841² partition, and about 1.4 s *per partition* under the
-   * reference's random merge, which is exactly the shape §18.3 gives this thread.
-   *
-   * The arrays are copied rather than transferred, for the same reason
-   * `correlate`'s are: transferring would neuter the arrays the heatmap is
-   * drawing from while it waits for the answer.
-   */
-  | {
-      id: number
-      kind: 'serpentine'
-      values: Float32Array
-      counts: Float32Array
-      over: Float32Array | null
-      nrows: number
-      ncols: number
-      rowExtent: readonly [number, number]
-      colExtent: readonly [number, number]
-      spec: SerpentineSpec
-    }
   // Cooperative, exactly as the reader's is: the worker checks between pixel
   // chunks, so a scan stops at the next chunk boundary rather than being killed
   // mid-write.
@@ -266,13 +227,9 @@ export function analysisTransfers(payload: unknown): Transferable[] {
   // to transfer where the *request's* array was not: this one is allocated by
   // the job and nothing on the far side keeps a reference, so moving it saves a
   // copy of up to 9 MB at the bin cap instead of neutering a block being drawn.
-  const field = payload as Partial<CorrelationField> & Partial<SerpentineField>
+  const field = payload as Partial<CorrelationField>
   if (field.values instanceof Float32Array) {
     take(field.values)
-    // A serpentine binning carries a second field beside the first — the
-    // baseline binned over the same regions — and it is allocated by the job on
-    // the same terms, so it moves rather than being copied too.
-    if (field.over instanceof Float32Array) take(field.over)
     return out
   }
   if (!Array.isArray(result.outputs)) return out

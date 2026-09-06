@@ -14,57 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Serpentine binning, in the same `smooth` picker.** Six settings below the
-  adaptive ones: `serpentine · light`, `· medium`, `· strong`, and the same three
-  `(sampled)`. Cells are grouped into **regions** grown until each holds enough to
-  average, rather than each cell getting a window — serpentine's own answer
-  ([Baudry *et al.*, 2020](https://doi.org/10.1093/bioinformatics/btaa249)) rather
-  than only its criterion. Carried in the link as `smooth=s50` and `smooth=sx50`,
-  and captioned `counts · binned into serpentine regions (medium)` with the region
-  count beside it, because the number of regions *is* the resolution of the
-  picture.
-
-  Three things a partition has that a window does not, and they are why this sits
-  beside the adaptive filter rather than replacing it: regions are **not square**,
-  so a stripe is followed rather than straddled; the target is met with **no
-  ceiling**, where a window stops at radius 192 and a cell that has not reached
-  its target stays noisy; and it is the **published method**, which is what a
-  reviewer recognises in a figure legend.
-
-  **The second matrix is the expected map.** Serpentine is differential — it grows
-  regions on two maps at once and reports `log2(B/A)`, and there is no
-  single-matrix path in the reference despite its README mentioning one. Both
-  shapes work here: with one field the criterion degenerates to `sum < threshold`
-  and you get an adaptively binned map, and with the **expected** map as the
-  second field the ratio of the two region means is an O/E computed on serpentine
-  regions — numerator and denominator averaged over exactly the same cells, which
-  is the matched-window property the ordinary despeckle needs, arrived at from the
-  other direction. Depths match by construction, so none of serpentine's
-  trend-finding is wanted.
-
-  **The default merge rule is not the reference's.** The reference picks a random
-  neighbour, which is what forces its ten iterations and what makes the partition
-  reshuffle under a reader who pans. The three plain `serpentine ·` settings use a
-  deterministic rule instead — absorb the neighbour holding the most signal, among
-  those that are themselves still short, neediest region first — which needs one
-  partition rather than ten and gives the same picture twice. It costs **~0.4 s at
-  841²** against ~1.4 s *per partition* for the sampled rule, which is why the two
-  carry different caps: **1.5 M cells** deterministic, **500 k** sampled, above
-  which the adaptive filter is used and the caption says so.
-
-  Restricting the choice to needy neighbours is not a detail. Absorbing the
-  richest neighbour outright is the obvious greedy rule and it collapsed the whole
-  block into **a single region**: the richest neighbour has almost always met the
-  threshold already, so every needy region ate a satisfied one and the result was
-  needy again. Randomness hides this in the reference, because a random neighbour
-  is usually another needy one.
-
-- **A despeckle whose window sizes itself, in the `smooth` picker.** Three new
-  settings beside the fixed `3 × 3`, `5 × 5` and `7 × 7` — `adaptive · light`,
-  `· medium` and `· strong`. Each cell's window grows until it covers enough
-  evidence to average, so it stays narrow where the counts are thick and widens
-  where they thin out. Carried in the link as `smooth=a200`, and written into the
-  colourbar caption as `counts · smoothed adaptively (medium)`.
+- **A despeckle whose window sizes itself, in the `smooth` picker.** One new
+  setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
+  window grows until it covers enough evidence to average, so it stays narrow
+  where the counts are thick and widens where they thin out. Carried in the link
+  as `smooth=a50`, and written into the colourbar caption as
+  `counts · smoothed adaptively`.
 
   **Why a fixed window was never going to work away from the diagonal.** The
   precision of a box mean depends on the *counts* it covers, not on the cells it
@@ -79,27 +34,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **This is serpentine's criterion, not serpentine's algorithm.**
   [Serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*,
   *Bioinformatics* 2020) is where the idea of holding the counts constant instead
-  of the window comes from. Its own method grows *regions* by random agglomeration
-  and averages each, which makes the result a partition — the right shape for a
-  differential analysis, and the wrong one for a viewer, because the partition is
-  global and stochastic, so panning by one bin redraws every boundary and the map
-  visibly reshuffles under the reader. Here the windows overlap and no partition
-  is formed, so a cell reads the same whether it sits in the middle of the
-  viewport or at its edge, and a smoothed map can be panned.
+  of the window comes from. Its own method grows *regions* and averages each,
+  which makes the result a partition — the right shape for a differential
+  analysis, and the wrong one for a viewer, because the partition is global and
+  stochastic, so panning by one bin redraws every boundary and the map visibly
+  reshuffles under the reader. Here the windows overlap and no partition is
+  formed, so a cell reads the same wherever it sits in the viewport.
 
   The width is set by the block's **as-read** values while the mean is taken over
   whatever the derivation has made of them — serpentine's own separation, and what
   makes the setting work under the O/E at all, since observed-over-expected is
   near 1 everywhere by construction and a window sized on it would be the same
   size everywhere. The target is a multiple of the block's mean rather than an
-  absolute count, because `score` may have put balanced values in the cells; it
-  reduces to a threshold on counts when the cells are counts.
+  absolute count, because `score` may have put balanced values in the cells.
 
-  Each setting is **floored at the fixed window it sits below**, so `light` is
-  `3 × 3` or wider and never narrower, and capped at a radius of 64. It costs
-  **80–120 ms on an 841² block** and is refused above **2 M cells**, where the
-  floor is used instead and the caption says so.
+  **Picking it turns the O/E on**, exactly as clicking the toggle would, and the
+  `log2` scale, the symmetric range and the diverging ramp all follow from the
+  neutral of 1 that gives the result. That is the picture the setting is for: on
+  raw counts all it can denoise is the distance decay that was never in question.
+  Turning the O/E off again is left to the reader.
 
+  The window is floored at `3 × 3` and capped at a radius of 192. Blocks are
+  capped at **16 M cells** — the 4096² raster cap, so in practice it is available
+  on anything the viewer draws. The cumulative tables are built for a **band of
+  rows** at a time rather than for the block, so about 128 MB is resident whatever
+  the block's size; without that a 16 M block would allocate over half a gigabyte
+  on the thread drawing frames. Time is roughly linear: **173 ms at 841², 328 ms
+  at 1,200², 867 ms at 4 M and 3.9 s at 16 M**. That last is a real freeze and the
+  honest price of the cap being where it is; if it ever needs fixing the answer is
+  the analysis thread rather than a lower cap. Above the cap the fixed `3 × 3` is
+  used and the refusal is said **twice** — in the export caption, and in the view
+  note under the heading, because a caption nobody reads until they export is no
+  use to somebody looking at the screen.
 - **VCF opens as a lane of variants.** Drop a `.vcf`, or a `.vcf.gz` with its
   `.tbi`, and the calls draw as boxes over the reference bases each record is
   about — with the symbolic ones at their real size, read out of `INFO/END` and
@@ -629,63 +595,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **The self-sizing settings now run up to 4 M cells, from 1.5 M and 2 M.** A
-  2,000-bin square, which is what a whole chromosome actually is: a yeast
-  chromosome at 1 kb is up to 1,531 bins and a 100 Mb human window at 50 kb is
-  2,000. The old limits fitted the *small* yeast chromosomes at 1 kb and refused
-  the large ones, which is the worst place for a limit to fall — chr IV came out
-  with a plain 7×7 while its neighbours binned properly.
-
-  Measured at the new cap: the adaptive filter is **300 ms** and about **128 MB**
-  of summed-area tables, allocated and freed inside one derivation — it runs on
-  the thread drawing frames, so its ceiling is the memory rather than the wait.
-  The binning runs on the analysis thread and is **7.3 s** deterministic, which is
-  superlinear (roughly `n^1.7`, from one typed array per cell being more garbage
-  collection than merging) and the obvious thing to fix if this ever goes higher.
-
-  **The sampled merge is 12.3 s per partition at the cap, so about 37 s for the
-  three it averages.** It is offered at the full range anyway rather than being
-  quietly narrowed, because it is the published algorithm and a figure that has
-  to say "serpentine binning" and mean it should not be refused at the size a
-  chromosome is. The job is off-thread, reports the region count as it falls, is
-  cancellable, and the map is drawn unbinned throughout — a visible wait a reader
-  can walk away from rather than a frozen window. The deterministic rule sits
-  beside it at a fifth of the price.
-
-- **Serpentine binning runs on the analysis thread, not on the one drawing
-  frames.** It is the one step of the derivation measured in hundreds of
-  milliseconds to seconds rather than in passes over the cells, so `deriveBlock`
-  no longer computes it: it runs the pipeline up to the point the binning would
-  happen, hands back the arrays a binning would need, and carries on with the
-  **unbinned** field. The panel starts a job, and derives again when the answer
-  lands — the correlation's arrangement, for the correlation's reason.
-
-  While it waits the map is the honest unbinned picture and the caption says
-  `counts`, not `binned`: a figure exported mid-wait must not claim a binning it
-  does not have. The wait shows on the veil with the region count as it falls,
-  the job is cancelled when the reader moves the picker or the block changes, and
-  a superseded answer is dropped rather than cached. The engine yields between
-  passes, so a cancel lands within tens of milliseconds.
-
-  Two cases now take the adaptive fallback and say why, rather than being
-  silently ignored: a panel with no analysis thread behind it, and **either file
-  of a compared pair**. The partition is grown on one block, so binning the lead
-  and not its companion would put a binned map over an unbinned one and call the
-  result a ratio — which is what the code did before this was noticed, because
-  both files were derived through the same object and the lead's binning was
-  still in it. Serpentine's own answer to a pair is to grow one partition on both
-  maps at once, which the engine already does and nothing yet asks it for.
-
-- **The adaptive window may now grow to radius 192, up from 64.** At 64 every one
-  of the three adaptive settings ran into the cap beyond about 200 bins of
-  separation on a yeast map at 500 bp, so `light`, `medium` and `strong` drew the
-  same picture out there and differed only nearer the diagonal — the cap, not the
-  target, was choosing the width for exactly the cells with the least data. At 192
-  the target decides, which is the point of the setting: the three now separate
-  where it matters, at a coefficient of variation of 0.09, 0.05 and 0.02 against a
-  flat 0.09 before. The search is binary, so this costs one more trial radius per
-  cell and nothing else.
-
+- **The adaptive window may now grow to radius 192, up from 64.** At 64 it ran
+  into the cap beyond about 200 bins of separation on a yeast map at 500 bp, so
+  the cap rather than the target was choosing the width for exactly the cells
+  with the least data. The search is binary, so this costs one more trial radius
+  per cell and nothing else.
 - **The despeckle now runs before the O/E division, and divides by a baseline
   averaged over the same windows.** Both halves of this were needed to make the
   `smooth` picker do anything visible on an O/E map, which is the picture most

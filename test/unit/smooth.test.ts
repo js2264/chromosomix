@@ -26,6 +26,7 @@ import { combine } from '@/render/compare'
 import { deriveBlock } from '@/render/derive'
 import {
   adaptiveSmoothValues,
+  ADAPTIVE_MAX_RADIUS,
   MAX_ADAPTIVE_CELLS,
   parseSmooth,
   SMOOTH_CHOICES,
@@ -298,8 +299,45 @@ describe('adaptiveSmoothValues', () => {
     expect(out[hole + 1]).toBeCloseTo(1, 6)
   })
 
+  it('gives the same answer either side of a band boundary', () => {
+    // The tables are built for a band of rows at a time, not for the block, so
+    // every window is read out of a table whose first row is not row zero. An
+    // origin off by a band is the whole failure mode of that, and it is invisible
+    // on a uniform field — so the block is made **periodic in its rows** with a
+    // period of exactly one band, and two rows one period apart, both clear of
+    // the block's edges, must come out identical. They sit in different bands.
+    const ncols = 6000
+    const period = Math.max(1, Math.floor(4_000_000 / (ncols + 1)) - 2 * ADAPTIVE_MAX_RADIUS)
+    const nrows = period * 2 + ADAPTIVE_MAX_RADIUS + 100
+    const values = new Float32Array(nrows * ncols)
+    for (let r = 0; r < nrows; r++) {
+      const k = r % period
+      for (let c = 0; c < ncols; c++) {
+        // Occupancy falls off along the row, so the window has to widen as it
+        // goes and the radius search is actually exercised rather than pinned.
+        const density = 90 - Math.floor((85 * c) / ncols)
+        const hit = (k * 31 + c * 17 + ((k * c) % 13)) % 100 < density
+        values[r * ncols + c] = hit ? ((k + c) % 5) + 1 : 0
+      }
+    }
+    const b = { ...block(1, 1, []), nrows, ncols, values }
+    const out = adaptiveSmoothValues(b, values, LIGHT).values
+
+    const first = ADAPTIVE_MAX_RADIUS + 8
+    const second = first + period
+    expect(second + ADAPTIVE_MAX_RADIUS).toBeLessThan(nrows)
+    // Different bands, or the test is asserting nothing.
+    expect(Math.floor(first / period)).not.toBe(Math.floor(second / period))
+    for (let c = 0; c < ncols; c++) {
+      expect(out[second * ncols + c]).toBeCloseTo(out[first * ncols + c], 5)
+    }
+    // …and the row is not simply flat, which would make the equality free.
+    const row = Array.from(out.subarray(first * ncols, first * ncols + ncols))
+    expect(Math.max(...row) - Math.min(...row)).toBeGreaterThan(0.1)
+  })
+
   it('falls back to the floor above the cell cap, and says which it used', () => {
-    const n = 2050
+    const n = 4001
     expect(n * n).toBeGreaterThan(MAX_ADAPTIVE_CELLS)
     const values = new Float32Array(n * n).fill(1)
     const b = { ...block(1, 1, []), values, nrows: n, ncols: n }
@@ -314,11 +352,25 @@ describe('the smoothing picker', () => {
   it('reads both vocabularies, and refuses what this build does not offer', () => {
     expect(parseSmooth('2')).toEqual({ kind: 'fixed', radius: 2 })
     expect(parseSmooth(2)).toEqual({ kind: 'fixed', radius: 2 })
-    expect(parseSmooth('a200')).toEqual({ kind: 'adaptive', target: 200, floor: 2, name: 'medium' })
+    expect(parseSmooth('a50')).toMatchObject({ kind: 'adaptive', target: 50, floor: 1 })
     expect(parseSmooth('0')).toBeNull()
     expect(parseSmooth(undefined)).toBeNull()
-    expect(parseSmooth('a999')).toBeNull()
+    // The ladder of adaptive strengths is gone; a link that carried one lands on
+    // the plain map, which is what every other unrecognised value does.
+    expect(parseSmooth('a200')).toBeNull()
+    expect(parseSmooth('a800')).toBeNull()
     expect(parseSmooth('lots')).toBeNull()
+  })
+
+  it('marks the adaptive setting as the one that wants the O/E', () => {
+    // `app/Session.ts` reads exactly this to decide whether picking a setting
+    // should also turn the O/E on. Pinned here so the rule has a name rather
+    // than living only as a `kind` comparison at the call site — the wiring
+    // itself needs a session to exercise and is not covered.
+    expect(parseSmooth('a50')?.kind).toBe('adaptive')
+    for (const id of ['0', '1', '2', '3']) {
+      expect(parseSmooth(id)?.kind ?? 'off').not.toBe('adaptive')
+    }
   })
 
   it('round-trips every choice through its token', () => {
@@ -328,11 +380,9 @@ describe('the smoothing picker', () => {
     }
   })
 
-  it('captions an adaptive map by its name, because it has no one window to give', () => {
+  it('captions an adaptive map as adaptive, because it has no one window to give', () => {
     const b = block(9, 9, new Array<number>(81).fill(1))
-    expect(deriveBlock(b, { smooth: 'a200' }, NO_RUNS).label).toBe(
-      'counts · smoothed adaptively (medium)',
-    )
+    expect(deriveBlock(b, { smooth: 'a50' }, NO_RUNS).label).toBe('counts · smoothed adaptively')
     expect(deriveBlock(b, { smooth: '2' }, NO_RUNS).label).toBe('counts · smoothed 5 × 5')
   })
 })
@@ -487,7 +537,7 @@ describe('the despeckle, where a reader meets it', () => {
     // baselines differ several-fold.
     const n = 180
     const b = sparse(n)
-    for (const id of ['1', '2', '3', 'a50', 'a200', 'a800']) {
+    for (const id of ['1', '2', '3', 'a50']) {
       const out = deriveBlock(b, { smooth: id, expected: true }, NO_RUNS).values
       expect(mean(out, n, 1, 12)).toBeGreaterThan(0.95)
       expect(mean(out, n, 1, 12)).toBeLessThan(1.05)

@@ -987,7 +987,6 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
-| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, **on the analysis thread**: ~0.4 s at 841² and 7.3 s at the 4 M cap; ~1.4 s / 12.3 s per partition under the reference's random merge |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1067,16 +1066,17 @@ to nearly nothing. That is the observation
 [serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*, 2020) is built on, and
 its answer is to hold the counts constant instead of the window.
 
-The **adaptive** settings take that criterion and keep this filter's locality. Each cell's window
-grows until it covers a target multiple of the block's mean cell, floored at the fixed radius it is
-named after and capped at 64. Three things about it are deliberate:
+The **adaptive** setting takes that criterion and keeps this filter's locality. Each cell's window
+grows until it covers a target multiple of the block's mean cell, floored at `3 × 3` and capped at a
+radius of 192. Three things about it are deliberate:
 
 - **It is a kernel, not a binning.** serpentine grows *regions* by random agglomeration and averages
   each, which makes the result a partition — right for a differential analysis, wrong for a viewer,
   because the partition is global and stochastic, so panning by one bin redraws every boundary and
   the map reshuffles under the reader. Here windows overlap and no partition is formed: a cell reads
   the same whether it sits in the middle of the viewport or at its edge, which is what lets a reader
-  pan a smoothed map and believe what moves.
+  pan a smoothed map and believe what moves. That is the whole reason this viewer takes serpentine's
+  *criterion* and not serpentine's *algorithm*.
 - **The width is measured on the values as read, and the mean is taken over the derived ones.** That
   is serpentine's own separation — it thresholds on counts and reports a ratio — and here it is what
   makes the setting work at all under the O/E, whose values are near 1 everywhere by construction and
@@ -1088,83 +1088,33 @@ named after and capped at 64. Three things about it are deliberate:
   cap and stays noisy, which is the honest outcome — a window that grew without limit would end up
   averaging the map into its own mean, and a flat field is not a better picture of thin data.
 
-Above **2 M cells** the adaptive settings are refused and the fixed radius they are floored at is used
-instead, with the caption saying so — the three cumulative tables are the block's size and two are
-`Float64`, which is about 40 MB at that cap and 335 MB at the 4096² raster cap, for a whole-genome
-view whose pooled cells are not short of evidence in the first place. This is §7.3's refusal shape
-and the correlation's: a real picture, and a caption that does not claim to be the one asked for.
+**Picking it turns the O/E on**, exactly as clicking the toggle would, and everything that follows —
+`log2`, a symmetric range, a diverging ramp — follows from the neutral of 1 the O/E gives the result.
+That is not a shortcut but the picture the setting is for: the window is sized on the counts and
+divided by a baseline averaged over that same window, and on raw counts all it can denoise is a
+picture of the distance decay that was never in question. Turning the O/E off again is left to the
+reader, who may want exactly that.
 
-**Serpentine binning is offered beside the filter, and it is a different object.** Everything above
-is a *kernel*: each cell gets its own window and the answer for one cell does not depend on where the
-viewport starts, which is what lets a reader pan a smoothed map and believe what moves. Serpentine
-([Baudry *et al.*, 2020](https://doi.org/10.1093/bioinformatics/btaa249)) answers the same question
-with a **partition** — every pixel starts as its own region, a region under the threshold absorbs a
-neighbour, and every cell ends up holding its region's mean. `render/serpentine.ts`.
+**One setting rather than a ladder of strengths.** Three of them were three ways of asking one
+question a reader has no way to answer, and the one kept is the one that preserves the most detail:
+`3 × 3` where the data is rich, and much wider where it is not.
 
-Three things a partition has that a window does not, and they are why it is here rather than being
-approximated away:
+Blocks are capped at **16 M cells**, which is the 4096² raster cap — so in practice the setting is
+available on anything the viewer will draw. The cumulative tables are built for a **band of rows** at
+a time rather than for the block, so what is resident is about 128 MB whatever the block's size;
+without that a 16 M block would allocate over half a gigabyte on the thread drawing frames. What the
+cap costs instead is time, and it is roughly linear: 173 ms at 841², 328 ms at 1,200², 867 ms at 4 M
+and **3.9 s at 16 M**. The last is a real freeze and the honest price of the cap being where it is;
+everything short of a whole chromosome at a fine bin size is a fraction of a second. Should that need
+fixing, the answer is the analysis thread rather than a lower cap — the work is a pure function of
+two arrays.
 
-- **Regions are not square.** They grow along whatever direction carries signal, so a stripe is
-  followed rather than straddled. A box centred on a stripe averages it with the empty space either
-  side.
-- **The target is met, with no ceiling.** The adaptive window stops at a radius of 192 and a cell that
-  has not reached its target by then stays noisy. A region keeps growing.
-- **It is the published method**, which is what a reviewer recognises in a figure legend.
-
-**The second matrix is the expected map, and that is the interesting part.** Serpentine is a
-differential method: it grows regions on two maps at once, merging while *both* are short, and reports
-`log2(B/A)`. There is no single-matrix path in the reference implementation despite its README
-mentioning one. Both shapes are available here. With one field the criterion degenerates to
-`sum < threshold` and the result is an adaptively binned map — honest, and mostly a denoised picture
-of the decay everybody already knows. Pass the **expected** map as the second field and the ratio of
-the two region means is an O/E computed on serpentine regions, numerator and denominator averaged
-over exactly the same cells — which is the same matched-window property the ordinary despeckle needs,
-arrived at from the other direction. Depths match by construction, so none of serpentine's
-trend-finding is wanted; and `minthreshold`, which exists to catch a coverage hole in one experiment
-and not the other, has nothing to catch, so region growth stops depending on which cells happened to
-catch a read.
-
-**The merge order is offered twice, and the default is not the reference's.** The reference picks a
-**random** neighbour, which is what forces its ten iterations: one random partition is arbitrary and
-averaging many washes that out. It is also what makes serpentine awkward in a viewer — the partition
-is global and stochastic, so panning by one bin redraws every boundary and the map reshuffles under
-the reader, at ten times the price. So `evidence` is offered beside it and is what the three plain
-`serpentine ·` settings use: absorb the neighbour holding the most signal, **among the neighbours that
-are themselves still short**, neediest region first. Deterministic, one partition instead of ten, and
-the greedy choice reaches the target in the fewest cells — which is the smallest region that can carry
-an estimate, and the direction a stripe runs in.
-
-The restriction to needy neighbours is not a detail. Absorbing the richest neighbour outright is the
-obvious rule and it collapses the whole block into a single region: the richest neighbour has almost
-always met the threshold already, so every needy region eats a satisfied one and the result is needy
-again. Randomness hides this in the reference, because a random neighbour is usually another needy
-one. A needy region ringed entirely by satisfied ones merges into the **smallest** of them, which
-cannot cascade and keeps it from being stranded below the threshold for good.
-
-**It runs on the analysis thread** (§18.3), which is the one place in `render/derive.ts` that is not
-a pass or two over the cells: hundreds of milliseconds to seconds, against the ~100 ms the adaptive
-filter costs. So `deriveBlock` does not compute it. It runs the pipeline up to the point the binning
-would happen, hands the caller the arrays it would have used, and carries on with the **unbinned**
-field; when the answer comes back the caller derives again and the step is a lookup. That is the
-correlation's arrangement and it is here for the correlation's reason — every other step in that
-module is synchronous, and a promise for the sake of one of them would make every caller wait on
-arithmetic already finished. While it waits the map is the unbinned picture and **the caption says
-`counts`, not `binned`**: a figure exported mid-wait must not claim a binning it does not have.
-
-Blocks are capped at **4 M cells** — a 2,000-bin square, which is what a whole chromosome wants: a
-yeast chromosome at 1 kb is up to 1,531 bins and a 100 Mb human window at 50 kb is 2,000. Above it the
-adaptive filter is used, and above *its* cap the fixed window the setting is floored at; the caption
-names the refusal either way. The wait at the cap is **7.3 s** deterministic and **12.3 s per
-partition** sampled, so about 37 s for the three the sampled rule averages — measured, superlinear in
-the cells, and the reason the deterministic rule is the default rather than an alternative. Two other
-things take the same fallback and say why: a panel with no analysis thread behind it, and
-**either file of a compared pair**. The partition is grown on one block, so binning the lead and not
-its companion would put a binned map over an unbinned one and call the result a ratio. Serpentine's
-own answer to a pair is to grow *one* partition on both maps at once, which the engine already does —
-it is what the second field is for — and which nothing yet asks it for. A square
-block on the diagonal is binned on one triangle and mirrored, because growing regions over the whole
-square would grow two independent partitions of the same data and draw a map that disagreed with its
-own transpose.
+Above the cap the fixed radius the setting is floored at is used instead, and **the refusal is said
+twice**: in the export caption, which is all a figure carries once it leaves the app, and in the view
+note under the heading, which is what a reader has while deciding what they are looking at. A refused
+adaptive window draws a fixed one, and a fixed one looks like a map — this is §7.3's refusal shape and
+the correlation's, with the note added because a caption nobody reads until they export is no use to
+somebody looking at the screen.
 
 **The two ends of a ratio are paper, not colour.** A cell where nothing was observed is `0`, and on a
 scale centred at 1 that is the strongest depletion the ramp can draw — so an O/E map of a sparse
@@ -1207,8 +1157,7 @@ cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made 
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
 `oe`, the comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
-radius (`smooth=2` is 5 × 5), an adaptive target (`smooth=a200`) or a serpentine one (`smooth=s50`,
-`smooth=sx50` for the sampled merge). All four are part of *what is
+radius (`smooth=2` is 5 × 5) or the adaptive window (`smooth=a50`). All four are part of *what is
 being looked at* rather than how it is shaded, so §11's rule applies: a recipient sees the numbers the
 sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
 key would send a recipient a picture whose single-cell features had been averaged away with nothing
@@ -2252,7 +2201,6 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
-| Serpentine binning of a block | 0 range requests; the arrays go over and back. ~0.4 s deterministic at 841² and 7.3 s at the 4 M cap; ~1.4 s and 12.3 s *per partition* sampled. A pass boundary is where it yields, so a cancel lands in tens of milliseconds, and the map draws **unbinned** meanwhile — never blank, and never captioned as binned |
 | Analysis worker mount | opened on first use, never at session open |
 
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;

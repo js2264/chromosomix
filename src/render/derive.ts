@@ -28,8 +28,6 @@
  */
 
 import { adaptiveSmoothValues, parseSmooth, smoothingCaption, smoothValues } from './smooth'
-import { MAX_SAMPLED_CELLS, MAX_SERPENTINE_CELLS } from './serpentine'
-import type { SerpentineSpec } from './serpentine'
 
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
@@ -175,15 +173,6 @@ export interface DerivedValues {
    * implies. `null` when the block is the whole of what the statement is about.
    */
   scope: string | null
-  /**
-   * A serpentine binning this derivation wanted and did not have.
-   *
-   * Present only when a `serpentine ·` setting is chosen and
-   * {@link Derivation.binned} was not supplied. The field above is the honest
-   * unbinned picture; a caller that can run the binning starts one and derives
-   * again. See {@link BinningRequest}.
-   */
-  pending?: BinningRequest
 }
 
 /** Whether a derived quantity is read against a middle rather than against zero. */
@@ -693,28 +682,6 @@ export interface Derivation {
    * (`render/smooth.ts`).
    */
   smooth?: string
-  /**
-   * A serpentine binning already computed for this exact block and setting.
-   *
-   * Absent on the first derivation of a block, which is what produces
-   * {@link DerivedValues.pending}; supplied on the second, once the answer is
-   * back. Nothing here checks that it belongs to this block — the caller holds
-   * the key that says so, exactly as it does for the correlation.
-   */
-  binned?: BinnedField
-  /**
-   * Why this caller cannot run a binning, when it cannot.
-   *
-   * A `serpentine ·` setting then takes the adaptive fallback and this becomes
-   * the scope note, rather than the setting being silently ignored. Two callers
-   * need it: a panel with no analysis thread behind it, and **either file of a
-   * compared pair** — the partition is grown on one block, so binning one file
-   * and not the other would put a binned map over an unbinned one and call the
-   * result a ratio. Serpentine's own answer to a pair is to grow *one* partition
-   * on both maps at once, which this engine can already do and nothing here yet
-   * asks it for.
-   */
-  binningUnavailable?: string
 }
 
 /**
@@ -753,46 +720,6 @@ interface Smoothed {
   over: Float32Array | null
   suffix: string
   scope: string | null
-  /** Set when a binning is wanted and none was supplied — see {@link BinningRequest}. */
-  pending?: BinningRequest
-}
-
-/**
- * Everything a serpentine binning needs, for a caller that can run one
- * elsewhere.
- *
- * Serpentine grows a partition over the whole block and takes hundreds of
- * milliseconds to seconds — the one step in this module that is not a pass or
- * two over the cells. So it is not done here. This module computes the pipeline
- * up to the point the binning would happen, hands the caller exactly the arrays
- * it would have used, and carries on with the **unbinned** field so there is a
- * real picture on screen meanwhile. When the answer arrives the caller derives
- * again with {@link Derivation.binned} supplied and this step is a lookup.
- *
- * That is the correlation's arrangement (`ui/MatrixPanel.ts`) and it is here for
- * the correlation's reason: every other step in `deriveBlock` is synchronous,
- * and a function that returned a promise for the sake of one of them would make
- * every caller wait on arithmetic that was already finished.
- */
-export interface BinningRequest {
-  /** The field to average, normalised and before any division. */
-  values: Float32Array
-  /** The block as read, which sets the threshold and drives the criterion. */
-  counts: Float32Array
-  /** The baseline to average over the same regions, when there is one. */
-  over: Float32Array | null
-  nrows: number
-  ncols: number
-  rowExtent: readonly [number, number]
-  colExtent: readonly [number, number]
-  spec: SerpentineSpec
-}
-
-/** A binning that has come back, ready to be substituted for the step. */
-export interface BinnedField {
-  values: Float32Array
-  over: Float32Array | null
-  regions: number
 }
 
 /**
@@ -877,56 +804,6 @@ export function deriveBlock(
     // whatever stage this is called from, because the thing they compensate for
     // — counts thinning out with distance — is a property of the measurement
     // rather than of the arithmetic done to it since.
-    if (smoothing.kind === 'serpentine') {
-      const cells = block.nrows * block.ncols
-      const cap = smoothing.merge === 'sampled' ? MAX_SAMPLED_CELLS : MAX_SERPENTINE_CELLS
-      if (cells <= cap && derivation.binningUnavailable === undefined) {
-        const held = derivation.binned
-        if (held !== undefined) {
-          return {
-            values: held.values,
-            over: held.over,
-            suffix: ` · binned ${smoothingCaption(smoothing)}`,
-            scope: `${held.regions.toLocaleString()} regions`,
-          }
-        }
-        // Nothing yet. The unbinned field goes out with **no suffix**, because
-        // the caption has to describe the picture actually drawn: a map labelled
-        // as binned that is not binned is the one claim an exported figure must
-        // never carry.
-        return {
-          values: source,
-          over: over ?? null,
-          suffix: '',
-          scope: null,
-          pending: {
-            values: source,
-            counts: block.values,
-            over: over ?? null,
-            nrows: block.nrows,
-            ncols: block.ncols,
-            rowExtent: block.rowExtent,
-            colExtent: block.colExtent,
-            spec: smoothing,
-          },
-        }
-      }
-      // Refused, and handed to the nearest thing that is local and cheap. The
-      // adaptive filter is the same criterion without the partition, so what is
-      // drawn is the same idea at a lower price rather than a different picture.
-      const fallback = adaptiveSmoothValues(
-        { ...block, values: source },
-        block.values,
-        { kind: 'adaptive', target: smoothing.target * 4, floor: smoothing.floor, name: smoothing.name },
-        over,
-      )
-      return {
-        values: fallback.values,
-        over: fallback.over,
-        suffix: ` · smoothed ${smoothingCaption(fallback.applied)}`,
-        scope: derivation.binningUnavailable ?? 'serpentine not applied — block too large',
-      }
-    }
     const adapted = adaptiveSmoothValues(
       { ...block, values: source },
       block.values,
@@ -1035,7 +912,6 @@ export function deriveBlock(
     neutral: derivation.expected === true && derivation.baseline !== true ? 1 : null,
     label: (parts.length === 0 ? 'counts' : parts.join(' · ')) + suffix,
     scope,
-    ...(smoothed.pending === undefined ? {} : { pending: smoothed.pending }),
   }
 }
 

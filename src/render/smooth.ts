@@ -231,30 +231,9 @@ export function smoothValues(block: Cells, radius: number): Float32Array {
  * counts thin out, which is where the O/E is noisiest.
  */
 
-/**
- * How much smoothing a reader asked for.
- *
- * Three shapes of one idea, in order of how far they go: a fixed window, a
- * window that sizes itself, and a partition grown until each region has what it
- * needs (`render/serpentine.ts`). The first two are kernels and stay local; the
- * third is serpentine's own answer and is not.
- */
+/** How much smoothing a reader asked for: a fixed window, or a target to reach. */
 export type Smoothing =
   | { kind: 'fixed'; radius: number }
-  | {
-      kind: 'serpentine'
-      /** Evidence a region must gather, in multiples of the block's mean cell. */
-      target: number
-      /** `evidence` is deterministic; `sampled` is the reference's random merge. */
-      merge: 'evidence' | 'sampled'
-      /** Partitions to average. Only `sampled` has more than one. */
-      iterations: number
-      /** Seed for `sampled`, so a figure comes out the same twice (§18.4). */
-      seed: number
-      /** The despeckle radius to fall back to where the binning is refused. */
-      floor: number
-      name: string
-    }
   | {
       kind: 'adaptive'
       /**
@@ -274,11 +253,10 @@ export type Smoothing =
        * The smallest window it may use, where the data is already rich enough.
        *
        * Without a floor, a cell sitting on a strong near-diagonal feature clears
-       * the target inside 3 × 3 and is left almost unsmoothed, so the three
-       * adaptive settings would look identical along the diagonal and differ
-       * only far from it. With one, each adaptive setting *starts* at its fixed
-       * counterpart and grows from there, which is the relationship the picker
-       * puts in front of the reader: `light` is 3 × 3 or wider, never narrower.
+       * the target inside a single cell and is left unsmoothed, so the setting
+       * would do nothing at all along the diagonal and everything away from it.
+       * With one, it is `3 × 3` or wider and never narrower — the fixed setting
+       * above it in the picker, widening where the counts thin out.
        */
       floor: number
       /** What the caption calls it. */
@@ -293,12 +271,10 @@ export type Smoothing =
  * until it has averaged the map into its own mean, and a flat field is not a
  * better picture of thin data than a noisy one.
  *
- * It was 64, and 64 was too low to tell the three settings apart where it
- * mattered most. On a yeast map at 500 bp every one of them ran into the cap
- * beyond about 200 bins of separation, so `light`, `medium` and `strong` drew the
- * same picture out there and differed only nearer the diagonal — the cap, not the
- * target, was choosing the width for the cells with the least data. At 192 the
- * target is what decides, which is the whole point of the setting.
+ * It was 64, and 64 was too low: on a yeast map at 500 bp the window ran into the
+ * cap beyond about 200 bins of separation, so the cap rather than the target was
+ * choosing the width for exactly the cells with the least data. At 192 the target
+ * is what decides, which is the whole point of the setting.
  *
  * The search is a binary one, so the cost of raising it is a fourth trial radius
  * per cell and nothing else; the ceiling is about meaning rather than time. It is
@@ -310,27 +286,41 @@ export const ADAPTIVE_MAX_RADIUS = 192
 /**
  * The largest block the adaptive filter will run on, in cells.
  *
- * The summed-area tables below are the size of the block and `Float64` — three
- * of them, or four when a baseline is being averaged alongside the map for an
- * O/E. That is about **128 MB at this cap**, allocated and freed inside one
- * derivation, for **300 ms** of work on a 2,000-bin square. Both numbers are
- * measured. At the 4096² raster cap the tables would be over half a gigabyte,
- * which is not a trade-off worth making silently for a whole-genome view whose
- * cells are pooled from thousands of contacts each and are not short of evidence
- * in the first place.
+ * 16 M cells is a 4096² block, which is the raster cap — so in practice the
+ * setting is available on anything the viewer will draw, including a whole
+ * chromosome at a fine bin size and a whole small genome. Earlier limits of 2 M
+ * and 4 M fell in the worst possible place: they fitted the small yeast
+ * chromosomes at 1 kb and refused the large ones, so the setting worked on
+ * fifteen chromosomes of a genome and not on the sixteenth.
  *
- * Raised from 2 M alongside `render/serpentine.ts`'s own cap, and for its
- * reason: a whole chromosome is a 1,200- to 2,000-bin square, and a limit that
- * fitted the small yeast chromosomes at 1 kb while refusing the large ones fell
- * in the worst possible place. Unlike the binning, this runs *here*, on the
- * thread drawing frames — 300 ms is a hitch on a dropdown, which is why the
- * ceiling is the memory rather than the wait.
+ * What used to make a cap necessary was memory, and {@link STRIP_ENTRIES} is why
+ * it no longer sets one: the cumulative tables are built for a band of rows at a
+ * time rather than for the block, so what is resident is 128 MB whatever the
+ * block's size. The cap that remains is about **time**, measured on the thread
+ * drawing frames:
+ *
+ * | block | cells | time |
+ * |---|---|---|
+ * | 841² | 0.7 M | 173 ms |
+ * | 1,200² | 1.4 M | 328 ms |
+ * | 2,000² | 4 M | 867 ms |
+ * | 4,096² | 16 M | **3.9 s** |
+ *
+ * Roughly linear, and the last row is the honest cost of the cap being where it
+ * is: a reader who picks this on the largest block the viewer draws waits about
+ * four seconds with the window blocked. Everything short of a whole chromosome
+ * at a fine bin size is a fraction of a second. If that last row ever needs to
+ * stop being a freeze, the answer is the analysis thread rather than a lower
+ * cap — the work is already a pure function of two arrays.
+ *
+ * Above it the picker's choice is honoured at its {@link Smoothing.floor} and
+ * the caption and the view note both say so.
  *
  * Above it the picker's choice is honoured at its {@link Smoothing.floor} and
  * the caption says so, which is the same refusal the correlation makes: a real
  * picture, and a caption that does not claim to be the one that was asked for.
  */
-export const MAX_ADAPTIVE_CELLS = 4_000_000
+export const MAX_ADAPTIVE_CELLS = 16_000_000
 
 /** The dropdown, in order: what it says and what it means. */
 export interface SmoothChoice {
@@ -351,12 +341,12 @@ export interface SmoothChoice {
  * every other key in it is legible: somebody has to be able to read a link and
  * see what picture it asks for.
  *
- * Three adaptive settings rather than a number box because the target is not a
- * quantity a reader has any way to choose. What they can judge is the picture,
- * and the ladder is arranged so that each adaptive setting behaves like the
- * fixed one above it where the data is rich and widens where it is not: on a
- * yeast map at 500 bp, `light` runs 3 × 3 along the diagonal and 21 × 21 at
- * 200 bins out, `strong` runs 7 × 7 and 81 × 81.
+ * One adaptive setting rather than a ladder of them, because the target is not a
+ * quantity a reader has any way to choose and three strengths of it were three
+ * ways to ask the same question. What is offered is the one that keeps the most
+ * detail: on a yeast map at 500 bp it runs 3 × 3 along the diagonal and 21 × 21
+ * at 200 bins out, which is the fixed `3 × 3` where the data is rich and much
+ * wider where it is not.
  */
 export const SMOOTH_CHOICES: readonly SmoothChoice[] = [
   { id: '0', label: 'off', smoothing: null },
@@ -369,102 +359,8 @@ export const SMOOTH_CHOICES: readonly SmoothChoice[] = [
   })),
   {
     id: 'a50',
-    label: 'adaptive · light',
-    smoothing: { kind: 'adaptive', target: 50, floor: 1, name: 'light' },
-  },
-  {
-    id: 'a200',
-    label: 'adaptive · medium',
-    smoothing: { kind: 'adaptive', target: 200, floor: 2, name: 'medium' },
-  },
-  {
-    id: 'a800',
-    label: 'adaptive · strong',
-    smoothing: { kind: 'adaptive', target: 800, floor: 3, name: 'strong' },
-  },
-  // The serpentine targets are an order of magnitude below the adaptive ones and
-  // that is not an inconsistency: a *region* keeps growing until it reaches its
-  // target with no cap, while a window stops at 64 and often falls short, so the
-  // same number would mean a far coarser picture here. `medium` is set at the
-  // reference's own default — 50 counts, on a map whose mean occupied cell is
-  // about one.
-  {
-    id: 's20',
-    label: 'serpentine · light',
-    smoothing: {
-      kind: 'serpentine',
-      target: 20,
-      merge: 'evidence',
-      iterations: 1,
-      seed: 1,
-      floor: 1,
-      name: 'light',
-    },
-  },
-  {
-    id: 's50',
-    label: 'serpentine · medium',
-    smoothing: {
-      kind: 'serpentine',
-      target: 50,
-      merge: 'evidence',
-      iterations: 1,
-      seed: 1,
-      floor: 2,
-      name: 'medium',
-    },
-  },
-  {
-    id: 's120',
-    label: 'serpentine · strong',
-    smoothing: {
-      kind: 'serpentine',
-      target: 120,
-      merge: 'evidence',
-      iterations: 1,
-      seed: 1,
-      floor: 3,
-      name: 'strong',
-    },
-  },
-  {
-    id: 'sx20',
-    label: 'serpentine · light (sampled)',
-    smoothing: {
-      kind: 'serpentine',
-      target: 20,
-      merge: 'sampled',
-      iterations: 3,
-      seed: 1,
-      floor: 1,
-      name: 'light, sampled',
-    },
-  },
-  {
-    id: 'sx50',
-    label: 'serpentine · medium (sampled)',
-    smoothing: {
-      kind: 'serpentine',
-      target: 50,
-      merge: 'sampled',
-      iterations: 3,
-      seed: 1,
-      floor: 2,
-      name: 'medium, sampled',
-    },
-  },
-  {
-    id: 'sx120',
-    label: 'serpentine · strong (sampled)',
-    smoothing: {
-      kind: 'serpentine',
-      target: 120,
-      merge: 'sampled',
-      iterations: 3,
-      seed: 1,
-      floor: 3,
-      name: 'strong, sampled',
-    },
+    label: 'adaptive',
+    smoothing: { kind: 'adaptive', target: 50, floor: 1, name: 'adaptive' },
   },
 ]
 
@@ -487,33 +383,42 @@ export function parseSmooth(token: number | string | undefined): Smoothing | nul
 export function smoothToken(smoothing: Smoothing | null): string {
   if (smoothing === null) return '0'
   const same = (offered: Smoothing): boolean =>
-    offered.kind === smoothing.kind &&
-    (smoothing.kind === 'fixed'
+    smoothing.kind === 'fixed'
       ? offered.kind === 'fixed' && offered.radius === smoothing.radius
-      : offered.kind !== 'fixed' && offered.name === smoothing.name)
+      : offered.kind === 'adaptive'
   return SMOOTH_CHOICES.find((choice) => choice.smoothing !== null && same(choice.smoothing))?.id ?? '0'
 }
 
 /**
  * What the colourbar caption calls a setting.
  *
- * The adaptive settings say `adaptively` rather than a window size because there
- * is no one window to name — the point of the setting is that the number varies
- * across the picture — and a caption naming the widest or the commonest of them
- * would be the one part of the figure that survives an export saying something
- * that is not true of most of it.
+ * The adaptive setting says `adaptively` rather than a window size because there
+ * is no one window to name — the point of it is that the number varies across the
+ * picture — and a caption naming the widest or the commonest would be the one
+ * part of the figure that survives an export saying something that is not true of
+ * most of it.
  */
 export function smoothingCaption(smoothing: Smoothing): string {
-  if (smoothing.kind === 'fixed') return smoothLabel(smoothing.radius)
-  if (smoothing.kind === 'serpentine') return `into serpentine regions (${smoothing.name})`
-  return `adaptively (${smoothing.name})`
+  return smoothing.kind === 'fixed' ? smoothLabel(smoothing.radius) : 'adaptively'
 }
+
+/**
+ * Entries one cumulative table may hold at once, which is what bands the work.
+ *
+ * 4 M `Float64` entries is 32 MB a table, so the four of them are 128 MB
+ * resident — allocated and freed inside one derivation, on the thread drawing
+ * frames. The alternative is a table the size of the block, which at the 16 M
+ * cell cap is 128 MB *each* and over half a gigabyte together.
+ */
+const STRIP_ENTRIES = 4_000_000
 
 /** A cumulative table and the row stride its box queries need. */
 interface Summed {
   table: Float64Array
   /** `ncols + 1`. */
   stride: number
+  /** The block row this table's first row stands for — see {@link summed}. */
+  origin: number
 }
 
 /**
@@ -535,30 +440,32 @@ interface Summed {
  * {@link MAX_ADAPTIVE_CELLS} exists to bound.
  */
 function summed(
-  nrows: number,
+  rowFrom: number,
+  rowTo: number,
   ncols: number,
   contribution: (index: number) => number,
 ): Summed {
   const stride = ncols + 1
-  const table = new Float64Array((nrows + 1) * stride)
-  for (let r = 0; r < nrows; r++) {
-    const above = r * stride
-    const here = (r + 1) * stride
-    const base = r * ncols
+  const rows = rowTo - rowFrom + 1
+  const table = new Float64Array((rows + 1) * stride)
+  for (let k = 0; k < rows; k++) {
+    const above = k * stride
+    const here = (k + 1) * stride
+    const base = (rowFrom + k) * ncols
     let running = 0
     for (let c = 0; c < ncols; c++) {
       running += contribution(base + c)
       table[here + c + 1] = table[above + c + 1] + running
     }
   }
-  return { table, stride }
+  return { table, stride, origin: rowFrom }
 }
 
 /** The sum over rows `r0..r1` and columns `c0..c1`, both inclusive. */
 function box(s: Summed, r0: number, c0: number, r1: number, c1: number): number {
-  const { table, stride } = s
-  const top = r0 * stride
-  const bottom = (r1 + 1) * stride
+  const { table, stride, origin } = s
+  const top = (r0 - origin) * stride
+  const bottom = (r1 - origin + 1) * stride
   return table[bottom + c1 + 1] - table[top + c1 + 1] - table[bottom + c0] + table[top + c0]
 }
 
@@ -664,64 +571,108 @@ export function adaptiveSmoothValues(
   const threshold = smoothing.target * scale
   const maxRadius = Math.min(ADAPTIVE_MAX_RADIUS, Math.max(nrows, ncols))
 
-  const evidence = summed(nrows, ncols, (i) => {
-    const v = counts[i]
-    return Number.isFinite(v) && v > 0 ? v : 0
-  })
   // One mask for every table below, and it has to be one: the bias only cancels
   // out of the ratio if the two fields were averaged over exactly the same cells
   // with exactly the same divisor. A cell missing from either field is missing
   // from both.
   const usable = (i: number): boolean =>
     Number.isFinite(values[i]) && (over === undefined || Number.isFinite(over[i]))
-  const sums = summed(nrows, ncols, (i) => (usable(i) ? values[i] : 0))
-  const overSums =
-    over === undefined ? null : summed(nrows, ncols, (i) => (usable(i) ? over[i] : 0))
-  const seenCells = summed(nrows, ncols, (i) => (usable(i) ? 1 : 0))
+
+  // **The tables are built for a band of rows at a time, not for the block.**
+  // They are the block's size and `Float64`, so at the 16 M cap the four of them
+  // would be over half a gigabyte allocated on the thread drawing frames. A cell
+  // only ever reads rows within `maxRadius` of itself, so a band of `stripRows`
+  // output rows needs `stripRows + 2 · maxRadius` table rows and nothing more.
+  // Rows in the overlap are built twice, which is the whole cost: about 1.6× the
+  // table-building work at a band that holds a few hundred rows, against a
+  // fivefold cut in what is resident at once.
+  const stripRows = Math.max(1, Math.floor(STRIP_ENTRIES / (ncols + 1)) - 2 * maxRadius)
+  // A block far wider than it is tall cannot be banded usefully — its bands are
+  // already the whole of it — so what would have been allocated is checked
+  // rather than assumed. This is the shape guard the cell cap alone cannot make.
+  const bandRows = Math.min(nrows, stripRows + 2 * maxRadius + 1)
+  if (bandRows * (ncols + 1) > STRIP_ENTRIES * 2) {
+    return {
+      values: smoothValues(block, floor),
+      applied: fell,
+      over: over === undefined ? null : smoothValues({ ...block, values: over }, floor),
+      scope: `adaptive smoothing not applied — block too large`,
+    }
+  }
 
   const out = new Float32Array(nrows * ncols)
-  const outOver = overSums === null ? null : new Float32Array(nrows * ncols)
-  for (let r = 0; r < nrows; r++) {
-    const base = r * ncols
-    for (let c = 0; c < ncols; c++) {
-      const centre = values[base + c]
-      if (Number.isNaN(centre)) {
-        out[base + c] = Number.NaN
-        if (outOver !== null) outOver[base + c] = Number.NaN
-        continue
-      }
+  const outOver = over === undefined ? null : new Float32Array(nrows * ncols)
 
-      // The narrowest window that covers the target, never below the floor and
-      // never above the cap. A cell that cannot reach it inside the cap keeps
-      // the cap, which is the widest honest answer available to it.
-      let lo = floor
-      let hi = maxRadius
-      let radius = maxRadius
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1
-        const r0 = r - mid < 0 ? 0 : r - mid
-        const c0 = c - mid < 0 ? 0 : c - mid
-        const r1 = r + mid >= nrows ? nrows - 1 : r + mid
-        const c1 = c + mid >= ncols ? ncols - 1 : c + mid
-        if (box(evidence, r0, c0, r1, c1) >= threshold) {
-          radius = mid
-          hi = mid - 1
-        } else {
-          lo = mid + 1
+  for (let top = 0; top < nrows; top += stripRows) {
+    const bottom = Math.min(nrows - 1, top + stripRows - 1)
+    // Everything any row of this band can see, clamped to the block. A window is
+    // clamped to the block too, so clamping to the band is the same thing.
+    const from = Math.max(0, top - maxRadius)
+    const to = Math.min(nrows - 1, bottom + maxRadius)
+
+    const evidence = summed(from, to, ncols, (i) => {
+      const v = counts[i]
+      return Number.isFinite(v) && v > 0 ? v : 0
+    })
+    const sums = summed(from, to, ncols, (i) => (usable(i) ? values[i] : 0))
+    const overSums =
+      over === undefined ? null : summed(from, to, ncols, (i) => (usable(i) ? over[i] : 0))
+    const seenCells = summed(from, to, ncols, (i) => (usable(i) ? 1 : 0))
+
+    /** Whether a window of this radius around `(r, c)` covers the target. */
+    const covers = (r: number, c: number, rad: number): boolean => {
+      const r0 = r - rad < from ? from : r - rad
+      const c0 = c - rad < 0 ? 0 : c - rad
+      const r1 = r + rad > to ? to : r + rad
+      const c1 = c + rad >= ncols ? ncols - 1 : c + rad
+      return box(evidence, r0, c0, r1, c1) >= threshold
+    }
+
+    // Where the previous row started, so each row begins its search near the
+    // answer rather than at the middle of the range.
+    let rowStart = floor
+    for (let r = top; r <= bottom; r++) {
+      const base = r * ncols
+      // **Walked from the neighbour's answer, not bisected.** The criterion is
+      // monotone in the radius — evidence is floored at zero on the way into the
+      // table for exactly that reason — so either would find the same width, and
+      // a bisection costs its eight steps on every cell however smooth the field
+      // is. Radii vary slowly from one cell to the next, so starting at the last
+      // one and walking usually costs one or two probes. It is the difference
+      // between 5.3 s and 2 s on a 16 M-cell block.
+      let radius = rowStart
+      for (let c = 0; c < ncols; c++) {
+        const centre = values[base + c]
+        if (Number.isNaN(centre)) {
+          out[base + c] = Number.NaN
+          if (outOver !== null) outOver[base + c] = Number.NaN
+          continue
         }
-      }
 
-      const r0 = r - radius < 0 ? 0 : r - radius
-      const c0 = c - radius < 0 ? 0 : c - radius
-      const r1 = r + radius >= nrows ? nrows - 1 : r + radius
-      const c1 = c + radius >= ncols ? ncols - 1 : c + radius
-      const sum = box(sums, r0, c0, r1, c1)
-      const count = box(seenCells, r0, c0, r1, c1)
+        // The narrowest window that covers the target, never below the floor and
+        // never above the cap. A cell that cannot reach it inside the cap keeps
+        // the cap, which is the widest honest answer available to it.
+        if (radius < floor) radius = floor
+        else if (radius > maxRadius) radius = maxRadius
+        if (covers(r, c, radius)) {
+          while (radius > floor && covers(r, c, radius - 1)) radius--
+        } else {
+          while (radius < maxRadius && !covers(r, c, radius)) radius++
+        }
+        if (c === 0) rowStart = radius
 
-      out[base + c] = count > 0 ? sum / count : centre
-      if (outOver !== null && overSums !== null) {
-        const overSum = box(overSums, r0, c0, r1, c1)
-        outOver[base + c] = count > 0 ? overSum / count : (over?.[base + c] ?? Number.NaN)
+        const r0 = r - radius < from ? from : r - radius
+        const c0 = c - radius < 0 ? 0 : c - radius
+        const r1 = r + radius > to ? to : r + radius
+        const c1 = c + radius >= ncols ? ncols - 1 : c + radius
+        const sum = box(sums, r0, c0, r1, c1)
+        const count = box(seenCells, r0, c0, r1, c1)
+
+        out[base + c] = count > 0 ? sum / count : centre
+        if (outOver !== null && overSums !== null) {
+          const overSum = box(overSums, r0, c0, r1, c1)
+          outOver[base + c] = count > 0 ? overSum / count : (over?.[base + c] ?? Number.NaN)
+        }
       }
     }
   }
