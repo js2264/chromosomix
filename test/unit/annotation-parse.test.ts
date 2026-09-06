@@ -15,7 +15,15 @@ import { fileURLToPath, URL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { featureRange, overlapWith } from '../../src/annotations/featureset'
-import { parseBed, parseBedpe, parseGtf, readHeader, sniffFormat } from '../../src/annotations/parse'
+import {
+  decodeAnnotationText,
+  parseBed,
+  parseBedpe,
+  parseGtf,
+  readHeader,
+  sniffFormat,
+} from '../../src/annotations/parse'
+import { bgzfBlock } from './bam-fixtures'
 
 function demo(name: string): string {
   return readFileSync(fileURLToPath(new URL(`../../demo/yeast/${name}`, import.meta.url)), 'utf8')
@@ -312,3 +320,77 @@ function indexOfNamed(set: { length: number; name: string[] }, name: string): nu
   for (let i = 0; i < set.length; i++) if (set.name[i] === name) return i
   return -1
 }
+
+describe('un-gzipping a whole file', () => {
+  /** `bgzip`'s own output shape: a member per block, then the empty end marker. */
+  async function bgzipped(parts: string[]): Promise<Uint8Array> {
+    const blocks: Uint8Array[] = []
+    for (const part of parts) blocks.push(await bgzfBlock(new TextEncoder().encode(part)))
+    blocks.push(await bgzfBlock(new Uint8Array(0)))
+    const total = blocks.reduce((sum, block) => sum + block.length, 0)
+    const out = new Uint8Array(total)
+    let at = 0
+    for (const block of blocks) {
+      out.set(block, at)
+      at += block.length
+    }
+    return out
+  }
+
+  async function gzipped(text: string): Promise<Uint8Array> {
+    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  }
+
+  /**
+   * Run `work` on a platform whose `gzip` decompressor refuses a second member.
+   *
+   * Which is a platform this app has actually met: CI read a two-block BGZF and
+   * threw `Trailing junk found after the end of the compressed stream`, Node's
+   * own `ERR_TRAILING_JUNK_AFTER_STREAM_END`. Concatenated members are what
+   * BGZF *is*, and the Compression Streams spec says trailing data after a
+   * stream's end is a `TypeError` rather than the next member — so a reader that
+   * hands a whole bgzipped file to one `gzip` stream is relying on something it
+   * was never promised. Stubbed rather than waited for, because the runtime that
+   * refuses is not the one these tests run on.
+   */
+  async function withStrictGzip<T>(work: () => Promise<T>): Promise<{ result: T; modes: string[] }> {
+    const real = globalThis.DecompressionStream
+    const modes: string[] = []
+    function Strict(this: unknown, format: string): unknown {
+      modes.push(format)
+      if (format === 'gzip') {
+        throw new TypeError('Trailing junk found after the end of the compressed stream')
+      }
+      return new real(format as CompressionFormat)
+    }
+    globalThis.DecompressionStream = Strict as unknown as typeof DecompressionStream
+    try {
+      return { result: await work(), modes }
+    } finally {
+      globalThis.DecompressionStream = real
+    }
+  }
+
+  it('reads every block of a bgzipped file without asking for multi-member gzip', async () => {
+    const parts = ['chrI\t1\t100\tone\n', 'chrI\t200\t300\ttwo\n', 'chrI\t400\t500\tthree\n']
+    const bytes = await bgzipped(parts)
+    const { result, modes } = await withStrictGzip(() => decodeAnnotationText(bytes))
+    expect(result).toBe(parts.join(''))
+    // The point of the stub: had the whole file gone to one `gzip` stream it
+    // would have thrown, and the three blocks would never have been walked.
+    expect(modes).not.toContain('gzip')
+  })
+
+  it('still un-gzips a plain `.gz`, which is one member and not BGZF', async () => {
+    // The other half of the branch: `isBgzf` is a test, not an assumption, and a
+    // file that fails it must keep taking the road it always did.
+    const text = 'chrI\t1\t100\tplain\n'
+    expect(await decodeAnnotationText(await gzipped(text))).toBe(text)
+  })
+
+  it('leaves bytes that are not gzipped alone', async () => {
+    const text = 'chrI\t1\t100\traw\n'
+    expect(await decodeAnnotationText(new TextEncoder().encode(text))).toBe(text)
+  })
+})

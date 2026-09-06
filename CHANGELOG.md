@@ -412,6 +412,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A bgzipped file with no index is read to its end, not to the end of its
+  first block.** `bgzip` writes a gzip member per block — roughly one per 64 KiB
+  — and the whole-file road handed all of them to a single `gzip` decompressor,
+  which is only correct on a platform that carries on past the first member's
+  end. The Compression Streams spec does not promise that; it says trailing data
+  after a stream ends is a `TypeError`. So on a runtime that reads it that way,
+  every `.vcf.gz`, `.gtf.gz` and `.fa.gz` without a `.tbi` beside it was refused
+  outright with *"Trailing junk found after the end of the compressed stream"* —
+  and a runtime that stopped quietly at the first member instead would have been
+  worse, drawing the opening blockful and calling it the file.
+
+  It now walks the blocks, which is the road the indexed path and every BAM
+  already took, and asks nothing of the platform beyond `deflate-raw`. A plain
+  `.gz` is one member and not BGZF, so it still goes the way it did.
+
 - **A file and its index dropped together are now actually paired.** The loader
   has always paired a `.tbi` with the file it indexes, and `Session.dropped` —
   which decides what a single file *is* — could only ever be asked about one

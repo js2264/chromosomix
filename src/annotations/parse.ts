@@ -16,6 +16,7 @@
 
 import { FeatureBuilder, PairBuilder } from './featureset'
 import { DETAIL_SEP, type FeatureSet, type PairSet } from './types'
+import { inflateBgzf, isBgzf } from './tabix'
 
 /** What the sniffer concluded a file is. */
 export type TextFormat = 'gtf' | 'bed' | 'bedpe'
@@ -54,6 +55,20 @@ export async function decodeAnnotationBytes(bytes: Uint8Array): Promise<Uint8Arr
         'Decompress it and drop the plain text file.',
     )
   }
+  // A bgzipped file is not one gzip stream but *concatenated* members — one per
+  // block, then an empty one marking the end — so handing the whole of it to a
+  // single `gzip` decompressor asks that decompressor to carry on past the
+  // first member's end. Whether it does is not something the Compression
+  // Streams spec settles: it says trailing data after a stream ends is a
+  // `TypeError`, and a runtime reading it that way refuses every bgzipped file
+  // with "Trailing junk found after the end of the compressed stream". Block by
+  // block is the road the indexed path and every BAM already take, and it asks
+  // nothing of the platform beyond `deflate-raw`.
+  //
+  // This is the whole-file road, so it is `bcftools`' and `tabix`' own output
+  // that lands here whenever the index is missing — `.vcf.gz`, `.gtf.gz`,
+  // `.fa.gz` are all BGZF, and a plain `.gz` still is not, and still goes below.
+  if (isBgzf(bytes)) return inflateBgzf(bytes)
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }

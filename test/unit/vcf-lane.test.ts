@@ -250,4 +250,45 @@ describe('a bgzipped VCF', () => {
     expect(format).toBe('vcf')
     expect(data.length).toBe(4)
   })
+
+  it('reads every block of one, not just the first', async () => {
+    // The case the single-block test cannot see. BGZF is *concatenated* gzip
+    // members — `bgzip` starts a new one roughly every 64 KiB — so any real
+    // `.vcf.gz` is many of them, and a reader that stops at the first member's
+    // end returns the opening blockful and calls it the file. That is a wrong
+    // answer wearing the shape of a right one: the lane draws, the count looks
+    // plausible, and the variants past the first block are simply absent.
+    //
+    // Two data blocks here rather than a 64 KiB one, because the boundary is
+    // what is under test and `bgzfBlock` lets it be put anywhere.
+    const half = 40
+    const many = Array.from({ length: half * 2 }, (_, i) =>
+      `chrV\t${1000 + i * 10}\trs${i}\tA\tG\t60\tPASS\tAF=0.5\tGT\t0/1\t1/1`,
+    )
+    const first = await bgzfBlock(
+      new TextEncoder().encode(HEADER + many.slice(0, half).join('\n') + '\n'),
+    )
+    const second = await bgzfBlock(new TextEncoder().encode(many.slice(half).join('\n') + '\n'))
+    const eof = await bgzfBlock(new Uint8Array(0))
+    const bytes = new Uint8Array(first.length + second.length + eof.length)
+    bytes.set(first, 0)
+    bytes.set(second, first.length)
+    bytes.set(eof, first.length + second.length)
+
+    const response = await ask({
+      kind: 'load',
+      entry: 'v-gz-blocks',
+      source: {
+        kind: 'local',
+        file: new File([bytes as BlobPart], 'many.vcf.gz'),
+        name: 'many.vcf.gz',
+      },
+      mapContigs: MAP,
+    })
+    expect(response.type, JSON.stringify(response)).toBe('result')
+    const { data } = payloadOf(response)
+    expect(data.length).toBe(half * 2)
+    // The last record of the last block, so a short read cannot pass by luck.
+    expect(data.start[data.length - 1]).toBe(1000 + (half * 2 - 1) * 10 - 1)
+  })
 })
