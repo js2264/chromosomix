@@ -16,7 +16,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **A despeckle whose window sizes itself, in the `smooth` picker.** Three new
   settings beside the fixed `3 × 3`, `5 × 5` and `7 × 7` — `adaptive · light`,
-  `· medium` and `· strong`. Each cell's window now grows until it covers enough
+  `· medium` and `· strong`. Each cell's window grows until it covers enough
   evidence to average, so it stays narrow where the counts are thick and widens
   where they thin out. Carried in the link as `smooth=a200`, and written into the
   colourbar caption as `counts · smoothed adaptively (medium)`.
@@ -28,9 +28,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   zero, so the mean is a handful of counts divided by 48 — still noise — and
   widening the box does not help, because what is in it grows in proportion to
   nearly nothing. On a yeast map at 500 bp the coefficient of variation between
-  200 and 800 bins of separation is **6.8 raw, 1.1 at `7 × 7`, and 0.42
-  adaptive**: the widest fixed window this app offered was leaving most of the
-  noise where the map is thinnest.
+  200 and 800 bins of separation is **6.8 raw, 1.1 at `7 × 7`, and 0.41
+  adaptive**.
 
   **This is serpentine's criterion, not serpentine's algorithm.**
   [Serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*,
@@ -43,28 +42,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is formed, so a cell reads the same whether it sits in the middle of the
   viewport or at its edge, and a smoothed map can be panned.
 
-  **The width is set by the counts, and the mean is taken over what is on
-  screen.** That is serpentine's own separation — it thresholds on counts and
-  reports a ratio — and it is what makes the setting work under the O/E at all:
-  observed-over-expected is near 1 everywhere by construction, so a window sized
-  on it would be the same size everywhere and the whole exercise would collapse.
-  The target is a multiple of the block's mean rather than an absolute count,
-  because `score` may have put balanced values in the cells; against the block's
-  own mean it means the same thing either way, and reduces to serpentine's
-  threshold on counts when the cells are counts.
+  The width is set by the block's **as-read** values while the mean is taken over
+  whatever the derivation has made of them — serpentine's own separation, and what
+  makes the setting work under the O/E at all, since observed-over-expected is
+  near 1 everywhere by construction and a window sized on it would be the same
+  size everywhere. The target is a multiple of the block's mean rather than an
+  absolute count, because `score` may have put balanced values in the cells; it
+  reduces to a threshold on counts when the cells are counts.
 
-  Each adaptive setting is **floored at the fixed window it sits below**, so
-  `light` is `3 × 3` or wider and never narrower, and capped at a radius of 64. On
-  a yeast map at 500 bp `light` runs `3 × 3` along the diagonal and `21 × 21` at
-  200 bins out; `strong` runs `7 × 7` and `81 × 81`. A cell that cannot reach its
-  target inside the cap keeps the cap and stays noisy, which is the honest
-  outcome — a window that grew without limit would average the map into its own
-  mean.
-
-  It costs **70–110 ms on an 841² block** and is refused above **2 M cells**, where
-  the fixed radius it is floored at is used instead and the caption says so. Like
-  the correlation's refusal, what is drawn is a real picture and the caption is
-  the half of it that survives an export.
+  Each setting is **floored at the fixed window it sits below**, so `light` is
+  `3 × 3` or wider and never narrower, and capped at a radius of 64. It costs
+  **80–120 ms on an 841² block** and is refused above **2 M cells**, where the
+  floor is used instead and the caption says so.
 
 - **VCF opens as a lane of variants.** Drop a `.vcf`, or a `.vcf.gz` with its
   `.tbi`, and the calls draw as boxes over the reference bases each record is
@@ -594,6 +583,51 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   parameter key is an alias for it.
 
 ### Changed
+
+- **The despeckle now runs before the O/E division, and divides by a baseline
+  averaged over the same windows.** Both halves of this were needed to make the
+  `smooth` picker do anything visible on an O/E map, which is the picture most
+  readers of a sparse map are looking at.
+
+  `observedOverExpected` draws a cell where nothing was observed as paper rather
+  than as the strongest depletion on the ramp, and away from the diagonal *most*
+  cells are that cell — **98%** of them at 200 bins out on a yeast map at 500 bp.
+  Computing the O/E first therefore handed the filter a field that was almost
+  entirely `NaN`, which no despeckle will touch, so every setting from `3 × 3` to
+  `7 × 7` drew the same picture: a scatter of the 2% of cells that happened to
+  catch a contact, at a mean of **45× expectation**, over a blank field.
+
+  Smoothed first, a zero cell with contacts around it is never blanked. That 98%
+  falls to **83% at `3 × 3`, 38% at `7 × 7` and 0% under every adaptive setting**,
+  and the mean of the band comes back to **1.00**.
+
+  The baseline is averaged over the same windows because dividing a smoothed map
+  by an unsmoothed curve is biased: near the diagonal the decay is steep, so a
+  window spanning it averages cells whose baselines differ several-fold and the
+  ratio reads **24–32% enriched** at radii 3 to 7 — an artefact of the filter and
+  of nothing in the file. Matched, the bias sits in both halves and cancels. The
+  curve itself is still estimated from the *unsmoothed* block, which is the half
+  of the old ordering worth keeping: fitting it to pre-averaged cells would let
+  each cell's neighbours count twice toward the baseline it is compared against.
+
+- **The despeckle keeps the cell's own value.** The kernel was `terra::focal`
+  with a zero centre weight, on the argument that a cell disagreeing with all
+  eight of its neighbours is evidence about the neighbourhood rather than about
+  itself. That is right about rejecting outliers and wrong about a sparse map,
+  where a lone contact is not an outlier but the only measurement there is: the
+  zero-centre kernel replaced it with the mean of the eight zeros around it while
+  spreading it into those eight, so **every isolated count rendered as a hollow
+  square with a hole where the contact was**, and away from the diagonal most of
+  the picture was made of those.
+
+  It was also the wrong estimator for what the filter now feeds — a local rate
+  that the O/E divides — since discarding the one cell being estimated at is both
+  biased and needlessly noisy. Despeckling survives the change in all but the
+  narrowest window: a wild pixel is diluted to a ninth of its excess at `3 × 3`, a
+  twenty-fifth at `5 × 5`, and to a few hundredths at the widths the adaptive
+  settings reach. What is lost is the guarantee that a single wild cell is
+  annihilated rather than suppressed; what is bought is that a single *real* cell
+  is no longer annihilated either.
 
 - **Zooming a curve is a rectangle now, and it keeps working.** Dragging across a
   P(s), a slope or any other drawer curve selects a window on **both** axes

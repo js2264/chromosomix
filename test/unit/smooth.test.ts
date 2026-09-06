@@ -53,31 +53,38 @@ describe('smoothValues', () => {
     expect(smoothValues(b, 0)).toBe(b.values)
   })
 
-  it('replaces a cell by the mean of its neighbours, excluding itself', () => {
-    // A single spike in a field of ones. The centre becomes the mean of its
-    // eight neighbours — all 1 — so the spike is removed outright rather than
-    // reduced, which is what excluding the centre buys.
+  it('replaces a cell by the mean of its window, itself included', () => {
+    // A single spike in a field of ones. The centre keeps a ninth of its own
+    // excess rather than being annihilated: a lone cell on a sparse map is the
+    // only measurement there is, not an outlier to be rejected.
     const values = new Array<number>(25).fill(1)
     values[12] = 100
     const out = smoothValues(block(5, 5, values), 1)
-    expect(out[12]).toBeCloseTo(1, 6)
+    expect(out[12]).toBeCloseTo((8 * 1 + 100) / 9, 5)
+    // Still suppressed by most of its excess, which is the despeckling that
+    // survives the centre going back in.
+    expect(out[12]).toBeLessThan(1 + 99 / 8)
   })
 
-  it('spreads the spike into the ring around it, and no further', () => {
+  it('leaves no hole where a lone count was', () => {
+    // The artefact that put the centre back: a zero-centre kernel turned every
+    // isolated contact into a ring of eight with a blank in the middle, which on
+    // a sparse map is most of the picture.
     const values = new Array<number>(25).fill(0)
     values[12] = 9
     const out = smoothValues(block(5, 5, values), 1)
-    // Each of the eight neighbours sees the spike once out of its own eight.
-    expect(out[7]).toBeCloseTo(9 / 8, 6)
-    expect(out[11]).toBeCloseTo(9 / 8, 6)
+    // The centre is the brightest cell of the block, not the dimmest.
+    expect(out[12]).toBeCloseTo(1, 6)
+    for (const i of [7, 11, 13, 17]) expect(out[i]).toBeCloseTo(1, 6)
+    expect(out[12]).toBeGreaterThanOrEqual(out[7])
     // A cell two away never sees it.
     expect(out[2]).toBe(0)
   })
 
-  it('divides a corner by the neighbours it has, not by the ones it does not', () => {
-    // A corner cell has 3 neighbours, not 8. `terra::focal` would divide this
-    // by 8 and return 3/8; that bias is the dark frame this does not draw.
-    const out = smoothValues(block(3, 3, [0, 1, 1, 1, 1, 1, 1, 1, 1]), 1)
+  it('divides a corner by the cells it has, not by the ones it does not', () => {
+    // A corner's window holds 4 cells, not 9. `terra::focal` would divide by the
+    // nominal size; that bias is the dark frame this does not draw.
+    const out = smoothValues(block(3, 3, [1, 1, 1, 1, 1, 1, 1, 1, 1]), 1)
     expect(out[0]).toBeCloseTo(1, 6)
   })
 
@@ -123,7 +130,6 @@ describe('smoothValues', () => {
           let count = 0
           for (let dr = -radius; dr <= radius; dr++) {
             for (let dc = -radius; dc <= radius; dc++) {
-              if (dr === 0 && dc === 0) continue
               const rr = r + dr
               const cc = c + dc
               if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue
@@ -263,14 +269,20 @@ describe('adaptiveSmoothValues', () => {
     expect(spread(out, n, mid, 90, 1, 25)).toBeGreaterThan(spread(out, n, mid, 30, 1, 12) + 2)
   })
 
-  it('leaves the centre out, so a lone spike is removed rather than reduced', () => {
+  it('keeps the centre in, and still suppresses a lone spike', () => {
     const n = 21
     const values = new Float32Array(n * n).fill(1)
     const centre = 10 * n + 10
     values[centre] = 500
     const b = { ...block(n, n, []), values, nrows: n, ncols: n }
     const out = adaptiveSmoothValues(b, values, LIGHT).values
-    expect(out[centre]).toBeCloseTo(1, 3)
+    // The window stays at the floor here, and for the right reason: the spike is
+    // itself the evidence the bandwidth is looking for, so it is met inside
+    // 3 × 3 and the cell is diluted by nine rather than by hundreds. Suppressed
+    // without being erased, and without the hole a zero-centre kernel would
+    // leave in its place.
+    expect(out[centre]).toBeCloseTo((8 * 1 + 500) / 9, 3)
+    expect(out[centre]).toBeGreaterThan(1)
   })
 
   it('keeps a missing cell missing', () => {
@@ -350,5 +362,135 @@ describe('adaptiveSmoothValues, on the shapes a real block arrives in', () => {
     const plain = adaptiveSmoothValues(b, exact, LIGHT).values
     const tailed = adaptiveSmoothValues(withTail, padded, LIGHT).values
     for (let i = 0; i < cells; i++) expect(tailed[i]).toBeCloseTo(plain[i], 4)
+  })
+})
+
+/**
+ * The two things a reader reported, pinned at the level they were seen.
+ *
+ * Both were invisible to every test above, because both are about where the
+ * filter sits rather than about what the kernel computes — and the kernel was
+ * doing exactly what it was asked to.
+ */
+describe('the despeckle, where a reader meets it', () => {
+  /** A sparse map with a steep decay: most cells empty away from the diagonal. */
+  function sparse(n: number) {
+    // mulberry32, as `analysis/random.ts` uses. The LCG the kernel test above
+    // uses would lose precision here: `seed * 1103515245` passes 2^53 and the
+    // sequence degenerates, which on a block this size is not random enough to
+    // build a decay out of.
+    let a = 7
+    const next = (): number => {
+      a |= 0
+      a = (a + 0x6d2b79f5) | 0
+      let t = Math.imul(a ^ (a >>> 15), 1 | a)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const values = new Float32Array(n * n)
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const lambda = (2000 / n) * Math.pow(Math.abs(i - j) + 1, -1.1)
+        let k = 0
+        let p = 1
+        const limit = Math.exp(-lambda)
+        while (p > limit && k < 50) {
+          p *= next()
+          k++
+        }
+        values[i * n + j] = Math.max(0, k - 1)
+      }
+    }
+    return {
+      nrows: n,
+      ncols: n,
+      values,
+      rowExtent: [0, n] as [number, number],
+      colExtent: [0, n] as [number, number],
+    }
+  }
+
+  /** What fraction of a separation band the map actually draws. */
+  function drawn(out: Float32Array, n: number, lo: number, hi: number): number {
+    let finite = 0
+    let total = 0
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < i; j++) {
+        const d = i - j
+        if (d < lo || d >= hi) continue
+        total++
+        if (Number.isFinite(out[i * n + j])) finite++
+      }
+    }
+    return finite / total
+  }
+
+  function mean(out: Float32Array, n: number, lo: number, hi: number): number {
+    let sum = 0
+    let seen = 0
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < i; j++) {
+        const d = i - j
+        if (d < lo || d >= hi) continue
+        const v = out[i * n + j]
+        if (Number.isFinite(v)) {
+          sum += v
+          seen++
+        }
+      }
+    }
+    return sum / seen
+  }
+
+  it('does not punch a hole where a lone contact was', () => {
+    // Reported as "weird squares, with the center pixel being the pixel where
+    // there is an actual count". A zero-centre kernel spread an isolated count
+    // into its eight neighbours and replaced it with the mean of the eight
+    // zeros, so the one cell holding a measurement was the one cell drawn blank.
+    const n = 9
+    const values = new Array<number>(n * n).fill(0)
+    const lone = 4 * n + 4
+    values[lone] = 5
+    const out = deriveBlock(block(n, n, values), { smooth: '1' }, NO_RUNS).values
+    for (const neighbour of [lone - n - 1, lone - n, lone - 1, lone + 1, lone + n, lone + n + 1]) {
+      expect(out[lone]).toBeGreaterThanOrEqual(out[neighbour])
+    }
+    expect(out[lone]).toBeGreaterThan(0)
+  })
+
+  it('fills in an O/E map away from the diagonal instead of leaving it blank', () => {
+    // Reported as no difference between any of the six settings. The O/E draws a
+    // cell where nothing was observed as paper, and away from the diagonal that
+    // is almost every cell — so an O/E computed *before* the filter handed it a
+    // field of `NaN`, which no despeckle will touch, and every setting drew the
+    // same picture.
+    const n = 180
+    const b = sparse(n)
+    const at = (id: string): Float32Array =>
+      deriveBlock(b, { smooth: id, expected: true }, NO_RUNS).values
+
+    const off = drawn(at('0'), n, 40, 90)
+    // A tenth of the band, and the nine tenths that are missing are the cells
+    // where nothing was seen — not cells the file has nothing to say about.
+    expect(off).toBeLessThan(0.2)
+    // Each wider window recovers more of it, and a self-sizing one recovers it
+    // all. Ordered, so a reader moving down the picker sees the map change.
+    expect(drawn(at('1'), n, 40, 90)).toBeGreaterThan(off + 0.3)
+    expect(drawn(at('3'), n, 40, 90)).toBeGreaterThan(drawn(at('1'), n, 40, 90))
+    expect(drawn(at('a50'), n, 40, 90)).toBeGreaterThan(0.99)
+  })
+
+  it('divides by a baseline from the same windows, so the ratio stays centred on 1', () => {
+    // Smoothing the map and dividing it by an unsmoothed curve reads as a real
+    // enrichment near the diagonal that is produced entirely by the filter: the
+    // decay is steep there, so a window spanning it averages cells whose
+    // baselines differ several-fold.
+    const n = 180
+    const b = sparse(n)
+    for (const id of ['1', '2', '3', 'a50', 'a200', 'a800']) {
+      const out = deriveBlock(b, { smooth: id, expected: true }, NO_RUNS).values
+      expect(mean(out, n, 1, 12)).toBeGreaterThan(0.95)
+      expect(mean(out, n, 1, 12)).toBeLessThan(1.05)
+    }
   })
 })

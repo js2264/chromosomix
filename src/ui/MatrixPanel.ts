@@ -1489,9 +1489,9 @@ export class MatrixPanel {
         field(
           'smooth',
           smoothSelect,
-          'Replace each cell by the mean of the cells around it, leaving its own value out — ' +
-            '`terra::focal` with a zero centre weight, the despeckle Hi-C figures are usually ' +
-            'made with. Applied to each file before two are compared, so a ratio is ' +
+          'Replace each cell by the mean of the cells around it, itself included — the box ' +
+            'filter Hi-C figures are usually made with. Applied to each file before two are ' +
+            'compared, and before the O/E division, so a ratio is ' +
             '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
             'and the saturated single pixels a sparse ratio is made of are never produced. ' +
             'Single-cell features are averaged away with them, which is why it is off by default. ' +

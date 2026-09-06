@@ -1020,14 +1020,43 @@ an average over cells, so measuring it before the coverage bias is out means mea
 the bias, and every cell of a badly-covered bin is then compared against a baseline its own
 under-coverage helped set. This is cooltools' order, for the same reason.
 
-**The despeckle goes last, and one of its two shapes sizes itself.** Each cell becomes the mean of
-the cells around it with **its own value left out** — `terra::focal` with a zero centre weight — and
-it is applied *per file, before two are combined*, which is what makes it useful on a ratio rather
-than merely cosmetic: `smooth(A) / smooth(B)` never has to average the `Infinity` that `x / 0`
-produces, because a zero cell with contacts around it is no longer zero. It runs after the
-normalisation and the baseline because those two are estimators and this one is not: a coverage
-marginal and a decay curve are already sums over many cells, and feeding them pre-averaged cells
-would only make each cell's neighbours count twice toward the baseline it is then compared against.
+**The despeckle runs before every division, and one of its two shapes sizes itself.** Each cell
+becomes the mean of the cells around it, **itself included**, and it is applied *per file, before two
+are combined and before the O/E*, which is what makes it useful on a ratio rather than merely
+cosmetic: `smooth(A) / smooth(B)` never has to average the `Infinity` that `x / 0` produces, because
+a zero cell with contacts around it is no longer zero.
+
+**The centre is in the mean, and it did not use to be.** The kernel began as `terra::focal` with a
+zero centre weight, on the argument that a cell disagreeing with all eight of its neighbours is
+evidence about the neighbourhood rather than about itself. That is right about rejecting outliers and
+wrong about a sparse map, where a lone contact is not an outlier but the only measurement there is:
+the zero-centre kernel replaced it with the mean of the eight zeros around it while spreading it into
+those eight, so every isolated count rendered as a **hollow square with a hole where the contact
+was**, and away from the diagonal most of the picture was made of those. It is also the wrong
+estimator for what the filter now feeds — a local rate that the O/E divides — since discarding the
+one cell being estimated at is both biased and needlessly noisy. Despeckling survives the change in
+all but the narrowest window: a wild pixel is diluted to a ninth of its excess at `3 × 3` and to a few
+hundredths at the widths the adaptive settings reach.
+
+**The order changed with it, and the reason is the same one that puts the filter ahead of a
+two-file ratio.** `observedOverExpected` draws a cell where nothing was observed as paper rather than
+as the strongest depletion on the ramp — see below — and away from the diagonal *most* cells are that
+cell: 98% of them at 200 bins out on a yeast map at 500 bp. An O/E computed first therefore handed the
+filter a field that was almost entirely `NaN`, which no despeckle will touch, and every setting drew
+the same picture. Smoothed first, a zero cell with contacts around it is never blanked and the map
+fills in: that 98% falls to 1% under the adaptive settings and to 39% at `7 × 7`.
+
+**The baseline is averaged over the same windows as the map**, and that is not optional. Dividing a
+smoothed map by an unsmoothed curve is a biased operation: near the diagonal the decay is steep, so a
+window spanning it averages cells whose baselines differ several-fold and the ratio comes out
+systematically high — a measured 24–32% enrichment at radii 3 to 7 that is an artefact of the filter
+and of nothing in the file. Averaged over the same cells with the same divisor the bias sits in both
+halves of the ratio and cancels, and the mean returns to 1 where an O/E belongs.
+
+**The curve is still estimated from the unsmoothed block.** That is the half of the old ordering worth
+keeping: a decay curve is an average over cells, and fitting it to pre-averaged ones would let each
+cell's neighbours count twice toward the baseline it is then compared against. Estimating before and
+dividing after keeps the estimator honest and still lets the filter do its work.
 
 A **fixed** window is the wrong tool away from the diagonal, and the reason is that the precision of a
 box mean depends on the counts it covers rather than on the cells it covers. Near the diagonal a

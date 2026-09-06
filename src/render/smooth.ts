@@ -9,24 +9,38 @@
  * picture that results is a haze of saturated single pixels with the structure
  * somewhere underneath it.
  *
- * The fix is the oldest one there is — average over a neighbourhood — and the
- * form here is the one Hi-C figures are usually made with, `terra::focal` in R
- * over a `(2r+1)²` window of uniform weights with **the centre weight set to
- * zero**:
+ * The fix is the oldest one there is — average over a `(2r+1)²` neighbourhood of
+ * uniform weights, `terra::focal` in R, the filter Hi-C figures are usually made
+ * with.
  *
- * ```r
- * gauss <- matrix(1 / ((focal.size * 2 + 1)^2 - 1), ncol = ..., nrow = ...)
- * gauss[focal.size + 1, focal.size + 1] <- 0
- * terra::focal(x = r, w = gauss, fun = sum, na.rm = TRUE)
- * ```
+ * **The cell counts as one of its own neighbours, and that was not always so.**
+ * This filter began with the centre weight set to zero, on the argument that a
+ * cell disagreeing with all eight of its neighbours is evidence about the
+ * neighbourhood rather than about itself, and that a kernel keeping a ninth of
+ * its own value carries a wild pixel into the result at a ninth strength instead
+ * of removing it.
  *
- * Leaving the centre out is what makes it a *despeckle* rather than a blur. A
- * cell that disagrees with all eight of its neighbours is evidence about the
- * neighbourhood and not about itself, and a filter that kept a ninth of its own
- * value would carry a single wild pixel into the result at a ninth strength
- * instead of removing it. The cost is that genuine single-cell features — a
- * loop at one bin pair — are removed too, which is why this is a toggle and not
- * a default.
+ * That argument is right about *outlier rejection* and wrong about everything
+ * else this filter is now asked to do, and on a sparse map it fails visibly. A
+ * lone contact in an empty neighbourhood is not an outlier — it is the only
+ * measurement there is — and a zero-centre kernel replaces it with the mean of
+ * the eight zeros around it while spreading it into those eight, so every
+ * isolated count renders as a **hollow square with a hole where the contact
+ * actually was**. At 500 bp most of a map away from the diagonal is made of
+ * exactly those cells, so most of the picture became rings.
+ *
+ * It is also wrong for the arithmetic downstream. What this filter now produces
+ * is a local *rate*, which `render/derive.ts` divides by an expected curve, and
+ * an estimator that discards the one cell it is estimating at is both biased and
+ * needlessly noisy: it throws away a ninth of its own sample to reject an
+ * outlier nobody asked it to reject.
+ *
+ * So the centre is in, and the despeckling survives the change in all but the
+ * narrowest window: a wild pixel is diluted to a ninth of its excess at `3 × 3`,
+ * a twenty-fifth at `5 × 5`, and to a few hundredths at the widths the adaptive
+ * settings reach. What is lost is the guarantee that a single wild cell is
+ * annihilated rather than merely suppressed, and what is bought is that a single
+ * *real* cell is no longer annihilated either.
  *
  * **Where it sits matters more than the kernel does.** This is applied per file,
  * before two files are combined (`render/derive.ts`, `ui/MatrixPanel.ts`), so a
@@ -37,10 +51,10 @@
  * division, because a zero cell with contacts around it is no longer zero. The
  * speckle does not get blurred, it stops being produced.
  *
- * Two deliberate departures from the R above, both about edges:
+ * Two further departures from `terra::focal`, both about edges:
  *
  * 1. **The divisor is the number of cells that contributed**, not the fixed
- *    `(2r+1)² - 1`. `terra::focal` pads with `NA` and `na.rm = TRUE` drops them
+ *    `(2r+1)²`. `terra::focal` pads with `NA` and `na.rm = TRUE` drops them
  *    from the sum while the weights stay put, so a cell on the boundary is
  *    divided by a count of neighbours it did not have and comes out low. In a
  *    figure that is a dark frame a reader crops off. Here the boundary is the
@@ -84,7 +98,7 @@ export function smoothLabel(radius: number): string {
 }
 
 /**
- * Replace every cell by the mean of the cells around it, excluding itself.
+ * Replace every cell by the mean of the cells around it, itself included.
  *
  * Returns the block's own array untouched at radius `0`, which is the path
  * every reader who has not asked for this takes.
@@ -166,13 +180,11 @@ export function smoothValues(block: Cells, radius: number): Float32Array {
         out[base + c] = Number.NaN
         continue
       }
-      // The centre is taken back out of its own window. It is in `sum` and in
-      // `count` only if it was finite — an infinite cell never entered either,
-      // so it is despeckled by the neighbours around it rather than left to be
-      // the one thing the filter could not touch.
-      const finite = Number.isFinite(centre)
-      const n = finite ? count - 1 : count
-      out[base + c] = n > 0 ? (sum - (finite ? centre : 0)) / n : centre
+      // The centre counts as one of its own neighbours: it is already in `sum`
+      // and in `count`, and nothing is taken back out. An **infinite** centre
+      // never entered either, so it is still replaced by the cells around it
+      // rather than left as the one thing the filter could not touch.
+      out[base + c] = count > 0 ? sum / count : centre
     }
   }
 
@@ -427,7 +439,7 @@ function box(s: Summed, r0: number, c0: number, r1: number, c1: number): number 
 
 /**
  * Replace every cell by the mean of a window grown until it covers enough
- * evidence, excluding the cell itself.
+ * evidence.
  *
  * `counts` is the block as it was read — the array whose thinning-out with
  * distance is the thing being compensated for — while `block.values` is what
@@ -444,24 +456,52 @@ function box(s: Summed, r0: number, c0: number, r1: number, c1: number): number 
  *
  * Everything the fixed filter decided about edges and gaps is decided the same
  * way here, because they are the same questions: the divisor is the number of
- * cells that actually contributed rather than the window's nominal size, a `NaN`
- * centre stays `NaN` because an unbalanced bin has nothing to report, and a
- * non-finite centre is despeckled by its neighbours rather than left as the one
- * cell the filter could not touch.
+ * cells that actually contributed rather than the window's nominal size, the
+ * centre is one of them, a `NaN` centre stays `NaN` because an unbalanced bin
+ * has nothing to report, and a non-finite centre is replaced by its neighbours
+ * rather than left as the one cell the filter could not touch.
  */
 export function adaptiveSmoothValues(
   block: Cells,
   counts: Float32Array,
   smoothing: Extract<Smoothing, { kind: 'adaptive' }>,
-): { values: Float32Array; applied: Smoothing; scope: string | null } {
+  /**
+   * A second field averaged over **the same windows**, for a caller that is
+   * about to divide by it.
+   *
+   * Dividing a smoothed map by an unsmoothed baseline is not the same operation
+   * and is not a safe one: near the diagonal the decay is steep, so a window
+   * that spans it averages cells whose baselines differ several-fold, and the
+   * ratio comes out systematically high — a measured 24-32% enrichment at radii
+   * 3 to 7 that is an artefact of the filter and nothing else. Averaged over the
+   * same cells with the same divisor, the bias is in both halves of the ratio
+   * and cancels, and the mean sits back at 1 where an O/E belongs.
+   */
+  over?: Float32Array,
+): {
+  values: Float32Array
+  /** `null` unless {@link over} was given. */
+  over: Float32Array | null
+  applied: Smoothing
+  scope: string | null
+} {
   const { nrows, ncols, values } = block
   const floor = Math.max(1, Math.floor(smoothing.floor))
   const fell = { kind: 'fixed', radius: floor } as const
-  if (nrows === 0 || ncols === 0) return { values, applied: smoothing, scope: null }
+  // The floor applied to both fields, for the paths that cannot adapt. The
+  // companion goes through the same filter at the same radius, so a caller
+  // dividing one by the other still gets matched windows.
+  const bothAtFloor = (): { values: Float32Array; over: Float32Array | null } => ({
+    values: smoothValues(block, floor),
+    over: over === undefined ? null : smoothValues({ ...block, values: over }, floor),
+  })
+  if (nrows === 0 || ncols === 0) {
+    return { values, over: over ?? null, applied: smoothing, scope: null }
+  }
 
   if (nrows * ncols > MAX_ADAPTIVE_CELLS) {
     return {
-      values: smoothValues(block, floor),
+      ...bothAtFloor(),
       // What the caption will say, and it says the window that was *used*. A
       // figure captioned `adaptively` whose windows were all one size would be
       // the refusal reaching the one place a refusal must never reach.
@@ -494,7 +534,7 @@ export function adaptiveSmoothValues(
   // Nothing to size a window against: an empty block, or one whose every cell is
   // missing. The floor is what the reader asked for anyway, and there is no
   // adaptation to report the absence of — every window would be the floor.
-  if (!(scale > 0)) return { values: smoothValues(block, floor), applied: fell, scope: null }
+  if (!(scale > 0)) return { ...bothAtFloor(), applied: fell, scope: null }
 
   const threshold = smoothing.target * scale
   const maxRadius = Math.min(ADAPTIVE_MAX_RADIUS, Math.max(nrows, ncols))
@@ -503,19 +543,26 @@ export function adaptiveSmoothValues(
     const v = counts[i]
     return Number.isFinite(v) && v > 0 ? v : 0
   })
-  const sums = summed(nrows, ncols, (i) => {
-    const v = values[i]
-    return Number.isFinite(v) ? v : 0
-  })
-  const seenCells = summed(nrows, ncols, (i) => (Number.isFinite(values[i]) ? 1 : 0))
+  // One mask for every table below, and it has to be one: the bias only cancels
+  // out of the ratio if the two fields were averaged over exactly the same cells
+  // with exactly the same divisor. A cell missing from either field is missing
+  // from both.
+  const usable = (i: number): boolean =>
+    Number.isFinite(values[i]) && (over === undefined || Number.isFinite(over[i]))
+  const sums = summed(nrows, ncols, (i) => (usable(i) ? values[i] : 0))
+  const overSums =
+    over === undefined ? null : summed(nrows, ncols, (i) => (usable(i) ? over[i] : 0))
+  const seenCells = summed(nrows, ncols, (i) => (usable(i) ? 1 : 0))
 
   const out = new Float32Array(nrows * ncols)
+  const outOver = overSums === null ? null : new Float32Array(nrows * ncols)
   for (let r = 0; r < nrows; r++) {
     const base = r * ncols
     for (let c = 0; c < ncols; c++) {
       const centre = values[base + c]
       if (Number.isNaN(centre)) {
         out[base + c] = Number.NaN
+        if (outOver !== null) outOver[base + c] = Number.NaN
         continue
       }
 
@@ -546,11 +593,13 @@ export function adaptiveSmoothValues(
       const sum = box(sums, r0, c0, r1, c1)
       const count = box(seenCells, r0, c0, r1, c1)
 
-      const finite = Number.isFinite(centre)
-      const n = finite ? count - 1 : count
-      out[base + c] = n > 0 ? (sum - (finite ? centre : 0)) / n : centre
+      out[base + c] = count > 0 ? sum / count : centre
+      if (outOver !== null && overSums !== null) {
+        const overSum = box(overSums, r0, c0, r1, c1)
+        outOver[base + c] = count > 0 ? overSum / count : (over?.[base + c] ?? Number.NaN)
+      }
     }
   }
 
-  return { values: out, applied: smoothing, scope: null }
+  return { values: out, over: outOver, applied: smoothing, scope: null }
 }
