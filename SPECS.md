@@ -979,13 +979,14 @@ A cooler stores one number per pixel and, if somebody ran `cooler balance`, one 
 Everything else a reader wants is arithmetic over numbers that are already on screen, and none of it
 requires a companion file, a preprocessing step or a server — so C1, C2 and C3 permit all of it.
 
-Three families, in `render/derive.ts` and `render/compare.ts`:
+Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`:
 
 | Family | Offered as | Cost |
 |---|---|---|
 | **Normalisation** — VC, VC √, ICE | entries in the score picker (§7.1's control) | one to a few dozen passes over the block |
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
+| **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1018,6 +1019,50 @@ nothing in the picture lives.
 an average over cells, so measuring it before the coverage bias is out means measuring it partly on
 the bias, and every cell of a badly-covered bin is then compared against a baseline its own
 under-coverage helped set. This is cooltools' order, for the same reason.
+
+**The despeckle goes last, and one of its two shapes sizes itself.** Each cell becomes the mean of
+the cells around it with **its own value left out** — `terra::focal` with a zero centre weight — and
+it is applied *per file, before two are combined*, which is what makes it useful on a ratio rather
+than merely cosmetic: `smooth(A) / smooth(B)` never has to average the `Infinity` that `x / 0`
+produces, because a zero cell with contacts around it is no longer zero. It runs after the
+normalisation and the baseline because those two are estimators and this one is not: a coverage
+marginal and a decay curve are already sums over many cells, and feeding them pre-averaged cells
+would only make each cell's neighbours count twice toward the baseline it is then compared against.
+
+A **fixed** window is the wrong tool away from the diagonal, and the reason is that the precision of a
+box mean depends on the counts it covers rather than on the cells it covers. Near the diagonal a
+7 × 7 box holds thousands of contacts; at 300 kb separation the same 48 cells are almost all zero, so
+the mean is still noise and widening the box does not help, because what is in it grows in proportion
+to nearly nothing. That is the observation
+[serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*, 2020) is built on, and
+its answer is to hold the counts constant instead of the window.
+
+The **adaptive** settings take that criterion and keep this filter's locality. Each cell's window
+grows until it covers a target multiple of the block's mean cell, floored at the fixed radius it is
+named after and capped at 64. Three things about it are deliberate:
+
+- **It is a kernel, not a binning.** serpentine grows *regions* by random agglomeration and averages
+  each, which makes the result a partition — right for a differential analysis, wrong for a viewer,
+  because the partition is global and stochastic, so panning by one bin redraws every boundary and
+  the map reshuffles under the reader. Here windows overlap and no partition is formed: a cell reads
+  the same whether it sits in the middle of the viewport or at its edge, which is what lets a reader
+  pan a smoothed map and believe what moves.
+- **The width is measured on the values as read, and the mean is taken over the derived ones.** That
+  is serpentine's own separation — it thresholds on counts and reports a ratio — and here it is what
+  makes the setting work at all under the O/E, whose values are near 1 everywhere by construction and
+  would size every window the same.
+- **The target is a multiple of the block's mean, not an absolute count**, because the cells reaching
+  this stage are not always counts: `score` may have put balanced values in them (§6.4). Against the
+  block's own mean the criterion means the same thing on both, and reduces to serpentine's threshold
+  on counts when the cells are counts. A cell that cannot reach its target inside the cap keeps the
+  cap and stays noisy, which is the honest outcome — a window that grew without limit would end up
+  averaging the map into its own mean, and a flat field is not a better picture of thin data.
+
+Above **2 M cells** the adaptive settings are refused and the fixed radius they are floored at is used
+instead, with the caption saying so — the three cumulative tables are the block's size and two are
+`Float64`, which is about 40 MB at that cap and 335 MB at the 4096² raster cap, for a whole-genome
+view whose pooled cells are not short of evidence in the first place. This is §7.3's refusal shape
+and the correlation's: a real picture, and a caption that does not claim to be the one asked for.
 
 **The two ends of a ratio are paper, not colour.** A cell where nothing was observed is `0`, and on a
 scale centred at 1 that is the strongest depletion the ramp can draw — so an O/E map of a sparse
@@ -1059,8 +1104,12 @@ mattered. A derived lane fetches nothing of its own — both operands go through
 cache — so it inherits §8.4's pan-and-zoom-free rule from the two it is made of.
 
 **What a link carries.** The normalisation is a `score` and needs no key of its own; the baseline is
-`oe`, and the comparison is `op`. All three are part of *what is being looked at* rather than how it
-is shaded, so §11's rule applies: a recipient sees the numbers the sender saw.
+`oe`, the comparison is `op`, and the despeckle is `smooth` — one key with two vocabularies, a fixed
+radius (`smooth=2` is 5 × 5) or an adaptive target (`smooth=a200`). All four are part of *what is
+being looked at* rather than how it is shaded, so §11's rule applies: a recipient sees the numbers the
+sender saw. A smoothed map matters most here, because it *looks like a map*: a link that dropped the
+key would send a recipient a picture whose single-cell features had been averaged away with nothing
+on screen saying so.
 
 ---
 

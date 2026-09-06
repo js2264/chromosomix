@@ -24,7 +24,16 @@ import { describe, expect, it } from 'vitest'
 
 import { combine } from '@/render/compare'
 import { deriveBlock } from '@/render/derive'
-import { SMOOTH_RADII, smoothLabel, smoothValues } from '@/render/smooth'
+import {
+  adaptiveSmoothValues,
+  MAX_ADAPTIVE_CELLS,
+  parseSmooth,
+  SMOOTH_CHOICES,
+  SMOOTH_RADII,
+  smoothLabel,
+  smoothToken,
+  smoothValues,
+} from '@/render/smooth'
 
 function block(nrows: number, ncols: number, values: number[]) {
   return {
@@ -138,13 +147,13 @@ describe('smoothing inside the derivation', () => {
   it('says so in the label, so an exported figure carries the word', () => {
     const b = block(3, 3, new Array<number>(9).fill(1))
     expect(deriveBlock(b, {}, NO_RUNS).label).toBe('counts')
-    expect(deriveBlock(b, { smooth: 1 }, NO_RUNS).label).toBe('counts · smoothed 3 × 3')
-    expect(deriveBlock(b, { smooth: 2 }, NO_RUNS).label).toBe('counts · smoothed 5 × 5')
+    expect(deriveBlock(b, { smooth: '1' }, NO_RUNS).label).toBe('counts · smoothed 3 × 3')
+    expect(deriveBlock(b, { smooth: '2' }, NO_RUNS).label).toBe('counts · smoothed 5 × 5')
   })
 
   it('leaves the block untouched at radius 0', () => {
     const b = block(3, 3, new Array<number>(9).fill(1))
-    expect(deriveBlock(b, { smooth: 0 }, NO_RUNS).values).toBe(b.values)
+    expect(deriveBlock(b, { smooth: '0' }, NO_RUNS).values).toBe(b.values)
   })
 
   it('stops a sparse ratio from producing infinities at all', () => {
@@ -159,10 +168,187 @@ describe('smoothing inside the derivation', () => {
     expect(wild).toBeGreaterThan(10)
 
     const smoothed = combine(
-      { ...a, values: deriveBlock(a, { smooth: 1 }, NO_RUNS).values },
-      { ...b, values: deriveBlock(b, { smooth: 1 }, NO_RUNS).values },
+      { ...a, values: deriveBlock(a, { smooth: '1' }, NO_RUNS).values },
+      { ...b, values: deriveBlock(b, { smooth: '1' }, NO_RUNS).values },
       { op: 'ratio' },
     )
     for (const v of smoothed.values) expect(Number.isFinite(v)).toBe(true)
+  })
+})
+
+/**
+ * The window that sizes itself, and the four things that make it worth having.
+ *
+ * The fixed filter above is tested for its kernel. This one is tested for its
+ * *bandwidth*, because the kernel is the same box mean and the bandwidth is the
+ * whole idea: a window that stays narrow where the counts are thick and widens
+ * where they thin out, which is what a fixed window cannot do and why a map
+ * smoothed with one is still noisy away from the diagonal.
+ */
+describe('adaptiveSmoothValues', () => {
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'light' } as const
+
+  /**
+   * How far a lone spike reaches, which is the width of its neighbours' windows.
+   *
+   * Scanned only as far as `maxD`, which each caller sets to keep the walk
+   * inside the half it is measuring: the step between the two halves is itself a
+   * difference from the local base, and a scan that crossed it would report the
+   * distance to the step rather than the width of a window.
+   */
+  function spread(
+    out: Float32Array,
+    n: number,
+    row: number,
+    col: number,
+    base: number,
+    maxD: number,
+  ): number {
+    let far = 0
+    for (let d = 1; d <= maxD && col + d < n; d++) {
+      if (Math.abs(out[row * n + col + d] - base) > base * 1e-3) far = d
+    }
+    return far
+  }
+
+  /**
+   * A field thick on the left and thin on the right, with a spike in each half.
+   * The spike reaches exactly as far as the windows around it are wide.
+   */
+  function twoHalves(n: number, thick: number, thin: number) {
+    const values = new Float32Array(n * n)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) values[r * n + c] = c < n / 2 ? thick : thin
+    }
+    return values
+  }
+
+  it('widens the window where the counts thin out, and not where they do not', () => {
+    const n = 121
+    const values = twoHalves(n, 10, 1)
+    const mid = 60
+    values[mid * n + 30] = 100
+    values[mid * n + 90] = 10
+    const b = { ...block(n, n, []), values, nrows: n, ncols: n }
+    const { values: out, applied, scope } = adaptiveSmoothValues(b, values, LIGHT)
+
+    expect(applied).toEqual(LIGHT)
+    expect(scope).toBeNull()
+
+    // Each walk stays well inside its own half and clear of the block edge, so
+    // what it measures is the width of a window rather than the distance to a
+    // cell whose window widened for some other reason.
+    const thickReach = spread(out, n, mid, 30, 10, 12)
+    const thinReach = spread(out, n, mid, 90, 1, 25)
+    // Both halves are smoothed; the thin one is smoothed over several times the
+    // area, which is the entire point and the thing a fixed radius cannot do.
+    expect(thickReach).toBeGreaterThan(0)
+    expect(thinReach).toBeGreaterThan(thickReach + 2)
+  })
+
+  it('sizes the window on the counts, not on the values being averaged', () => {
+    // The values carry the same structure everywhere, so anything that varies
+    // across the picture came from `counts` — which is the separation that lets
+    // this run on an O/E map, whose own values are near 1 by construction and
+    // would size every window the same.
+    const n = 121
+    const counts = twoHalves(n, 10, 1)
+    const values = new Float32Array(n * n).fill(1)
+    const mid = 60
+    values[mid * n + 30] = 5
+    values[mid * n + 90] = 5
+    const b = { ...block(n, n, []), values, nrows: n, ncols: n }
+    const out = adaptiveSmoothValues(b, counts, LIGHT).values
+
+    expect(spread(out, n, mid, 90, 1, 25)).toBeGreaterThan(spread(out, n, mid, 30, 1, 12) + 2)
+  })
+
+  it('leaves the centre out, so a lone spike is removed rather than reduced', () => {
+    const n = 21
+    const values = new Float32Array(n * n).fill(1)
+    const centre = 10 * n + 10
+    values[centre] = 500
+    const b = { ...block(n, n, []), values, nrows: n, ncols: n }
+    const out = adaptiveSmoothValues(b, values, LIGHT).values
+    expect(out[centre]).toBeCloseTo(1, 3)
+  })
+
+  it('keeps a missing cell missing', () => {
+    const n = 21
+    const values = new Float32Array(n * n).fill(1)
+    const hole = 10 * n + 10
+    values[hole] = Number.NaN
+    const b = { ...block(n, n, []), values, nrows: n, ncols: n }
+    const out = adaptiveSmoothValues(b, values, LIGHT).values
+    expect(Number.isNaN(out[hole])).toBe(true)
+    // and its neighbours are divided by what actually contributed, not by the
+    // window's nominal size, so the hole leaves no dark ring around itself.
+    expect(out[hole + 1]).toBeCloseTo(1, 6)
+  })
+
+  it('falls back to the floor above the cell cap, and says which it used', () => {
+    const n = 1415
+    expect(n * n).toBeGreaterThan(MAX_ADAPTIVE_CELLS)
+    const values = new Float32Array(n * n).fill(1)
+    const b = { ...block(1, 1, []), values, nrows: n, ncols: n }
+    const strong = { kind: 'adaptive', target: 800, floor: 3, name: 'strong' } as const
+    const { applied, scope } = adaptiveSmoothValues(b, values, strong)
+    expect(applied).toEqual({ kind: 'fixed', radius: 3 })
+    expect(scope).toBe('adaptive smoothing not applied — block too large')
+  })
+})
+
+describe('the smoothing picker', () => {
+  it('reads both vocabularies, and refuses what this build does not offer', () => {
+    expect(parseSmooth('2')).toEqual({ kind: 'fixed', radius: 2 })
+    expect(parseSmooth(2)).toEqual({ kind: 'fixed', radius: 2 })
+    expect(parseSmooth('a200')).toEqual({ kind: 'adaptive', target: 200, floor: 2, name: 'medium' })
+    expect(parseSmooth('0')).toBeNull()
+    expect(parseSmooth(undefined)).toBeNull()
+    expect(parseSmooth('a999')).toBeNull()
+    expect(parseSmooth('lots')).toBeNull()
+  })
+
+  it('round-trips every choice through its token', () => {
+    for (const choice of SMOOTH_CHOICES) {
+      expect(smoothToken(choice.smoothing)).toBe(choice.id)
+      expect(parseSmooth(choice.id)).toEqual(choice.smoothing)
+    }
+  })
+
+  it('captions an adaptive map by its name, because it has no one window to give', () => {
+    const b = block(9, 9, new Array<number>(81).fill(1))
+    expect(deriveBlock(b, { smooth: 'a200' }, NO_RUNS).label).toBe(
+      'counts · smoothed adaptively (medium)',
+    )
+    expect(deriveBlock(b, { smooth: '2' }, NO_RUNS).label).toBe('counts · smoothed 5 × 5')
+  })
+})
+
+describe('adaptiveSmoothValues, on the shapes a real block arrives in', () => {
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'light' } as const
+
+  it('ignores a padded tail when it measures the block', () => {
+    // `BlockValues.values` is documented as *at least* `nrows * ncols` long, and
+    // a reader that walked the whole array would let padding it must not see set
+    // the scale that sizes every window on the picture.
+    const n = 41
+    const cells = n * n
+    const centre = 20 * n + 20
+    const exact = new Float32Array(cells).fill(1)
+    exact[centre] = 200
+    // The same block with a tail of large values behind it. A scale taken over
+    // the whole array would be hundreds of times too big, every window would run
+    // to the cap to reach it, and the spike would smear across the picture — so
+    // the block has to carry a feature for this to be able to fail.
+    const padded = new Float32Array(cells + 500)
+    padded.set(exact.subarray(0, cells))
+    padded.fill(1000, cells)
+
+    const b = { ...block(1, 1, []), nrows: n, ncols: n, values: exact }
+    const withTail = { ...b, values: padded }
+    const plain = adaptiveSmoothValues(b, exact, LIGHT).values
+    const tailed = adaptiveSmoothValues(withTail, padded, LIGHT).values
+    for (let i = 0; i < cells; i++) expect(tailed[i]).toBeCloseTo(plain[i], 4)
   })
 })

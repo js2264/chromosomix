@@ -411,9 +411,11 @@ export interface ViewState {
    * reading is observed over expected *of* balanced counts.
    */
   oe?: boolean
-  /**
-   * Radius of the despeckling window, in cells — `1` is 3 × 3, `0` and absent
-   * are off (`render/smooth.ts`).
+   /**
+   * How much despeckling, as the token the picker carries — a fixed radius
+   * (`1` is 3 × 3) or an adaptive target (`a200`, a window that grows per cell
+   * until it covers enough evidence); `0` and absent are off
+   * (`render/smooth.ts`).
    *
    * Beside {@link oe} and carried for its reason: it composes with every other
    * value rather than replacing one, and a smoothed map *looks like a map*, so a
@@ -422,7 +424,7 @@ export interface ViewState {
    * key in this group whose absence and whose `0` mean the same thing, which is
    * why it is written down only when a reader has asked for it.
    */
-  smooth?: number
+  smooth?: string
   /**
    * How two open files are put together — the diagonal split, or one derived
    * field over the whole square (`render/compare.ts`).

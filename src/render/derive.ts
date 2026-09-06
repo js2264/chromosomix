@@ -27,7 +27,7 @@
  * the pooling layer and the reader unaware that derived values exist.
  */
 
-import { smoothLabel, smoothValues } from './smooth'
+import { adaptiveSmoothValues, parseSmooth, smoothingCaption, smoothValues } from './smooth'
 
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
@@ -677,10 +677,11 @@ export interface Derivation {
    */
   baseline?: boolean
   /**
-   * Radius of the despeckling window, in cells; `0` or absent for none
+   * How much despeckling, as the token the picker and the link carry — a fixed
+   * radius (`1` is 3 × 3) or an adaptive target (`a200`); `0` or absent for none
    * (`render/smooth.ts`).
    */
-  smooth?: number
+  smooth?: string
 }
 
 /**
@@ -757,7 +758,13 @@ export function deriveBlock(
     parts.push('O/E')
   }
 
-  const radius = derivation.smooth ?? 0
+  // Two shapes of the same operation, and the branch is the only place that has
+  // to know which: a fixed window, or one that grows per cell until it covers
+  // enough evidence (`render/smooth.ts`). The adaptive one is handed the block's
+  // **as-read** values beside the derived ones, because the width has to be set
+  // by the thing that thins out with distance rather than by the O/E that was
+  // computed precisely to remove that thinning.
+  const smoothing = parseSmooth(derivation.smooth)
   // Named in the label like the steps above it, because it is the one of the
   // three that a reader cannot see they asked for: a normalisation changes the
   // numbers and a baseline changes the ramp, while a despeckled map looks like a
@@ -771,8 +778,23 @@ export function deriveBlock(
   // about how it was measured. Pushed into `parts` it produced `smoothed 3 × 3`
   // on a colourbar over a block of plain counts — a legend that had lost the
   // name of its own quantity.
-  const suffix = radius >= 1 ? ` · smoothed ${smoothLabel(radius)}` : ''
-  if (radius >= 1) values = smoothValues({ ...block, values }, radius)
+  let suffix = ''
+  if (smoothing !== null) {
+    if (smoothing.kind === 'fixed') {
+      values = smoothValues({ ...block, values }, smoothing.radius)
+      suffix = ` · smoothed ${smoothingCaption(smoothing)}`
+    } else {
+      const adapted = adaptiveSmoothValues({ ...block, values }, block.values, smoothing)
+      values = adapted.values
+      // What was *done*, not what was asked for — the two differ on a block the
+      // adaptive filter refused, and the caption is the half of that refusal a
+      // reader still has after the figure leaves the app.
+      suffix = ` · smoothed ${smoothingCaption(adapted.applied)}`
+      if (adapted.scope !== null) {
+        scope = scope === null ? adapted.scope : `${scope} · ${adapted.scope}`
+      }
+    }
+  }
 
   return {
     values,

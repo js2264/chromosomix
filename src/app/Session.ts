@@ -4619,12 +4619,12 @@ export class Session {
         // correlation again and the failure would repeat once per frame.
         this.host.notify(`Correlation failed: ${message}`)
       },
-      smooth: state.smooth ?? 0,
-      onSmoothChange: (radius) => {
+      smooth: state.smooth ?? '0',
+      onSmoothChange: (token) => {
         // `0` is written as *absent*, like `oe`'s `false`: the two mean the same
         // thing and a hash carrying `smooth=0` would be a link saying it had
         // chosen the default.
-        this.store.patch({ smooth: radius > 0 ? radius : undefined })
+        this.store.patch({ smooth: token === '0' ? undefined : token })
         this.rederive()
       },
     }

@@ -96,7 +96,7 @@ import {
   type Derivation,
   type Normalisation,
 } from '../render/derive'
-import { SMOOTH_RADII, smoothLabel } from '../render/smooth'
+import { SMOOTH_CHOICES } from '../render/smooth'
 import type { CorrelationField } from '../analysis/compartments'
 import { isCancellation, type Cancellable } from '../worker/client'
 import {
@@ -600,16 +600,17 @@ export interface DerivePresentation {
    */
   onExpectedChange?(on: boolean): void
   /**
-   * Radius of the despeckling window; `0` for none (`render/smooth.ts`).
+   * How much despeckling, as the picker's token; `0` for none
+   * (`render/smooth.ts`).
    *
    * Shared and applied exactly as {@link expected} is, including on a companion
    * that draws it without offering the control — a deck whose panels smoothed
    * differently would be five pictures that could not be compared, which is the
    * one thing a deck is for.
    */
-  smooth: number
+  smooth: string
   /** Absent on a panel that applies the smoothing but does not own it. */
-  onSmoothChange?(radius: number): void
+  onSmoothChange?(token: string): void
   /**
    * Whether the square is replaced by the correlation between its rows.
    *
@@ -1477,14 +1478,12 @@ export class MatrixPanel {
     if (onSmoothChange !== undefined) {
       const smoothSelect = el('select', { class: 'select' })
       this.smoothSelect = smoothSelect
-      for (const radius of SMOOTH_RADII) {
-        smoothSelect.appendChild(
-          el('option', { value: String(radius), text: radius === 0 ? 'off' : smoothLabel(radius) }),
-        )
+      for (const choice of SMOOTH_CHOICES) {
+        smoothSelect.appendChild(el('option', { value: choice.id, text: choice.label }))
       }
-      smoothSelect.value = String(options.derive?.smooth ?? 0)
+      smoothSelect.value = options.derive?.smooth ?? '0'
       smoothSelect.addEventListener('change', () => {
-        onSmoothChange(Number(smoothSelect.value))
+        onSmoothChange(smoothSelect.value)
       })
       controls.unshift(
         field(
@@ -1495,7 +1494,10 @@ export class MatrixPanel {
             'made with. Applied to each file before two are compared, so a ratio is ' +
             '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
             'and the saturated single pixels a sparse ratio is made of are never produced. ' +
-            'Single-cell features are averaged away with them, which is why it is off by default.',
+            'Single-cell features are averaged away with them, which is why it is off by default. ' +
+            'The three adaptive settings size each window separately, widening it where the ' +
+            'counts thin out — which is away from the diagonal, where a fixed window averages ' +
+            'mostly empty cells and stays noisy. Each starts at the fixed window above it.',
         ),
       )
     }
@@ -2672,7 +2674,7 @@ export class MatrixPanel {
       data.rowExtent[1],
       derivation.normalise ?? '',
       String(derivation.expected === true),
-      derivation.smooth ?? 0,
+      derivation.smooth ?? '0',
     ].join('|')
   }
 
@@ -2770,16 +2772,16 @@ export class MatrixPanel {
   }
 
   /**
-   * Show the despeckle radius the panel is drawing. {@link paintExpected}'s
+   * Show the despeckle setting the panel is drawing. {@link paintExpected}'s
    * counterpart, and silent on a companion, which has no picker to set.
    *
    * Programmatic assignment to a `<select>` fires no `change` event, so this
    * cannot loop back through the handler that called it.
    */
-  private paintSmooth(radius: number): void {
+  private paintSmooth(token: string): void {
     const select = this.smoothSelect
     if (select === null) return
-    select.value = String(radius)
+    select.value = String(token)
   }
 
 
@@ -5271,7 +5273,7 @@ export class MatrixPanel {
       // Applied inside `deriveBlock`, which is what puts it on *each file* and
       // ahead of `combine` — the whole reason a ratio can be smoothed at all
       // (`render/smooth.ts`).
-      smooth: this.options.derive?.smooth ?? 0,
+      smooth: this.options.derive?.smooth ?? '0',
     }
     const derived = deriveBlock(data, derivation, runs)
     // The correlation replaces the whole field, which is why it is applied here
@@ -6021,7 +6023,7 @@ export class MatrixPanel {
       derive?.baseline !== true && (derive?.expected === true || derive?.correlate === true),
     )
     this.gateExpected(derive?.baseline === true)
-    this.paintSmooth(derive?.smooth ?? 0)
+    this.paintSmooth(derive?.smooth ?? '0')
     return same
   }
 

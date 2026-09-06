@@ -14,6 +14,58 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A despeckle whose window sizes itself, in the `smooth` picker.** Three new
+  settings beside the fixed `3 × 3`, `5 × 5` and `7 × 7` — `adaptive · light`,
+  `· medium` and `· strong`. Each cell's window now grows until it covers enough
+  evidence to average, so it stays narrow where the counts are thick and widens
+  where they thin out. Carried in the link as `smooth=a200`, and written into the
+  colourbar caption as `counts · smoothed adaptively (medium)`.
+
+  **Why a fixed window was never going to work away from the diagonal.** The
+  precision of a box mean depends on the *counts* it covers, not on the cells it
+  covers. Near the diagonal a `7 × 7` box holds thousands of contacts and its mean
+  is steady; at 300 kb separation on the same map those 48 cells are almost all
+  zero, so the mean is a handful of counts divided by 48 — still noise — and
+  widening the box does not help, because what is in it grows in proportion to
+  nearly nothing. On a yeast map at 500 bp the coefficient of variation between
+  200 and 800 bins of separation is **6.8 raw, 1.1 at `7 × 7`, and 0.42
+  adaptive**: the widest fixed window this app offered was leaving most of the
+  noise where the map is thinnest.
+
+  **This is serpentine's criterion, not serpentine's algorithm.**
+  [Serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*,
+  *Bioinformatics* 2020) is where the idea of holding the counts constant instead
+  of the window comes from. Its own method grows *regions* by random agglomeration
+  and averages each, which makes the result a partition — the right shape for a
+  differential analysis, and the wrong one for a viewer, because the partition is
+  global and stochastic, so panning by one bin redraws every boundary and the map
+  visibly reshuffles under the reader. Here the windows overlap and no partition
+  is formed, so a cell reads the same whether it sits in the middle of the
+  viewport or at its edge, and a smoothed map can be panned.
+
+  **The width is set by the counts, and the mean is taken over what is on
+  screen.** That is serpentine's own separation — it thresholds on counts and
+  reports a ratio — and it is what makes the setting work under the O/E at all:
+  observed-over-expected is near 1 everywhere by construction, so a window sized
+  on it would be the same size everywhere and the whole exercise would collapse.
+  The target is a multiple of the block's mean rather than an absolute count,
+  because `score` may have put balanced values in the cells; against the block's
+  own mean it means the same thing either way, and reduces to serpentine's
+  threshold on counts when the cells are counts.
+
+  Each adaptive setting is **floored at the fixed window it sits below**, so
+  `light` is `3 × 3` or wider and never narrower, and capped at a radius of 64. On
+  a yeast map at 500 bp `light` runs `3 × 3` along the diagonal and `21 × 21` at
+  200 bins out; `strong` runs `7 × 7` and `81 × 81`. A cell that cannot reach its
+  target inside the cap keeps the cap and stays noisy, which is the honest
+  outcome — a window that grew without limit would average the map into its own
+  mean.
+
+  It costs **70–110 ms on an 841² block** and is refused above **2 M cells**, where
+  the fixed radius it is floored at is used instead and the caption says so. Like
+  the correlation's refusal, what is drawn is a real picture and the caption is
+  the half of it that survives an export.
+
 - **VCF opens as a lane of variants.** Drop a `.vcf`, or a `.vcf.gz` with its
   `.tbi`, and the calls draw as boxes over the reference bases each record is
   about — with the symbolic ones at their real size, read out of `INFO/END` and
