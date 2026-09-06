@@ -1130,7 +1130,19 @@ a time rather than for the block, so what is resident is about 128 MB whatever t
 without that a 16 M block would allocate over half a gigabyte on the thread drawing frames. What the
 cap costs instead is time, and it is roughly linear — and about twice what it was before the
 winsorising pass, which reads the block again: 78 ms at 353², 300 ms at 841², 574 ms at 1,200², 1.5 s
-at 4 M and **7.4 s at 16 M**. The last is a real freeze and the honest price of the cap being where it is;
+at 4 M and **7.4 s at 16 M**.
+
+**Above 1 M cells it runs on the analysis thread** (§18.3). Below that it is a hitch on a dropdown and
+is done inline, which keeps the map from flashing unsmoothed on the way to being smoothed; above it
+the cost climbs past a second and would be a frozen window. So `deriveBlock` runs the pipeline to the
+point the smoothing would happen, hands the caller the arrays it would have used, and carries on with
+the **unsmoothed** field — and **the caption says `counts`, not `smoothed`**, because a figure exported
+mid-wait must not claim a filter it does not have. When the answer lands the caller derives again and
+the step is a lookup. That is the correlation's arrangement, for the correlation's reason: every other
+step in that module is synchronous, and a promise for the sake of one of them would make every caller
+wait on arithmetic already finished. The fixed radii never defer at any size — one incremental pass is
+not worth a round trip. Neither does a compared pair, where two blocks would need two jobs and a
+half-finished pair would put a smoothed map over an unsmoothed one and call it a ratio. The last is a real freeze and the honest price of the cap being where it is;
 everything short of a whole chromosome at a fine bin size is a fraction of a second. Should that need
 fixing, the answer is the analysis thread rather than a lower cap — the work is a pure function of
 two arrays.
@@ -2227,6 +2239,7 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
+| Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
 | Analysis worker mount | opened on first use, never at session open |
 
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;

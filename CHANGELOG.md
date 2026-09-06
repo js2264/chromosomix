@@ -595,6 +595,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The adaptive filter runs on the analysis thread above 1 M cells.** It reads
+  the block twice — once to measure every cell against its neighbourhood and once
+  to average the capped field — and at the cell cap that is 7.4 s, which on the
+  thread drawing frames is a frozen window rather than a hitch. Below the limit it
+  is still done inline, which is the better trade there: 78 ms on a 353² view, and
+  no flash of an unsmoothed map on the way to a smoothed one.
+
+  `deriveBlock` runs the pipeline to the point the smoothing would happen, hands
+  the caller the arrays it would have used, and carries on with the **unsmoothed**
+  field; the panel starts a job and derives again when the answer lands, at which
+  point the step is a lookup. The correlation's arrangement, for the correlation's
+  reason. While it waits **the caption says `counts`, not `smoothed`** — a figure
+  exported mid-wait must not claim a filter it does not have — the wait shows on
+  the veil, a superseded job is cancelled, and a late answer to a superseded
+  question is dropped rather than cached.
+
+  Two callers never defer and compute inline at whatever it costs, because the
+  alternative is not doing it at all: a panel with no analysis thread behind it,
+  and **either file of a compared pair**, where two blocks would need two jobs and
+  a half-finished pair would put a smoothed map over an unsmoothed one and call
+  the result a ratio. The fixed radii never defer at any size — one incremental
+  pass is not worth a round trip.
+
+  The job is not interruptible partway through, unlike the correlation's, and that
+  is deliberate: the filter's passes are banded over rows and there is no
+  consistent state to stop at inside one. The cancel is checked before the work as
+  well as after, so a job cancelled while queued never starts and only the one
+  already running is wasted.
+
 - **The adaptive window no longer turns one hot cell into a rectangle.** Reported
   from a yeast microC map at 500 bp: saturated hard-edged blocks, each with an
   isolated bright pixel at its centre and its edges lined up with discarded-bin

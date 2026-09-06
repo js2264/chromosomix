@@ -28,6 +28,7 @@ import {
   adaptiveSmoothValues,
   ADAPTIVE_MAX_RADIUS,
   MAX_ADAPTIVE_CELLS,
+  SMOOTH_INLINE_CELLS,
   parseSmooth,
   SMOOTH_CHOICES,
   SMOOTH_RADII,
@@ -399,6 +400,88 @@ describe('adaptiveSmoothValues, against one wild cell', () => {
     expect(out[30 * n + 30]).toBeGreaterThan(1.5)
     // …and is not levelled to the background it sits on.
     expect(out[30 * n + 30]).toBeGreaterThan(out[10 * n + 50])
+  })
+})
+
+describe('the adaptive filter, moved off the drawing thread', () => {
+  const runs = { rows: [], cols: [] }
+  const square = (n: number, values: Float32Array) => ({
+    nrows: n,
+    ncols: n,
+    values,
+    rowExtent: [0, n] as [number, number],
+    colExtent: [0, n] as [number, number],
+  })
+
+  it('does the work inline while the block is small enough to be worth it', () => {
+    // Below the limit the filter is a hitch on a dropdown, and doing it here
+    // keeps the map from flashing unsmoothed on the way to being smoothed.
+    const n = 40
+    expect(n * n).toBeLessThan(SMOOTH_INLINE_CELLS)
+    const values = new Float32Array(n * n).fill(1)
+    const out = deriveBlock(square(n, values), { smooth: 'a50', deferSmoothing: true }, runs)
+    expect(out.pending).toBeUndefined()
+    expect(out.label).toBe('counts · smoothed adaptively')
+  })
+
+  it('hands the work back above it, and draws the unsmoothed map meanwhile', () => {
+    const n = 1001
+    expect(n * n).toBeGreaterThan(SMOOTH_INLINE_CELLS)
+    const values = new Float32Array(n * n).fill(1)
+    const b = square(n, values)
+    const out = deriveBlock(b, { smooth: 'a50', deferSmoothing: true }, runs)
+
+    expect(out.pending).toBeDefined()
+    expect(out.pending?.spec).toMatchObject({ kind: 'adaptive', target: 50 })
+    expect(out.pending?.counts).toBe(values)
+    expect(out.pending?.nrows).toBe(n)
+    expect(out.pending?.over).toBeNull()
+    // The field that goes out is the honest unsmoothed one, and **the caption
+    // does not claim otherwise** — a figure exported mid-wait must not say it was
+    // smoothed when it was not.
+    expect(out.values).toBe(values)
+    expect(out.label).toBe('counts')
+  })
+
+  it('sends the baseline to be averaged too, when the O/E is on', () => {
+    const n = 1001
+    const values = new Float32Array(n * n).fill(1)
+    const out = deriveBlock(
+      square(n, values),
+      { smooth: 'a50', expected: true, deferSmoothing: true },
+      runs,
+    )
+    // Both halves of the ratio, so the windows that average one average the
+    // other — the matched-window property, carried through the worker.
+    expect(out.pending?.over).not.toBeNull()
+    expect(out.pending?.over?.length).toBe(n * n)
+  })
+
+  it('uses an answer that has come back, and captions what was actually done', () => {
+    const n = 1001
+    const values = new Float32Array(n * n).fill(1)
+    const b = square(n, values)
+    const field = {
+      values: new Float32Array(n * n).fill(7),
+      over: null,
+      // The refusal case: what the caption says is the window that was *used*.
+      applied: { kind: 'fixed', radius: 1 } as const,
+      scope: 'adaptive smoothing not applied — block too large',
+    }
+    const out = deriveBlock(b, { smooth: 'a50', smoothed: field, deferSmoothing: true }, runs)
+    expect(out.pending).toBeUndefined()
+    expect(out.values).toBe(field.values)
+    expect(out.label).toBe('counts · smoothed 3 × 3')
+    expect(out.scope).toBe('adaptive smoothing not applied — block too large')
+  })
+
+  it('never defers a caller that cannot run one', () => {
+    // A test, a panel with no analysis thread, or either file of a compared pair.
+    // They compute it inline at whatever it costs, because the alternative is not
+    // doing it at all.
+    const n = 40
+    const values = new Float32Array(n * n).fill(1)
+    expect(deriveBlock(square(n, values), { smooth: 'a50' }, runs).pending).toBeUndefined()
   })
 })
 

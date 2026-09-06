@@ -66,7 +66,7 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import type { CompareOp, Transform, ViewState } from '../types'
-import type { Normalisation } from '../render/derive'
+import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/derive'
 import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
@@ -4614,6 +4614,7 @@ export class Session {
         this.rederive()
       },
       correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+      smoothBlock: (request) => this.smooth(request),
       onCorrelateFailure: (message) => {
         // The panel has already asked for the score to move, so this only says
         // what happened. Without the move the next render would ask for the
@@ -4675,6 +4676,27 @@ export class Session {
   ): Cancellable<CorrelationField> {
     this.correlator ??= new AnalysisClient()
     return this.correlator.cancellable<'correlate'>({ kind: 'correlate', values, n }, onProgress)
+  }
+
+  /**
+   * Run the adaptive despeckle on the analysis thread.
+   *
+   * {@link correlate}'s twin, on the same client and for the same reason: the
+   * work is measured in seconds on a large block, and §18.3 gives that thread
+   * exactly this shape of job so the thread answering frames never queues behind
+   * one.
+   */
+  private smooth(request: SmoothingRequest): Cancellable<SmoothedField> {
+    this.correlator ??= new AnalysisClient()
+    return this.correlator.cancellable<'smooth'>({
+      kind: 'smooth',
+      values: request.values,
+      counts: request.counts,
+      over: request.over,
+      nrows: request.nrows,
+      ncols: request.ncols,
+      spec: request.spec,
+    })
   }
 
   /** What every map view needs to build its score picker. */

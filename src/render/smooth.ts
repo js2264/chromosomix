@@ -337,6 +337,21 @@ export const ADAPTIVE_MAX_RADIUS = 192
  */
 export const MAX_ADAPTIVE_CELLS = 16_000_000
 
+/**
+ * The largest block this is worth computing on the thread drawing frames.
+ *
+ * Below it the filter is a hitch on a dropdown — 78 ms on a 353² view, 400 ms at
+ * this limit — and doing it inline keeps the map from flashing unsmoothed on the
+ * way to being smoothed. Above it the cost climbs past a second and reaches 7.4 s
+ * at {@link MAX_ADAPTIVE_CELLS}, which is a frozen window, so a caller that can
+ * run the work elsewhere is handed the arrays instead
+ * (`render/derive.ts`'s `SmoothingRequest`).
+ *
+ * The fixed radii never defer at any size: they are one incremental pass over the
+ * cells, and 20 ms is not worth a round trip.
+ */
+export const SMOOTH_INLINE_CELLS = 1_000_000
+
 /** The dropdown, in order: what it says and what it means. */
 export interface SmoothChoice {
   /** Stable identity, carried in the link. */

@@ -36,6 +36,7 @@ import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
 import { createSource, releaseSources } from '../../worker/sources'
 import { correlationField, type CorrelationField } from '../compartments'
+import { adaptiveSmoothValues } from '../../render/smooth'
 import { abortError, type JobContext } from '../job'
 import { RUNNERS } from '../run/index'
 import type { TaskResult } from '../types'
@@ -45,6 +46,7 @@ import {
   type AnalysisResponse,
   type AnalysisResultMap,
 } from './protocol'
+import type { SmoothedField } from '../../render/derive'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -256,6 +258,43 @@ async function handleCorrelate(request: Extract<AnalysisRequest, { kind: 'correl
  */
 const CORRELATE_BATCH_ROWS = 64
 
+/**
+ * The adaptive despeckle of one block.
+ *
+ * Synchronous, unlike the correlation beside it, and that is a deliberate
+ * difference rather than an omission. The filter's two passes are banded over
+ * rows and each band's tables are built and thrown away together; there is no
+ * consistent state to stop at partway through one, and threading a yield through
+ * both passes would buy a cancel that lands a few hundred milliseconds sooner on
+ * a job the reader is no longer waiting for anyway.
+ *
+ * What that costs is that a superseded job runs to completion instead of being
+ * cut short. It is bounded: the cancel is checked **before** the work as well as
+ * after, so a job cancelled while it sat in the queue never starts, and only the
+ * one already running is wasted.
+ */
+function handleSmooth(
+  request: Extract<AnalysisRequest, { kind: 'smooth' }>,
+): SmoothedField {
+  if (cancelled.has(request.id)) throw abortError()
+  const smoothed = adaptiveSmoothValues(
+    { nrows: request.nrows, ncols: request.ncols, values: request.values },
+    request.counts,
+    request.spec,
+    request.over ?? undefined,
+  )
+  // As `handleRun` does, and for its reason: a job whose last band finished just
+  // as the cancel landed would otherwise deliver a picture to a reader who has
+  // already moved the picker.
+  if (cancelled.has(request.id)) throw abortError()
+  return {
+    values: smoothed.values,
+    over: smoothed.over,
+    applied: smoothed.applied,
+    scope: smoothed.scope,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -268,6 +307,8 @@ async function dispatch(request: AnalysisRequest): Promise<unknown> {
       return handleRun(request)
     case 'correlate':
       return handleCorrelate(request)
+    case 'smooth':
+      return handleSmooth(request)
     case 'cancel':
       cancelled.add(request.target)
       return null

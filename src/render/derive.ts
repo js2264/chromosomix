@@ -27,7 +27,14 @@
  * the pooling layer and the reader unaware that derived values exist.
  */
 
-import { adaptiveSmoothValues, parseSmooth, smoothingCaption, smoothValues } from './smooth'
+import {
+  adaptiveSmoothValues,
+  parseSmooth,
+  smoothingCaption,
+  smoothValues,
+  SMOOTH_INLINE_CELLS,
+  type Smoothing,
+} from './smooth'
 
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
@@ -173,6 +180,15 @@ export interface DerivedValues {
    * implies. `null` when the block is the whole of what the statement is about.
    */
   scope: string | null
+  /**
+   * A smoothing this derivation wanted and did not have.
+   *
+   * Present only when an `adaptive` setting is chosen on a block big enough to be
+   * worth moving and the caller said it could move it. The field above is the
+   * honest unsmoothed picture; a caller that can run the filter starts one and
+   * derives again. See {@link SmoothingRequest}.
+   */
+  pending?: SmoothingRequest
 }
 
 /** Whether a derived quantity is read against a middle rather than against zero. */
@@ -682,6 +698,25 @@ export interface Derivation {
    * (`render/smooth.ts`).
    */
   smooth?: string
+  /**
+   * A smoothing already computed for this exact block and setting.
+   *
+   * Absent on the first derivation of a block, which is what produces
+   * {@link DerivedValues.pending}; supplied on the second, once the answer is
+   * back. Nothing here checks that it belongs to this block — the caller holds
+   * the key that says so, exactly as it does for the correlation.
+   */
+  smoothed?: SmoothedField
+  /**
+   * Whether this caller can run the adaptive filter off this thread.
+   *
+   * Absent for a caller that cannot — a test, a panel with no analysis thread
+   * behind it, or **either file of a compared pair**, where two blocks would need
+   * two jobs and a half-finished pair would put a smoothed map over an unsmoothed
+   * one and call the result a ratio. Those compute it inline at whatever it
+   * costs, which is right: the alternative is not doing it at all.
+   */
+  deferSmoothing?: boolean
 }
 
 /**
@@ -719,6 +754,46 @@ interface Smoothed {
   /** The matched-window baseline, when one was asked for. */
   over: Float32Array | null
   suffix: string
+  scope: string | null
+  /** Set when the work was handed back rather than done — see {@link SmoothingRequest}. */
+  pending?: SmoothingRequest
+}
+
+/**
+ * Everything the adaptive filter needs, for a caller that can run it elsewhere.
+ *
+ * It reads the block twice — once to measure every cell against its neighbourhood and
+ * once to average the capped field — and at the cell cap that is seconds rather
+ * than the pass or two every other step here costs. So above
+ * {@link SMOOTH_INLINE_CELLS} it is not done here. This module runs the pipeline
+ * to the point the smoothing would happen, hands the caller exactly the arrays it
+ * would have used, and carries on with the **unsmoothed** field so there is a
+ * real picture on screen meanwhile. When the answer arrives the caller derives
+ * again with {@link Derivation.smoothed} supplied and the step is a lookup.
+ *
+ * That is the correlation's arrangement (`ui/MatrixPanel.ts`) and it is here for
+ * the correlation's reason: every other step in `deriveBlock` is synchronous, and
+ * a function that returned a promise for the sake of one of them would make every
+ * caller wait on arithmetic that was already finished.
+ */
+export interface SmoothingRequest {
+  /** The field to average, normalised and before any division. */
+  values: Float32Array
+  /** The block as read, which sets the threshold and drives the criterion. */
+  counts: Float32Array
+  /** The baseline to average over the same windows, when there is one. */
+  over: Float32Array | null
+  nrows: number
+  ncols: number
+  spec: Extract<Smoothing, { kind: 'adaptive' }>
+}
+
+/** A smoothing that has come back, ready to be substituted for the step. */
+export interface SmoothedField {
+  values: Float32Array
+  over: Float32Array | null
+  /** What was *done* — the fixed floor where the filter refused the block. */
+  applied: Smoothing
   scope: string | null
 }
 
@@ -800,10 +875,43 @@ export function deriveBlock(
         scope: null,
       }
     }
-    // Both of the self-sizing shapes measure on the block's **as-read** values
-    // whatever stage this is called from, because the thing they compensate for
-    // — counts thinning out with distance — is a property of the measurement
-    // rather than of the arithmetic done to it since.
+    // Already computed elsewhere, for this exact block and setting.
+    const held = derivation.smoothed
+    if (held !== undefined) {
+      return {
+        values: held.values,
+        over: held.over,
+        suffix: ` · smoothed ${smoothingCaption(held.applied)}`,
+        scope: held.scope,
+      }
+    }
+    // Big enough to be worth moving, and a caller that can move it. The
+    // unsmoothed field goes out with **no suffix**, because the caption has to
+    // describe the picture actually drawn: a map labelled as smoothed that is not
+    // smoothed is the one claim an exported figure must never carry.
+    if (
+      derivation.deferSmoothing === true &&
+      block.nrows * block.ncols > SMOOTH_INLINE_CELLS
+    ) {
+      return {
+        values: source,
+        over: over ?? null,
+        suffix: '',
+        scope: null,
+        pending: {
+          values: source,
+          counts: block.values,
+          over: over ?? null,
+          nrows: block.nrows,
+          ncols: block.ncols,
+          spec: smoothing,
+        },
+      }
+    }
+    // The adaptive width measures on the block's **as-read** values whatever
+    // stage this is called from, because the thing it compensates for — counts
+    // thinning out with distance — is a property of the measurement rather than
+    // of the arithmetic done to it since.
     const adapted = adaptiveSmoothValues(
       { ...block, values: source },
       block.values,
@@ -912,6 +1020,7 @@ export function deriveBlock(
     neutral: derivation.expected === true && derivation.baseline !== true ? 1 : null,
     label: (parts.length === 0 ? 'counts' : parts.join(' · ')) + suffix,
     scope,
+    ...(smoothed.pending === undefined ? {} : { pending: smoothed.pending }),
   }
 }
 
