@@ -1099,12 +1099,38 @@ reader, who may want exactly that.
 question a reader has no way to answer, and the one kept is the one that preserves the most detail:
 `3 × 3` where the data is rich, and much wider where it is not.
 
+**One wild cell must not become a rectangle, and that takes two things.** A mean
+has no defence against a single extreme value, and a box kernel's impulse response *is* a box — so
+before this, one hot pixel raised every window that could reach it by the same amount and none of the
+next ones along, drawing a hard-edged saturated block that reads as structure. Measured: one cell at
+400× its neighbourhood produced a 20 × 20 bin block peaking at 5.3 in `log2` O/E, on a scale that
+clips at 0.84.
+
+The first of the two is a **cap on leverage**, applied in a pass before the averaging. Not a multiple
+of the local mean, which is the obvious rule and is wrong here: away from the diagonal the map is
+Poisson-sparse, so the window mean is 0.05 while the occupied cells hold 1, and *every* honest count
+is twenty times the local mean. No fixed multiple both spares those and controls a spike. What the
+artefact is, is leverage — a cell shifts the mean of every window reaching it by `(value − mean) / n`
+— so the cap is written on that directly: no cell may add more than half again to the mean of a window
+its own size, `cap = mean_without_it × (1 + ½ n)`. That scales itself, tight in a 3 × 3 near the
+diagonal and two hundredfold in a sparse 21 × 21. The mean is taken **without the cell**, which is the
+one thing the old zero-centre kernel had right: excluding the centre is correct for deciding whether a
+cell is an outlier and wrong for estimating what to draw there, and the two passes do one each.
+
+The second is a **shoulder on the kernel**. The mean is taken over three nested windows — `r/2`, `r`
+and `3r/2` — and averaged, which puts a step in the weights instead of a cliff: the outermost shell
+carries about 8% of the weight the centre does, so what remains of an outlier fades rather than
+ending at a straight edge. The radii are chosen so this costs nothing in noise — the effective sample
+is 3.90·r² against the plain box's 4·r², the same estimate over half again as much ground. With both,
+nothing on that map reaches the clip and the O/E mean stays at 1.00 in every band.
+
 Blocks are capped at **16 M cells**, which is the 4096² raster cap — so in practice the setting is
 available on anything the viewer will draw. The cumulative tables are built for a **band of rows** at
 a time rather than for the block, so what is resident is about 128 MB whatever the block's size;
 without that a 16 M block would allocate over half a gigabyte on the thread drawing frames. What the
-cap costs instead is time, and it is roughly linear: 173 ms at 841², 328 ms at 1,200², 867 ms at 4 M
-and **3.9 s at 16 M**. The last is a real freeze and the honest price of the cap being where it is;
+cap costs instead is time, and it is roughly linear — and about twice what it was before the
+winsorising pass, which reads the block again: 78 ms at 353², 300 ms at 841², 574 ms at 1,200², 1.5 s
+at 4 M and **7.4 s at 16 M**. The last is a real freeze and the honest price of the cap being where it is;
 everything short of a whole chromosome at a fine bin size is a fraction of a second. Should that need
 fixing, the answer is the analysis thread rather than a lower cap — the work is a pure function of
 two arrays.

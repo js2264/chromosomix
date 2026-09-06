@@ -277,13 +277,18 @@ describe('adaptiveSmoothValues', () => {
     values[centre] = 500
     const b = { ...block(n, n, []), values, nrows: n, ncols: n }
     const out = adaptiveSmoothValues(b, values, LIGHT).values
-    // The window stays at the floor here, and for the right reason: the spike is
-    // itself the evidence the bandwidth is looking for, so it is met inside
-    // 3 × 3 and the cell is diluted by nine rather than by hundreds. Suppressed
-    // without being erased, and without the hole a zero-centre kernel would
-    // leave in its place.
-    expect(out[centre]).toBeCloseTo((8 * 1 + 500) / 9, 3)
+    // Two steps, and the arithmetic of both is worth writing down. The window
+    // stays at the floor, because the spike is itself the evidence the bandwidth
+    // is looking for and 3 × 3 already covers the target. The first pass measures
+    // the cell against its **eight neighbours alone** — mean 1 — and allows it
+    // the value that would add half again to a mean over that many cells:
+    // `1 × (1 + 0.5 × 8) = 5`. The second averages the capped field, `(5 + 8) / 9`.
+    expect(out[centre]).toBeCloseTo((1 * (1 + 0.5 * 8) + 8) / 9, 3)
+    // A lone cell five hundred times its neighbourhood ends up barely above it,
+    // which is the point — and still above it, so the hole a zero-centre kernel
+    // would leave is not back.
     expect(out[centre]).toBeGreaterThan(1)
+    expect(out[centre]).toBeLessThan(2)
   })
 
   it('keeps a missing cell missing', () => {
@@ -345,6 +350,55 @@ describe('adaptiveSmoothValues', () => {
     const { applied, scope } = adaptiveSmoothValues(b, values, strong)
     expect(applied).toEqual({ kind: 'fixed', radius: 3 })
     expect(scope).toBe('adaptive smoothing not applied — block too large')
+  })
+})
+
+describe('adaptiveSmoothValues, against one wild cell', () => {
+  const LIGHT = { kind: 'adaptive', target: 50, floor: 1, name: 'adaptive' } as const
+
+  it('does not turn a point into a hard-edged rectangle', () => {
+    // The reported artefact, at the level it was seen. A box filter's impulse
+    // response is a box, so before the taper one hot cell raised every output
+    // cell that could see it by the same amount and none of the next ones along
+    // — a uniform block with straight edges, which reads as structure.
+    const n = 121
+    const values = new Float32Array(n * n).fill(1)
+    const centre = 60 * n + 60
+    values[centre] = 4000
+    const b = { ...block(1, 1, []), nrows: n, ncols: n, values }
+    const out = adaptiveSmoothValues(b, values, LIGHT).values
+
+    // Along a row through the spike the response must *fall away* rather than
+    // sitting flat and then stopping. Sampled at the three shells the taper
+    // builds, the outer one carries a small fraction of the centre's excess.
+    const at = (d: number): number => out[60 * n + 60 + d] - 1
+    expect(at(0)).toBeGreaterThan(0)
+    expect(at(2)).toBeLessThan(at(0))
+    expect(at(5)).toBeLessThan(at(2))
+    // …and no cliff: the last shell with any excess is a small step, not the
+    // full height, which is what a plain box would have given.
+    const shoulder = at(5) / at(0)
+    expect(shoulder).toBeLessThan(0.35)
+  })
+
+  it('caps a wild cell against its own neighbourhood, not against the model', () => {
+    // A real loop is a cell standing above what its separation predicts, so a cap
+    // measured against the distance model would erase exactly the findings. This
+    // one is measured against the neighbourhood, and a peak whose neighbours rise
+    // with it is left alone.
+    const n = 61
+    const values = new Float32Array(n * n).fill(1)
+    // A genuine feature: a 3 × 3 patch four times the background.
+    for (let r = 29; r <= 31; r++) for (let c = 29; c <= 31; c++) values[r * n + c] = 4
+    // A lone wild cell of the same height elsewhere.
+    values[10 * n + 50] = 4
+    const b = { ...block(1, 1, []), nrows: n, ncols: n, values }
+    const out = adaptiveSmoothValues(b, values, LIGHT).values
+
+    // The patch survives as a raised region…
+    expect(out[30 * n + 30]).toBeGreaterThan(1.5)
+    // …and is not levelled to the background it sits on.
+    expect(out[30 * n + 30]).toBeGreaterThan(out[10 * n + 50])
   })
 })
 

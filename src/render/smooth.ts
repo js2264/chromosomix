@@ -42,6 +42,19 @@
  * annihilated rather than merely suppressed, and what is bought is that a single
  * *real* cell is no longer annihilated either.
  *
+ * **Two passes, and a kernel with a shoulder.** The adaptive filter below reads
+ * the block twice. The first pass measures every cell against its own
+ * neighbourhood *excluding itself* and caps what one cell may contribute
+ * ({@link LEVERAGE}); the second averages the capped field over three nested
+ * windows rather than one. Both exist for the same reported defect: a box mean
+ * has no defence against a single wild cell, and a box kernel's impulse response
+ * *is* a box, so one hot pixel raised every window that reached it by the same
+ * amount and none of the next ones along — a hard-edged rectangle that read as
+ * structure. Measured on a yeast map at 500 bp, one cell at 400× its
+ * neighbourhood produced a 20 × 20 bin block saturating the `log2` scale; with
+ * both in place nothing on that map reaches the clip and the O/E's mean stays at
+ * 1.00 in every separation band.
+ *
  * **Where it sits matters more than the kernel does.** This is applied per file,
  * before two files are combined (`render/derive.ts`, `ui/MatrixPanel.ts`), so a
  * ratio is `smooth(A) / smooth(B)` and never `smooth(A / B)`. The two are not
@@ -301,17 +314,19 @@ export const ADAPTIVE_MAX_RADIUS = 192
  *
  * | block | cells | time |
  * |---|---|---|
- * | 841² | 0.7 M | 173 ms |
- * | 1,200² | 1.4 M | 328 ms |
- * | 2,000² | 4 M | 867 ms |
- * | 4,096² | 16 M | **3.9 s** |
+ * | 353² | 0.12 M | 78 ms |
+ * | 841² | 0.7 M | 300 ms |
+ * | 1,200² | 1.4 M | 574 ms |
+ * | 2,000² | 4 M | 1.5 s |
+ * | 4,096² | 16 M | **7.4 s** |
  *
- * Roughly linear, and the last row is the honest cost of the cap being where it
- * is: a reader who picks this on the largest block the viewer draws waits about
- * four seconds with the window blocked. Everything short of a whole chromosome
- * at a fine bin size is a fraction of a second. If that last row ever needs to
- * stop being a freeze, the answer is the analysis thread rather than a lower
- * cap — the work is already a pure function of two arrays.
+ * Roughly linear, and about twice what it was before the winsorising pass, which
+ * reads the block a second time. The last row is the honest cost of the cap being
+ * where it is: a reader who picks this on the largest block the viewer draws waits
+ * seven seconds with the window blocked. A whole chromosome at 1 kb is under a
+ * second. If that last row ever needs to stop being a freeze, the answer is the
+ * analysis thread rather than a lower cap — the work is a pure function of two
+ * arrays.
  *
  * Above it the picker's choice is honoured at its {@link Smoothing.floor} and
  * the caption and the view note both say so.
@@ -411,6 +426,40 @@ export function smoothingCaption(smoothing: Smoothing): string {
  * cell cap is 128 MB *each* and over half a gigabyte together.
  */
 const STRIP_ENTRIES = 4_000_000
+
+/**
+ * How much of a window's mean one cell of it may be responsible for.
+ *
+ * **Not a multiple of the local mean**, which is the obvious rule and is wrong
+ * for this data. Away from the diagonal a contact map is Poisson-sparse: the
+ * mean over a window is 0.05 while the occupied cells in it hold 1, so *every*
+ * real count is twenty times the local mean. A cap of `k × mean` either sits low
+ * enough to delete all of them — biasing the sparsest part of the map downward,
+ * which is the part the filter exists for — or high enough to let a hot pixel
+ * through. There is no `k` that does both.
+ *
+ * What the artefact actually is, is **leverage**: a cell raises the mean of every
+ * window that reaches it by `(value − mean) / n`, and a box kernel gives it that
+ * leverage over every one of those windows equally. So the cap is written on the
+ * leverage directly — no cell may add more than half again to the mean of a
+ * window its own size:
+ *
+ * ```
+ * cap = mean_without_it × (1 + LEVERAGE × cells_in_window)
+ * ```
+ *
+ * That scales itself. Near the diagonal a window is 3 × 3 and the cap is 5.5×
+ * the neighbours, tight enough to hold a sharp feature to something its
+ * neighbours corroborate. In a sparse region the window is 21 × 21 and the cap is
+ * 200× the local mean, which leaves every honest isolated count alone and still
+ * cuts a cell of four hundred to single digits.
+ *
+ * The mean is taken **without the cell itself**, which is the one place the old
+ * zero-centre kernel was right: excluding the centre is the correct thing for
+ * deciding whether a cell is an outlier, and the wrong thing for estimating what
+ * should be drawn there. Both are done here, one in each pass.
+ */
+const LEVERAGE = 0.5
 
 /** A cumulative table and the row stride its box queries need. */
 interface Summed {
@@ -600,46 +649,154 @@ export function adaptiveSmoothValues(
     }
   }
 
-  const out = new Float32Array(nrows * ncols)
-  const outOver = over === undefined ? null : new Float32Array(nrows * ncols)
-
+  /** The band boundaries, shared by both passes so the two see the same rows. */
+  const bands: Array<[number, number, number, number]> = []
   for (let top = 0; top < nrows; top += stripRows) {
     const bottom = Math.min(nrows - 1, top + stripRows - 1)
     // Everything any row of this band can see, clamped to the block. A window is
     // clamped to the block too, so clamping to the band is the same thing.
-    const from = Math.max(0, top - maxRadius)
-    const to = Math.min(nrows - 1, bottom + maxRadius)
+    bands.push([top, bottom, Math.max(0, top - maxRadius), Math.min(nrows - 1, bottom + maxRadius)])
+  }
 
-    const evidence = summed(from, to, ncols, (i) => {
-      const v = counts[i]
-      return Number.isFinite(v) && v > 0 ? v : 0
-    })
-    const sums = summed(from, to, ncols, (i) => (usable(i) ? values[i] : 0))
-    const overSums =
-      over === undefined ? null : summed(from, to, ncols, (i) => (usable(i) ? over[i] : 0))
-    const seenCells = summed(from, to, ncols, (i) => (usable(i) ? 1 : 0))
-
-    /** Whether a window of this radius around `(r, c)` covers the target. */
-    const covers = (r: number, c: number, rad: number): boolean => {
+  /**
+   * The window this cell's own neighbourhood justifies, walked from the last
+   * answer rather than bisected.
+   *
+   * The criterion is monotone in the radius — evidence is floored at zero on the
+   * way into the table for exactly that reason — so a walk and a bisection find
+   * the same width, and a bisection costs its eight probes on every cell however
+   * smooth the field is. Radii vary slowly from one cell to the next.
+   */
+  const search = (
+    evidence: Summed,
+    r: number,
+    c: number,
+    from: number,
+    to: number,
+    start: number,
+  ): number => {
+    const covers = (rad: number): boolean => {
       const r0 = r - rad < from ? from : r - rad
       const c0 = c - rad < 0 ? 0 : c - rad
       const r1 = r + rad > to ? to : r + rad
       const c1 = c + rad >= ncols ? ncols - 1 : c + rad
       return box(evidence, r0, c0, r1, c1) >= threshold
     }
+    let rad = start < floor ? floor : start > maxRadius ? maxRadius : start
+    if (covers(rad)) {
+      while (rad > floor && covers(rad - 1)) rad--
+    } else {
+      while (rad < maxRadius && !covers(rad)) rad++
+    }
+    return rad
+  }
 
-    // Where the previous row started, so each row begins its search near the
-    // answer rather than at the middle of the range.
+  /** The mean of one field over the window, and the cells that contributed. */
+  const windowMean = (
+    field: Summed,
+    counted: Summed,
+    r: number,
+    c: number,
+    rad: number,
+    from: number,
+    to: number,
+  ): number => {
+    const r0 = r - rad < from ? from : r - rad
+    const c0 = c - rad < 0 ? 0 : c - rad
+    const r1 = r + rad > to ? to : r + rad
+    const c1 = c + rad >= ncols ? ncols - 1 : c + rad
+    const n = box(counted, r0, c0, r1, c1)
+    return n > 0 ? box(field, r0, c0, r1, c1) / n : Number.NaN
+  }
+
+  // -------------------------------------------------------------------------
+  // Pass one: what each cell's neighbourhood looks like, so the cell can be
+  // measured against it
+  // -------------------------------------------------------------------------
+
+  /**
+   * `values`, with no cell allowed to stand more than {@link WINSOR_FACTOR}
+   * above the mean of its own window.
+   *
+   * A mean has no defence against one wild number, and this filter had one until
+   * the centre went back into the kernel — a lone hot cell used to be annihilated
+   * and is now averaged in at full weight. On a sparse map far from the diagonal
+   * that is a visible defect rather than a subtlety: a single cell a few hundred
+   * times its surroundings raises the whole window's mean, and because the kernel
+   * is a box, *every* cell whose window reaches it is raised by the same amount.
+   * A point becomes a **hard-edged rectangle** — measured at 20 × 20 bins for one
+   * cell at 400× its neighbourhood, at a peak of 5.3 in `log2` O/E, where the
+   * scale clips at 0.84.
+   *
+   * Capping against the cell's *own neighbourhood* rather than against the
+   * distance model is the part that matters. A real loop is precisely a cell far
+   * above what its separation predicts, so a cap of `k × expected` would erase
+   * the findings; a cap of `k × local mean` keeps them, because the neighbours
+   * that make a loop a loop raise the mean with it.
+   *
+   * The mean it is measured against is itself slightly inflated by the outlier,
+   * which is a self-limiting problem rather than a circular one: the cell enters
+   * that mean divided by the window's cell count and leaves it multiplied by
+   * `k`, so a 400× spike in a 529-cell window is compared against a mean it
+   * lifted by 90% and is still cut by a factor of forty.
+   */
+  const capped = new Float32Array(nrows * ncols)
+  for (const [top, bottom, from, to] of bands) {
+    const evidence = summed(from, to, ncols, (i) => {
+      const v = counts[i]
+      return Number.isFinite(v) && v > 0 ? v : 0
+    })
+    const sums = summed(from, to, ncols, (i) => (usable(i) ? values[i] : 0))
+    const seenCells = summed(from, to, ncols, (i) => (usable(i) ? 1 : 0))
+
     let rowStart = floor
     for (let r = top; r <= bottom; r++) {
       const base = r * ncols
-      // **Walked from the neighbour's answer, not bisected.** The criterion is
-      // monotone in the radius — evidence is floored at zero on the way into the
-      // table for exactly that reason — so either would find the same width, and
-      // a bisection costs its eight steps on every cell however smooth the field
-      // is. Radii vary slowly from one cell to the next, so starting at the last
-      // one and walking usually costs one or two probes. It is the difference
-      // between 5.3 s and 2 s on a 16 M-cell block.
+      let radius = rowStart
+      for (let c = 0; c < ncols; c++) {
+        const centre = values[base + c]
+        if (!usable(base + c)) {
+          capped[base + c] = centre
+          continue
+        }
+        radius = search(evidence, r, c, from, to, radius)
+        if (c === 0) rowStart = radius
+
+        const r0 = r - radius < from ? from : r - radius
+        const c0 = c - radius < 0 ? 0 : c - radius
+        const r1 = r + radius > to ? to : r + radius
+        const c1 = c + radius >= ncols ? ncols - 1 : c + radius
+        const n = box(seenCells, r0, c0, r1, c1) - 1
+        const without = n > 0 ? (box(sums, r0, c0, r1, c1) - centre) / n : 0
+        // Nothing around it to be an outlier against. A cap of zero would delete
+        // a measurement rather than moderate one, and a cell whose whole window
+        // is empty is the only evidence there is about that place.
+        capped[base + c] =
+          without > 0 ? Math.min(centre, without * (1 + LEVERAGE * n)) : centre
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Pass two: the tapered mean of the capped field
+  // -------------------------------------------------------------------------
+
+  const out = new Float32Array(nrows * ncols)
+  const outOver = over === undefined ? null : new Float32Array(nrows * ncols)
+
+  for (const [top, bottom, from, to] of bands) {
+    const evidence = summed(from, to, ncols, (i) => {
+      const v = counts[i]
+      return Number.isFinite(v) && v > 0 ? v : 0
+    })
+    const sums = summed(from, to, ncols, (i) => (usable(i) ? capped[i] : 0))
+    const overSums =
+      over === undefined ? null : summed(from, to, ncols, (i) => (usable(i) ? over[i] : 0))
+    const seenCells = summed(from, to, ncols, (i) => (usable(i) ? 1 : 0))
+
+    let rowStart = floor
+    for (let r = top; r <= bottom; r++) {
+      const base = r * ncols
       let radius = rowStart
       for (let c = 0; c < ncols; c++) {
         const centre = values[base + c]
@@ -652,26 +809,40 @@ export function adaptiveSmoothValues(
         // The narrowest window that covers the target, never below the floor and
         // never above the cap. A cell that cannot reach it inside the cap keeps
         // the cap, which is the widest honest answer available to it.
-        if (radius < floor) radius = floor
-        else if (radius > maxRadius) radius = maxRadius
-        if (covers(r, c, radius)) {
-          while (radius > floor && covers(r, c, radius - 1)) radius--
-        } else {
-          while (radius < maxRadius && !covers(r, c, radius)) radius++
-        }
+        radius = search(evidence, r, c, from, to, radius)
         if (c === 0) rowStart = radius
 
-        const r0 = r - radius < from ? from : r - radius
-        const c0 = c - radius < 0 ? 0 : c - radius
-        const r1 = r + radius > to ? to : r + radius
-        const c1 = c + radius >= ncols ? ncols - 1 : c + radius
-        const sum = box(sums, r0, c0, r1, c1)
-        const count = box(seenCells, r0, c0, r1, c1)
+        // **Three nested windows, averaged.** A single box is the reason a point
+        // becomes a rectangle: its impulse response *is* a box, so a cell that
+        // enters the window contributes the same amount to every output cell
+        // that can see it and nothing at all to the next one along. Averaging
+        // the means of boxes at `r/2`, `r` and `3r/2` puts a step in the weights
+        // instead of a cliff — the outermost shell carries about 8% of the
+        // weight the centre does, so a residual outlier fades out rather than
+        // ending at a straight edge that reads as structure.
+        //
+        // The radii are chosen so the taper costs nothing in noise. Spreading the
+        // weight outward lowers the effective sample size for a given extent, and
+        // `(r/2, r, 3r/2)` gives an effective count of 3.90·r² against the plain
+        // box's 4·r² — the same estimate, over half again as much ground.
+        const inner = radius >> 1 < floor ? floor : radius >> 1
+        const outer = radius + (radius >> 1) > maxRadius ? maxRadius : radius + (radius >> 1)
+        let total = 0
+        let levels = 0
+        let overTotal = 0
+        for (const rad of [inner, radius, outer]) {
+          const m = windowMean(sums, seenCells, r, c, rad, from, to)
+          if (Number.isNaN(m)) continue
+          total += m
+          levels++
+          if (overSums !== null) {
+            overTotal += windowMean(overSums, seenCells, r, c, rad, from, to)
+          }
+        }
 
-        out[base + c] = count > 0 ? sum / count : centre
-        if (outOver !== null && overSums !== null) {
-          const overSum = box(overSums, r0, c0, r1, c1)
-          outOver[base + c] = count > 0 ? overSum / count : (over?.[base + c] ?? Number.NaN)
+        out[base + c] = levels > 0 ? total / levels : centre
+        if (outOver !== null) {
+          outOver[base + c] = levels > 0 ? overTotal / levels : (over?.[base + c] ?? Number.NaN)
         }
       }
     }

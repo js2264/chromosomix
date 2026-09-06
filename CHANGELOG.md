@@ -595,6 +595,43 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The adaptive window no longer turns one hot cell into a rectangle.** Reported
+  from a yeast microC map at 500 bp: saturated hard-edged blocks, each with an
+  isolated bright pixel at its centre and its edges lined up with discarded-bin
+  stripes. Two causes, both ours. A mean has no defence against a single extreme
+  value — and it had one until the centre went back into the kernel, which fixed
+  the hollow squares and removed the only outlier rejection there was. And a box
+  kernel's impulse response *is* a box, so the cell raised every window that could
+  reach it by the same amount and none of the next ones along. Measured: one cell
+  at 400× its neighbourhood produced a **20 × 20 bin block peaking at 5.3** in
+  `log2` O/E, on a scale clipping at 0.84.
+
+  **A cap on leverage, before the averaging.** Not a multiple of the local mean,
+  which is the obvious rule and is wrong for this data: away from the diagonal the
+  map is Poisson-sparse, so a window's mean is 0.05 while its occupied cells hold
+  1, and every honest count is already twenty times the local mean. No fixed
+  multiple both spares those and controls a spike — a tight one biases the
+  sparsest part of the map downward, which is the part the filter is for. What the
+  artefact is, is leverage: a cell shifts the mean of every window reaching it by
+  `(value − mean) / n`. So the cap is written on that — no cell may add more than
+  half again to the mean of a window its own size — and it scales itself, tight in
+  a 3 × 3 near the diagonal and two hundredfold in a sparse 21 × 21. The mean is
+  taken **without the cell itself**, which is the one thing the zero-centre kernel
+  had right: excluding the centre is correct for deciding whether a cell is an
+  outlier and wrong for estimating what to draw there. The two passes do one each.
+
+  **And a shoulder on the kernel.** The mean is now taken over three nested
+  windows — `r/2`, `r`, `3r/2` — and averaged, so the weights step down instead of
+  falling off a cliff: the outer shell carries about 8% of the weight the centre
+  does. The radii are chosen so this costs nothing in noise, an effective sample of
+  3.90·r² against the plain box's 4·r² — the same estimate over half again as much
+  ground.
+
+  With both, **nothing on that map reaches the clip** even at a 2000× spike, and
+  the O/E's mean stays at 1.00 in every separation band, so no bias was traded for
+  it. The cost is a second read of the block: 78 ms at 353², 300 ms at 841², 1.5 s
+  at 4 M and 7.4 s at 16 M, about double what it was.
+
 - **The adaptive window may now grow to radius 192, up from 64.** At 64 it ran
   into the cap beyond about 200 bins of separation on a yeast map at 500 bp, so
   the cap rather than the target was choosing the width for exactly the cells
