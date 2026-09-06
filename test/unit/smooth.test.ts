@@ -299,7 +299,7 @@ describe('adaptiveSmoothValues', () => {
   })
 
   it('falls back to the floor above the cell cap, and says which it used', () => {
-    const n = 1415
+    const n = 2050
     expect(n * n).toBeGreaterThan(MAX_ADAPTIVE_CELLS)
     const values = new Float32Array(n * n).fill(1)
     const b = { ...block(1, 1, []), values, nrows: n, ncols: n }

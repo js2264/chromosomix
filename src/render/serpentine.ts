@@ -111,32 +111,44 @@ export interface SerpentineSpec {
 /**
  * The largest block this will run on, in cells.
  *
- * Union-find over every cell plus an adjacency pool is about 30 MB at this cap
- * and a second or so of work; above it the picture is handed back to the
- * despeckle and the caption says so. A whole-genome view is pooled from
- * thousands of contacts per cell and is not short of evidence in the first
- * place, which is the same argument `smooth.ts` makes for its own cap.
+ * 4 M cells is a 2,000-bin square, which is what a whole chromosome wants: a
+ * yeast chromosome at 1 kb is up to 1,531 bins and a 100 Mb human window at
+ * 50 kb is 2,000, and the previous 1.5 M cap refused both — it fitted the
+ * *small* yeast chromosomes at 1 kb and not the large ones, which is the worst
+ * place for a limit to fall.
+ *
+ * It costs **7.3 s at the cap**, measured, against 1.2 s at 1.44 M. That is
+ * superlinear — roughly `n^1.7` — because the adjacency starts as one typed
+ * array per cell and two million of those is more garbage collection than
+ * merging. It is the obvious thing to fix if this cap ever wants to go higher.
  *
  * This runs on the analysis thread (§18.3), so the cap is about **the wait**
  * rather than about a blocked frame — the same thing the correlation's own cap
- * measures, and the reason both are stated in seconds rather than in cells.
+ * measures, and the reason both are stated in seconds rather than in cells. The
+ * map is drawn unbinned meanwhile and the job is cancellable, so the wait is
+ * visible and escapable rather than a freeze.
  */
-export const MAX_SERPENTINE_CELLS = 1_500_000
+export const MAX_SERPENTINE_CELLS = 4_000_000
 
 /**
  * The same, for the reference's random merge — a third of it.
  *
- * `sampled` costs about **1.4 s per partition** at 841², against 0.4 s for the
- * whole of `evidence`: it has no compaction to lean on while it is picking
- * uniformly, and it coalesces much further, so it does more merges into much
- * larger regions. Multiplied by the iterations that make the average mean
- * anything, the full cap would be a wait of ten seconds or more — and unlike the
- * correlation, which is cubic and has nowhere else to go, there is a cheaper rule
- * right beside it that reaches a comparable picture. So the faithful merge is
- * offered over the range where its wait is a few seconds, and the deterministic
- * one covers the rest.
+ * Held level with it deliberately, and the number to know before choosing this
+ * setting is that **it is not the same wait**. `sampled` has no compaction to
+ * lean on while it is picking uniformly and it coalesces much further, so it
+ * does more merges into much larger regions: **12.3 s per partition at the cap**
+ * against 7.3 s for the whole of `evidence`, and it averages three of them —
+ * about **37 s** on a 2,000-bin square, against 1.4 s per partition at 841².
+ *
+ * It is offered at the full range anyway rather than being quietly narrowed,
+ * because it is the published algorithm and a figure that has to say "serpentine
+ * binning" and mean it should not be refused at the size a chromosome actually
+ * is. The job runs on the analysis thread, reports the region count as it falls
+ * and is cancellable, and the map is drawn unbinned throughout — so the cost is
+ * a visible wait a reader can walk away from, not a frozen window. The
+ * deterministic rule is right beside it at a fifth of the price.
  */
-export const MAX_SAMPLED_CELLS = 500_000
+export const MAX_SAMPLED_CELLS = 4_000_000
 
 /** mulberry32, as `analysis/random.ts` uses and for its reasons (§18.4). */
 function seeded(seed: number): () => number {

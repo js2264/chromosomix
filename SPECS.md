@@ -987,7 +987,7 @@ Four families, in `render/derive.ts`, `render/smooth.ts` and `render/compare.ts`
 | **Baseline** — observed / expected | a toggle of its own | two passes |
 | **Baseline** — the expected itself | an entry in the score picker | two passes |
 | **Smoothing** — a despeckle, fixed or self-sizing | the `smooth` picker | one pass at a fixed radius; three cumulative passes and a bounded search per cell when it sizes itself |
-| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, **on the analysis thread**: ~0.4 s at 841², ~1.4 s per partition under the reference's random merge |
+| **Binning** — serpentine regions | the `smooth` picker | union-find over the block, **on the analysis thread**: ~0.4 s at 841² and 7.3 s at the 4 M cap; ~1.4 s / 12.3 s per partition under the reference's random merge |
 | **Comparison** — ratio, difference | the `compare` control, beside the split | one pass over two blocks |
 
 **Why this is honest here and would not be in HiGlass.** Every one of them measures a statistic
@@ -1151,9 +1151,13 @@ module is synchronous, and a promise for the sake of one of them would make ever
 arithmetic already finished. While it waits the map is the unbinned picture and **the caption says
 `counts`, not `binned`**: a figure exported mid-wait must not claim a binning it does not have.
 
-Blocks are capped at **1.5 M cells**, and at **500 k** under the random merge, above which the
-adaptive filter — the same criterion without the partition — is used and the caption says so. Two
-other things take the same fallback and say why: a panel with no analysis thread behind it, and
+Blocks are capped at **4 M cells** — a 2,000-bin square, which is what a whole chromosome wants: a
+yeast chromosome at 1 kb is up to 1,531 bins and a 100 Mb human window at 50 kb is 2,000. Above it the
+adaptive filter is used, and above *its* cap the fixed window the setting is floored at; the caption
+names the refusal either way. The wait at the cap is **7.3 s** deterministic and **12.3 s per
+partition** sampled, so about 37 s for the three the sampled rule averages — measured, superlinear in
+the cells, and the reason the deterministic rule is the default rather than an alternative. Two other
+things take the same fallback and say why: a panel with no analysis thread behind it, and
 **either file of a compared pair**. The partition is grown on one block, so binning the lead and not
 its companion would put a binned map over an unbinned one and call the result a ratio. Serpentine's
 own answer to a pair is to grow *one* partition on both maps at once, which the engine already does —
@@ -2248,7 +2252,7 @@ satisfy and is therefore the one that is tested first:
 | APA, k windows, remote | ≤ 2 range requests per *coalesced* window, with the estimate shown before **Run** |
 | Metaplot, k features | 0 matrix reads; ≤ 1 `sample` request per contig touched |
 | Correlation / eigenvectors | 0 range requests beyond the block; refused above the bin-count gate (§18.6) |
-| Serpentine binning of a block | 0 range requests; the arrays go over and back. ~0.4 s deterministic at 841², ~1.4 s *per partition* sampled; a pass boundary is where it yields, so a cancel lands in tens of milliseconds. The map draws **unbinned** meanwhile — never blank, and never captioned as binned |
+| Serpentine binning of a block | 0 range requests; the arrays go over and back. ~0.4 s deterministic at 841² and 7.3 s at the 4 M cap; ~1.4 s and 12.3 s *per partition* sampled. A pass boundary is where it yields, so a cancel lands in tens of milliseconds, and the map draws **unbinned** meanwhile — never blank, and never captioned as binned |
 | Analysis worker mount | opened on first use, never at session open |
 
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;

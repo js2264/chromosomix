@@ -629,6 +629,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The self-sizing settings now run up to 4 M cells, from 1.5 M and 2 M.** A
+  2,000-bin square, which is what a whole chromosome actually is: a yeast
+  chromosome at 1 kb is up to 1,531 bins and a 100 Mb human window at 50 kb is
+  2,000. The old limits fitted the *small* yeast chromosomes at 1 kb and refused
+  the large ones, which is the worst place for a limit to fall — chr IV came out
+  with a plain 7×7 while its neighbours binned properly.
+
+  Measured at the new cap: the adaptive filter is **300 ms** and about **128 MB**
+  of summed-area tables, allocated and freed inside one derivation — it runs on
+  the thread drawing frames, so its ceiling is the memory rather than the wait.
+  The binning runs on the analysis thread and is **7.3 s** deterministic, which is
+  superlinear (roughly `n^1.7`, from one typed array per cell being more garbage
+  collection than merging) and the obvious thing to fix if this ever goes higher.
+
+  **The sampled merge is 12.3 s per partition at the cap, so about 37 s for the
+  three it averages.** It is offered at the full range anyway rather than being
+  quietly narrowed, because it is the published algorithm and a figure that has
+  to say "serpentine binning" and mean it should not be refused at the size a
+  chromosome is. The job is off-thread, reports the region count as it falls, is
+  cancellable, and the map is drawn unbinned throughout — a visible wait a reader
+  can walk away from rather than a frozen window. The deterministic rule sits
+  beside it at a fifth of the price.
+
 - **Serpentine binning runs on the analysis thread, not on the one drawing
   frames.** It is the one step of the derivation measured in hundreds of
   milliseconds to seconds rather than in passes over the cells, so `deriveBlock`

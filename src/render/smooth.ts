@@ -310,18 +310,27 @@ export const ADAPTIVE_MAX_RADIUS = 192
 /**
  * The largest block the adaptive filter will run on, in cells.
  *
- * The three summed-area tables below are the size of the block and two of them
- * are `Float64` — about 40 MB at this cap, held for the length of one
- * derivation. At the 4096² raster cap it would be 335 MB, which is not a
- * trade-off worth making silently for a whole-genome view whose cells are
- * pooled from thousands of contacts each and are not short of evidence in the
- * first place.
+ * The summed-area tables below are the size of the block and `Float64` — three
+ * of them, or four when a baseline is being averaged alongside the map for an
+ * O/E. That is about **128 MB at this cap**, allocated and freed inside one
+ * derivation, for **300 ms** of work on a 2,000-bin square. Both numbers are
+ * measured. At the 4096² raster cap the tables would be over half a gigabyte,
+ * which is not a trade-off worth making silently for a whole-genome view whose
+ * cells are pooled from thousands of contacts each and are not short of evidence
+ * in the first place.
+ *
+ * Raised from 2 M alongside `render/serpentine.ts`'s own cap, and for its
+ * reason: a whole chromosome is a 1,200- to 2,000-bin square, and a limit that
+ * fitted the small yeast chromosomes at 1 kb while refusing the large ones fell
+ * in the worst possible place. Unlike the binning, this runs *here*, on the
+ * thread drawing frames — 300 ms is a hitch on a dropdown, which is why the
+ * ceiling is the memory rather than the wait.
  *
  * Above it the picker's choice is honoured at its {@link Smoothing.floor} and
  * the caption says so, which is the same refusal the correlation makes: a real
  * picture, and a caption that does not claim to be the one that was asked for.
  */
-export const MAX_ADAPTIVE_CELLS = 2_000_000
+export const MAX_ADAPTIVE_CELLS = 4_000_000
 
 /** The dropdown, in order: what it says and what it means. */
 export interface SmoothChoice {

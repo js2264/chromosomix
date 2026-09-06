@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { deriveBlock } from '@/render/derive'
 import { MAX_SAMPLED_CELLS, serpentineBin } from '@/render/serpentine'
-import { parseSmooth } from '@/render/smooth'
+import { MAX_ADAPTIVE_CELLS, parseSmooth } from '@/render/smooth'
 
 const EVIDENCE = {
   target: 50,
@@ -157,16 +157,21 @@ describe('serpentineBin', () => {
     expect(Number.isNaN(out[20 * n + 25])).toBe(true)
   })
 
-  it('refuses a block past the sampled cap and says so', async () => {
-    const n = 750
+  it('refuses a block past the cap, and falls back down the whole ladder', async () => {
+    // Past 4 M cells all three self-sizing settings are refused in turn, and what
+    // is drawn is the fixed window the chosen setting is floored at. The chain
+    // matters more than any one link: a reader who picked `medium` gets 5 × 5,
+    // which is a real picture, and the caption names the refusal rather than
+    // letting the label imply a binning that did not happen.
+    const n = 2050
     expect(n * n).toBeGreaterThan(MAX_SAMPLED_CELLS)
+    expect(n * n).toBeGreaterThan(MAX_ADAPTIVE_CELLS)
     const values = new Float32Array(n * n).fill(1)
-    const sampled = parseSmooth('sx50')
-    expect(sampled?.kind).toBe('serpentine')
+    expect(parseSmooth('sx50')?.kind).toBe('serpentine')
     const out = deriveBlock(square(n, values), { smooth: 'sx50' }, { rows: [], cols: [] })
     expect(out.scope).toBe('serpentine not applied — block too large')
-    // …and what is drawn is the local approximation of the same idea, named.
-    expect(out.label).toContain('smoothed adaptively')
+    expect(out.label).toBe('counts · smoothed 5 × 5')
+    expect(out.pending).toBeUndefined()
   })
 })
 
