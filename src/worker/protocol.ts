@@ -48,31 +48,42 @@ export type SourceKind = 'local' | 'remote'
  * demo bucket is read with no `Authorization` header, no preflight, and no
  * credential ever reaching this message.
  */
-export type SourceSpec =
+/**
+ * Where a file's bytes are, and — for the one format that is two files — where
+ * its other half's are.
+ *
+ * `bins` is the HiC-Pro pair (§3.8), and it is the same shape as the thing it
+ * hangs off because it is the same question asked twice: a bin file may be a
+ * local drop or a URL exactly as its matrix may. It is not a sidecar index in
+ * the §8.11 sense — the matrix is unreadable without it rather than merely
+ * slower — so its absence is a refusal rather than a fallback.
+ */
+export type SourceSpec = SourceLocation & {
+  bins?: SourceLocation
+  /**
+   * How to read this file, when the default is known to be wrong for it.
+   *
+   * Absent is the default, and is what every file takes. It is set only by the
+   * shell re-issuing an open with the reader's answer to a load gate, and it
+   * doubles as the token that says the gate has been answered — which is why it
+   * sits out here rather than on the remote arm: §3.7's gate is about round
+   * trips and fires only over the network, but §3.8's is about parsing and
+   * memory and fires on a local file just the same.
+   *
+   * - `whole` — one `GET` of the entire object, then everything is instant.
+   *   The only answer a HiC-Pro pair has, since it is read whole regardless.
+   * - `fine` — small chunks, little bandwidth, many round trips. An `.scool`
+   *   only (§3.7); nothing else has a scattered-metadata problem to trade against.
+   */
+  reading?: 'whole' | 'fine'
+}
+
+type SourceLocation =
   | { kind: 'local'; file: File; index?: File }
   | {
       kind: 'remote'
       url: string
       credential?: S3Credential
-      /**
-       * How to read this object, when the default is known to be wrong for it.
-       *
-       * Absent is the default and is what every file takes: 1 MiB chunks,
-       * cached, which is the right shape for the contiguous pixel reads this
-       * application is otherwise made of.
-       *
-       * A single-cell container is the exception, and it is the only one (§12).
-       * Listing its cells walks HDF5 link storage that writers scatter across
-       * the entire file — measured on a 3,882-cell file as about a thousand
-       * reads averaging 500 bytes, spread uniformly over 327 MB. No chunk size
-       * wins: at 1 MiB the listing fetches the whole object, and at 16 KiB it
-       * fetches 5% of it as a thousand sequential requests. So the reader is
-       * asked which to pay, and their answer arrives here.
-       *
-       * - `whole` — one `GET` of the entire object, then everything is instant.
-       * - `fine` — small chunks, little bandwidth, many round trips.
-       */
-      reading?: 'whole' | 'fine'
     }
 
 /**

@@ -201,6 +201,72 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Specified at SPECS §21, with a picture of a real one and the worked example in
   the README.
 
+- **HiC-Pro's `.matrix` + `_abs.bed` pair, as one contact map.** The output of
+  the pipeline most published Hi-C was processed with, and it opens as what it
+  is: the BED is the coordinate system, the matrix is the pixels, and between
+  them they are an ordinary map — the chromosome table, every region, the
+  analysis panel, tracks, export, the deck. All four `MATRIX_FORMAT` variants
+  read, `iced/` matrices included.
+
+  **The bin file is found three ways, because it is not optional.** A `.tbi` is
+  an optimisation and a `.bai` is a format's only bounded read; an `_abs.bed` is
+  the matrix's *coordinate system*, so without it there is not a slower map but
+  no map. So it is paired when both are dropped together, handed over when the
+  matrix is picked out of a connected folder, and probed for beside a URL where
+  HiC-Pro writes it — `raw/` and `iced/` share one bed per resolution, so the
+  `_iced` matrices are tried against the raw directory's too. A URL whose bin
+  file is somewhere unguessable can name it: `<matrix>#bins=<url>`. A matrix
+  with none of the three is refused by name, and the refusal lists all three.
+
+  **Read whole once, and then it is a cooler.** This is the one format here that
+  cannot be indexed: the rows are text of variable width, so byte offset and bin
+  id have no relation, and `asis` says outright they need not be sorted. So the
+  matrix is parsed at open — byte by byte, never a string per line, at a measured
+  6.8 M pixels/s — and a counting sort by `bin1` produces the sorted triplets and
+  the cumulative index together. After that every read is bounded and in memory,
+  and panning costs nothing.
+
+  The sort behind that is a **radix sort — two stable counting passes, by
+  column then by row — and not a sort per row band**, which is what it was
+  first. Bands are wide: a row of a 100 kb human matrix has thousands of
+  non-zero columns, and sorting each on its own is quadratic in that width. On a
+  211 MB file it took 59 seconds where the radix sort takes 3.7, and the parse
+  itself runs at 100 MB/s — the sort must not be what decides the wait. The
+  second pass's bucket boundaries *are* the cumulative `bin1_offset`, so the
+  index falls out of the sort rather than being built after it.
+
+  **Which is why there is no `HicProStore`.** A `.hic` cannot answer `pixels/*`
+  or `indexes/bin1_offset` and needs a pixel store of its own; this container
+  was read whole by necessity, so it serves those datasets honestly and
+  `CoolerStore` reads them unchanged. The pixel path for a HiC-Pro map is the
+  cooler path, byte for byte.
+
+  **A mirror and a repeat are not the same duplicate.** Two rows can land on one
+  cell and they mean opposite things: `(a, b)` and `(b, a)` is one contact
+  stated twice, which `MATRIX_FORMAT=complete` writes and which must be
+  *dropped* — adding it doubles every off-diagonal cell and leaves the diagonal
+  alone, giving a picture that still looks entirely like a contact map. Two rows
+  on the same side are more evidence, and are *summed*. Once both have been
+  folded onto the upper triangle they are indistinguishable, so the side each
+  row was stored on is carried as far as the collapse.
+
+  Not read, and both deliberate: fragment-level maps (`GENOME_FRAGMENT`), since
+  a fragment grid is variable bins under another name — refused with the config
+  key that produced it; and the `.biases` file, since those biases normalise the
+  *raw* matrix while the `iced/` one is already normalised, and offering them as
+  a weight column would let somebody normalise twice.
+
+- **A second load gate, on bytes rather than on the network.** Past 200 MB of
+  matrix the reader is told what the read costs — the size, the pixel count it
+  works out to, and that it is paid once rather than per view, which is the part
+  that turns a bad number into an acceptable one. It shares a module with the
+  `.scool` gate below because the two are the same shape; they differ in that an
+  `.scool` offers two readings and this offers one, and that an `.scool`'s cost
+  is round trips so a local file is never asked, where this one's is parsing and
+  memory and a local file pays in full. The panel also names the way out for a
+  map too fine to hold: `cooler load -f coo` turns the same two files into a
+  `.cool` that opens in a handful of requests at any size.
+
 - **`.scool` — single-cell coolers, per cell and summed.** The container from
   [Wolff *et al.* 2021](https://academic.oup.com/bioinformatics/article/37/14/2053/5948994):
   one cooler per cell over one shared bin space. It opens as what it is. A
@@ -760,6 +826,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   type="file">` for files, the snapshot shape for a directory. Dropping was never
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
+
+- **A URL fragment is not part of a file name.** `<matrix>#bins=<url>` ends in
+  `.bed`, so the name test sent the *matrix* through the genome door and drew
+  its bin file as a feature track. Both places that take a name off a URL — the
+  router and the worker — now drop the query string and the fragment, which the
+  first was already half doing for presigned bucket URLs.
 
 - **Answering the `.scool` gate with *small pieces* asked the same question
   again, forever.** Two causes, both worth naming. The retained remote source

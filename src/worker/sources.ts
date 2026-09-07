@@ -13,6 +13,7 @@ import { LocalFileSource } from '../sources/LocalFileSource'
 import { RemoteRangeSource } from '../sources/RemoteRangeSource'
 import { signS3Request, type S3Credential } from '../s3/sigv4'
 import type { SourceSpec } from './protocol'
+import { decodeAnnotationBytes } from '../annotations/parse'
 
 /**
  * Build the byte source described by `spec`.
@@ -367,6 +368,58 @@ function borrowWhole(url: string): ByteSource | null {
     return null
   }
   return retained(wholeHeld.source)
+}
+
+/**
+ * Read a file whole, un-gzipping it if it is gzipped.
+ *
+ * The road for a container with **no index**, which is HiC-Pro and only
+ * HiC-Pro (§3.8): both halves of the pair are read entirely by construction, so
+ * neither belongs in the range-request LRU that exists to keep bounded reads
+ * bounded. A `RemoteRangeSource` would fetch the same bytes in megabyte chunks,
+ * evict them against its own cache ceiling as it went, and end up having
+ * downloaded the file once anyway — with the extra property that a 1 GB matrix
+ * would thrash a 64 MB cache the whole way.
+ *
+ * So this is one `GET`, or one `File` read, and then the bytes are parsed and
+ * released. Nothing is retained: after the parse the map is typed arrays, and
+ * the source has nothing left to answer.
+ */
+export async function readWhole(spec: SourceSpec | NonNullable<SourceSpec['bins']>): Promise<Uint8Array> {
+  let bytes: Uint8Array
+  if (spec.kind === 'local') {
+    bytes = new Uint8Array(await spec.file.arrayBuffer())
+  } else {
+    const credential = spec.credential
+    let response: Response
+    try {
+      response = await fetch(spec.url, {
+        headers:
+          credential === undefined
+            ? {}
+            : signS3Request({ method: 'GET', url: spec.url, credential }),
+      })
+    } catch (err) {
+      throw new ViewerError(
+        'remote-cors',
+        `Could not read ${spec.url}: ${err instanceof Error ? err.message : String(err)}. ` +
+          `The host ${hostOf(spec.url)} must allow this page to GET it.`,
+        { url: spec.url, host: hostOf(spec.url) },
+      )
+    }
+    if (!response.ok) {
+      throw new ViewerError(
+        'remote-cors',
+        `${spec.url} answered ${response.status} ${response.statusText}.`,
+        { url: spec.url, status: response.status },
+      )
+    }
+    bytes = new Uint8Array(await response.arrayBuffer())
+  }
+  // The two halves are shipped gzipped as often as not — `.matrix.gz` beside a
+  // plain `.bed`, or both — and this is the same un-gzipping every text format
+  // in the application already goes through, BGZF included.
+  return decodeAnnotationBytes(bytes)
 }
 
 /** Host part of a URL, or the raw string when it does not parse. */

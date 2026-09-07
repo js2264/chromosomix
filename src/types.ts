@@ -93,7 +93,15 @@ export interface Table {
 // File layout detection (spec §3.1)
 // ---------------------------------------------------------------------------
 
-export type LayoutKind = 'mmetacool' | 'metacool' | 'mcool' | 'scool' | 'cool' | 'hic' | 'pairs'
+export type LayoutKind =
+  | 'mmetacool'
+  | 'metacool'
+  | 'mcool'
+  | 'scool'
+  | 'cool'
+  | 'hic'
+  | 'hicpro'
+  | 'pairs'
 
 export interface Layout {
   kind: LayoutKind

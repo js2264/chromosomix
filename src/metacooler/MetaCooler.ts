@@ -79,6 +79,7 @@ import { isPairsFile, readPairsHeader, type PairsHeader } from '../pairs/format'
 import { isGzip as isGzipMagic } from '../pairs/stream'
 import { pairsHandle } from '../pairs/handle'
 import { PairsStore } from '../pairs/store'
+import { hicProHandle, type HicProFile } from '../hicpro/handle'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -544,6 +545,43 @@ export class MetaCooler {
       contigs: representative.readTable('chroms', undefined, undefined, READER_CONTIG_COLUMNS),
       chromOffset,
       store: new ScoolStore(handle, layout, names, nBins, countKind),
+    })
+  }
+
+  /**
+   * Open a HiC-Pro pair as one of these (§3.8).
+   *
+   * Shorter than {@link fromHic} by a whole module, and the reason is worth
+   * keeping: a HiC-Pro matrix has no index, so it was read whole before this
+   * point, and what the parser hands back is what a cooler stores — sorted
+   * triplets and a cumulative `bin1_offset`. So the handle serves the pixel
+   * datasets honestly and the **default {@link CoolerStore} reads them**, which
+   * makes the pixel path for this container the cooler path exactly rather than
+   * a second implementation of it.
+   *
+   * The refusal below is §3.3's, applied where the evidence is: a HiC-Pro map
+   * binned by restriction fragment (`GENOME_FRAGMENT`) is a variable-bin file,
+   * and the only place that is visible is the widths in the BED.
+   */
+  static fromHicPro(uri: string, file: HicProFile): MetaCooler {
+    if (!file.bins.fixed || file.bins.binsize === null) {
+      throw new ViewerError(
+        'variable-bins',
+        `The viewer supports fixed-bin files only, and ${file.binsName} is not one: its ` +
+          `intervals are of differing widths, which is what a fragment-level map ` +
+          `(\`GENOME_FRAGMENT\` in HiC-Pro's config) looks like. Re-run HiC-Pro with a ` +
+          '`BIN_SIZE`, or open the fixed-bin matrix beside this one.',
+        { 'bin-type': 'variable', 'bin-size': null, bins: file.binsName },
+      )
+    }
+    const handle = hicProHandle(uri, file)
+    return new MetaCooler({
+      uri,
+      handle,
+      layout: { kind: 'hicpro', group: '/' },
+      attrs: handle.attrs(),
+      contigs: handle.readTable('chroms'),
+      chromOffset: file.bins.chromOffset,
     })
   }
 

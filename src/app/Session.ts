@@ -90,6 +90,7 @@ import type {
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeOf, type FileRoute } from '../browse/route'
+import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
@@ -118,7 +119,7 @@ import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
-import { askScoolReading, isListingGate } from '../ui/ScoolGate'
+import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
@@ -1888,14 +1889,23 @@ export class Session {
       await this.openGenome(uri, source, carry?.locus, false, index)
       return
     }
-    // A sidecar dropped with the file reaches the *map* door too, and only one
-    // format uses it there: a `.px2` beside a `.pairs.gz`. Folded into the spec
-    // rather than carried alongside it, because the worker builds its sources
-    // from the spec alone and a second channel for one format would be a second
-    // way for the pairing to be lost (`worker/sources.ts`).
+    // A sidecar dropped with the file reaches the *map* door too, and two
+    // formats use it there. Both are folded into the spec rather than carried
+    // alongside it, because the worker builds its sources from the spec alone
+    // and a second channel for one format would be a second way for the pairing
+    // to be lost (`worker/sources.ts`).
+    //
+    // A `.px2` beside a `.pairs.gz` is an index: an optimisation, and the file
+    // opens without it.
     if (index !== undefined && source.kind === 'local' && source.index === undefined) {
       source = { ...source, index }
     }
+    // A bin file beside a HiC-Pro matrix is not. The matrix is half a contact
+    // map, so whatever this session already knows about its other half is
+    // attached before the worker is asked; what it does not know — a bin file
+    // sitting beside a URL — the worker probes for by convention, and refuses by
+    // name when there is none (§3.8).
+    source = withHicProBins(uri, source, index)
     // The tracks this session is holding, before anything is torn down. A map
     // opened over a genome browser is the same genome by a different file, and
     // the tracks were drawn against it.
@@ -2065,9 +2075,13 @@ export class Session {
       // costs, and which to pay is the reader's to choose. Asked here rather
       // than in the worker for the obvious reason — the worker has no screen —
       // and re-issued as the *same* open with the answer written on the source.
-      if (isListingGate(err) && source.kind === 'remote') {
+      // Both §12 load gates land here: an `.scool`'s listing cost and a
+      // HiC-Pro pair's parse cost. The second fires on a local file too, which
+      // is why this no longer asks whether the source is remote — the gate
+      // itself decides when it applies, and reaching here means it has.
+      if (isLoadGate(err)) {
         this.opening = null
-        const reading = await askScoolReading(err, fileLabel(uri))
+        const reading = await askLoadCost(err, fileLabel(uri))
         if (this.destroyed) return
         if (reading === null) {
           // Dismissed is an answer: neither cost, so nothing is read. Back to
@@ -6775,6 +6789,35 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
+}
+
+/**
+ * Attach the bin file this session already holds for a HiC-Pro matrix.
+ *
+ * Two of §3.8's three roads in, and both are things only the *shell* knows: a
+ * file dropped alongside the matrix, or picked out of a connected folder beside
+ * it, arrives as `index` exactly as a `.bai` does; and a URL may name its bin
+ * file in a `#bins=` fragment, which is the escape hatch for a bucket the
+ * convention cannot guess at.
+ *
+ * The third road — probing the conventional name — is deliberately *not* here.
+ * It costs a request, the worker is where requests are made and counted, and
+ * putting it here would mean two places that know where HiC-Pro writes its bin
+ * files.
+ */
+function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
+  const { address, bins } = splitBinsFragment(uri)
+  if (!isHicProMatrix(splitUri(address).path)) return source
+  if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
+  if (bins === undefined) return source
+  // The fragment is stripped from the *source*, not from the URI. A `#` is
+  // never sent to a server, so the fetch would have worked either way — but the
+  // name is read off this URL to decide the file is a matrix at all, and
+  // `orphan.matrix#bins=…` does not end in `.matrix`. The URI keeps its
+  // fragment, because that is what makes the pair one shareable string (§11).
+  const at: SourceSpec =
+    source.kind === 'remote' ? { ...source, url: splitUri(address).path } : source
+  return { ...at, bins: { kind: 'remote', url: bins } }
 }
 
 function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {

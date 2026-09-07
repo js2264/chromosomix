@@ -1,5 +1,5 @@
 /**
- * The one question this application asks before it reads (spec §12, §3.7).
+ * The questions this application asks before it reads (spec §12).
  *
  * Everything else here is a bounded read, and where a read *is* expensive — the
  * whole-metagenome scan, the whole-file view — the gate asks about a cost the
@@ -29,6 +29,24 @@
  * The third way out is the honest one and it is said on the panel rather than
  * hidden: a copy on the reader's own disk has neither cost, because a local file
  * is read in place.
+ *
+ * ## The second gate, and why it is one module with the first
+ *
+ * A HiC-Pro pair (§3.8) has no index either, and for a blunter reason: it is
+ * two text files. So its whole matrix is read and parsed before anything can be
+ * drawn, and past a couple of hundred megabytes that is a wait worth stating.
+ *
+ * The two gates are the same *shape* — a refusal carrying the numbers, thrown
+ * where the cost is about to be paid, caught by the shell, answered, and the
+ * open re-issued with the answer on the source — and they differ in exactly two
+ * ways, which is why they share this module rather than duplicating it:
+ *
+ * - an `.scool` offers **two** readings and a HiC-Pro pair **one**, because
+ *   there is nothing to trade: it is read whole or not at all;
+ * - an `.scool`'s cost is round trips, so a local file never pays it and is
+ *   never asked; a HiC-Pro pair's is parsing and memory, which a local file
+ *   pays in full — a gigabyte off a disk is the same ten seconds and the same
+ *   gigabyte of typed arrays as a gigabyte off a bucket.
  */
 
 import { ViewerError } from '../errors'
@@ -39,15 +57,18 @@ import { Modal } from './Modal'
 export type ScoolReading = 'whole' | 'fine' | null
 
 /**
- * `true` when this error is the §12 listing gate rather than a failure.
+ * `true` when this error is a §12 load gate rather than a failure.
  *
  * The shell asks before treating an open's rejection as an error screen, in
  * exactly the way it already asks whether a rejection was an mmetacool root —
- * both are refusals that mean *ask the reader something*, not *this file is
- * broken*.
+ * all of them are refusals that mean *ask the reader something*, not *this file
+ * is broken*.
  */
-export function isListingGate(error: unknown): error is ViewerError {
-  return error instanceof ViewerError && error.code === 'scool-listing-cost'
+export function isLoadGate(error: unknown): error is ViewerError {
+  return (
+    error instanceof ViewerError &&
+    (error.code === 'scool-listing-cost' || error.code === 'hicpro-load-cost')
+  )
 }
 
 /** The object's size, as the gate's refusal recorded it. */
@@ -63,7 +84,8 @@ function sizeOf(error: ViewerError): number {
  * *neither*, I will fetch it myself — and the caller shows the file picker
  * again rather than starting a read nobody agreed to.
  */
-export function askScoolReading(error: ViewerError, label: string): Promise<ScoolReading> {
+export function askLoadCost(error: ViewerError, label: string): Promise<ScoolReading> {
+  if (error.code === 'hicpro-load-cost') return askHicProLoad(error)
   return new Promise((resolve) => {
     let answered: ScoolReading = null
     new Modal({
@@ -117,4 +139,62 @@ export function askScoolReading(error: ViewerError, label: string): Promise<Scoo
       },
     })
   })
+}
+
+/**
+ * The HiC-Pro disclosure: what the read costs, and one button.
+ *
+ * Not a choice, because there is not one — the format has no index, so there is
+ * no cheaper way to reach the first pixel and nothing to weigh against anything
+ * else. What the panel is *for* is that a reader who clicks and then waits ten
+ * seconds should have been told it would be ten seconds, and should know the
+ * wait is once rather than per view. So it says both, and the second is the
+ * part that turns a bad number into an acceptable one.
+ */
+function askHicProLoad(error: ViewerError): Promise<ScoolReading> {
+  return new Promise((resolve) => {
+    let answered: ScoolReading = null
+    new Modal({
+      title: 'This contact map has to be read whole first',
+      variant: 'modal-wide',
+      onClose: () => resolve(answered),
+      body: (close) => {
+        const bytes = numberIn(error, 'bytes')
+        const go = button(`read all ${fmt.bytes(bytes)}`, () => {
+          answered = 'whole'
+          close()
+        }, { class: 'btn btn-primary' })
+        go.title =
+          'Parse the matrix into memory. Every region, every zoom and every analysis ' +
+          'afterwards is instant and costs no further reading.'
+
+        return el(
+          'div',
+          { class: 'about-body scool-gate' },
+          el('p', { text: error.message }),
+          el('p', {
+            text:
+              'A HiC-Pro matrix is a list of pixels as text, with nothing to say where in ' +
+              'the file any of them is — so unlike every other format here, a region cannot ' +
+              'be reached without reading everything before it. It is read once, at about ' +
+              '100 MB a second, and then behaves exactly like a cooler.',
+          }),
+          el('div', { class: 'modal-actions' }, go),
+          el('p', {
+            class: 'hint',
+            text:
+              'A finer resolution than this is better converted: `cooler load -f coo` turns ' +
+              'the same two files into a `.cool`, which opens here in a few requests however ' +
+              'large it is.',
+          }),
+        )
+      },
+    })
+  })
+}
+
+/** A number the refusal recorded, or `0` where it did not. */
+function numberIn(error: ViewerError, key: string): number {
+  const value = error.detail[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }

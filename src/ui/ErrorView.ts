@@ -123,6 +123,22 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'A copy on your own disk has neither cost: drop it here and it is read in place.',
     ],
   },
+  'hicpro-no-bins': {
+    title: 'This is half of a contact map',
+    advice: [
+      'A HiC-Pro map is two files: the `.matrix` of pixel counts, and the `_abs.bed` beside it that says which genomic interval each bin id means. Neither is a map on its own.',
+      'Drop the two together, or connect the folder they are in and pick the matrix there — the bin file comes with it.',
+      'For a URL whose bin file is somewhere unguessable, name it: `<matrix>#bins=<url>`.',
+    ],
+  },
+  'hicpro-load-cost': {
+    title: 'This HiC-Pro matrix has to be read whole',
+    advice: [
+      'A HiC-Pro matrix is a list of pixels as text with no index, so there is no way to reach a region without reading everything before it.',
+      'It is read once and then behaves exactly like a cooler — every region and every zoom afterwards is instant.',
+      'For a fine resolution, convert it instead: `cooler load -f coo <bins> <matrix> out.cool`.',
+    ],
+  },
   'cell-not-found': {
     title: 'No such cell in this file',
     advice: [

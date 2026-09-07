@@ -24,6 +24,8 @@ export type ErrorCode =
   | 'unknown-label'
   | 'cell-not-found'
   | 'scool-listing-cost'
+  | 'hicpro-load-cost'
+  | 'hicpro-no-bins'
   | 'bad-range'
   | 'genome-coordinate-suffix'
   | 'unsupported'

@@ -448,6 +448,88 @@ pixels on the Nagano file and reads instantly.
 
 ---
 
+### 3.8 HiC-Pro — two text files, and the index that is not there
+
+A HiC-Pro contact map is a pair, documented in that pipeline's own `RESULTS.md`:
+
+- **`<prefix>_<res>_abs.bed`** — `chrom  start  end  binID`, one row per bin of the whole genome,
+  where `binID` is **1-based and global**: it runs continuously across sequences rather than
+  restarting at each;
+- **`<prefix>_<res>.matrix`** — `binA  binB  count`, one row per non-zero pixel, naming those ids.
+  `MATRIX_FORMAT` decides which half is stored: `upper` (the default), `lower`, `complete`, or
+  `asis`.
+
+The BED **is** a `/bins` table, and run-length encoding its first column gives the `/chroms` table
+and `indexes/chrom_offset` this application is written against. The matrix **is** `/pixels`. What
+the pair does not have is `indexes/bin1_offset`, and that single absence is the whole of what makes
+this container different from every other one here.
+
+**It is read whole, once, and then it is a cooler.** There is no index and no index that could be
+derived without reading everything: the rows are text of variable width, so byte offset and bin id
+have no relation, and `asis` says outright that they need not even be sorted. So a region cannot be
+a bounded read, and pretending otherwise would mean scanning the file *per view* rather than once.
+The answer is to pay it at open and hand the rest of the application exactly what it already uses —
+two stable counting sorts — by column, then by row —
+produce the sorted triplets and the cumulative index together, the second pass's bucket boundaries
+*being* `bin1_offset`. Measured: **6.8 M pixels/s (≈100 MB/s)** parsing, and 12 bytes per pixel held
+against about 15 as text.
+
+A radix sort rather than a sort per row band, and the difference is not academic: bands are wide — a
+row of a 100 kb human matrix has thousands of non-zero columns — so sorting each on its own is
+quadratic in that width. On a 211 MB file it was 59 seconds against 3.7.
+
+**So there is no `HicProStore`, and there should not be one.** This is where the container differs
+from `.hic`, which cannot answer `pixels/*` or `indexes/bin1_offset` and needs a `PixelStore` of its
+own. Here those datasets are served honestly from the parsed arrays and `CoolerStore` reads them
+unchanged: the pixel path for a HiC-Pro map is the cooler path, byte for byte, and a second
+implementation of it could only drift.
+
+**All four `MATRIX_FORMAT` values open, and none of them is the special case.** The parser swaps the
+ends of any pixel stored below the diagonal, so what reaches `planRead` and `scatterDense` is
+upper-triangular whichever way the file was written. Two rows landing on one cell are not one case
+but two, and they want opposite treatment: a **mirror** — `(a, b)` and `(b, a)`, which is what
+`complete` writes — is one contact stated twice and the second is dropped, since adding it would
+double every off-diagonal cell and leave the diagonal alone; a **repeat**, two rows on the same side,
+is more evidence and is summed. Once both are upper-triangular they are indistinguishable, which is
+why the side each row was *stored* on is carried as far as the collapse. It is one byte per pixel.
+
+**The bin file is required, and is found three ways.** It is not a sidecar in §8.11's sense — a
+`.tbi` is an optimisation and a `.bai` is a format's only bounded read, but an `_abs.bed` is the
+matrix's coordinate system, so without it there is not a slower map or a refused one but *no map*.
+So: dropped alongside the matrix, or picked out of a connected folder beside it, both through the
+same rules that pair a BAM with its index; found by convention next to a URL, which is where
+HiC-Pro writes it — `raw/` and `iced/` share one bed per resolution, so the `_iced` matrices are
+probed against the raw directory's too; or named outright as `<matrix>#bins=<url>`, for a bucket
+the convention cannot guess at. A matrix with none of the three is **refused by name**, and the
+refusal says which of the three to reach for.
+
+**The load is gated on bytes, not on being remote** (§12). Past 200 MB of matrix the reader is told
+what the read will cost and that it is paid once — which is the part that turns a bad number into an
+acceptable one. That threshold is a difference from §3.7's gate rather than an inconsistency: an
+`.scool`'s cost is round trips, which a local file does not pay, and this one's is parsing and
+memory, which it pays in full.
+
+**Where it works, and where to convert instead.** The limit is the pixel count and nothing about the
+format: about 100 M pixels is comfortable (≈1.5 GB of text, 15 s, 1.2 GB held), and past ~250 M it
+is not a browser tab's job. That covers any small genome at any resolution, and human down to about
+250 kb. Finer than that, `cooler load -f coo <bins> <matrix> out.cool` turns the very same two files
+into a `.cool` which opens here in a handful of requests however large it is — and the panel says so.
+
+**Two things are deliberately not read.** Fragment-level maps (`GENOME_FRAGMENT`), because a
+fragment grid is variable bins under another name and §3.3 excludes those from the whole
+application — refused with the config key that produced it. And the `.biases` file, because HiC-Pro's
+biases normalise the *raw* matrix while its `iced/` matrix is the already-normalised one: a reader
+that offered the first as a weight column would let somebody normalise twice. Open the `iced/`
+matrix to see normalised counts, which is what it is for.
+
+**Correctness.** The fixtures are written *from a cooler* and the manifest carries cooler's own dense
+matrix, so the suite asserts that the two text files mean exactly the matrix they were written from —
+a round trip through the format against the implementation this application is a port of. All four
+`MATRIX_FORMAT` variants are checked against the same oracle, because only one of them is the common
+case and that is how the other three come to be broken unnoticed.
+
+---
+
 ## 4. Data access model and cost
 
 Every operation the app performs, with its cost, because the cost model *is* the design:
@@ -2485,6 +2567,22 @@ the two costs to pay:
 
 This is the case `hdf5-indexed-reader` above was held in reserve for, and it remains the way out:
 a pre-built path → offset index would turn the gate into an ordinary bounded open.
+
+**A second open is exempt, and for a blunter reason: a HiC-Pro pair is two text files with no index
+at all** (§3.8). There is nothing to hold in reserve here — the format cannot be indexed without
+being rewritten — so the whole matrix is read once, at open, and every read after it is bounded and
+in memory. The gate is on **bytes rather than on being remote**, because the cost is parsing and
+memory rather than round trips and a local file pays it in full:
+
+| Operation | Budget |
+|---|---|
+| Open a HiC-Pro pair under 200 MB | read whole, ungated — about two seconds at 100 MB/s |
+| Open one over 200 MB | a **gate** quoting the size, the estimated pixel count and that the cost is paid once |
+| Every read afterwards | **0 requests** — the map is typed arrays; pan and zoom are free |
+| Find the bin file beside a URL | ≤ 2 `HEAD` requests, then the refusal names all three ways to supply it |
+
+The way out here is not an index but a conversion, and the gate says so: `cooler load -f coo` turns
+the same two files into a `.cool` that opens in a handful of requests at any size.
 
 ---
 

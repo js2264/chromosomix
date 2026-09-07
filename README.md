@@ -39,10 +39,23 @@ pseudo-bulk. The chosen cells stay chosen as you walk into a chromosome and back
 in the link. Both layouts open — the standard `/cells` container `cooler` writes, and the flat one
 every pre-2021 tool produced.
 
-Opening one over the network is the single place this viewer asks a question first, and it says why:
-a container's cell names live in HDF5 link records that writers scatter across the whole file, so
-there is no bounded read that reaches them. Download it once, or read it in a thousand small pieces —
-both costs are on the buttons, and a copy on your own disk has neither.
+Opening one over the network is one of the two places this viewer asks a question first, and it says
+why: a container's cell names live in HDF5 link records that writers scatter across the whole file,
+so there is no bounded read that reaches them. Download it once, or read it in a thousand small
+pieces — both costs are on the buttons, and a copy on your own disk has neither.
+
+**A HiC-Pro map opens as the pair of text files it is.** Drop the `.matrix` and the `_abs.bed`
+together, or pick the matrix out of a connected folder and its bin file comes with it, or give a URL
+and the bin file beside it is found where HiC-Pro writes it. The BED is the coordinate system and the
+matrix is the pixels, so between them they are an ordinary contact map — the chromosome table, every
+region, the analysis panel, tracks and export, all of it. All four `MATRIX_FORMAT` variants open, the
+`iced/` matrices included.
+
+It has no index, and it is the one format here that cannot have one, so the whole matrix is read at
+open — about a second per hundred megabytes — and after that it *is* a cooler: every region instant,
+panning free. Past a couple of hundred megabytes you are told that before it happens, and told the
+cost is paid once. Fine-resolution human maps are better converted, and the panel says how:
+`cooler load -f coo` turns the same two files into a `.cool`.
 
 There is no server. There is no upload. There is no preprocessing step. A file straight out of
 `metacooler create` opens and works.
@@ -460,6 +473,18 @@ the cells' own data, so listing them is about a thousand reads of ~500 bytes eac
 whole object. No chunk size wins — anything large enough to coalesce them fetches the file, anything
 small enough to avoid that needs a round trip each — so the reader is asked which to pay rather than
 being surprised by either. A local copy is never asked, because seeking on disk is free.
+
+**A HiC-Pro pair is read whole, because there is no other way to read it.** Every other format here
+is reachable by a bounded read — HDF5 through range requests, a bigWig by zoom level, a `.hic` by the
+blocks its rectangle covers. A HiC-Pro matrix is a list of pixels as text with nothing saying where in
+the file any of them is, so a region cannot be reached without reading everything before it. It is
+read once rather than per view, which is the best available answer and not a good one; the limit is
+the pixel count, around 100 million comfortably. Above that, convert.
+
+**Its `.biases` file is not read, and that is deliberate.** HiC-Pro's biases normalise the *raw*
+matrix, while its `iced/` matrix is the already-normalised one. Offering the first as a weight column
+would let somebody normalise twice and get a plausible-looking map. Open the `iced/` matrix to see
+normalised counts; that is what it is for.
 
 **Analysis tasks run on the map, not on the cell set.** The fifteen tasks operate on whatever is
 drawn, so they run on a single cell and on a small sum of them. They are not *aware* of cells: there
