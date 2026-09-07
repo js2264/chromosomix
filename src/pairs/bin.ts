@@ -106,6 +106,17 @@ export interface BinnedPixels {
   sum: number
   /** Records whose chromosome was not in the header. */
   skippedUnknownContig: number
+  /**
+   * Records whose position column did not hold a number.
+   *
+   * Counted apart from the unknown-contig tally, and the distinction is the
+   * whole reason it exists: the two have completely different causes and
+   * completely different fixes. An unknown contig is a file about another
+   * assembly; an unparsable position is a `#columns:` line that does not match
+   * the records, and reporting it as a missing `#chromsize:` entry would send a
+   * reader to fix the header that is already right.
+   */
+  skippedBadPosition: number
   /** Records whose position ran past the declared contig length. */
   clampedPosition: number
   /** `true` when the file was not `bin1`-ordered and a merge pass was needed. */
@@ -219,6 +230,7 @@ export async function binPairs(
   let records = 0
   let sum = 0
   let skippedUnknownContig = 0
+  let skippedBadPosition = 0
   let clampedPosition = 0
   let wasUnsorted = false
   let failure: ViewerError | null = null
@@ -286,7 +298,7 @@ export async function binPairs(
       return
     }
     if (p1 < 0 || p2 < 0) {
-      skippedUnknownContig++
+      skippedBadPosition++
       return
     }
 
@@ -379,6 +391,7 @@ export async function binPairs(
     nnz,
     sum,
     skippedUnknownContig,
+    skippedBadPosition,
     clampedPosition,
     wasUnsorted,
   }

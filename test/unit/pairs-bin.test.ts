@@ -200,6 +200,32 @@ describe('binPairs', () => {
     expect(pixels!.skippedUnknownContig).toBe(1)
   })
 
+  it('tells an unknown contig apart from an unparsable position', async () => {
+    // The two have different causes and different fixes: one is a file about
+    // another assembly, the other is a `#columns:` line that does not match the
+    // records. Reporting the second as the first sends a reader to fix a header
+    // that is already right.
+    const lines = [
+      '## pairs format v1.0',
+      ...CONTIGS.map((c) => `#chromsize: ${c.name} ${c.length}`),
+      '#columns: readID chr1 pos1 chr2 pos2',
+      'a\tchrI\t10\tchrI\t20',
+      'b\tchrZ\t10\tchrI\t20',
+      'c\tchrI\tnot-a-number\tchrI\t20',
+      'd\tchrI\t10\tchrI\t',
+    ]
+    const source = new BytesSource(bgzipped(`${lines.join('\n')}\n`))
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(pixels!.sum).toBe(1)
+    expect(pixels!.skippedUnknownContig).toBe(1)
+    expect(pixels!.skippedBadPosition).toBe(2)
+  })
+
   it('can be cancelled mid-pass', async () => {
     const records = sortRecords(CONTIGS, randomRecords(20_000, 5))
     const source = new BytesSource(bgzipped(pairsText({ contigs: CONTIGS, records }), 1 << 10))

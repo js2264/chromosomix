@@ -20,6 +20,7 @@ import {
   indexedPairs,
   probePairs,
   roundToSeries,
+  rungInImport,
   suggestBase,
 } from '@/pairs/import'
 import {
@@ -212,6 +213,48 @@ describe('importPairs', () => {
     await expect(
       importPairs(source, probe, { base: 1, rungs: 1, maxPixelBytes: 512 }),
     ).rejects.toMatchObject({ code: 'dense-too-large', detail: { binSize: 1 } })
+  })
+})
+
+describe('rungInImport', () => {
+  /**
+   * The switch that must not re-read the file.
+   *
+   * Changing resolution on an imported map arrives as an ordinary open of
+   * `file.pairs.gz::resolutions/2000`, with no binning on it — because the
+   * rungs are spelled as an `.mcool`'s resolutions, which is what wires them
+   * into the picker and the refine ladder for free. Without this the ladder is
+   * dropped, the whole file is read again, and the reader is asked for a bin
+   * size they have already given.
+   */
+  async function anImport(): ReturnType<typeof importPairs> {
+    const source = new BytesSource(FILE)
+    const probe = await probePairs(source, async () => null)
+    return importPairs(source, probe, { base: 100, rungs: 3 })
+  }
+
+  it('finds a rung the import built, in the file it was built from', async () => {
+    const imported = (await anImport())!
+    expect(imported.rungs).toEqual([100, 200, 500])
+    for (const size of imported.rungs) {
+      expect(rungInImport(imported, 'x.pairs.gz', `x.pairs.gz::resolutions/${size}`)).toBe(size)
+    }
+  })
+
+  it('refuses a rung the import did not build', async () => {
+    const imported = (await anImport())!
+    expect(rungInImport(imported, 'x.pairs.gz', 'x.pairs.gz::resolutions/1000')).toBeNull()
+  })
+
+  it('refuses a different file, however its rungs are spelled', async () => {
+    const imported = (await anImport())!
+    expect(rungInImport(imported, 'x.pairs.gz', 'other.pairs.gz::resolutions/100')).toBeNull()
+  })
+
+  it('refuses a URI that names no rung at all', async () => {
+    const imported = (await anImport())!
+    expect(rungInImport(imported, 'x.pairs.gz', 'x.pairs.gz')).toBeNull()
+    expect(rungInImport(imported, 'x.pairs.gz', 'x.pairs.gz::entries/100')).toBeNull()
   })
 })
 

@@ -54,7 +54,7 @@ import {
   type WorkerResponse,
 } from './protocol'
 import { createSource, openIndexSource, releaseSources } from './sources'
-import { importPairs, probePairs, suggestBase, type PairsImport } from '../pairs/import'
+import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { writeMcool } from '../pairs/write'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
@@ -236,10 +236,18 @@ function post(response: WorkerResponse, transfers: Transferable[] = []): void {
  * progress bar on one of them and not the others was a difference in the
  * plumbing rather than in the wait.
  */
-function scanHooks(id: number): { cancelled: () => boolean; onProgress: (done: number, total: number) => void } {
+function scanHooks(id: number): {
+  cancelled: () => boolean
+  onProgress: (done: number, total: number, note?: string) => void
+} {
   return {
     cancelled: () => cancelled.has(id),
-    onProgress: (done, total) => post({ type: 'progress', id, done, total }),
+    // The `note` is passed through rather than dropped. A pixel scan has
+    // nothing to say beyond its percentage, but an import does — "reading
+    // records", "building the 5 kb rung", "writing pixels" — and the wire
+    // type, the client and both progress surfaces have always carried it.
+    onProgress: (done, total, note) =>
+      post(note === undefined ? { type: 'progress', id, done, total } : { type: 'progress', id, done, total, note }),
   }
 }
 
@@ -308,6 +316,7 @@ function summarise(pairs: PairsImport, download: boolean): PairsImportSummary {
     nnz: base.nnz,
     indexed: pairs.indexed,
     skippedUnknownContig: base.skippedUnknownContig,
+    skippedBadPosition: base.skippedBadPosition,
     clampedPosition: base.clampedPosition,
     requiredMerge: base.wasUnsorted,
     download,
@@ -345,9 +354,21 @@ function mcoolNameFor(uri: string): string {
   return `${stem || 'pairs'}.mcool`
 }
 
+/** The import and rung this URI reuses, when it reuses one — see `rungInImport`. */
+function importedRungFor(
+  active: Session | null,
+  uri: string,
+): { pairs: PairsImport; size: number } | null {
+  if (active?.pairs == null) return null
+  const size = rungInImport(active.pairs, active.mc.uri, uri)
+  return size === null ? null : { pairs: active.pairs, size }
+}
+
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
+  // Before the session is torn down, because it is the thing being reused.
+  const reusable = importedRungFor(session, request.uri)
   releaseRungs(session)
-  session?.mc.close()
+  if (reusable === null) session?.mc.close()
   session = null
   // A cancel that arrives after its target finished leaves its id behind, since
   // the `finally` that would have removed it has already run. Harmless
@@ -357,9 +378,22 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
 
   const source = await createSource(request.source)
   let mc: MetaCooler
-  let pairs: PairsImport | null = null
+  let pairs: PairsImport | null = reusable?.pairs ?? null
   try {
-    mc = await MetaCooler.open(request.uri, source)
+    if (reusable !== null) {
+      // A rung switch inside a file already imported: no read, no dialog, no
+      // second pass. The table is in hand.
+      mc = MetaCooler.fromPairs({
+        uri: request.uri,
+        header: reusable.pairs.header,
+        pixels: reusable.pairs.tables.get(reusable.size)!,
+        rungs: reusable.pairs.rungs,
+        indexed: reusable.pairs.indexed,
+        declaredRecords: reusable.pairs.declaredRecords,
+      })
+    } else {
+      mc = await MetaCooler.open(request.uri, source)
+    }
   } catch (error) {
     // A `.pairs` is the one input that cannot be opened from its own bytes: it
     // declares no resolution, so there is nothing to open it *at*. The first

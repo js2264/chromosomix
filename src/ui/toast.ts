@@ -30,7 +30,17 @@ export interface ProgressToast {
 /** How long a finished note stays before it goes. */
 const LINGER_MS = 4_000
 
-export function progressToast(message: string): ProgressToast {
+export function progressToast(
+  message: string,
+  /**
+   * Called when the reader closes the note before it finishes.
+   *
+   * Not optional in spirit, even though it is in the type: a note with a bar on
+   * it and a × that only removes the bar is a lie about what the × does. The
+   * one caller cancels the job.
+   */
+  onDismiss?: () => void,
+): ProgressToast {
   const label = el('p', { class: 'toast-label', text: message })
   const fill = el('div', { class: 'toast-fill' })
   const bar = el('div', { class: 'toast-bar' }, fill)
@@ -46,12 +56,19 @@ export function progressToast(message: string): ProgressToast {
   document.body.appendChild(root)
 
   let timer: ReturnType<typeof setTimeout> | null = null
+  let settled = false
   const dismiss = (): void => {
     if (timer !== null) clearTimeout(timer)
     timer = null
     root.remove()
   }
-  close.addEventListener('click', dismiss)
+  close.addEventListener('click', () => {
+    // Only while the work is still running: closing a *finished* note is
+    // tidying up, and calling off a job that has already handed back its
+    // result would be a cancel with nothing to cancel.
+    if (!settled) onDismiss?.()
+    dismiss()
+  })
 
   return {
     update(done, total, text) {
@@ -61,12 +78,14 @@ export function progressToast(message: string): ProgressToast {
         text === undefined ? `${Math.round(fraction * 100)}%` : `${text} — ${Math.round(fraction * 100)}%`
     },
     finish(text) {
+      settled = true
       fill.style.width = '100%'
       note.textContent = text
       root.classList.add('toast-done')
       timer = setTimeout(dismiss, LINGER_MS)
     },
     fail(text) {
+      settled = true
       bar.remove()
       note.textContent = text
       root.classList.add('toast-failed')

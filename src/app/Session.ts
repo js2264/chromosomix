@@ -75,6 +75,7 @@ import { isCancellation, ReaderClient, type Cancellable } from '../worker/client
 import type {
   ContigsResult,
   GenomesResult,
+  McoolExport,
   OpenResult,
   PairsBinning,
   PairsProbeResult,
@@ -2086,10 +2087,14 @@ export class Session {
    * take the session down with it.
    */
   private async exportImportedMcool(): Promise<void> {
-    const note = progressToast('Writing .mcool')
+    // The job has to exist before the note can offer to cancel it, and the note
+    // has to exist before the job can report into it. Declared first and
+    // assigned below, which is the smallest way out of that.
+    let job: Cancellable<McoolExport> | null = null
+    const note = progressToast('Writing .mcool', () => job?.cancel())
     try {
       const client = this.clientOf()
-      const job = client.cancellable<'exportMcool'>({ kind: 'exportMcool' }, (done, total, text) =>
+      job = client.cancellable<'exportMcool'>({ kind: 'exportMcool' }, (done, total, text) =>
         note.update(done, total, text),
       )
       const result = await job.promise

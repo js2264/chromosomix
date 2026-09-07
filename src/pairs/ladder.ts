@@ -182,6 +182,7 @@ export async function aggregatePixels(
     nnz: out,
     sum,
     skippedUnknownContig: base.skippedUnknownContig,
+    skippedBadPosition: base.skippedBadPosition,
     clampedPosition: base.clampedPosition,
     wasUnsorted: base.wasUnsorted,
   }

@@ -120,6 +120,9 @@ export function pairsHandle(init: PairsHandleInit): Hdf5Handle {
     ...(pixels.skippedUnknownContig === 0
       ? {}
       : { 'pairs-skipped-unknown-contig': pixels.skippedUnknownContig }),
+    ...(pixels.skippedBadPosition === 0
+      ? {}
+      : { 'pairs-skipped-bad-position': pixels.skippedBadPosition }),
     ...(pixels.clampedPosition === 0 ? {} : { 'pairs-clamped-positions': pixels.clampedPosition }),
     ...(pixels.wasUnsorted ? { 'pairs-required-merge': true } : {}),
   }

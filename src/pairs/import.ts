@@ -38,6 +38,7 @@ import { binPairs, type BinnedPixels } from './bin'
 import { binCountFor, readPairsHeader, type PairsHeader } from './format'
 import { aggregatePixels, ladderSizes } from './ladder'
 import { loadPx2, spansFor, splitKey, type Px2Index } from './px2'
+import { parseUri } from '../uri'
 
 /** Bytes a stored pixel occupies in the imported table: three int32s. */
 export const BYTES_PER_PIXEL = 12
@@ -270,6 +271,36 @@ function spansForKeys(
   // selection meant: a key set that matches no index entry falls back to the
   // whole file rather than to silence.
   return spans.length === 0 ? undefined : spans
+}
+
+/**
+ * The rung of `imported` that `wanted` names, or `null`.
+ *
+ * An imported map's rungs are entries under `resolutions`, exactly as an
+ * `.mcool`'s are — which is what wires them into the resolution picker, the URL
+ * hash and §3.4's refine ladder with no code of their own. The cost of that
+ * freedom is that *switching* rung arrives at the worker as an ordinary open of
+ * `file.pairs.gz::resolutions/2000`, carrying no binning; taking that road
+ * would drop the ladder, re-read the whole file, and ask the reader for a bin
+ * size they have already given.
+ *
+ * So the URI is matched against the import first. Both halves have to hold: the
+ * same file — a *different* `.pairs` is a new import however its rungs are
+ * spelled — and a rung this import actually built.
+ *
+ * Lives here rather than in the worker so it can be tested: `reader.worker.ts`
+ * calls `getH5()` at module load and cannot be imported into a test at all.
+ */
+export function rungInImport(
+  imported: PairsImport,
+  openUri: string,
+  wanted: string,
+): number | null {
+  if (parseUri(wanted).path !== parseUri(openUri).path) return null
+  const named = /^\/resolutions\/(\d+)$/.exec(parseUri(wanted).group)
+  if (named === null) return null
+  const size = Number(named[1])
+  return imported.tables.has(size) ? size : null
 }
 
 /** The chromosome pairs an index knows about, as ordinary name pairs. */

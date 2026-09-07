@@ -207,6 +207,8 @@ export interface PairsImportSummary {
   indexed: boolean
   /** Records naming a contig the header did not declare. */
   skippedUnknownContig: number
+  /** Records whose position column did not hold a number. */
+  skippedBadPosition: number
   /** Records whose position ran past the declared contig length. */
   clampedPosition: number
   /** `true` when the file was not `bin1`-ordered and a merge pass ran. */

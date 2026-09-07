@@ -102,6 +102,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   an imported map is a cooler-class citizen (§9) — chromosomes table, no genomes
   table, the four metagenome tasks absent rather than disabled.
 
+- Switching resolution on an imported map no longer re-reads the file. The
+  rungs are spelled as an `.mcool`'s resolutions — which is what wires them
+  into the picker, the hash and the refine ladder for free — so a switch
+  arrives as an ordinary open carrying no binning, and the ordinary path
+  would drop the ladder and ask for a bin size that had already been given.
+
 - **`metacooler-run` takes a `.pairs` too**, with `--bin-size` and `--rungs`
   standing in for the dialog the browser shows. Everything after the open is
   the same code, which is the whole point of the CLI: a number computed in a

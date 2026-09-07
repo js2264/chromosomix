@@ -51,7 +51,7 @@
  * where the progress for a large export comes from.
  */
 
-import { getH5, type H5wasmGroup } from '../h5/bootstrap'
+import { getH5, isNodeRuntime, type H5wasmGroup } from '../h5/bootstrap'
 import type { BinnedPixels } from './bin'
 import type { PairsHeader } from './format'
 import { formatBp, type PairsImport } from './import'
@@ -59,6 +59,28 @@ import { VERSION } from '../version'
 
 /** Pixels converted and written at a time. */
 export const WRITE_CHUNK = 1 << 20
+
+/**
+ * Where the file is built, which is **not** the same place in both runtimes.
+ *
+ * In a browser or a worker h5wasm is over MEMFS, `/` is a virtual root, and
+ * writing there costs nothing and touches nothing. Under `h5wasm/node` it is
+ * NODERAWFS — the `FS` *is* the real filesystem — so the same `/` is the
+ * machine's actual root directory. Writing an `.mcool` there litters it on a
+ * developer's box and fails outright with `EACCES` for anyone not running as
+ * root, which is every ordinary use of the CLI.
+ *
+ * So the browser keeps its virtual root and Node is given a temp directory.
+ * Read out of the environment rather than through `node:os`, because this
+ * module is bundled for the browser and a static `node:` import would follow it
+ * there.
+ */
+function scratchDir(): string {
+  if (!isNodeRuntime()) return ''
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  const dir = env?.['TMPDIR'] ?? env?.['TMP'] ?? env?.['TEMP'] ?? '/tmp'
+  return dir.replace(/\/+$/, '')
+}
 
 /**
  * h5wasm's dtype strings are **C-struct format characters, not numpy's**, and
@@ -103,11 +125,28 @@ export async function writeMcool(
   options: WriteOptions = {},
 ): Promise<Uint8Array | null> {
   const h5 = await getH5()
-  const path = `/pairs-export-${Date.now()}.mcool`
+  const path = `${scratchDir()}/pairs-export-${Date.now()}.mcool`
 
   // A stale mount from a cancelled export would be silently reused.
   if (h5.FS.analyzePath(path).exists) h5.FS.unlink(path)
 
+  try {
+    return await build(h5, path, imported, options)
+  } finally {
+    // Every road out, including a cancel and a throw. The path is uniquified
+    // per call, so a leaked one is not reclaimed by the next export's cleanup —
+    // it is simply a whole `.mcool` left resident in MEMFS for the life of the
+    // worker, which on a large import is hundreds of megabytes.
+    if (h5.FS.analyzePath(path).exists) h5.FS.unlink(path)
+  }
+}
+
+async function build(
+  h5: Awaited<ReturnType<typeof getH5>>,
+  path: string,
+  imported: PairsImport,
+  options: WriteOptions,
+): Promise<Uint8Array | null> {
   const file = new h5.File(path, 'w')
   try {
     file.create_attribute('format', MCOOL_FORMAT)
@@ -133,12 +172,8 @@ export async function writeMcool(
     file.close()
   }
 
-  try {
-    const bytes = h5.FS.readFile(path)
-    return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  } finally {
-    h5.FS.unlink(path)
-  }
+  const bytes = h5.FS.readFile(path)
+  return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
 }
 
 /** Everything but the pixel table: attributes, chroms, bins, indexes. */
@@ -316,6 +351,9 @@ function provenance(imported: PairsImport, table: BinnedPixels): Record<string, 
     ...(table.skippedUnknownContig === 0
       ? {}
       : { 'records-skipped-unknown-contig': table.skippedUnknownContig }),
+    ...(table.skippedBadPosition === 0
+      ? {}
+      : { 'records-skipped-bad-position': table.skippedBadPosition }),
     ...(table.clampedPosition === 0 ? {} : { 'positions-clamped': table.clampedPosition }),
     ...(table.wasUnsorted ? { 'required-merge-pass': true } : {}),
     balanced: false,

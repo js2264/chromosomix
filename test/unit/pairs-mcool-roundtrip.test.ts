@@ -27,7 +27,7 @@
  * built, expects it.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -289,6 +289,30 @@ describe('pairs → .mcool', () => {
       fromPairs.close()
       fromCool.close()
     }
+  })
+
+  it('leaves nothing behind, on every road out', async () => {
+    // Under `h5wasm/node` the FS is NODERAWFS — real files, in a real
+    // directory — so a leaked export is a whole `.mcool` on disk rather than a
+    // page of MEMFS. And on a cancel the leak is the one that matters: the
+    // path is uniquified per call, so nothing later ever reclaims it.
+    const scratch = process.env['TMPDIR']?.replace(/\/+$/, '') ?? '/tmp'
+    const leftovers = (): string[] =>
+      readdirSync(scratch).filter((name) => name.startsWith('pairs-export-'))
+    const before = leftovers()
+
+    const source = new BytesSource(bgzipped(pairsText({ contigs: CONTIGS, records: records(2_000, 87) })))
+    const probe = await probePairs(source, async () => null)
+    const imported = await importPairs(source, probe, { base: BASE, rungs: 2 })
+
+    // A completed export.
+    expect(await writeMcool(imported!)).not.toBeNull()
+    expect(leftovers(), 'after a completed export').toEqual(before)
+
+    // A cancelled one.
+    let ticks = 0
+    expect(await writeMcool(imported!, { cancelled: () => ++ticks > 1 })).toBeNull()
+    expect(leftovers(), 'after a cancelled export').toEqual(before)
   })
 
   it('survives a table larger than one write chunk', async () => {
