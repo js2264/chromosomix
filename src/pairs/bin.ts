@@ -258,7 +258,6 @@ export async function binPairs(
   }
 
   const total = options.expectedRecords ?? 0
-  let lastReport = 0
 
   const onLine = (line: Uint8Array): void => {
     if (line.length === 0 || line[0] === HASH) return
@@ -340,25 +339,23 @@ export async function binPairs(
       const streamOptions: SpanOptions = {
         from: span.from,
         to: span.to,
+        // One report per source read, and no throttle on top of it. The reads
+        // are already {@link PULL_CHUNK_BYTES} apart, which is the granularity
+        // the bar wants; an extra counter threshold on top of that was how a
+        // small file managed to import with the bar never moving at all.
+        //
+        // Records where the index gave an exact total, bytes otherwise — so the
+        // bar is always in the unit the dialog quoted its estimate in.
         onProgress: (fed) => {
-          if (total > 0) return
-          const done = bytesDone + fed
-          if (done - lastReport < 1 << 22) return
-          lastReport = done
-          options.onProgress?.(done, spanBytes, 'reading')
+          if (total > 0) options.onProgress?.(records, total, 'reading records')
+          else options.onProgress?.(bytesDone + fed, spanBytes, 'reading records')
         },
       }
       if (options.cancelled !== undefined) streamOptions.cancelled = options.cancelled
 
       const finished = await forEachLine(
         decompressedStream(source, streamOptions),
-        (line) => {
-          onLine(line)
-          if (total > 0 && records - lastReport >= 1 << 18) {
-            lastReport = records
-            options.onProgress?.(records, total, 'binning')
-          }
-        },
+        onLine,
         options.cancelled,
       )
       bytesDone += Math.max(0, span.to - span.from)

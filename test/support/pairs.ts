@@ -102,7 +102,16 @@ export function gzipped(text: string): Uint8Array {
  * test that does not run.
  */
 export function bgzipped(text: string, blockSize = 1 << 14): Uint8Array {
-  const data = Buffer.from(text, 'utf8')
+  return bgzipBytes(Buffer.from(text, 'utf8'), blockSize)
+}
+
+/** The same, for bytes that are not text — a `.px2` is binary. */
+export function bgzipBytes(data: Uint8Array, blockSize = 1 << 14): Uint8Array {
+  const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+  return bgzipFrom(buffer, blockSize)
+}
+
+function bgzipFrom(data: Buffer, blockSize: number): Uint8Array {
   const parts: Buffer[] = []
   for (let at = 0; at < data.length || at === 0; at += blockSize) {
     const slice = data.subarray(at, Math.min(at + blockSize, data.length))

@@ -215,8 +215,8 @@ export async function importPairs(
     columns: probe.header.columns,
     oneBased: options.oneBased ?? true,
     maxPixelBytes: budget,
-    onProgress: (done, total) => {
-      report(total > 0 ? (done / total) * PASS_SHARE : 0, 'reading records')
+    onProgress: (done, total, note) => {
+      report(total > 0 ? (done / total) * PASS_SHARE : 0, note ?? 'reading records')
     },
   }
   if (spans !== undefined) binOptions.spans = spans
