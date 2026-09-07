@@ -321,6 +321,12 @@ select` and import the result. Nothing is inferred about restriction fragments, 
 ever built from alignments (§13); a `.pairs` is a contact list, which is a different thing and is
 the reason this fits.
 
+**Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
+from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
+diagonal, `forEachBands`, `scanAll` and `binOffsets`. That is the property every view and all
+fourteen §18 tasks actually depend on, and the way it would fail is the way that matters: not an
+error, but one number differing for whichever tasks happen to use the method that diverged.
+
 **Correctness.** The binning is checked against a second implementation of the same arithmetic,
 written the slow obvious way, over sorted, shuffled, gzipped, bgzipped and uncompressed files, at
 contig boundaries and short final bins. The written `.mcool` is checked twice — read back through

@@ -287,6 +287,21 @@ metacooler-run tasks
 ##       --flagBelow (default 0.1)  Flag below this cross-block ratio
 ```
 
+Every task takes as many files as you like, and writes its results where `--out` points:
+
+```bash
+metacooler-run insulation *.mcool --window chrII --out results/
+metacooler-run chromosight sample.cool --pattern borders --balance --out results/
+metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
+
+# A .pairs is binned first, at a resolution you name — the shell's answer to
+# the browser's dialog. `--pairs` above is a BEDPE of features; the contact
+# list is the positional argument.
+metacooler-run coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
+
+metacooler-run replay workspace.metacooler.json --over 'data/*.hic'
+```
+
 ## Licence
 
 MIT.

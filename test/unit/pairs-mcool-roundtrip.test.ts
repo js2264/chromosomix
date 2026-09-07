@@ -227,6 +227,70 @@ describe('pairs → .mcool', () => {
     }
   })
 
+  it('answers every PixelStore method exactly as the cooler it wrote does', async () => {
+    // The equivalence that matters most, and the one nothing else here covers.
+    // Every view and all fourteen analysis tasks reach the pixels through this
+    // interface, so a `PairsStore` that emitted a different set for the same
+    // query would make a pairs-backed map and the `.mcool` written from it
+    // disagree about a number — silently, and only for whichever tasks happen
+    // to use the method that differs.
+    const recs = records(4_000, 61)
+    const { path, imported } = await buildMcool(recs)
+    const fromPairs = MetaCooler.fromPairs({
+      uri: 'sample.pairs.gz',
+      header: imported!.header,
+      pixels: imported!.tables.get(BASE)!,
+      rungs: imported!.rungs,
+      indexed: false,
+    })
+    const source = await LocalFileSource.open(path)
+    const fromCool = await MetaCooler.open(`${path}::resolutions/${BASE}`, source)
+    try {
+      expect(fromPairs.nBins).toBe(fromCool.nBins)
+      expect([...fromPairs.store.binOffsets()]).toEqual([...fromCool.store.binOffsets()])
+
+      // `forEachWindow`, through the dense read that every view takes.
+      for (const window of [
+        [0, fromPairs.nBins],
+        [0, 20],
+        [23, 34],
+      ] as Array<[number, number]>) {
+        const a = await fromPairs.matrix({ rows: window })
+        const b = await fromCool.matrix({ rows: window })
+        expect([...a.values], `window ${window.join('-')}`).toEqual([...b.values])
+      }
+
+      // The off-diagonal case, where the plan decides which band is read.
+      const offA = await fromPairs.matrix({ rows: [0, 20], cols: [23, 34] })
+      const offB = await fromCool.matrix({ rows: [0, 20], cols: [23, 34] })
+      expect([...offA.values]).toEqual([...offB.values])
+
+      // `scanAll` and `forEachBands`, which the analysis tasks use directly.
+      const drain = async (
+        mc: MetaCooler,
+        how: 'scanAll' | 'bands',
+      ): Promise<{ total: number; n: number }> => {
+        let total = 0
+        let n = 0
+        const take = (chunk: { length: number; count: Float64Array }): void => {
+          for (let i = 0; i < chunk.length; i++) {
+            total += chunk.count[i]
+            n++
+          }
+        }
+        if (how === 'scanAll') await mc.store.scanAll({ chunkSize: 500, onChunk: take })
+        else await mc.store.forEachBands([[0, 10], [20, 30]], take)
+        return { total, n }
+      }
+      for (const how of ['scanAll', 'bands'] as const) {
+        expect(await drain(fromPairs, how), how).toEqual(await drain(fromCool, how))
+      }
+    } finally {
+      fromPairs.close()
+      fromCool.close()
+    }
+  })
+
   it('survives a table larger than one write chunk', async () => {
     // Forces the resize-and-write_slice path rather than the single-shot one.
     const recs = records(60_000, 77)

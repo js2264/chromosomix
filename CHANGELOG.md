@@ -102,6 +102,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   an imported map is a cooler-class citizen (§9) — chromosomes table, no genomes
   table, the four metagenome tasks absent rather than disabled.
 
+- **`metacooler-run` takes a `.pairs` too**, with `--bin-size` and `--rungs`
+  standing in for the dialog the browser shows. Everything after the open is
+  the same code, which is the whole point of the CLI: a number computed in a
+  batch and a number computed by clicking come out of one implementation. Note
+  the older `--pairs` flag is a BEDPE of *features* for a pileup — a contact
+  list is the positional argument, and the usage now says so.
+
 - **The `.mcool` is written back out, and downloads when it is ready.** Every
   rung, as a real cooler: `chroms`, `bins`, `pixels`, `indexes`, cooler's own
   format attributes, and the pairs preamble carried verbatim in `metadata`
