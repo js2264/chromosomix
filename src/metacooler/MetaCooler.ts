@@ -63,6 +63,10 @@ import { HicFile } from '../hic/HicFile'
 import { isHicMagic } from '../hic/format'
 import { hicHandle } from '../hic/handle'
 import { HicStore } from '../hic/store'
+import type { BinnedPixels } from '../pairs/bin'
+import { isPairsFile, readPairsHeader, type PairsHeader } from '../pairs/format'
+import { pairsHandle } from '../pairs/handle'
+import { PairsStore } from '../pairs/store'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -269,6 +273,25 @@ export class MetaCooler {
     // all, because a `.hic` is not an HDF5 file and h5wasm's refusal of one is
     // a stack trace rather than the sentence §10 requires.
     if (isHicMagic(source.readBytes(0, 4))) return MetaCooler.fromHic(uri, source)
+    // A `.pairs` is a *third* container and the only one that cannot be opened
+    // from its own bytes alone: it declares no resolution, so there is nothing
+    // to open it *at* until a reader has chosen one. The refusal carries what
+    // the choice needs — see `pairs/import.ts` — and the worker turns it into a
+    // dialog. Asked here rather than in the worker so every entry point (the
+    // CLI, a test) gets the same sentence instead of an HDF5 stack trace.
+    if (await isPairsFile(source)) {
+      const header = await readPairsHeader(source)
+      throw new ViewerError(
+        'pairs-binning-needed',
+        'This is a .pairs file: a list of contacts with no resolution of its own. Choose a ' +
+          'bin size to build a map at.',
+        {
+          contigs: header.contigs.length,
+          assembly: header.assembly,
+          sorted: header.sorted,
+        },
+      )
+    }
     // The group comes from the URI, so `file.mmetacool::entries/rep1` and a
     // plain `file.metacool` reach the handle already resolved (§3.5).
     const handle = await openHdf5(uri, source, parseUri(uri).group)
@@ -322,6 +345,55 @@ export class MetaCooler {
       contigs: handle.readTable('chroms'),
       chromOffset: handle.readNumeric('indexes/chrom_offset'),
       store: new HicStore(file),
+    })
+  }
+
+  /**
+   * Open one rung of an imported `.pairs` as one of these.
+   *
+   * The same three lines of translation a `.hic` gets, and for the same reason:
+   * `pairs/handle.ts` answers the metadata questions, `pairs/store.ts` answers
+   * the pixel ones, and this constructor is the only place in the repo that
+   * knows both exist.
+   *
+   * Unlike every other constructor here, this one reads no bytes. The file was
+   * read once, at import; what arrives is a pixel table and the header it came
+   * from, and the resulting object is a `MetaCooler` in every sense the rest of
+   * the application uses the word — including the fourteen analysis tasks,
+   * which cannot tell the difference and are not told.
+   *
+   * The rung list is spelled the way an mcool's resolutions are, so the entry
+   * picker, the URL hash, §3.4's refine ladder and a deck descending to its
+   * lead's rung all work with no code of their own.
+   */
+  static fromPairs(init: {
+    uri: string
+    header: PairsHeader
+    pixels: BinnedPixels
+    rungs: number[]
+    indexed: boolean
+    declaredRecords?: number | null
+  }): MetaCooler {
+    const handle = pairsHandle({
+      uri: init.uri,
+      header: init.header,
+      pixels: init.pixels,
+      rungs: init.rungs,
+      indexed: init.indexed,
+      declaredRecords: init.declaredRecords ?? null,
+    })
+    return new MetaCooler({
+      uri: init.uri,
+      handle,
+      layout: {
+        kind: 'pairs',
+        group: `/resolutions/${init.pixels.binSize}`,
+        entries: init.rungs.map((size) => String(size)),
+      },
+      attrs: handle.attrs(),
+      contigs: handle.readTable('chroms'),
+      chromOffset: handle.readNumeric('indexes/chrom_offset'),
+      store: new PairsStore(init.pixels),
     })
   }
 

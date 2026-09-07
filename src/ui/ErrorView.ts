@@ -61,6 +61,13 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'Pick a resolution with the :: syntax, e.g. file.mcool::resolutions/1000 — or just drop the file again and the finest one opens.',
     ],
   },
+  'pairs-binning-needed': {
+    title: 'This is a contact list, not a map',
+    advice: [
+      'A .pairs file lists individual contacts and declares no resolution of its own, so a bin size has to be chosen before there is a map to draw.',
+      'Pick a base resolution and how many rungs the ladder should have; the file is read once and every rung is served from memory afterwards.',
+    ],
+  },
   'entry-not-found': {
     title: 'No such entry in this collection',
     advice: ['Pick one of the entries listed below, or drop the :: suffix to see them all.'],
