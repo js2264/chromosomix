@@ -71,11 +71,13 @@ import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
-import { ReaderClient, type Cancellable } from '../worker/client'
+import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
   ContigsResult,
   GenomesResult,
   OpenResult,
+  PairsBinning,
+  PairsProbeResult,
   SourceSpec,
   TablePayload,
 } from '../worker/protocol'
@@ -108,6 +110,8 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
+import { openPairsDialog } from '../ui/PairsDialog'
+import { progressToast } from '../ui/toast'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
@@ -1824,7 +1828,21 @@ export class Session {
     }
   }
 
-  async open(uri: string, source: SourceSpec, carry?: ViewState, index?: File): Promise<void> {
+  async open(
+    uri: string,
+    source: SourceSpec,
+    carry?: ViewState,
+    index?: File,
+    /**
+     * How to bin a `.pairs`, on the *second* pass through here.
+     *
+     * The first open of a contact list is always refused — there is no
+     * resolution in the file to open it at — and the refusal is caught below,
+     * turned into a dialog, and answered by calling this method again with the
+     * reader's choice. The same two-step an `.mcool` at its root already takes.
+     */
+    binning?: PairsBinning,
+  ): Promise<void> {
     if (this.opening === uri) return
     // A file that is not a contact map starts a genome browser instead. Decided
     // by name first, and by the bytes when the name does not say — see
@@ -1833,6 +1851,14 @@ export class Session {
     if (route === 'genome') {
       await this.openGenome(uri, source, carry?.locus, false, index)
       return
+    }
+    // A sidecar dropped with the file reaches the *map* door too, and only one
+    // format uses it there: a `.px2` beside a `.pairs.gz`. Folded into the spec
+    // rather than carried alongside it, because the worker builds its sources
+    // from the spec alone and a second channel for one format would be a second
+    // way for the pairing to be lost (`worker/sources.ts`).
+    if (index !== undefined && source.kind === 'local' && source.index === undefined) {
+      source = { ...source, index }
     }
     // The tracks this session is holding, before anything is torn down. A map
     // opened over a genome browser is the same genome by a different file, and
@@ -1848,7 +1874,16 @@ export class Session {
     this.host.sessionChanged(this)
     try {
       const client = this.clientOf()
-      const info = await client.request<'open'>({ kind: 'open', uri, source })
+      // A `.pairs` import is the one open with a denominator and a real wait,
+      // so it gets a bar rather than a spinner — and the bar is wired to the
+      // worker's own progress messages (`pairs/import.ts` weights the pass
+      // against the rungs so it does not stall at 99%).
+      const bar = binning === undefined ? null : progressView(`Binning ${fileLabel(uri)}`)
+      if (bar !== null) this.showContent(bar.el)
+      const info = await client.request<'open'>(
+        { kind: 'open', uri, source, ...(binning === undefined ? {} : { binning }) },
+        bar === null ? undefined : (done, total, note) => bar.update(done, total, note),
+      )
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       const names = genomes.table.data['name'] as string[]
@@ -1968,12 +2003,35 @@ export class Session {
       // render explicitly in that case — and only in that case, to avoid
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
+      // Last, and deliberately not awaited: the map is on screen and usable,
+      // and the export is a second job over arrays that are already in memory.
+      // Making the reader wait for a file after waiting for a picture is the
+      // one thing this ordering exists to avoid.
+      if (info.pairs?.download === true) void this.exportImportedMcool()
     } catch (err) {
       // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
       // reader mirrors that faithfully (§3.4). But a *user* who dropped a
       // collection meant "show me this data", so the app answers by opening an
       // entry and offering the rest in the breadcrumb picker, rather than
       // handing back an error about a URI syntax they did not use.
+      // A contact list, refused because it declares no resolution. The reader
+      // meant "show me this data", so the app asks the one question the file
+      // cannot answer and opens again — the same shape as the collection-root
+      // redirect below, and for the same reason.
+      const probe = pairsProbe(err)
+      if (probe !== null) {
+        this.opening = null
+        openPairsDialog({
+          probe,
+          fileLabel: fileLabel(uri),
+          onConfirm: (chosen) => void this.open(uri, source, carry, index, chosen),
+          // Nothing is behind this dialog: dismissing it has to leave the
+          // reader somewhere rather than on a blank panel, so the refusal is
+          // shown with what it said and the file picker is one press away.
+          onCancel: () => this.showError(err, uri, source),
+        })
+        return
+      }
       const landing = firstEntry(err)
       if (landing !== null) {
         const entryUri = `${splitUri(uri).path}::${landing.group}/${landing.entry}`
@@ -2013,6 +2071,40 @@ export class Session {
       // `render` that a second file is on its way when nothing is coming.
       this.compareCarry = null
       this.host.sessionChanged(this)
+    }
+  }
+
+  /**
+   * Build and download the `.mcool` for a session opened from a `.pairs`.
+   *
+   * Runs beside the open map rather than in front of it, with its own bar in
+   * the corner and its own cancel, because the reader has already waited once
+   * and what they are waiting for now is a file rather than a picture.
+   *
+   * Failure is reported and nothing else: the map is real and correct whether
+   * or not the export succeeded, so a write that runs out of memory must not
+   * take the session down with it.
+   */
+  private async exportImportedMcool(): Promise<void> {
+    const note = progressToast('Writing .mcool')
+    try {
+      const client = this.clientOf()
+      const job = client.cancellable<'exportMcool'>({ kind: 'exportMcool' }, (done, total, text) =>
+        note.update(done, total, text),
+      )
+      const result = await job.promise
+      if (this.destroyed) {
+        note.dismiss()
+        return
+      }
+      downloadBlob(new Blob([result.bytes as BlobPart], { type: 'application/x-hdf5' }), result.filename)
+      note.finish(`${result.filename} — ${result.rungs.length} resolutions`)
+    } catch (err) {
+      if (isCancellation(err)) {
+        note.dismiss()
+        return
+      }
+      note.fail(`Could not write the .mcool: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -6319,6 +6411,77 @@ export class Session {
  * that is working. The spinner is CSS, so it costs nothing and keeps moving
  * while the worker is busy — a frozen indicator would be worse than none.
  */
+/**
+ * A determinate bar, for the one wait in this app that has a denominator.
+ *
+ * Everything else the reader waits for is a bounded read whose cost is a
+ * handful of range requests, and `loading` — a spinner and a sentence — is the
+ * honest picture of one. A `.pairs` import is the exception: it walks the whole
+ * file, it can be minutes on a large one, and there is no map behind it to look
+ * at meanwhile. A spinner over that is the difference between "working" and
+ * "hung".
+ *
+ * Returned with its own `update`, so the caller drives it from the worker's
+ * progress messages without this module knowing anything about them.
+ */
+export function progressView(message: string): {
+  el: HTMLElement
+  update(done: number, total: number, note?: string): void
+} {
+  const fill = el('div', { class: 'pairs-progress-fill' })
+  const note = el('p', { class: 'pairs-progress-note', text: 'Starting…' })
+  const bar = el(
+    'div',
+    {
+      class: 'pairs-progress-bar',
+      attrs: { role: 'progressbar', 'aria-label': message, 'aria-valuemin': '0', 'aria-valuemax': '100' },
+    },
+    fill,
+  )
+  const root = el(
+    'div',
+    { class: 'pairs-progress' },
+    el('p', { class: 'loading-text', text: `${message}…` }),
+    bar,
+    note,
+  )
+  return {
+    el: root,
+    update(done: number, total: number, text?: string): void {
+      const fraction = total > 0 ? Math.max(0, Math.min(1, done / total)) : 0
+      fill.style.width = `${(fraction * 100).toFixed(1)}%`
+      bar.setAttribute('aria-valuenow', String(Math.round(fraction * 100)))
+      note.textContent = text === undefined ? `${Math.round(fraction * 100)}%` : `${text} — ${Math.round(fraction * 100)}%`
+    },
+  }
+}
+
+/**
+ * The probe carried by a `pairs-binning-needed` refusal, or `null`.
+ *
+ * The counterpart to `firstEntry`: both read a typed refusal and turn it into
+ * the next step, rather than into an error screen. Written as a guard rather
+ * than a cast because the detail crosses a worker boundary and arrives as plain
+ * data — a missing field here is a protocol change, and it should show up as a
+ * dialog that does not open rather than as `undefined` in an input box.
+ */
+export function pairsProbe(err: unknown): PairsProbeResult | null {
+  if (!(err instanceof ViewerError) || err.code !== 'pairs-binning-needed') return null
+  const detail = err.detail as Partial<PairsProbeResult>
+  if (!Array.isArray(detail.contigs) || detail.contigs.length === 0) return null
+  if (typeof detail.suggestedBase !== 'number' || detail.suggestedBase < 1) return null
+  return {
+    contigs: detail.contigs,
+    genomeLength: detail.genomeLength ?? 0,
+    records: detail.records ?? null,
+    indexed: detail.indexed === true,
+    assembly: detail.assembly ?? null,
+    sorted: detail.sorted ?? null,
+    sourceBytes: detail.sourceBytes ?? 0,
+    suggestedBase: detail.suggestedBase,
+  }
+}
+
 export function loading(message: string): HTMLElement {
   return el(
     'div',

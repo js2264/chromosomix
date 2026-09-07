@@ -49,8 +49,40 @@ export type SourceKind = 'local' | 'remote'
  * credential ever reaching this message.
  */
 export type SourceSpec =
-  | { kind: 'local'; file: File }
+  | { kind: 'local'; file: File; index?: File }
   | { kind: 'remote'; url: string; credential?: S3Credential }
+
+/**
+ * How a `.pairs` file is turned into a map (§3.7).
+ *
+ * Present only on the second `open` of one: the first is refused with
+ * `pairs-binning-needed`, because a contact list declares no resolution and
+ * there is nothing to open it *at* until a reader has chosen one.
+ */
+export interface PairsBinning {
+  /** Bin size of the finest rung, in base pairs. */
+  base: number
+  /** How many rungs the ladder has, base included. */
+  rungs: number
+  /** Positions are 1-based, per the 4DN spec. */
+  oneBased?: boolean
+  /** Hand the written `.mcool` to the browser as soon as it is built. */
+  download?: boolean
+}
+
+/** What a probe of a `.pairs` learned, for the dialog that picks a resolution. */
+export interface PairsProbeResult {
+  contigs: Array<{ name: string; length: number }>
+  genomeLength: number
+  /** Exact when the file is indexed, `null` otherwise. */
+  records: number | null
+  indexed: boolean
+  assembly: string | null
+  sorted: string | null
+  sourceBytes: number
+  /** The base resolution the dialog opens on. */
+  suggestedBase: number
+}
 
 // ---------------------------------------------------------------------------
 // Wire-safe tables
@@ -156,6 +188,33 @@ import type { DeepValidation, UnassignedStats } from '../metacooler/MetaCooler'
 // Results
 // ---------------------------------------------------------------------------
 
+/** The `.mcool` an import was written to, ready to be handed to the browser. */
+export interface McoolExport {
+  /** The file's bytes. Transferred rather than copied — see `reader.worker.ts`. */
+  bytes: Uint8Array
+  /** What to call it in the download. */
+  filename: string
+  /** Rungs it carries, finest first. */
+  rungs: number[]
+}
+
+/** What an import actually did, for the info panel and the status line. */
+export interface PairsImportSummary {
+  base: number
+  rungs: number[]
+  records: number
+  nnz: number
+  indexed: boolean
+  /** Records naming a contig the header did not declare. */
+  skippedUnknownContig: number
+  /** Records whose position ran past the declared contig length. */
+  clampedPosition: number
+  /** `true` when the file was not `bin1`-ordered and a merge pass ran. */
+  requiredMerge: boolean
+  /** Whether the caller asked for the `.mcool` to be built and downloaded. */
+  download: boolean
+}
+
 export interface OpenResult {
   uri: string
   layout: Layout
@@ -197,6 +256,8 @@ export interface OpenResult {
   scoreColumns: string[]
   /** Byte size of the source — the remote overview gate is a byte threshold (§7.3). */
   sourceBytes: number
+  /** Present only when this map was imported from a `.pairs` (§3.7). */
+  pairs?: PairsImportSummary
   sourceKind: SourceKind
 }
 
@@ -484,6 +545,7 @@ export interface ResultMap {
   overviewSidecar: OverviewResult
   validateDeep: DeepValidation
   stats: StatsResult
+  exportMcool: McoolExport
   cancel: null
   close: null
 }
@@ -495,7 +557,12 @@ export type RequestKind = keyof ResultMap
 // ---------------------------------------------------------------------------
 
 export type WorkerRequest =
-  | { id: number; kind: 'open'; uri: string; source: SourceSpec }
+  | { id: number; kind: 'open'; uri: string; source: SourceSpec; binning?: PairsBinning }
+  // Build the `.mcool` for the pairs import this session was opened from.
+  // Separate from `open` because it is a second long job with its own
+  // progress and its own cancel, and because a reader who cancelled the
+  // download still has the map.
+  | { id: number; kind: 'exportMcool' }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
   | { id: number; kind: 'binColumns' }

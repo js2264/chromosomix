@@ -48,13 +48,16 @@ export function splitIndexFragment(url: string): { address: string; index?: stri
  * The sidecar suffixes this app pairs with the file they index.
  *
  * `.tbi` indexes a bgzipped text file and is opportunistic — the file opens
- * without it (§8.11). `.bai` and `.csi` index a BAM and are not: there is no
- * whole-file fallback at §12's budgets, so the pair is the unit, and a BAM
- * arriving without its index is refused by name (§8.13). One regular
- * expression for all three, because *pairing* is the same gesture whichever it
- * is; what differs is only what happens when the pairing fails.
+ * without it (§8.11). `.px2` indexes a `.pairs.gz` and is opportunistic in the
+ * same sense (§3.7): with one the import's cost is known before it starts and
+ * can be scoped, without one the file is read whole. `.bai` and `.csi` index a
+ * BAM and are neither: there is no whole-file fallback at §12's budgets, so the
+ * pair is the unit, and a BAM arriving without its index is refused by name
+ * (§8.13). One regular expression for all four, because *pairing* is the same
+ * gesture whichever it is; what differs is only what happens when the pairing
+ * fails.
  */
-const INDEX_SUFFIX = /\.(tbi|bai|csi)$/i
+const INDEX_SUFFIX = /\.(tbi|bai|csi|px2)$/i
 
 /** Whether this file is a sidecar index rather than something to draw. */
 export function isIndexName(name: string): boolean {
@@ -90,6 +93,10 @@ export function indexNamesFor(base: string): string[] {
     const stem = base.replace(/\.bam$/i, '')
     return [`${base}.bai`, `${base}.csi`, `${stem}.bai`, `${stem}.csi`]
   }
+  // A pairs file takes a `.px2` and never a `.tbi`; everything else bgzipped
+  // takes a `.tbi` and never a `.px2`. Offering both for either would mean a
+  // restored row fetching an index that cannot exist.
+  if (/\.pairs\.gz$/i.test(base)) return [`${base}.px2`]
   if (/\.gz$/i.test(base)) return [`${base}.tbi`]
   return []
 }

@@ -43,14 +43,19 @@ import {
   type DeepValidation,
   type GenomesResult,
   type MatrixResult,
+  type McoolExport,
   type OpenResult,
   type OverviewResult,
+  type PairsImportSummary,
+  type PairsProbeResult,
   type SourceKind,
   type StatsResult,
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
-import { createSource, releaseSources } from './sources'
+import { createSource, openIndexSource, releaseSources } from './sources'
+import { importPairs, probePairs, suggestBase, type PairsImport } from '../pairs/import'
+import { writeMcool } from '../pairs/write'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
 /**
@@ -100,6 +105,14 @@ interface Session {
   rungs: Map<string, MetaCooler>
   /** Rung names, most recently used first — the eviction order. */
   recent: string[]
+  /**
+   * The imported `.pairs` this session was built from, when it was one.
+   *
+   * Held because it *is* the file: an imported map has no bytes to go back to,
+   * so a sibling rung is served from `tables` rather than re-opened, and the
+   * `.mcool` export is written from the same arrays the map is drawn from.
+   */
+  pairs: PairsImport | null
 }
 
 /**
@@ -140,6 +153,32 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
   if (held !== undefined) {
     touchRung(active, rung)
     return held
+  }
+  // An imported `.pairs` has no bytes to reopen: the ladder is in memory and a
+  // rung is one `MetaCooler` over a table that already exists. Built on demand
+  // and retained like any other rung, so the eviction below still bounds how
+  // many are held — though for this container what it evicts is a handle over
+  // arrays rather than an open HDF5 file.
+  if (active.pairs !== null) {
+    const table = active.pairs.tables.get(Number(rung))
+    if (table === undefined) return active.mc
+    const built = MetaCooler.fromPairs({
+      uri: active.mc.uri,
+      header: active.pairs.header,
+      pixels: table,
+      rungs: active.pairs.rungs,
+      indexed: active.pairs.indexed,
+      declaredRecords: active.pairs.declaredRecords,
+    })
+    active.rungs.set(rung, built)
+    touchRung(active, rung)
+    while (active.recent.length > MAX_RUNGS) {
+      const oldest = active.recent.pop()
+      if (oldest === undefined) break
+      active.rungs.get(oldest)?.close()
+      active.rungs.delete(oldest)
+    }
+    return built
   }
   const group = active.mc.entryGroup === '' ? 'entries' : active.mc.entryGroup
   const { path } = parseUri(active.mc.uri)
@@ -215,6 +254,97 @@ function abortError(): Error {
 // Handlers
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase two of opening a `.pairs`: probe, then either refuse with the numbers
+ * or run the import.
+ *
+ * The probe happens on both roads because it is cheap — a preamble and, where
+ * there is one, a small index — and because the second road needs the index's
+ * record count for its progress bar anyway.
+ *
+ * @returns `null` when the reader cancelled the import.
+ * @throws ViewerError `pairs-binning-needed`, carrying the probe, when no
+ *   binning was asked for.
+ */
+async function openPairs(
+  request: Extract<WorkerRequest, { kind: 'open' }>,
+  source: ByteSource,
+): Promise<PairsImport | null> {
+  const probe = await probePairs(source, () => openIndexSource(request.source))
+  const binning = request.binning
+  if (binning === undefined) {
+    const detail: PairsProbeResult = {
+      contigs: probe.header.contigs.map((contig) => ({ ...contig })),
+      genomeLength: probe.genomeLength,
+      records: probe.records,
+      indexed: probe.index !== null,
+      assembly: probe.header.assembly,
+      sorted: probe.header.sorted,
+      sourceBytes: probe.sourceBytes,
+      suggestedBase: suggestBase(probe),
+    }
+    throw new ViewerError(
+      'pairs-binning-needed',
+      'This is a .pairs file: a list of contacts with no resolution of its own. Choose a ' +
+        'bin size to build a map at.',
+      detail as unknown as Record<string, unknown>,
+    )
+  }
+  return importPairs(source, probe, {
+    base: binning.base,
+    rungs: binning.rungs,
+    oneBased: binning.oneBased ?? true,
+    ...scanHooks(request.id),
+  })
+}
+
+/** What the import did, for the info panel and the status line. */
+function summarise(pairs: PairsImport, download: boolean): PairsImportSummary {
+  const base = pairs.tables.get(pairs.rungs[0])!
+  return {
+    base: pairs.rungs[0],
+    rungs: pairs.rungs,
+    records: base.sum,
+    nnz: base.nnz,
+    indexed: pairs.indexed,
+    skippedUnknownContig: base.skippedUnknownContig,
+    clampedPosition: base.clampedPosition,
+    requiredMerge: base.wasUnsorted,
+    download,
+  }
+}
+
+/**
+ * Build the `.mcool` for the import this session was opened from.
+ *
+ * A request of its own rather than part of `open`, for three reasons: it is a
+ * second long job and wants its own bar and its own cancel; a reader who calls
+ * it off still has the map; and the bytes are large enough that they want to be
+ * *transferred* rather than copied across the thread boundary, which a result
+ * shared with the open payload could not be.
+ */
+async function handleExportMcool(id: number): Promise<McoolExport> {
+  const active = requireSession()
+  if (active.pairs === null) {
+    throw new ViewerError(
+      'unsupported',
+      'This map was not imported from a .pairs file, so there is nothing to write: it is ' +
+        'already a file on disk or on a bucket.',
+      { layout: active.mc.layout.kind },
+    )
+  }
+  const bytes = await writeMcool(active.pairs, scanHooks(id))
+  if (bytes === null) throw abortError()
+  return { bytes, filename: mcoolNameFor(active.mc.uri), rungs: active.pairs.rungs }
+}
+
+/** `Hum53.pairs.gz` → `Hum53.mcool`, which is what the download is called. */
+function mcoolNameFor(uri: string): string {
+  const leaf = uri.split(/[\\/]/).pop() ?? 'pairs'
+  const stem = leaf.replace(/\.px2$/i, '').replace(/\.gz$/i, '').replace(/\.pairs$/i, '')
+  return `${stem || 'pairs'}.mcool`
+}
+
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
   releaseRungs(session)
   session?.mc.close()
@@ -226,10 +356,38 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   cancelled.clear()
 
   const source = await createSource(request.source)
-  const mc = await MetaCooler.open(request.uri, source)
-  session = { mc, source, sourceKind: request.source.kind, rungs: new Map(), recent: [] }
+  let mc: MetaCooler
+  let pairs: PairsImport | null = null
+  try {
+    mc = await MetaCooler.open(request.uri, source)
+  } catch (error) {
+    // A `.pairs` is the one input that cannot be opened from its own bytes: it
+    // declares no resolution, so there is nothing to open it *at*. The first
+    // open is therefore always refused, and what comes back is what the dialog
+    // needs to make the choice a decision rather than a guess.
+    if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
+    pairs = await openPairs(request, source)
+    if (pairs === null) throw abortError()
+    mc = MetaCooler.fromPairs({
+      uri: request.uri,
+      header: pairs.header,
+      pixels: pairs.tables.get(pairs.rungs[0])!,
+      rungs: pairs.rungs,
+      indexed: pairs.indexed,
+      declaredRecords: pairs.declaredRecords,
+    })
+  }
+  session = {
+    mc,
+    source,
+    sourceKind: request.source.kind,
+    rungs: new Map(),
+    recent: [],
+    pairs,
+  }
 
   return {
+    ...(pairs === null ? {} : { pairs: summarise(pairs, request.binning?.download === true) }),
     uri: mc.uri,
     layout: mc.layout,
     info: mc.info,
@@ -1130,6 +1288,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
   switch (request.kind) {
     case 'open':
       return handleOpen(request)
+    case 'exportMcool':
+      return handleExportMcool(request.id)
     case 'genomes':
       return handleGenomes()
     case 'contigs':

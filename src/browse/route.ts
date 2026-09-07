@@ -42,6 +42,11 @@ export type FileRoute = 'map' | 'genome' | 'unknown'
 export function routeOf(uri: string): FileRoute {
   const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
   if (/\.(m?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
+  // A `.pairs` is a contact list rather than a matrix, and it still belongs at
+  // the map's door: what comes out of it is a map, after one question the file
+  // cannot answer for itself (§3.7). Routing is about which front door a name
+  // belongs to, and this one's is not the browser's.
+  if (/\.pairs(\.gz)?$/i.test(name)) return 'map'
   if (
     /\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig)(\.gz)?$/i.test(
       name,
@@ -74,6 +79,9 @@ export function unroutableNote(name: string): string | null {
     // reader looking at a `.bai` greyed out beside a `.bam` is one step from
     // concluding the pair cannot be opened at all.
     return 'A BAM index. Load the .bam it indexes and this is picked up with it.'
+  }
+  if (/\.px2$/i.test(name)) {
+    return 'A pairix index. Load the .pairs.gz it indexes and this is picked up with it.'
   }
   if (/\.cram$/i.test(name)) {
     return 'CRAM needs its exact reference genome, which this viewer will not fetch. Convert it with `samtools view -b`.'

@@ -64,6 +64,40 @@ export async function createSource(spec: SourceSpec): Promise<ByteSource> {
   }
 }
 
+/**
+ * The `.px2` beside a pairs file, or `null` when there is not one.
+ *
+ * Opportunistic in §3.4's exact sense: an index makes the import's cost known
+ * before it starts and lets it be scoped, and its absence changes nothing
+ * except that the whole file is read. So every failure here is `null` rather
+ * than a throw — a 404, a CORS refusal, a bucket that does not have it. The one
+ * thing that is *not* swallowed is a present-but-unreadable index, which
+ * `parsePx2` refuses by name from the caller's side.
+ *
+ * Locally the index cannot be guessed at all — a `File` has no directory to
+ * look in — so it arrives on the spec, paired by the drop target the way a
+ * `.bai` is (`annotations/sidecar.ts`). Remotely it is `<url>.px2`, which is
+ * what `pairix` writes.
+ */
+export async function openIndexSource(spec: SourceSpec): Promise<ByteSource | null> {
+  if (spec.kind === 'local') {
+    return spec.index === undefined ? null : new LocalFileSource(spec.index)
+  }
+  const url = `${stripQuery(spec.url)}.px2`
+  try {
+    const credential = spec.credential
+    return await RemoteRangeSource.open(url, credential === undefined ? {} : { credential })
+  } catch {
+    return null
+  }
+}
+
+/** A URL with its query string removed, so `.px2` lands on the object name. */
+function stripQuery(url: string): string {
+  const at = url.search(/[?#]/)
+  return at < 0 ? url : url.slice(0, at)
+}
+
 // ---------------------------------------------------------------------------
 // Reusing one remote file across opens
 // ---------------------------------------------------------------------------

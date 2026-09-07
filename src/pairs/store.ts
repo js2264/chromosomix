@@ -179,20 +179,27 @@ export class PairsStore implements PixelStore {
   }
 
   /**
-   * One chunk, as a `PixelChunk`.
+   * One chunk, as a `PixelChunk` — **copied**, never a view.
    *
-   * `bin1` and `bin2` are handed over as subarrays — views on the stored
-   * arrays, not copies — which the interface explicitly allows: chunks are not
-   * retained between calls, and a callback that needs one past its own return
-   * must copy. `count` has to be materialised because the interface asks for a
-   * `Float64Array` and the table holds `Int32Array`; that is one allocation per
-   * chunk rather than one per pixel.
+   * A `subarray` would be free and is the wrong call, for a reason particular
+   * to this store: it is the only one whose arrays are the *session's own
+   * data*. `CoolerStore` hands back what it just read out of HDF5 and
+   * `HicStore` what it just decoded from a block, so a caller that keeps or
+   * neuters one of their chunks damages nothing. Here a view is a window onto
+   * the imported table itself, and `transfersFor` — which walks a result
+   * payload and transfers every buffer it finds — would *detach the whole
+   * pixel table* the first time a chunk reached one. The map would go blank
+   * with no error anywhere.
+   *
+   * So the three arrays are materialised per chunk, which is exactly what the
+   * other two stores pay anyway, and the failure mode stops existing rather
+   * than being documented as a rule for future callers to remember.
    */
   private chunk(from: number, to: number): PixelChunk {
     const { bin1, bin2, count } = this.pixels
     return {
-      bin1: bin1.subarray(from, to),
-      bin2: bin2.subarray(from, to),
+      bin1: bin1.slice(from, to),
+      bin2: bin2.slice(from, to),
       count: Float64Array.from(count.subarray(from, to)),
       length: to - from,
     }
