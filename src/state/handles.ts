@@ -55,6 +55,7 @@
  */
 
 import { STORES, store } from './idb'
+import { crossOriginFrame } from '../embed'
 import { splitUri } from '../ui/labels'
 
 /** One granted file, and what it looked like when the grant was made. */
@@ -85,14 +86,18 @@ export function handleKey(uri: string): string {
 /**
  * `true` where this browser can remember a file at all.
  *
- * Both halves are needed and neither implies the other: Safari has
+ * All three parts are needed and none implies the others. Safari has
  * `FileSystemFileHandle` for the origin-private filesystem and no picker, so a
- * check for the type alone would promise a feature that cannot be granted.
+ * check for the type alone would promise a feature that cannot be granted — and
+ * a **cross-origin frame** has the picker as a function that rejects when it is
+ * called, which is the same promise made in a way `typeof` cannot see
+ * (`src/embed.ts`).
  */
 export function handlesSupported(): boolean {
   return (
     typeof window !== 'undefined' &&
     typeof window.showOpenFilePicker === 'function' &&
+    !crossOriginFrame() &&
     typeof indexedDB !== 'undefined'
   )
 }

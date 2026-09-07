@@ -1658,8 +1658,17 @@ export class Session {
    * in `demo/yeast/` open from the bucket, from a copy of that folder on another
    * bucket, and in the desktop build, without any of the three being written
    * into the file.
+   *
+   * **Public for one second caller**, and it is the one this method was already
+   * the whole of: `?config=<url>` names a published session in the address
+   * itself, which is how an embed is seeded (`src/embed.ts`) and how a session
+   * becomes something a page can link to rather than something a reader has to
+   * find in a picker. It is the same fetch, the same signing, the same resolving
+   * and the same errors — a seeded session and a chosen one differ in nothing
+   * after this line, which is the property worth having and the reason there is
+   * no second door.
    */
-  private async openConfigUrl(url: string): Promise<void> {
+  async openConfigUrl(url: string): Promise<void> {
     this.showContent(loading(`Reading ${fileLabel(url)}`))
     this.host.sessionChanged(this)
     try {

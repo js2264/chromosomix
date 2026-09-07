@@ -36,6 +36,8 @@
  * they ever dragged onto the window.
  */
 
+import { crossOriginFrame } from '../embed'
+
 /** Grants for files this page has been handed, by the `File` they came with. */
 const grants = new WeakMap<File, Promise<FileSystemFileHandle | null>>()
 
@@ -106,7 +108,14 @@ export function filesFrom(transfer: DataTransfer | null | undefined): File[] {
  */
 export async function chooseFiles(options: { multiple?: boolean } = {}): Promise<File[]> {
   const multiple = options.multiple ?? true
-  const picker = typeof window === 'undefined' ? undefined : window.showOpenFilePicker
+  // "Any embedding that has disabled the newer picker" is the case above, and
+  // `typeof` is not how it is detected: a cross-origin frame *has* the function
+  // and rejects the call (`src/embed.ts`). That rejection lands in the `catch`
+  // below, which reads it as a cancelled dialog — so without this line an
+  // embedded viewer offers a Choose-files button that does nothing at all, which
+  // is the one outcome worse than not offering it.
+  const picker =
+    typeof window === 'undefined' || crossOriginFrame() ? undefined : window.showOpenFilePicker
   if (typeof picker === 'function') {
     let handles: FileSystemFileHandle[]
     try {

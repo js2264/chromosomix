@@ -4037,3 +4037,105 @@ single file, made visible at the wider grant.
 In the standalone build (§19) the bucket half is absent — the origin is opaque, so every remote read
 fails before a byte moves — and the local half is the snapshot shape, since the File System Access
 API is not available to an opaque origin either.
+
+## 21. Embedded in another page
+
+Not a sixth build: the same web build, mounted differently. `?embed=1` renders **one view of one
+file with no window around it**, so the app can be what it has never been able to be — the figure
+*inside* somebody else's page: a portal, a lab's site, a paper's supplementary material, a course
+page. `src/embed.ts` is the only module that reads the flag; everything downstream asks it.
+
+**Nothing has to be installed at either end, and that is a consequence of §1 rather than a feature
+added on top.** There is no backend to point at and no package to depend on, so an embed is an
+`<iframe src=…>` and nothing else. Three properties this app already had are what make that work,
+and each is load-bearing:
+
+- **No `Cross-Origin-Opener-Policy` or `Cross-Origin-Embedder-Policy`, and no `SharedArrayBuffer`**
+  (docs/deploy.md). This is the usual reason a wasm application *cannot* be embedded — cross-origin
+  isolation has to be arranged by the *host* page and almost never is. h5wasm 0.10.x is
+  single-threaded with the binary inlined, so there is nothing to isolate.
+- **Every view state is in the hash** (§5.5), so what to show is sayable in the `src=`.
+- **Every push is archived at `…/v/<commit>/`** (docs/deploy.md), so an embed can name an immutable
+  build and go on rendering the same picture in five years. A figure in a paper should be pinned;
+  the root is for a page that wants the newest.
+
+The data host needs no new CORS entry per embedding site: a frame's requests carry the **frame's**
+origin, which is the viewer's, so §11's hosting requirements are exactly as they were.
+
+### 21.1 What decides what an embed shows
+
+Three seeds, in the order they override one another, and each is reached only because the ones above
+it said nothing: a **shared session** in the fragment (`#s=`, a whole workspace deflated into the
+URL); a **view state** in the fragment (`#uri=…`, which is what a navigation leaves behind, so it has
+to beat the `src=` or every reload would undo the reader's last click); and **`?config=<url>`**, a
+published `.metacooler.json` fetched and opened through `Session.openConfigUrl` — the same road the
+picker's own URL box takes, so a seeded session and a chosen one differ in nothing after the fetch.
+With none of the three, an embed is the file picker, which is a legitimate thing to embed.
+
+`?config=` is the pointer form of what `#s=` carries as a payload. A payload cannot be changed once
+the embed is published and grows the URL by the size of the session; a pointer is a file on a bucket,
+editable afterwards, of no length, and — because the names inside it resolve against its own URL
+(`state/SessionConfig.ts`'s `resolveConfig`) — self-contained enough to be copied to another bucket with its data. Both are
+read by one parser.
+
+A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept:
+the value is about to be fetched, and the other schemes are the ones with no server on the other end.
+
+### 21.2 What an embed does not have, and why each one
+
+- **The window furniture.** Header, tab strip, restore slot, status bar, and the five columns. The
+  header is controls over a window; the tab strip offers tabs an embed does not keep; the restore
+  slot offers *the reader's own* previous workspace, which inside an article would be six of their
+  files on a page that never asked for them (§11); the status bar is a byte counter under a figure.
+
+  The columns are the one that is about width rather than taste, and it was measured before it was
+  decided: a column is opened by a toggle *in the header*, so columns mounted without one can be
+  neither closed nor opened — and a published session carries the panel layout it was saved with, so
+  a figure saved from a full window arrived in a 1,200-pixel frame with five open columns and
+  **thirty-two pixels of map**. What is lost with them is a set of *controls*; every track in the
+  session is still drawn, because a lane is part of the view.
+
+  Everything else — the view, the breadcrumb, the analysis drawer, the content area, dropping a
+  file, every keyboard shortcut — is built exactly as it is for a top-level window, so no view knows
+  it is embedded.
+- **History entries.** A frame's `pushState` writes into the *joint* session history, so an embed
+  that pushed would take over the reader's Back button: clicking a genome and pressing Back would
+  step the map instead of leaving the page. Every write replaces. The bar is still written — a
+  reload and a copied link both read it — only the stack is left alone.
+- **A memory of itself.** Neither the `sessionStorage` tab strip (§5.6) nor the durable record
+  under it (`state/workspace.ts`) is written. An embed is one view seeded by its URL and must show what the page says on
+  every load; and a third-party frame's storage is partitioned per embedding site, so what it wrote
+  would be a store the reader has no interface to and no way to clear.
+- **The service worker and the version notice.** An embed is not an app to install, and a bar
+  offering "take the newest build" across the top of somebody's figure is chrome by another name —
+  and an offer only the page's author could accept, since they pinned the build on purpose.
+
+**The File System Access API is unavailable to a cross-origin frame**, and in the way that is hardest
+to see: the pickers are *present* and reject when called. Every capability gate in the app therefore
+tests `crossOriginFrame()` as well as `typeof`, and a cross-origin embed takes the same fallbacks
+Firefox and Safari have always taken — an `<input type="file">` for files, the snapshot shape for a
+directory (§20). **Dropping is untouched**, so "drop your own file on this figure" is an embed a page
+can offer. A same-origin frame is deliberately not caught: the pickers work there.
+
+### 21.3 The channel
+
+An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
+messages (`app/EmbedChannel.ts`). Out: `metacooler:ready`, once, carrying the protocol version and
+the build and **nothing about the session**; and `metacooler:state`, the view state as the hash is
+written from. In: `metacooler:where`, answered with the state; and `metacooler:navigate`, a **patch**
+laid over what is on screen — `{ locus: … }` moves the browser without the host knowing what else is
+in the state, a key sent as `null` is removed, and `state: null` is the picker.
+
+Two rules decide the rest. **Only the window that framed this one is answered**, and only after it
+has spoken — `ready` is the single exception and the reason the handshake terminates. Replies and
+pushes go to the origin the host spoke from, never to `*`, because a reader can open *their own* file
+in an embed and the URL that follows is not the host's to learn unless it asked to be told. An opaque
+origin — a `file://` host, a sandboxed frame — cannot be named as a target, and is answered at the
+window itself, which is the only address it has.
+
+And a patch is **serialised and parsed back** through §5.5's reader rather than believed. It is an
+object from another origin, so it is exactly as untrusted as a hand-edited link, and there is already
+one reader that validates every key, clamps what needs clamping and drops what it does not recognise.
+A `view` this build has never heard of falls back; a smoothing radius it does not offer is dropped;
+an array where a genome name should be is not stringified into one. What the host is told afterwards
+is where the view actually **went**, which for a trimmed patch is not always where it asked to go.

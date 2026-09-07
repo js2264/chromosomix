@@ -31,6 +31,7 @@
  */
 
 import { STORES, store } from './idb'
+import { crossOriginFrame } from '../embed'
 
 /** One connected directory, and what it was called when it was connected. */
 export interface DirectoryRow {
@@ -61,6 +62,9 @@ export function directoriesSupported(): boolean {
   return (
     typeof window !== 'undefined' &&
     typeof window.showDirectoryPicker === 'function' &&
+    // And not from a frame somebody else's page put this window in, where the
+    // picker is present and rejects — `handlesSupported` carries the argument.
+    !crossOriginFrame() &&
     typeof indexedDB !== 'undefined'
   )
 }
