@@ -111,6 +111,15 @@ describe('the matrix, however its triangle was stored', () => {
     expect(p.sum).toBe(33)
   })
 
+  it('labels an upper file upper, diagonal pixels notwithstanding', () => {
+    // A diagonal pixel is in neither triangle. Counting it in both made every
+    // real file `mixed` — and every real file has a diagonal — so the label
+    // said nothing at all until the comparison was made strict.
+    expect(parseMatrix(UPPER, 5, 'x').observed).toBe('upper')
+    expect(parseMatrix(LOWER, 5, 'x').observed).toBe('lower')
+    expect(parseMatrix(enc('3\t3\t2\n'), 5, 'x').observed).toBe('upper')
+  })
+
   it('does not double the off-diagonal cells of a complete matrix', () => {
     // The failure this exists for: folding both triangles onto one and *adding*
     // them gives 0,1 = 10 and a map that is twice as bright everywhere but the

@@ -827,6 +827,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
 
+- **A diagonal pixel was counting as both triangles**, so the `MATRIX_FORMAT`
+  a HiC-Pro file turned out to be written with was reported as `mixed` for
+  every real file — every real file has a diagonal. Caught against HiCExplorer's
+  own HiC-Pro test pair, which is upper-triangular and was labelled `mixed`;
+  the comparison is now strict, and a file of nothing but its diagonal reports
+  the default it would have been written as.
+
 - **A URL fragment is not part of a file name.** `<matrix>#bins=<url>` ends in
   `.bed`, so the name test sent the *matrix* through the genome door and drew
   its bin file as a feature track. Both places that take a name off a URL — the

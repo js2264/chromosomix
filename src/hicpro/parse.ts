@@ -389,8 +389,11 @@ export function parseMatrix(
         { label, line, bin1: a.value, bin2: b.value, nBins },
       )
     }
-    if (i <= j) sawUpper = true
-    if (i >= j) sawLower = true
+    // Strictly: a diagonal pixel is in neither triangle, and counting it in
+    // both labelled every real file `mixed` — which every real file has, so the
+    // label meant nothing until this was strict.
+    if (i < j) sawUpper = true
+    if (i > j) sawLower = true
     // Stored upper whichever way it arrived; `complete` is folded below.
     bin1[out] = i <= j ? i : j
     bin2[out] = i <= j ? j : i
@@ -404,8 +407,10 @@ export function parseMatrix(
     }
   }
 
+  // A file of nothing but its diagonal is in neither triangle and is reported
+  // as the default one, which is what it would have been written as.
   const observed: HicProPixels['observed'] =
-    sawUpper && sawLower ? 'mixed' : sawUpper ? 'upper' : 'lower'
+    sawUpper && sawLower ? 'mixed' : sawLower ? 'lower' : 'upper'
 
   // Two stable counting sorts — by `bin2`, then by `bin1` — which together put
   // the pixels in the (row, column) order a cooler stores them in, and leave
