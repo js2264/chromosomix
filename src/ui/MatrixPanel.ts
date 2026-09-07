@@ -93,10 +93,12 @@ import {
   preferredTransform,
   type AxisRun,
   type DerivedValues,
+  type SmoothedField,
+  type SmoothingRequest,
   type Derivation,
   type Normalisation,
 } from '../render/derive'
-import { SMOOTH_RADII, smoothLabel } from '../render/smooth'
+import { SMOOTH_CHOICES } from '../render/smooth'
 import type { CorrelationField } from '../analysis/compartments'
 import { isCancellation, type Cancellable } from '../worker/client'
 import {
@@ -600,16 +602,17 @@ export interface DerivePresentation {
    */
   onExpectedChange?(on: boolean): void
   /**
-   * Radius of the despeckling window; `0` for none (`render/smooth.ts`).
+   * How much despeckling, as the picker's token; `0` for none
+   * (`render/smooth.ts`).
    *
    * Shared and applied exactly as {@link expected} is, including on a companion
    * that draws it without offering the control — a deck whose panels smoothed
    * differently would be five pictures that could not be compared, which is the
    * one thing a deck is for.
    */
-  smooth: number
+  smooth: string
   /** Absent on a panel that applies the smoothing but does not own it. */
-  onSmoothChange?(radius: number): void
+  onSmoothChange?(token: string): void
   /**
    * Whether the square is replaced by the correlation between its rows.
    *
@@ -653,6 +656,16 @@ export interface DerivePresentation {
    * message describes something that is over.
    */
   onCorrelateFailure?(message: string): void
+  /**
+   * Run the adaptive despeckle off this thread.
+   *
+   * A callback rather than a client, exactly as {@link correlateBlock} is and for
+   * its reason: the session owns the worker, the panel owns the block and the
+   * cache, and the seam is the arrays in and the arrays out. Absent where nothing
+   * can run one, in which case the filter is computed inline at whatever it
+   * costs — which is right, because the alternative is not doing it at all.
+   */
+  smoothBlock?(request: SmoothingRequest): Cancellable<SmoothedField>
 }
 
 /**
@@ -1054,6 +1067,12 @@ export class MatrixPanel {
    * looking finished and then changed under the reader some seconds later.
    */
   private correlationNote: string | null = null
+  /** A smoothing already computed, for the block and setting it names. */
+  private smoothed: { key: string; field: SmoothedField } | null = null
+  /** The smoothing on its way, so a superseded one can be cancelled. */
+  private smoothing: { key: string; job: Cancellable<SmoothedField> } | null = null
+  /** The smoothing's own line on the veil, kept apart from the correlation's. */
+  private smoothingNote: string | null = null
   /** The last title {@link setData} was given, so a turn can re-run it. */
   private lastTitle = ''
   /** The room the box has, measured once per resize. See {@link measureRoom}. */
@@ -1477,25 +1496,27 @@ export class MatrixPanel {
     if (onSmoothChange !== undefined) {
       const smoothSelect = el('select', { class: 'select' })
       this.smoothSelect = smoothSelect
-      for (const radius of SMOOTH_RADII) {
-        smoothSelect.appendChild(
-          el('option', { value: String(radius), text: radius === 0 ? 'off' : smoothLabel(radius) }),
-        )
+      for (const choice of SMOOTH_CHOICES) {
+        smoothSelect.appendChild(el('option', { value: choice.id, text: choice.label }))
       }
-      smoothSelect.value = String(options.derive?.smooth ?? 0)
+      smoothSelect.value = options.derive?.smooth ?? '0'
       smoothSelect.addEventListener('change', () => {
-        onSmoothChange(Number(smoothSelect.value))
+        onSmoothChange(smoothSelect.value)
       })
       controls.unshift(
         field(
           'smooth',
           smoothSelect,
-          'Replace each cell by the mean of the cells around it, leaving its own value out — ' +
-            '`terra::focal` with a zero centre weight, the despeckle Hi-C figures are usually ' +
-            'made with. Applied to each file before two are compared, so a ratio is ' +
+          'Replace each cell by the mean of the cells around it, itself included — the box ' +
+            'filter Hi-C figures are usually made with. Applied to each file before two are ' +
+            'compared, and before the O/E division, so a ratio is ' +
             '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
             'and the saturated single pixels a sparse ratio is made of are never produced. ' +
-            'Single-cell features are averaged away with them, which is why it is off by default.',
+            'Single-cell features are averaged away with them, which is why it is off by default. ' +
+            'The three adaptive settings size each window separately, widening it where the ' +
+            'counts thin out — which is away from the diagonal, where a fixed window averages ' +
+            'mostly empty cells and stays noisy. Each starts at the fixed window above it. ' +
+            'Picking it turns the O/E on, because that is the picture it is for.',
         ),
       )
     }
@@ -2672,7 +2693,7 @@ export class MatrixPanel {
       data.rowExtent[1],
       derivation.normalise ?? '',
       String(derivation.expected === true),
-      derivation.smooth ?? 0,
+      derivation.smooth ?? '0',
     ].join('|')
   }
 
@@ -2757,6 +2778,25 @@ export class MatrixPanel {
   /** Put the correlation's own wait on the veil, or take it off. */
   private showCorrelating(note: string | null): void {
     this.correlationNote = note
+    this.refreshBusy()
+  }
+
+  /** Put the smoothing's wait on the veil, or take it off. */
+  private showSmoothing(note: string | null): void {
+    this.smoothingNote = note
+    this.refreshBusy()
+  }
+
+  /**
+   * Whichever wait is outstanding, with the correlation's winning.
+   *
+   * Both can be outstanding at once — the smoothing runs before the correlation
+   * does — and two notes cannot share one veil. The correlation's is shown
+   * because it is the longer job and the one whose progress a reader is actually
+   * waiting on.
+   */
+  private refreshBusy(): void {
+    const note = this.correlationNote ?? this.smoothingNote
     if (note === null) this.setBusy(false)
     else this.setBusy(true, note)
   }
@@ -2769,17 +2809,92 @@ export class MatrixPanel {
     this.showCorrelating(null)
   }
 
+  /** The same for a smoothing, and it is dropped on the same events. */
+  private forgetSmoothing(): void {
+    this.smoothing?.job.cancel()
+    this.smoothing = null
+    this.smoothed = null
+    this.showSmoothing(null)
+  }
+
   /**
-   * Show the despeckle radius the panel is drawing. {@link paintExpected}'s
+   * Ask for a smoothing, unless the same one is already on its way.
+   *
+   * `startCorrelation`'s shape throughout, including the two things easy to leave
+   * out: a superseded job is cancelled rather than left to finish for a block
+   * nobody is looking at, and a late answer to a superseded question is dropped
+   * rather than cached, because the key it belongs to may never be asked for
+   * again.
+   */
+  private startSmoothing(key: string, request: SmoothingRequest): void {
+    if (this.smoothing?.key === key) return
+    const run = this.options.derive?.smoothBlock
+    if (run === undefined) return
+    this.smoothing?.job.cancel()
+
+    const job = run(request)
+    this.smoothing = { key, job }
+    this.showSmoothing('smoothing…')
+
+    job.promise.then(
+      (field) => {
+        if (this.smoothing?.key !== key) return
+        this.smoothing = null
+        this.smoothed = { key, field }
+        this.showSmoothing(null)
+        this.redraw()
+      },
+      (err: unknown) => {
+        if (this.smoothing?.key !== key) return
+        this.smoothing = null
+        this.showSmoothing(null)
+        // A cancelled smoothing is a reader who moved the picker, which is not an
+        // error and must not draw one (`worker/client.ts`). A real failure leaves
+        // the unsmoothed map standing, a true picture of the same region.
+        if (!isCancellation(err)) {
+          this.options.derive?.onCorrelateFailure?.(
+            err instanceof Error ? err.message : String(err),
+          )
+        }
+      },
+    )
+  }
+
+  /**
+   * What identifies the block a smoothing was computed for.
+   *
+   * Everything upstream of it in `deriveBlock`'s pipeline, and the baseline
+   * through `expected`: a window sized against one normalisation is not the
+   * window another would have chosen, and the O/E decides whether a second field
+   * was averaged alongside the first at all.
+   */
+  private smoothingKey(data: MatrixResult, derivation: Derivation): string {
+    return [
+      this.blockGeneration,
+      data.nrows,
+      data.ncols,
+      data.rowExtent[0],
+      data.rowExtent[1],
+      data.colExtent[0],
+      data.colExtent[1],
+      derivation.normalise ?? '',
+      String(derivation.expected === true),
+      String(derivation.baseline === true),
+      derivation.smooth ?? '0',
+    ].join('|')
+  }
+
+  /**
+   * Show the despeckle setting the panel is drawing. {@link paintExpected}'s
    * counterpart, and silent on a companion, which has no picker to set.
    *
    * Programmatic assignment to a `<select>` fires no `change` event, so this
    * cannot loop back through the handler that called it.
    */
-  private paintSmooth(radius: number): void {
+  private paintSmooth(token: string): void {
     const select = this.smoothSelect
     if (select === null) return
-    select.value = String(radius)
+    select.value = String(token)
   }
 
 
@@ -2799,6 +2914,7 @@ export class MatrixPanel {
     // left to resolve into a dead panel, and the client itself is the session's
     // to close.
     this.forgetCorrelation()
+    this.forgetSmoothing()
     setReadout('')
     this.featureDialog?.close()
     this.featureDialog = null
@@ -5271,9 +5387,25 @@ export class MatrixPanel {
       // Applied inside `deriveBlock`, which is what puts it on *each file* and
       // ahead of `combine` — the whole reason a ratio can be smoothed at all
       // (`render/smooth.ts`).
-      smooth: this.options.derive?.smooth ?? 0,
+      smooth: this.options.derive?.smooth ?? '0',
     }
+    const aligned = second !== undefined && alignable(data, second) ? second : undefined
+    // A compared pair is never deferred: two blocks would need two jobs, and a
+    // half-finished pair would put a smoothed map over an unsmoothed one and call
+    // the result a ratio. Both are computed inline instead.
+    if (this.options.derive?.smoothBlock !== undefined && aligned === undefined) {
+      derivation.deferSmoothing = true
+    }
+    const smoothKey = this.smoothingKey(data, derivation)
+    if (this.smoothed !== null && this.smoothed.key !== smoothKey) this.smoothed = null
+    if (this.smoothed?.key === smoothKey) derivation.smoothed = this.smoothed.field
+
     const derived = deriveBlock(data, derivation, runs)
+    // Wanted and not held: start one, and draw the unsmoothed field meanwhile.
+    // Exactly the correlation's arrangement — the operand is a real picture of
+    // the same region, and the caption does not claim it is the smoothed one.
+    if (derived.pending !== undefined) this.startSmoothing(smoothKey, derived.pending)
+    else if (this.smoothing !== null && this.smoothing.key !== smoothKey) this.forgetSmoothing()
     // The correlation replaces the whole field, which is why it is applied here
     // rather than inside `deriveBlock`: every step in there is synchronous and
     // this one is not, so the panel is the only place that can hold the answer
@@ -5289,9 +5421,13 @@ export class MatrixPanel {
           { ...derived, scope: `correlation not drawn — ${refusal}` }
     if (!correlating && this.correlating !== null) this.forgetCorrelation()
     this.derived = mine
-    const aligned = second !== undefined && alignable(data, second) ? second : undefined
     const theirs =
-      aligned === undefined ? undefined : deriveBlock(aligned, derivation, runs)
+      aligned === undefined
+        ? undefined
+        : // Its own derivation object: a window sized on the lead's cells says
+          // nothing about this file's, and `smoothed` left in place would put the
+          // lead's values into the companion's half of the ratio.
+          deriveBlock(aligned, { ...derivation, smoothed: undefined }, runs)
 
     const op = this.options.compare?.op ?? 'split'
     // Measured on the *derived* blocks, not the raw ones: a normalisation may
@@ -6021,7 +6157,7 @@ export class MatrixPanel {
       derive?.baseline !== true && (derive?.expected === true || derive?.correlate === true),
     )
     this.gateExpected(derive?.baseline === true)
-    this.paintSmooth(derive?.smooth ?? 0)
+    this.paintSmooth(derive?.smooth ?? '0')
     return same
   }
 
@@ -6408,7 +6544,14 @@ export class MatrixPanel {
       // …and for the same reason: the scales the heatmap has just written are
       // what this reads, and writing it before the draw would show the previous
       // frame's window for one frame of every drag.
-      this.viewNote.textContent = this.viewPhrase()
+      // The derivation's own caveat rides on the same line, because it is the one
+      // thing about the picture a reader cannot see by looking at it: a refused
+      // adaptive window draws a fixed one, and a fixed one looks like a map. It
+      // was already in the export caption, which is no use to somebody deciding
+      // what they are looking at now.
+      const caveat = this.derived?.scope ?? null
+      const phrase = this.viewPhrase()
+      this.viewNote.textContent = caveat === null ? phrase : `${phrase} · ${caveat}`
       this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where

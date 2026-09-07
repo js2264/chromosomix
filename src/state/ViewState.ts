@@ -19,7 +19,7 @@
  */
 
 import { isCompareOp } from '../render/compare'
-import { SMOOTH_RADII } from '../render/smooth'
+import { parseSmooth } from '../render/smooth'
 import { contigOf } from '../ui/labels'
 import type { Transform, ViewKind, ViewState } from '../types'
 
@@ -238,10 +238,10 @@ export function parseViewState(hash: string): ViewState | null {
   // land on the plain map, which is what every other unrecognised value does.
   const smooth = raw.get('smooth')
   if (smooth !== undefined && smooth !== '') {
-    const radius = Number(smooth)
-    if (Number.isInteger(radius) && SMOOTH_RADII.includes(radius) && radius > 0) {
-      state.smooth = radius
-    }
+    // One key, two vocabularies: `2` is a radius and `a200` is a target for a
+    // window that sizes itself. Both are believed only if this build offers
+    // them, which is what `parseSmooth` answers.
+    if (parseSmooth(smooth) !== null) state.smooth = smooth
   }
 
   const op = raw.get('op')

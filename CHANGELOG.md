@@ -14,6 +14,58 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A despeckle whose window sizes itself, in the `smooth` picker.** One new
+  setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
+  window grows until it covers enough evidence to average, so it stays narrow
+  where the counts are thick and widens where they thin out. Carried in the link
+  as `smooth=a50`, and written into the colourbar caption as
+  `counts · smoothed adaptively`.
+
+  **Why a fixed window was never going to work away from the diagonal.** The
+  precision of a box mean depends on the *counts* it covers, not on the cells it
+  covers. Near the diagonal a `7 × 7` box holds thousands of contacts and its mean
+  is steady; at 300 kb separation on the same map those 48 cells are almost all
+  zero, so the mean is a handful of counts divided by 48 — still noise — and
+  widening the box does not help, because what is in it grows in proportion to
+  nearly nothing. On a yeast map at 500 bp the coefficient of variation between
+  200 and 800 bins of separation is **6.8 raw, 1.1 at `7 × 7`, and 0.41
+  adaptive**.
+
+  **This is serpentine's criterion, not serpentine's algorithm.**
+  [Serpentine](https://doi.org/10.1093/bioinformatics/btaa249) (Baudry *et al.*,
+  *Bioinformatics* 2020) is where the idea of holding the counts constant instead
+  of the window comes from. Its own method grows *regions* and averages each,
+  which makes the result a partition — the right shape for a differential
+  analysis, and the wrong one for a viewer, because the partition is global and
+  stochastic, so panning by one bin redraws every boundary and the map visibly
+  reshuffles under the reader. Here the windows overlap and no partition is
+  formed, so a cell reads the same wherever it sits in the viewport.
+
+  The width is set by the block's **as-read** values while the mean is taken over
+  whatever the derivation has made of them — serpentine's own separation, and what
+  makes the setting work under the O/E at all, since observed-over-expected is
+  near 1 everywhere by construction and a window sized on it would be the same
+  size everywhere. The target is a multiple of the block's mean rather than an
+  absolute count, because `score` may have put balanced values in the cells.
+
+  **Picking it turns the O/E on**, exactly as clicking the toggle would, and the
+  `log2` scale, the symmetric range and the diverging ramp all follow from the
+  neutral of 1 that gives the result. That is the picture the setting is for: on
+  raw counts all it can denoise is the distance decay that was never in question.
+  Turning the O/E off again is left to the reader.
+
+  The window is floored at `3 × 3` and capped at a radius of 192. Blocks are
+  capped at **16 M cells** — the 4096² raster cap, so in practice it is available
+  on anything the viewer draws. The cumulative tables are built for a **band of
+  rows** at a time rather than for the block, so about 128 MB is resident whatever
+  the block's size; without that a 16 M block would allocate over half a gigabyte
+  on the thread drawing frames. Time is roughly linear: **173 ms at 841², 328 ms
+  at 1,200², 867 ms at 4 M and 3.9 s at 16 M**. That last is a real freeze and the
+  honest price of the cap being where it is; if it ever needs fixing the answer is
+  the analysis thread rather than a lower cap. Above the cap the fixed `3 × 3` is
+  used and the refusal is said **twice** — in the export caption, and in the view
+  note under the heading, because a caption nobody reads until they export is no
+  use to somebody looking at the screen.
 - **VCF opens as a lane of variants.** Drop a `.vcf`, or a `.vcf.gz` with its
   `.tbi`, and the calls draw as boxes over the reference bases each record is
   about — with the symbolic ones at their real size, read out of `INFO/END` and
@@ -542,6 +594,132 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   parameter key is an alias for it.
 
 ### Changed
+
+- **The adaptive filter runs on the analysis thread above 1 M cells.** It reads
+  the block twice — once to measure every cell against its neighbourhood and once
+  to average the capped field — and at the cell cap that is 7.4 s, which on the
+  thread drawing frames is a frozen window rather than a hitch. Below the limit it
+  is still done inline, which is the better trade there: 78 ms on a 353² view, and
+  no flash of an unsmoothed map on the way to a smoothed one.
+
+  `deriveBlock` runs the pipeline to the point the smoothing would happen, hands
+  the caller the arrays it would have used, and carries on with the **unsmoothed**
+  field; the panel starts a job and derives again when the answer lands, at which
+  point the step is a lookup. The correlation's arrangement, for the correlation's
+  reason. While it waits **the caption says `counts`, not `smoothed`** — a figure
+  exported mid-wait must not claim a filter it does not have — the wait shows on
+  the veil, a superseded job is cancelled, and a late answer to a superseded
+  question is dropped rather than cached.
+
+  Two callers never defer and compute inline at whatever it costs, because the
+  alternative is not doing it at all: a panel with no analysis thread behind it,
+  and **either file of a compared pair**, where two blocks would need two jobs and
+  a half-finished pair would put a smoothed map over an unsmoothed one and call
+  the result a ratio. The fixed radii never defer at any size — one incremental
+  pass is not worth a round trip.
+
+  The job is not interruptible partway through, unlike the correlation's, and that
+  is deliberate: the filter's passes are banded over rows and there is no
+  consistent state to stop at inside one. The cancel is checked before the work as
+  well as after, so a job cancelled while queued never starts and only the one
+  already running is wasted.
+
+- **The adaptive window no longer turns one hot cell into a rectangle.** Reported
+  from a yeast microC map at 500 bp: saturated hard-edged blocks, each with an
+  isolated bright pixel at its centre and its edges lined up with discarded-bin
+  stripes. Two causes, both ours. A mean has no defence against a single extreme
+  value — and it had one until the centre went back into the kernel, which fixed
+  the hollow squares and removed the only outlier rejection there was. And a box
+  kernel's impulse response *is* a box, so the cell raised every window that could
+  reach it by the same amount and none of the next ones along. Measured: one cell
+  at 400× its neighbourhood produced a **20 × 20 bin block peaking at 5.3** in
+  `log2` O/E, on a scale clipping at 0.84.
+
+  **A cap on leverage, before the averaging.** Not a multiple of the local mean,
+  which is the obvious rule and is wrong for this data: away from the diagonal the
+  map is Poisson-sparse, so a window's mean is 0.05 while its occupied cells hold
+  1, and every honest count is already twenty times the local mean. No fixed
+  multiple both spares those and controls a spike — a tight one biases the
+  sparsest part of the map downward, which is the part the filter is for. What the
+  artefact is, is leverage: a cell shifts the mean of every window reaching it by
+  `(value − mean) / n`. So the cap is written on that — no cell may add more than
+  half again to the mean of a window its own size — and it scales itself, tight in
+  a 3 × 3 near the diagonal and two hundredfold in a sparse 21 × 21. The mean is
+  taken **without the cell itself**, which is the one thing the zero-centre kernel
+  had right: excluding the centre is correct for deciding whether a cell is an
+  outlier and wrong for estimating what to draw there. The two passes do one each.
+
+  **And a shoulder on the kernel.** The mean is now taken over three nested
+  windows — `r/2`, `r`, `3r/2` — and averaged, so the weights step down instead of
+  falling off a cliff: the outer shell carries about 8% of the weight the centre
+  does. The radii are chosen so this costs nothing in noise, an effective sample of
+  3.90·r² against the plain box's 4·r² — the same estimate over half again as much
+  ground.
+
+  With both, a synthetic spike of 2000× no longer reaches the clip and the O/E's
+  mean stays at 1.00 in every separation band, so no bias was traded for the
+  improvement. The cost is a second read of the block: 78 ms at 353², 300 ms at
+  841², 1.5 s at 4 M and 7.4 s at 16 M, about double what it was.
+
+  **This reduces the artefact rather than removing it, and on real data it is
+  still visible.** The cap bounds a flagged cell's damage by construction — the
+  rule permits it to inflate its window by half, which is `log2 0.58` on a scale
+  clipping at 0.84 — and two stricter answers were tried and dropped: trimming the
+  flagged cell out of the sum and the divisor, and replacing it with the mean of
+  its eight neighbours. Both looked better on synthetic spikes and neither removed
+  the artefact reproducibly on a real map, which says the detector rather than the
+  response is what still needs work. The synthetic used to develop this evidently
+  does not reproduce whatever the real one is.
+
+- **The adaptive window may now grow to radius 192, up from 64.** At 64 it ran
+  into the cap beyond about 200 bins of separation on a yeast map at 500 bp, so
+  the cap rather than the target was choosing the width for exactly the cells
+  with the least data. The search is binary, so this costs one more trial radius
+  per cell and nothing else.
+- **The despeckle now runs before the O/E division, and divides by a baseline
+  averaged over the same windows.** Both halves of this were needed to make the
+  `smooth` picker do anything visible on an O/E map, which is the picture most
+  readers of a sparse map are looking at.
+
+  `observedOverExpected` draws a cell where nothing was observed as paper rather
+  than as the strongest depletion on the ramp, and away from the diagonal *most*
+  cells are that cell — **98%** of them at 200 bins out on a yeast map at 500 bp.
+  Computing the O/E first therefore handed the filter a field that was almost
+  entirely `NaN`, which no despeckle will touch, so every setting from `3 × 3` to
+  `7 × 7` drew the same picture: a scatter of the 2% of cells that happened to
+  catch a contact, at a mean of **45× expectation**, over a blank field.
+
+  Smoothed first, a zero cell with contacts around it is never blanked. That 98%
+  falls to **83% at `3 × 3`, 38% at `7 × 7` and 0% under every adaptive setting**,
+  and the mean of the band comes back to **1.00**.
+
+  The baseline is averaged over the same windows because dividing a smoothed map
+  by an unsmoothed curve is biased: near the diagonal the decay is steep, so a
+  window spanning it averages cells whose baselines differ several-fold and the
+  ratio reads **24–32% enriched** at radii 3 to 7 — an artefact of the filter and
+  of nothing in the file. Matched, the bias sits in both halves and cancels. The
+  curve itself is still estimated from the *unsmoothed* block, which is the half
+  of the old ordering worth keeping: fitting it to pre-averaged cells would let
+  each cell's neighbours count twice toward the baseline it is compared against.
+
+- **The despeckle keeps the cell's own value.** The kernel was `terra::focal`
+  with a zero centre weight, on the argument that a cell disagreeing with all
+  eight of its neighbours is evidence about the neighbourhood rather than about
+  itself. That is right about rejecting outliers and wrong about a sparse map,
+  where a lone contact is not an outlier but the only measurement there is: the
+  zero-centre kernel replaced it with the mean of the eight zeros around it while
+  spreading it into those eight, so **every isolated count rendered as a hollow
+  square with a hole where the contact was**, and away from the diagonal most of
+  the picture was made of those.
+
+  It was also the wrong estimator for what the filter now feeds — a local rate
+  that the O/E divides — since discarding the one cell being estimated at is both
+  biased and needlessly noisy. Despeckling survives the change in all but the
+  narrowest window: a wild pixel is diluted to a ninth of its excess at `3 × 3`, a
+  twenty-fifth at `5 × 5`, and to a few hundredths at the widths the adaptive
+  settings reach. What is lost is the guarantee that a single wild cell is
+  annihilated rather than suppressed; what is bought is that a single *real* cell
+  is no longer annihilated either.
 
 - **Zooming a curve is a rectangle now, and it keeps working.** Dragging across a
   P(s), a slope or any other drawer curve selects a window on **both** axes

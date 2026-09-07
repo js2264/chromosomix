@@ -112,7 +112,7 @@ const CASES: ViewState[] = [
     balance: true,
     score: 'balanced',
     oe: true,
-    smooth: 2,
+    smooth: '2',
     op: 'ratio',
     // `false` rather than absent on purpose: absent *means* turned, so the
     // explicit square is the value that has to survive being written down.
@@ -128,10 +128,13 @@ describe('serialiseViewState / parseViewState', () => {
     })
   }
 
-  it('takes a despeckle radius this build offers, and nothing else', () => {
-    const at = (hash: string): unknown => (parseViewState(hash) as { smooth?: number }).smooth
-    expect(at('#uri=a&view=region&region=c1&smooth=1')).toBe(1)
-    expect(at('#uri=a&view=region&region=c1&smooth=3')).toBe(3)
+  it('takes a despeckle setting this build offers, and nothing else', () => {
+    const at = (hash: string): unknown => (parseViewState(hash) as { smooth?: string }).smooth
+    expect(at('#uri=a&view=region&region=c1&smooth=1')).toBe('1')
+    expect(at('#uri=a&view=region&region=c1&smooth=3')).toBe('3')
+    // The adaptive setting shares the key, and is read by the same rule.
+    expect(at('#uri=a&view=region&region=c1&smooth=a50')).toBe('a50')
+    expect(at('#uri=a&view=region&region=c1&smooth=a999')).toBeUndefined()
     // `0` is off and off is *absent*: a hash saying it had chosen the default
     // would round-trip to a key the serialiser never writes.
     expect(at('#uri=a&view=region&region=c1&smooth=0')).toBeUndefined()

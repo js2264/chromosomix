@@ -27,7 +27,14 @@
  * the pooling layer and the reader unaware that derived values exist.
  */
 
-import { smoothLabel, smoothValues } from './smooth'
+import {
+  adaptiveSmoothValues,
+  parseSmooth,
+  smoothingCaption,
+  smoothValues,
+  SMOOTH_INLINE_CELLS,
+  type Smoothing,
+} from './smooth'
 
 /** The part of a read this module needs: shape, values, and where they sit. */
 export interface BlockValues {
@@ -173,6 +180,15 @@ export interface DerivedValues {
    * implies. `null` when the block is the whole of what the statement is about.
    */
   scope: string | null
+  /**
+   * A smoothing this derivation wanted and did not have.
+   *
+   * Present only when an `adaptive` setting is chosen on a block big enough to be
+   * worth moving and the caller said it could move it. The field above is the
+   * honest unsmoothed picture; a caller that can run the filter starts one and
+   * derives again. See {@link SmoothingRequest}.
+   */
+  pending?: SmoothingRequest
 }
 
 /** Whether a derived quantity is read against a middle rather than against zero. */
@@ -677,10 +693,30 @@ export interface Derivation {
    */
   baseline?: boolean
   /**
-   * Radius of the despeckling window, in cells; `0` or absent for none
+   * How much despeckling, as the token the picker and the link carry — a fixed
+   * radius (`1` is 3 × 3) or an adaptive target (`a200`); `0` or absent for none
    * (`render/smooth.ts`).
    */
-  smooth?: number
+  smooth?: string
+  /**
+   * A smoothing already computed for this exact block and setting.
+   *
+   * Absent on the first derivation of a block, which is what produces
+   * {@link DerivedValues.pending}; supplied on the second, once the answer is
+   * back. Nothing here checks that it belongs to this block — the caller holds
+   * the key that says so, exactly as it does for the correlation.
+   */
+  smoothed?: SmoothedField
+  /**
+   * Whether this caller can run the adaptive filter off this thread.
+   *
+   * Absent for a caller that cannot — a test, a panel with no analysis thread
+   * behind it, or **either file of a compared pair**, where two blocks would need
+   * two jobs and a half-finished pair would put a smoothed map over an unsmoothed
+   * one and call the result a ratio. Those compute it inline at whatever it
+   * costs, which is right: the alternative is not doing it at all.
+   */
+  deferSmoothing?: boolean
 }
 
 /**
@@ -712,6 +748,79 @@ export interface Derivation {
  * cells on the single commonest path there is — a reader who asked for none of
  * this.
  */
+/** What {@link deriveBlock}'s despeckle step produces, with its baseline beside it. */
+interface Smoothed {
+  values: Float32Array
+  /** The matched-window baseline, when one was asked for. */
+  over: Float32Array | null
+  suffix: string
+  scope: string | null
+  /** Set when the work was handed back rather than done — see {@link SmoothingRequest}. */
+  pending?: SmoothingRequest
+}
+
+/**
+ * Everything the adaptive filter needs, for a caller that can run it elsewhere.
+ *
+ * It reads the block twice — once to measure every cell against its neighbourhood and
+ * once to average the capped field — and at the cell cap that is seconds rather
+ * than the pass or two every other step here costs. So above
+ * {@link SMOOTH_INLINE_CELLS} it is not done here. This module runs the pipeline
+ * to the point the smoothing would happen, hands the caller exactly the arrays it
+ * would have used, and carries on with the **unsmoothed** field so there is a
+ * real picture on screen meanwhile. When the answer arrives the caller derives
+ * again with {@link Derivation.smoothed} supplied and the step is a lookup.
+ *
+ * That is the correlation's arrangement (`ui/MatrixPanel.ts`) and it is here for
+ * the correlation's reason: every other step in `deriveBlock` is synchronous, and
+ * a function that returned a promise for the sake of one of them would make every
+ * caller wait on arithmetic that was already finished.
+ */
+export interface SmoothingRequest {
+  /** The field to average, normalised and before any division. */
+  values: Float32Array
+  /** The block as read, which sets the threshold and drives the criterion. */
+  counts: Float32Array
+  /** The baseline to average over the same windows, when there is one. */
+  over: Float32Array | null
+  nrows: number
+  ncols: number
+  spec: Extract<Smoothing, { kind: 'adaptive' }>
+}
+
+/** A smoothing that has come back, ready to be substituted for the step. */
+export interface SmoothedField {
+  values: Float32Array
+  over: Float32Array | null
+  /** What was *done* — the fixed floor where the filter refused the block. */
+  applied: Smoothing
+  scope: string | null
+}
+
+/**
+ * A ratio field under the same two rules {@link observedOverExpected} applies to
+ * its own: a cell where nothing was seen and a baseline too small to divide by
+ * are both paper rather than the loudest colour on the ramp (§7.5).
+ */
+function ratioOf(
+  numerator: Float32Array,
+  denominator: Float32Array | null,
+  length: number,
+): Float32Array {
+  const out = new Float32Array(length)
+  for (let i = 0; i < length; i++) {
+    const n = numerator[i]
+    const d = denominator === null ? Number.NaN : denominator[i]
+    if (!Number.isFinite(n)) {
+      out[i] = Number.NaN
+      continue
+    }
+    const ratio = d > 0 ? n / d : Number.NaN
+    out[i] = ratio !== 0 && Number.isFinite(ratio) ? ratio : Number.NaN
+  }
+  return out
+}
+
 export function deriveBlock(
   block: BlockValues,
   derivation: Derivation,
@@ -744,20 +853,143 @@ export function deriveBlock(
       break
   }
 
+  // How much despeckling, and what it did — resolved before the baseline below
+  // because the O/E has to be able to run *after* it. Nothing is applied yet.
+  const smoothing = parseSmooth(derivation.smooth)
+  const despeckle = (
+    source: Float32Array,
+    /** A baseline the caller is about to divide by, averaged over the same windows. */
+    over?: Float32Array,
+  ): Smoothed => {
+    if (smoothing === null) {
+      return { values: source, over: over ?? null, suffix: '', scope: null }
+    }
+    if (smoothing.kind === 'fixed') {
+      return {
+        values: smoothValues({ ...block, values: source }, smoothing.radius),
+        over:
+          over === undefined
+            ? null
+            : smoothValues({ ...block, values: over }, smoothing.radius),
+        suffix: ` · smoothed ${smoothingCaption(smoothing)}`,
+        scope: null,
+      }
+    }
+    // Already computed elsewhere, for this exact block and setting.
+    const held = derivation.smoothed
+    if (held !== undefined) {
+      return {
+        values: held.values,
+        over: held.over,
+        suffix: ` · smoothed ${smoothingCaption(held.applied)}`,
+        scope: held.scope,
+      }
+    }
+    // Big enough to be worth moving, and a caller that can move it. The
+    // unsmoothed field goes out with **no suffix**, because the caption has to
+    // describe the picture actually drawn: a map labelled as smoothed that is not
+    // smoothed is the one claim an exported figure must never carry.
+    if (
+      derivation.deferSmoothing === true &&
+      block.nrows * block.ncols > SMOOTH_INLINE_CELLS
+    ) {
+      return {
+        values: source,
+        over: over ?? null,
+        suffix: '',
+        scope: null,
+        pending: {
+          values: source,
+          counts: block.values,
+          over: over ?? null,
+          nrows: block.nrows,
+          ncols: block.ncols,
+          spec: smoothing,
+        },
+      }
+    }
+    // The adaptive width measures on the block's **as-read** values whatever
+    // stage this is called from, because the thing it compensates for — counts
+    // thinning out with distance — is a property of the measurement rather than
+    // of the arithmetic done to it since.
+    const adapted = adaptiveSmoothValues(
+      { ...block, values: source },
+      block.values,
+      smoothing,
+      over,
+    )
+    return {
+      values: adapted.values,
+      over: adapted.over,
+      suffix: ` · smoothed ${smoothingCaption(adapted.applied)}`,
+      scope: adapted.scope,
+    }
+  }
+
   // The baseline first, and exclusive: it is the same estimate the ratio would
   // have used, shown instead of applied. `expected` is not consulted at all
   // under it, so a reader who leaves the O/E toggle on and picks the baseline
   // gets the baseline rather than a field of ones.
+  let smoothed: Smoothed
   if (derivation.baseline === true) {
     values = expectedValues({ ...block, values }, runs)
     parts.push('expected')
+    // Last, and it barely matters: a distance curve is a mean over many cells
+    // and is already smooth. Kept in the order for consistency rather than for
+    // effect — there is no speckle in a baseline to remove.
+    smoothed = despeckle(values)
+    values = smoothed.values
   } else if (derivation.expected === true) {
+    // **The despeckle runs before the division, and this is the whole reason a
+    // smoothed O/E map is worth looking at.**
+    //
+    // `observedOverExpected` blanks a cell where nothing was observed, because
+    // zero over a positive baseline is the strongest depletion a ramp centred on
+    // 1 can draw and that is the loudest possible statement of the one thing the
+    // file does not say (§7.5). Away from the diagonal *most* cells are that
+    // cell — 98% of them at 200 bins out on a yeast map at 500 bp — so an O/E
+    // computed first hands the filter a field that is almost entirely `NaN`, and
+    // `NaN` is the one thing no despeckle will touch. Every setting then drew
+    // the same picture, because the blanks that make up the picture were not
+    // reachable by any of them.
+    //
+    // Smoothed first, a zero cell with contacts around it is no longer zero, so
+    // it is never blanked and the map fills in: the same 98% falls to 1% under
+    // the adaptive settings and to 39% at 7 × 7. This is exactly the argument
+    // `render/smooth.ts` already makes for putting the filter ahead of a *ratio
+    // between two files* — make the awkward cells finite before the division
+    // rather than trying to average them afterwards — applied to the division
+    // this module does itself.
+    //
+    // **The curve is still estimated from the unsmoothed block.** That is the
+    // half of "the despeckle goes last" worth keeping: a decay curve is an
+    // average over cells, and fitting it to pre-averaged ones would let each
+    // cell's neighbours count twice toward the baseline it is then compared
+    // against. Estimating before and dividing after keeps the estimator honest
+    // and still lets the filter do its work.
     const stepped = { ...block, values }
-    values = observedOverExpected(stepped, runs)
+    if (smoothing === null) {
+      smoothed = despeckle(values)
+      values = observedOverExpected(stepped, runs)
+    } else {
+      // **And the baseline is averaged over the same windows as the map.**
+      // Dividing a smoothed map by an unsmoothed curve is a different operation
+      // and a biased one: near the diagonal the decay is steep, so a window that
+      // spans it averages cells whose baselines differ several-fold and the
+      // ratio comes out systematically high — 24-32% at radii 3 to 7, an
+      // enrichment produced by the filter and by nothing in the file. Averaged
+      // over the same cells with the same divisor the bias is in both halves and
+      // cancels, and the mean sits back at 1 where an O/E belongs.
+      const model = expectedModel(stepped, runs)
+      smoothed = despeckle(values, expectedValues(stepped, runs, model))
+      values = ratioOf(smoothed.values, smoothed.over, block.nrows * block.ncols)
+    }
     parts.push('O/E')
+  } else {
+    smoothed = despeckle(values)
+    values = smoothed.values
   }
 
-  const radius = derivation.smooth ?? 0
   // Named in the label like the steps above it, because it is the one of the
   // three that a reader cannot see they asked for: a normalisation changes the
   // numbers and a baseline changes the ramp, while a despeckled map looks like a
@@ -768,11 +1000,11 @@ export function deriveBlock(
   // that is the difference between an operation and an annotation: the steps
   // above change what the quantity **is**, so any of them makes the word
   // `counts` wrong; this one leaves it exactly what it was and says something
-  // about how it was measured. Pushed into `parts` it produced `smoothed 3 × 3`
-  // on a colourbar over a block of plain counts — a legend that had lost the
-  // name of its own quantity.
-  const suffix = radius >= 1 ? ` · smoothed ${smoothLabel(radius)}` : ''
-  if (radius >= 1) values = smoothValues({ ...block, values }, radius)
+  // about how it was measured.
+  const suffix = smoothed.suffix
+  if (smoothed.scope !== null) {
+    scope = scope === null ? smoothed.scope : `${scope} · ${smoothed.scope}`
+  }
 
   return {
     values,
@@ -788,6 +1020,7 @@ export function deriveBlock(
     neutral: derivation.expected === true && derivation.baseline !== true ? 1 : null,
     label: (parts.length === 0 ? 'counts' : parts.join(' · ')) + suffix,
     scope,
+    ...(smoothed.pending === undefined ? {} : { pending: smoothed.pending }),
   }
 }
 

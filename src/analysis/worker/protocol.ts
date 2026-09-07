@@ -32,6 +32,8 @@
 import type { FeatureSet, PairSet } from '../../annotations/types'
 import type { SerialisedError, SourceSpec } from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
+import type { SmoothedField } from '../../render/derive'
+import type { Smoothing } from '../../render/smooth'
 import type { AnalysisFraming, Params, TaskResult } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -130,6 +132,7 @@ export interface AnalysisResultMap {
   open: { nBins: number; binsize: number }
   run: TaskResult
   correlate: CorrelationField
+  smooth: SmoothedField
   cancel: null
   close: null
 }
@@ -171,6 +174,31 @@ export type AnalysisRequest =
    * transferring would neuter the array the heatmap is drawing from.
    */
   | { id: number; kind: 'correlate'; values: Float32Array; n: number }
+  /**
+   * The adaptive despeckle of a block the **view already holds**, for the map's
+   * `adaptive` smoothing setting.
+   *
+   * Beside `correlate` and for its reasons. It is not a `run`, because a task is
+   * a measurement of a *file* with a mount, a framing and provenance, and this is
+   * one block's cells going out and coming back. And it is off the reader's
+   * thread because it is the one step of `render/derive.ts` that reads the block
+   * twice — 1.5 s at 4 M cells and 7.4 s at the 16 M cap, against the ~20 ms a
+   * fixed radius costs, which is exactly the shape §18.3 gives this thread.
+   *
+   * The arrays are copied rather than transferred, for the same reason
+   * `correlate`'s are: transferring would neuter the arrays the heatmap is
+   * drawing from while it waits for the answer.
+   */
+  | {
+      id: number
+      kind: 'smooth'
+      values: Float32Array
+      counts: Float32Array
+      over: Float32Array | null
+      nrows: number
+      ncols: number
+      spec: Extract<Smoothing, { kind: 'adaptive' }>
+    }
   // Cooperative, exactly as the reader's is: the worker checks between pixel
   // chunks, so a scan stops at the next chunk boundary rather than being killed
   // mid-write.
@@ -227,9 +255,13 @@ export function analysisTransfers(payload: unknown): Transferable[] {
   // to transfer where the *request's* array was not: this one is allocated by
   // the job and nothing on the far side keeps a reference, so moving it saves a
   // copy of up to 9 MB at the bin cap instead of neutering a block being drawn.
-  const field = payload as Partial<CorrelationField>
+  const field = payload as Partial<CorrelationField> & Partial<SmoothedField>
   if (field.values instanceof Float32Array) {
     take(field.values)
+    // A smoothing carries a second field beside the first — the baseline averaged
+    // over the same windows — allocated by the job on the same terms, so it moves
+    // rather than being copied too.
+    if (field.over instanceof Float32Array) take(field.over)
     return out
   }
   if (!Array.isArray(result.outputs)) return out

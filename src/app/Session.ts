@@ -66,7 +66,8 @@ import {
   type SessionConfig,
 } from '../state/SessionConfig'
 import type { CompareOp, Transform, ViewState } from '../types'
-import type { Normalisation } from '../render/derive'
+import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/derive'
+import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
@@ -4613,18 +4614,32 @@ export class Session {
         this.rederive()
       },
       correlateBlock: (values, n, onProgress) => this.correlate(values, n, onProgress),
+      smoothBlock: (request) => this.smooth(request),
       onCorrelateFailure: (message) => {
         // The panel has already asked for the score to move, so this only says
         // what happened. Without the move the next render would ask for the
         // correlation again and the failure would repeat once per frame.
         this.host.notify(`Correlation failed: ${message}`)
       },
-      smooth: state.smooth ?? 0,
-      onSmoothChange: (radius) => {
+      smooth: state.smooth ?? '0',
+      onSmoothChange: (token) => {
         // `0` is written as *absent*, like `oe`'s `false`: the two mean the same
         // thing and a hash carrying `smooth=0` would be a link saying it had
         // chosen the default.
-        this.store.patch({ smooth: radius > 0 ? radius : undefined })
+        //
+        // **Picking the adaptive window turns the O/E on**, exactly as clicking
+        // the toggle would: the ramp goes diverging and `log2` because
+        // `deriveBlock` gives the result a neutral of 1, and everything follows
+        // from that one number. It is not a shortcut but the picture the setting
+        // is for — the window is sized on the counts and divided by a baseline
+        // averaged over that same window, and on raw counts all it can denoise
+        // is a picture of the distance decay everybody already has. Turning it
+        // *off* again is left to the reader, who may want exactly that.
+        const wantsExpected = parseSmooth(token)?.kind === 'adaptive'
+        this.store.patch({
+          smooth: token === '0' ? undefined : token,
+          ...(wantsExpected ? { oe: true } : {}),
+        })
         this.rederive()
       },
     }
@@ -4661,6 +4676,27 @@ export class Session {
   ): Cancellable<CorrelationField> {
     this.correlator ??= new AnalysisClient()
     return this.correlator.cancellable<'correlate'>({ kind: 'correlate', values, n }, onProgress)
+  }
+
+  /**
+   * Run the adaptive despeckle on the analysis thread.
+   *
+   * {@link correlate}'s twin, on the same client and for the same reason: the
+   * work is measured in seconds on a large block, and §18.3 gives that thread
+   * exactly this shape of job so the thread answering frames never queues behind
+   * one.
+   */
+  private smooth(request: SmoothingRequest): Cancellable<SmoothedField> {
+    this.correlator ??= new AnalysisClient()
+    return this.correlator.cancellable<'smooth'>({
+      kind: 'smooth',
+      values: request.values,
+      counts: request.counts,
+      over: request.over,
+      nrows: request.nrows,
+      ncols: request.ncols,
+      spec: request.spec,
+    })
   }
 
   /** What every map view needs to build its score picker. */
