@@ -1,6 +1,6 @@
 # metacooler-viewer
 
-A unified genome browser for `.*cool`, `.hic`, HiC-Pro, and other similar formats, 
+A unified genome browser for `.*cool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
 and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, BAM and VCF. 
 It is a single-page application that runs entirely in the browser, with no 
 server-side processing or data upload.
@@ -29,6 +29,10 @@ server-side processing or data upload.
 genomic data on a laptop with the network cable out.
 
 1. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
+
+1. **A `.pairs` file is imported, not merely opened.** Everything above is a matrix — the thing a pipeline produces at its end. What is on disk after running one is a list of contacts, with no grid in it, and turning it into something openable used to mean leaving for `cooler cload` or `metacooler create pairs` first. Now you drop it, pick a base resolution and how many ladder rungs you want, and the file is read **once**: every rung is built in that pass, and every view afterwards costs no I/O at all. Plain, gzipped or bgzipped; a `pairix` `.px2` beside it makes the cost known before the read starts, and its absence changes nothing except that the whole file is read. The input is gigabytes and the output is tens of megabytes — yeast Micro-C is 179 M records and 13.7 M stored pixels at 1 kb — so you pay for the file once and answer from memory afterwards, at about 2.9 M records/s.
+
+1. **The `.mcool` is written back out, and downloads when it is ready.** Every rung, as a real cooler, with the pairs header carried verbatim in `metadata` and raw counts that say `unbalanced` so nobody mistakes them for balanced ones. It is the one file this viewer writes that another tool reads as a *format* rather than as a picture, and the [spec](SPECS.md) says at §18.9 exactly which refusal that narrowed and what it was checked against. What it is not is a `.metacool`: `#chromsize:` has no concept of a genome, so an imported map has chromosomes and no MAG layer — `metacooler create pairs` still wants the contig and genome tables for that.
 
 ## Using metacooler.js
 

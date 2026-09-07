@@ -95,6 +95,11 @@ describe('an imported .pairs read as a map', () => {
       expect(mc.binsize).toBe(BASE)
       expect(mc.info['bin-type']).toBe('fixed')
       expect(mc.info['storage-mode']).toBe('symmetric-upper')
+      // Renamed by `normaliseInfo` from the file-level spellings, which is what
+      // the handle has to write for the info panel to show them at all.
+      expect(mc.info.ordering).toBe('genome-then-length')
+      expect(mc.info.ncontigs).toBe(3)
+      expect(mc.info.assembly).toBe(null)
       expect(mc.hasGenomes).toBe(false)
       expect(mc.nGenomes).toBe(0)
       expect(mc.chromnames).toEqual(['chrI', 'chrII', 'chrIII'])

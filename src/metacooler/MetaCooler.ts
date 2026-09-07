@@ -65,6 +65,7 @@ import { hicHandle } from '../hic/handle'
 import { HicStore } from '../hic/store'
 import type { BinnedPixels } from '../pairs/bin'
 import { isPairsFile, readPairsHeader, type PairsHeader } from '../pairs/format'
+import { isGzip as isGzipMagic } from '../pairs/stream'
 import { pairsHandle } from '../pairs/handle'
 import { PairsStore } from '../pairs/store'
 import { parseRegion, regionToExtent } from './range'
@@ -290,6 +291,21 @@ export class MetaCooler {
           assembly: header.assembly,
           sorted: header.sorted,
         },
+      )
+    }
+    // A gzip that is *not* a pairs file is refused here rather than handed on.
+    // HDF5 cannot read a compressed file in any case, and what it does instead
+    // is worth pre-empting: h5wasm answers a request for the root attributes of
+    // a non-HDF5 file with `error - name not defined!`, which is neither the
+    // sentence §10 requires nor recognisably about the file the reader dropped.
+    if (isGzipMagic(source.readBytes(0, 2))) {
+      throw new ViewerError(
+        'not-hdf5',
+        'This file is gzip-compressed. HDF5 is read in place and cannot be decompressed on ' +
+          'the fly, so a .cool, .mcool or .metacool must be decompressed first. A .pairs.gz ' +
+          'is read compressed — but this one carries no `## pairs format` line, so it is not ' +
+          'one.',
+        {},
       )
     }
     // The group comes from the URI, so `file.mmetacool::entries/rep1` and a

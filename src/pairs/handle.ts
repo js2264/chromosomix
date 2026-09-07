@@ -28,9 +28,10 @@
  *
  * - **`bin-type: 'fixed'`** — the grid was chosen by the reader and is uniform
  *   by construction.
- * - **`ordering: 'genome-then-length'`** — vacuous in its first half, since a
- *   pairs file has no genome layer, and true in its second: `#chromsize:` order
- *   is the contig order, and each contig is one contiguous block of bins.
+ * - **`contig-ordering: 'genome-then-length'`** — vacuous in its first half,
+ *   since a pairs file has no genome layer, and true in its second:
+ *   `#chromsize:` order is the contig order, and each contig is one contiguous
+ *   block of bins.
  * - **`storage-mode: 'symmetric-upper'`** — a statement about the importer's
  *   output, which swaps every record onto the upper triangle, rather than about
  *   the file. Exactly the `.hic` handle's phrasing, and it is the reason
@@ -92,11 +93,17 @@ export function pairsHandle(init: PairsHandleInit): Hdf5Handle {
     'format-version': versionNumber(header.version),
     'bin-size': pixels.binSize,
     'bin-type': 'fixed',
-    ordering: 'genome-then-length',
+    // The *file-level* spellings, not the normalised ones. `normaliseInfo`
+    // renames `contig-ordering` → `ordering`, `nchroms` → `ncontigs` and takes
+    // `genome-assembly` in preference to `assembly`, so a handle that hands
+    // over the already-renamed keys has them pass through untouched and shows
+    // an em dash where the value is. This is what a cooler's attributes are
+    // actually called, which is the thing this handle exists to imitate.
+    'contig-ordering': 'genome-then-length',
     'storage-mode': 'symmetric-upper',
-    assembly: header.assembly,
+    'genome-assembly': header.assembly,
     nbins: pixels.nBins,
-    ncontigs: pixels.contigs.length,
+    nchroms: pixels.contigs.length,
     nnz: pixels.nnz,
     sum: pixels.sum,
     ngenomes: null,

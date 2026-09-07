@@ -36,6 +36,7 @@
 
 import { ViewerError } from '../errors'
 import type { ByteSource } from '../types'
+import { blockSize, isBgzf } from '../annotations/tabix'
 import { decompressedStream, forEachLine } from './stream'
 
 /** The spec's own column order, used when a file declares none. */
@@ -58,6 +59,12 @@ const COLUMN_ALIASES = {
  * file at all rather than to police a real one.
  */
 const MAX_HEADER_BYTES = 64 << 20
+
+/** Enough to hold a BGZF member header and its extra field. */
+const BGZF_HEADER_PROBE = 64
+
+/** The slice a plain-gzip probe reads, knowing it will not decode to its end. */
+const PLAIN_PROBE_BYTES = 1 << 16
 
 /** One sequence, as the header declares it. */
 export interface PairsContig {
@@ -104,19 +111,41 @@ export function isPairsPreamble(firstLine: string): boolean {
  * therefore cost nothing when it is "no".
  */
 export async function isPairsFile(source: ByteSource): Promise<boolean> {
+  let first: string | null = null
   try {
-    const stream = decompressedStream(source, { to: Math.min(source.size, 1 << 16) })
-    let first: string | null = null
-    await forEachLine(stream, (line) => {
-      first ??= new TextDecoder().decode(line)
-    })
-    return first !== null && isPairsPreamble(first)
+    await forEachLine(
+      decompressedStream(source, { to: probeEnd(source) }),
+      (line) => {
+        first ??= new TextDecoder().decode(line)
+      },
+      () => first !== null,
+    )
   } catch {
-    // A truncated gzip member at the 64 KiB cut is the common case and means
-    // nothing about the file's identity; anything else that throws here is not
-    // a pairs file either.
-    return false
+    // A span that ends inside a gzip member cannot be decoded to its end, and
+    // on a plain `.gz` there is no way to cut one that does not. That is not a
+    // fact about the file: what was decoded *before* the cut is the answer, and
+    // it is already in `first`. Swallowing the throw and discarding the line
+    // with it is what made every real bgzipped pairs file fall through to
+    // h5wasm and fail there instead.
   }
+  return first !== null && isPairsPreamble(first)
+}
+
+/**
+ * How much to read to see the first line.
+ *
+ * A BGZF file can be cut *exactly*, because the first member's own header says
+ * how long it is — so the common case decodes cleanly with nothing to tolerate.
+ * A plain `.gz` cannot: its members are unbounded, so the probe takes a fixed
+ * slice and accepts that the decoder will raise at the end of it.
+ */
+function probeEnd(source: ByteSource): number {
+  const head = source.readBytes(0, Math.min(source.size, BGZF_HEADER_PROBE))
+  if (isBgzf(head)) {
+    const size = blockSize(head)
+    if (size !== null) return Math.min(source.size, size)
+  }
+  return Math.min(source.size, PLAIN_PROBE_BYTES)
 }
 
 /**
@@ -142,6 +171,11 @@ export async function readPairsHeader(source: ByteSource): Promise<PairsHeader> 
 
   const decoder = new TextDecoder()
   const stream = decompressedStream(source, { to: Math.min(source.size, MAX_HEADER_BYTES) })
+  // The same tolerance {@link isPairsFile} needs, for the same reason and one
+  // case only: a file whose header alone exceeds the cap is cut mid-member and
+  // cannot be decoded to its end. What was read still decides — the checks
+  // below turn "no preamble" and "no sizes" into refusals that name the fix,
+  // which is a better answer than a decoder's.
   await forEachLine(
     stream,
     (line) => {
@@ -186,7 +220,7 @@ export async function readPairsHeader(source: ByteSource): Promise<PairsHeader> 
       }
     },
     () => done,
-  )
+  ).catch(() => false)
 
   if (version === null) {
     throw new ViewerError(

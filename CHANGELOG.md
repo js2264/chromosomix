@@ -61,6 +61,75 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shows the licence of a package it can find one for, and a tarball that
   declares MIT without carrying it is asking to be taken on trust.
 
+- **`.pairs` files open, at a resolution you choose.** A 4DN pairs file — plain,
+  gzipped or bgzipped, with a `.px2` beside it or without one — is now an
+  accepted input, and it is the first one the app **imports** rather than opens.
+  Everything else in §3 is a matrix in a container; a pairs file is a list of
+  contacts, and there is no grid in it. So the first open is refused, a dialog
+  asks for a base resolution and a number of ladder rungs, and the file is read
+  once. After that it is a map like any other: the same views, the same deck,
+  the same turn, the same fourteen analysis tasks, none of which learns the
+  container exists.
+
+  **The grid could not be guessed**, and that is why there is a dialog rather
+  than a default. A bin table inferred from the largest coordinate observed
+  would differ between two subsamples of the same library — the one way of being
+  wrong that survives every check downstream and makes two files silently
+  incomparable.
+
+  **The ladder is nearly free**, so it is offered rather than rationed: the base
+  rung costs a pass over the records, and every rung above it is derived from
+  that table, which is smaller than the record stream by the ratio of records to
+  stored pixels — thirteen to one on `demo/yeast/`. The rungs are spelled the
+  way an `.mcool`'s resolutions are, which wires them into the resolution
+  picker, the refine ladder and a deck descending to its lead's rung with no
+  code in any of them.
+
+  **The shape of the data is what makes this the right design.** On this
+  repository's own demo files, yeast Micro-C is 179 M records and 13.7 M stored
+  pixels at 1 kb; the mock community is 10.9 M records and 7.1 M pixels. The
+  input is gigabytes and the output is tens of megabytes — so the file is paid
+  for once, at open, and every view afterwards costs no I/O at all. Measured at
+  **2.9 M records/s** against a `DecompressionStream('gzip')` ceiling of
+  ~195 MB/s: decompression is 69% of the wall time, so the parser is within half
+  of the platform's floor and there is nothing left here worth optimising.
+
+  An imported map is a *fuller* citizen than a `.hic`: because the file was
+  read, the per-bin pixel index is a by-product rather than a whole-file scan,
+  so `binOffsets()` answers where a `.hic`'s refuses and `nnz` is a real number.
+
+  What it is not is a `.metacool`. `#chromsize:` has no concept of a genome, so
+  an imported map is a cooler-class citizen (§9) — chromosomes table, no genomes
+  table, the four metagenome tasks absent rather than disabled.
+
+- **The `.mcool` is written back out, and downloads when it is ready.** Every
+  rung, as a real cooler: `chroms`, `bins`, `pixels`, `indexes`, cooler's own
+  format attributes, and the pairs preamble carried verbatim in `metadata`
+  beside the record count and whatever the import skipped, clamped or had to
+  merge. Raw counts and no weights — `generated-by` says `unbalanced`, and
+  `cooler balance` is the answer. It runs beside the open map rather than in
+  front of it, because the reader has already waited once and what they are
+  waiting for now is a file rather than a picture.
+
+  This required narrowing a stated non-feature, and it is narrowed in the open
+  at SPECS §18.9 rather than stepped around. Writing a matrix *derived from an
+  opened map* is still refused, for the reason that clause gave: provenance,
+  balancing and the bin table would be choices this app makes on the reader's
+  behalf and then seals into a file that outlives the session. A file binned
+  from a `.pairs` answers all three from its input — the bin table from
+  `#chromsize:` and a size the reader picked, provenance from the header, and no
+  balancing at all — and what is written is *what is on screen*, off the arrays
+  the map is drawn from, so there is no second computation to disagree with the
+  first.
+
+  Checked two ways, because a round trip alone would only prove the reader and
+  the writer agree — which is exactly what they did about `.hic` endianness: the
+  file is read back through this app's own reader **and** compared cell for cell
+  against an independent binning of the same records written the slow obvious
+  way. One structural difference from `cooler cload` is stated rather than left
+  to be found: `bins/chrom` is int32 codes rather than an HDF5 enum, because
+  h5wasm exposes no enum construction. Everything numeric is identical.
+
 - **The viewer, inside somebody else's page.** `?embed=1` mounts the same web
   build with no window around it — no header, no tab strip, no status bar — so
   it can be the figure in a portal, a lab site, a course page or a paper's

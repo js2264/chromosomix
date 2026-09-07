@@ -163,7 +163,9 @@ function writeCoolerGroup(
   group.create_attribute('generated-by', `metacooler-viewer ${VERSION} (pairs import; unbalanced)`)
   group.create_attribute('creation-date', new Date().toISOString())
   if (imported.header.assembly !== null) {
-    group.create_attribute('assembly', imported.header.assembly)
+    // `genome-assembly` is the name cooler writes and the one its readers look
+    // for; `assembly` is a legacy spelling this app still accepts on the way in.
+    group.create_attribute('genome-assembly', imported.header.assembly)
   }
   group.create_attribute('metadata', JSON.stringify(provenance(imported, table)))
 

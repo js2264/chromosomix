@@ -141,9 +141,13 @@ export async function forEachLine(
   let carry = new Uint8Array(0)
   try {
     for (;;) {
+      // Before the read, not after it. A caller that has what it came for —
+      // the header probe wants one line — must not be made to issue another
+      // read to discover that: on a span cut mid-member, that read is where
+      // the decoder raises, and the answer would be thrown away with it.
+      if (cancelled?.() === true) return false
       const { done, value } = await reader.read()
       if (done) break
-      if (cancelled?.() === true) return false
 
       let buf: Uint8Array
       if (carry.length === 0) {

@@ -203,7 +203,7 @@ describe('pairs → .mcool', () => {
       expect(group.attrs['format'].value).toBe('HDF5::Cooler')
       expect(group.attrs['storage-mode'].value).toBe('symmetric-upper')
       expect(group.attrs['bin-type'].value).toBe('fixed')
-      expect(group.attrs['assembly'].value).toBe('testAsm')
+      expect(group.attrs['genome-assembly'].value).toBe('testAsm')
       expect(String(group.attrs['generated-by'].value)).toContain('unbalanced')
 
       const metadata = JSON.parse(String(group.attrs['metadata'].value)) as Record<string, unknown>
