@@ -14,28 +14,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Two more adaptive settings, `· trimmed` and `· despeckled`.** A cap bounds a
-  wild cell's damage and does not remove it — the leverage rule permits a flagged
-  cell to inflate its window by half by construction, which is `log2 0.58` on a
-  scale clipping at 0.84, so what is left of a hot pixel is still visible. These
-  two remove it instead.
-
-  All three share the **same detector**, which is deliberate: deciding whether a
-  cell is an outlier is the part that is hard to get right on Poisson-sparse data,
-  and it should not vary between them. What differs is the answer. `adaptive`
-  caps the cell at the limit; `adaptive · trimmed` drops it from the sum **and
-  from the divisor**, so it contributes nothing at the price of its own mass; and
-  `adaptive · despeckled` replaces it with the mean of its own eight neighbours,
-  which also removes it and — unlike the trim — leaves a plausible local number at
-  the cell rather than a gap.
-
-  Measured against a cell at 400× its neighbourhood on a yeast map at 500 bp, as a
-  peak in `log2` O/E where the scale clips at 0.84 and the same map with no spike
-  peaks at **0.24**: `cap` leaves **0.66**, trimmed **0.35**, despeckled **0.33**.
-  Neither of the new two costs anything in bias — the O/E's mean stays at 1.00 in
-  every separation band under all three. Carried in the link as `a50t` and `a50d`,
-  and captioned apart, because they are different numbers.
-
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
   window grows until it covers enough evidence to average, so it stays narrow
@@ -678,10 +656,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   3.90·r² against the plain box's 4·r² — the same estimate over half again as much
   ground.
 
-  With both, **nothing on that map reaches the clip** even at a 2000× spike, and
-  the O/E's mean stays at 1.00 in every separation band, so no bias was traded for
-  it. The cost is a second read of the block: 78 ms at 353², 300 ms at 841², 1.5 s
-  at 4 M and 7.4 s at 16 M, about double what it was.
+  With both, a synthetic spike of 2000× no longer reaches the clip and the O/E's
+  mean stays at 1.00 in every separation band, so no bias was traded for the
+  improvement. The cost is a second read of the block: 78 ms at 353², 300 ms at
+  841², 1.5 s at 4 M and 7.4 s at 16 M, about double what it was.
+
+  **This reduces the artefact rather than removing it, and on real data it is
+  still visible.** The cap bounds a flagged cell's damage by construction — the
+  rule permits it to inflate its window by half, which is `log2 0.58` on a scale
+  clipping at 0.84 — and two stricter answers were tried and dropped: trimming the
+  flagged cell out of the sum and the divisor, and replacing it with the mean of
+  its eight neighbours. Both looked better on synthetic spikes and neither removed
+  the artefact reproducibly on a real map, which says the detector rather than the
+  response is what still needs work. The synthetic used to develop this evidently
+  does not reproduce whatever the real one is.
 
 - **The adaptive window may now grow to radius 192, up from 64.** At 64 it ran
   into the cap beyond about 200 bins of separation on a yeast map at 500 bp, so
