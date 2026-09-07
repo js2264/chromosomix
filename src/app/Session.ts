@@ -132,7 +132,7 @@ import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
-import { el, fmt } from '../ui/dom'
+import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
@@ -1540,8 +1540,30 @@ export class Session {
 
   /** The worker, built the first time anything needs one. */
   private clientOf(): ReaderClient {
-    this.reader ??= new ReaderClient()
+    if (this.reader === null) {
+      this.reader = new ReaderClient()
+      this.reader.onNotice = (done, total, note) => this.notice(done, total, note)
+    }
     return this.reader
+  }
+
+  /**
+   * News from a read nobody asked to follow — onto the veil that is already up.
+   *
+   * The views raise the veil themselves when they ask for a block and drop it
+   * when the block arrives, so this only ever writes on a veil that is up and
+   * never leaves one behind: the view's own `setBusy(false)` follows. What it
+   * changes is what the veil *says* while a cell set is being summed, which is
+   * a wait proportional to the number of cells rather than to the picture.
+   */
+  private notice(done: number, total: number, note?: string): void {
+    const panel = this.current?.panel
+    if (panel === undefined) return
+    if (note === 'summing cells') {
+      panel.setBusy(true, `summing ${fmt.int(done)} of ${fmt.int(total)} cells…`)
+      return
+    }
+    if (note !== undefined) panel.setBusy(true, `${note}…`)
   }
 
   /**
@@ -1916,20 +1938,27 @@ export class Session {
     this.carryCompare(uri)
     this.opening = uri
     this.noteGrant(uri, source)
-    this.showContent(loading(`Opening ${fileLabel(uri)}`))
+    const client = this.clientOf()
+    // A spinner until the worker has something to say, and a bar and a cancel
+    // from the first word onward. Only the three indexless containers ever say
+    // anything (§3.7, §3.8, §3.9); every other open resolves before the first
+    // report. A `.pairs` is *binned* rather than opened, and the heading says
+    // so, because the wait is a pass over its records rather than a read.
+    let task: Cancellable<OpenResult> | null = null
+    const screen = new LoadingView(
+      `${binning === undefined ? 'Opening' : 'Binning'} ${fileLabel(uri)}`,
+      () => task?.cancel(),
+    )
+    this.showContent(screen.el)
     this.host.sessionChanged(this)
     try {
-      const client = this.clientOf()
-      // A `.pairs` import is the one open with a denominator and a real wait,
-      // so it gets a bar rather than a spinner — and the bar is wired to the
-      // worker's own progress messages (`pairs/import.ts` weights the pass
-      // against the rungs so it does not stall at 99%).
-      const bar = binning === undefined ? null : progressView(`Binning ${fileLabel(uri)}`)
-      if (bar !== null) this.showContent(bar.el)
-      const info = await client.request<'open'>(
+      // `pairs/import.ts` weights its pass against the rungs so the bar does
+      // not stall at 99%; the other two report bytes and then pixels.
+      task = client.cancellable<'open'>(
         { kind: 'open', uri, source, ...(binning === undefined ? {} : { binning }) },
-        bar === null ? undefined : (done, total, note) => bar.update(done, total, note),
+        (done, total, note) => screen.report(done, total, note),
       )
+      const info = await task.promise
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       const names = genomes.table.data['name'] as string[]
@@ -2070,6 +2099,16 @@ export class Session {
       if (info.pairs !== undefined) reportImportGaps(info.pairs)
       if (info.pairs?.download === true) void this.exportImportedMcool()
     } catch (err) {
+      // Cancelling is not a failure and must not look like one. The reader
+      // stopped a read they were told the cost of and chose to stop — so the
+      // way back is the picker, exactly as dismissing the gate is, and not an
+      // error screen about a file that is perfectly fine.
+      if (isCancellation(err)) {
+        this.opening = null
+        this.showContent(this.picker.el)
+        this.host.sessionChanged(this)
+        return
+      }
       // The §12 listing gate is a question, not a failure: a single-cell
       // container over the network cannot be opened without paying one of two
       // costs, and which to pay is the reader's to choose. Asked here rather
@@ -6731,6 +6770,89 @@ export function loading(message: string): HTMLElement {
     el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } }),
     el('p', { class: 'loading-text', text: `${message}…` }),
   )
+}
+
+/**
+ * The loading screen an open can talk back to.
+ *
+ * A spinner says *something is happening* and is the right answer for an open
+ * that takes a moment. It is the wrong answer for one that takes a minute — a
+ * HiC-Pro matrix read whole (§3.8), or an `.scool` downloaded whole (§3.7) —
+ * where a reader watching it has no way to tell a slow connection from a hung
+ * one, and no way out.
+ *
+ * So the spinner stays until the worker says otherwise, and the first progress
+ * report replaces it with a bar, a line of prose and a way to stop. The bar is
+ * per *phase* rather than across the whole open: downloading is measured in
+ * bytes and parsing in pixels, and one bar sliding between two denominators
+ * would look like it had gone backwards. Two labelled sweeps is what a reader
+ * can actually follow.
+ */
+export class LoadingView {
+  readonly el: HTMLElement
+  private readonly text: HTMLElement
+  private readonly bar: HTMLProgressElement
+  private readonly box: HTMLElement
+
+  constructor(message: string, onCancel?: () => void) {
+    this.text = el('p', { class: 'loading-text', text: `${message}…` })
+    this.bar = el('progress', { class: 'progress' }) as HTMLProgressElement
+    this.bar.max = 1
+    this.bar.value = 0
+    const stop =
+      onCancel === undefined
+        ? null
+        : button('cancel', () => onCancel(), { class: 'btn btn-quiet' })
+    this.box = el(
+      'div',
+      { class: 'progress-box hidden' },
+      this.bar,
+      ...(stop === null ? [] : [stop]),
+    )
+    this.el = el(
+      'div',
+      { class: 'loading' },
+      el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } }),
+      this.text,
+      this.box,
+    )
+  }
+
+  /**
+   * Show what the worker is doing now.
+   *
+   * A `total` of zero is *indeterminate* rather than *finished* — a host that
+   * states no `Content-Length` gives one — so the bar loses its value and the
+   * browser draws it as the barber's pole it has for exactly this.
+   */
+  report(done: number, total: number, note?: string): void {
+    this.box.classList.remove('hidden')
+    const phase = note ?? 'reading'
+    if (total > 0) {
+      this.bar.value = Math.min(1, done / total)
+      this.text.textContent = `${phase} — ${describe(done, total, note)}`
+    } else {
+      this.bar.removeAttribute('value')
+      // Nothing counted *and* nothing to count it against is a phase that has
+      // only a name — the cell listing is one, and `0 B` beside it would read
+      // as a stalled download rather than as a wait with no meter on it.
+      this.text.textContent = done > 0 ? `${phase} — ${fmt.bytes(done)}` : `${phase}…`
+    }
+  }
+}
+
+/**
+ * The two halves of an open, each in the units it is actually counted in.
+ *
+ * Bytes look like bytes and pixels look like counts; saying "14,769,558 of
+ * 14,769,558" in megabytes, or a download in pixels, is the kind of small lie
+ * that makes a reader distrust the whole bar.
+ */
+function describe(done: number, total: number, note?: string): string {
+  const counted = note?.includes('pixel') === true || note?.includes('cell') === true
+  return counted
+    ? `${fmt.int(done)} of ${fmt.int(total)}`
+    : `${fmt.bytes(done)} of ${fmt.bytes(total)}`
 }
 
 /**

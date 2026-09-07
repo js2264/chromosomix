@@ -5152,6 +5152,21 @@ canvas.is-frozen {
   margin: 0.6rem 0;
 }
 
+/* The same bar on the loading screen, which is a centred column rather than a
+   left-aligned panel — so it centres with the text above it and the spinner
+   above that, and the tabular figures keep the line from twitching as the
+   numbers climb. */
+.loading .progress-box {
+  justify-content: center;
+  margin: 0;
+}
+
+.loading .loading-text {
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  min-height: 1.4em;
+}
+
 .progress {
   width: 18rem;
 }

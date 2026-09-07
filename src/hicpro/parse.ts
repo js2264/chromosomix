@@ -41,6 +41,7 @@
  * above comes from and why a 1 GB file is a wait rather than a crash.
  */
 
+import { yieldToEventLoop } from '../async'
 import { ViewerError } from '../errors'
 import type { StorageMode } from '../constants'
 
@@ -49,10 +50,13 @@ const TAB = 9
 const NEWLINE = 10
 const RETURN = 13
 const HASH = 35
+const PLUS = 43
 const MINUS = 45
 const DOT = 46
 const ZERO = 48
 const NINE = 57
+const E_UPPER = 69
+const E_LOWER = 101
 
 /** The `/bins` half of the pair, as the reader's coordinate model wants it. */
 export interface HicProBins {
@@ -295,6 +299,10 @@ export interface ParseProgress {
   cancelled?(): boolean
 }
 
+/** The hooks' stand-ins, named so the scan loop always calls a real function. */
+const noReport = (): void => {}
+const notCancelled = (): boolean => false
+
 /**
  * Parse `<prefix>_<res>.matrix` into sorted triplets and a CSR index.
  *
@@ -310,17 +318,21 @@ export interface ParseProgress {
  *    cumulative `bin1_offset` together, because the offsets *are* the sort's
  *    bucket boundaries.
  *
+ * Asynchronous, and only for the cancel: the loop hands the worker's event
+ * loop back every hundredth of the file so a `cancel` message can be read
+ * between them. Nothing here awaits I/O — the bytes are already in hand.
+ *
  * A `complete` matrix stores both triangles, so normalising it would fold each
  * pixel onto its mirror and double every off-diagonal cell. That case is
  * detected — a file holding both `(a, b)` and `(b, a)` — and the lower half is
  * dropped rather than added, which is what makes the counts right.
  */
-export function parseMatrix(
+export async function parseMatrix(
   bytes: Uint8Array,
   nBins: number,
   label: string,
   hooks: ParseProgress = {},
-): HicProPixels {
+): Promise<HicProPixels> {
   const n = bytes.length
   let rows = 0
   for (let i = 0; i < n; i++) if (bytes[i] === NEWLINE) rows++
@@ -343,70 +355,37 @@ export function parseMatrix(
   // file's mirror from a genuine repeat once both are upper-triangular, and
   // those two want opposite treatment — see {@link collapse}.
   const swapped = new Uint8Array(rows)
-  let out = 0
+  const state: ScanState = { out: 0, line: 0, sawUpper: false, sawLower: false }
   let sum = 0
-  let sawUpper = false
-  let sawLower = false
   let at = 0
-  let line = 0
-  const report = Math.max(1, Math.floor(rows / 100))
 
+  // The tight loop is a **synchronous** function called slice by slice, and the
+  // yield sits between the calls rather than inside the loop. That shape is not
+  // stylistic: an `await` inside the scanning loop makes the whole loop part of
+  // an async function's state machine, and V8 stops optimising it — measured at
+  // 40 s for a 270 MB file against 2.7 s for the same code with the await moved
+  // out. The yield is still needed, because a cancel arrives as a message and a
+  // worker that never returns to its event loop never reads one (`../async`).
+  //
+  // The hooks are resolved to real functions *here*, and calling them through
+  // `?.` in the loop below would undo the paragraph above entirely. V8 inlines
+  // `scanSlice` back into this function and compiles the loop as one unit; an
+  // optional call that has never been made carries no type feedback, so that
+  // unit is thrown away — `Insufficient type feedback for call` — on the first
+  // slice, recompiled on the next, and thrown away again. The scan then runs
+  // interpreted, which measured **35 s for a 270 MB file against 0.9 s** here.
+  // A default that is a function makes both call sites ordinary ones.
+  const report = hooks.onProgress ?? noReport
+  const isCancelled = hooks.cancelled ?? notCancelled
   while (at < n) {
-    if (bytes[at] === NEWLINE || bytes[at] === RETURN) {
-      at++
-      continue
-    }
-    if (bytes[at] === HASH) {
-      while (at < n && bytes[at] !== NEWLINE) at++
-      continue
-    }
-    line++
-    const a = readInt(bytes, at)
-    at = a.at
-    if (!a.saw || bytes[at] !== TAB) throw badMatrix(label, line, nBins)
-    at++
-    const b = readInt(bytes, at)
-    at = b.at
-    if (!b.saw || bytes[at] !== TAB) throw badMatrix(label, line, nBins)
-    at++
-    const v = readFloat(bytes, at)
-    at = v.at
-    if (!v.saw) throw badMatrix(label, line, nBins)
-    while (at < n && bytes[at] !== NEWLINE) at++
-    at++
-
-    // 1-based to 0-based. A `0` in either column means the file is already
-    // 0-based, which HiC-Pro does not write but a hand-made one might; it is
-    // caught by the bounds check rather than silently shifting every pixel.
-    const i = a.value - 1
-    const j = b.value - 1
-    if (i < 0 || j < 0 || i >= nBins || j >= nBins) {
-      throw new ViewerError(
-        'format',
-        `${label} names bin ${a.value} × ${b.value} on line ${line}, and the bin file has ` +
-          `${nBins} bins numbered 1…${nBins}. The two halves of the pair are for different ` +
-          'resolutions, or for different genomes.',
-        { label, line, bin1: a.value, bin2: b.value, nBins },
-      )
-    }
-    // Strictly: a diagonal pixel is in neither triangle, and counting it in
-    // both labelled every real file `mixed` — which every real file has, so the
-    // label meant nothing until this was strict.
-    if (i < j) sawUpper = true
-    if (i > j) sawLower = true
-    // Stored upper whichever way it arrived; `complete` is folded below.
-    bin1[out] = i <= j ? i : j
-    bin2[out] = i <= j ? j : i
-    count[out] = v.value
-    swapped[out] = i <= j ? 0 : 1
-    out++
-
-    if (out % report === 0) {
-      if (hooks.cancelled?.() === true) throw cancelled()
-      hooks.onProgress?.(out, rows)
-    }
+    const stop = lineBoundaryAfter(bytes, Math.min(n, at + SCAN_SLICE))
+    at = scanSlice(bytes, at, stop, nBins, label, bin1, bin2, count, swapped, state)
+    await yieldToEventLoop()
+    if (isCancelled()) throw cancelled()
+    report(state.out, rows)
   }
-
+  const out = state.out
+  const { sawUpper, sawLower } = state
   // A file of nothing but its diagonal is in neither triangle and is reported
   // as the default one, which is what it would have been written as.
   const observed: HicProPixels['observed'] =
@@ -449,6 +428,199 @@ export function parseMatrix(
     sum,
     observed: observed === 'mixed' && folded.mirrored > 0 ? 'complete' : observed,
   }
+}
+
+/** Text per synchronous slice: big enough that the yield is noise, small
+ * enough that a cancel is answered within a few tens of milliseconds. */
+const SCAN_SLICE = 1 << 23
+
+/** What the slice scanner carries between slices. */
+interface ScanState {
+  out: number
+  line: number
+  sawUpper: boolean
+  sawLower: boolean
+}
+
+/** The first byte after the newline at or after `at`, so a slice ends on a row. */
+function lineBoundaryAfter(bytes: Uint8Array, at: number): number {
+  let i = at
+  while (i < bytes.length && bytes[i] !== NEWLINE) i++
+  return Math.min(bytes.length, i + 1)
+}
+
+/**
+ * Scan `[from, to)` of a matrix into the arrays, and return where it stopped.
+ *
+ * Synchronous, and deliberately a function of its own — see the note at its one
+ * call site. Everything it touches is a typed array or a number, so the loop
+ * stays in the shape V8 can keep in registers.
+ *
+ * ## Why it reads its own digits rather than calling {@link readInt}
+ *
+ * It did call it, and that made this function **nineteen times slower** — but
+ * only when a bin file had been parsed first, which is to say only ever in the
+ * application and never in a test that timed the matrix alone. A 270 MB file
+ * took 35 s where it now takes 1.8 s, and the difference was not in any of the
+ * arithmetic below.
+ *
+ * `--trace-opt-verbose` says what happened: `delaying optimization of
+ * scanSlice, IC changed`, once per tick, forever. {@link readInt} is shared
+ * with {@link parseBins}, so its inline caches carry that call's feedback too —
+ * a different array, different values, different shapes — and V8 will not tier
+ * up a function whose caches are still moving. The scan therefore ran
+ * interpreted from the first byte to the last, which is what a 30× gap looks
+ * like.
+ *
+ * So the one hot loop in this reader owns everything it touches. That is not a
+ * micro-optimisation and it is not a duplicate to be tidied away later: it is
+ * the only thing separating a two-second open from a thirty-five-second one,
+ * and reintroducing the call would restore the slow one silently, because every
+ * test that times this file parses no bins.
+ */
+function scanSlice(
+  bytes: Uint8Array,
+  from: number,
+  to: number,
+  nBins: number,
+  label: string,
+  bin1: Int32Array,
+  bin2: Int32Array,
+  count: Float32Array,
+  swapped: Uint8Array,
+  state: ScanState,
+): number {
+  let at = from
+  let out = state.out
+  let line = state.line
+  let sawUpper = state.sawUpper
+  let sawLower = state.sawLower
+
+  while (at < to) {
+    if (bytes[at] === NEWLINE || bytes[at] === RETURN) {
+      at++
+      continue
+    }
+    if (bytes[at] === HASH) {
+      while (at < to && bytes[at] !== NEWLINE) at++
+      continue
+    }
+    line++
+    // `binA`, then `binB`: unsigned decimal, tab-terminated. A sign here is not
+    // a bin id, so it ends the number at zero digits and is reported as a row
+    // that is not `binA  binB  count` — which it is.
+    let a = 0
+    let sawA = false
+    while (at < to) {
+      const c = bytes[at]
+      if (c < ZERO || c > NINE) break
+      a = a * 10 + (c - ZERO)
+      sawA = true
+      at++
+    }
+    if (!sawA || bytes[at] !== TAB) throw badMatrix(label, line, nBins)
+    at++
+    let b = 0
+    let sawB = false
+    while (at < to) {
+      const c = bytes[at]
+      if (c < ZERO || c > NINE) break
+      b = b * 10 + (c - ZERO)
+      sawB = true
+      at++
+    }
+    if (!sawB || bytes[at] !== TAB) throw badMatrix(label, line, nBins)
+    at++
+
+    // The value column, which is an integer in `raw/` and a float in `iced/`.
+    let v = 0
+    let sawV = false
+    let negative = false
+    if (bytes[at] === MINUS) {
+      negative = true
+      at++
+    }
+    while (at < to) {
+      const c = bytes[at]
+      if (c < ZERO || c > NINE) break
+      v = v * 10 + (c - ZERO)
+      sawV = true
+      at++
+    }
+    if (bytes[at] === DOT) {
+      at++
+      let scale = 0.1
+      while (at < to) {
+        const c = bytes[at]
+        if (c < ZERO || c > NINE) break
+        v += (c - ZERO) * scale
+        scale /= 10
+        sawV = true
+        at++
+      }
+    }
+    // An exponent, which `iced/` writes for very small bias-scaled values.
+    if (bytes[at] === E_LOWER || bytes[at] === E_UPPER) {
+      const mark = at
+      at++
+      let expSign = 1
+      if (bytes[at] === MINUS) {
+        expSign = -1
+        at++
+      } else if (bytes[at] === PLUS) {
+        at++
+      }
+      let exp = 0
+      let sawExp = false
+      while (at < to) {
+        const c = bytes[at]
+        if (c < ZERO || c > NINE) break
+        exp = exp * 10 + (c - ZERO)
+        sawExp = true
+        at++
+      }
+      // An `e` with no digits behind it is not an exponent; leave it to the
+      // skip-to-newline below rather than swallowing the rest of the row.
+      if (sawExp) v *= 10 ** (exp * expSign)
+      else at = mark
+    }
+    if (!sawV) throw badMatrix(label, line, nBins)
+    if (negative) v = -v
+    while (at < to && bytes[at] !== NEWLINE) at++
+    at++
+
+    // 1-based to 0-based. A `0` in either column means the file is already
+    // 0-based, which HiC-Pro does not write but a hand-made one might; it is
+    // caught by the bounds check rather than silently shifting every pixel.
+    const i = a - 1
+    const j = b - 1
+    if (i < 0 || j < 0 || i >= nBins || j >= nBins) {
+      throw new ViewerError(
+        'format',
+        `${label} names bin ${a} × ${b} on line ${line}, and the bin file has ` +
+          `${nBins} bins numbered 1…${nBins}. The two halves of the pair are for different ` +
+          'resolutions, or for different genomes.',
+        { label, line, bin1: a, bin2: b, nBins },
+      )
+    }
+    // Strictly: a diagonal pixel is in neither triangle, and counting it in
+    // both labelled every real file `mixed` — which every real file has, so the
+    // label meant nothing until this was strict.
+    if (i < j) sawUpper = true
+    if (i > j) sawLower = true
+    // Stored upper whichever way it arrived; `complete` is folded below.
+    bin1[out] = i <= j ? i : j
+    bin2[out] = i <= j ? j : i
+    count[out] = v
+    swapped[out] = i <= j ? 0 : 1
+    out++
+  }
+
+  state.out = out
+  state.line = line
+  state.sawUpper = sawUpper
+  state.sawLower = sawLower
+  return at
 }
 
 /**
@@ -580,36 +752,6 @@ function readInt(bytes: Uint8Array, at: number): { value: number; at: number; sa
     at++
   }
   return { value: value * sign, at, saw }
-}
-
-/** The value column, which is an integer in `raw/` and a float in `iced/`. */
-function readFloat(bytes: Uint8Array, at: number): { value: number; at: number; saw: boolean } {
-  const whole = readInt(bytes, at)
-  at = whole.at
-  let value = whole.value
-  let saw = whole.saw
-  if (bytes[at] === DOT) {
-    at++
-    let scale = 0.1
-    while (at < bytes.length) {
-      const c = bytes[at]
-      if (c < ZERO || c > NINE) break
-      value += (c - ZERO) * scale * (whole.value < 0 ? -1 : 1)
-      scale /= 10
-      saw = true
-      at++
-    }
-  }
-  // An exponent, which `iced/` writes for very small biases-scaled values.
-  if (at < bytes.length && (bytes[at] === 101 || bytes[at] === 69)) {
-    at++
-    const exp = readInt(bytes, at)
-    if (exp.saw) {
-      at = exp.at
-      value *= 10 ** exp.value
-    }
-  }
-  return { value, at, saw }
 }
 
 function badMatrix(label: string, line: number, nBins: number): ViewerError {

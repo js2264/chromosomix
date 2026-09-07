@@ -16,6 +16,7 @@ import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
+import { ScoolStore } from '../metacooler/scool'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { NameContext, NameMatch } from '../genome/naming'
@@ -448,6 +449,39 @@ async function probeBins(
 }
 
 /**
+ * Say what an open is doing, in the units of whatever it is doing.
+ *
+ * Bytes while a file is coming across, pixels while it is being parsed, and the
+ * `note` says which — because the two have different denominators and a bar
+ * that silently switched from one to the other would look like it had gone
+ * backwards. Two sweeps with a label each is what a reader can actually follow.
+ */
+function reporter(id: number): (done: number, total: number, note: string) => void {
+  let last = 0
+  return (done, total, note) => {
+    // Throttled to ~20 Hz. The download loop fires per network chunk and the
+    // parse per hundredth of a file, and posting every one of them would put
+    // more messages on the thread than the read it is describing.
+    const now = Date.now()
+    if (now - last < 50 && done < total) return
+    last = now
+    post({ type: 'progress', id, done, total, note })
+  }
+}
+
+/**
+ * Whether this name is a container whose open has a listing phase worth naming.
+ *
+ * By name, because the answer is wanted *before* the file is classified — the
+ * point of it is to label the wait that classification is about to spend. It is
+ * only a label: a flat-layout `.scool` written as `.cool` gets the ordinary
+ * spinner and opens exactly the same, and nothing downstream reads this.
+ */
+function looksSingleCell(uri: string): boolean {
+  return /\.scool(\.gz)?(\?|#|$)/i.test(uri)
+}
+
+/**
  * The HiC-Pro road: read both text files whole, parse, and hand up a map.
  *
  * There is no `ByteSource` here because there is nothing left for one to
@@ -468,15 +502,22 @@ async function openHicPro(
 ): Promise<{ mc: MetaCooler; source: ByteSource }> {
   const binsName = nameOf(bins)
   const matrixName = nameOf(request.source)
-  const binBytes = await readWhole(bins)
+  const say = reporter(request.id)
+  const binBytes = await readWhole(bins, {
+    onProgress: (got, total) => say(got, total, 'reading the bins'),
+    cancelled: () => cancelled.has(request.id),
+  })
   const parsedBins = parseBins(binBytes, binsName)
   // Before the matrix is touched, and after the bins are — the bins are small
   // and their bin count is what makes the estimate below mean anything.
   await assertLoadAffordable(request, matrixName, parsedBins.nBins)
-  const matrixBytes = await readWhole(request.source)
-  const parsedPixels = parseMatrix(matrixBytes, parsedBins.nBins, matrixName, {
+  const matrixBytes = await readWhole(request.source, {
+    onProgress: (got, total) => say(got, total, 'downloading the matrix'),
     cancelled: () => cancelled.has(request.id),
-    onProgress: (done, total) => post({ type: 'progress', id: request.id, done, total }),
+  })
+  const parsedPixels = await parseMatrix(matrixBytes, parsedBins.nBins, matrixName, {
+    cancelled: () => cancelled.has(request.id),
+    onProgress: (done, total) => say(done, total, 'reading pixels'),
   })
   const mc = MetaCooler.fromHicPro(request.uri, {
     bins: parsedBins,
@@ -608,13 +649,17 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // left behind for a `ByteSource` to represent (§3.8). It is decided first
   // because it is the one road that does not begin with a mount at all.
   const bins = await binsFor(request)
+  const say = reporter(request.id)
   let mc: MetaCooler
   let source: ByteSource
   let pairs: PairsImport | null = reusable?.pairs ?? null
   if (bins !== null) {
     ;({ mc, source } = await openHicPro(request, bins))
   } else {
-    source = await createSource(request.source)
+    source = await createSource(request.source, {
+      onProgress: (received, total) => say(received, total, 'downloading'),
+      cancelled: () => cancelled.has(request.id),
+    })
     try {
       if (reusable !== null) {
         // A rung switch inside a file already imported: no read, no dialog, no
@@ -632,6 +677,15 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
         // the shell only ever sets one by re-issuing this open with what they
         // chose.
         const agreed = request.source.kind === 'remote' && request.source.reading !== undefined
+        // Listing a single-cell container's cells is the one wait in this
+        // application that cannot be measured while it happens: it is a single
+        // call into h5wasm that issues a thousand small synchronous reads and
+        // returns when it is done, so this thread is not free to say anything
+        // until it already has the answer. What can be said is *which* wait it
+        // is, before it starts — an indeterminate bar under the name of the
+        // phase, which is the difference between a reader who knows a thousand
+        // reads are in flight and one watching a spinner.
+        if (looksSingleCell(request.uri)) say(0, 0, 'listing cells')
         mc = await MetaCooler.open(request.uri, source, agreed ? { listingAgreed: true } : {})
       }
     } catch (error) {
@@ -1647,6 +1701,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
 async function handle(request: WorkerRequest): Promise<void> {
   calls++
   const before = session?.source.stats()
+  const summing = followCells(request.id)
   try {
     const payload = await dispatch(request)
     if (isViewRequest(request.kind) && before && session) {
@@ -1657,7 +1712,36 @@ async function handle(request: WorkerRequest): Promise<void> {
   } catch (err) {
     post({ type: 'error', id: request.id, error: serialiseError(err) })
   } finally {
+    summing()
     cancelled.delete(request.id)
+  }
+}
+
+/**
+ * Report the cell fan-out of whatever this request turns out to read.
+ *
+ * Attached here, around the whole dispatch, rather than inside the handlers
+ * that read a block: a cell set is summed by `matrix`, by `aggregate`, by
+ * `selection` and by the overview, and every one of them reaches the store
+ * through several layers that have no reason to learn about cells. The store is
+ * per selection and lives on the session, so this is the one place that knows
+ * both it and the id the news belongs to.
+ *
+ * Returns the undo, which the caller runs in its `finally` — a sink left
+ * attached would post against a request that has already been answered.
+ */
+function followCells(id: number): () => void {
+  const store = session?.mc.store
+  // One cell is not a sum, and a bar that says `1 of 1` says nothing.
+  if (!(store instanceof ScoolStore) || store.names.length < 2) return () => {}
+  const say = reporter(id)
+  const sink = (done: number, total: number): void => say(done, total, 'summing cells')
+  store.onCells = sink
+  // Cleared only if it is still ours: two reads can be in flight at once — a
+  // map and the overview behind it — and the one that finishes first must not
+  // silence the one still running.
+  return () => {
+    if (store.onCells === sink) store.onCells = null
   }
 }
 

@@ -69,6 +69,21 @@ export class ScoolStore implements PixelStore {
   readonly countKind: 'i' | 'u' | 'f'
   private readonly cells: Cell[]
   private offsets: Float64Array | null = null
+  /**
+   * Told how far the fan-out has got, per cell.
+   *
+   * Every other read in this application is bounded by the rectangle asked for
+   * and needs no such thing. This one is bounded by the rectangle *times the
+   * cell count*, so the same window that draws instantly over one cell is a
+   * minute of small reads over four thousand — and the only honest denominator
+   * is cells, because that is what the work is counted in.
+   *
+   * A field rather than an argument because the callers are the view layer's
+   * dozen matrix requests, which have no business knowing that this file has
+   * cells at all: the store is per selection, so whoever mounted it can ask to
+   * be told and everything above stays as it was.
+   */
+  onCells: ((done: number, total: number) => void) | null = null
 
   /**
    * @param handle The file's root handle; each cell is a borrowed view of it.
@@ -167,12 +182,14 @@ export class ScoolStore implements PixelStore {
     onChunk: (chunk: PixelChunk) => void,
     options: SpanScanOptions = {},
   ): Promise<boolean> {
+    let done = 0
     for (const cell of this.cells) {
       if (!(await cell.store.forEachWindow(rows, cols, plan, onChunk, options))) return false
       // Between cells rather than only inside them: a set of four thousand
       // sparse cells is four thousand small reads, and a cancel arriving as a
       // message needs the queue to run to be seen (`../async`).
       await yieldToEventLoop()
+      this.onCells?.(++done, this.cells.length)
     }
     return true
   }
@@ -182,9 +199,11 @@ export class ScoolStore implements PixelStore {
     onChunk: (chunk: PixelChunk) => void,
     options: SpanScanOptions = {},
   ): Promise<boolean> {
+    let done = 0
     for (const cell of this.cells) {
       if (!(await cell.store.forEachBands(bands, onChunk, options))) return false
       await yieldToEventLoop()
+      this.onCells?.(++done, this.cells.length)
     }
     return true
   }

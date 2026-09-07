@@ -47,9 +47,9 @@ const VARIANTS: Array<[string, string, string]> = manifest.variants.map((v) => [
 const read = (name: string): Uint8Array => new Uint8Array(readFileSync(`${FIXTURES}${name}`))
 
 /** Open a pair the way the worker will: parse both halves, then build the map. */
-function open(matrixName: string, binsName: string): MetaCooler {
+async function open(matrixName: string, binsName: string): Promise<MetaCooler> {
   const bins = parseBins(read(binsName), binsName)
-  const pixels = parseMatrix(read(matrixName), bins.nBins, matrixName)
+  const pixels = await parseMatrix(read(matrixName), bins.nBins, matrixName)
   return MetaCooler.fromHicPro(`${FIXTURES}${matrixName}`, {
     bins,
     pixels,
@@ -66,7 +66,7 @@ describe.skipIf(!present)('the fixtures', () => {
 
 describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
   it.each(VARIANTS)('%s: the coordinate system comes off the BED', async (_f, m, b) => {
-    const mc = open(m, b)
+    const mc = await open(m, b)
     try {
       expect(mc.layout.kind).toBe('hicpro')
       expect(mc.binsize).toBe(manifest.binsize)
@@ -83,7 +83,7 @@ describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
   })
 
   it.each(VARIANTS)('%s: the whole matrix is the one cooler computed', async (_f, m, b) => {
-    const mc = open(m, b)
+    const mc = await open(m, b)
     try {
       const n = manifest.nbins
       const block = await mc.matrix({ rows: [0, n] })
@@ -98,7 +98,7 @@ describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
   })
 
   it.each(VARIANTS)('%s: a sub-window agrees with the whole', async (_f, m, b) => {
-    const mc = open(m, b)
+    const mc = await open(m, b)
     try {
       const n = manifest.nbins
       const whole = await mc.matrix({ rows: [0, n] })
@@ -116,7 +116,7 @@ describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
   })
 
   it.each(VARIANTS)('%s: reports the pixel count and total it actually read', async (_f, m, b) => {
-    const mc = open(m, b)
+    const mc = await open(m, b)
     try {
       // Six distinct pixels, whichever triangle they were stored in — a
       // `complete` file holds eleven rows for them and must still say six.
@@ -132,7 +132,7 @@ describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
 describe.skipIf(!present)('a region of one sequence', () => {
   it('is addressed by name, as any cooler is', async () => {
     const [, m, b] = VARIANTS[0]
-    const mc = open(m, b)
+    const mc = await open(m, b)
     try {
       const chr2 = mc.coords.contigBinExtent(1)
       expect([...chr2]).toEqual([3, 5])
@@ -147,14 +147,15 @@ describe.skipIf(!present)('a region of one sequence', () => {
 })
 
 describe.skipIf(!present)('a fragment-level pair', () => {
-  it('is refused by name, with the config key that produced it', () => {
+  it('is refused by name, with the config key that produced it', async () => {
     const bins = parseBins(read(manifest.fragment.bins), manifest.fragment.bins)
     expect(bins.fixed).toBe(false)
+    const pixels = await parseMatrix(read(manifest.fragment.matrix), bins.nBins, 'frag')
     let thrown: unknown
     try {
       MetaCooler.fromHicPro('frag', {
         bins,
-        pixels: parseMatrix(read(manifest.fragment.matrix), bins.nBins, 'frag'),
+        pixels,
         matrixName: manifest.fragment.matrix,
         binsName: manifest.fragment.bins,
       })
@@ -168,12 +169,12 @@ describe.skipIf(!present)('a fragment-level pair', () => {
 })
 
 describe.skipIf(!present)('the handle serves the cooler datasets honestly', () => {
-  it('so CoolerStore reads it with no second implementation', () => {
+  it('so CoolerStore reads it with no second implementation', async () => {
     // The property that deletes a module: unlike a `.hic`, this container can
     // answer `pixels/*` and `indexes/bin1_offset`, because it was read whole.
     const [, m, b] = VARIANTS[0]
     const bins = parseBins(read(b), b)
-    const pixels = parseMatrix(read(m), bins.nBins, m)
+    const pixels = await parseMatrix(read(m), bins.nBins, m)
     const h = hicProHandle('x', { bins, pixels, matrixName: m, binsName: b })
     expect(h.has('indexes/bin1_offset')).toBe(true)
     expect(h.has('pixels/bin1_id')).toBe(true)

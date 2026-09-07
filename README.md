@@ -35,8 +35,9 @@ table lands first — every cell in the file, sortable by the depth its own attr
 by name — and a click opens one cell's map. Tick several and they are **added together**, because
 every cell here indexes the same bins, so a set of them is one map with their contacts summed: the
 thing that turns a sparse single-cell matrix into a readable one. Tick all of them and you have the
-pseudo-bulk. The chosen cells stay chosen as you walk into a chromosome and back out, and they travel
-in the link. Both layouts open — the standard `/cells` container `cooler` writes, and the flat one
+pseudo-bulk — and while it adds them up it says how far it has got, because summing four thousand
+cells is four thousand reads and a spinner would not be honest about that. The chosen cells stay
+chosen as you walk into a chromosome and back out, and they travel in the link. Both layouts open — the standard `/cells` container `cooler` writes, and the flat one
 every pre-2021 tool produced.
 
 Opening one over the network is one of the two places this viewer asks a question first, and it says
@@ -52,8 +53,9 @@ region, the analysis panel, tracks and export, all of it. All four `MATRIX_FORMA
 `iced/` matrices included.
 
 It has no index, and it is the one format here that cannot have one, so the whole matrix is read at
-open — about a second per hundred megabytes — and after that it *is* a cooler: every region instant,
-panning free. Past a couple of hundred megabytes you are told that before it happens, and told the
+open — about a second per hundred megabytes, with a bar that counts the bytes coming across and then
+the pixels coming out, and a cancel if you change your mind — and after that it *is* a cooler: every
+region instant, panning free. Past a couple of hundred megabytes you are told that before it happens, and told the
 cost is paid once. Fine-resolution human maps are better converted, and the panel says how:
 `cooler load -f coo` turns the same two files into a `.cool`.
 

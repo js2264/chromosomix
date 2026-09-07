@@ -22,7 +22,7 @@ import { decodeAnnotationBytes } from '../annotations/parse'
  * target is mounted directly, which is what makes "nothing is uploaded" a
  * property of the code rather than a promise in the README (spec §11).
  */
-export async function createSource(spec: SourceSpec): Promise<ByteSource> {
+export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise<ByteSource> {
   if (spec.kind === 'local') {
     // Retained across opens of the *same* file, exactly as a remote one is.
     // Stepping through an mcool's resolutions or an mmetacool's entries reopens
@@ -41,7 +41,7 @@ export async function createSource(spec: SourceSpec): Promise<ByteSource> {
   if (spec.reading === 'whole') {
     const held = borrowWhole(spec.url)
     if (held !== null) return held
-    return keepWhole(spec.url, await wholeObjectOf(spec.url, spec.credential))
+    return keepWhole(spec.url, await wholeObjectOf(spec.url, spec.credential, watch))
   }
   const reading = spec.reading ?? ''
   const reused = borrowRemote(spec.url, reading)
@@ -315,7 +315,11 @@ const FINE_CHUNK_SIZE = 16 << 10
 const MAX_CHOSEN_WHOLE_BYTES = 2 * (1 << 30)
 
 /** The whole-object source a gated open asked for, downloaded and mounted. */
-async function wholeObjectOf(url: string, credential?: S3Credential): Promise<ByteSource> {
+async function wholeObjectOf(
+  url: string,
+  credential?: S3Credential,
+  watch?: ReadWatch,
+): Promise<ByteSource> {
   let bytes: Uint8Array
   try {
     const response = await fetch(url, {
@@ -332,9 +336,9 @@ async function wholeObjectOf(url: string, credential?: S3Credential): Promise<By
         { url, size: declared, limit: MAX_CHOSEN_WHOLE_BYTES },
       )
     }
-    bytes = new Uint8Array(await response.arrayBuffer())
+    bytes = await drain(response, watch)
   } catch (err) {
-    if (err instanceof ViewerError) throw err
+    if (err instanceof ViewerError || isAbort(err)) throw err
     throw new ViewerError(
       'remote-cors',
       `Could not download ${url} whole: ${err instanceof Error ? err.message : String(err)}`,
@@ -385,7 +389,10 @@ function borrowWhole(url: string): ByteSource | null {
  * released. Nothing is retained: after the parse the map is typed arrays, and
  * the source has nothing left to answer.
  */
-export async function readWhole(spec: SourceSpec | NonNullable<SourceSpec['bins']>): Promise<Uint8Array> {
+export async function readWhole(
+  spec: SourceSpec | NonNullable<SourceSpec['bins']>,
+  watch?: ReadWatch,
+): Promise<Uint8Array> {
   let bytes: Uint8Array
   if (spec.kind === 'local') {
     bytes = new Uint8Array(await spec.file.arrayBuffer())
@@ -414,12 +421,118 @@ export async function readWhole(spec: SourceSpec | NonNullable<SourceSpec['bins'
         { url: spec.url, status: response.status },
       )
     }
-    bytes = new Uint8Array(await response.arrayBuffer())
+    bytes = await drain(response, watch)
   }
   // The two halves are shipped gzipped as often as not — `.matrix.gz` beside a
   // plain `.bed`, or both — and this is the same un-gzipping every text format
   // in the application already goes through, BGZF included.
   return decodeAnnotationBytes(bytes)
+}
+
+/**
+ * What a whole-file read reports to, and asks whether to keep going.
+ *
+ * One object rather than two parameters because the two always travel together:
+ * a read worth reporting is a read long enough to want stopping, and the two
+ * paths that read a whole file — a gated remote object and a HiC-Pro pair — are
+ * exactly the ones that offer a cancel.
+ */
+export interface ReadWatch {
+  onProgress?(received: number, total: number): void
+  cancelled?(): boolean
+}
+
+/** Raised when the reader calls a download off; the shell reads it as a no-op. */
+function abortError(): Error {
+  const err = new Error('cancelled')
+  err.name = 'AbortError'
+  return err
+}
+
+function isAbort(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
+}
+
+/**
+ * Collect a response body, reporting bytes as they land.
+ *
+ * `arrayBuffer()` is one await and no news, which is fine for a bounded read
+ * and wrong for this one: a HiC-Pro matrix is read whole, so the download *is*
+ * most of the wait, and a reader watching a spinner has no way to tell a slow
+ * connection from a hung one. Streaming the body costs one loop and turns that
+ * into a bar.
+ *
+ * `Content-Length` is the denominator where the host states one. Where it does
+ * not — a chunked response, or a proxy that strips it — the total is reported
+ * as `0`, which the bar reads as *indeterminate* rather than as *finished*.
+ *
+ * Falls back to `arrayBuffer()` where the platform has no streaming body, which
+ * is only very old runtimes and the odd test double.
+ */
+async function drain(response: Response, watch?: ReadWatch): Promise<Uint8Array> {
+  const declared = Number(response.headers.get('Content-Length') ?? Number.NaN)
+  const total = Number.isFinite(declared) && declared > 0 ? declared : 0
+  const body = response.body
+  const onProgress = watch?.onProgress
+  if (body === null || watch === undefined) {
+    return new Uint8Array(await response.arrayBuffer())
+  }
+  const reader = body.getReader()
+  // A cancel arriving mid-download is answered here rather than after it: the
+  // download *is* most of the wait on the one path that offers a cancel at all,
+  // and a button that does nothing until the thing it is stopping has finished
+  // is worse than no button.
+  const stop = (): never => {
+    void reader.cancel()
+    throw abortError()
+  }
+  let received = 0
+  // Where the host states a length, the buffer is allocated **once** and filled
+  // in place. That is not a micro-optimisation on this path: these files are
+  // read whole, so holding the chunks and then copying them into a second
+  // buffer means peak memory of twice the file — 540 MB transient on a 270 MB
+  // matrix, on top of the arrays the parse is about to build.
+  if (total > 0) {
+    const out = new Uint8Array(total)
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (watch.cancelled?.() === true) stop()
+      if (value === undefined) continue
+      // A host whose body outruns its own `Content-Length` is not something to
+      // crash on: keep what fits, and let the parser judge the result.
+      if (received + value.length > total) {
+        out.set(value.subarray(0, total - received), received)
+        received = total
+        break
+      }
+      out.set(value, received)
+      received += value.length
+      onProgress?.(received, total)
+    }
+    onProgress?.(received, total)
+    return received === total ? out : out.subarray(0, received)
+  }
+  // No length stated: collect, then join once. The bar is indeterminate here
+  // and the second buffer is unavoidable, since the size is unknown until the
+  // stream ends.
+  const chunks: Uint8Array[] = []
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (watch.cancelled?.() === true) stop()
+    if (value === undefined) continue
+    chunks.push(value)
+    received += value.length
+    onProgress?.(received, 0)
+  }
+  const out = new Uint8Array(received)
+  let at = 0
+  for (const chunk of chunks) {
+    out.set(chunk, at)
+    at += chunk.length
+  }
+  return out
 }
 
 /** Host part of a URL, or the raw string when it does not parse. */

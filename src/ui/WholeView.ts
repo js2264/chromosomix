@@ -625,9 +625,14 @@ export class WholeView {
     // whole-metagenome scan makes — see `metacooler/matrix.ts`. The task is held
     // so `cancel` can reach it and so a result that arrives *after* a cancel can
     // be told apart from the one being waited for.
-    const onProgress = (done: number, total: number): void => {
+    // The denominator is named by whoever counted it. A read of a cell set is
+    // counted in *cells* — it is one bounded read repeated per cell — and a bar
+    // that called those pixels would report three hundred pixels for a map with
+    // a million in it.
+    const onProgress = (done: number, total: number, note?: string): void => {
       this.progressBar.value = total === 0 ? 0 : done / total
-      this.progressText.textContent = `${fmt.int(done)} of ${fmt.int(total)} pixels`
+      const unit = note === 'summing cells' ? 'cells' : 'pixels'
+      this.progressText.textContent = `${fmt.int(done)} of ${fmt.int(total)} ${unit}`
     }
     // Three kinds, one shape: each resolves to a `MatrixResult` and each walks
     // the same pixels. Written as separate calls rather than one over a union

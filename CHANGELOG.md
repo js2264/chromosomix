@@ -201,6 +201,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Specified at SPECS §21, with a picture of a real one and the worked example in
   the README.
 
+- **A progress bar on the two opens that are worth watching, with a way out.**
+  Almost every read here is bounded and finishes before anyone could want news
+  of it. Two are not: a HiC-Pro pair is read whole and parsed at open (§3.8),
+  and an `.scool` over the network pays its listing cost up front (§3.7) — and
+  a spinner in front of either gives a reader no way to tell a slow connection
+  from a hung one, and no way to stop.
+
+  So the loading screen now talks back. It stays a spinner until the worker has
+  something to say, and from the first word it is a labelled bar and a
+  **cancel**: bytes while a file is coming across, pixels while it is parsed —
+  two sweeps with a denominator each, rather than one bar sliding between two
+  and appearing to go backwards. Cancelling is not a failure and does not look
+  like one: it stops the download mid-stream and goes back to the picker, the
+  way dismissing the gate does. A 258 MB pair reads in about four seconds, and
+  the bar spends three of them on the download.
+
+  The `.scool` listing is the one wait that cannot be measured *while* it
+  happens — it is a single call into HDF5 that issues a thousand small reads and
+  returns when it has them, so the thread is not free to say anything until it
+  already has the answer. What it can say is which wait it is, before it starts:
+  an indeterminate bar under the name of the phase.
+
+- **A cell sum says how far it has got.** Summing a cell set is the one read in
+  this application that is linear in something other than the picture: the same
+  window that draws instantly over one cell is four thousand small reads over a
+  whole file, and the veil in front of the map said `loading…` for all of it.
+  It now counts cells — `summing 1,204 of 3,882 cells…` — in every map view, and
+  the whole-file view's own bar names the unit it is counting rather than
+  calling three hundred cells three hundred pixels.
+
 - **HiC-Pro's `.matrix` + `_abs.bed` pair, as one contact map.** The output of
   the pipeline most published Hi-C was processed with, and it opens as what it
   is: the BED is the coordinate system, the matrix is the pixels, and between
@@ -826,6 +856,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   type="file">` for files, the snapshot shape for a directory. Dropping was never
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
+
+- **A HiC-Pro matrix parsed nineteen times slower than it reads**, and only
+  ever in the application: 35 seconds for a 258 MB file where the same code
+  measured 1.8. The scan shared its integer reader with the bin-file parser, and
+  V8 will not optimise a function whose inline caches are still moving —
+  `--trace-opt-verbose` says `delaying optimization of scanSlice, IC changed`,
+  once per tick, forever — so having read a bin file first left the scan running
+  interpreted from the first byte to the last. It reads its own digits now.
+
+  The reason it was invisible is worth recording: the bins are parsed *before*
+  the matrix in the application and never before it in a test, so every timing
+  taken of this file was of the fast path. The fix carries the measurement and
+  the reason beside it, because re-sharing the helper would restore the slow
+  path silently.
+
+  Two things fell out of inlining the scan, both of which the old scanner had
+  wrong and nothing had noticed: an exponent written with its sign (`1e+2`, what
+  `%g` and numpy print) stopped at the `+` and quietly kept the mantissa, so the
+  pixel was 1 rather than 100; and a negative fractional value (`-0.5`) asked
+  its integer part which way it went, got `-0`, and came out positive.
 
 - **A diagonal pixel was counting as both triangles**, so the `MATRIX_FORMAT`
   a HiC-Pro file turned out to be written with was reported as `mixed` for

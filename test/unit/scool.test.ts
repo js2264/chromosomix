@@ -228,6 +228,34 @@ describe.skipIf(!present)('the summed index', () => {
   })
 })
 
+describe.skipIf(!present)('how far the sum has got', () => {
+  it.each(LAYOUTS)('%s is reported per cell, in cells', async (name) => {
+    // The one read here whose cost is linear in something other than the
+    // picture: the same window over one cell and over four thousand is the same
+    // block and a thousandfold different wait. Cells are the only honest
+    // denominator, and the store is where they are counted — nothing between it
+    // and the view layer knows this file has cells at all.
+    await withMap(name, null, async (mc) => {
+      const store = mc.store as ScoolStore
+      const seen: Array<[number, number]> = []
+      store.onCells = (done, total) => seen.push([done, total])
+      await mc.matrix({ rows: [0, manifest.nbins] })
+      expect(seen).toEqual(CELL_NAMES.map((_, i) => [i + 1, CELL_NAMES.length]))
+    })
+  })
+
+  it.each(LAYOUTS)('%s costs nothing and reaches no one when unset', async (name) => {
+    // The ordinary case — every read of every other file — and the read must be
+    // identical with the sink absent.
+    await withMap(name, null, async (mc) => {
+      const watched = await mc.matrix({ rows: [0, manifest.nbins] })
+      ;(mc.store as ScoolStore).onCells = null
+      const plain = await mc.matrix({ rows: [0, manifest.nbins] })
+      expect([...plain.values]).toEqual([...watched.values])
+    })
+  })
+})
+
 describe.skipIf(!present)('naming a cell that is not there', () => {
   it('is refused rather than silently dropped', () => {
     expect(() => resolveCells(CELL_NAMES, ['cell_a', 'nope'])).toThrowError(ViewerError)

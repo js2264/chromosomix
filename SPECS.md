@@ -441,6 +441,20 @@ needs a round trip each. The reader is asked which to pay — one download, or a
 — with the numbers on the buttons, and told that a local copy costs neither. **A local file is never
 asked**, because the question is about round trips and a file on disk seeks for free.
 
+**The two waits it costs, and what each can say.** The download, when that is what was chosen, is
+reported in bytes with a cancel, exactly as §3.8's is. The listing itself cannot be: it is a single
+call into HDF5 that issues its thousand small reads and returns when it has them, so the thread is
+not free to report anything until it already has the answer. What it can say is *which* wait it is,
+before it starts — an indeterminate bar under the name of the phase, which is the difference between
+a reader who knows a thousand reads are in flight and one watching a spinner.
+
+**Summing says how far it has got.** A cell sum is the only read here whose cost is linear in
+something other than the picture asked for: the same window that draws instantly over one cell is
+four thousand small reads over a whole file. So the fan-out counts cells — `summing 1,204 of 3,882
+cells…` — on the veil in front of the map, and the whole-file view's own bar names cells rather than
+pixels when cells are what it is counting. The store is told where to report; nothing between it and
+the view layer learns that this file has cells.
+
 The consolation is that the listing is the *only* cost. Every cell's attribute block sits in metadata
 the listing already brought across — measured at **zero** additional source chunks on both files — so
 the cells table's columns are free once the names are paid for, and a per-cell map is 2,802 stored
@@ -508,6 +522,21 @@ what the read will cost and that it is paid once — which is the part that turn
 acceptable one. That threshold is a difference from §3.7's gate rather than an inconsistency: an
 `.scool`'s cost is round trips, which a local file does not pay, and this one's is parsing and
 memory, which it pays in full.
+
+**The wait is watched and stoppable.** This and §3.7 are the only two opens in the application long
+enough for anyone to want news of one, and both now report through the loading screen rather than a
+spinner: bytes while the file comes across, pixels while it is parsed — two labelled sweeps rather
+than one bar sliding between two denominators — and a **cancel** that stops the download mid-stream
+and returns to the picker. Cancelling is an answer, not a failure, exactly as dismissing the gate is.
+A 258 MB pair reads in about four seconds, three of them download.
+
+**The parse's own trap, recorded because it is invisible.** The scan shared its integer reader with
+`parseBins`, and V8 refuses to optimise a function whose inline caches are still moving —
+`delaying optimization of scanSlice, IC changed`, once per tick, forever. Having parsed a bin file
+first therefore left the matrix scan running *interpreted*: 35 seconds for a 258 MB file against 1.8
+for the same arithmetic. The bins are parsed before the matrix in the application and never before it
+in a test, so every measurement ever taken of this parser was of the fast path. The one hot loop
+reads its own digits now, and that is not a duplicate to be tidied away later.
 
 **Where it works, and where to convert instead.** The limit is the pixel count and nothing about the
 format: about 100 M pixels is comfortable (≈1.5 GB of text, 15 s, 1.2 GB held), and past ~250 M it
@@ -2564,6 +2593,7 @@ the two costs to pay:
 | The cells table, after that listing | **0** further chunks — every cell's attributes are in metadata already fetched |
 | One cell's map | as any cooler's: a bounded read (2,802 stored pixels on the Nagano file) |
 | Summing *k* cells | *k* bounded reads, linear in *k* and in nothing else — 12.7 s for all 3,882 of them, gated above §7.3's pixel threshold like any other whole-file read |
+| What the reader sees while it happens | `summing 1,204 of 3,882 cells…`, counted in cells because cells are what the work is |
 
 This is the case `hdf5-indexed-reader` above was held in reserve for, and it remains the way out:
 a pre-built path → offset index would turn the gate into an ordinary bounded open.
@@ -2580,6 +2610,7 @@ memory rather than round trips and a local file pays it in full:
 | Open one over 200 MB | a **gate** quoting the size, the estimated pixel count and that the cost is paid once |
 | Every read afterwards | **0 requests** — the map is typed arrays; pan and zoom are free |
 | Find the bin file beside a URL | ≤ 2 `HEAD` requests, then the refusal names all three ways to supply it |
+| What the reader sees while it happens | bytes, then pixels, on a labelled bar with a cancel — 258 MB in ≈4 s, three of them download |
 
 The way out here is not an index but a conversion, and the gate says so: `cooler load -f coo` turns
 the same two files into a `.cool` that opens in a handful of requests at any size.
