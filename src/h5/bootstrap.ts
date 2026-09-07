@@ -94,6 +94,16 @@ export interface H5FSNode {
  */
 export interface H5FileSystem {
   writeFile(path: string, data: Uint8Array): void
+  /**
+   * Read a whole file out of the virtual filesystem.
+   *
+   * The one legitimate whole-file read in this repo, and it is a read of
+   * something this process just *wrote*: `pairs/write.ts` builds an `.mcool`
+   * in MEMFS and hands the bytes to the browser as a download. Never used on a
+   * file the reader opened — that is what `readBytes` and the block indexes
+   * exist to avoid.
+   */
+  readFile(path: string): Uint8Array
   unlink(path: string): void
   stat(path: string): { size: number }
   analyzePath(path: string): { exists: boolean }
