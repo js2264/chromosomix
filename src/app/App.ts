@@ -95,7 +95,9 @@ import {
   togglePlotOption,
 } from '../ui/plotOptions'
 import { refineEnabled, toggleRefine } from '../ui/refine'
+import { embedded, mounting } from '../embed'
 import { Session, reserveSessionIds, type SessionHost } from './Session'
+import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
 
@@ -221,11 +223,36 @@ export class App implements SessionHost {
   private readonly analysisPanel: SidePanel
   private readonly tabs: TabStrip
   private readonly theme: ThemeToggle
-  private readonly status: StatusBar
+  /**
+   * The footer, or `null` in an embed.
+   *
+   * Not built rather than built and hidden, and the difference is a timer: the
+   * bar measures memory and CPU once a second for as long as the window is open
+   * (`ui/StatusBar.ts`), which is a fair price for a readout somebody can see
+   * and none at all for one mounted nowhere.
+   */
+  private readonly status: StatusBar | null
   /** At most one dialog at a time; it owns the keyboard while it is up. */
   private modal: Modal | null = null
   /** Set while this class is the one moving the hash, so it ignores the echo. */
   private writingHash = false
+  /**
+   * Whether this page was mounted as an embed (`?embed=1`, `src/embed.ts`).
+   *
+   * Read once into a field rather than asked for at each use. It decides what
+   * the constructor appends, what every navigation does to the history, and
+   * whether this window remembers itself — and a window that answered the
+   * question differently in three of those places would be a bug nobody could
+   * see from any one of them.
+   */
+  private readonly embed = embedded()
+  /**
+   * The host page's end of the conversation, or `null`.
+   *
+   * `null` for every top-level page, which is the ordinary case: the app is then
+   * the whole window and the host it would be answering is the reader.
+   */
+  private readonly channel: EmbedChannel | null = null
 
   constructor(root: HTMLElement) {
     this.breadcrumbSlot = el('div', { class: 'breadcrumb-slot' })
@@ -263,7 +290,9 @@ export class App implements SessionHost {
     // useful. See `ui/SidePanel.ts`.
     this.filesPanel.setAvailable(true)
 
-    this.status = new StatusBar({ client: () => this.current?.client ?? null })
+    this.status = this.embed
+      ? null
+      : new StatusBar({ client: () => this.current?.client ?? null })
     this.theme = new ThemeToggle()
     this.tabs = new TabStrip({
       onSelect: (index) => this.activate(index),
@@ -295,122 +324,155 @@ export class App implements SessionHost {
     })
     source.appendChild(icon('github'))
 
-    root.append(
-      el(
-        'header',
-        { class: 'app-head' },
-        el(
-          'div',
-          { class: 'head-left' },
-          el(
-            'div',
-            { class: 'brand' },
-            // Before the name: the same mark as the tab's favicon and the dock
-            // icon, so the window and the taskbar entry agree about what this
-            // app is. Sized against the name rather than the row — 26 px beside
-            // a 16 px name is the proportion a favicon has to a tab title.
-            appMark(26),
-            home,
-          ),
-          // …and the four columns after it, not before. They are controls over
-          // the window's own furniture, and a row that opens with four unlabelled
-          // marks makes a reader identify them before reaching the thing that
-          // says what they are looking at. The strapline that used to hold this
-          // side of the header is gone with them: it explained the app to
-          // somebody who has already opened it, and this is the row where the
-          // panels are reached from.
-          el(
-            'div',
-            { class: 'head-panels' },
-            // Files first, matching the columns' own order out from the map:
-            // it is the outermost on the left, and it is the one a reader
-            // arrives through rather than one they drive the picture with.
-            this.filesPanel.toggle,
-            this.generalPanel.toggle,
-            this.annotationsPanel.toggle,
-            this.aestheticsPanel.toggle,
-            this.analysisPanel.toggle,
-          ),
-          // Past a second divider, because it is not a fifth panel: those four
-          // fold furniture this window already has, and this one brings
-          // something into it. Dropping is still the gesture the app is opened
-          // with and the whole content area still takes it — this is the same
-          // gesture for a reader who has no window to drag from, and the only
-          // door to a file that is on screen in every view. See
-          // {@link addFileDialog} for why it *adds* rather than replaces.
-          el(
-            'div',
-            { class: 'head-add' },
-            iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
-              this.addFileDialog(),
-            ),
-            // Beside the `+` and not instead of it, because they answer
-            // different questions. The `+` brings in **one file**, now, and
-            // closes; this attaches a **place** and leaves it attached, so the
-            // next twenty files cost a click each. A reader with one URL wants
-            // the first; a reader working out of a directory for an afternoon
-            // wants the second, and until now the app only offered them the
-            // first, twenty times.
-            iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
-              this.openConnectDialog(),
-            ),
-          ),
-        ),
-        palette,
-        el(
-          'div',
-          { class: 'head-actions' },
-          // Share one tab as a link, save the whole window as a file, theme,
-          // shortcuts, source, about. The two leftmost are a deliberate pair and
-          // say different things: a link is *what is being looked at* (§5.5) and
-          // there is one of those on screen, while a file is the window.
-          //
-          // Nothing here *opens* a file, and the two doors that do are both on
-          // the other side of the row: the `+` adds one to this tab, and the
-          // brand — whose hover says so — goes back to the picker and replaces.
-          // That is the same add-versus-replace line this side draws between a
-          // dropped workspace and the startup offer.
-          iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
-          iconButton(
-            'save',
-            withKey(
-              'Save this workspace as a file — every tab, to open again later',
-              KEYS.saveSession,
-            ),
-            () => this.exportWorkspace(),
-          ),
-          this.theme.el,
-          iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
-            this.openShortcutsDialog(),
-          ),
-          source,
-          iconButton('info', 'About this viewer', () => this.openAboutDialog()),
-        ),
-      ),
-      this.tabs.el,
-      // Empty except on the first screen of a browser that was closed with work
-      // in it. A row of its own rather than a floating bar, because what it
-      // offers is the reader's own workspace and it must not cover the drop
-      // target — see `ui/RestoreCard.ts`.
-      this.restoreSlot,
-      this.noticeSlot,
-      this.breadcrumbSlot,
-      // Each column carries its own `order`, so the DOM order here is free —
-      // and it is content-first, which is what the tab order should be.
+    const head = el(
+      'header',
+      { class: 'app-head' },
       el(
         'div',
-        { class: 'app-body' },
-        this.content,
-        this.filesPanel.el,
-        this.generalPanel.el,
-        this.annotationsPanel.el,
-        this.aestheticsPanel.el,
-        this.analysisPanel.el,
-        // Last, so it paints over the columns beside it without needing a
-        // stacking context of its own beyond the one its `z-index` gives it.
-        this.drawerSlot,
+        { class: 'head-left' },
+        el(
+          'div',
+          { class: 'brand' },
+          // Before the name: the same mark as the tab's favicon and the dock
+          // icon, so the window and the taskbar entry agree about what this
+          // app is. Sized against the name rather than the row — 26 px beside
+          // a 16 px name is the proportion a favicon has to a tab title.
+          appMark(26),
+          home,
+        ),
+        // …and the four columns after it, not before. They are controls over
+        // the window's own furniture, and a row that opens with four unlabelled
+        // marks makes a reader identify them before reaching the thing that
+        // says what they are looking at. The strapline that used to hold this
+        // side of the header is gone with them: it explained the app to
+        // somebody who has already opened it, and this is the row where the
+        // panels are reached from.
+        el(
+          'div',
+          { class: 'head-panels' },
+          // Files first, matching the columns' own order out from the map:
+          // it is the outermost on the left, and it is the one a reader
+          // arrives through rather than one they drive the picture with.
+          this.filesPanel.toggle,
+          this.generalPanel.toggle,
+          this.annotationsPanel.toggle,
+          this.aestheticsPanel.toggle,
+          this.analysisPanel.toggle,
+        ),
+        // Past a second divider, because it is not a fifth panel: those four
+        // fold furniture this window already has, and this one brings
+        // something into it. Dropping is still the gesture the app is opened
+        // with and the whole content area still takes it — this is the same
+        // gesture for a reader who has no window to drag from, and the only
+        // door to a file that is on screen in every view. See
+        // {@link addFileDialog} for why it *adds* rather than replaces.
+        el(
+          'div',
+          { class: 'head-add' },
+          iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
+            this.addFileDialog(),
+          ),
+          // Beside the `+` and not instead of it, because they answer
+          // different questions. The `+` brings in **one file**, now, and
+          // closes; this attaches a **place** and leaves it attached, so the
+          // next twenty files cost a click each. A reader with one URL wants
+          // the first; a reader working out of a directory for an afternoon
+          // wants the second, and until now the app only offered them the
+          // first, twenty times.
+          iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
+            this.openConnectDialog(),
+          ),
+        ),
       ),
-      this.status.el,
+      palette,
+      el(
+        'div',
+        { class: 'head-actions' },
+        // Share one tab as a link, save the whole window as a file, theme,
+        // shortcuts, source, about. The two leftmost are a deliberate pair and
+        // say different things: a link is *what is being looked at* (§5.5) and
+        // there is one of those on screen, while a file is the window.
+        //
+        // Nothing here *opens* a file, and the two doors that do are both on
+        // the other side of the row: the `+` adds one to this tab, and the
+        // brand — whose hover says so — goes back to the picker and replaces.
+        // That is the same add-versus-replace line this side draws between a
+        // dropped workspace and the startup offer.
+        iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
+        iconButton(
+          'save',
+          withKey(
+            'Save this workspace as a file — every tab, to open again later',
+            KEYS.saveSession,
+          ),
+          () => this.exportWorkspace(),
+        ),
+        this.theme.el,
+        iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
+          this.openShortcutsDialog(),
+        ),
+        source,
+        iconButton('info', 'About this viewer', () => this.openAboutDialog()),
+      ),
+    )
+
+    // The five columns, and they are window furniture in the same sense the
+    // header is: an embed does not mount them. That is not tidiness — it is the
+    // whole width of the frame. A panel is opened by a toggle *in the header*,
+    // so columns mounted without one can be neither closed nor opened; and a
+    // published session carries the layout it was saved with (`PanelLayout`), so
+    // a figure saved from a full window arrived in a 1,200-pixel frame with five
+    // open columns and thirty-two pixels of map, with no way to get any of it
+    // back. What the reader loses with them is a set of *controls*: every track
+    // in the session is still drawn, because a lane is part of the view.
+    //
+    // Each column carries its own `order`, so the DOM order here is free — and
+    // it is content-first, which is what the tab order should be. The drawer is
+    // last, so it paints over whatever is beside it without needing a stacking
+    // context of its own beyond the one its `z-index` gives it.
+    const body = el(
+      'div',
+      { class: 'app-body' },
+      this.content,
+      ...(this.embed
+        ? []
+        : [
+            this.filesPanel.el,
+            this.generalPanel.el,
+            this.annotationsPanel.el,
+            this.aestheticsPanel.el,
+            this.analysisPanel.el,
+          ]),
+      this.drawerSlot,
+    )
+
+    // **The whole of what an embed does to the DOM**, and it is a subtraction
+    // rather than a second window: three rows are not mounted, and everything
+    // that is — the view, the drawer, the content area and its drop handling —
+    // is built exactly as it is for a top-level page. That is what keeps
+    // `Session` ignorant of any of this: it parents its cards into the same
+    // panels and mounts into the same slot whether or not anybody can see them,
+    // so there is no second layout to keep in step. The header and the columns
+    // are built and left unmounted for the same reason, since furniture nobody
+    // appends costs its nodes once; the status bar is the one thing not built at
+    // all, because what it costs is a timer rather than nodes.
+    //
+    // What goes from this call, and why: the **header** is controls over a
+    // window (tabs, panels, theme, share, save), the **tab strip** offers tabs
+    // an embed does not keep, the **restore slot** offers the reader's own
+    // previous workspace — which inside somebody's article would be six of their
+    // files on a page that never asked for them (§11) — and the **status bar**
+    // is a byte counter under a figure. The columns went one statement above,
+    // for the one reason that is about width rather than taste. The notice slot
+    // stays: it is where a session's remarks and refusals land, and an embed
+    // that swallowed those would fail silently for the one reader who could
+    // report it.
+    root.append(
+      ...(this.embed ? [] : [head, this.tabs.el, this.restoreSlot]),
+      this.noticeSlot,
+      this.breadcrumbSlot,
+      body,
+      ...(this.status === null ? [] : [this.status.el]),
     )
 
     window.addEventListener('keydown', (event) => this.onKeyDown(event))
@@ -544,7 +606,25 @@ export class App implements SessionHost {
     // than dropped.
     void hydrateFolders().then(() => this.files.showFirst())
 
+    // Built before the tabs are seated so that a view state settling during the
+    // boot has somewhere to be reported to, and **started after**, because
+    // `start` announces this window as ready to be addressed and the first thing
+    // a host does with that is ask where the view is. Announcing from an empty
+    // window would answer that question wrongly once, at the only moment a host
+    // is certain to be listening.
+    //
+    // Only in an embed. A top-level page has a reader rather than a host, and a
+    // frame that was not asked to be one has nothing to say to whoever framed
+    // it — see `app/EmbedChannel.ts` on why the channel is opt-in at all.
+    if (this.embed) {
+      this.channel = embedChannel({
+        state: () => this.current?.state ?? null,
+        navigate: (state) => this.goTo(state),
+      })
+    }
+
     this.restore()
+    this.channel?.start()
   }
 
   /**
@@ -592,6 +672,15 @@ export class App implements SessionHost {
    * eight workers and eight fetches. The one that *is* opened is whichever the
    * address bar names — a link decides which tab you land on, and the remembered
    * choice only decides it when the link says nothing.
+   *
+   * ## What decides what an embed shows
+   *
+   * The same list with its last entry removed, which is the whole of the
+   * difference: a shared session in the fragment, then a view state in it, then
+   * `?config=`, and the picker when none of the three says anything. **Nothing
+   * remembered**, because an embed does not remember (see {@link remember}) —
+   * so a frame reloaded a month later shows what the page's `src` says, every
+   * time, rather than the corner of the figure somebody last dragged it to.
    */
   private restore(): void {
     // A shared link is not a view state and must not be read as one. It is
@@ -601,7 +690,7 @@ export class App implements SessionHost {
     // later.
     const shared = readShareHash(window.location.hash) !== null
     const linked = shared ? null : parseViewState(window.location.hash)
-    const stored = readSessions()
+    const stored = this.embed ? { sessions: [], active: null } : readSessions()
     reserveSessionIds(highestId(stored.sessions))
 
     for (const snapshot of stored.sessions.slice(0, MAX_SESSIONS)) {
@@ -635,7 +724,18 @@ export class App implements SessionHost {
     this.active = target >= 0 ? target : 0
     this.paintTabs()
     this.mountActive()
+    // The three seeds, in the order they override one another, and each one is
+    // only reached because the ones above it said nothing. A **payload** in the
+    // fragment is the most specific thing anybody can hand this window; a *view
+    // state* in it is what a navigation leaves behind, so it has to beat the
+    // `src=` the page was mounted with or a reload would undo the reader's last
+    // click; and `?config=` is the seed the page itself named, which is exactly
+    // what a window with nothing else to go on should open.
     if (shared) void this.openSharedHash()
+    else if (linked === null && this.sessions.every((session) => session.state === null)) {
+      const seed = mounting().config
+      if (seed !== null) void this.current?.openConfigUrl(seed)
+    }
     this.current?.activate()
     // Only when session storage had nothing, which is exactly "the browser was
     // closed" — a reload has its own, fresher answer above and must not be
@@ -646,7 +746,10 @@ export class App implements SessionHost {
     // may be written from this moment. The other branch settles when the read
     // comes back, which is what keeps an empty startup window from deleting the
     // workspace it is about to be offered.
-    if (stored.sessions.length > 0) this.durableSettled = true
+    //
+    // An embed asks nothing and settles at once: it has no record to offer back
+    // and writes none, so both halves are answered before the question.
+    if (this.embed || stored.sessions.length > 0) this.durableSettled = true
     else void this.offerWorkspace()
   }
 
@@ -916,7 +1019,21 @@ export class App implements SessionHost {
     )
   }
 
+  /**
+   * Write the tab strip down, unless this window is not one.
+   *
+   * **An embed remembers nothing**, and the guard is here rather than at each
+   * call site because both roads out of this method — the strip in
+   * `sessionStorage` and the durable record under it — are answers to the same
+   * question, *what was this window holding*, which an embed does not have.
+   * What it has is a URL that says what to show, and it must say it on every
+   * load: a reader who panned an embedded figure last month and comes back to
+   * the article should meet the figure the page names, not the corner of it they
+   * left. Remembering would also be remembering into a store partitioned per
+   * embedding site, that the reader has no interface to and no way to clear.
+   */
   private remember(): void {
+    if (this.embed) return
     const snapshots: SessionSnapshot[] = []
     for (const session of this.sessions) {
       const state = session.state
@@ -947,6 +1064,13 @@ export class App implements SessionHost {
    * change, which includes every frame of a colour-slider drag.
    */
   private rememberDurably(): void {
+    // Its own guard, and not only `remember`'s: this is reached from a panel
+    // fold, from a tab change and from `pagehide` as well as from a navigation,
+    // so a single check one level up would leave three roads open. An embed
+    // writing here would be worse than the strip it does not write — the record
+    // is what the *landing page* offers back, so an embedded figure would seed
+    // the offer a reader meets on the real site.
+    if (this.embed) return
     const sessions: WorkspaceSession[] = []
     for (const session of this.sessions) {
       const config = session.exportConfig()
@@ -1048,6 +1172,10 @@ export class App implements SessionHost {
     this.remember()
     if (session !== this.current) return
     this.writeHash(session.state, options)
+    // The other bar, for a window that has one. `moved` is silent until a host
+    // has asked to be told, so an embed nobody is driving posts nothing at all
+    // — which is why this can sit on the navigation path unconditionally.
+    this.channel?.moved()
   }
 
   panelsChanged(session: Session): void {
@@ -1057,7 +1185,7 @@ export class App implements SessionHost {
 
   activity(session: Session): void {
     if (session !== this.current) return
-    this.status.refresh()
+    this.status?.refresh()
   }
 
   /**
@@ -1301,7 +1429,19 @@ export class App implements SessionHost {
     if (window.location.hash === hash) return
     this.writingHash = true
     const url = `${window.location.pathname}${window.location.search}${hash}`
-    if (options.replace) window.history.replaceState(null, '', url)
+    // **An embed never pushes.** A frame's `pushState` writes into the *joint*
+    // session history — the one the reader's Back button walks — so a figure
+    // embedded in an article would quietly take that button over: clicking a
+    // genome, then Back, would step the map instead of leaving the page, and the
+    // number of presses needed to get out would be however many times the reader
+    // touched the picture. §5.5's own argument, one level up: the back button
+    // should walk the breadcrumb of *this window*, and inside a frame that
+    // history is not this window's to spend.
+    //
+    // The bar is still written, and that is not a contradiction. It is what a
+    // reload reads, what "copy this link" copies, and what makes an embed's
+    // current view addressable at all — only the *stack* is left alone.
+    if (options.replace || this.embed) window.history.replaceState(null, '', url)
     else window.history.pushState(null, '', url)
     this.writingHash = false
   }
@@ -1322,14 +1462,27 @@ export class App implements SessionHost {
       void this.openSharedHash()
       return
     }
+    this.goTo(parseViewState(window.location.hash))
+  }
+
+  /**
+   * Move the active tab to a view state that came from outside this window.
+   *
+   * Three roads arrive here and they are one gesture: the address bar (a pasted
+   * link, a hand-edited hash), the back button, and — in an embed — the host
+   * page over `postMessage`. Sharing the road is the point rather than a
+   * saving: the host channel has no business knowing that a state naming a
+   * different file has to open it, which is a rule `Session.render` already
+   * holds and would otherwise be restated in a second place.
+   */
+  private goTo(state: ViewState | null): void {
     const session = this.current
     if (session === undefined) return
-    const parsed = parseViewState(window.location.hash)
-    if (viewStateEquals(parsed, session.state)) return
+    if (viewStateEquals(state, session.state)) return
     // `set` notifies, which reaches `stateChanged`, which writes the hash — and
     // finds it already exactly this and does nothing. That is the loop closing
     // rather than a guard against it: one comparison, in one place.
-    session.store.set(parsed)
+    session.store.set(state)
   }
 
   // -------------------------------------------------------------------------

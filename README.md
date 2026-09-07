@@ -156,6 +156,110 @@ Every browser profile on a machine shares one `file://` origin, so its saved
 sessions are shared with any other `file://` page — which matters only if you
 open somebody else's.
 
+### In somebody else's page
+
+`?embed=1` mounts the same viewer with **no window around it** — no header, no tab strip, no status
+bar — so it can be the figure inside a portal, a lab page, a course page or a paper's supplementary
+material. Nothing is installed at either end: it is an `<iframe>` and a URL. There is no package to
+depend on and no header for the host page to set, which is the usual reason a wasm application
+cannot be embedded — this one needs no cross-origin isolation, because it is single-threaded and
+carries its HDF5 runtime inside its own bundle.
+
+This is live. Paste it into a page and it works:
+
+```html
+<iframe
+  src="https://js2264.github.io/metacooler.js/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true"
+  width="100%"
+  height="640"
+  loading="lazy"
+  style="border: 0"
+  title="Mitotic micro-C of synthetic yeast, IV:1.0–1.4 Mb"
+></iframe>
+```
+
+**Three ways to say what it should show**, in the order they override one another:
+
+| | what it carries | when to use it |
+| --- | --- | --- |
+| `#uri=…&view=…` | one file at one view | a map or a browser at a place, as above |
+| `?config=<url>` | a published `.metacooler.json` | a composed figure — tracks, colours, marks |
+| `#s=…` | a whole session, deflated into the link | what **Share** produces; no bucket needed |
+
+`?config=` is the one to reach for. **Save** writes the file, it goes on a bucket beside the data it
+names, and the names inside it stay relative — resolved against the file's own URL — so the folder
+can be copied anywhere and every embed of it still opens:
+
+```html
+<iframe src="https://js2264.github.io/metacooler.js/?embed=1&config=https://your-bucket/figures/mitotic-arrest.metacooler.json"></iframe>
+```
+
+`#s=` says the same thing without a bucket, at the cost of length: the yeast figure above with its
+eight files — sequence, gene model, ATAC and its peaks, Pol II over input and its peaks, 1,506 loop
+calls — is about 1.2 kB of URL. Nothing truncates that in an `src=`; it is chat clients that wrap
+long links, not browsers.
+
+**For a paper, pin the build.** Every push is archived, so
+`…/metacooler.js/v/<commit>/?embed=1#…` renders the same picture in five years, whatever the site
+does next. `versions.json` lists what is published.
+
+#### Driving it from the page
+
+Four messages, and the frame speaks only to the window that framed it, only after that window has
+spoken to it:
+
+```html
+<iframe id="map" src="https://js2264.github.io/metacooler.js/?embed=1&config=https://your-bucket/figures/one.metacooler.json"></iframe>
+<p id="where"></p>
+
+<script>
+  const VIEWER = 'https://js2264.github.io'
+  const frame = document.getElementById('map')
+  const tell = (message) => frame.contentWindow.postMessage(message, VIEWER)
+
+  addEventListener('message', (event) => {
+    if (event.origin !== VIEWER || event.source !== frame.contentWindow) return
+    // `ready` is the frame saying it is listening; answering subscribes to the rest.
+    if (event.data.type === 'metacooler:ready') tell({ type: 'metacooler:where' })
+    // …and then one of these on every move the reader makes, and after every navigate.
+    if (event.data.type === 'metacooler:state') {
+      document.getElementById('where').textContent = event.data.state?.region ?? 'the whole file'
+    }
+  })
+
+  // A table of loci beside the figure: one line each.
+  for (const row of document.querySelectorAll('[data-locus]')) {
+    row.onclick = () =>
+      tell({ type: 'metacooler:navigate', state: { view: 'region', region: row.dataset.locus } })
+  }
+</script>
+```
+
+`navigate` takes a **patch** over what is on screen, so `{ locus: 'IV:400,000-460,000' }` moves a
+browser without the page having to know what else is in the state; a key sent as `null` is removed,
+and `state: null` goes back to the picker. It is validated by the same reader that validates a
+pasted link, so what comes back in `state` is where the view actually went rather than an echo of
+what was asked for.
+
+#### What an embed does not have
+
+The window furniture — header, tab strip, status bar, and the five side columns, which are opened
+from a header an embed does not have and would otherwise arrive open on a saved session and leave
+about thirty pixels for the map. Every track in the figure is still *drawn*; what goes with the
+columns is the controls over them.
+
+Three things come with that. It writes **no history entries** — a frame's `pushState` spends the
+reader's Back button, so the address bar is kept in step by replacing rather than pushing. It
+**remembers nothing**: no tab strip, no restore offer, so a reload shows what the page's `src=` says
+rather than the corner of the figure somebody wandered to. And it registers **no service worker** and
+offers no version bar, since an embed is not an app to install.
+
+Dropping a file on it works exactly as it does anywhere else. What a cross-origin frame cannot do is
+the *File System Access* pickers — they are present and reject when called — so an embed falls back
+to an ordinary file input, which is the same path Firefox and Safari take everywhere.
+
+The whole contract is [SPECS.md §21](SPECS.md).
+
 ### The analysis from a shell
 
 The fifteen tasks are reachable without the panel, over as many files as you
@@ -218,6 +322,7 @@ Large real-world files live in `data/` and are gitignored. Tests that need them
 ```
 src/
   types.ts constants.ts errors.ts format.ts uri.ts   # the shared contract
+  embed.ts       how this page was mounted: ?embed=1, ?config=, and the frame check
   sources/       ByteSource implementations: LocalFileSource, RemoteRangeSource
   h5/            the only code that imports h5wasm or touches raw HDF5 bytes
   metacooler/    the reader: detect, MetaCooler, coords, range, matrix, aggregate,
@@ -239,7 +344,8 @@ src/
   analysis/      the fifteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
                  and a bigWig writer with no dependency behind it
-  app/           App (the window, the tabs, the address bar) and Session (one file)
+  app/           App (the window, the tabs, the address bar), Session (one file),
+                 and EmbedChannel — four postMessage messages for a host page
   main.ts        three lines of bootstrap
 scripts/
   make_fixtures.py  make_golden.py  make_analysis_golden.py  gen_luts.py
@@ -287,6 +393,7 @@ not the plan.
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 | — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA, a BAM or a feature file (§5.8) |
 | — | Metadata annotations (§8.12) | **done** — the columns a file already carries about its own genomes, sequences and bins, discovered from its `/genomes`, `/contigs` and `/bins` tables and drawn as lanes beside the map: bars for a measurement, runs of colour for a set of labels. Indexed by the map's own cells rather than by base pairs, so a MAG's completeness draws on a genome × genome overview where no other lane can — and offered only where its own table is no finer than the axis. The one annotation that never needed the §8.5 gate lifted, since a column of a file's own tables *is* the map's axis and has nothing to be matched against |
+| — | Embedding (§21) | **done** — `?embed=1` mounts the same build chrome-less, `?config=<url>` opens a published `.metacooler.json` named in the address, and `postMessage` carries *go here* / *tell me where you are*. No backend, no package, no header for the host page to set. A frame never writes history entries and remembers nothing, so an embedded figure neither spends the reader's Back button nor comes back showing where somebody else left it |
 | — | Analysis (§18) | **done** — every task in `TASKS_PLAN.md`'s catalogue, in a fourth worker so a whole-file scan never blocks the view; a resizable drawer; results that come back as synthetic tracks in the Annotations panel, indistinguishable from a loaded bigWig; and a bigWig writer of this repo's own. Goldened against cooltools, coolpuppy, pyBigWig and numpy on the demo micro-C map |
 
 Other gaps worth naming rather than discovering:

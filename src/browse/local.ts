@@ -53,10 +53,23 @@ import {
   type PickedFile,
 } from './folder'
 import { indexNamesFor } from '../annotations/sidecar'
+import { crossOriginFrame } from '../embed'
 
-/** `true` where this browser can hold a directory at all — the grant shape. */
+/**
+ * `true` where this browser can hold a directory at all — the grant shape.
+ *
+ * The frame check is the third browser this app runs in that has the picker and
+ * cannot use it: a cross-origin frame answers `'function'` and then rejects the
+ * call (`src/embed.ts`). Answering `false` here is what routes an embedded
+ * viewer to the snapshot path below, which is the same path Firefox and Safari
+ * have always taken and which works in a frame.
+ */
 export function directoryPickerSupported(): boolean {
-  return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.showDirectoryPicker === 'function' &&
+    !crossOriginFrame()
+  )
 }
 
 /**

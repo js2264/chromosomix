@@ -16,6 +16,7 @@
 import './ui/styles.css'
 
 import { App } from './app/App'
+import { embedded } from './embed'
 import { parseViewState } from './state/ViewState'
 import { readShareHash } from './state/shareLink'
 import { initTheme } from './ui/ThemeToggle'
@@ -30,13 +31,28 @@ initTheme()
 // published before those existed can produce: the page is already being
 // reloaded, and drawing an interface over it would be a flash of the wrong app.
 if (!recoverPinnedNavigation()) {
-  // Offline, after the first visit. Nothing downstream depends on it: a browser
-  // that refuses, or a page served over plain HTTP, simply has no cache.
-  registerServiceWorker()
+  // Neither of the next two in an embed, and for one reason with two halves.
+  //
+  // A worker is for an app somebody keeps: it makes the second visit work with
+  // the network out, and it is registered per origin — so an embed would install
+  // the app's cache from a page that was only ever showing a figure, on behalf
+  // of a reader who never chose to keep it. Nothing an embed does needs it: the
+  // frame is a fresh load of a URL that says what to show.
+  //
+  // And the notice is a bar across the top of the window offering to move to
+  // another build. In a frame that top is somebody's figure, and the offer is
+  // one only the page's author could sensibly accept — they chose the pinned
+  // build in the `src=`, on purpose, so that the embed still renders the same
+  // way in five years (docs/deploy.md).
+  if (!embedded()) {
+    // Offline, after the first visit. Nothing downstream depends on it: a browser
+    // that refuses, or a page served over plain HTTP, simply has no cache.
+    registerServiceWorker()
 
-  // Only ever visible in an archived build, and the one thing standing between
-  // a stale link and an afternoon's work in a build from July.
-  mountPinnedNotice()
+    // Only ever visible in an archived build, and the one thing standing between
+    // a stale link and an afternoon's work in a build from July.
+    mountPinnedNotice()
+  }
 
   const root = document.getElementById('app')
   if (root !== null) {

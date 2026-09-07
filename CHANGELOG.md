@@ -14,6 +14,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewer, inside somebody else's page.** `?embed=1` mounts the same web
+  build with no window around it — no header, no tab strip, no status bar — so
+  it can be the figure in a portal, a lab site, a course page or a paper's
+  supplementary material. It is an `<iframe>` and a URL: no backend, no package
+  to install, and no header for the host page to set.
+
+  That last one is why this is possible at all. Cross-origin isolation
+  (`COOP`/`COEP`) has to be arranged by the *hosting* page and almost never is,
+  which is the usual reason a wasm application cannot be embedded. This viewer
+  has never needed it — h5wasm 0.10.x is single-threaded with the binary inlined
+  — so the two prerequisites that *are* hard were already met: every view state
+  is in the hash, and every push is archived at `…/v/<commit>/`, so an embed in a
+  2026 paper still renders in 2031.
+
+  **Three ways to say what to show**, in the order they override one another:
+  `#s=` (a whole session deflated into the link, what **Share** already
+  produced), `#uri=…` (one file at one view, what a navigation leaves behind),
+  and the new `?config=<url>` — a published `.metacooler.json` named in the
+  address, fetched, signed where a bucket entry covers it, and resolved against
+  its own URL, through the road `Session.openConfigUrl` already took for the
+  picker's URL box. `?config=` is the pointer form of what `#s=` carries as a
+  payload: editable after the embed is published, of no length, and
+  self-contained enough that the folder can be copied to another bucket.
+
+  **And a `postMessage` channel**, so an embed is not only a picture: `ready`
+  and `state` out, `where` and `navigate` in. A `navigate` is a *patch* over
+  what is on screen — `{ locus: … }` moves the browser without the page knowing
+  what else is in the state — and it is serialised and parsed back through
+  §5.5's own reader rather than believed, because an object from another origin
+  is exactly as untrusted as a hand-edited link. The frame answers only the
+  window that framed it, only after that window has spoken, and only at the
+  origin it spoke from: a reader can open *their own* file in an embed, and the
+  URL that follows is not the host's to learn unless it asked to be told.
+
+  Specified at SPECS §21, with the worked example in the README.
+
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
   window grows until it covers enough evidence to average, so it stays narrow
@@ -463,6 +499,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **A Choose-files button in a framed page no longer does nothing at all.**
+  Anybody could already put this site in an `<iframe>`, and in a cross-origin one
+  the File System Access pickers are *present and rejecting*: `typeof
+  window.showOpenFilePicker` answers `'function'` and the call fails with a
+  `SecurityError`. Every capability gate here tested the `typeof`, and
+  `chooseFiles` swallows a rejection because that is what a cancelled dialog
+  looks like — so the button opened nothing and reported nothing, which is the
+  one outcome worse than not offering it. `handlesSupported`,
+  `directoriesSupported`, `directoryPickerSupported` and `chooseFiles` now ask
+  whether this window's top-level document is on another origin, and a frame that
+  is takes the fallbacks Firefox and Safari have always taken: an `<input
+  type="file">` for files, the snapshot shape for a directory. Dropping was never
+  affected. A **same-origin** frame is deliberately not caught, since the pickers
+  work there.
 
 - **A bgzipped file with no index is read to its end, not to the end of its
   first block.** `bgzip` writes a gzip member per block — roughly one per 64 KiB

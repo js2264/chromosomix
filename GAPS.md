@@ -5,9 +5,16 @@
 > the overlay, interactive figures), **G4** (`metacooler-run`, as a CLI rather
 > than as emitted snippets), **G5** (found already landed; the equivalence suite
 > it was waiting on is now written), **G6** (tabix) and **G8** (bedGraph and
-> wig). A Share button was built in place of G7's embed mode. What remains
-> unbuilt is **G2**, **G7**, **G9**, **G10** and **G11** — and G2 is still the
+> wig). A Share button was built in place of G7's embed mode. What remained
+> unbuilt was **G2**, **G7**, **G9**, **G10** and **G11** — and G2 is still the
 > highest-value item in the document.
+>
+> **Since, G7 is built**: `?embed=1`, `?config=<url>` and a four-message
+> `postMessage` channel, specified at SPECS §21 and demonstrated in the README.
+> The share link it was once traded against turned out to be half of it — an
+> embed's payload seed is `#s=`, unchanged — and the other half found a defect
+> that was already there, which is that a frame writing `pushState` spends the
+> host page's Back button.
 >
 > Three defects were found on the way and are worth naming here, because each was
 > silent: `.hic` is little-endian and a self-consistent reader and writer had
@@ -184,18 +191,44 @@ This is what makes gene models over a bucket as cheap as a bigWig, and it is the
 "the app supports GTF" and "the app is usable with a human annotation on a hotel connection". BGZF
 inflation is `DecompressionStream` per block, which `parse.ts` already reaches for.
 
-### G7. An embeddable mode
+### G7. An embeddable mode — **built** (SPECS §21)
 
-`package.json` says *an application, not a library*, and that is right about npm. It is not an
+`package.json` says *an application, not a library*, and that is right about npm. It was never an
 argument against an **embed mode**: `?embed=1` for chrome-less rendering of one view, the hash API
 that already exists as the documented contract, and a `postMessage` channel for *go here* / *tell me
 where you are*.
 
 HiGlass's reach comes overwhelmingly from being embeddable — in portals, in supplementary material,
-in Jupyter. This app has the two hard prerequisites already: a complete URL state model
+in Jupyter. This app had the two hard prerequisites already: a complete URL state model
 (`state/ViewState.ts`) and archived immutable builds at `…/v/<commit>/` (`docs/deploy.md`), which
-means an embed in a 2026 paper still renders in 2031. That combination is genuinely rare and is
-currently unexploited. It needs no backend, no accounts, no npm publish and no second bundle.
+means an embed in a 2026 paper still renders in 2031. That combination is genuinely rare and was
+unexploited. It needed no backend, no accounts, no npm publish and no second bundle — and it got
+none of them.
+
+**What was built**, over `src/embed.ts`, `app/EmbedChannel.ts` and four gates elsewhere:
+
+- `?embed=1` mounts the same web build without the header, the tab strip, the restore slot, the
+  status bar or the five columns, and turns off the service worker and the version notice with them.
+  The columns were the surprise: they are opened from a toggle in a header an embed does not have,
+  and a published session carries the layout it was saved with — so the first real embed of the
+  yeast figure came up in a 1,200-pixel frame with five open columns and thirty-two pixels of map.
+- **An embed never pushes history.** This was the one real defect the exercise turned up rather than
+  a feature it added: a frame's `pushState` writes into the joint session history, so an embedded
+  figure was going to take over the reader's Back button on any page that used one.
+- `?config=<url>` opens a published `.metacooler.json` named in the address — the pointer form of
+  what `#s=` carries as a payload, through the fetch, the signing and the resolving that
+  `Session.openConfigUrl` already did for the picker's URL box.
+- Four messages over `postMessage`: `ready`, `state`, `where`, `navigate`. Only the framing window
+  is answered, only after it has spoken, only at the origin it spoke from — and a `navigate` patch is
+  parsed by §5.5's own reader rather than believed.
+- The File System Access pickers are *present and throwing* in a cross-origin frame, so
+  `handlesSupported`, `directoriesSupported`, `directoryPickerSupported` and `chooseFiles` now check
+  the frame as well as the function. Before that, an embedded Choose-files button did nothing at all
+  and the rejection was indistinguishable from a cancelled dialog.
+
+What is **not** in it, and is the natural next step: an npm-installable wrapper. The argument in
+`package.json` still holds — what ships is the built site, and there is nothing here a registry would
+want — so the embed is a URL, which is one fewer thing for a host page to keep up to date.
 
 ### G8. bedGraph and wig in
 
