@@ -61,6 +61,8 @@ export interface RemoteRangeOptions {
 export class RemoteRangeSource implements ByteSource {
   readonly id: string
   readonly size: number
+  /** Always: every seek this source answers is a range request. */
+  readonly isRemote = true
   readonly url: string
 
   private readonly chunkSize: number

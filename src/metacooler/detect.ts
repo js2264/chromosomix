@@ -7,7 +7,7 @@
  * §12 request budget even when the answer is "no".
  */
 
-import { COOLER_FORMAT, INT_ATTR_NULL_SENTINELS, METACOOLER_FORMAT, METACOOLER_FORMAT_VERSION, MMETACOOLER_FORMAT, REQUIRED_ORDERING, STORAGE_MODES, type StorageMode } from '../constants'
+import { CELLS_GROUP, CELL_GROUPS, COOLER_FORMAT, INT_ATTR_NULL_SENTINELS, METACOOLER_FORMAT, METACOOLER_FORMAT_VERSION, MMETACOOLER_FORMAT, REQUIRED_ORDERING, SCOOL_FORMAT, SCOOL_FORMAT_VERSION, STORAGE_MODES, type StorageMode } from '../constants'
 import { MetaCoolerFormatError, ViewerError } from '../errors'
 import { pyInt, pyList, pyRepr } from '../format'
 import type { AttrValue, Hdf5Handle } from '../h5/api'
@@ -117,6 +117,107 @@ export function listEntryNames(h: Hdf5Handle): string[] {
 }
 
 /**
+ * Is this group a cooler in its own right?
+ *
+ * Group names and one attribute block, so it is answerable inside §3.1's rule
+ * that nothing is classified by reading a dataset. It is asked of *candidate*
+ * children when a file has no cooler at its own root, which is the only shape
+ * a flat `.scool` can be told apart by — that layout writes `HDF5::Cooler` at
+ * the root and puts the cells beside each other underneath it, so the root
+ * attribute says nothing and the children say everything.
+ */
+function isCellGroup(h: Hdf5Handle, path: string): boolean {
+  if (CELL_GROUPS.some((group) => !h.has(`${path}/${group}`))) return false
+  return strAttr(h.attrsAt(path), 'format') === COOLER_FORMAT
+}
+
+/**
+ * Is this file about to be asked for a cell listing, judged **without** taking
+ * one?
+ *
+ * The gate in §12 exists because listing a container's cells is the one open in
+ * this application that is not a bounded read, and it can only be *avoided* if
+ * it can be foreseen. Foreseeing it is what this answers, from link lookups and
+ * one attribute block — never a listing, which would be the cost itself.
+ *
+ * Two shapes reach it:
+ *
+ * - a **standard** container says so outright, on its root `format`. Cheap, and
+ *   certain.
+ * - a **flat** one says nothing, and cannot be told from anything else by name.
+ *   But it can be told by elimination: it is HDF5, it is not a cooler (no
+ *   `/bins`, `/pixels` or `/indexes` of its own), not an mcool (`/resolutions`),
+ *   not an mmetacool (`/entries`), not a metacool. Every one of those is a
+ *   single link lookup. What is left, if this viewer can open it at all, is a
+ *   container whose children are the cells — so the listing is coming.
+ *
+ * The elimination is narrowed by one more test than it strictly needs: the root
+ * `format` must be cooler's or absent. Without it, *any* HDF5 file this viewer
+ * cannot open — an `.h5ad`, a `.loom`, someone's analysis output — matched the
+ * shape "not a cooler and not a collection" and was met with a dialog about
+ * single-cell containers before the plain `not-a-cooler` message it deserves.
+ * The cost of the extra test is a flat container whose writer declared some
+ * third format string, which pays the listing ungated; no such writer is known,
+ * and both that produced the files this was measured on write cooler's.
+ */
+export function willListCells(h: Hdf5Handle, attrs: Record<string, AttrValue>): boolean {
+  if (strAttr(attrs, 'format') === SCOOL_FORMAT) return h.has(CELLS_GROUP)
+  if (strAttr(attrs, 'metacooler-format') === METACOOLER_FORMAT) return false
+  const format = strAttr(attrs, 'format')
+  if (format !== null && format !== COOLER_FORMAT) return false
+  if (CELL_GROUPS.some((group) => h.has(group)) || h.has('chroms')) return false
+  return !h.has('resolutions') && !h.has('entries')
+}
+
+/**
+ * The cells of an `.scool`, in the two layouts that exist, or `null` for
+ * neither.
+ *
+ * **Standard** (`cooler.create_scool`, and what the format paper describes):
+ * `format = "HDF5::SCOOL"` at the root, one cooler per cell under `/cells`,
+ * and `/chroms` and `/bins` hard-linked into every one of them from the root.
+ *
+ * **Flat** (HiCMatrix, scHiCExplorer, and every `.scool` written before cooler
+ * 0.8.11 standardised the layout): the cells are the root's own children, each
+ * a complete self-contained cooler with its own copy of the two tables, and the
+ * root carries a bare `HDF5::Cooler` provenance block with no `ncells`, no
+ * `bin-size` and no tables of its own.
+ *
+ * `ncells` is not consulted even where it exists. It is a *count*, and what a
+ * reader needs is the names — the count cannot name a cell, cannot be ticked,
+ * and on the flat layout is simply not written. The one listing answers both.
+ *
+ * Only the **first** child is examined for the flat case. A file whose first
+ * group is a cooler and whose hundredth is not is malformed in a way this
+ * detection cannot see, and paying a listing per child to find out would put
+ * the whole file's metadata on the wire to answer a question about its shape.
+ */
+function scoolCells(
+  h: Hdf5Handle,
+  attrs: Record<string, AttrValue>,
+): { names: string[]; group: string } | null {
+  if (strAttr(attrs, 'format') === SCOOL_FORMAT) {
+    const cells = h.keys(CELLS_GROUP)
+    if (cells.length > 0) return { names: cells, group: CELLS_GROUP }
+    // The attribute is a claim, and a claim with no cells behind it is refused
+    // rather than fallen through: the fall-through lands on the cooler branch,
+    // which would then refuse it for having no `/bins` — an error about a group
+    // the reader was never going to find, for a file that told it where to look.
+    throw new ViewerError(
+      'not-a-cooler',
+      `${h.uri} declares format ${pyRepr(SCOOL_FORMAT)} but has no cells under /${CELLS_GROUP}. ` +
+        `Top-level keys: ${pyList(h.keys('').slice(0, 20))}.`,
+      { format: SCOOL_FORMAT, group: h.group },
+    )
+  }
+  // A file that is itself a cooler is one, whatever its children look like.
+  if (CELL_GROUPS.some((group) => h.has(group))) return null
+  const children = h.keys('')
+  if (children.length === 0) return null
+  return isCellGroup(h, children[0]) ? { names: children, group: '' } : null
+}
+
+/**
  * Classify an open handle, **in the spec's order**.
  *
  * The order is the whole point. A `.metacool` also satisfies cooler's
@@ -159,6 +260,14 @@ export function detectLayout(h: Hdf5Handle, rootAttrs?: Record<string, AttrValue
   const resolutions = h.keys('resolutions')
   if (resolutions.length > 0) {
     return { kind: 'mcool', group: h.group, entries: orderEntries(resolutions) }
+  }
+  // Before the cooler branch, and that ordering is the whole of the flat
+  // layout's detection: such a file declares `HDF5::Cooler` at its root and
+  // would be classified as a cooler here, then refused for having no `/bins` —
+  // naming a missing group rather than the several thousand cells it has.
+  const cells = scoolCells(h, attrs)
+  if (cells !== null) {
+    return { kind: 'scool', group: h.group, entries: cells.names, cellGroup: cells.group }
   }
   if (format === COOLER_FORMAT) {
     return { kind: 'cool', group: h.group }
@@ -230,6 +339,61 @@ export function refuseMcoolRoot(h: Hdf5Handle, entries: string[]): never {
   )
 }
 
+/**
+ * The group path of one cell, relative to the file's root.
+ *
+ * `cells/<name>` in the standard layout and a bare `<name>` in the flat one —
+ * the single difference between the two that anything above this file has to
+ * know, which is why it is joined here and nowhere else.
+ */
+export function cellPath(layout: Layout, name: string): string {
+  const group = layout.cellGroup ?? ''
+  return group === '' ? name : `${group}/${name}`
+}
+
+/**
+ * The attributes that describe an scool's *geometry*, and where they came from.
+ *
+ * A standard `.scool` carries `bin-size`, `bin-type` and `nbins` on its root,
+ * because it has a `/bins` of its own for them to describe. A flat one carries
+ * nothing but provenance there — its bins live inside each cell, and so do the
+ * attributes about them. Both are answered by asking the file the same
+ * question, and every gate below is then written once.
+ *
+ * Falling back to the *first* cell rather than merging every cell's: the cells
+ * of an scool share one bin space by construction (that is what makes summing
+ * them meaningful at all), so the first one speaks for all of them, and reading
+ * several thousand attribute blocks to gate a file would cost more than opening
+ * it.
+ */
+export function scoolGeometry(
+  h: Hdf5Handle,
+  layout: Layout,
+  rootAttrs: Record<string, AttrValue>,
+): { attrs: Record<string, AttrValue>; from: string | null } {
+  if (intAttr(rootAttrs, 'bin-size') !== null) return { attrs: rootAttrs, from: null }
+  const first = layout.entries?.[0]
+  if (first === undefined) return { attrs: rootAttrs, from: null }
+  const path = cellPath(layout, first)
+  return { attrs: h.attrsAt(path), from: path }
+}
+
+/**
+ * Refuse an scool that carries no cells at all.
+ *
+ * Distinct from the mcool and mmetacool refusals above, which say *pick one*:
+ * an scool root is a view in its own right — the cells table — so the only
+ * thing to refuse is a container with nothing in it.
+ */
+export function assertHasCells(h: Hdf5Handle, layout: Layout): void {
+  if ((layout.entries ?? []).length > 0) return
+  throw new ViewerError(
+    'not-a-cooler',
+    `${parseUri(h.uri).path} is a single-cell cooler container with no cells in it.`,
+    { path: parseUri(h.uri).path },
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Acceptance gates (spec §3.2, §10)
 // ---------------------------------------------------------------------------
@@ -289,9 +453,27 @@ export function assertAcceptable(
     }
   }
 
+  // An scool's geometry may be written on its root or only inside its cells,
+  // so the gate below is applied to whichever of the two the file used. Every
+  // other layout answers with its own root attributes, unchanged.
+  const geometry = layout.kind === 'scool' ? scoolGeometry(h, layout, attrs) : { attrs, from: null }
+  if (layout.kind === 'scool') {
+    assertHasCells(h, layout)
+    const version = intAttr(attrs, 'format-version')
+    if (strAttr(attrs, 'format') === SCOOL_FORMAT && version !== null && version !== SCOOL_FORMAT_VERSION) {
+      throw new ViewerError(
+        'bad-format-version',
+        `This file declares scool format-version ${version}; the viewer understands version ` +
+          `${SCOOL_FORMAT_VERSION}. Open it with a viewer that reads ${version}, or re-create it ` +
+          `with \`cooler.create_scool\`.`,
+        { found: version, expected: SCOOL_FORMAT_VERSION },
+      )
+    }
+  }
+
   // `intAttr` is the gate, not `Number()` — see its doc comment.
-  const binType = strAttr(attrs, 'bin-type')
-  const binSize = intAttr(attrs, 'bin-size')
+  const binType = strAttr(geometry.attrs, 'bin-type')
+  const binSize = intAttr(geometry.attrs, 'bin-size')
   if (binType === 'variable' || binSize === null || binSize <= 0) {
     throw new ViewerError(
       'variable-bins',
@@ -303,7 +485,7 @@ export function assertAcceptable(
     )
   }
 
-  resolveStorageMode(attrs)
+  resolveStorageMode(geometry.attrs)
 }
 
 // ---------------------------------------------------------------------------

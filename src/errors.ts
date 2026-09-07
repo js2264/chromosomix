@@ -22,6 +22,8 @@ export type ErrorCode =
   | 'unbinned-not-displayable'
   | 'dense-too-large'
   | 'unknown-label'
+  | 'cell-not-found'
+  | 'scool-listing-cost'
   | 'bad-range'
   | 'genome-coordinate-suffix'
   | 'unsupported'

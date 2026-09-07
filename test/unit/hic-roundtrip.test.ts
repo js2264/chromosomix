@@ -32,6 +32,7 @@ import { writeHic, type HicRecord } from '../support/hicWriter'
 class BytesSource implements ByteSource {
   readonly id = 'fixture.hic'
   readonly size: number
+  readonly isRemote = false
   requests = 0
   bytesRead = 0
 

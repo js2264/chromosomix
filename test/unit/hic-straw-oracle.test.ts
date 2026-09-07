@@ -56,6 +56,7 @@ class StrawBytesFile {
 class BytesSource implements ByteSource {
   readonly id = 'oracle.hic'
   readonly size: number
+  readonly isRemote = false
   constructor(private readonly data: Uint8Array) {
     this.size = data.byteLength
   }

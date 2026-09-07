@@ -20,7 +20,7 @@
 
 import { KEYS, keyBadge, withKey } from './commands'
 import { icon } from './icons'
-import { selectionOf } from '../state/ViewState'
+import { cellsOf, selectionOf } from '../state/ViewState'
 import type { ViewState } from '../types'
 import { el } from './dom'
 
@@ -33,7 +33,7 @@ import { el } from './dom'
  * and every place that knew it was routed around the trail rather than through
  * it.
  */
-export type RootChoice = 'genomes' | 'contigs' | 'overview' | 'whole'
+export type RootChoice = 'genomes' | 'cells' | 'contigs' | 'overview' | 'whole'
 
 /**
  * Title Case, because these are the names of views, not field values.
@@ -46,6 +46,7 @@ export type RootChoice = 'genomes' | 'contigs' | 'overview' | 'whole'
  */
 const ROOT_LABEL: Record<RootChoice, string> = {
   genomes: 'Genomes',
+  cells: 'Cells',
   contigs: 'Contigs',
   overview: 'Whole genome',
   whole: 'Whole genome',
@@ -60,6 +61,8 @@ const ROOT_LABEL: Record<RootChoice, string> = {
  */
 const ROOT_KEYS: Record<RootChoice, string> = {
   genomes: KEYS.genomes,
+  // The same key as Genomes, and deliberately — see `KEYS.genomes`.
+  cells: KEYS.genomes,
   contigs: KEYS.contigs,
   overview: KEYS.whole,
   whole: KEYS.whole,
@@ -67,7 +70,7 @@ const ROOT_KEYS: Record<RootChoice, string> = {
 
 export interface BreadcrumbProps {
   /** Root of the hierarchy: the landing view for this kind of file. */
-  rootKind: 'genomes' | 'contigs'
+  rootKind: 'genomes' | 'cells' | 'contigs'
   /** Landing views this file can offer. One entry hides the picker. */
   rootChoices: RootChoice[]
   /**
@@ -88,6 +91,11 @@ export interface BreadcrumbProps {
   currentEntry?: string
   /** What one entry is called in this format: an entry, or a resolution. */
   entryNoun?: string
+  /**
+   * Cells in the open `.scool`, for the crumb that says which are being summed;
+   * `0` for every other container.
+   */
+  cellCount?: number
   onNavigate(state: ViewState): void
   /**
    * The file crumb was clicked. It opens a file *over* the current view rather
@@ -114,8 +122,13 @@ export interface BreadcrumbProps {
  * off a mode means a shared link rebuilds the same trail as the session that
  * produced it.
  */
-export function rootTable(state: ViewState, fallback: 'genomes' | 'contigs'): 'genomes' | 'contigs' {
-  if (state.view === 'genomes' || state.view === 'contigs') return state.view
+export function rootTable(
+  state: ViewState,
+  fallback: 'genomes' | 'cells' | 'contigs',
+): 'genomes' | 'cells' | 'contigs' {
+  if (state.view === 'genomes' || state.view === 'contigs' || state.view === 'cells') {
+    return state.view
+  }
   if (state.view === 'region') return state.genome === undefined ? 'contigs' : 'genomes'
   // A selection leads back to the table it was ticked in, which is the one that
   // can un-tick it. A `selection` naming nothing is not one, and falls through
@@ -146,6 +159,7 @@ export class Breadcrumb {
     this.push(this.props.fileLabel, () => this.props.onOpenFile(), false, 'file')
     this.pushEntryPicker()
     this.pushRootPicker(state)
+    this.pushCells(state)
 
     // A selection hangs off the table it was made in: several genomes are below
     // the genomes table, several contigs below the contigs one. Named while
@@ -190,6 +204,50 @@ export class Breadcrumb {
     }
   }
 
+  /**
+   * Which cells the map below is summed from — an scool's second crumb (§3.7).
+   *
+   * It has to be *somewhere*, and this is the one place that is on screen in
+   * every view: a cell set is not the subject of the view the way a genome is,
+   * it is the subject of the **file**, and a reader three clicks into a locus
+   * has otherwise nothing telling them whether they are looking at one cell or
+   * four thousand. Which is the difference between a scatter of dots and a
+   * contact map, so it must not be inferrable only from the picture.
+   *
+   * One cell is named; a handful are counted; everything is called *all*,
+   * because that is the state the file opens in and a reader needs to be able
+   * to tell it from a selection that happens to be large. Clicking returns to
+   * the table where the ticks are, which is the only place the set changes.
+   */
+  private pushCells(state: ViewState): void {
+    const total = this.props.cellCount ?? 0
+    if (total === 0 || state.view === 'cells') return
+    const names = cellsOf(state)
+    const label =
+      names === null
+        ? `all ${total.toLocaleString()} cells`
+        : names.length === 1
+          ? (names[0] ?? '')
+          : `${names.length.toLocaleString()} cells`
+    this.separator()
+    const crumb = el('button', {
+      class: 'crumb',
+      type: 'button',
+      text: label,
+      title:
+        names === null
+          ? `Every cell in this file, added together. Back to the cells table to choose fewer.`
+          : names.length === 1
+            ? `One cell: ${names[0]}. Back to the cells table to choose others.`
+            : `${names.length.toLocaleString()} cells, added together: ${names.slice(0, 6).join(', ')}` +
+              `${names.length > 6 ? ', …' : ''}. Back to the cells table to change them.`,
+    })
+    crumb.addEventListener('click', () =>
+      this.props.onNavigate({ uri: state.uri, view: 'cells', cells: state.cells }),
+    )
+    this.el.appendChild(crumb)
+  }
+
   /** The mmetacool entry picker, before the root (§3.4). */
   private pushEntryPicker(): void {
     const { entries, currentEntry, onSelectEntry } = this.props
@@ -218,7 +276,7 @@ export class Breadcrumb {
    */
   private pushRootPicker(state: ViewState): void {
     const { rootChoices, rootKind } = this.props
-    const table: 'genomes' | 'contigs' = rootTable(state, rootKind)
+    const table: 'genomes' | 'cells' | 'contigs' = rootTable(state, rootKind)
     // The whole-file views belong in this crumb as much as the tables do:
     // leaving them out left them labelled "Chromosomes", so the only sign
     // anything had happened was the heatmap itself.

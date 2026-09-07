@@ -39,6 +39,8 @@ import {
   type AxisGroup,
   type BinColumnResult,
   type BinColumnsResult,
+  type CellsResult,
+  type CellsSelectedResult,
   type ContigsResult,
   type DeepValidation,
   type GenomesResult,
@@ -394,7 +396,10 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
         declaredRecords: reusable.pairs.declaredRecords,
       })
     } else {
-      mc = await MetaCooler.open(request.uri, source)
+      // A `reading` on the spec *is* the reader's answer to the §12 gate — the
+      // shell only ever sets one by re-issuing this open with what they chose.
+      const agreed = request.source.kind === 'remote' && request.source.reading !== undefined
+      mc = await MetaCooler.open(request.uri, source, agreed ? { listingAgreed: true } : {})
     }
   } catch (error) {
     // A `.pairs` is the one input that cannot be opened from its own bytes: it
@@ -437,6 +442,9 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     displayExtent: mc.displayBinExtent(),
     entries: mc.entries,
     entryGroup: mc.entryGroup,
+    cells: mc.cells,
+    activeCells: mc.activeCells,
+    cellNnz: mc.cells.length > 0 ? mc.nnz : null,
     hasGenomes: mc.hasGenomes,
     hasWeights: mc.hasWeights,
     scoreColumns: mc.scoreColumns,
@@ -474,6 +482,36 @@ function handleGenomes(): GenomesResult {
 
 function handleContigs(): ContigsResult {
   return { table: tableToPayload(requireSession().mc.fullContigs()) }
+}
+
+/**
+ * The cells table: one row per cell, columns discovered from their attributes.
+ *
+ * Free, on any file that opened at all. The names were the cost, and they were
+ * paid at open; every cell's attribute block sits in HDF5 metadata the listing
+ * already brought across, measured at **zero** additional source chunks on both
+ * a 3,882-cell HiCMatrix file and a cooler-written one (§12). So the columns
+ * that make the table worth having — the stored pixels and the contact total
+ * per cell, which is what separates a deeply sequenced cell from an empty one —
+ * cost nothing to offer and are read here rather than being made optional.
+ */
+function handleCells(): CellsResult {
+  const { mc } = requireSession()
+  const table = mc.cellTable()
+  const active = new Set(mc.activeCells)
+  const names = mc.cells
+  const selected: number[] = []
+  for (let i = 0; i < names.length; i++) if (active.has(names[i])) selected.push(i)
+  return { table: tableToPayload(table), selected: Int32Array.from(selected) }
+}
+
+/** Swap the cells the open map sums, in place — see the request's note. */
+function handleSelectCells(
+  request: Extract<WorkerRequest, { kind: 'selectCells' }>,
+): CellsSelectedResult {
+  const { mc } = requireSession()
+  mc.selectCells(request.names)
+  return { names: mc.activeCells, nnz: mc.nnz ?? 0, scoreColumns: mc.scoreColumns }
 }
 
 /** What `/bins` holds, by name and kind — no values (§8.12). */
@@ -1330,6 +1368,10 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleGenomes()
     case 'contigs':
       return handleContigs()
+    case 'cells':
+      return handleCells()
+    case 'selectCells':
+      return handleSelectCells(request)
     case 'binColumns':
       return handleBinColumns()
     case 'binColumn':

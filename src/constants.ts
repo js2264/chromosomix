@@ -12,6 +12,31 @@ export const MMETACOOLER_FORMAT = 'HDF5::MMetaCooler'
 export const MMETACOOLER_FORMAT_VERSION = 1
 export const COOLER_FORMAT = 'HDF5::Cooler'
 
+/**
+ * cooler's single-cell container, one cooler per cell under `/cells`.
+ *
+ * The format the scool paper describes (Wolff et al. 2021), and what
+ * `cooler.create_scool` writes. Detected on this attribute alone; the flat
+ * layout below carries {@link COOLER_FORMAT} at its root instead and is
+ * recognised by shape.
+ */
+export const SCOOL_FORMAT = 'HDF5::SCOOL'
+export const SCOOL_FORMAT_VERSION = 1
+
+/** Where a standard `.scool` keeps its cells. */
+export const CELLS_GROUP = 'cells'
+
+/**
+ * Groups a cell must carry to be counted as one, in either layout.
+ *
+ * `chroms` is deliberately absent: a standard `.scool` hard-links it into every
+ * cell, but the check below runs against a *candidate* group in a file that may
+ * be anything at all, and requiring four groups where three settle it costs a
+ * listing per candidate for no discrimination. `pixels` and `indexes` together
+ * are what no non-cooler group has.
+ */
+export const CELL_GROUPS = ['bins', 'pixels', 'indexes'] as const
+
 /** Refuse to allocate a dense matrix larger than this on either axis. */
 export const DENSE_MATRIX_BIN_LIMIT = 50_000
 

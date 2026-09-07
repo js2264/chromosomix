@@ -41,7 +41,7 @@ export type FileRoute = 'map' | 'genome' | 'unknown'
  */
 export function routeOf(uri: string): FileRoute {
   const name = splitUri(uri).path.split(/[\\/]/).pop() ?? uri
-  if (/\.(m?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
+  if (/\.([ms]?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
   // A `.pairs` is a contact list rather than a matrix, and it still belongs at
   // the map's door: what comes out of it is a map, after one question the file
   // cannot answer for itself (§3.7). Routing is about which front door a name

@@ -40,9 +40,12 @@ import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
   READING_KEYS,
+  SUBJECT_KEYS,
   ViewStore,
   differsOnlyInFocus,
   differsOnlyInPresentation,
+  cellsOf,
+  cellsPatch,
   landingState,
   matrixLevel,
   overviewLevel,
@@ -65,7 +68,7 @@ import {
   SESSION_NAME_SCOPE,
   type SessionConfig,
 } from '../state/SessionConfig'
-import type { CompareOp, Transform, ViewState } from '../types'
+import type { CompareOp, Transform, ViewKind, ViewState } from '../types'
 import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/derive'
 import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
@@ -73,6 +76,7 @@ import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
+  CellsResult,
   ContigsResult,
   GenomesResult,
   McoolExport,
@@ -114,7 +118,9 @@ import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
+import { askScoolReading, isListingGate } from '../ui/ScoolGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
+import { CellsTable } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
 import { Overview, wholeFileLevelCard } from '../ui/Overview'
@@ -208,6 +214,22 @@ export interface OpenFile {
   info: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult | null
+  /**
+   * The cells table of an `.scool`, fetched the first time it is shown.
+   *
+   * Lazily like `contigs` and for the same reason: it is a view's data, not an
+   * open's. The *names* did arrive at open — they had to, since the reader
+   * cannot address a cell without them — and this is the rest of the table.
+   */
+  cells: CellsResult | null
+  /**
+   * Which cells the worker is currently summing.
+   *
+   * The session's copy of state that lives in the worker, so a navigation that
+   * does not change the set does not pay for a swap. `null` on a file with no
+   * cells, and on one whose set is still every cell.
+   */
+  activeCells: string[] | null
   source: SourceSpec
   genomeNames: string[]
   displayNames: string[]
@@ -744,6 +766,11 @@ export class Session {
     return this.file?.info.layout.kind === 'metacool'
   }
 
+  /** `true` while the open file is a single-cell container (§3.7). */
+  get isScool(): boolean {
+    return this.file?.info.layout.kind === 'scool'
+  }
+
   /** The reader client, or `null` where nothing has ever been opened here. */
   get client(): ReaderClient | null {
     return this.reader
@@ -1023,6 +1050,7 @@ export class Session {
     const state = this.store.state
     const file = this.file
     const isMetacool = this.isMetacool
+    const isScool = this.isScool
     // A browser session answers a different set: there is no genomes table and
     // no whole-metagenome scan, and the two things it *does* have — a locus and
     // a zoom — have no counterpart on a map. Listing a map's actions beside a
@@ -1256,13 +1284,19 @@ export class Session {
         run: () => this.current?.panel?.autoscaleTracks(),
       },
       {
+        // One command and one key for the file's own landing table, whichever
+        // of the two it is: a metacool's genomes, or an scool's cells. No file
+        // has both, so a second entry would be a second key that is disabled on
+        // every file the first one works on.
         id: 'go-genomes',
         group: 'Go',
-        title: 'Genomes table',
+        title: isScool ? 'Cells table' : 'Genomes table',
         keys: KEYS.genomes,
-        enabled: file !== null && isMetacool,
+        enabled: file !== null && (isMetacool || isScool),
         run: () => {
-          if (state !== null) this.navigate({ uri: state.uri, view: 'genomes' })
+          if (state !== null) {
+            this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
+          }
         },
       },
       {
@@ -1908,6 +1942,8 @@ export class Session {
         info,
         genomes,
         contigs: null,
+        cells: null,
+        activeCells: info.cells.length > 0 ? info.activeCells : null,
         source,
         genomeNames: names,
         displayNames: Array.from(genomes.display, (index) => names[index]).filter(
@@ -1917,26 +1953,36 @@ export class Session {
         currentEntry,
       }
       const isMetacool = info.layout.kind === 'metacool'
+      // An scool's landing table is its cells, and its Genomes entry is greyed
+      // out for the reason a cooler's is: every cell holds one genome. What it
+      // has instead of genomes is the thing the file is a container of.
+      const isScool = info.layout.kind === 'scool'
       this.breadcrumb = new Breadcrumb({
-        rootKind: isMetacool ? 'genomes' : 'contigs',
+        rootKind: isMetacool ? 'genomes' : isScool ? 'cells' : 'contigs',
         // A metacool offers both landing tables and the scanned whole-genome
         // view. A cooler offers its chromosomes and, when it fits, the whole
         // genome in one read — and still lists Genomes, greyed out, because
         // "this file has none" is a more useful answer than an absent entry.
         rootChoices: isMetacool
           ? ['genomes', 'contigs', 'overview']
-          : ['genomes', 'contigs', 'whole'],
+          : isScool
+            ? ['cells', 'contigs', 'whole']
+            : ['genomes', 'contigs', 'whole'],
         ...(isMetacool
           ? {}
           : {
-              disabledChoices: {
-                genomes: 'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
-              },
+              disabledChoices: isScool
+                ? {}
+                : {
+                    genomes:
+                      'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
+                  },
               contigNoun: 'Chromosomes',
             }),
         fileLabel: fileLabel(uri),
         entries,
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
+        cellCount: info.cells.length,
         ...(currentEntry === undefined ? {} : { currentEntry }),
         onNavigate: (state) => this.navigate(state),
         onOpenFile: () => this.host.openFileDialog(this),
@@ -1968,7 +2014,8 @@ export class Session {
 
       // A link may already have named a view inside this file (§5.5); honour it
       // rather than bouncing the recipient to the landing table.
-      const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
+      const rootView: ViewKind =
+        info.layout.kind === 'metacool' ? 'genomes' : isScool ? 'cells' : 'contigs'
       const wanted = carry ?? this.store.state
       // `view=browser` is the one view a map session cannot hold: it names the
       // *other* shape of session, and carrying it here would leave the store
@@ -2013,6 +2060,26 @@ export class Session {
       if (info.pairs !== undefined) reportImportGaps(info.pairs)
       if (info.pairs?.download === true) void this.exportImportedMcool()
     } catch (err) {
+      // The §12 listing gate is a question, not a failure: a single-cell
+      // container over the network cannot be opened without paying one of two
+      // costs, and which to pay is the reader's to choose. Asked here rather
+      // than in the worker for the obvious reason — the worker has no screen —
+      // and re-issued as the *same* open with the answer written on the source.
+      if (isListingGate(err) && source.kind === 'remote') {
+        this.opening = null
+        const reading = await askScoolReading(err, fileLabel(uri))
+        if (this.destroyed) return
+        if (reading === null) {
+          // Dismissed is an answer: neither cost, so nothing is read. Back to
+          // the picker rather than to an error screen about a file that is
+          // perfectly fine and simply was not opened.
+          this.showContent(this.picker.el)
+          this.host.sessionChanged(this)
+          return
+        }
+        await this.open(uri, { ...source, reading }, carry, index)
+        return
+      }
       // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
       // reader mirrors that faithfully (§3.4). But a *user* who dropped a
       // collection meant "show me this data", so the app answers by opening an
@@ -4980,7 +5047,24 @@ export class Session {
     }
 
     if (state.view === 'genomes' && !this.file.info.hasGenomes) {
-      this.navigate({ uri: state.uri, view: 'contigs' }, { replace: true })
+      // An scool's landing table is its cells, and `genomes` is the default a
+      // hash with no `view` in it parses to — so without this, dropping one or
+      // following a bare link to one arrived on Chromosomes, past the table the
+      // file exists to offer. A cooler has no such table and keeps going to
+      // its chromosomes, which is the case this redirect was written for.
+      const instead = this.isScool ? 'cells' : 'contigs'
+      this.navigate({ ...state, view: instead }, { replace: true })
+      return
+    }
+
+    // The mirror, for a link that names a cells table on a file that has none.
+    // Every other container answers `cells` with an empty view and no way off
+    // it, which is the failure this whole block exists to prevent.
+    if (state.view === 'cells' && !this.isScool) {
+      this.navigate(
+        { uri: state.uri, view: this.file.info.hasGenomes ? 'genomes' : 'contigs' },
+        { replace: true },
+      )
       return
     }
 
@@ -5131,11 +5215,18 @@ export class Session {
 
     this.breadcrumb?.render(state)
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
+    // Before the view mounts, because the view is what issues the reads and a
+    // block drawn from the previous set would be a picture of the wrong cells.
+    await this.syncCells(state)
+    if (this.destroyed || this.store.state !== state) return
     this.mounted = state
 
     switch (state.view) {
       case 'genomes':
         this.mountGenomes(state)
+        break
+      case 'cells':
+        await this.mountCells(state)
         break
       case 'contigs':
         await this.mountContigs(state)
@@ -5318,6 +5409,88 @@ export class Session {
   }
 
   /**
+   * The cells table of an `.scool` (§3.7), fetched on first sight.
+   *
+   * Ticking rows does two things at once, and that is the view's whole design:
+   * it names the picture to draw *and* sets which cells the file is read
+   * through from here on. So the navigation carries both — a whole-genome view
+   * of the sum, and the set itself, which every view the reader moves to next
+   * inherits until they come back here and change it.
+   */
+  private async mountCells(state: ViewState): Promise<void> {
+    const file = this.file
+    if (file === null) return
+    const data = await this.cells()
+    if (this.destroyed || this.store.state !== state) return
+    const total = data.table.length
+    const show = (names: readonly string[] | null): void => {
+      this.navigate({
+        uri: state.uri,
+        view: this.wholeFileView(),
+        ...cellsPatch(names, total),
+      })
+    }
+    const view = new CellsTable({
+      data,
+      persistence: this.tableMemory(state.uri, 'cells'),
+      onShowCells: (names) => show(names),
+      onShowAll: () => show(null),
+    })
+    this.showContent(view.el, view)
+  }
+
+  /** The cells table payload, read once per open file. */
+  private async cells(): Promise<CellsResult> {
+    const file = this.file
+    if (file === null) throw new Error('no file open')
+    if (file.cells === null) {
+      file.cells = await this.clientOf().request<'cells'>({ kind: 'cells' })
+    }
+    return file.cells
+  }
+
+  /**
+   * Put the worker on the cell set this state names, before anything reads.
+   *
+   * The one piece of worker state a *navigation* can change, and the reason it
+   * is reconciled here rather than sent with each read: a cell set is a property
+   * of the open map, so a matrix, a scan and a pooled aggregation over the same
+   * set must all see the same one, and threading it through every request kind
+   * would give six places for the two to disagree.
+   *
+   * A no-op when the set has not moved, which is every navigation but the ones
+   * through the cells table — so panning, zooming and stepping into a
+   * chromosome cost nothing at all.
+   */
+  private async syncCells(state: ViewState): Promise<void> {
+    const file = this.file
+    if (file === null || file.info.cells.length === 0) return
+    const wanted = cellsOf(state)
+    const resolved = wanted ?? file.info.cells
+    const current = file.activeCells
+    if (current !== null && sameNames(current, resolved)) return
+    const result = await this.clientOf().request<'selectCells'>({
+      kind: 'selectCells',
+      names: wanted === null ? null : [...wanted],
+    })
+    if (this.destroyed) return
+    file.activeCells = result.names
+    // The score picker is per cell set, not per file: a column one cell of the
+    // set lacks cannot be summed across it (`metacooler/scool.ts`).
+    file.info = {
+      ...file.info,
+      activeCells: result.names,
+      cellNnz: result.nnz,
+      scoreColumns: result.scoreColumns,
+    }
+    // The panel is painted once at open, because a file's facts do not move —
+    // except these two, which are the reader's own choice and the cost it
+    // implies. Without this it went on reporting the whole file's pixel count
+    // over a map summed from two of its cells.
+    this.infoPanel?.refresh(file.info)
+  }
+
+  /**
    * Which of the two whole-file views this file has: the metagenome's scan, or
    * the cooler's single map. Both are called "Whole genome" wherever they are
    * offered, because they answer the same question by the means the file allows.
@@ -5416,7 +5589,7 @@ export class Session {
           // The file's own count of stored pixels, which is what the read walks.
           // A cooler that does not declare it is not gated rather than gated on
           // a guess; the same number is in the File card, from the same place.
-          nnz: numberOr(file.info.info['nnz']),
+          nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
           level,
           scale: this.scaleOf(state),
           balance,
@@ -5493,7 +5666,7 @@ export class Session {
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
       displayExtent: file.info.displayExtent,
-      nnz: numberOr(file.info.info['nnz']),
+      nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
       level: 'bin',
       scale: this.scaleOf(state),
       balance: this.balanceOf(state),
@@ -5864,7 +6037,12 @@ export class Session {
     // itself down (`onMapsChange(undefined)`) and the compare card close its
     // file, without either having to know this rule exists — and what lets a
     // reader who asked for the square keep it, `flip: false` being a thing said.
-    const carry = <K extends (typeof COMPANION_KEYS)[number] | (typeof READING_KEYS)[number]>(
+    const carry = <
+      K extends
+        | (typeof COMPANION_KEYS)[number]
+        | (typeof READING_KEYS)[number]
+        | (typeof SUBJECT_KEYS)[number],
+    >(
       key: K,
     ): void => {
       if (key in next) return
@@ -5873,6 +6051,7 @@ export class Session {
     }
     for (const key of COMPANION_KEYS) carry(key)
     for (const key of READING_KEYS) carry(key)
+    for (const key of SUBJECT_KEYS) carry(key)
     return out
   }
 
@@ -6584,6 +6763,20 @@ function numberOr(value: unknown): number | null {
  * `Session.balancedByDefault`. Everything else absent means the §7.1 default,
  * which `MatrixPanel` supplies.
  */
+/**
+ * Two name lists holding the same names in the same order.
+ *
+ * Order counts because the worker resolves a set into file order, and a list
+ * that matches it element for element is one that needs no swap. Two sets with
+ * the same members in a different order compare unequal here and cost one
+ * redundant swap, which is cheaper than sorting four thousand names to find out.
+ */
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {
   const scale: ScaleState = {}
   if (fallback.transform !== undefined) scale.transform = fallback.transform

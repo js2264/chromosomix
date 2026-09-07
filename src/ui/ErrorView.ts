@@ -115,6 +115,21 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
       'Genome and contig namespaces can collide; when they do, the genome wins.',
     ],
   },
+  'scool-listing-cost': {
+    title: 'This single-cell file has to be read whole, or read slowly',
+    advice: [
+      'Listing the cells means reading HDF5 link records that writers scatter across the entire file, so there is no bounded read that reaches them.',
+      'Either download the object once — fast afterwards, but the whole file crosses the network — or read it in small pieces, which moves far fewer bytes but takes many round trips.',
+      'A copy on your own disk has neither cost: drop it here and it is read in place.',
+    ],
+  },
+  'cell-not-found': {
+    title: 'No such cell in this file',
+    advice: [
+      'A link or a saved view named cells this .scool does not carry — most often a link made against a different file, or one whose cells were renamed.',
+      'The cells table lists every cell this file has; tick the ones you want there.',
+    ],
+  },
   'bad-range': {
     title: 'That range does not parse',
     advice: [

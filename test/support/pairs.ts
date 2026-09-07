@@ -16,6 +16,8 @@ import type { ByteSource, SourceStats } from '@/types'
 export class BytesSource implements ByteSource {
   readonly id: string
   readonly size: number
+  /** Bytes already in hand, so a seek costs nothing — see `ByteSource`. */
+  readonly isRemote = false
   constructor(
     private readonly data: Uint8Array,
     id = 'sample.pairs.gz',

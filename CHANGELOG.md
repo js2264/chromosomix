@@ -201,6 +201,68 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Specified at SPECS §21, with a picture of a real one and the worked example in
   the README.
 
+- **`.scool` — single-cell coolers, per cell and summed.** The container from
+  [Wolff *et al.* 2021](https://academic.oup.com/bioinformatics/article/37/14/2053/5948994):
+  one cooler per cell over one shared bin space. It opens as what it is. A
+  **Cells** table is the landing view — every cell in the file, with the `nnz`
+  and contact total its own attributes record, sortable and filterable like the
+  genomes table beside it — a click opens one cell's map, and ticking any number
+  of them **adds them together**. Tick all of them and that is the pseudo-bulk.
+
+  **Both layouts, and neither is the special case.** The standard `/cells`
+  container `cooler.create_scool` writes, and the flat one HiCMatrix and
+  scHiCExplorer produced before the format was standardised in cooler 0.8.11 —
+  cells at the file root, no shared tables, and a root that announces nothing.
+  The second is the majority of what exists (every published `.scool` predating
+  2021 is one), so it is detected by elimination and tested at every step
+  alongside the first.
+
+  **Summing needs no arithmetic, and that is the whole design.** Every cell
+  indexes the same bins, so a bin id means the same thing in all of them; and
+  the dense scatter was already additive per pixel, because a bounded rectangle
+  may arrive in several chunks. A store that hands one callback each selected
+  cell's chunks in turn therefore *is* their sum — no summing code, no
+  intermediate matrix, a peak footprint of one chunk. The same falls out twice
+  more: `nnz` is a total over the set, and a sum of cumulative indexes is the
+  cumulative index of the sum, so the density proxy, the band planner and the
+  selection read all work over a cell set without knowing one exists.
+
+  **The set is a property of the file, not of the view.** Chosen cells stay
+  chosen through a chromosome and back out, they show in the breadcrumb in every
+  view — a map summed from one cell and one summed from four thousand are
+  different experiments and that must not be inferrable only from the picture —
+  and they travel in the link as `cells=`, with `*` for all of them, because
+  four thousand names is not a URL. Balancing sums the raw counts and applies
+  the file's *shared* `/bins/weight` once to the result, which is cooler's own
+  definition applied to the pseudo-bulk; it is offered only where such a column
+  exists. One cell is addressable on its own as `file.scool::/cells/<name>` and
+  is an ordinary cooler there, weights included.
+
+- **A gate before a remote `.scool` is read, with both costs on the buttons.**
+  The first and only open in this viewer that asks a question, and the reason is
+  worth stating because it is a property of HDF5 rather than of the format: a
+  container's cell *names* live in the group's link storage, which the library
+  allocates as members are added — immediately after each cell's pixels, for
+  every writer there is. The index of the file is interleaved with its data
+  rather than gathered anywhere.
+
+  Measured on the 3,882-cell Nagano 2017 file: listing the cells is **1,015
+  reads averaging 512 bytes, spread uniformly across all 327 MB**. Not a quirk
+  of that writer — a container written by `cooler.create_scool` behaves
+  identically, and a synthetic 800-cell 50 MB one touches all 48 of its megabyte
+  blocks. So no chunk size wins: the reads are ~500 bytes about 320 KB apart, so
+  anything large enough to coalesce them fetches the whole file and anything
+  small enough to avoid that needs a round trip each. Rather than pick one
+  silently, the reader is offered both with the numbers on them — one download,
+  or ~1,000 small requests for ~5% of the bytes — and told that a local copy
+  costs neither. **A local file is never asked**: the question is about round
+  trips, and a file on disk seeks for free.
+
+  The consolation is that the listing is the only cost. Every cell's attributes
+  sit in metadata the listing already brought across — measured at *zero*
+  additional chunks on both files — so the cells table's columns are free once
+  the names are paid for.
+
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
   window grows until it covers enough evidence to average, so it stays narrow
@@ -698,6 +760,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   type="file">` for files, the snapshot shape for a directory. Dropping was never
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
+
+- **Answering the `.scool` gate with *small pieces* asked the same question
+  again, forever.** Two causes, both worth naming. The retained remote source
+  was keyed on the URL alone, so re-opening with the reader's answer handed back
+  the mount built for the other reading and discarded the answer; and the gate
+  itself only knew about the source, which is still remote after that choice —
+  choosing *download it whole* passed only incidentally, because that source
+  stops being remote. The reading is now part of a mount's identity, and the
+  agreement is passed explicitly rather than inferred.
+
+- **`2 << 30` is not two gigabytes.** The shift operators coerce to signed
+  32-bit, so the whole-object download limit evaluated to −2,147,483,648 and
+  refused every file, including a 114 kB one, with "more than a browser tab can
+  hold in memory". Found by driving the built app in a browser rather than by a
+  test, which is the kind of arithmetic no unit test was ever going to be
+  pointed at.
 
 - **A bgzipped file with no index is read to its end, not to the end of its
   first block.** `bgzip` writes a gzip member per block — roughly one per 64 KiB

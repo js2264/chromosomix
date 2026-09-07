@@ -22,6 +22,16 @@ export interface ByteSource {
   readonly id: string
   /** Total size in bytes. Known before `mount()` for both implementations. */
   readonly size: number
+  /**
+   * `true` when a read that seeks costs a network round trip.
+   *
+   * Not "was this a URL": a remote object downloaded whole and mounted from
+   * memory answers `false`, because what this is asked about is the cost of
+   * *scattered* access, and there is none once the bytes are here. The one
+   * caller is the §12 gate on listing a single-cell container's cells, which is
+   * the only read in this application whose shape the byte layer cannot bound.
+   */
+  readonly isRemote: boolean
   /** Make the bytes visible to the Emscripten FS; returns the mounted path. */
   mount(): Promise<string>
   /**
@@ -83,14 +93,25 @@ export interface Table {
 // File layout detection (spec §3.1)
 // ---------------------------------------------------------------------------
 
-export type LayoutKind = 'mmetacool' | 'metacool' | 'mcool' | 'cool' | 'hic' | 'pairs'
+export type LayoutKind = 'mmetacool' | 'metacool' | 'mcool' | 'scool' | 'cool' | 'hic' | 'pairs'
 
 export interface Layout {
   kind: LayoutKind
   /** HDF5 group path holding the dataset ('/' for a plain metacool). */
   group: string
-  /** For mmetacool/mcool/hic: available entry (or resolution) names, in file order. */
+  /** For mmetacool/mcool/scool/hic: available entry (or cell, or resolution) names, in file order. */
   entries?: string[]
+  /**
+   * For `scool`: the group the cells live under, which is the one structural
+   * difference between the format's two layouts.
+   *
+   * `'cells'` for the standard container `cooler.create_scool` writes, and the
+   * empty string for the flat one every pre-0.8.11 writer produced, whose cells
+   * are the root's own children. Absent for every other layout, which has no
+   * cells. A field rather than a boolean because it is a *path*, and every
+   * caller that has one wants to join it to a name.
+   */
+  cellGroup?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +304,7 @@ export interface Separator {
  */
 export type ViewKind =
   | 'genomes'
+  | 'cells'
   | 'contigs'
   | 'genome'
   | 'pair'
@@ -371,6 +393,20 @@ export interface ViewState {
   genomes?: string
   /** The contigs a `selection` view is of — the plural of {@link region}. */
   regions?: string
+  /**
+   * The cells of an `.scool` being summed, comma-joined, in file order.
+   *
+   * Unlike every other key here it is not the subject of *one* view: it says
+   * which cells the file is being **read through**, and it survives navigating
+   * from the cells table into a chromosome and back out (§3.7). A map view with
+   * no `cells` sums every cell in the file, which is what an scool dropped and
+   * pressed through means.
+   *
+   * Comma-joined for the reason `genomes` is, and with the same limit: a
+   * selection of four thousand cells would not fit in a URL, so `*` is written
+   * for "all of them" and the enumeration is only for a genuine subset.
+   */
+  cells?: string
   /**
    * What one row of the matrix is.
    *

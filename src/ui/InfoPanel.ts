@@ -146,6 +146,21 @@ export class InfoPanel {
     this.paintFiles()
   }
 
+  /**
+   * Re-read the open file's facts.
+   *
+   * Almost everything on this card is fixed for the life of an open file —
+   * a bin size does not change while it is open — so the panel is painted once
+   * and left. One thing does: an `.scool`'s cell set, which the reader changes
+   * by ticking boxes, and with it the pixel count the card reports and the whole
+   * -file gate forecasts from. Left unpainted, the panel went on saying *all
+   * 3,882* over a map summed from two.
+   */
+  refresh(info: OpenResult): void {
+    this.props.info = info
+    this.paintFiles()
+  }
+
   private paintFiles(): void {
     if (this.compare === null) {
       this.fileHost.replaceChildren(
@@ -219,7 +234,33 @@ export class InfoPanel {
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],
-      ['non-zero pixels', info.info['nnz'] === null || info.info['nnz'] === undefined ? '—' : fmt.int(Number(info.info['nnz']))],
+      // Two rows for an scool where every other file has none: how many cells
+      // it holds, and how many of them the picture on screen is made of. The
+      // second is the one that matters — a map summed from four cells and a map
+      // summed from four thousand look like different experiments, and this is
+      // the panel that says which one is being read.
+      ...(info.cells.length === 0
+        ? []
+        : ([
+            ['cells', fmt.int(info.cells.length)],
+            [
+              'cells summed',
+              info.activeCells.length === info.cells.length
+                ? `all ${fmt.int(info.cells.length)}`
+                : fmt.int(info.activeCells.length),
+            ],
+          ] as Array<[string, string]>)),
+      // An scool's root declares no pixel count — it has no pixels of its own —
+      // so the honest number is the selected cells', which is also the one the
+      // whole-file gate forecasts from.
+      [
+        'non-zero pixels',
+        info.cellNnz !== null
+          ? fmt.int(info.cellNnz)
+          : info.info['nnz'] === null || info.info['nnz'] === undefined
+            ? '—'
+            : fmt.int(Number(info.info['nnz'])),
+      ],
       ['sum', info.info['sum'] === null || info.info['sum'] === undefined ? '—' : fmt.int(Number(info.info['sum']))],
     ]
     return el('div', { class: 'kv' }, ...rows.flatMap(([key, value]) => keyValue(key, value)))
