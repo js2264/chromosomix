@@ -271,6 +271,21 @@ resolution. The app turns that into a dialog and opens again. It is the same two
 addressed at its root already takes (§3.4); what differs is only that a collection's answer is in
 the file and this one is not.
 
+**The cost is the framing, not the format.** A `.pairs.gz` is BGZF — a sequence of
+independently-deflated members — and **Chromium's `DecompressionStream('gzip')` will not walk them**:
+it stops after the first and throws `Junk found after end of compressed data.` Since BGZF's
+end-of-file marker is itself an empty second member, that is true of every bgzipped file, not just a
+large one. So members are decompressed one at a time, which is what the format is.
+
+What that costs depends entirely on how finely the file was framed, because a deflate stream has a
+fixed cost however little it carries. Inflate alone, measured in Chromium: **260 MB/s** at the 64 KiB
+members `bgzip` writes, **78 MB/s** at the ~1.4 KB members `demo/ecoli/SRR19500734.pairs.gz` has —
+165,000 of them. That ceiling belongs to deflate rather than to the browser API: `fflate`'s pure-JS
+inflate measures 76 MB/s on the same members, so a dependency would buy nothing, and issuing members
+concurrently is slower still. **Re-blocking a finely framed file is the fix that works**
+(`bgzip -d < f.pairs.gz | bgzip > g.pairs.gz`), and the app says so rather than pretending the
+difference is not there.
+
 **One pass, and then it is a cooler.** The chosen resolution is binned in a single streaming pass
 over the records, and every rung above it is derived from that table rather than from the file. The
 result is held in memory and *is* the map: every view, the deck, the turn and all fourteen §18 tasks
@@ -2346,8 +2361,8 @@ whole file:
 
 | Operation | Budget |
 |---|---|
-| Probe a `.pairs`: header, and the index if there is one | ≤ 3 range requests. One BGZF member for the format check — cut *exactly*, from the member's own header, so the common case decodes with nothing to tolerate — then the preamble, then the `.px2` whole, which is small by construction |
-| The binning pass | **one sequential read of the file**, and no second pass ever. Measured at **2.9 M records/s** against a `DecompressionStream('gzip')` ceiling of ~195 MB/s, so decompression is ~69% of the wall time and the parser is within half of the platform floor. Progress in records where a `.px2` gave an exact count, in compressed bytes otherwise; cancellable throughout |
+| Probe a `.pairs`: header, and the index if there is one | ≤ 3 range requests. One BGZF member for the format check — cut *exactly*, from the member's own header — then the preamble, then the `.px2` whole, which is small by construction |
+| The binning pass | **one sequential read of the file**, and no second pass ever. Measured on `demo/ecoli/SRR19500734.pairs.gz` (17.7 M records, 238 MB): **0.69 M records/s** at the 64 KiB BGZF framing `bgzip` writes, and **0.12 M records/s** at the ~1.4 KB framing that file actually has. The 5.7× is decompression, not parsing — see below. Progress in records where a `.px2` gave an exact count, in compressed bytes otherwise; cancellable throughout |
 | Every rung above the base | 0 reads. Derived from the base pixel table, which is smaller than the record stream by the ratio of records to stored pixels — thirteen to one on `demo/yeast/` |
 | Every view, afterwards | **0 reads, ever.** The map is in memory; a rung switch, a pan, a zoom, the deck and all fourteen §18 tasks cost no I/O at all |
 | Writing the `.mcool` | 0 reads. Runs beside the open map, with its own bar and its own cancel; the int64 conversion buffer is capped at one chunk rather than one column |

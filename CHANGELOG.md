@@ -89,10 +89,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   repository's own demo files, yeast Micro-C is 179 M records and 13.7 M stored
   pixels at 1 kb; the mock community is 10.9 M records and 7.1 M pixels. The
   input is gigabytes and the output is tens of megabytes — so the file is paid
-  for once, at open, and every view afterwards costs no I/O at all. Measured at
-  **2.9 M records/s** against a `DecompressionStream('gzip')` ceiling of
-  ~195 MB/s: decompression is 69% of the wall time, so the parser is within half
-  of the platform's floor and there is nothing left here worth optimising.
+  for once, at open, and every view afterwards costs no I/O at all.
+  `demo/ecoli/SRR19500734.pairs.gz` — 238 MB, 17.7 M records — imports in about
+  forty seconds.
+
+  **What decides that time is the file's BGZF framing rather than this code**,
+  and it is worth knowing because it can be changed. A deflate block costs about
+  the same to start whether it holds 1 KB or 64 KB, so a finely framed file pays
+  that fixed cost tens of thousands of times over: measured on the same 1.39 M
+  records, **0.69 M records/s** at the 64 KiB blocks `bgzip` writes and
+  **0.12 M records/s** at the ~1.4 KB blocks that E. coli file has. Re-blocking
+  it (`bgzip -d < f.pairs.gz | bgzip > g.pairs.gz`) is worth about 5×.
 
   An imported map is a *fuller* citizen than a `.hic`: because the file was
   read, the per-bin pixel index is a by-product rather than a whole-file scan,
@@ -643,6 +650,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **A bgzipped `.pairs.gz` failed to open in the browser** with `Junk found
+  after end of compressed data.` BGZF is a concatenation of gzip members, and
+  the specification says a decoder walks them — Node's does, and that is where
+  it was verified. **Chromium's does not**: `DecompressionStream('gzip')` stops
+  after the first member and throws. Because BGZF's end-of-file marker is
+  itself an empty second member, this was true of *every* bgzipped file, not
+  only a large one; the fixtures that passed were plain single-member gzip,
+  which is the one shape that works either way.
+
+  Members are now decompressed one at a time, which is what the format is. That
+  turned out to cost nothing: taking the writer and reader off the
+  `DecompressionStream` directly, rather than through a `Blob` and a `Response`,
+  runs at 260 MB/s against the `Blob` form's 34 MB/s — so
+  `annotations/tabix.ts`, which reads `.tbi` and GTF spans the slow way, now
+  shares the fast one.
 
 - **A Choose-files button in a framed page no longer does nothing at all.**
   Anybody could already put this site in an `<iframe>`, and in a cross-origin one

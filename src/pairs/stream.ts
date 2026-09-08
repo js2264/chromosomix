@@ -1,29 +1,52 @@
 /**
  * A `.pairs` file's bytes, decompressed, as a stream this side can pull.
  *
- * ## Why this is not `annotations/tabix.ts`
+ * ## The mistake this module was built on, and the correction
  *
- * That module inflates a *span* — the byte range holding one sequence's
- * records, found from an index — and it does so one BGZF block at a time
- * through `DecompressionStream('deflate-raw')`, because a span's edges are
- * virtual offsets and only a block-at-a-time decode can honour them.
+ * It used to hand a whole BGZF file to one `DecompressionStream('gzip')`, on
+ * the reasoning that BGZF *is* gzip — a concatenation of standard members — and
+ * that the specification requires concatenated members to be walked. The
+ * reasoning is right about the format and wrong about the platform:
  *
- * This module inflates a *file*, and doing it a block at a time would be the
- * single most expensive decision in the import. A BGZF block holds at most
- * 64 KiB, so a gigabyte of pairs is upwards of twenty thousand blocks, and a
- * `Blob` + `DecompressionStream` + `Response` per block is twenty thousand
- * allocations of three objects each before a single record is parsed.
+ * - **Node walks concatenated members.** That is where it was verified, and it
+ *   passed.
+ * - **Chromium does not.** `DecompressionStream('gzip')` stops at the end of
+ *   the first member and throws `TypeError: Junk found after end of compressed
+ *   data.` — which is the browser, the only place this code actually runs.
  *
- * The alternative is available and is exactly one line: **BGZF is gzip**. A
- * BGZF file is a concatenation of standard gzip members, and
- * `DecompressionStream('gzip')` walks concatenated members by specification —
- * verified here against a three-member file, and the reason a whole-file import
- * runs at the platform's inflate ceiling (~195 MB/s) rather than at whatever
- * per-block object churn would leave of it.
+ * And it is not a large-file problem: BGZF's end-of-file marker is itself an
+ * empty second member, so **every** bgzipped file failed, including a
+ * one-block one. The test fixtures that passed were plain single-member gzip.
  *
- * So: spans go through `tabix.ts`, whole files go through here, and the two
- * coexist because they are answering different questions rather than because
- * one was overlooked.
+ * ## What replaces it, and why it is faster rather than slower
+ *
+ * BGZF is decompressed **one member at a time**, which is what the format
+ * actually is. The obvious way to do that is the way `annotations/tabix.ts`
+ * did — `new Blob([payload]).stream().pipeThrough(...)` and a `Response` to
+ * collect it — and that is genuinely slow: three objects per 64 KiB member,
+ * measured at **34 MB/s** in Chromium.
+ *
+ * Taking the writer and reader off the `DecompressionStream` directly, with no
+ * `Blob` and no `Response`, measures at **260 MB/s** on the same data in the
+ * same browser — 7.6× the `Blob` form, and faster than the single-stream path
+ * it replaces. `inflateMember` is that loop, and `annotations/tabix.ts` now
+ * shares it.
+ *
+ * **What is left is a per-member cost, and it belongs to deflate rather than to
+ * this API.** The same 260 MB/s falls to **78 MB/s** on a file framed in 1.4 KB
+ * members instead of 64 KiB ones, because a deflate stream has a fixed cost
+ * however little it carries. `fflate`'s pure-JS inflate measures 76 MB/s on
+ * exactly those members, so swapping the platform API for a dependency would
+ * buy nothing; and issuing the members concurrently is *slower* still, since
+ * the cost is CPU rather than latency. Both were measured before being ruled
+ * out.
+ *
+ * A **plain** gzip `.pairs.gz` — one member, which is what `gzip` produces — is
+ * still handed to `DecompressionStream('gzip')` whole, because for a single
+ * member that is exactly right and there is no framing to walk. A plain gzip
+ * that is *itself* a concatenation (`cat a.gz b.gz`) is not supported and
+ * cannot be: unlike BGZF, nothing in the framing says where the next member
+ * begins without inflating the one before it.
  *
  * ## Progress is measured in compressed bytes
  *
@@ -47,9 +70,98 @@ import type { ByteSource } from '../types'
  */
 export const PULL_CHUNK_BYTES = 4 << 20
 
+/** A BGZF member header is always at least this long. */
+const BGZF_HEADER_BYTES = 12
+
+/** No BGZF member exceeds 64 KiB compressed; the format guarantees it. */
+export const BGZF_MAX_MEMBER = 1 << 16
+
 /** gzip's first two bytes, which BGZF shares because BGZF *is* gzip. */
 export function isGzip(bytes: Uint8Array): boolean {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+}
+
+/**
+ * Whether these bytes begin a BGZF member rather than a plain gzip one.
+ *
+ * gzip magic, then the `FEXTRA` flag, then a `BC` subfield in the extra field.
+ * A plain `.gz` has the first and not the others, and must keep working — which
+ * is why this is a *test* and not an assumption.
+ */
+export function isBgzfMember(bytes: Uint8Array, at = 0): boolean {
+  if (bytes.length < at + BGZF_HEADER_BYTES) return false
+  if (bytes[at] !== 0x1f || bytes[at + 1] !== 0x8b || bytes[at + 2] !== 8) return false
+  if ((bytes[at + 3] & 4) === 0) return false
+  return memberSize(bytes, at) !== null
+}
+
+/**
+ * The total size of the BGZF member starting at `bytes[at]`, or `null`.
+ *
+ * `BSIZE` is stored as *total member size minus one*, which is the single most
+ * common off-by-one in the format.
+ */
+export function memberSize(bytes: Uint8Array, at = 0): number | null {
+  if (bytes.length < at + BGZF_HEADER_BYTES) return null
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const extraLength = view.getUint16(at + 10, true)
+  let cursor = at + 12
+  const end = Math.min(cursor + extraLength, bytes.length)
+  while (cursor + 4 <= end) {
+    const si1 = bytes[cursor]
+    const si2 = bytes[cursor + 1]
+    const length = view.getUint16(cursor + 2, true)
+    if (si1 === 66 && si2 === 67 && length === 2) {
+      return view.getUint16(cursor + 4, true) + 1
+    }
+    cursor += 4 + length
+  }
+  return null
+}
+
+/**
+ * Inflate one member's deflate payload.
+ *
+ * The writer and reader are taken off the `DecompressionStream` directly. The
+ * `Blob` + `pipeThrough` + `Response` spelling is the obvious one and costs
+ * 7.6× as much — see the module docblock. `deflate-raw` rather than `gzip`
+ * because the gzip framing has already been stripped by the caller, which is
+ * the only way to know where the member ended in the first place.
+ */
+export async function inflateMember(payload: Uint8Array): Promise<Uint8Array> {
+  if (payload.length === 0) return payload
+  const stream = new DecompressionStream('deflate-raw')
+  const writer = stream.writable.getWriter()
+  const reader = stream.readable.getReader()
+  const parts: Uint8Array[] = []
+  let total = 0
+  const pump = (async (): Promise<void> => {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+      total += value.length
+    }
+  })()
+  await writer.write(payload as Uint8Array<ArrayBuffer>)
+  await writer.close()
+  await pump
+  if (parts.length === 1) return parts[0]
+  const out = new Uint8Array(total)
+  let at = 0
+  for (const part of parts) {
+    out.set(part, at)
+    at += part.length
+  }
+  return out
+}
+
+/** The deflate payload of the member at `at`, given its total size. */
+function payloadOf(bytes: Uint8Array, at: number, size: number): Uint8Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const extraLength = view.getUint16(at + 10, true)
+  // 12-byte header + the extra field, and 8 bytes of CRC32 and ISIZE trailer.
+  return bytes.subarray(at + 12 + extraLength, at + size - 8)
 }
 
 export interface SpanOptions {
@@ -64,7 +176,7 @@ export interface SpanOptions {
 }
 
 /**
- * The bytes of `[from, to)`, decompressed if the file is gzipped.
+ * The bytes of `[from, to)`, decompressed if the file is compressed.
  *
  * A plain `.pairs` is passed through untouched rather than refused, which costs
  * one branch and is the difference between "bring a bgzipped file" and "bring a
@@ -76,29 +188,35 @@ export function decompressedStream(
   source: ByteSource,
   options: SpanOptions = {},
 ): ReadableStream<Uint8Array> {
+  // The probe reads the *file's* first bytes, never the span's: a span starting
+  // mid-file begins inside a member and does not carry gzip magic, but the file
+  // it came from does.
+  const head = source.readBytes(0, Math.min(source.size, 64))
+  if (isBgzfMember(head)) return bgzfStream(source, options)
+  const raw = spanStream(source, options)
+  return isGzip(head) ? raw.pipeThrough(new DecompressionStream('gzip')) : raw
+}
+
+/** The compressed bytes of a span, unchanged, in source-sized reads. */
+function spanStream(
+  source: ByteSource,
+  options: SpanOptions,
+): ReadableStream<Uint8Array<ArrayBuffer>> {
   const from = options.from ?? 0
   const to = Math.min(options.to ?? source.size, source.size)
   const total = Math.max(0, to - from)
   let at = from
   let fed = 0
 
-  // Parameterised on `ArrayBuffer` rather than left as a bare `Uint8Array`
-  // because that is what `DecompressionStream`'s writable side is typed to
-  // accept; the sources hand back exactly these bytes either way.
-  const raw = new ReadableStream<Uint8Array<ArrayBuffer>>({
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
     pull(controller) {
-      if (options.cancelled?.() === true) {
+      if (options.cancelled?.() === true || at >= to) {
         controller.close()
         return
       }
-      if (at >= to) {
-        controller.close()
-        return
-      }
-      const length = Math.min(PULL_CHUNK_BYTES, to - at)
       // Synchronous by construction — see `ByteSource.readBytes`. That is why
       // every caller of this module runs in a worker.
-      const bytes = source.readBytes(at, length)
+      const bytes = source.readBytes(at, Math.min(PULL_CHUNK_BYTES, to - at))
       if (bytes.length === 0) {
         controller.close()
         return
@@ -109,12 +227,76 @@ export function decompressedStream(
       options.onProgress?.(fed, total)
     },
   })
+}
 
-  // The probe reads the *file's* first bytes, never the span's: a span starting
-  // mid-file begins inside a BGZF member and does not carry gzip magic, but the
-  // file it came from does.
-  const head = source.readBytes(0, 2)
-  return isGzip(head) ? raw.pipeThrough(new DecompressionStream('gzip')) : raw
+/**
+ * A BGZF span, member by member.
+ *
+ * Members are walked using their own `BSIZE`, so the boundaries are known
+ * without inflating anything — which is the property that makes this possible
+ * at all and the one a plain gzip does not have.
+ *
+ * A member left incomplete at the end of the span is **dropped rather than
+ * fatal**. That is deliberate and is what a span read needs: `px2.ts` aims its
+ * spans at exact member boundaries, but a caller reading a fixed prefix (the
+ * header probe on a file larger than the cap) necessarily cuts mid-member, and
+ * a decoder error there would throw away everything that was read before it.
+ */
+function bgzfStream(source: ByteSource, options: SpanOptions): ReadableStream<Uint8Array> {
+  const from = options.from ?? 0
+  const to = Math.min(options.to ?? source.size, source.size)
+  const total = Math.max(0, to - from)
+  let at = from
+  let fed = 0
+  let carry = new Uint8Array(0)
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        if (options.cancelled?.() === true) {
+          controller.close()
+          return
+        }
+        // Enough of a member in hand to know its length, and all of it?
+        const size = carry.length >= BGZF_HEADER_BYTES ? memberSize(carry) : null
+        if (size !== null && carry.length >= size) {
+          const payload = payloadOf(carry, 0, size)
+          carry = carry.subarray(size)
+          // An empty member is the end-of-file marker, which is a real member
+          // and inflates to nothing. Skipped rather than enqueued so a consumer
+          // never sees a zero-length chunk.
+          if (payload.length > 0) {
+            controller.enqueue(await inflateMember(payload))
+            return
+          }
+          continue
+        }
+        if (at >= to) {
+          // A trailing partial member is the caller's cut, not a broken file.
+          controller.close()
+          return
+        }
+        const bytes = source.readBytes(at, Math.min(PULL_CHUNK_BYTES, to - at))
+        if (bytes.length === 0) {
+          controller.close()
+          return
+        }
+        at += bytes.length
+        fed += bytes.length
+        options.onProgress?.(fed, total)
+        if (carry.length === 0) {
+          // `slice`, not a view: `carry` outlives this iteration and the source
+          // is free to reuse the buffer it handed back.
+          carry = bytes.slice()
+        } else {
+          const joined = new Uint8Array(carry.length + bytes.length)
+          joined.set(carry)
+          joined.set(bytes, carry.length)
+          carry = joined
+        }
+      }
+    },
+  })
 }
 
 /**

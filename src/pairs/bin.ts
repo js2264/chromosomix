@@ -17,14 +17,32 @@
  *
  * ## The four decisions that make it fast
  *
- * Measured end to end at **2.9 M records/s**, against a hard inflate ceiling of
- * ~195 MB/s — decompression is 69% of the wall time, so the parser is close
- * enough to the floor that further work here would buy nothing.
+ * Measured on the real 4DN file `demo/ecoli/SRR19500734.pairs.gz` — 17.7 M
+ * records, 238 MB — and on the same records re-framed, because **the dominant
+ * cost is not this code**:
+ *
+ * | framing | throughput |
+ * |---|---|
+ * | 64 KiB BGZF members, which is what `bgzip` writes | 0.69 M records/s |
+ * | ~1.4 KB members, which is what that file actually has | 0.12 M records/s |
+ *
+ * The 5.7× is entirely decompression. A deflate stream has a fixed cost per
+ * member, and a file framed in 1.4 KB pieces pays it 165,000 times: inflate
+ * alone runs at 260 MB/s in Chromium at 64 KiB and 78 MB/s at 1.4 KB. That
+ * ceiling is the platform's rather than the browser API's — `fflate`'s pure-JS
+ * inflate measures 76 MB/s on the same members, so a dependency would buy
+ * nothing and none is taken.
+ *
+ * So the parser is not the thing to optimise; it is already a minority of the
+ * wall time on any normally framed file. What *would* make a finely framed file
+ * fast is re-blocking it (`bgzip -d < f.pairs.gz | bgzip > g.pairs.gz`), and
+ * that is worth knowing rather than worth working around.
  *
  * 1. **No strings on the hot path.** Fields are located by scanning for tabs
  *    and integers are accumulated digit by digit out of the raw bytes. An
- *    earlier version decoded the two chromosome fields per record; it ran at
- *    1.3 M records/s, and that one `TextDecoder` call was the difference.
+ *    earlier version decoded the two chromosome fields per record; on the same
+ *    data it was 2.2× slower, and that one `TextDecoder` call was the whole of
+ *    the difference.
  * 2. **Chromosome names interned by hash**, with collisions resolved rather
  *    than assumed away — see {@link ContigIndex}.
  * 3. **A dense scratch row, not a hash of pixels.** `counts[bin2]++` with a

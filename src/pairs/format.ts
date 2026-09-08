@@ -36,8 +36,7 @@
 
 import { ViewerError } from '../errors'
 import type { ByteSource } from '../types'
-import { blockSize, isBgzf } from '../annotations/tabix'
-import { decompressedStream, forEachLine } from './stream'
+import { decompressedStream, forEachLine, isBgzfMember, memberSize } from './stream'
 
 /** The spec's own column order, used when a file declares none. */
 const DEFAULT_COLUMNS = ['readID', 'chr1', 'pos1', 'chr2', 'pos2', 'strand1', 'strand2']
@@ -141,8 +140,8 @@ export async function isPairsFile(source: ByteSource): Promise<boolean> {
  */
 function probeEnd(source: ByteSource): number {
   const head = source.readBytes(0, Math.min(source.size, BGZF_HEADER_PROBE))
-  if (isBgzf(head)) {
-    const size = blockSize(head)
+  if (isBgzfMember(head)) {
+    const size = memberSize(head)
     if (size !== null) return Math.min(source.size, size)
   }
   return Math.min(source.size, PLAIN_PROBE_BYTES)
