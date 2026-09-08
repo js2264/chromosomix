@@ -185,6 +185,8 @@ export async function aggregatePixels(
     skippedBadPosition: base.skippedBadPosition,
     clampedPosition: base.clampedPosition,
     wasUnsorted: base.wasUnsorted,
+    truncated: base.truncated,
+    contigsWithoutCisContacts: [...base.contigsWithoutCisContacts],
   }
 }
 

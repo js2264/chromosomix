@@ -342,6 +342,22 @@ diagonal, `forEachBands`, `scanAll` and `binOffsets`. That is the property every
 fourteen §18 tasks actually depend on, and the way it would fail is the way that matters: not an
 error, but one number differing for whichever tasks happen to use the method that diverged.
 
+**An incomplete file is reported, not drawn in silence.** A BGZF file says where each of its
+members ends and marks its own end with an empty one, so a file that stops mid-member or carries no
+end-of-file marker was never finished — a cancelled upload, an interrupted `bgzip`, a partial copy.
+Every record that did arrive is binned and drawn, because it is real; what is refused is doing that
+*quietly*. Nothing in a contact map distinguishes *this library has no contacts on chromosome XIII*
+from *this file stops before chromosome XIII*, and a reader cannot be left to work out which.
+
+Reported alongside it: sequences with **nothing on their own diagonal**. That is the visible form of
+the same fact — a diagonal is a map's most populated feature and a sequence without one is missing
+from the data — and it is deliberately not "sequences no record named", which the file this was
+written for would have passed: a list sorted by first chromosome and then cut still mentions the
+sequences it never reaches, as the *second* chromosome of a trans contact.
+
+A plain `.gz` gets no such claim. It carries no framing this side can check, and silence there means
+*unknown* rather than *whole*.
+
 **Correctness.** The binning is checked against a second implementation of the same arithmetic,
 written the slow obvious way, over sorted, shuffled, gzipped, bgzipped and uncompressed files, at
 contig boundaries and short final bins. The written `.mcool` is checked twice — read back through

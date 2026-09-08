@@ -125,6 +125,12 @@ export function pairsHandle(init: PairsHandleInit): Hdf5Handle {
       : { 'pairs-skipped-bad-position': pixels.skippedBadPosition }),
     ...(pixels.clampedPosition === 0 ? {} : { 'pairs-clamped-positions': pixels.clampedPosition }),
     ...(pixels.wasUnsorted ? { 'pairs-required-merge': true } : {}),
+    ...(pixels.truncated ? { 'pairs-truncated': true } : {}),
+    ...(pixels.contigsWithoutCisContacts.length === 0
+      ? {}
+      : {
+          'pairs-sequences-without-cis-contacts': pixels.contigsWithoutCisContacts.join(', '),
+        }),
   }
 
   return {

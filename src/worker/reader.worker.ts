@@ -319,6 +319,8 @@ function summarise(pairs: PairsImport, download: boolean): PairsImportSummary {
     skippedBadPosition: base.skippedBadPosition,
     clampedPosition: base.clampedPosition,
     requiredMerge: base.wasUnsorted,
+    truncated: base.truncated,
+    sequencesWithoutCisContacts: base.contigsWithoutCisContacts,
     download,
   }
 }

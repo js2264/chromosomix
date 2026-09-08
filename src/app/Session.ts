@@ -78,6 +78,7 @@ import type {
   McoolExport,
   OpenResult,
   PairsBinning,
+  PairsImportSummary,
   PairsProbeResult,
   SourceSpec,
   TablePayload,
@@ -2008,6 +2009,8 @@ export class Session {
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
       // one thing this ordering exists to avoid.
+      // Before the export, because it is about the map that just appeared.
+      if (info.pairs !== undefined) reportImportGaps(info.pairs)
       if (info.pairs?.download === true) void this.exportImportedMcool()
     } catch (err) {
       // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
@@ -6459,6 +6462,47 @@ export function progressView(message: string): {
       note.textContent = text === undefined ? `${Math.round(fraction * 100)}%` : `${text} — ${Math.round(fraction * 100)}%`
     },
   }
+}
+
+/**
+ * Say what the file did not contain, when it did not contain everything.
+ *
+ * A map binned from a truncated `.pairs` is not blank and not wrong — every
+ * number in it is true of the records that arrived — so nothing on screen
+ * distinguishes *this library has no contacts on chromosome XIII* from *this
+ * file stops before chromosome XIII*. That is the whole reason this exists: the
+ * reader cannot work it out from the picture, and being quiet leaves them to
+ * conclude the first when it is the second.
+ *
+ * A note rather than a refusal, and it stays until it is dismissed. The data
+ * that is there is real and worth looking at; what is not on is drawing it
+ * without saying so.
+ */
+function reportImportGaps(summary: PairsImportSummary): void {
+  const missing = summary.sequencesWithoutCisContacts
+  if (!summary.truncated && missing.length === 0) return
+
+  const named = missing.length > 6 ? `${missing.slice(0, 6).join(', ')} and ${missing.length - 6} more` : missing.join(', ')
+  const parts: string[] = []
+  if (summary.truncated) {
+    parts.push(
+      'This .pairs file is incomplete: it ends part-way through a compressed block, with no ' +
+        'end-of-file marker. Whatever was written is binned and drawn, but the rest of the file ' +
+        'was never there to read.',
+    )
+  }
+  if (missing.length > 0) {
+    parts.push(
+      `${missing.length} ${missing.length === 1 ? 'sequence has' : 'sequences have'} nothing on ` +
+        `${missing.length === 1 ? 'its' : 'their'} own diagonal: ${named}.`,
+    )
+  }
+  if (summary.truncated && missing.length > 0) {
+    parts.push('Those two together usually mean the file was cut off before those sequences.')
+  }
+
+  const note = progressToast(summary.truncated ? 'Incomplete file' : 'Empty sequences')
+  note.fail(parts.join(' '))
 }
 
 /**

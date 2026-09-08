@@ -651,6 +651,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An incomplete `.pairs` file is now said to be incomplete.** A truncated
+  BGZF — a cancelled upload, an interrupted `bgzip`, a partial copy — imported
+  without complaint and drew a map of whatever had arrived. Every number in
+  that map is true of the records that were there, which is exactly the
+  problem: nothing on screen distinguishes *this library has no contacts on
+  chromosome XIII* from *this file stops before chromosome XIII*.
+
+  A BGZF file marks its own end with an empty member, so the two states are
+  distinguishable and now are: a file that ends mid-member or without that
+  marker is reported as incomplete, alongside any sequences that have nothing
+  on their own diagonal — the visible form of the same fact. Both are carried
+  into the written `.mcool` as well, since a cooler binned from an incomplete
+  file is itself incomplete and will outlive the window that knew.
+
+  Found on `demo/yeast/CH128.pairs.gz`, which is cut off after chromosome XII
+  and silently produced a map with four empty chromosomes.
+
 - **A bgzipped `.pairs.gz` failed to open in the browser** with `Junk found
   after end of compressed data.` BGZF is a concatenation of gzip members, and
   the specification says a decoder walks them — Node's does, and that is where

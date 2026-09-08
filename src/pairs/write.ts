@@ -356,6 +356,13 @@ function provenance(imported: PairsImport, table: BinnedPixels): Record<string, 
       : { 'records-skipped-bad-position': table.skippedBadPosition }),
     ...(table.clampedPosition === 0 ? {} : { 'positions-clamped': table.clampedPosition }),
     ...(table.wasUnsorted ? { 'required-merge-pass': true } : {}),
+    // Carried into the file rather than left in the session: a `.cool` written
+    // from an incomplete `.pairs` is itself incomplete, and it will outlive the
+    // window that knew.
+    ...(table.truncated ? { 'source-truncated': true } : {}),
+    ...(table.contigsWithoutCisContacts.length === 0
+      ? {}
+      : { 'sequences-without-cis-contacts': table.contigsWithoutCisContacts }),
     balanced: false,
     note: 'Raw counts, unbalanced. Run `cooler balance` to add a bins/weight column.',
   }

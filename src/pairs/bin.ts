@@ -139,6 +139,35 @@ export interface BinnedPixels {
   clampedPosition: number
   /** `true` when the file was not `bin1`-ordered and a merge pass was needed. */
   wasUnsorted: boolean
+  /**
+   * The file ended without being finished: a partial final member, or no BGZF
+   * end-of-file marker.
+   *
+   * A whole map can be drawn from a truncated file and every number in it is
+   * true of the records that arrived — which is exactly why this has to be
+   * carried and said. A reader looking at a genome whose last four chromosomes
+   * are empty needs to be told the difference between *this library has no
+   * contacts there* and *this file stops before it gets there*, and nothing in
+   * the picture can tell them.
+   *
+   * `false` for a plain gzip or an uncompressed file, which carry no framing
+   * this side can check — absence of evidence, and not reported as more.
+   */
+  truncated: boolean
+  /**
+   * Declared sequences with nothing on their own diagonal.
+   *
+   * The other half of the same question, and phrased this way because it is the
+   * thing a reader can *see*: a contact map's diagonal is its most populated
+   * feature, and a sequence missing one is missing from the data.
+   *
+   * "Named by no record at all" would be the obvious test and is the wrong one.
+   * A contact list sorted by first chromosome and then cut still mentions the
+   * sequences it never reaches — as the *second* chromosome of a trans contact
+   * — so on the file this was written for it reported nothing at all while four
+   * chromosomes were plainly empty.
+   */
+  contigsWithoutCisContacts: string[]
 }
 
 /**
@@ -251,6 +280,11 @@ export async function binPairs(
   let skippedBadPosition = 0
   let clampedPosition = 0
   let wasUnsorted = false
+  let truncated = false
+  let framingSeen = false
+  // One byte per declared sequence, set when a record lands on that sequence's
+  // own diagonal. One store per cis record, which is most of them.
+  const cisContig = new Uint8Array(contigs.length)
   let failure: ViewerError | null = null
 
   const maxPixels =
@@ -338,6 +372,8 @@ export async function binPairs(
       b2 = swap
     }
 
+    if (c1 === c2) cisContig[c1] = 1
+
     if (b1 !== curRow) {
       // The one thing the sort is trusted for, and the one thing that is
       // checked. A row that has already been emitted arriving again means the
@@ -382,6 +418,14 @@ export async function binPairs(
         },
       }
       if (options.cancelled !== undefined) streamOptions.cancelled = options.cancelled
+      // Only a *whole-file* read can conclude anything from the framing: a span
+      // ends where the index pointed, which is mid-member by construction.
+      if (options.spans === undefined) {
+        streamOptions.onFraming = (info) => {
+          framingSeen = true
+          if (info.partialMember || !info.endedOnEofMarker) truncated = true
+        }
+      }
 
       const finished = await forEachLine(
         decompressedStream(source, streamOptions),
@@ -412,6 +456,10 @@ export async function binPairs(
     skippedBadPosition,
     clampedPosition,
     wasUnsorted,
+    truncated: framingSeen && truncated,
+    contigsWithoutCisContacts: contigs
+      .filter((_, index) => cisContig[index] === 0)
+      .map((contig) => contig.name),
   }
   return wasUnsorted ? mergeDuplicates(result) : result
 }

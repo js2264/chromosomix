@@ -226,6 +226,75 @@ describe('binPairs', () => {
     expect(pixels!.skippedBadPosition).toBe(2)
   })
 
+  it('notices a file that was cut off, and says which sequences are absent', async () => {
+    // Exactly the shape of `demo/yeast/CH128.pairs.gz`: a BGZF file whose tail
+    // was never written, so the sequences that sort last never appear. The map
+    // that comes out is not blank and not wrong — every number in it is true of
+    // the records that arrived — which is precisely why the file has to be
+    // reported as incomplete rather than drawn in silence.
+    const bulk: Record[] = []
+    for (let i = 0; i < 3_000; i++) {
+      bulk.push({ chrom1: 'chrI', pos1: 1 + (i % 2_200), chrom2: 'chrI', pos2: 1 + ((i * 7) % 2_200) })
+    }
+    // The two that sort last, and that the cut will take with it.
+    const tail: Record[] = [
+      { chrom1: 'chrII', pos1: 10, chrom2: 'chrII', pos2: 20 },
+      { chrom1: 'chrIII', pos1: 10, chrom2: 'chrIII', pos2: 20 },
+    ]
+    const whole = bgzipped(pairsText({ contigs: CONTIGS, records: [...bulk, ...tail] }), 1 << 10)
+    // Enough to take the end-of-file marker and the last few members with it.
+    const cut = whole.subarray(0, whole.length - 3_000).slice()
+    expect(cut.length).toBeGreaterThan(1 << 12)
+
+    const source = new BytesSource(cut)
+    const header = await readPairsHeader(source)
+    expect(header.contigs).toEqual(CONTIGS)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(pixels!.truncated, 'a file with no EOF marker is truncated').toBe(true)
+    expect(pixels!.sum, 'the records that did arrive are still binned').toBeGreaterThan(0)
+    expect(pixels!.contigsWithoutCisContacts).toEqual(['chrII', 'chrIII'])
+  })
+
+  it('calls a whole file whole, and names no sequence that has a diagonal', async () => {
+    const records: Record[] = [
+      // One cis contact each, plus a trans one to show it is the *diagonal*
+      // that is being asked about rather than mere presence.
+      { chrom1: 'chrI', pos1: 10, chrom2: 'chrI', pos2: 20 },
+      { chrom1: 'chrII', pos1: 10, chrom2: 'chrII', pos2: 20 },
+      { chrom1: 'chrIII', pos1: 30, chrom2: 'chrIII', pos2: 40 },
+      { chrom1: 'chrI', pos1: 10, chrom2: 'chrIII', pos2: 20 },
+    ]
+    const source = new BytesSource(bgzipped(pairsText({ contigs: CONTIGS, records })))
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(pixels!.truncated).toBe(false)
+    expect(pixels!.contigsWithoutCisContacts).toEqual([])
+  })
+
+  it('claims nothing about a plain gzip, which carries no framing to check', async () => {
+    // Absence of evidence: a plain `.gz` says nothing about whether it is
+    // whole, so `truncated` stays false rather than guessing either way. The
+    // empty-diagonal report is unaffected — it is about the records.
+    const records: Record[] = [{ chrom1: 'chrI', pos1: 10, chrom2: 'chrI', pos2: 20 }]
+    const source = new BytesSource(gzipped(pairsText({ contigs: CONTIGS, records })))
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(pixels!.truncated).toBe(false)
+    expect(pixels!.contigsWithoutCisContacts).toEqual(['chrII', 'chrIII'])
+  })
+
   it('can be cancelled mid-pass', async () => {
     const records = sortRecords(CONTIGS, randomRecords(20_000, 5))
     const source = new BytesSource(bgzipped(pairsText({ contigs: CONTIGS, records }), 1 << 10))

@@ -213,6 +213,10 @@ export interface PairsImportSummary {
   clampedPosition: number
   /** `true` when the file was not `bin1`-ordered and a merge pass ran. */
   requiredMerge: boolean
+  /** `true` when the file ended mid-member or without a BGZF end-of-file marker. */
+  truncated: boolean
+  /** Declared sequences with nothing on their own diagonal. */
+  sequencesWithoutCisContacts: string[]
   /** Whether the caller asked for the `.mcool` to be built and downloaded. */
   download: boolean
 }

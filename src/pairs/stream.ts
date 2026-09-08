@@ -156,12 +156,43 @@ export async function inflateMember(payload: Uint8Array): Promise<Uint8Array> {
   return out
 }
 
+/**
+ * The *uncompressed* size of the member at `at`, from its `ISIZE` trailer.
+ *
+ * The only honest way to recognise BGZF's end-of-file marker. Its deflate
+ * payload is two bytes (`03 00`) rather than zero — an empty deflate stream is
+ * still a deflate stream — so testing the compressed length says every real
+ * marker is a data member, which is how a complete file came to be reported as
+ * truncated.
+ */
+function uncompressedSize(bytes: Uint8Array, at: number, size: number): number {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return view.getUint32(at + size - 4, true)
+}
+
 /** The deflate payload of the member at `at`, given its total size. */
 function payloadOf(bytes: Uint8Array, at: number, size: number): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const extraLength = view.getUint16(at + 10, true)
   // 12-byte header + the extra field, and 8 bytes of CRC32 and ISIZE trailer.
   return bytes.subarray(at + 12 + extraLength, at + size - 8)
+}
+
+/**
+ * What the framing said about how a BGZF span ended.
+ *
+ * Reported rather than acted on, because the same two facts mean different
+ * things to different callers. A *span* read cuts where the index pointed and
+ * ends mid-member as a matter of course; a *whole-file* read that ends the same
+ * way is reading a file that was never fully written — a cancelled upload, an
+ * interrupted `bgzip`, a truncated copy — and that is worth saying out loud
+ * rather than drawing a map of whatever arrived.
+ */
+export interface FramingInfo {
+  /** Bytes were left over that do not complete a member. */
+  partialMember: boolean
+  /** The last complete member was BGZF's empty end-of-file marker. */
+  endedOnEofMarker: boolean
 }
 
 export interface SpanOptions {
@@ -173,6 +204,14 @@ export interface SpanOptions {
   onProgress?: (done: number, total: number) => void
   /** Polled between chunks; returning `true` ends the stream early. */
   cancelled?: () => boolean
+  /**
+   * Called once, when a BGZF stream closes, with how it ended.
+   *
+   * Never called for a plain gzip or an uncompressed file: neither carries
+   * framing this side can check, so there is nothing to report and a caller
+   * must not read silence as "the file is whole".
+   */
+  onFraming?: (info: FramingInfo) => void
 }
 
 /**
@@ -250,10 +289,17 @@ function bgzfStream(source: ByteSource, options: SpanOptions): ReadableStream<Ui
   let fed = 0
   let carry = new Uint8Array(0)
 
+  let endedOnEofMarker = false
+  const close = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
+    options.onFraming?.({ partialMember: carry.length > 0, endedOnEofMarker })
+    controller.close()
+  }
+
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       for (;;) {
         if (options.cancelled?.() === true) {
+          // A cancel says nothing about the file, so no framing is reported.
           controller.close()
           return
         }
@@ -261,24 +307,29 @@ function bgzfStream(source: ByteSource, options: SpanOptions): ReadableStream<Ui
         const size = carry.length >= BGZF_HEADER_BYTES ? memberSize(carry) : null
         if (size !== null && carry.length >= size) {
           const payload = payloadOf(carry, 0, size)
+          const inflatedSize = uncompressedSize(carry, 0, size)
           carry = carry.subarray(size)
-          // An empty member is the end-of-file marker, which is a real member
-          // and inflates to nothing. Skipped rather than enqueued so a consumer
-          // never sees a zero-length chunk.
-          if (payload.length > 0) {
+          // A member that inflates to nothing is the end-of-file marker. It is
+          // a real member and is skipped rather than enqueued, so a consumer
+          // never sees a zero-length chunk — and skipped without inflating it,
+          // since there is nothing in it to inflate.
+          endedOnEofMarker = inflatedSize === 0
+          if (inflatedSize > 0) {
             controller.enqueue(await inflateMember(payload))
             return
           }
           continue
         }
         if (at >= to) {
-          // A trailing partial member is the caller's cut, not a broken file.
-          controller.close()
+          // Whether a trailing partial member is the caller's cut or a broken
+          // file is not knowable here — `onFraming` reports it and the caller
+          // decides (see {@link FramingInfo}).
+          close(controller)
           return
         }
         const bytes = source.readBytes(at, Math.min(PULL_CHUNK_BYTES, to - at))
         if (bytes.length === 0) {
-          controller.close()
+          close(controller)
           return
         }
         at += bytes.length
