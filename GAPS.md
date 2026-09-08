@@ -207,11 +207,18 @@ none of them.
 
 **What was built**, over `src/embed.ts`, `app/EmbedChannel.ts` and four gates elsewhere:
 
-- `?embed=1` mounts the same web build without the header, the tab strip, the restore slot, the
-  status bar or the five columns, and turns off the service worker and the version notice with them.
-  The columns were the surprise: they are opened from a toggle in a header an embed does not have,
-  and a published session carries the layout it was saved with — so the first real embed of the
-  yeast figure came up in a 1,200-pixel frame with five open columns and thirty-two pixels of map.
+- `?embed=1` mounts the same web build without the header, the tab strip, the restore slot or the
+  status bar, and turns off the service worker and the version notice with them. In their place is
+  one bar: the mark and the name — a link out to this same view in the full application — the file's
+  breadcrumb, and on the right the Annotations and Aesthetics toggles and **About**, which is where
+  an embedded figure says what it is, that nothing is uploaded, and which build drew it.
+- **Two of the five columns stay**, folded, standing as their own spines on either edge: Annotations
+  and Aesthetics are controls over the picture, and the other three are about the window. The fold
+  was the surprise, and it was measured rather than reasoned — a column is open until somebody folds
+  it, so the first real embed of the yeast figure came up in a 1,200-pixel frame with five open
+  columns and thirty-two pixels of map between them. Worth noting for its own sake: **the full app
+  does the same thing** on a fresh profile at 1,400 pixels with a file that offers all five, which
+  is a separate question from this one and is not answered here.
 - **An embed never pushes history.** This was the one real defect the exercise turned up rather than
   a feature it added: a frame's `pushState` writes into the joint session history, so an embedded
   figure was going to take over the reader's Back button on any page that used one.

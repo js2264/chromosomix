@@ -253,6 +253,15 @@ export class App implements SessionHost {
    * the whole window and the host it would be answering is the reader.
    */
   private readonly channel: EmbedChannel | null = null
+  /**
+   * The embed bar's brand, which is also the way out to the full viewer.
+   *
+   * Held so that {@link writeHash} can keep its `href` on the view the reader is
+   * actually looking at. An anchor whose address is a navigation behind is worse
+   * than one with no address at all: it is right often enough to be trusted and
+   * wrong exactly when somebody copies it.
+   */
+  private readonly brandLink: HTMLAnchorElement | null = null
 
   constructor(root: HTMLElement) {
     this.breadcrumbSlot = el('div', { class: 'breadcrumb-slot' })
@@ -270,11 +279,18 @@ export class App implements SessionHost {
     // doing that on every pixel of a drag would put storage between the hand and
     // the repaint. Debounced downstream like every other write of the record.
     const settled = (): void => this.rememberDurably()
-    this.generalPanel = new SidePanel(GENERAL_PANEL, relayout, settled)
-    this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout, settled)
-    this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled)
-    this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout, settled)
-    this.filesPanel = new SidePanel(FILES_PANEL, relayout, settled)
+    // The fourth argument is *whether this window's columns are the reader's*.
+    // In an embed they are not, in both directions: a column must not open
+    // inside somebody's figure because the reader once left it open on the app's
+    // own site, and a reader who opens one *in* a figure must not find the app
+    // rearranged next time they go to it. So an embed's columns start folded and
+    // leave no trace (`ui/SidePanel.ts`).
+    const remembers = !this.embed
+    this.generalPanel = new SidePanel(GENERAL_PANEL, relayout, settled, remembers)
+    this.annotationsPanel = new SidePanel(ANNOTATION_PANEL, relayout, settled, remembers)
+    this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled, remembers)
+    this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout, settled, remembers)
+    this.filesPanel = new SidePanel(FILES_PANEL, relayout, settled, remembers)
     this.files = new FilesCard({
       // The panel's arrow means what the header's `+` means, so it goes to the
       // same place: a second map beside the one that is open, anything else on
@@ -416,15 +432,24 @@ export class App implements SessionHost {
       ),
     )
 
-    // The five columns, and they are window furniture in the same sense the
-    // header is: an embed does not mount them. That is not tidiness — it is the
-    // whole width of the frame. A panel is opened by a toggle *in the header*,
-    // so columns mounted without one can be neither closed nor opened; and a
-    // published session carries the layout it was saved with (`PanelLayout`), so
-    // a figure saved from a full window arrived in a 1,200-pixel frame with five
-    // open columns and thirty-two pixels of map, with no way to get any of it
-    // back. What the reader loses with them is a set of *controls*: every track
-    // in the session is still drawn, because a lane is part of the view.
+    // **Two of the five columns in an embed**, and the line between them is what
+    // they are *about*: Annotations and Aesthetics are controls over the picture
+    // on screen — which lanes are drawn, how they are coloured, scaled and
+    // clipped — and a reader looking at somebody's figure has every reason to
+    // want them. The other three are about the window and the work around it:
+    // Files is the places this window has been connected to, General is a
+    // reference card about the file, and Analysis starts jobs and writes
+    // results. One on each side, as they are in a window: Annotations at
+    // `order: -1`, Aesthetics at `order: 1`.
+    //
+    // They arrive **folded**, whatever anything else says, and stand as their own
+    // named spines until the reader asks (`SidePanel.spine`). A column is open
+    // unless it has been folded — a fresh browser has nothing stored, and a
+    // session may carry a layout of its own — so the first real embed of a
+    // published figure came up in a 1,200-pixel frame behind five open columns,
+    // with thirty-two pixels of map between them. An embed is a picture first;
+    // the controls over it are one click away on either edge, and the bar above
+    // carries the same two toggles for folding them again.
     //
     // Each column carries its own `order`, so the DOM order here is free — and
     // it is content-first, which is what the tab order should be. The drawer is
@@ -435,7 +460,7 @@ export class App implements SessionHost {
       { class: 'app-body' },
       this.content,
       ...(this.embed
-        ? []
+        ? [this.annotationsPanel.el, this.aestheticsPanel.el]
         : [
             this.filesPanel.el,
             this.generalPanel.el,
@@ -446,31 +471,83 @@ export class App implements SessionHost {
       this.drawerSlot,
     )
 
-    // **The whole of what an embed does to the DOM**, and it is a subtraction
-    // rather than a second window: three rows are not mounted, and everything
-    // that is — the view, the drawer, the content area and its drop handling —
-    // is built exactly as it is for a top-level page. That is what keeps
-    // `Session` ignorant of any of this: it parents its cards into the same
-    // panels and mounts into the same slot whether or not anybody can see them,
-    // so there is no second layout to keep in step. The header and the columns
-    // are built and left unmounted for the same reason, since furniture nobody
-    // appends costs its nodes once; the status bar is the one thing not built at
-    // all, because what it costs is a timer rather than nodes.
+    // **The one row an embed has**, and it is the breadcrumb row with three
+    // things added rather than a header made smaller. What is on it is what a
+    // figure in somebody else's page owes its reader: whose viewer this is, what
+    // file they are looking at and where in it, the two controls over the
+    // picture, and the way to find out what any of it means.
     //
-    // What goes from this call, and why: the **header** is controls over a
-    // window (tabs, panels, theme, share, save), the **tab strip** offers tabs
-    // an embed does not keep, the **restore slot** offers the reader's own
-    // previous workspace — which inside somebody's article would be six of their
-    // files on a page that never asked for them (§11) — and the **status bar**
-    // is a byte counter under a figure. The columns went one statement above,
-    // for the one reason that is about width rather than taste. The notice slot
-    // stays: it is where a session's remarks and refusals land, and an embed
-    // that swallowed those would fail silently for the one reader who could
-    // report it.
+    // The brand is a **link out** rather than the way home. In a window it is a
+    // button back to the picker, which is right there and catastrophic here — it
+    // would throw away the figure the page named, in a frame with no back
+    // button to return by (`writeHash`). So it opens this same view in the full
+    // viewer, in a new tab, with `embed` dropped from the address: the reader
+    // gets the whole application, the page keeps its figure, and the href is
+    // rewritten on every navigation so copying the link copies where they
+    // actually are.
+    const brand = this.embed
+      ? el(
+          'a',
+          {
+            class: 'embed-brand',
+            href: this.fullViewerUrl(),
+            title: 'Open this view in the full viewer, in a new tab',
+            attrs: { target: '_blank', rel: 'noopener noreferrer' },
+          },
+          appMark(20),
+          el('span', { class: 'embed-brand-name', text: APP_TITLE }),
+        )
+      : null
+    this.brandLink = brand
+
+    // Right of the bar, and the toggles are the *same objects* the header holds
+    // in a window — a panel owns its button, so there is one fold path and not a
+    // second one written for frames. Each hides itself when its column has
+    // nothing to show (`SidePanel.paint`), which is what lets this group be
+    // built once and never told about a session.
+    const bar = this.embed
+      ? el(
+          'div',
+          { class: 'embed-bar' },
+          brand as HTMLElement,
+          this.breadcrumbSlot,
+          el(
+            'div',
+            { class: 'embed-tools' },
+            this.annotationsPanel.toggle,
+            this.aestheticsPanel.toggle,
+            // The same dialog the window's header opens, and it is the answer to
+            // every question this bar raises: what this viewer is, that nothing
+            // is uploaded, which build is in the frame, and where the source is.
+            iconButton('info', 'About this viewer', () => this.openAboutDialog()),
+          ),
+        )
+      : null
+
+    // **The whole of what an embed does to the DOM**, and it is a subtraction
+    // with one row added back: everything that is mounted — the view, the
+    // drawer, the content area and its drop handling — is built exactly as it is
+    // for a top-level page. That is what keeps `Session` ignorant of any of
+    // this: it parents its cards into the same panels and mounts into the same
+    // slot whether or not anybody can see them, so there is no second layout to
+    // keep in step. The header and the three unmounted columns are built and
+    // left where they are, since furniture nobody appends costs its nodes once;
+    // the status bar is the one thing not built at all, because what it costs is
+    // a timer rather than nodes.
+    //
+    // What goes, and why: the **header** is controls over a window (tabs,
+    // panels, theme, share, save) and its useful half is on the bar above; the
+    // **tab strip** offers tabs an embed does not keep; the **restore slot**
+    // offers the reader's own previous workspace, which inside somebody's
+    // article would be six of their files on a page that never asked for them
+    // (§11); and the **status bar** is a byte counter under a figure. The notice
+    // slot stays: it is where a session's remarks and refusals land, and an
+    // embed that swallowed those would fail silently for the one reader who
+    // could report it.
     root.append(
-      ...(this.embed ? [] : [head, this.tabs.el, this.restoreSlot]),
-      this.noticeSlot,
-      this.breadcrumbSlot,
+      ...(bar === null
+        ? [head, this.tabs.el, this.restoreSlot, this.noticeSlot, this.breadcrumbSlot]
+        : [bar, this.noticeSlot]),
       body,
       ...(this.status === null ? [] : [this.status.el]),
     )
@@ -1134,9 +1211,16 @@ export class App implements SessionHost {
     return layout
   }
 
-  /** Put a saved arrangement of columns back. Absent is *leave them alone*. */
+  /**
+   * Put a saved arrangement of columns back. Absent is *leave them alone*.
+   *
+   * And so is an embed, for the reason its columns do not read the stored fold
+   * either: a layout describes the window somebody saved from, and a frame is not
+   * one. The two columns an embed mounts arrive folded whatever this is handed,
+   * and are opened by the reader — from the bar, or from their own spines.
+   */
   applyPanelLayout(layout: PanelLayout | undefined): void {
-    if (layout === undefined) return
+    if (this.embed || layout === undefined) return
     for (const [spec, column] of this.columns()) column.applyLayout(layout[spec.key])
   }
 
@@ -1444,6 +1528,23 @@ export class App implements SessionHost {
     if (options.replace || this.embed) window.history.replaceState(null, '', url)
     else window.history.pushState(null, '', url)
     this.writingHash = false
+    if (this.brandLink !== null) this.brandLink.href = this.fullViewerUrl()
+  }
+
+  /**
+   * This page, in the full application.
+   *
+   * The whole of the difference is `embed` leaving the query string: the
+   * fragment goes across untouched, so the window that opens is looking at
+   * exactly what the frame was — same file, same view, same colour limits — with
+   * the header, the tabs and the other three columns around it. `?config=` stays
+   * too, which costs nothing (the fragment overrides it) and means a reader who
+   * lands there and reloads gets the figure back rather than the picker.
+   */
+  private fullViewerUrl(): string {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('embed')
+    return url.href
   }
 
   /**

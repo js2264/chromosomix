@@ -158,14 +158,26 @@ open somebody else's.
 
 ### In somebody else's page
 
-`?embed=1` mounts the same viewer with **no window around it** — no header, no tab strip, no status
-bar — so it can be the figure inside a portal, a lab page, a course page or a paper's supplementary
-material. Nothing is installed at either end: it is an `<iframe>` and a URL. There is no package to
-depend on and no header for the host page to set, which is the usual reason a wasm application
-cannot be embedded — this one needs no cross-origin isolation, because it is single-threaded and
-carries its HDF5 runtime inside its own bundle.
+`?embed=1` mounts the same viewer with **no window around it** — one bar, one view — so it can be
+the figure inside a portal, a lab page, a course page or a paper's supplementary material. Nothing
+is installed at either end: it is an `<iframe>` and a URL. There is no package to depend on and no
+header for the host page to set, which is the usual reason a wasm application cannot be embedded —
+this one needs no cross-origin isolation, because it is single-threaded and carries its HDF5 runtime
+inside its own bundle.
 
-This is live. Paste it into a page and it works:
+Here it is, in somebody else's page. **GitHub strips `<iframe>` out of a README**, so what follows is
+a photograph of one — [click it and the live embed opens](https://js2264.github.io/metacooler.js/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true), which is the same thing with the
+data actually being read:
+
+[![The viewer embedded in a supplementary-material page: a branded bar with the file's breadcrumb, the micro-C map with its loop calls, and the gene, ATAC and Pol II tracks beneath it](docs/embed.png)](https://js2264.github.io/metacooler.js/?embed=1#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true)
+
+The bar across the top is the whole of the chrome: the mark and the name (a link that opens this same
+view in the full viewer, in a new tab), the file and where you are in it, and on the right the two
+panel toggles and **About** — which says what the viewer is, that nothing is uploaded, and which
+build is in the frame. The two spines on the edges are the Annotations and Aesthetics columns,
+folded; click either and it opens over the map.
+
+And this is the markup. Paste it into a page and it works:
 
 ```html
 <iframe
@@ -241,18 +253,24 @@ and `state: null` goes back to the picker. It is validated by the same reader th
 pasted link, so what comes back in `state` is where the view actually went rather than an echo of
 what was asked for.
 
-#### What an embed does not have
+#### What an embed has, and what it does not
 
-The window furniture — header, tab strip, status bar, and the five side columns, which are opened
-from a header an embed does not have and would otherwise arrive open on a saved session and leave
-about thirty pixels for the map. Every track in the figure is still *drawn*; what goes with the
-columns is the controls over them.
+**Two of the five columns**: Annotations and Aesthetics, because they are controls over the *picture*
+— which lanes are drawn, how they are coloured, scaled and clipped — and a reader looking at somebody
+else's figure has every reason to reach for them. The other three are about the window and the work
+around it: Files is the places this window has been connected to, General is a reference card about
+the file, Analysis starts jobs. Both arrive **folded**, standing as named spines on either edge
+whatever anything else says, because an embed is a picture first: a column is open until somebody
+folds it, so a frame that honoured that came up behind five open columns with about thirty pixels of
+map between them.
 
-Three things come with that. It writes **no history entries** — a frame's `pushState` spends the
-reader's Back button, so the address bar is kept in step by replacing rather than pushing. It
-**remembers nothing**: no tab strip, no restore offer, so a reload shows what the page's `src=` says
-rather than the corner of the figure somebody wandered to. And it registers **no service worker** and
-offers no version bar, since an embed is not an app to install.
+Gone with the window: the header, the tab strip and the status bar. Three things come with that. It
+writes **no history entries** — a frame's `pushState` spends the reader's Back button, so the address
+bar is kept in step by replacing rather than pushing. It **remembers nothing**: no tab strip, no
+restore offer, and the columns neither read nor write the fold and width kept for the full app, so a
+reader who opens a panel inside your figure does not find the application rearranged next time they
+go to it. And it registers **no service worker** and offers no version bar, since an embed is not an
+app to install.
 
 Dropping a file on it works exactly as it does anywhere else. What a cross-origin frame cannot do is
 the *File System Access* pickers — they are present and reject when called — so an embed falls back

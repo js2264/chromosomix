@@ -4081,23 +4081,31 @@ read by one parser.
 A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept:
 the value is about to be fetched, and the other schemes are the ones with no server on the other end.
 
-### 21.2 What an embed does not have, and why each one
+### 21.2 What it keeps and what it drops, and why each one
 
-- **The window furniture.** Header, tab strip, restore slot, status bar, and the five columns. The
-  header is controls over a window; the tab strip offers tabs an embed does not keep; the restore
-  slot offers *the reader's own* previous workspace, which inside an article would be six of their
-  files on a page that never asked for them (§11); the status bar is a byte counter under a figure.
+- **The window furniture.** Header, tab strip, restore slot, status bar. The header is controls over
+  a window; the tab strip offers tabs an embed does not keep; the restore slot offers *the reader's
+  own* previous workspace, which inside an article would be six of their files on a page that never
+  asked for them (§11); the status bar is a byte counter under a figure.
+- **Three of the five columns.** Files is the places this window has been connected to (§20),
+  General is a reference card about the file, and Analysis starts jobs and writes results — all
+  three about the window and the work around it. **Annotations and Aesthetics stay**, because they
+  are controls over the *picture*: which lanes are drawn, how they are coloured, scaled and clipped.
+  A reader looking at somebody else's figure has every reason to reach for those two.
 
-  The columns are the one that is about width rather than taste, and it was measured before it was
-  decided: a column is opened by a toggle *in the header*, so columns mounted without one can be
-  neither closed nor opened — and a published session carries the panel layout it was saved with, so
-  a figure saved from a full window arrived in a 1,200-pixel frame with five open columns and
-  **thirty-two pixels of map**. What is lost with them is a set of *controls*; every track in the
-  session is still drawn, because a lane is part of the view.
+  They arrive **folded**, whatever anything else says, and stand as their own named spines on either
+  edge. This one was measured rather than reasoned. A column is open unless it has been folded — a
+  fresh browser has nothing stored, and a session may carry a layout of its own — so the first real
+  embed of a published figure came up in a 1,200-pixel frame behind five open columns, with
+  **thirty-two pixels of map** between them. An embed is a picture first.
 
-  Everything else — the view, the breadcrumb, the analysis drawer, the content area, dropping a
-  file, every keyboard shortcut — is built exactly as it is for a top-level window, so no view knows
-  it is embedded.
+  An embed's columns also neither read nor write the stored fold and width. Reading would open a
+  column inside somebody's figure because the reader once left it open on the app's own site;
+  writing would rearrange the application for a reader who opened a panel in a page they were only
+  reading. Same rule as the window's memory above, one level down.
+
+  Everything else — the view, the analysis drawer, the content area, dropping a file, every keyboard
+  shortcut — is built exactly as it is for a top-level window, so no view knows it is embedded.
 - **History entries.** A frame's `pushState` writes into the *joint* session history, so an embed
   that pushed would take over the reader's Back button: clicking a genome and pressing Back would
   step the map instead of leaving the page. Every write replaces. The bar is still written — a
@@ -4117,7 +4125,28 @@ Firefox and Safari have always taken — an `<input type="file">` for files, the
 directory (§20). **Dropping is untouched**, so "drop your own file on this figure" is an embed a page
 can offer. A same-origin frame is deliberately not caught: the pickers work there.
 
-### 21.3 The channel
+### 21.3 The one bar it has
+
+Not a smaller header: the breadcrumb row with three things added, and what is on it is what a figure
+in somebody else's page owes its reader.
+
+**The mark and the name**, left. In a window the brand is the way home — back to the picker, which is
+one click away and catastrophic in a frame, since it would throw away the figure the page named with
+no back button to return by (§21.2). So it is a link *out*: this same view in the full application, in
+a new tab, with `embed` dropped from the query string and the fragment carried across untouched. Its
+address is rewritten on every navigation, so copying it copies where the reader actually is.
+
+**The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
+session fills in a window, with its own frame taken off so the row reads as one bar.
+
+**The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
+objects the header holds in a window, so there is one fold path and not a second written for frames —
+and each hides itself when its column has nothing to show. About is the same dialog the header opens,
+and it is the answer to every question this bar raises: what this viewer is, that nothing is uploaded
+(§11), which build is in the frame, and where the source is. An embedded figure that could not say
+those four things would be asking a reader to trust a picture with no provenance.
+
+### 21.4 The channel
 
 An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
 messages (`app/EmbedChannel.ts`). Out: `metacooler:ready`, once, carrying the protocol version and

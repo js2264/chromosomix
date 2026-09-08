@@ -48,7 +48,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   origin it spoke from: a reader can open *their own* file in an embed, and the
   URL that follows is not the host's to learn unless it asked to be told.
 
-  Specified at SPECS §21, with the worked example in the README.
+  **One bar, and two of the five columns.** Chrome-less is not featureless: the
+  bar carries the mark and the name — a link out to this same view in the full
+  application, in a new tab — the file's own breadcrumb, and on the right the
+  Annotations and Aesthetics toggles beside **About**, which is where a figure
+  in somebody else's page says what it is, that nothing is uploaded, and which
+  build drew it. Those two columns stay because they are controls over the
+  *picture*; Files, General and Analysis are about the window. They arrive
+  folded, standing as named spines on either edge — a column is open until
+  somebody folds it, and a frame that honoured that came up with five open
+  columns and thirty pixels of map between them — and they neither read nor
+  write the fold and width kept for the full app, so a reader who opens a panel
+  inside an embedded figure does not find the application rearranged the next
+  time they go to it.
+
+  Specified at SPECS §21, with a picture of a real one and the worked example in
+  the README.
 
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
