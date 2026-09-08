@@ -39,9 +39,9 @@
  * `package.json` already applies to the bundle. It is about forty lines.
  */
 
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { MetaCooler } from '../metacooler/MetaCooler'
@@ -54,7 +54,16 @@ import type { JobContext } from '../analysis/job'
 import { outputToTsv } from '../analysis/write/tsv'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
-import { parseBed, parseBedpe, sniffFormat, decodeAnnotationText } from '../annotations/parse'
+import {
+  decodeAnnotationBytes,
+  decodeAnnotationText,
+  parseBed,
+  parseBedpe,
+  sniffFormat,
+} from '../annotations/parse'
+import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
+import { parseBins } from '../hicpro/parse'
+import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
 import type { AnalysisFraming, AnalysisTask, Params, TaskResult } from '../analysis/types'
@@ -327,6 +336,48 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
 }
 
 /**
+ * Open a file named on the command line, by whichever road it needs.
+ *
+ * The browser's two roads (`worker/open.ts`), against a filesystem instead of a
+ * `SourceSpec`: an HDF5 container mounts, and a HiC-Pro matrix is read whole
+ * beside its bin file. Written here rather than reused wholesale because the
+ * discovery step is genuinely different — a path is `existsSync`, not a `HEAD`
+ * — but the parse below is the shared one, so a number computed in a shell and
+ * a number computed by clicking come out of the same implementation.
+ */
+async function openLocal(
+  path: string,
+  options: RunOptions,
+): Promise<{ mc: MetaCooler; source: ByteSource }> {
+  const name = basename(path)
+  if (!isHicProMatrix(name)) {
+    // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
+    const source = await LocalFileSource.fromPath(path)
+    return { mc: await openForTask(path, source, options), source }
+  }
+  const beside = hicProBinsNames(name)
+    .map((n) => join(dirname(path), n))
+    .find((candidate) => existsSync(candidate))
+  if (beside === undefined) {
+    throw new Error(
+      `${name} is a HiC-Pro matrix, which is half of a contact map: the bin file beside it — ` +
+        `${hicProBinsNames(name).join(' or ')} — is what says which genomic interval each bin ` +
+        `id means, and there are no coordinates without it.`,
+    )
+  }
+  const binBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(beside)))
+  const parsedBins = parseBins(binBytes, basename(beside))
+  const matrixBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(path)))
+  return hicProMap(
+    path,
+    { bytes: matrixBytes, name },
+    parsedBins,
+    basename(beside),
+    binBytes.length,
+  )
+}
+
+/**
  * One task, one file, one result — the CLI's whole unit of work.
  *
  * The `JobContext` here is the one `analysis/worker/analysis.worker.ts` builds,
@@ -337,8 +388,7 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, params, path } = options
-  const source = await LocalFileSource.fromPath(resolve(path))
-  const mc = await openForTask(resolve(path), source, options)
+  const { mc } = await openLocal(resolve(path), options)
   try {
     const runner = RUNNERS[task.id]
     if (runner === undefined) {

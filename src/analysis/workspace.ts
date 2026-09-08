@@ -73,8 +73,13 @@ import { formatIntervals } from '../annotations/export'
 
 /** What the workspace needs from the session around it. */
 export interface AnalysisWorkspaceHost {
-  /** How the analysis worker should mount the file; `null` before anything is open. */
-  source(): { uri: string; source: SourceSpec } | null
+  /**
+   * How the analysis worker should mount the file; `null` before anything is open.
+   *
+   * `cells` is the ticked set of a single-cell container and is absent for every
+   * other file — see {@link RunTarget.cells}.
+   */
+  source(): { uri: string; source: SourceSpec; cells?: readonly string[] } | null
   context(): AnalysisContext | null
   framing(): AnalysisFraming | null
   block(): BlockInput | null

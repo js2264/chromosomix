@@ -857,6 +857,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
 
+- **Every analysis task failed on a HiC-Pro map** with `error - name not
+  defined!` — HDF5's own words, for a `.matrix` that is not HDF5 at all. The two
+  threads that mount a contact map had drifted apart: the reader worker grew the
+  HiC-Pro road (two text files, read whole, no HDF5 anywhere) and the analysis
+  worker, which mounts the same file a second time so a long task cannot block a
+  pan, went on calling `MetaCooler.open` directly. The map was drawn and
+  perfectly fine; the task said the file was broken.
+
+  The fix is one road rather than a second branch. `worker/open.ts` now holds the
+  knowledge of *how many ways there are into a map*, and the reader worker, the
+  analysis worker and the `metacooler-run` CLI all go through it — so the CLI,
+  which had the same defect and no one had hit it yet, is fixed by the same
+  change rather than by remembering to.
+
+- **A task on a selection of cells measured every cell in the file.** Because
+  the analysis worker mounts the file itself, it never learned that an `.scool`
+  had a selection: it opened the pseudo-bulk, so two cells ticked and four
+  thousand gave the same answer with nothing on screen to say so — silently
+  wrong numbers, which is worse than the error above. The ticked set now travels
+  with the target, and the worker's mount is keyed on it as well as on the file,
+  because re-ticking is a new map at the same URI and a cache on the name alone
+  would answer the second question with the first one's cells.
+
 - **A HiC-Pro matrix parsed nineteen times slower than it reads**, and only
   ever in the application: 35 seconds for a 258 MB file where the same code
   measured 1.8. The scan shared its integer reader with the bin-file parser, and

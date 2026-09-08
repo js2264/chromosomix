@@ -6332,9 +6332,17 @@ export class Session {
     return {
       source: () => {
         const starred = this.starredFacts()
-        if (starred !== null) return { uri: starred.uri, source: starred.source }
+        if (starred !== null) {
+          return { uri: starred.uri, source: starred.source, ...cellsOfMap(starred.info) }
+        }
         const file = this.file
-        if (file !== null) return { uri: file.uri, source: file.source }
+        if (file !== null) {
+          // The ticked cells, so a task measures the map that is drawn rather
+          // than the pseudo-bulk of every cell in the file (§3.7). The analysis
+          // worker mounts the file for itself and would otherwise have no way to
+          // know a selection exists.
+          return { uri: file.uri, source: file.source, ...cellsOfMap(file.info) }
+        }
         // **The genome, where there is no map.** Three tasks run entirely on
         // loaded tracks and a 1D browser session is exactly where a reader has
         // the tracks and not the matrix (§18.3) — `analysisContext` says so and
@@ -6494,7 +6502,13 @@ export class Session {
     const out: RunTarget[] = []
     const file = this.file
     if (file !== null) {
-      out.push({ map: LEAD_MAP, uri: file.uri, source: file.source, label: fileLabel(file.uri) })
+      out.push({
+        map: LEAD_MAP,
+        uri: file.uri,
+        source: file.source,
+        ...cellsOfMap(file.info),
+        label: fileLabel(file.uri),
+      })
     }
     for (const { map, panel } of this.deck?.analysable() ?? []) {
       const facts = panel.analysisFacts()
@@ -6502,7 +6516,13 @@ export class Session {
         if (options.start) void panel.prepareAnalysis(() => this.analysis?.refresh())
         continue
       }
-      out.push({ map, uri: facts.uri, source: facts.source, label: fileLabel(facts.uri) })
+      out.push({
+        map,
+        uri: facts.uri,
+        source: facts.source,
+        ...cellsOfMap(facts.info),
+        label: fileLabel(facts.uri),
+      })
     }
     return out
   }
@@ -6853,6 +6873,18 @@ function describe(done: number, total: number, note?: string): string {
   return counted
     ? `${fmt.int(done)} of ${fmt.int(total)}`
     : `${fmt.bytes(done)} of ${fmt.bytes(total)}`
+}
+
+/**
+ * The cell set of a map, for the analysis worker's own mount of it.
+ *
+ * Spread rather than returned, so a file with no cells contributes no key at
+ * all: `cells: undefined` on the request would be a field the protocol has to
+ * mean something by, and *absent* already means the only thing it could —
+ * every cell, which is what an scool with nothing ticked draws.
+ */
+function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
+  return info.cells.length === 0 ? {} : { cells: info.activeCells }
 }
 
 /**

@@ -281,6 +281,72 @@ async function settle(): Promise<void> {
 
 // ---------------------------------------------------------------------------
 
+describe('the file the analysis worker is asked to mount', () => {
+  // This worker opens the file for itself, on its own thread, so everything the
+  // reader's map is that is not in the file has to be told to it. There is one
+  // such thing, and it is a cell set (§3.7): the same scool with two cells
+  // ticked and with four thousand is two different experiments, and a mount that
+  // ignored the selection answered a task about the pseudo-bulk every time with
+  // nothing on screen to say so.
+  const opens = (fake: FakeAnalysisWorker): AnalysisRequest[] =>
+    fake.seen.filter((m) => m.kind === 'open')
+
+  it('carries the ticked cells of a single-cell container', async () => {
+    const { runner, fake } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => ({
+        uri: URI,
+        source: { kind: 'local', file: new File([], URI) },
+        cells: ['cell_a', 'cell_b'],
+      }),
+    })
+    runner.run(task('coverage'), {})
+    await settle()
+    expect(opens(fake)).toHaveLength(1)
+    expect((opens(fake)[0] as { cells?: readonly string[] }).cells).toEqual(['cell_a', 'cell_b'])
+  })
+
+  it('says nothing about cells for a file that has none', async () => {
+    // Absent rather than empty: the protocol reads *absent* as "every cell",
+    // which is what every other container trivially is.
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), {})
+    await settle()
+    expect((opens(fake)[0] as { cells?: readonly string[] }).cells).toBeUndefined()
+  })
+
+  it('re-mounts when the selection changes, though the file has not', async () => {
+    // The bug a URI-keyed mount cache would have: same file, different map, and
+    // the second run silently answered with the first one's cells.
+    let cells = ['cell_a']
+    const { runner, fake } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => ({ uri: URI, source: { kind: 'local', file: new File([], URI) }, cells }),
+    })
+    runner.run(task('coverage'), {})
+    await settle()
+    fake.finish()
+    await settle()
+
+    cells = ['cell_a', 'cell_b']
+    runner.run(task('insulation'), {})
+    await settle()
+    expect(opens(fake).map((m) => (m as { cells?: readonly string[] }).cells)).toEqual([
+      ['cell_a'],
+      ['cell_a', 'cell_b'],
+    ])
+  })
+
+  it('mounts once when nothing about the target moved', async () => {
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), {})
+    await settle()
+    fake.finish()
+    await settle()
+    runner.run(task('insulation'), {})
+    await settle()
+    expect(opens(fake)).toHaveLength(1)
+  })
+})
+
 describe('the analysis queue', () => {
   it('runs one job at a time and starts the second when the first is answered', async () => {
     const { runner, fake } = harness()

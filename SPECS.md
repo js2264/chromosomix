@@ -448,6 +448,12 @@ not free to report anything until it already has the answer. What it can say is 
 before it starts — an indeterminate bar under the name of the phase, which is the difference between
 a reader who knows a thousand reads are in flight and one watching a spinner.
 
+**A task measures the cells that are ticked.** The analysis worker mounts the file independently of
+the reader's, so it has to be *told* the selection — without it a task opened the pseudo-bulk and
+answered a question about two cells with the number for four thousand, which is a worse failure than
+an error because nothing on screen contradicts it. The set travels with the run's target, and that
+worker's mount is keyed on the cells as well as on the file: re-ticking is a new map at the same URI.
+
 **Summing says how far it has got.** A cell sum is the only read here whose cost is linear in
 something other than the picture asked for: the same window that draws instantly over one cell is
 four thousand small reads over a whole file. So the fan-out counts cells — `summing 1,204 of 3,882
@@ -550,6 +556,15 @@ application — refused with the config key that produced it. And the `.biases` 
 biases normalise the *raw* matrix while its `iced/` matrix is the already-normalised one: a reader
 that offered the first as a weight column would let somebody normalise twice. Open the `iced/`
 matrix to see normalised counts, which is what it is for.
+
+**Both threads open it the same way.** A contact map is mounted twice — once by
+the reader worker that every view reads through, and once by the analysis worker so a long task
+cannot block a pan (§18.3) — and the two have to agree about what a file *is*. They did not: the
+reader grew this road and the analysis worker went on calling `MetaCooler.open`, so every task on a
+HiC-Pro pair reached HDF5 with a `.matrix` and failed inside it with `error - name not defined!`.
+The roads into a map now live in one module (`worker/open.ts`) that all three callers use — both
+workers and the `metacooler-run` CLI — so a third container cannot be added to one and forgotten in
+the others.
 
 **Correctness.** The fixtures are written *from a cooler* and the manifest carries cooler's own dense
 matrix, so the suite asserts that the two text files mean exactly the matrix they were written from —

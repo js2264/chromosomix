@@ -20,6 +20,8 @@ import { ViewerError } from '@/errors'
 import { hicProHandle } from '@/hicpro/handle'
 import { parseBins, parseMatrix } from '@/hicpro/parse'
 import { MetaCooler } from '@/metacooler/MetaCooler'
+import { LocalFileSource } from '@/sources/LocalFileSource'
+import { binsFor, openMap } from '@/worker/open'
 
 const FIXTURES = decodeURIComponent(new URL('../fixtures/', import.meta.url).pathname)
 const MANIFEST = `${FIXTURES}_hicpro.json`
@@ -165,6 +167,64 @@ describe.skipIf(!present)('a fragment-level pair', () => {
     expect(thrown).toBeInstanceOf(ViewerError)
     expect((thrown as ViewerError).code).toBe('variable-bins')
     expect((thrown as ViewerError).message).toContain('GENOME_FRAGMENT')
+  })
+})
+
+describe.skipIf(!present)('the road both workers open a file by', () => {
+  // The reader worker and the analysis worker mount the same file on two
+  // threads, and for a while they disagreed about what a file *is*: the reader
+  // grew the HiC-Pro road and the analysis worker went on calling
+  // `MetaCooler.open`, so it reached h5wasm with a `.matrix` and failed inside
+  // it — `error - name not defined!` — for every task on a map that was drawn
+  // and perfectly fine. What is asserted here is that there is one road, and
+  // that it is the one that knows about both containers.
+  const specOf = (name: string): { kind: 'local'; file: File } => ({
+    kind: 'local',
+    file: new File([readFileSync(`${FIXTURES}${name}`)], name),
+  })
+
+  it('opens a HiC-Pro pair, where the plain HDF5 road cannot', async () => {
+    const [, matrixName, binsName] = VARIANTS[0]
+    // The failure this test exists for, stated first so it cannot silently stop
+    // being one: HDF5 does not recognise a text file, and says so unhelpfully.
+    await expect(
+      MetaCooler.open(`${FIXTURES}${matrixName}`, await LocalFileSource.fromPath(`${FIXTURES}${matrixName}`)),
+    ).rejects.toThrow(/name not defined/)
+
+    const { mc } = await openMap(`${FIXTURES}${matrixName}`, {
+      ...specOf(matrixName),
+      bins: specOf(binsName),
+    })
+    try {
+      expect(mc.layout.kind).toBe('hicpro')
+      expect(mc.nBins).toBe(manifest.nbins)
+      // And it is a *map*, not merely an open handle — which is what a task
+      // reaches for the moment it starts.
+      const block = await mc.matrix({ rows: [0, manifest.nbins] })
+      expect(Array.from(block.values.subarray(0, manifest.nbins), Number)).toEqual(manifest.dense[0])
+    } finally {
+      mc.close()
+    }
+  })
+
+  it('sends everything else down the HDF5 road, untouched', async () => {
+    // The branch, rather than the open behind it: mounting HDF5 needs a
+    // `FileReaderSync`, which exists in a worker and not here, and the road
+    // itself is what these two tests are about. `null` *is* the statement that
+    // this file is not a HiC-Pro pair.
+    await expect(binsFor(specOf('hicpro_oracle.cool'))).resolves.toBeNull()
+    await expect(binsFor({ kind: 'remote', url: 'https://x/y.mcool' })).resolves.toBeNull()
+  })
+
+  it('refuses a matrix with no bin file, by name and with the three ways out', async () => {
+    const [, matrixName] = VARIANTS[0]
+    const error = await binsFor(specOf(matrixName)).then(
+      () => null,
+      (err: unknown) => err as ViewerError,
+    )
+    expect(error).toBeInstanceOf(ViewerError)
+    expect(error?.code).toBe('hicpro-no-bins')
+    expect(error?.message).toContain('#bins=')
   })
 })
 

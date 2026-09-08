@@ -43,7 +43,6 @@ import {
   type CellsResult,
   type CellsSelectedResult,
   type ContigsResult,
-  type SourceSpec,
   type DeepValidation,
   type GenomesResult,
   type MatrixResult,
@@ -57,12 +56,10 @@ import {
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
-import { createSource, openIndexSource, readWhole, releaseSources } from './sources'
+import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { writeMcool } from '../pairs/write'
-import { parseBins, parseMatrix } from '../hicpro/parse'
-import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
-import { signS3Request, type S3Credential } from '../s3/sigv4'
+import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
 /**
@@ -374,81 +371,6 @@ function importedRungFor(
 }
 
 /**
- * Where this matrix's bin file is, or `null` when this is not a HiC-Pro matrix.
- *
- * Three roads in, in the order a reader is likely to have taken them:
- *
- * 1. **handed over** — dropped together, or picked out of a connected folder,
- *    where the sibling was found by name (`annotations/sidecar.ts`);
- * 2. **by convention**, for a URL: `<prefix>_<res>_abs.bed` next to the matrix,
- *    which is where HiC-Pro writes it. Probed rather than assumed, and the
- *    `_iced` matrices are probed against the raw directory's bed too, because
- *    that is the one HiC-Pro writes them against;
- * 3. **refused by name**, which is the honest end of the road for a local
- *    matrix with nothing beside it. There is no fallback to invent: without the
- *    bed there are no coordinates, so this is §8.13's situation rather than
- *    §8.11's, and the message says what to drop.
- */
-async function binsFor(
-  request: Extract<WorkerRequest, { kind: 'open' }>,
-): Promise<NonNullable<SourceSpec['bins']> | null> {
-  const name = nameOf(request.source)
-  if (!isHicProMatrix(name)) return null
-  if (request.source.bins !== undefined) return request.source.bins
-  if (request.source.kind === 'remote') {
-    const found = await probeBins(request.source.url, request.source.credential)
-    if (found !== null) return found
-  }
-  throw new ViewerError(
-    'hicpro-no-bins',
-    `${name} is a HiC-Pro matrix, which is half of a contact map: the bin file beside it — ` +
-      `${hicProBinsNames(name).join(' or ')} — is what says which genomic interval each bin ` +
-      `id means, and there are no coordinates without it. Drop the two together, pick the ` +
-      `matrix out of a connected folder so its bin file comes with it, or name the bin file ` +
-      `on the URL as \`<matrix>#bins=<url>\`.`,
-    { matrix: name, wanted: hicProBinsNames(name) },
-  )
-}
-
-/** Try the conventional bin-file URLs beside a matrix; `null` if none answers. */
-async function probeBins(
-  url: string,
-  credential: S3Credential | undefined,
-): Promise<{ kind: 'remote'; url: string; credential?: S3Credential } | null> {
-  const slash = url.lastIndexOf('/')
-  const directory = slash < 0 ? '' : url.slice(0, slash + 1)
-  const name = url.slice(slash + 1)
-  const candidates = hicProBinsNames(name).map((n) => `${directory}${n}`)
-  // An `iced/<res>/x_iced.matrix` is written against `raw/<res>/x_abs.bed`, one
-  // directory across. Offered after the same-directory spellings, since a
-  // pipeline that copied them together should not pay for a miss.
-  if (directory.includes('/iced/')) {
-    for (const n of hicProBinsNames(name)) {
-      candidates.push(`${directory.replace('/iced/', '/raw/')}${n}`)
-    }
-  }
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(candidate, {
-        method: 'HEAD',
-        headers:
-          credential === undefined
-            ? {}
-            : signS3Request({ method: 'HEAD', url: candidate, credential }),
-      })
-      if (response.ok) {
-        return credential === undefined
-          ? { kind: 'remote', url: candidate }
-          : { kind: 'remote', url: candidate, credential }
-      }
-    } catch {
-      // Not there, or not allowed. The next spelling, then the refusal.
-    }
-  }
-  return null
-}
-
-/**
  * Say what an open is doing, in the units of whatever it is doing.
  *
  * Bytes while a file is coming across, pixels while it is being parsed, and the
@@ -469,169 +391,6 @@ function reporter(id: number): (done: number, total: number, note: string) => vo
   }
 }
 
-/**
- * Whether this name is a container whose open has a listing phase worth naming.
- *
- * By name, because the answer is wanted *before* the file is classified — the
- * point of it is to label the wait that classification is about to spend. It is
- * only a label: a flat-layout `.scool` written as `.cool` gets the ordinary
- * spinner and opens exactly the same, and nothing downstream reads this.
- */
-function looksSingleCell(uri: string): boolean {
-  return /\.scool(\.gz)?(\?|#|$)/i.test(uri)
-}
-
-/**
- * The HiC-Pro road: read both text files whole, parse, and hand up a map.
- *
- * There is no `ByteSource` here because there is nothing left for one to
- * answer. A cooler keeps its file mounted and reads bands out of it as views
- * ask; this container has no index, so the whole of it was read at open and the
- * map is typed arrays from then on. What is handed back in a source's place is
- * a record of what that cost — the bytes really fetched — because the §12
- * accounting and the reader's own status bar both ask a source that question
- * and both should get the true answer rather than a zero.
- *
- * The bins are parsed **first**, and that ordering is not incidental: the
- * matrix names bins by id, so `nBins` is what turns an out-of-range id into
- * "these two halves are for different resolutions" instead of a corrupt read.
- */
-async function openHicPro(
-  request: Extract<WorkerRequest, { kind: 'open' }>,
-  bins: NonNullable<SourceSpec['bins']>,
-): Promise<{ mc: MetaCooler; source: ByteSource }> {
-  const binsName = nameOf(bins)
-  const matrixName = nameOf(request.source)
-  const say = reporter(request.id)
-  const binBytes = await readWhole(bins, {
-    onProgress: (got, total) => say(got, total, 'reading the bins'),
-    cancelled: () => cancelled.has(request.id),
-  })
-  const parsedBins = parseBins(binBytes, binsName)
-  // Before the matrix is touched, and after the bins are — the bins are small
-  // and their bin count is what makes the estimate below mean anything.
-  await assertLoadAffordable(request, matrixName, parsedBins.nBins)
-  const matrixBytes = await readWhole(request.source, {
-    onProgress: (got, total) => say(got, total, 'downloading the matrix'),
-    cancelled: () => cancelled.has(request.id),
-  })
-  const parsedPixels = await parseMatrix(matrixBytes, parsedBins.nBins, matrixName, {
-    cancelled: () => cancelled.has(request.id),
-    onProgress: (done, total) => say(done, total, 'reading pixels'),
-  })
-  const mc = MetaCooler.fromHicPro(request.uri, {
-    bins: parsedBins,
-    pixels: parsedPixels,
-    matrixName,
-    binsName,
-  })
-  return { mc, source: parsedSource(matrixName, binBytes.length + matrixBytes.length) }
-}
-
-/**
- * Above this many bytes of matrix, say what reading it will cost before doing it.
- *
- * 200 MB, which at this format's ~15 bytes per pixel is about 13 M pixels and,
- * at the measured 100 MB/s, about two seconds — the point where a picture stops
- * appearing and starts being waited for. Below it the read is quick enough that
- * a question about it would cost more than the read.
- *
- * The threshold is on **bytes, not on being remote**, and that is the
- * difference from §3.7's gate. There the cost was round trips, which a local
- * file does not pay; here it is parsing and memory, which it pays in full — a
- * gigabyte of text off a local disk is the same ten seconds and the same
- * gigabyte of typed arrays as one off a bucket.
- */
-const HICPRO_GATE_BYTES = 200 << 20
-
-/**
- * Refuse to read a large matrix until the reader has agreed to what it costs.
- *
- * §3.8's gate, and the shape is §3.7's: a refusal carrying the numbers, thrown
- * where the cost is about to be paid and caught by the shell, which asks and
- * re-issues the open with the agreement on the source. The agreement rides on
- * the same `reading` field, because it is the same sentence — *yes, read it
- * whole* — and this container has no second way to be read.
- *
- * @throws ViewerError `hicpro-load-cost` when the matrix is large and unagreed.
- */
-async function assertLoadAffordable(
-  request: Extract<WorkerRequest, { kind: 'open' }>,
-  matrixName: string,
-  nBins: number,
-): Promise<void> {
-  if (request.source.reading !== undefined) return
-  const bytes = await sizeOfSource(request.source)
-  if (bytes === null || bytes <= HICPRO_GATE_BYTES) return
-  // ~15 bytes a row across the resolutions this format is written at, which is
-  // an estimate and is presented as one; the exact count is known only after
-  // the read this is asking about.
-  const pixels = Math.round(bytes / 15)
-  throw new ViewerError(
-    'hicpro-load-cost',
-    `${matrixName} is ${Math.round(bytes / (1 << 20))} MB of text, and a HiC-Pro matrix has ` +
-      `no index — so the whole of it is read and turned into about ${pixels.toLocaleString()} ` +
-      `pixels over ${nBins.toLocaleString()} bins before anything can be drawn. That is the ` +
-      `only cost: afterwards every region is instant and panning is free.`,
-    { matrix: matrixName, bytes, pixels, nBins },
-  )
-}
-
-/** The byte length of a source, without reading it. */
-async function sizeOfSource(spec: SourceSpec): Promise<number | null> {
-  if (spec.kind === 'local') return spec.file.size
-  try {
-    const response = await fetch(spec.url, {
-      method: 'HEAD',
-      headers:
-        spec.credential === undefined
-          ? {}
-          : signS3Request({ method: 'HEAD', url: spec.url, credential: spec.credential }),
-    })
-    const length = Number(response.headers.get('Content-Length') ?? Number.NaN)
-    return Number.isFinite(length) ? length : null
-  } catch {
-    // A host that will not answer a HEAD is one the read below will fail on
-    // anyway, with a better message than a gate could give.
-    return null
-  }
-}
-
-/** The last file name in a location, for the messages the parsers write. */
-function nameOf(spec: SourceSpec | NonNullable<SourceSpec['bins']>): string {
-  const raw = spec.kind === 'local' ? spec.file.name : spec.url
-  // Neither a query string nor a fragment is part of the name, and both reach
-  // here: a bucket URL carries the first, and `#bins=` the second.
-  return raw.split(/[\\/]/).pop()?.split(/[?#]/)[0] ?? raw
-}
-
-/**
- * A source for bytes that have already been read and parsed away.
- *
- * Every field is the truth about a container that holds nothing open: the size
- * is what was fetched, the stats say the same, and every further read is a bug
- * rather than a cost — so `readBytes` refuses rather than returning empty.
- */
-function parsedSource(id: string, bytes: number): ByteSource {
-  return {
-    id,
-    size: bytes,
-    // The bytes are here, parsed; nothing seeks over a network any more.
-    isRemote: false,
-    mount: () => Promise.resolve(id),
-    readBytes() {
-      throw new ViewerError(
-        'unsupported',
-        `${id} was read whole and parsed at open; there are no bytes left to read from it. ` +
-          'A read reaching here is a code path that bypassed the parsed arrays.',
-        { id },
-      )
-    },
-    stats: () => ({ requests: 1, bytes }),
-    close: () => undefined,
-  }
-}
-
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
   // Before the session is torn down, because it is the thing being reused.
   const reusable = importedRungFor(session, request.uri)
@@ -644,56 +403,40 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // the ids belonged to.
   cancelled.clear()
 
-  // A HiC-Pro pair never reaches `createSource`: it has no index, so both
-  // halves are read whole and parsed into typed arrays, and there is no mount
-  // left behind for a `ByteSource` to represent (§3.8). It is decided first
-  // because it is the one road that does not begin with a mount at all.
-  const bins = await binsFor(request)
+  // `openMap` knows the two roads a container can arrive by: HDF5 through a
+  // mount, or a HiC-Pro pair read whole as two text files (`worker/open.ts`).
+  // What it cannot know is the third, because a `.pairs` is not opened at all —
+  // it is *imported*, at a resolution the file does not carry — so that one is
+  // reached through the refusal the mount raises, below.
   const say = reporter(request.id)
+  const hooks = { report: say, cancelled: () => cancelled.has(request.id) }
   let mc: MetaCooler
   let source: ByteSource
   let pairs: PairsImport | null = reusable?.pairs ?? null
-  if (bins !== null) {
-    ;({ mc, source } = await openHicPro(request, bins))
-  } else {
-    source = await createSource(request.source, {
-      onProgress: (received, total) => say(received, total, 'downloading'),
-      cancelled: () => cancelled.has(request.id),
+  if (reusable !== null) {
+    // A rung switch inside a file already imported: no read, no dialog, no
+    // second pass. The table is in hand.
+    source = await createSource(request.source)
+    mc = MetaCooler.fromPairs({
+      uri: request.uri,
+      header: reusable.pairs.header,
+      pixels: reusable.pairs.tables.get(reusable.size)!,
+      rungs: reusable.pairs.rungs,
+      indexed: reusable.pairs.indexed,
+      declaredRecords: reusable.pairs.declaredRecords,
     })
+  } else {
     try {
-      if (reusable !== null) {
-        // A rung switch inside a file already imported: no read, no dialog, no
-        // second pass. The table is in hand.
-        mc = MetaCooler.fromPairs({
-          uri: request.uri,
-          header: reusable.pairs.header,
-          pixels: reusable.pairs.tables.get(reusable.size)!,
-          rungs: reusable.pairs.rungs,
-          indexed: reusable.pairs.indexed,
-          declaredRecords: reusable.pairs.declaredRecords,
-        })
-      } else {
-        // A `reading` on the spec *is* the reader's answer to the §12 gate —
-        // the shell only ever sets one by re-issuing this open with what they
-        // chose.
-        const agreed = request.source.kind === 'remote' && request.source.reading !== undefined
-        // Listing a single-cell container's cells is the one wait in this
-        // application that cannot be measured while it happens: it is a single
-        // call into h5wasm that issues a thousand small synchronous reads and
-        // returns when it is done, so this thread is not free to say anything
-        // until it already has the answer. What can be said is *which* wait it
-        // is, before it starts — an indeterminate bar under the name of the
-        // phase, which is the difference between a reader who knows a thousand
-        // reads are in flight and one watching a spinner.
-        if (looksSingleCell(request.uri)) say(0, 0, 'listing cells')
-        mc = await MetaCooler.open(request.uri, source, agreed ? { listingAgreed: true } : {})
-      }
+      ;({ mc, source } = await openMap(request.uri, request.source, hooks))
     } catch (error) {
       // A `.pairs` is the one input that cannot be opened from its own bytes: it
       // declares no resolution, so there is nothing to open it *at*. The first
       // open is therefore always refused, and what comes back is what the dialog
       // needs to make the choice a decision rather than a guess.
       if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
+      // The mount the refusal came from, handed back rather than made again:
+      // `createSource` retains a source per file, so this is the same one.
+      source = await createSource(request.source)
       pairs = await openPairs(request, source)
       if (pairs === null) throw abortError()
       mc = MetaCooler.fromPairs({

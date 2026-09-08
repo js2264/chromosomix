@@ -143,7 +143,21 @@ export type AnalysisRequest =
   // Lazy, and the laziness is the point: nothing mounts until the first task
   // that needs a mount, so opening the panel to read the list of tasks costs no
   // I/O and no wasm instance.
-  | { id: number; kind: 'open'; uri: string; source: SourceSpec }
+  | {
+      id: number
+      kind: 'open'
+      uri: string
+      source: SourceSpec
+      /**
+       * The cells to sum, for a single-cell container (§3.7).
+       *
+       * Absent for every other file, and absent means *all of them* — which is
+       * what an scool with nothing ticked draws. It is carried because this
+       * worker mounts the file independently of the reader's: without it, a task
+       * run over two selected cells would silently measure the pseudo-bulk.
+       */
+      cells?: readonly string[]
+    }
   | {
       id: number
       kind: 'run'
