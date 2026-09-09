@@ -17,7 +17,7 @@
 
 import { el } from './ui/dom'
 import { TARGET } from './version'
-import { ARCHIVE_SEGMENT, PINNED_COMMIT, SITE_BASE } from './versions'
+import { ARCHIVE_SEGMENT, IS_PORTABLE, PINNED_COMMIT, SITE_BASE } from './versions'
 
 /**
  * Register, and watch for a replacement.
@@ -47,6 +47,13 @@ export function registerServiceWorker(): void {
   // caching a build somebody pinned in July for as long as the browser feels
   // like keeping it. See `vite.pinned.config.ts`.
   if (PINNED_COMMIT !== null) return
+  // Guard five, and the same argument as guard four seen from the other side.
+  // An archived build knows it is not the site; a package build does not know
+  // *what* it is under — it was made for a relative base precisely so that one
+  // published version can be unpacked anywhere (`src/versions.ts`). A worker
+  // registered from there claims a scope over whatever else lives at that path:
+  // a lab's own site, or, on a registry CDN, other people's packages.
+  if (IS_PORTABLE) return
   if (!('serviceWorker' in navigator)) return
 
   window.addEventListener('load', () => {

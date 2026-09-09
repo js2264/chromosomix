@@ -28,6 +28,7 @@
     "vite.config.ts",
     "vite.desktop.config.ts",
     "vite.pinned.config.ts",
+    "vite.package.config.ts",
     "vitest.config.ts"
   ]
 }

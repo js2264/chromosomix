@@ -215,6 +215,56 @@ long links, not browsers.
 `…/metacooler.js/v/<commit>/?embed=1#…` renders the same picture in five years, whatever the site
 does next. `versions.json` lists what is published.
 
+#### Where the viewer itself comes from
+
+The `src=` above points at this project's GitHub Pages site, which is one answer and not the only
+one. **The viewer is published to npm**, as a built directory rather than as something to import, so
+a page can frame a copy that does not depend on anybody's domain staying up:
+
+```html
+<!-- from a registry CDN, immutable at that version -->
+<iframe src="https://cdn.jsdelivr.net/npm/metacooler-viewer@0.11.0/dist/index.html?embed=1&config=…"></iframe>
+```
+
+```bash
+# or vendored into your own site, which depends on nothing at all
+npm pack metacooler-viewer@0.11.0
+tar xf metacooler-viewer-0.11.0.tgz
+cp -r package/dist /var/www/viewer/     # then src="/viewer/?embed=1&config=…"
+```
+
+That works because the published build uses a **relative base**: one tarball runs from `/viewer/`, from
+`/npm/metacooler-viewer@0.11.0/dist/`, or from any other path, with no rebuild
+(`vite.package.config.ts`). It is ~6 MB unpacked — the site build's 20 MB of source maps are not in
+it — and it registers no service worker and asks for no version manifest, because a copy that does
+not know where it is mounted has no scope to claim and no site to ask.
+
+Two things to know. **End the URL in a slash, or name `index.html`**: a relative base resolves against
+the document, so `…/viewer` without the trailing slash looks for the assets one directory too high.
+And **check that your CDN serves the page as `text/html`** before relying on it — registry CDNs are
+built for library assets, and one that answers `text/plain` will show you the markup instead of
+running it:
+
+```bash
+curl -sI https://cdn.jsdelivr.net/npm/metacooler-viewer@0.11.0/dist/index.html | grep -i content-type
+```
+
+Vendoring has no such question, and same-origin hosting is worth it for two more reasons: your data
+needs no CORS entry at all, and the File System Access pickers keep working inside the frame, since
+they are only unavailable *cross-origin*.
+
+**Or one file, with no directory and no CDN.** Every release attaches
+`metacooler-viewer-<tag>.html` — the whole viewer inlined (`npm run build:standalone`). Served over
+http(s) it embeds like any other copy and reads remote data normally:
+
+```html
+<iframe src="./metacooler-viewer-0.11.0.html?embed=1&config=./figure.metacooler.json"></iframe>
+```
+
+It costs ~12 MB parsed on every frame load with no cache split, which is fine for one figure on a page
+and wasteful for six. Opened from a **disk** it is a different thing — a `file://` page has an opaque
+origin, so local files only (§19).
+
 #### Driving it from the page
 
 Four messages, and the frame speaks only to the window that framed it, only after that window has
@@ -372,6 +422,7 @@ test/
 docs/
   hosting.md     bucket configuration for published files
   deploy.md      publishing the app itself to GitHub Pages
+vite.package.config.ts   the sixth build: the copy that goes to npm, relative base
 SPECS.md         the specification — section numbers are cited throughout the source
 IMPLEMENTATION.md  the build plan, and nine corrections where the docs were wrong
 TASKS_PLAN.md    the build plan for §18, the Analysis panel
@@ -411,7 +462,8 @@ not the plan.
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 | — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA, a BAM or a feature file (§5.8) |
 | — | Metadata annotations (§8.12) | **done** — the columns a file already carries about its own genomes, sequences and bins, discovered from its `/genomes`, `/contigs` and `/bins` tables and drawn as lanes beside the map: bars for a measurement, runs of colour for a set of labels. Indexed by the map's own cells rather than by base pairs, so a MAG's completeness draws on a genome × genome overview where no other lane can — and offered only where its own table is no finer than the axis. The one annotation that never needed the §8.5 gate lifted, since a column of a file's own tables *is* the map's axis and has nothing to be matched against |
-| — | Embedding (§21) | **done** — `?embed=1` mounts the same build chrome-less, `?config=<url>` opens a published `.metacooler.json` named in the address, and `postMessage` carries *go here* / *tell me where you are*. No backend, no package, no header for the host page to set. A frame never writes history entries and remembers nothing, so an embedded figure neither spends the reader's Back button nor comes back showing where somebody else left it |
+| — | Embedding (§21) | **done** — `?embed=1` mounts the same build chrome-less, `?config=<url>` opens a published `.metacooler.json` named in the address, and `postMessage` carries *go here* / *tell me where you are*. No backend and no header for the host page to set. A frame never writes history entries and remembers nothing, so an embedded figure neither spends the reader's Back button nor comes back showing where somebody else left it |
+| — | The package (§22) | **done** — the viewer is published to npm as a built directory with a *relative* base, so one tarball runs from a registry CDN, from a lab site's `/viewer/`, or from any other path, with no rebuild. What it buys is an embed that depends on nobody's hosting; `npx metacooler-run` comes with it |
 | — | Analysis (§18) | **done** — every task in `TASKS_PLAN.md`'s catalogue, in a fourth worker so a whole-file scan never blocks the view; a resizable drawer; results that come back as synthetic tracks in the Annotations panel, indistinguishable from a loaded bigWig; and a bigWig writer of this repo's own. Goldened against cooltools, coolpuppy, pyBigWig and numpy on the demo micro-C map |
 
 Other gaps worth naming rather than discovering:

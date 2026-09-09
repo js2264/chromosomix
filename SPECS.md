@@ -4168,3 +4168,73 @@ one reader that validates every key, clamps what needs clamping and drops what i
 A `view` this build has never heard of falls back; a smoothing radius it does not offer is dropped;
 an array where a genome name should be is not stringified into one. What the host is told afterwards
 is where the view actually **went**, which for a trimmed patch is not always where it asked to go.
+
+## 22. The package: the copy that goes to npm
+
+A sixth build of the same source, after the site, the archived pin, the desktop shell, the CLI and
+the standalone page. It emits `dist/` — the ordinary web app — and it is published to a registry as
+a **built directory rather than as something to import**. Nothing depends on it; things *serve* it.
+
+**What it is for is one question §21 could not answer.** An embed is an `<iframe>` and a URL, and
+until now that URL was this project's GitHub Pages site. A page that frames it takes on a dependency
+on somebody else's domain, deployment and lifetime — which is a reasonable thing to decline, and a
+thing a figure in a paper should decline. A published version is the alternative: immutable,
+checksummed, mirrored, and unpackable into any server the reader's institution already runs.
+
+`package.json` used to say `private: true`, on the argument that this is an application rather than a
+library and that a registry has no use for it. The first half is still true and is not what
+publishing changes. What a registry is wanted for here is not dependency resolution; it is **hosting
+nobody has to trust**, which is a distribution channel beside Pages rather than a claim that anyone
+should `import` this.
+
+### 22.1 The relative base, which is the whole of the build
+
+Every other build knows where it will be served from and bakes absolute asset URLs accordingly: the
+site root, `/v/<commit>/` for an archive (§21), `/` inside an asar. A tarball knows nothing — it is
+unpacked into `/viewer/` on one site, `/npm/<name>@<version>/dist/` on a CDN, a deep path on the
+next — so its base is `./`, and one published version serves all of them with no rebuild.
+
+The rule that comes with it is the reader's: **the URL has to end in a slash, or name `index.html`.**
+A relative base resolves against the document, so `…/viewer` without the slash looks for the assets
+one directory too high. Most servers redirect; a CDN generally does not.
+
+Two absences follow from not knowing where it is, and both are enforced rather than assumed
+(`IS_PORTABLE`, `src/versions.ts`):
+
+- **No service worker.** A copy mounted under a path it does not own must not claim a scope there —
+  on a registry CDN that scope covers other people's packages.
+- **No version manifest.** `SITE_BASE` resolves against the document, so asking for `versions.json`
+  would be asking whichever directory the copy was unpacked into for a file only the deployment has.
+  The About dialog therefore lists no other builds, which is correct: there is no site to list.
+
+It also carries no source maps and nothing from `public/` — ~20 MB of a ~26 MB site build — because
+a tarball is downloaded by everyone who installs it and cached for ever by every mirror. What is left
+is ~6 MB unpacked, 1.7 MB compressed.
+
+### 22.2 What is in it, and the one thing that rides along
+
+`files` is `dist/` and `dist-cli/`, and it is the whole of what stands between a publish and 250 MB of
+demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
+resolves inside the package — `npx metacooler-run` then works against a published version with no
+clone, which is what makes `h5wasm` and `@gmod/bbi` runtime dependencies rather than dev ones.
+
+npm **force-includes the file `main` names**, ahead of `files` and ahead of a negation. `main` is the
+Electron entry point (§15) and cannot be dropped without breaking `electron .`, so a pack run in a
+working tree that has built the desktop target carries 18 KB of compiled main process with it. It is
+inert — nothing in the package requires it — but it makes the tarball depend on local state, which is
+why publishing happens from CI, on a clean checkout, where the directory does not exist.
+
+### 22.3 Why the shape is asserted before it can be packed
+
+`prepack` runs the build, so `npm pack` and `npm publish` both fill `dist/` from source at that
+moment rather than shipping whatever was there. Then `check-package-build.mjs` refuses the result if
+it is wrong, and the rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`)
+in the arrangement §15 and §21's archived build both use.
+
+That check earns its place twice over here. `dist/` is written by **two** builds — the site's and this
+one — and only one of them may be published; a tarball packed over a site build would carry absolute
+asset URLs that 404 on every mount that is not the site root, plus 20 MB of maps. And unlike every
+other artifact in this repository, **a published version cannot be corrected**: an archived build is
+rebuilt over on the next push and a deployment is redeployed, while a tarball is on the registry for
+ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
+week. The pack is the last moment any of it is cheap to notice.

@@ -14,6 +14,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The viewer is published to npm**, as a built directory rather than as
+  something to import — so a page can embed a copy that depends on nobody's
+  hosting, including ours:
+
+  ```html
+  <iframe src="https://cdn.jsdelivr.net/npm/metacooler-viewer@0.11.0/dist/index.html?embed=1&config=…"></iframe>
+  ```
+
+  ```bash
+  npm pack metacooler-viewer && tar xf metacooler-viewer-*.tgz && cp -r package/dist /var/www/viewer/
+  ```
+
+  A sixth invocation of the same bundler (`vite.package.config.ts`), and the one
+  built for a path it does not know. Everything else this repository emits is
+  served from somewhere decided in advance — the site root, `/v/<commit>/`, an
+  asar, a disk — and bakes absolute asset URLs accordingly. A tarball is
+  unpacked wherever somebody puts it, so its base is `./` and one published
+  version serves all of them. The rule that comes with that is the mounter's:
+  the URL has to end in a slash, or name `index.html`.
+
+  Two things follow from a copy not knowing where it is, and both are enforced
+  rather than assumed (`IS_PORTABLE`): it registers **no service worker**, since
+  a copy mounted under a path it does not own must not claim a scope there — on
+  a registry CDN that scope covers other people's packages — and it asks for
+  **no version manifest**, since `versions.json` lives at a site root a vendored
+  copy has no way to find. Before those guards, every vendored copy would have
+  made two doomed requests: a 404 for a `sw.js` this build does not emit, and a
+  cross-origin fetch for a manifest belonging to somebody else's server.
+
+  `files` is `dist/` and `dist-cli/`, which is the whole of what stands between
+  a publish and 250 MB of demo data, and which makes `npx metacooler-run` work
+  against a published version with no clone. `prepack` builds and
+  `check-package-build.mjs` then refuses the result if it is wrong — a tarball
+  packed over a *site* build would carry absolute asset URLs that 404 on every
+  mount but the site root, and unlike everything else here a published version
+  cannot be corrected.
+
+  `private: true` is gone with its comment. The argument it made — an
+  application, not a library — is still true and is not what publishing changes:
+  what a registry is wanted for here is hosting nobody has to trust, not
+  dependency resolution. Specified at SPECS §22.
+
+- **A `LICENSE` file**, with the MIT text the manifest has always declared. It
+  was missing, which matters most at the moment a package is published: npm
+  shows the licence of a package it can find one for, and a tarball that
+  declares MIT without carrying it is asking to be taken on trust.
+
 - **The viewer, inside somebody else's page.** `?embed=1` mounts the same web
   build with no window around it — no header, no tab strip, no status bar — so
   it can be the figure in a portal, a lab site, a course page or a paper's

@@ -233,9 +233,13 @@ none of them.
   the frame as well as the function. Before that, an embedded Choose-files button did nothing at all
   and the rejection was indistinguishable from a cancelled dialog.
 
-What is **not** in it, and is the natural next step: an npm-installable wrapper. The argument in
-`package.json` still holds — what ships is the built site, and there is nothing here a registry would
-want — so the embed is a URL, which is one fewer thing for a host page to keep up to date.
+What was **not** in it was a way to embed the viewer without depending on this project's own
+hosting — and that is now built too, at SPECS §22. The package is published to npm as a *built
+directory with a relative base*, so one tarball runs from a registry CDN, from a lab site's
+`/viewer/`, or from any other path, with no rebuild. `package.json`'s old argument against it
+survives in a narrower form: this is still an application rather than a library, and nothing imports
+it. What a registry turned out to be wanted for is hosting nobody has to trust, which is a different
+claim from the one `private: true` was refusing.
 
 ### G8. bedGraph and wig in
 
