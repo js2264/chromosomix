@@ -237,6 +237,35 @@ export interface ColumnParam extends ParamBase {
   noneLabel?: string
 }
 
+/**
+ * Free text — an answer that is neither a number, nor a choice, nor a file.
+ *
+ * The last kind to be added, and it was resisted for as long as it could be: a
+ * box the reader can type anything into is a control the descriptor cannot check
+ * and the form cannot help with, so every parameter that could be a list was
+ * made a list instead. What finally needed one is a **motif** (§8.3): `GATC`,
+ * `GGTCANNNTGACC`, `TTAGGG` — a string in an alphabet the task validates, out of
+ * a space no dropdown could enumerate and no number could stand in for.
+ *
+ * Deliberately *not* {@link RegionParam} with the sequence list turned off, which
+ * is the shape it would otherwise have borrowed. That control offers the file's
+ * contig names in a `<datalist>`, seeds itself from the framing, and says in its
+ * tooltip that it takes a locus — three helpful behaviours that are three lies
+ * about a motif, and a reader typing `GATC` into a box that had just suggested
+ * `chrIV` would be right to wonder which of the two the task was reading.
+ *
+ * The value is a plain string and nothing more: the *task* decides what a
+ * well-formed one is, and says so through its {@link AnalysisTask.estimate}
+ * refusal, which is where a form-time complaint about a parameter belongs.
+ */
+export interface TextParam extends ParamBase {
+  kind: 'text'
+  /** Absent means the box starts empty, which is a state the estimate may refuse. */
+  default?: string
+  /** Shown in the empty box. An example, never a restatement of the label. */
+  placeholder?: string
+}
+
 /** A locus, in the syntax the views' own boxes take. Defaults to the framing. */
 export interface RegionParam extends ParamBase {
   kind: 'region'
@@ -329,6 +358,7 @@ export type ParamSpec =
   | EntryParam
   | ColumnParam
   | RegionParam
+  | TextParam
   | SequencesParam
   | SeedParam
 
@@ -348,6 +378,10 @@ export function defaultParams(specs: readonly ParamSpec[]): Params {
         out[spec.key] = spec.default
         break
       case 'region':
+      // `''` and not `null`, like a region: an empty box is a box nobody has
+      // typed in, and the one thing it must not become is the string `"null"`
+      // in the header of an exported table.
+      case 'text':
         out[spec.key] = spec.default ?? ''
         break
       // `null` rather than `[]`, and the difference is the whole convention:

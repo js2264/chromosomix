@@ -55,6 +55,7 @@ import {
   viewStateEquals,
   type UnitSelection,
 } from '../state/ViewState'
+import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
@@ -94,6 +95,8 @@ import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import {
   assemblyOf,
+  findContig,
+  formatLocus,
   lengthsAreExact,
   parseLocus,
   replacesLengths,
@@ -132,6 +135,7 @@ import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
+import { MinimapCard, suitsMinimap, type MinimapRange } from '../ui/MinimapCard'
 import { Overview, wholeFileLevelCard } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/RecordCard'
@@ -274,6 +278,16 @@ function genomeCard(
   assembly: Assembly,
   onGoTo: (locus: string) => void,
   selection: SequenceSelection,
+  /**
+   * The minimap, where this genome is one a strip can usefully be drawn of.
+   *
+   * Passed in rather than built here because it is *kept*: the strip has to be
+   * told where the window moved to on every pan, and a card rebuilt from a
+   * function that takes no location could only ever show the place the column
+   * was last assembled at. `Session` holds it and updates it; this only decides
+   * where in the column it sits.
+   */
+  minimap?: HTMLElement,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -308,6 +322,10 @@ function genomeCard(
             }),
           ]),
     ),
+    // Above the sequence list rather than below it: the strip is the picture of
+    // the same thing the list is a table of, and a reader looking for *where am
+    // I* should not have to scroll past sixteen rows to find out.
+    ...(minimap === undefined ? [] : [minimap]),
     sequenceCard({
       contigs: assembly.contigs,
       selection,
@@ -320,6 +338,54 @@ function genomeCard(
     // about *what is on screen* rather than about what the file is. Two cards
     // offering to load a map, in two columns, is the state this replaced.
   )
+}
+
+/**
+ * A `contig:start-end` region as the range the minimap draws, or `null`.
+ *
+ * The region grammar is the map's — 0-based, half-open, and either coordinate
+ * may be omitted to mean the whole sequence — which is already what
+ * `MinimapRange` is, so this is a parse and a fill-in rather than a conversion.
+ * A name the assembly does not have yields `null` rather than a guess: a
+ * highlight in the wrong place is worse than no highlight, because it is not
+ * visibly wrong.
+ *
+ * `parseRegionString` throws on a malformed region, and a malformed region here
+ * is not an error worth surfacing — the state is already on screen and the map
+ * has already refused it — so it is caught and read as "nowhere".
+ */
+function minimapRange(region: string, assembly: Assembly): MinimapRange | null {
+  let name: string
+  let from: number | null
+  let to: number | null
+  try {
+    ;[name, from, to] = parseRegionString(region)
+  } catch {
+    return null
+  }
+  const contig = findContig(assembly, name)
+  if (contig === null) return null
+  return {
+    contig: contig.name,
+    start: from ?? 0,
+    end: to ?? contig.length,
+  }
+}
+
+/**
+ * The minimap's own `contig:first-last` back as a `LocusRange`.
+ *
+ * The card emits the string `SequenceBar` emits — 0-based, half-open, no
+ * thousands separators — and the browser is driven by `formatLocus`, which is
+ * 1-based and inclusive. One of the two has to convert and this is the seam;
+ * `state/ViewState.ts` and `ui/SequenceBar.ts` both explain why the two
+ * conventions are kept apart rather than reconciled.
+ */
+function rangeOfRegion(region: string): { contig: string; start: number; end: number } {
+  const at = region.lastIndexOf(':')
+  if (at < 0) return { contig: region, start: 0, end: 0 }
+  const [first, last] = region.slice(at + 1).split('-')
+  return { contig: region.slice(0, at), start: Number(first), end: Number(last) }
 }
 
 /** How each kind of source is described in the Genome card. */
@@ -475,6 +541,16 @@ export class Session {
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
   private infoPanel: InfoPanel | null = null
+  /**
+   * The genome strip, where this session's genome is one worth drawing.
+   *
+   * Held rather than rebuilt, because it is told where the view moved to on
+   * every navigation and every pan ({@link syncMinimap}) — a card reassembled
+   * from a function that takes no location could only show the place the column
+   * was last built at. One at a time: a session is of one genome, and the map
+   * column and the browser column never both hold one.
+   */
+  private minimap: MinimapCard | null = null
   /**
    * The whole-file view, kept across navigations, and the read it holds.
    *
@@ -1024,6 +1100,8 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.minimap?.destroy()
+    this.minimap = null
     this.analysis?.destroy()
     this.analysis = null
     this.current?.destroy?.()
@@ -2044,6 +2122,22 @@ export class Session {
         info,
         onCloseFile: (which) => this.closeCompare(which),
       })
+      // The same strip the browser shows, over the map's own chromosome list, so
+      // "where am I in the genome" is answered in the same place and the same
+      // shape whichever picture is on screen. A cooler's `/chroms` table is an
+      // assembly; `assemblyOfFile` is the one that says so, and it answers
+      // `null` for a file with no contigs, which is a file with no strip.
+      const mapAssembly = this.file === null ? null : this.assemblyOfFile(this.file)
+      if (mapAssembly !== null) {
+        this.buildMinimap(mapAssembly, {
+          onOpenContig: (name) => this.navigate({ uri, view: 'region', region: name }),
+          onOpenRegion: (region) => this.navigate({ uri, view: 'region', region }),
+        })
+      } else {
+        this.minimap?.destroy()
+        this.minimap = null
+      }
+      this.infoPanel.setMinimap(this.minimap?.el ?? null)
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
@@ -3454,7 +3548,86 @@ export class Session {
 
   /** The Sequences card a browser steers its axis from. */
   private genomeCardFor(assembly: Assembly): HTMLElement {
-    return genomeCard(assembly, (locus) => this.goToLocus(locus), this.selectionFor(assembly))
+    this.buildMinimap(assembly, {
+      // A bare sequence name is already a locus the browser's own parser takes,
+      // so a click on a band needs no conversion at all.
+      onOpenContig: (name) => this.goToLocus(name),
+      onOpenRegion: (region) => this.goToLocus(formatLocus(rangeOfRegion(region))),
+    })
+    return genomeCard(
+      assembly,
+      (locus) => this.goToLocus(locus),
+      this.selectionFor(assembly),
+      this.minimap?.el,
+    )
+  }
+
+  /**
+   * A fresh minimap over this assembly, replacing whatever the last one was of.
+   *
+   * One card per assembly rather than one per session: the strip is laid out
+   * from the sequence list, and a browser that adopts real lengths
+   * ({@link takeLengths}) or opens a different genome is a different strip. The
+   * old one is destroyed rather than dropped — it holds a `ResizeObserver` and a
+   * text-scale subscription, and the column that showed it is about to be
+   * replaced wholesale by `setGeneral`, which calls nothing.
+   *
+   * `null` where a strip would not be a picture of anything: a metagenome is
+   * tens of thousands of contigs from thousands of independently assembled
+   * organisms, every band a fraction of a pixel, which is the same gate
+   * {@link paintSequences} and `ContigsTable` already apply (§7.4).
+   */
+  private buildMinimap(
+    assembly: Assembly,
+    go: { onOpenContig: (name: string) => void; onOpenRegion: (region: string) => void },
+  ): void {
+    this.minimap?.destroy()
+    this.minimap = suitsMinimap({ hasGenomes: this.file?.info.hasGenomes ?? false })
+      ? new MinimapCard({ assembly, ...go })
+      : null
+    this.syncMinimap(this.store.state)
+  }
+
+  /**
+   * Where the minimap should say we are, from the state alone.
+   *
+   * From the state rather than from the mounted view, because this runs on every
+   * navigation including the ones that mount nothing new — a pan reports its
+   * locus into the store (`mountBrowser`'s `onLocusChange`), so the store is the
+   * one place both a jump and a drag are visible.
+   *
+   * The two modes differ in exactly one thing and the strip does not know it:
+   * a browser has a window and a map has a row range and a column range. Equal
+   * ranges are what an on-diagonal block is, and `MinimapCard` collapses them
+   * back into the single highlight a 1D window draws — so the same place looks
+   * the same in both modes, which is what the card is for.
+   */
+  private syncMinimap(state: ViewState | null): void {
+    const card = this.minimap
+    if (card === undefined || card === null) return
+    const assembly = this.assembly ?? (this.file === null ? null : this.assemblyOfFile(this.file))
+    if (state === null || assembly === null) {
+      card.update(null)
+      return
+    }
+    if (state.view === 'browser') {
+      const here = state.locus === undefined ? null : parseLocus(state.locus, assembly)
+      // `'whole'` is the whole genome, which is the same "nowhere in particular"
+      // an absent locus is — and highlighting everything says nothing.
+      card.update(
+        here === null || here === 'whole' ? null : { kind: 'window', range: here },
+      )
+      return
+    }
+    const rows = state.region === undefined ? null : minimapRange(state.region, assembly)
+    if (rows === null) {
+      card.update(null)
+      return
+    }
+    // An absent `region2` is an on-diagonal block, which is the same range twice
+    // rather than a missing one (§5.5).
+    const columns = state.region2 === undefined ? rows : minimapRange(state.region2, assembly)
+    card.update({ kind: 'block', rows, columns: columns ?? rows })
   }
 
   /**
@@ -5197,6 +5370,11 @@ export class Session {
       this.manualCard = null
       this.metadataCard = null
       this.bookmarksCard = null
+      // Destroyed rather than dropped: it holds a `ResizeObserver` and a
+      // text-scale subscription, and `setGeneral([])` below replaces the column
+      // without telling anything in it that it is going.
+      this.minimap?.destroy()
+      this.minimap = null
       // The second file too, and for the same reason: it is a second map *of a
       // file that is no longer open*, and with no state there is no `uri2` left
       // to reconcile against — so nothing downstream would ever reach it again,
@@ -5507,6 +5685,11 @@ export class Session {
     // …and for the same reason, since the ticks are read against that table: a
     // link straight to a region arrives before anything has opened one.
     this.syncSequenceTicks(state)
+    // Here rather than beside the mount, because a *pan* mounts nothing: the
+    // browser reports its window into the store (`onLocusChange`), which comes
+    // back through this same path, so this is the one place a jump and a drag
+    // are both visible.
+    this.syncMinimap(state)
     this.host.activity(this)
   }
 

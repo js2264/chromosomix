@@ -33,7 +33,7 @@ import { assemblyOf, type Assembly } from '@/genome/assembly'
 import { SequenceSelection } from '@/genome/selection'
 import { BrowserView } from '@/ui/BrowserView'
 import { TRACK_OPTIONS, PLOT_OPTION_LABELS } from '@/ui/plotOptions'
-import { setUpDom, all, type DomTeardown } from '../support/dom'
+import { setUpDom, all, silentContext, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
 const built: BrowserView[] = []
@@ -93,6 +93,22 @@ function mount(): Mounted {
 
 function line(manual: ManualStore, contig: string, bp: number, axis: LineAxis = 'both'): void {
   manual.add({ id: mintMarkId(), kind: 'line', axis, at: { contig, bp }, colour: '#c0392b' })
+}
+
+/**
+ * One frame, into a context that accepts every call and draws nothing.
+ *
+ * What this asks is only "does the paint run": the marks it *would* put on the
+ * page are asserted above, through the plan both this and the real canvas draw
+ * from. A silent context rather than a `VectorPage`, because the question is
+ * about a frame of the whole view — ruler, lanes, marks — and not about the
+ * operators one of them emits.
+ */
+function paint(view: BrowserView): void {
+  const ctx = silentContext(document.createElement('canvas'))
+  ;(view as unknown as {
+    paint(ctx: CanvasRenderingContext2D, width: number, height: number): void
+  }).paint(ctx, 800, 400)
 }
 
 describe('lines', () => {
@@ -230,7 +246,13 @@ describe('marks this axis has never heard of', () => {
     })
     // The one end that *is* on this axis is still drawn: half a loop is where
     // the reader can see it, and the other half is somewhere this file has not.
-    expect(view.manualMarks).toEqual([{ id: expect.any(String), kind: 'anchor', colour: '#111318', from: 500, to: 500 }])
+    expect(view.manualMarks).toEqual([
+      { id: expect.any(String), kind: 'anchor', colour: '#111318', from: 500, to: 500 },
+    ])
+    // …and the frame that follows draws, rather than throwing on the mark it
+    // cannot place. A context is lent for this one call, since the plan above
+    // says *what* would be drawn and this says the drawing itself runs.
+    expect(() => paint(view)).not.toThrow()
   })
 
   it('draws nothing for a sequence that has been unticked', () => {

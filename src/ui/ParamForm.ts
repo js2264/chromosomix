@@ -44,6 +44,7 @@ import type {
   RegionParam,
   SequencesParam,
   SeedParam,
+  TextParam,
   ToggleParam,
 } from '../analysis/types'
 import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
@@ -846,6 +847,8 @@ export class ParamForm {
         return this.sequenceList(spec)
       case 'region':
         return this.regionControl(spec)
+      case 'text':
+        return this.textControl(spec)
       case 'seed':
         return this.seedControl(spec)
     }
