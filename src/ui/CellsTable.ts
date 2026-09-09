@@ -1,5 +1,5 @@
 /**
- * The cells table — the landing view of an `.scool` (spec §5.1, §3.7).
+ * The cells table — the landing view of an `.scool` (spec §5.1, §3.8).
  *
  * The genomes table's sibling, and deliberately its near-twin: a sortable,
  * filterable list of everything in the file, tick boxes down the side, and one

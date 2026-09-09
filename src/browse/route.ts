@@ -43,7 +43,7 @@ export function routeOf(uri: string): FileRoute {
   // The last path segment, with the query and the fragment taken off it.
   // Neither is part of a name, and both reach here: a bucket URL carries a
   // query string, and a HiC-Pro pair names its bin file in a `#bins=` fragment
-  // (§3.8) — which ends in `.bed`, and routed the *matrix* to the genome door.
+  // (§3.9) — which ends in `.bed`, and routed the *matrix* to the genome door.
   const name = (splitUri(uri).path.split(/[\\/]/).pop() ?? uri).split(/[?#]/)[0]
   if (/\.([ms]?cool|m?metacool|hic|h5|hdf5)$/i.test(name)) return 'map'
   // A `.pairs` is a contact list rather than a matrix, and it still belongs at
@@ -51,7 +51,7 @@ export function routeOf(uri: string): FileRoute {
   // cannot answer for itself (§3.7). Routing is about which front door a name
   // belongs to, and this one's is not the browser's.
   if (/\.pairs(\.gz)?$/i.test(name)) return 'map'
-  // A HiC-Pro matrix, which is a contact map made of two text files (§3.8). The
+  // A HiC-Pro matrix, which is a contact map made of two text files (§3.9). The
   // `.bed` beside it stays on the genome door: it is a valid BED as well as a
   // bin grid, and which of the two it is depends on what it was dropped with.
   if (/\.matrix(\.gz)?$/i.test(name)) return 'map'

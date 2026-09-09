@@ -767,7 +767,7 @@ export class Session {
     return this.file?.info.layout.kind === 'metacool'
   }
 
-  /** `true` while the open file is a single-cell container (§3.7). */
+  /** `true` while the open file is a single-cell container (§3.8). */
   get isScool(): boolean {
     return this.file?.info.layout.kind === 'scool'
   }
@@ -1926,7 +1926,7 @@ export class Session {
     // map, so whatever this session already knows about its other half is
     // attached before the worker is asked; what it does not know — a bin file
     // sitting beside a URL — the worker probes for by convention, and refuses by
-    // name when there is none (§3.8).
+    // name when there is none (§3.9).
     source = withHicProBins(uri, source, index)
     // The tracks this session is holding, before anything is torn down. A map
     // opened over a genome browser is the same genome by a different file, and
@@ -5462,7 +5462,7 @@ export class Session {
   }
 
   /**
-   * The cells table of an `.scool` (§3.7), fetched on first sight.
+   * The cells table of an `.scool` (§3.8), fetched on first sight.
    *
    * Ticking rows does two things at once, and that is the view's whole design:
    * it names the picture to draw *and* sets which cells the file is read
@@ -6338,7 +6338,7 @@ export class Session {
         const file = this.file
         if (file !== null) {
           // The ticked cells, so a task measures the map that is drawn rather
-          // than the pseudo-bulk of every cell in the file (§3.7). The analysis
+          // than the pseudo-bulk of every cell in the file (§3.8). The analysis
           // worker mounts the file for itself and would otherwise have no way to
           // know a selection exists.
           return { uri: file.uri, source: file.source, ...cellsOfMap(file.info) }
@@ -6797,7 +6797,7 @@ export function loading(message: string): HTMLElement {
  *
  * A spinner says *something is happening* and is the right answer for an open
  * that takes a moment. It is the wrong answer for one that takes a minute — a
- * HiC-Pro matrix read whole (§3.8), or an `.scool` downloaded whole (§3.7) —
+ * HiC-Pro matrix read whole (§3.9), or an `.scool` downloaded whole (§3.8) —
  * where a reader watching it has no way to tell a slow connection from a hung
  * one, and no way out.
  *
@@ -6948,7 +6948,7 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
 /**
  * Attach the bin file this session already holds for a HiC-Pro matrix.
  *
- * Two of §3.8's three roads in, and both are things only the *shell* knows: a
+ * Two of §3.9's three roads in, and both are things only the *shell* knows: a
  * file dropped alongside the matrix, or picked out of a connected folder beside
  * it, arrives as `index` exactly as a `.bai` does; and a URL may name its bin
  * file in a `#bins=` fragment, which is the escape hatch for a bucket the

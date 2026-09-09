@@ -203,8 +203,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **A progress bar on the two opens that are worth watching, with a way out.**
   Almost every read here is bounded and finishes before anyone could want news
-  of it. Two are not: a HiC-Pro pair is read whole and parsed at open (§3.8),
-  and an `.scool` over the network pays its listing cost up front (§3.7) — and
+  of it. Two are not: a HiC-Pro pair is read whole and parsed at open (§3.9),
+  and an `.scool` over the network pays its listing cost up front (§3.8) — and
   a spinner in front of either gives a reader no way to tell a slow connection
   from a hung one, and no way to stop.
 

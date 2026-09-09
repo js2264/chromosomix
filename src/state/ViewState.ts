@@ -403,7 +403,7 @@ export const READING_KEYS = ['flip', 'oe', 'smooth'] as const
  * The keys that say **which data the file is being read through**, and outlive
  * a navigation for a different reason than {@link READING_KEYS} do.
  *
- * One member, and it is the cell set of an `.scool` (§3.7). It is carried not
+ * One member, and it is the cell set of an `.scool` (§3.8). It is carried not
  * because it is a preference — it is the opposite, it is the subject — but
  * because a container of four thousand cells is browsed the way a file is: you
  * choose the cells once, in the cells table, and then look at chromosome 3, and
@@ -520,7 +520,7 @@ function splitNames(value: string | undefined): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// The cell set of an .scool (§3.7)
+// The cell set of an .scool (§3.8)
 // ---------------------------------------------------------------------------
 
 /** What `cells` is written as when the selection is the whole file. */

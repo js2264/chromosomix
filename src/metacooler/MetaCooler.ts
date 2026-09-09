@@ -488,7 +488,7 @@ export class MetaCooler {
   }
 
   /**
-   * Open an `.scool` as one cooler over a set of its cells (§3.7).
+   * Open an `.scool` as one cooler over a set of its cells (§3.8).
    *
    * The file is a container of coolers sharing one bin space, so the object
    * this returns is a `MetaCooler` in the same full sense a `.hic` is: the
@@ -549,7 +549,7 @@ export class MetaCooler {
   }
 
   /**
-   * Open a HiC-Pro pair as one of these (§3.8).
+   * Open a HiC-Pro pair as one of these (§3.9).
    *
    * Shorter than {@link fromHic} by a whole module, and the reason is worth
    * keeping: a HiC-Pro matrix has no index, so it was read whole before this
@@ -1379,7 +1379,7 @@ export class MetaCooler {
   }
 
   // -------------------------------------------------------------------------
-  // Cells (spec §3.7)
+  // Cells (spec §3.8)
   // -------------------------------------------------------------------------
 
   /** Every cell of an `.scool`, in file order; `[]` for any other container. */

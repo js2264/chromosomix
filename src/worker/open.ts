@@ -6,7 +6,7 @@
  * mounts the same file a second time so a long task cannot block a pan
  * (§18.3). They must agree about what a file *is*, and for a while they did not:
  * the reader grew a HiC-Pro road — two text files, read whole, no HDF5 anywhere
- * (§3.8) — and the analysis worker kept calling `MetaCooler.open` directly, so
+ * (§3.9) — and the analysis worker kept calling `MetaCooler.open` directly, so
  * every task on a HiC-Pro pair reached h5wasm with a `.matrix` and failed inside
  * it with `error - name not defined!`. The map was on screen; the task said the
  * file was broken.
@@ -38,7 +38,7 @@ type BinsSpec = NonNullable<SourceSpec['bins']>
  *
  * Both optional, and both absent is a perfectly ordinary open: most containers
  * are HDF5, mount in a handful of bounded reads and are finished before anyone
- * could want either. The two indexless ones are why this exists (§3.7, §3.8).
+ * could want either. The two indexless ones are why this exists (§3.8, §3.9).
  */
 export interface OpenHooks {
   /** Bytes or pixels as they land, with the phase that is counting them. */
@@ -61,7 +61,7 @@ export async function openMap(
 ): Promise<{ mc: MetaCooler; source: ByteSource }> {
   // A HiC-Pro pair never reaches `createSource`: it has no index, so both
   // halves are read whole and parsed into typed arrays, and there is no mount
-  // left behind for a `ByteSource` to represent (§3.8).
+  // left behind for a `ByteSource` to represent (§3.9).
   const bins = await binsFor(spec)
   return bins === null
     ? await openThroughSource(uri, spec, hooks)
@@ -259,7 +259,7 @@ function looksSingleCell(uri: string): boolean {
  * a question about it would cost more than the read.
  *
  * The threshold is on **bytes, not on being remote**, and that is the
- * difference from §3.7's gate. There the cost was round trips, which a local
+ * difference from §3.8's gate. There the cost was round trips, which a local
  * file does not pay; here it is parsing and memory, which it pays in full — a
  * gigabyte of text off a local disk is the same ten seconds and the same
  * gigabyte of typed arrays as one off a bucket.
@@ -269,7 +269,7 @@ const HICPRO_GATE_BYTES = 200 << 20
 /**
  * Refuse to read a large matrix until the reader has agreed to what it costs.
  *
- * §3.8's gate, and the shape is §3.7's: a refusal carrying the numbers, thrown
+ * §3.9's gate, and the shape is §3.8's: a refusal carrying the numbers, thrown
  * where the cost is about to be paid and caught by the shell, which asks and
  * re-issues the open with the agreement on the source. The agreement rides on
  * the same `reading` field, because it is the same sentence — *yes, read it

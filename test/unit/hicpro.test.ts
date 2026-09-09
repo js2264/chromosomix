@@ -77,7 +77,7 @@ describe.skipIf(!present)('the pair opens as a cooler-class map', () => {
       // No genome layer, exactly as a cooler has none — so the app lands on the
       // chromosomes table rather than inventing a genomes one.
       expect(mc.hasGenomes).toBe(false)
-      // …and no weights, which is a decision rather than a gap (§3.8).
+      // …and no weights, which is a decision rather than a gap (§3.9).
       expect(mc.hasWeights).toBe(false)
     } finally {
       mc.close()

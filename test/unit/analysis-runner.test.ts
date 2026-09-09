@@ -284,7 +284,7 @@ async function settle(): Promise<void> {
 describe('the file the analysis worker is asked to mount', () => {
   // This worker opens the file for itself, on its own thread, so everything the
   // reader's map is that is not in the file has to be told to it. There is one
-  // such thing, and it is a cell set (§3.7): the same scool with two cells
+  // such thing, and it is a cell set (§3.8): the same scool with two cells
   // ticked and with four thousand is two different experiments, and a mount that
   // ignored the selection answered a task about the pseudo-bulk every time with
   // nothing on screen to say so.

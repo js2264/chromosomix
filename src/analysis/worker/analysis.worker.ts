@@ -118,7 +118,7 @@ async function handleOpen(
   // The cells the reader has ticked, not the file's whole set. A task measures
   // what is on screen, and an scool with two cells selected draws two: opening
   // the pseudo-bulk here would answer a question about four thousand cells with
-  // the same number every time and no way to tell (§3.7).
+  // the same number every time and no way to tell (§3.8).
   if (request.cells !== undefined && mc.cells.length > 0) mc.selectCells(request.cells)
   session = { mc, source }
 

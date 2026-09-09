@@ -82,7 +82,7 @@ export function splitBinsFragment(url: string): { address: string; bins?: string
 const INDEX_SUFFIX = /\.(tbi|bai|csi|px2)$/i
 
 /**
- * The bin file beside a HiC-Pro matrix (§3.8).
+ * The bin file beside a HiC-Pro matrix (§3.9).
  *
  * A fourth kind of companion, paired by the same gesture as the three above and
  * for the reason the comment on {@link INDEX_SUFFIX} gives: what differs

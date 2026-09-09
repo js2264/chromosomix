@@ -1,5 +1,5 @@
 /**
- * The single-cell container (spec §3.7): detection, per-cell views, and the sum.
+ * The single-cell container (spec §3.8): detection, per-cell views, and the sum.
  *
  * Driven off `test/fixtures/_scool.json`, which `scripts/make_scool_fixtures.py`
  * wrote beside the fixtures — so the expected sum is the one the *generator*
@@ -140,7 +140,7 @@ describe.skipIf(!present)('the shared coordinate system', () => {
   })
 })
 
-describe.skipIf(!present)('summing cells (§3.7)', () => {
+describe.skipIf(!present)('summing cells (§3.8)', () => {
   it.each(LAYOUTS)('%s over every cell reproduces the generator sum', async (name) => {
     await withMap(name, null, async (mc) => {
       const n = manifest.nbins

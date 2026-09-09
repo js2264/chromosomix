@@ -32,7 +32,7 @@
  *
  * ## The second gate, and why it is one module with the first
  *
- * A HiC-Pro pair (§3.8) has no index either, and for a blunter reason: it is
+ * A HiC-Pro pair (§3.9) has no index either, and for a blunter reason: it is
  * two text files. So its whole matrix is read and parsed before anything can be
  * drawn, and past a couple of hundred megabytes that is a wait worth stating.
  *

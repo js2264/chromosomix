@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The landing view of a single-cell container (§3.7, §5.1).
+ * The landing view of a single-cell container (§3.8, §5.1).
  *
  * The genomes table's twin, and it is tested against the same two structural
  * rules — columns discovered rather than named, the button saying what pressing

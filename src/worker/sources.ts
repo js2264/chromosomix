@@ -378,7 +378,7 @@ function borrowWhole(url: string): ByteSource | null {
  * Read a file whole, un-gzipping it if it is gzipped.
  *
  * The road for a container with **no index**, which is HiC-Pro and only
- * HiC-Pro (§3.8): both halves of the pair are read entirely by construction, so
+ * HiC-Pro (§3.9): both halves of the pair are read entirely by construction, so
  * neither belongs in the range-request LRU that exists to keep bounded reads
  * bounded. A `RemoteRangeSource` would fetch the same bytes in megabyte chunks,
  * evict them against its own cache ceiling as it went, and end up having

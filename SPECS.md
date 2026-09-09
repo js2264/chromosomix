@@ -367,7 +367,7 @@ round trip alone only proves the reader and the writer agree, which is exactly w
 
 ---
 
-### 3.7 `.scool` — one file, many cells, summed
+### 3.8 `.scool` — one file, many cells, summed
 
 The single-cell container from [Wolff *et al.* 2021](https://academic.oup.com/bioinformatics/article/37/14/2053/5948994).
 One cooler per cell over **one shared bin space**, and that shared bin space is the whole of the
@@ -442,7 +442,7 @@ needs a round trip each. The reader is asked which to pay — one download, or a
 asked**, because the question is about round trips and a file on disk seeks for free.
 
 **The two waits it costs, and what each can say.** The download, when that is what was chosen, is
-reported in bytes with a cancel, exactly as §3.8's is. The listing itself cannot be: it is a single
+reported in bytes with a cancel, exactly as §3.9's is. The listing itself cannot be: it is a single
 call into HDF5 that issues its thousand small reads and returns when it has them, so the thread is
 not free to report anything until it already has the answer. What it can say is *which* wait it is,
 before it starts — an indeterminate bar under the name of the phase, which is the difference between
@@ -468,7 +468,7 @@ pixels on the Nagano file and reads instantly.
 
 ---
 
-### 3.8 HiC-Pro — two text files, and the index that is not there
+### 3.9 HiC-Pro — two text files, and the index that is not there
 
 A HiC-Pro contact map is a pair, documented in that pipeline's own `RESULTS.md`:
 
@@ -525,11 +525,11 @@ refusal says which of the three to reach for.
 
 **The load is gated on bytes, not on being remote** (§12). Past 200 MB of matrix the reader is told
 what the read will cost and that it is paid once — which is the part that turns a bad number into an
-acceptable one. That threshold is a difference from §3.7's gate rather than an inconsistency: an
+acceptable one. That threshold is a difference from §3.8's gate rather than an inconsistency: an
 `.scool`'s cost is round trips, which a local file does not pay, and this one's is parsing and
 memory, which it pays in full.
 
-**The wait is watched and stoppable.** This and §3.7 are the only two opens in the application long
+**The wait is watched and stoppable.** This and §3.8 are the only two opens in the application long
 enough for anyone to want news of one, and both now report through the loading screen rather than a
 spinner: bytes while the file comes across, pixels while it is parsed — two labelled sweeps rather
 than one bar sliding between two denominators — and a **cancel** that stops the download mid-stream
@@ -2594,7 +2594,7 @@ If metadata reads explode, the known cause is walking HDF5's object hierarchy;
 `hdf5-indexed-reader` addresses it with a pre-built path → offset index and was built for `.cndb`
 chromatin files. Held in reserve — adopting it would not change any file format, only the reader.
 
-**One open is exempt, and is the only one: an `.scool` over the network** (§3.7). Listing a
+**One open is exempt, and is the only one: an `.scool` over the network** (§3.8). Listing a
 container's cells reads link records the writer interleaved with the cells' own data, so it is not a
 bounded read and no chunk size makes it one — measured on a 3,882-cell file as 1,015 reads averaging
 512 bytes spread uniformly across 327 MB, and reproduced on a container `cooler.create_scool` wrote.
@@ -2614,7 +2614,7 @@ This is the case `hdf5-indexed-reader` above was held in reserve for, and it rem
 a pre-built path → offset index would turn the gate into an ordinary bounded open.
 
 **A second open is exempt, and for a blunter reason: a HiC-Pro pair is two text files with no index
-at all** (§3.8). There is nothing to hold in reserve here — the format cannot be indexed without
+at all** (§3.9). There is nothing to hold in reserve here — the format cannot be indexed without
 being rewritten — so the whole matrix is read once, at open, and every read after it is bounded and
 in memory. The gate is on **bytes rather than on being remote**, because the cost is parsing and
 memory rather than round trips and a local file pays it in full:

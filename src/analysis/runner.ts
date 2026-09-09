@@ -279,7 +279,7 @@ export interface RunTarget {
    */
   source?: SourceSpec
   /**
-   * The cells this map is summing, where it is a single-cell container (§3.7).
+   * The cells this map is summing, where it is a single-cell container (§3.8).
    *
    * Absent everywhere else, and absent means *all of them*. It is part of the
    * target rather than of the source because it is a property of the *view* —
@@ -593,7 +593,7 @@ export class AnalysisRunner {
       ...(source === null ? {} : { source: source.source }),
       // Carried, not dropped: this is the target a plain Run builds, so a cell
       // set lost here is lost for every single-map run — which is all of them
-      // outside a batch (§3.7).
+      // outside a batch (§3.8).
       ...(source?.cells === undefined ? {} : { cells: source.cells }),
       label: framing.uri,
     }

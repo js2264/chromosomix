@@ -205,7 +205,7 @@ export class Breadcrumb {
   }
 
   /**
-   * Which cells the map below is summed from — an scool's second crumb (§3.7).
+   * Which cells the map below is summed from — an scool's second crumb (§3.8).
    *
    * It has to be *somewhere*, and this is the one place that is on screen in
    * every view: a cell set is not the subject of the view the way a genome is,

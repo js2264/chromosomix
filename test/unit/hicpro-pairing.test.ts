@@ -1,5 +1,5 @@
 /**
- * Pairing a HiC-Pro matrix with its bin file (§3.8).
+ * Pairing a HiC-Pro matrix with its bin file (§3.9).
  *
  * The fourth kind of companion these rules handle, and the one whose absence
  * matters most: a `.tbi` is an optimisation and a `.bai` is a format's only

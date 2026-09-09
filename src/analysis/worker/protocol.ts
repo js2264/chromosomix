@@ -149,7 +149,7 @@ export type AnalysisRequest =
       uri: string
       source: SourceSpec
       /**
-       * The cells to sum, for a single-cell container (§3.7).
+       * The cells to sum, for a single-cell container (§3.8).
        *
        * Absent for every other file, and absent means *all of them* — which is
        * what an scool with nothing ticked draws. It is carried because this

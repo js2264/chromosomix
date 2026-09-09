@@ -52,7 +52,7 @@ export type SourceKind = 'local' | 'remote'
  * Where a file's bytes are, and — for the one format that is two files — where
  * its other half's are.
  *
- * `bins` is the HiC-Pro pair (§3.8), and it is the same shape as the thing it
+ * `bins` is the HiC-Pro pair (§3.9), and it is the same shape as the thing it
  * hangs off because it is the same question asked twice: a bin file may be a
  * local drop or a URL exactly as its matrix may. It is not a sidecar index in
  * the §8.11 sense — the matrix is unreadable without it rather than merely
@@ -66,14 +66,14 @@ export type SourceSpec = SourceLocation & {
    * Absent is the default, and is what every file takes. It is set only by the
    * shell re-issuing an open with the reader's answer to a load gate, and it
    * doubles as the token that says the gate has been answered — which is why it
-   * sits out here rather than on the remote arm: §3.7's gate is about round
-   * trips and fires only over the network, but §3.8's is about parsing and
+   * sits out here rather than on the remote arm: §3.8's gate is about round
+   * trips and fires only over the network, but §3.9's is about parsing and
    * memory and fires on a local file just the same.
    *
    * - `whole` — one `GET` of the entire object, then everything is instant.
    *   The only answer a HiC-Pro pair has, since it is read whole regardless.
    * - `fine` — small chunks, little bandwidth, many round trips. An `.scool`
-   *   only (§3.7); nothing else has a scattered-metadata problem to trade against.
+   *   only (§3.8); nothing else has a scattered-metadata problem to trade against.
    */
   reading?: 'whole' | 'fine'
 }
@@ -677,7 +677,7 @@ export type WorkerRequest =
   | { id: number; kind: 'contigs' }
   | { id: number; kind: 'cells' }
   /**
-   * Change which cells the open map sums (§3.7).
+   * Change which cells the open map sums (§3.8).
    *
    * A cell set is not part of the URI — `file.scool::/cells/one` addresses one
    * cell as a plain cooler, and there is no group path that means *these eight*

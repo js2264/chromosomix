@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The loading screen an open can talk back to (§3.7, §3.8).
+ * The loading screen an open can talk back to (§3.8, §3.9).
  *
  * A spinner is the right answer for a wait of a moment and the wrong one for a
  * wait of a minute, and this application has exactly two of the latter: a

@@ -406,7 +406,7 @@ export interface ViewState {
    *
    * Unlike every other key here it is not the subject of *one* view: it says
    * which cells the file is being **read through**, and it survives navigating
-   * from the cells table into a chromosome and back out (§3.7). A map view with
+   * from the cells table into a chromosome and back out (§3.8). A map view with
    * no `cells` sums every cell in the file, which is what an scool dropped and
    * pressed through means.
    *

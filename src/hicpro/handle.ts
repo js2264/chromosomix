@@ -109,7 +109,7 @@ export function hicProHandle(uri: string, file: HicProFile): Hdf5Handle {
     attrsAt: (path: string) => (path === '' || path === '/' ? { ...attributes } : {}),
 
     has(path: string): boolean {
-      // No `bins/weight`, and that is a decision rather than a gap — see §3.8.
+      // No `bins/weight`, and that is a decision rather than a gap — see §3.9.
       // HiC-Pro's biases normalise the *raw* matrix, and its `iced/` matrix is
       // the already-normalised one; a reader that applied the first to the
       // second would silently normalise twice.
