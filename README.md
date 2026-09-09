@@ -260,6 +260,7 @@ metacooler-run tasks
 ##       --subset (default "all")  Then
 ##       --count (default 500)  N
 ##       --groups (default 4)  Groups
+##       --zscore (default false)  Z-score tracks first
 ##       --average (default "mean")  Average
 ##       --band (default "bootstrap")  Band
 ##       --iterations (default 200)  Bootstrap draws

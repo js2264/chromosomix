@@ -897,6 +897,90 @@ p {
   z-index: 3;
 }
 
+/* --- the genome minimap, a card in the General column -------------------- */
+
+/* The same strip as the bar above, in a card, with one thing added that the bar
+   deliberately refuses: a highlight saying where the reader is (`ui/MinimapCard.ts`).
+   Its own drawing rather than `drawRuler`'s, because a 72-pixel ruler in a
+   288-pixel column is a quarter of the card stack spent on an overview — so the
+   heights here are the script's (`minimapHeight`) and this rule only says that
+   the strip fills the card's width. */
+.minimap-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The card's heading *is* the disclosure control, so the triangle is the marker
+   `<summary>` already carries and the heading keeps `.card-head`'s own spacing.
+   `list-style` twice because Safari answers to neither one alone. */
+.minimap-summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+.minimap-summary::-webkit-details-marker {
+  color: var(--text-dim);
+}
+
+/* The heading inside the summary: `display: flex` on an `h3` would put it on its
+   own line and leave the triangle above it, so it goes inline and the icon keeps
+   the `.card-head` alignment it was given. */
+.minimap-summary > .card-head {
+  display: inline-flex;
+  vertical-align: middle;
+  margin: 0;
+}
+
+/* The strip. Height is set from the script, because it follows the text scale
+   and the card must not jump on the frame after mounting.
+
+   The caret, and not a resize arrow: what a drag here does is *name a stretch*,
+   which is the gesture selecting text makes and the one the browser's own ruler
+   already wears. `ew-resize` would say "move this edge", which is a different
+   promise and one this strip does not keep. */
+.minimap-stage {
+  position: relative;
+  width: 100%;
+  cursor: text;
+  user-select: none;
+  margin-top: 0.15rem;
+}
+
+/* …and a hand over a band, because there a press *opens that sequence*. The two
+   gestures share the strip and the cursor is what tells them apart; `MinimapCard`
+   sets both, exactly as `SequenceBar` does over its own. */
+.minimap-stage.is-over-band {
+  cursor: pointer;
+}
+
+.minimap-stage.is-dragging {
+  cursor: text;
+}
+
+/* In the flow rather than floating: unlike the bar's, this canvas is exactly as
+   tall as the strip — the coordinates a drag names are written in the line of
+   text below rather than in chips hanging over whatever is under the card. */
+.minimap-canvas {
+  display: block;
+  width: 100%;
+  outline: none;
+}
+
+/* Where you are, in words, under the strip. Monospaced figures so the numbers do
+   not jitter as a drag moves — the whole line is redrawn on every mouse move. */
+.minimap-where {
+  font-family: var(--mono);
+  font-size: var(--step--2, 0.72rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin: 0.3rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.minimap-note {
+  margin: 0.15rem 0 0;
+}
+
 /* The stage is `relative` because three things are positioned against it: the
    canvas, the row of inline editors over it, and the tooltip. */
 .browser-stage {
@@ -1515,6 +1599,50 @@ p {
 .panel-column-key {
   flex: 0 0 auto;
   opacity: 0.55;
+}
+
+/* The chevron that folds the column, beside the key that does the same thing.
+
+   Not a `.btn.btn-icon`: this heading is a small uppercase grey word and a faint
+   key cap, and a full-weight icon button next to them is the loudest thing in a
+   column whose cards are the point. So it is drawn at the key's own `0.55` and
+   comes up to full strength on hover or focus, which is the register the folder
+   row's load button and the tab itself already use.
+
+   The padding is what makes it worth aiming at — the mark is 14px and a 14px
+   target is a miss — and the matching negative margin keeps it from setting the
+   height of a row that the title and the key cap should size. `align-self`
+   because the head is baseline-aligned for its two pieces of text, and a mark
+   hung from a text baseline sits low by half its own descender space. */
+.panel-column-fold {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -0.25rem 0;
+  padding: 0.25rem;
+  line-height: 1;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-dim);
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
+}
+
+.panel-column-fold:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.panel-column-fold:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .panel-column-title {
@@ -5007,6 +5135,20 @@ canvas.is-frozen {
 }
 
 .sequence-host:empty {
+  display: none;
+}
+
+/* The Genome minimap's slot in the File panel, under the Sequences card. Empty
+   on a metagenome, where a hundred thousand contigs are a texture rather than a
+   strip (`suitsMinimap`) — so `:empty` again, or the panel would spend a gap on
+   a card that is not there. */
+.minimap-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.minimap-host:empty {
   display: none;
 }
 

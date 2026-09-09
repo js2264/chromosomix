@@ -53,6 +53,12 @@
  * a tab is an invitation, and one that opens an empty column is worse than the
  * column's absence.
  *
+ * An **open** column says the other half of that sentence with one chevron in
+ * its own heading ({@link chevron}), beside the key badge and pointing the way
+ * it will go. The header's row of marks can fold any of them, but it stands two
+ * columns from what it acts on and names neither the column nor the direction —
+ * and a reader who wants *this* one out of the way is looking at this one.
+ *
  * ## Four of them describe the open file, and one does not
  *
  * §16.5 says these columns are the session's furniture and each describes the
@@ -377,6 +383,7 @@ export class SidePanel {
           text: keyLabel(spec.keys),
           title: `Press ${keyLabel(spec.keys)} to fold or open this panel`,
         }),
+        this.chevron(),
       ),
       this.body,
       this.handle(),
@@ -423,6 +430,51 @@ export class SidePanel {
       }),
     )
     node.addEventListener('click', () => this.fold(false))
+    return node
+  }
+
+  /**
+   * The fold, written on the column that folds.
+   *
+   * A *folded* column has carried the way back on itself since the tabs arrived
+   * — its mark, its name, its key and a chevron — while an open one carried
+   * nothing at all: the only way to put it away was the row of marks up in the
+   * window furniture, which are two columns from the thing they act on and say
+   * neither which one they belong to nor which way it will go. That asymmetry is
+   * what this closes, and it closes it beside the key badge, which is the other
+   * half of the same sentence: *this panel folds, and here is the shortcut*.
+   *
+   * The chevron points **the way this column travels**, which is the opposite of
+   * the one {@link spine} draws and is the part a later reader will get
+   * backwards. A tab is an offer to *open*, so its chevron points away from its
+   * own edge and into the window the column will appear in; this is an offer to
+   * *close*, so it points at the edge the column is about to go back against —
+   * `chevron-left` for a left-hand column, `chevron-right` for a right-hand one.
+   * Both obey the one rule that holds for the pair: press it and the panel moves
+   * the way the arrow points.
+   *
+   * It needs no state and so is absent from {@link paint}: unlike the header's
+   * button it means one thing only, and the stylesheet already takes it away
+   * with the rest of the heading when the column folds — a second mechanism here
+   * would be a second thing to keep in step.
+   */
+  private chevron(): HTMLButtonElement {
+    const node = el(
+      'button',
+      {
+        class: 'panel-column-fold',
+        type: 'button',
+        title: withKey(`Fold the ${this.spec.title} panel`, this.spec.keys),
+        // The key is in the tooltip but not in the name, as on the tab: a label
+        // read aloud as "fold the General panel, bracket, B" is a shortcut
+        // spelled out to the one reader who cannot press it while looking.
+        attrs: { 'aria-label': `Fold the ${this.spec.title} panel` },
+      },
+      icon(this.spec.side === 'left' ? 'chevron-left' : 'chevron-right', { size: 14 }),
+    )
+    // Through `fold` like the other three ways in, so the stored preference, the
+    // relayout and the workspace write happen once and in one place.
+    node.addEventListener('click', () => this.fold(true))
     return node
   }
 

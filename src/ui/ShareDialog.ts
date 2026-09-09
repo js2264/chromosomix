@@ -59,7 +59,24 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   // scrolled by every means a reader already knows, and `tabindex` keeps it on
   // the Tab order the input was on, so the dialog still opens with the caret on
   // the link (`Modal` focuses the body's first focusable) rather than on ✕.
-  const field = el('div', { class: 'share-link', attrs: { tabindex: '0' }, text: 'preparing…' })
+  //
+  // The `role` and the label are not decoration. An `<input readOnly>` is
+  // announced by a screen reader as a named field holding a value; a bare
+  // focusable `div` is announced as nothing at all, which would trade a
+  // scrollable box for a stop on the Tab order that says why it is there to
+  // nobody. `aria-readonly` because it is genuinely not editable — a reader who
+  // is told they can type here and then cannot has been told a worse thing than
+  // silence.
+  const field = el('div', {
+    class: 'share-link',
+    attrs: {
+      tabindex: '0',
+      role: 'textbox',
+      'aria-readonly': 'true',
+      'aria-label': 'The link to this session',
+    },
+    text: 'preparing…',
+  })
 
   const note = el('p', { class: 'hint' })
   const advice = el('p', { class: 'hint' })

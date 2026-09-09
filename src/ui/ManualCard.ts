@@ -44,6 +44,20 @@ export interface MapPicker {
   /** `true` when there is a plot to click on. */
   available(): boolean
   /**
+   * What kind of picture the picks would land on, when there is one.
+   *
+   * The card says *pick on map* beside a contact map and *pick on track* in the
+   * 1D genome browser, because those are two different things to point at and a
+   * button that named the one that is not on screen would be asking the reader
+   * to look for it. Absent — or a shell that does not answer — means a map,
+   * which is what every caller meant before there was anything else to pick on.
+   *
+   * Read on every {@link ManualCard.refresh}, not captured: the card lives in
+   * the sidebar and the picture under it is replaced on every navigation, so
+   * this is a question about *now* rather than a property of the picker.
+   */
+  surface?(): PickSurface
+  /**
    * Turn on picking, for as long as the mode lasts.
    *
    * Which gesture the mode listens for is decided by what the form hands over:
@@ -60,6 +74,12 @@ export interface MapPicker {
   start(handlers: PickHandlers, onEnd: () => void): () => void
 }
 
+/** Which picture is being pointed at — see {@link MapPicker.surface}. */
+export type PickSurface = 'map' | 'track'
+
+/** What one pick button calls itself, on each of the two surfaces. */
+type PickLabels = Record<PickSurface, string>
+
 export interface ManualCardProps {
   store: ManualStore
   picker: MapPicker
@@ -71,7 +91,14 @@ export class ManualCard {
   readonly el: HTMLElement
   private readonly list = el('div', { class: 'ann-list' })
   private readonly unsubscribe: () => void
-  private readonly buttons: HTMLButtonElement[] = []
+  /**
+   * What each pick button has to be told when the picture changes.
+   *
+   * A closure per button rather than the buttons themselves, because two things
+   * move together and only one of them is a property: whether there is anything
+   * to pick on, and *what* it is. See {@link pickButton}.
+   */
+  private readonly buttons: Array<(ready: boolean, surface: PickSurface) => void> = []
   private readonly formatSelect = el('select', { class: 'select' })
   private readonly saveButton: HTMLButtonElement
 
@@ -98,10 +125,19 @@ export class ManualCard {
     this.unsubscribe()
   }
 
-  /** Enable or disable the pick buttons as views come and go. */
+  /**
+   * Enable, disable and re-word the pick buttons as views come and go.
+   *
+   * Both halves for the same reason: the picture under this card is replaced on
+   * every navigation, and a button offering a gesture the mounted view cannot
+   * complete — or naming a surface that is not on screen — is a button that
+   * lies. The surface is asked for here rather than remembered, since a session
+   * walks map → tracks → map without the card being rebuilt.
+   */
   refresh(): void {
     const ready = this.props.picker.available()
-    for (const node of this.buttons) node.disabled = !ready
+    const surface = this.props.picker.surface?.() ?? 'map'
+    for (const sync of this.buttons) sync(ready, surface)
   }
 
   // -------------------------------------------------------------------------
@@ -119,11 +155,15 @@ export class ManualCard {
     }
 
     const at = el('input', { class: 'input', type: 'text', placeholder: 'I:120000' })
-    const add = (point: ManualPoint): void => {
+    // The drawn axis is a parameter with a default rather than a read of the
+    // select, because one way in does not get to choose it: a pick on a track
+    // is always a crosshair (see below), and the select is about the two ways in
+    // that name an axis of a map.
+    const add = (point: ManualPoint, drawn: LineAxis = axis.value as LineAxis): void => {
       this.props.store.add({
         id: mintMarkId(),
         kind: 'line',
-        axis: axis.value as LineAxis,
+        axis: drawn,
         at: point,
         colour: this.props.store.nextColour(),
       })
@@ -150,9 +190,28 @@ export class ManualCard {
     // Read from the select on every click rather than captured once: the mode
     // now outlives a single mark, so a reader may well place two verticals,
     // switch to horizontal and place a third without leaving it.
-    const pick = this.pickButton('pick on map', {
-      point: (at) => add(axis.value === 'horizontal' ? at.rows : at.cols),
-    })
+    //
+    // **A line picked on a track is `both`**, whatever the select says, and it
+    // is worth saying why a one-dimensional gesture writes a two-axis mark
+    // rather than a new one-axis kind. A track has one axis, so a click on it
+    // names a coordinate and not a direction — the row/column question the
+    // select answers is a question about a picture that is not on screen. The
+    // honest reading of "look at this coordinate" with no axis attached is the
+    // crosshair: in the browser it draws as the single rule the reader asked
+    // for, and when a map is opened afterwards the same mark is already the
+    // vertical *and* the horizontal, with nothing to convert and no moment at
+    // which the app has to guess what they meant. The select is left alone
+    // rather than disabled, because it still governs everything typed into the
+    // box above it.
+    const pick = this.pickButton(
+      { map: 'pick on map', track: 'pick on track' },
+      {
+        point: (at) =>
+          at.oneAxis === true
+            ? add(at.cols, 'both')
+            : add(axis.value === 'horizontal' ? at.rows : at.cols),
+      },
+    )
 
     return el(
       'div',
@@ -190,7 +249,18 @@ export class ManualCard {
 
     // One click is a cell, and a cell already has both coordinates — so an
     // arrowhead is one click, not two.
-    const pick = this.pickButton('pick on map', { point: (at) => add(at.rows, at.cols) })
+    //
+    // On a **track** the two coordinates are the same one, so the click makes
+    // the on-diagonal arrowhead — the domain corner this mark's own type is
+    // documented for. That is the whole of what a single axis can honestly say
+    // about a cell, and it is a mark worth having: the alternative, two
+    // successive picks with a corner held in the reader's head between them, is
+    // the gesture the rectangle form was rewritten to get rid of. A loop is
+    // still one drag away on the map the tracks belong to.
+    const pick = this.pickButton(
+      { map: 'pick on map', track: 'pick on track' },
+      { point: (at) => add(at.rows, at.cols) },
+    )
 
     return el(
       'div',
@@ -251,9 +321,16 @@ export class ManualCard {
       })
     }
 
-    const pick = this.pickButton('draw on map', {
-      box: (at) => add(at.rows, at.cols),
-    })
+    // On a **track** the drag has one axis, so the browser reports the same
+    // stretch as the rows and as the columns and this makes the square on the
+    // diagonal — which is what a band drawn across a genome browser means: *this
+    // block of contacts*, from here to here, against itself. No schema change
+    // and no 1D-only kind: the mark a reader draws in the browser is already the
+    // mark the map will show them.
+    const pick = this.pickButton(
+      { map: 'draw on map', track: 'draw on track' },
+      { box: (at) => add(at.rows, at.cols) },
+    )
 
     return el(
       'div',
@@ -281,27 +358,62 @@ export class ManualCard {
    * two marks that name a place, a drag for the one that names an extent. The
    * button says which in its own hint, since a reader who clicks at a map that
    * is waiting for a drag has been given no way to find that out.
+   *
+   * **One button per form, whichever picture is mounted.** The label and the
+   * hint are a pair of sentences and not one, because the same gesture means
+   * something slightly different on a contact map and on a track — the second is
+   * one axis, so what it places lands on the diagonal — and a reader deserves to
+   * be told that before they press it rather than afterwards from the list. A
+   * second, browser-only button would have been the other way to say it, and it
+   * would have doubled the machinery below: the arming, the `Done` state, the
+   * Escape road and the "another form armed over this one" rule are the parts
+   * that are hard to get right, and there is exactly one of them here.
    */
-  private pickButton(label: string, handlers: PickHandlers): HTMLButtonElement {
-    const hint =
+  private pickButton(labels: PickLabels, handlers: PickHandlers): HTMLButtonElement {
+    const hints: PickLabels =
       handlers.box === undefined
-        ? 'Then click the plot, as often as you like. Escape or Done stops.'
-        : 'Then drag a box on the plot, as many as you like — Shift keeps it on the diagonal. ' +
-          'Escape or Done stops.'
+        ? {
+            map: 'Then click the plot, as often as you like. Escape or Done stops.',
+            track:
+              'Then click the tracks, as often as you like. A track has one axis, so the ' +
+              'mark lands on the diagonal. Escape or Done stops.',
+          }
+        : {
+            map:
+              'Then drag a box on the plot, as many as you like — Shift keeps it on the ' +
+              'diagonal. Escape or Done stops.',
+            track:
+              'Then drag across the tracks, as many as you like. A track has one axis, so ' +
+              'the box is the square on the diagonal. Escape or Done stops.',
+          }
     let stop: (() => void) | null = null
+
+    /**
+     * What this button says, given what is on screen — and nothing while armed.
+     *
+     * The armed button is a `Done` button: it has stopped naming the gesture and
+     * started offering the way out of it, so a navigation underneath must not
+     * rename it back. Its own `rest` is what puts it into this pass again.
+     */
+    const sync = (ready: boolean, surface: PickSurface): void => {
+      node.disabled = !ready
+      if (stop !== null) return
+      node.textContent = labels[surface]
+      node.title = hints[surface]
+    }
 
     const rest = (): void => {
       stop = null
       node.classList.remove('is-armed')
-      node.textContent = label
-      node.title = hint
       // Every pick button on the card comes back at once: only one mode can be
-      // on, so arming the other one has just ended this.
+      // on, so arming the other one has just ended this. The label comes back
+      // through the same pass, so it names whatever is on screen *now* rather
+      // than whatever was there when the mode was armed.
       this.refresh()
     }
 
     const node = button(
-      label,
+      labels.map,
       () => {
         if (stop !== null) {
           stop()
@@ -316,10 +428,10 @@ export class ManualCard {
         const end = this.props.picker.start(handlers, rest)
         if (stop !== null) stop = end
       },
-      { class: 'btn', title: hint },
+      { class: 'btn', title: hints.map },
     )
-    node.disabled = !this.props.picker.available()
-    this.buttons.push(node)
+    this.buttons.push(sync)
+    sync(this.props.picker.available(), this.props.picker.surface?.() ?? 'map')
     return node
   }
 

@@ -36,6 +36,7 @@ import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
 import { overlapWith } from '../featureset'
+import { compileMotif, findMotif, isMotifRefusal } from '../motif'
 import {
   contigIndexOf,
   renameInto,
@@ -74,6 +75,8 @@ import {
   type AnnotationResponse,
   type AssemblyResult,
   type BaseResult,
+  type MotifHits,
+  type MotifScanResult,
   type DetectedFormat,
   type LoadResult,
   type WireSource,
@@ -455,6 +458,8 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
       return runTask(request)
     case 'bases':
       return bases(request.entry, request.regions)
+    case 'motif':
+      return motifSites(request.entry, request.pattern, request.bothStrands, request.limit)
     case 'assembly':
       return assemblyOf(request.source)
     case 'reads':
@@ -760,13 +765,12 @@ function note(ends: Map<string, number>, contig: string, end: number): void {
  *
  * The step is **two orders of magnitude below** the coordinate — three
  * significant figures — and it used to be the coordinate's *own* order of
- * magnitude, one significant figure. One figure is not a nudge, it is a step
- * that grows tenfold at every power of ten and can be almost the whole value
- * on the wrong side of one: yeast
- * VII, whose last feature ends at 1,090,940, was handed 2,000,000, and so was
- * IV at 1,531,933 — two chromosomes 441 kb apart given exactly the same length,
- * which is the failure a reader sees. It shows up three ways at once: every
- * sequence gets a blank pannable margin on its right (VII 83% of it), the
+ * magnitude, one significant figure. One figure is not a nudge: the step grows
+ * tenfold at every power of ten, so just past one it is almost the whole value.
+ * Yeast VII, whose last feature ends at 1,090,940, was handed 2,000,000 — and
+ * so was IV at 1,531,933, two chromosomes 441 kb apart given exactly the same
+ * length, which is the failure a reader sees. It shows up three ways at once:
+ * every sequence gets a blank pannable margin on its right (VII 83% of it), the
  * SEQUENCES card draws each bar as `length / longest` and so draws a genome
  * that is not this one, and the whole yeast annotation set came out as 15.99 Mb
  * of a 12.16 Mb genome. At three figures VII is 1,100,000 and IV 1,540,000, and
@@ -1222,6 +1226,92 @@ function bases(entry: string, regions: Region[]): BaseResult {
     if (budget <= 0) break
   }
   return { regions: out }
+}
+
+/**
+ * How many sites one motif search may report.
+ *
+ * Generous on purpose: `GATC` is about 40,000 sites in yeast and a reader
+ * looking for a restriction map wants all of them, so a cap that trimmed a
+ * genuine answer would be worse than no feature at all. What it is here for is
+ * the pathological ask — a single `N`, or `NN` — which on a mammalian reference
+ * is three billion hits and would exhaust memory before anything reached the
+ * screen. Past this the search stops and *says* it stopped
+ * ({@link MotifScanResult.truncated}), because a lane that is silently a
+ * prefix of the answer is the one failure a reader cannot see.
+ */
+const MOTIF_SITE_LIMIT = 500_000
+
+/**
+ * Every occurrence of a motif in one loaded reference.
+ *
+ * In sequence order, one entry per contig that has a hit at all — a contig with
+ * none is omitted rather than carried as three empty arrays, since a draft
+ * assembly is mostly contigs with no hit in them and the empty entries would
+ * outnumber the real ones.
+ *
+ * The scan runs over `store.contigs` rather than over `store.bases` so the order
+ * is the reference's own, which is the order the axis is laid out in and so the
+ * order the caller wants; `basesOf` then resolves the spelling, exactly as
+ * {@link bases} does, so a FASTA renamed into the map's vocabulary at load time
+ * is searched under the names the rest of the application uses (§5.9).
+ */
+function motifSites(
+  entry: string,
+  pattern: string,
+  bothStrands: boolean,
+  limit: number | undefined,
+): MotifScanResult {
+  const store = sequences.get(entry)
+  if (store === undefined) {
+    throw new Error('This sequence is no longer open. Drop the file again.')
+  }
+  const compiled = compileMotif(pattern)
+  // A refusal is a fact about what the reader typed, not a failure of the
+  // request — see `MotifScanResult.refusal`.
+  if (isMotifRefusal(compiled)) {
+    return { hits: [], total: 0, truncated: false, refusal: compiled.reason }
+  }
+
+  const cap = Math.max(1, Math.min(limit ?? MOTIF_SITE_LIMIT, MOTIF_SITE_LIMIT))
+  const hits: MotifHits[] = []
+  let total = 0
+  let truncated = false
+
+  for (const contig of store.contigs) {
+    if (total >= cap) {
+      // Stopped with sequences left unread, which is a truncated answer even
+      // though the last contig searched finished cleanly.
+      truncated = true
+      break
+    }
+    const seq = basesOf(store, contig.name)
+    if (seq === undefined) continue
+    // One more than there is room for, and then the extra is dropped. Asking for
+    // exactly the remaining budget cannot tell "the cap fell on the last site
+    // there was" from "the cap cut the answer short" — `findMotif` stops on the
+    // site that fills the budget and has no way to know whether another follows
+    // without looking. Looking costs one more site's worth of scan and buys the
+    // difference between a complete answer and a claim of truncation on one.
+    const room = cap - total
+    const found = findMotif(seq, compiled, { bothStrands, limit: room + 1 })
+    const kept = Math.min(found.hits.length, room)
+    if (found.truncated || found.hits.length > room) truncated = true
+    if (kept === 0) continue
+
+    const starts = new Int32Array(kept)
+    const ends = new Int32Array(kept)
+    const strands = new Int8Array(kept)
+    for (let at = 0; at < kept; at++) {
+      const hit = found.hits[at]
+      starts[at] = hit.start
+      ends[at] = hit.end
+      strands[at] = hit.strand
+    }
+    hits.push({ contig: contig.name, starts, ends, strands })
+    total += kept
+  }
+  return { hits, total, truncated, refusal: null }
 }
 
 /**

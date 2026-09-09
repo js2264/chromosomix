@@ -206,9 +206,44 @@ export interface Armable<H> {
  */
 export interface PickHandlers {
   /** A click, as one locus per axis. */
-  point?: (at: { rows: ManualPoint; cols: ManualPoint }) => void
+  point?: (at: PickedPlace) => void
   /** A drag, as one stretch per axis. */
   box?: (at: { rows: ManualSpan; cols: ManualSpan }) => void
+}
+
+/**
+ * The place a click landed on, as a coordinate on each axis.
+ *
+ * Both axes, always, because a mark is a two-axis object and the *form* is what
+ * decides which of them it means — a vertical rule wants the column, a
+ * horizontal one the row, an arrowhead both. A surface that reported one would
+ * be a surface whose answer only half the card could use.
+ *
+ * A **1D surface reports the same coordinate twice**, and says so with
+ * {@link oneAxis}. That is not a stand-in for a missing number: a genome browser
+ * has one axis, so the place a click names on it is the point of the map's
+ * diagonal at that coordinate, where the row and the column genuinely are the
+ * same base pair. Everything downstream then works unchanged — a box drawn on a
+ * track comes out as the on-diagonal square, an arrowhead as the on-diagonal
+ * cell — and only the line form has a decision left to make, which is what the
+ * flag is for.
+ */
+export interface PickedPlace {
+  /** Where it sits on the row axis. */
+  rows: ManualPoint
+  /** Where it sits on the column axis. */
+  cols: ManualPoint
+  /**
+   * The surface has a single axis, so {@link rows} and {@link cols} are one
+   * coordinate reported twice.
+   *
+   * Stated rather than inferred from `rows` equalling `cols`: a click on a map's
+   * own diagonal reports two equal coordinates as well, and a card that read
+   * *that* as "this came off a track" would quietly change what the map's
+   * gestures mean — which is the one thing this flag must not do. Absent means a
+   * surface with two axes, which is every map.
+   */
+  oneAxis?: boolean
 }
 
 /**

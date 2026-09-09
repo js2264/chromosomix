@@ -22,7 +22,7 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
-import { ManualStore } from '../annotations/manual'
+import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
@@ -58,7 +58,7 @@ import {
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
-import { armAll, resetPick } from '../ui/mapPick'
+import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
@@ -2414,6 +2414,48 @@ export class Session {
   }
 
   /**
+   * How the Manual annotations card reaches whatever picture is on screen
+   * (§8.1).
+   *
+   * One picker for both shapes of session, because there is one card and one
+   * store behind it: a session walks map → tracks → map without either being
+   * rebuilt, and two pickers would be two answers to "what can be pointed at
+   * now". That is the bug this replaced — the card was armed against a
+   * `MatrixPanel`, which a 1D view does not have, so in the browser every pick
+   * button sat disabled with nothing on screen to say why.
+   *
+   * **Everything mounted, not only the lead.** A mark is a coordinate and a
+   * companion is a map, so a deck of five pictures is five places a reader may
+   * reasonably point at — and the marks already appeared on all of them, because
+   * they live in one store every panel draws from. Only the *gesture* was the
+   * lead's, which made the feature look broken in exactly the layout it is most
+   * useful in: a domain boundary drawn across four replicates is the thing a
+   * deck is for. `armAll` is what makes the several into one mode, and the
+   * browser joins that list on the same terms — its picks carry one axis rather
+   * than two, which is a fact about the gesture and not about the arming, so
+   * nothing here has to know it.
+   */
+  private markPicker(): MapPicker {
+    return {
+      // The *mounted* view, and deliberately not "anything `armAll` would
+      // reach": a deck outlives a navigation to a table, and a card that lit its
+      // buttons there would be offering a gesture on a picture that is not on
+      // screen. Which is the same rule as before, with the browser added to it.
+      available: () => this.current?.panel !== undefined || this.browser !== null,
+      // What the reader would be pointing at, which is what the card's buttons
+      // call themselves. A mounted map wins where there is one: a browser is
+      // never on screen at the same time as the matrix it stands in front of.
+      surface: () => (this.current?.panel === undefined ? 'track' : 'map'),
+      start: (handlers, onEnd) => armAll(this.pickTargets(), handlers, onEnd),
+    }
+  }
+
+  /** Every surface a mark could be placed on as things stand. */
+  private pickTargets(): Array<Armable<PickHandlers> | null | undefined> {
+    return [this.current?.panel, this.deck, this.browser]
+  }
+
+  /**
    * The annotation machinery for a browser session.
    *
    * The same four pieces a map gets, against the assembly rather than against a
@@ -2443,7 +2485,9 @@ export class Session {
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
     // An assembly's contigs are already `{ name, length }`, which is what the
     // loader's rename wants (§5.9).
-    const loader = new AnnotationLoader(store, client, assembly.contigs)
+    const loader = new AnnotationLoader(store, client, assembly.contigs, (files) =>
+      this.considerLengths(files),
+    )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -2464,6 +2508,17 @@ export class Session {
     }
 
     this.compareCard = this.newCompareCard(assembly.uri)
+    // The marks card, in the place it holds beside a map: under the tracks it
+    // annotates. It was absent here, and the store above it was not — so a
+    // browser session read a previous visit's marks out of storage, held them in
+    // memory and offered no way to see, place or remove any of them. A genome
+    // browser is exactly where a reader wants to say *look at this coordinate*:
+    // the axis is base pairs, which is what a mark is stated in (§8.1).
+    this.manualCard = new ManualCard({
+      store: manual,
+      picker: this.markPicker(),
+      fileLabel: fileLabel(assembly.uri),
+    })
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card, not below it: what a reader just computed is what
@@ -2476,6 +2531,7 @@ export class Session {
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
       }).el,
+      this.manualCard.el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
@@ -2667,6 +2723,10 @@ export class Session {
       ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       groups: held.groups,
+      // The same store the card writes into and the map draws from. Handed over
+      // rather than read back through the session, for the reason the tracks and
+      // the groups are: a view is rebuilt on every navigation and a mark is not.
+      manual: held.manual,
     })
     this.browser = view
     this.showContent(view.el, {
@@ -2957,22 +3017,11 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
+    // The loader raises {@link considerLengths} for every file it is handed, so
+    // the "does this file also know the real lengths" question is asked from
+    // here without being asked *here* — see the hook's own comment for why it
+    // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
-    // …and, if this browser is still guessing its lengths, ask this file
-    // whether it knows them. A bigWig, a bigBed, a BAM, a FASTA and a VCF with
-    // `##contig` lines each carry every sequence and its true length, which is
-    // exactly what the Genome card offers to replace the guesses with — so the
-    // offer is kept for all of them rather than for sizes files alone. **After**
-    // the load and never instead of it: the file is a track, and adopting its
-    // lengths is something done with it as well (§8.3).
-    //
-    // Only while the lengths are inferred, which is what bounds the cost: the
-    // extra question re-reads the dropped file, and the first exact answer ends
-    // it for the session. A file that turns out to know nothing — another BED —
-    // is simply not adopted.
-    if (this.assembly !== null && !lengthsAreExact(this.assembly)) {
-      void this.adoptExactLengths(file)
-    }
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -3021,6 +3070,27 @@ export class Session {
     } finally {
       client.destroy()
     }
+  }
+
+  /**
+   * Every file the loader was handed, asked whether it knows the real lengths.
+   *
+   * The gate rather than the work: this is called on **every** file that reaches
+   * a loader by any road, so the cheap check belongs here and the expensive one
+   * — a second read of the file, in a worker of its own — belongs behind it.
+   * Once the assembly's lengths are exact there is nothing left to improve, and
+   * `lengthsAreExact` says so without touching a byte, which is what keeps a
+   * reader who drops forty bigWigs onto a browser that already knows its genome
+   * from paying for forty pointless reads.
+   *
+   * Every file rather than the first: a reader selecting a bigWig and a BED
+   * together should get the lengths out of whichever of them has them, and
+   * `adoptExactLengths` already settles a race between two answers by checking
+   * that the assembly it started from is still the one in place.
+   */
+  private considerLengths(files: readonly File[]): void {
+    if (this.assembly === null || lengthsAreExact(this.assembly)) return
+    for (const file of files) void this.adoptExactLengths(file)
   }
 
   /**
@@ -3571,6 +3641,7 @@ export class Session {
         length: lengths.get(name) ?? 0,
         ...(genomeOf.size === 0 ? {} : { genome: genomeOf.get(name) ?? '' }),
       })),
+      (files) => this.considerLengths(files),
     )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
@@ -3603,22 +3674,11 @@ export class Session {
       }),
     }
 
-    const picker: MapPicker = {
-      available: () => this.current?.panel !== undefined,
-      /**
-       * The session's own map **and every map in the deck**.
-       *
-       * A mark is a coordinate and a companion is a map, so a deck of five
-       * pictures is five places a reader may reasonably point at — and the marks
-       * already appeared on all of them, because they live in one store every
-       * panel draws from. Only the *gesture* was the lead's, which made the
-       * feature look broken in exactly the layout it is most useful in: a domain
-       * boundary drawn across four replicates is the thing a deck is for.
-       * `armAll` is what makes the five into one mode.
-       */
-      start: (handlers, onEnd) => armAll([this.current?.panel, this.deck], handlers, onEnd),
-    }
-    this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
+    this.manualCard = new ManualCard({
+      store: manual,
+      picker: this.markPicker(),
+      fileLabel: fileLabel(uri),
+    })
     this.bookmarksCard = new BookmarksCard({
       store: new BookmarkStore(scope),
       go: (mark) => this.goToBookmark(mark),
@@ -3764,6 +3824,17 @@ export class Session {
   private carriedAnalysis: readonly CarriedResult[] | null = null
 
   /**
+   * The reader's own marks, held across the same gap for the same reason.
+   *
+   * Apart from {@link carried} because they arrive by a different road: a track
+   * goes back in through the `AnnotationLoader`, which re-reads it from the
+   * handle it still holds, and a mark has no handle to re-read from — it is a
+   * contig and a base pair, so what is written is what comes back. See
+   * {@link adoptCarriedMarks} for why they have to travel at all.
+   */
+  private carriedMarks: readonly ManualMark[] | null = null
+
+  /**
    * Remember the loaded tracks, if the file about to open is a different one.
    *
    * Only the rows that are actually readable: a detached row is a name and a
@@ -3786,6 +3857,8 @@ export class Session {
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]
     const computed = this.reopeningSameFile(next) ? (this.analysis?.carry() ?? []) : []
     this.carriedAnalysis = computed.length === 0 ? null : computed
+    const marks = this.annotations?.manual.marks
+    this.carriedMarks = marks === undefined || marks.length === 0 ? null : [...marks]
   }
 
   /**
@@ -3802,11 +3875,50 @@ export class Session {
   }
 
   private adoptCarried(loader: AnnotationLoader): void {
+    // The marks first, and unconditionally: they travel by a road of their own
+    // and a session with no readable tracks still has them to hand over.
+    this.adoptCarriedMarks()
     const rows = this.carried
     this.carried = null
     if (rows === null) return
     for (const row of rows) loader.carry(row)
     this.adoptCarriedLanes()
+  }
+
+  /**
+   * Put the hand-drawn marks into the store the incoming file just built.
+   *
+   * The tracks' problem, one layer down. Memory is keyed on the *file*
+   * ({@link memoryKey}), which is right — two files are two workspaces — and it
+   * means a mark placed against one URI is invisible to a store opened on
+   * another. Between a map and its own 1D browser that costs nothing, because
+   * `hideMap` keeps the file and therefore the key; but a browser opened on a
+   * bigWig scopes to the bigWig, and the cooler dropped on it afterwards scopes
+   * to the cooler. Same genome, same coordinates, same reader, different key —
+   * so four domains boxed while reading the tracks vanished the moment the map
+   * they were drawn for arrived. Which is precisely the gesture this feature is
+   * for.
+   *
+   * Carried live, exactly as the tracks are and across the same gap: the two
+   * stores never exist at the same moment, so there is nowhere else to hold
+   * them. A mark needs nothing re-read — it is a contig and a base pair, with no
+   * bytes behind it — so, unlike a track, it comes back whole.
+   *
+   * **By id, and only what is missing.** A reopen at another resolution hangs
+   * its workspace on the same key, so the new store has already read these marks
+   * out of storage; adding them again would double every mark on every change of
+   * bin size. Ids are minted once per tab and stored with the mark, so "already
+   * there" is a question with an answer.
+   */
+  private adoptCarriedMarks(): void {
+    const marks = this.carriedMarks
+    this.carriedMarks = null
+    const store = this.annotations?.manual
+    if (marks === null || store === undefined) return
+    const known = new Set(store.marks.map((mark) => mark.id))
+    for (const mark of marks) {
+      if (!known.has(mark.id)) store.add(mark)
+    }
   }
 
   /**

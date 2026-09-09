@@ -14,6 +14,72 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Find a sequence.** A reference loaded, a motif typed, and every place it
+  occurs becomes two lanes. The pattern is IUPAC — `GGTCANNNTGACC`, `GATC`,
+  `TTAGGG` — spaces are ignored, and both strands are searched unless you say
+  otherwise; a palindrome is reported once rather than twice, because searching
+  both strands of `GAATTC` would otherwise count every site again and a reader
+  totting up a lane would get double the answer with nothing on screen to
+  explain it.
+
+  **Two lanes, not one, and that is the point.** A set of sites answers two
+  questions and no single picture answers both: *where exactly is it*, which is
+  an interval per site — clickable, strand-carrying, exportable as BED, and an
+  eligible input to overlap, the metaplot and APA like any other interval set
+  (§18.3) — and *how dense is it here*, which is sites per bin and is the only
+  one of the two that means anything at chromosome scale. The first is a picket
+  fence when you zoom out; the second is a bar chart of ones when you zoom in.
+  So both are made, from one scan, and either can be closed with the same × as
+  every other row.
+
+  Two decisions inside it are worth stating because they are the ones that
+  would be wrong by default. An `N` in the *reference* does not satisfy a
+  pattern that names a base: an assembly gap is a base nobody knows, not a base
+  that is any of four, and matching it would turn every gap into a solid bar of
+  fictional hits — most of what you would see on a draft genome. And an empty
+  bin in the density lane is a **zero**, never a gap: `NaN` in a per-bin vector
+  draws as a hole, and "there is no site here" is the answer, not missing data.
+
+  The scan runs in the annotations worker, beside the residues, because that is
+  where they are — a genome is parsed into that thread and deliberately never
+  shipped out whole, so searching on the main thread would mean either hauling
+  twelve megabytes across the boundary or issuing thirty windowed reads and
+  stitching the seams. The card appears only while a reference is loaded, and
+  re-running a pattern replaces its own two rows rather than stacking a ninth
+  copy. The rows do not survive a reload, which is deliberate: the alternative
+  is inventing an analysis task purely to own a persistence path, and a search
+  is a few seconds with the pattern still on screen.
+
+- **A fold button on every panel header.** Each of the five columns now carries a
+  chevron beside its shortcut chip, pointing the way that column travels — left
+  for the three on the left, right for the two on the right. The affordance
+  existed when a panel was *folded* (the rotated spine tab, which points the
+  other way because it offers to open) and was missing when it was open, so the
+  only way to close a column was a button in the header bar that does not look
+  like it belongs to it. It goes through the same `fold` every other entry point
+  does, so the remembered state, the relayout and the settle all happen once.
+
+- **Shift-click ticks a range in the Tracks card.** Ticking the first ten of
+  thirty tracks was ten clicks on an eleven-pixel box, which is the arithmetic
+  that makes a batch action cost more than doing the ten by hand. Click one box,
+  shift-click another, and every row between the two takes the state the clicked
+  box is moving to — the gesture every file list has. The anchor is remembered as
+  a row's **id** and resolved to a position at click time, because the rows are
+  drag-reorderable and the card's list is not the store's: an index cached at the
+  first click is a lie the moment anything moves.
+
+- **Z-score the tracks first, on the metaplot.** A new option under *Summary*,
+  off by default. Two tracks in different units — a CPM bigWig and a log2 ratio —
+  plotted on one axis compare nothing; standardising each by its own mean and SD
+  before the metric puts them on one scale. The statistics are taken per **track**
+  and shared across that track's ranking groups, which is the part that is easy
+  to get wrong: standardising each group separately would re-centre every one of
+  them on zero and erase the ranking the reader split them by. A constant track
+  is centred and not divided, so nothing comes back as ±∞, and gaps stay gaps.
+  The heatmap shows the standardised values too, so the two halves of one figure
+  cannot disagree, and the y axis is relabelled rather than left claiming a unit
+  the numbers no longer have.
+
 - **The viewer is published to npm**, as a built directory rather than as
   something to import — so a page can embed a copy that depends on nobody's
   hosting, including ours:
@@ -808,6 +874,80 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **Every published demo failed to open.** The picker offered three sessions and
+  each one answered a click with *not a workspace*: `App.openWorkspaceFile` reads
+  `kind: "metacooler.workspace"` and refuses anything else, and the copies on the
+  bucket are still written in the older single-session shape. The mock-community
+  entry was a 404 on top of that — the bucket had moved that dataset under
+  `demo/metagenomics/` and `ui/examples.ts` went on naming the old prefix.
+
+  The catalogue is now **four** sessions, ordered as an argument rather than by
+  dataset: one map with its tracks, then the same assembly with no map at all,
+  then two maps side by side — a `.cool` and a Juicer `.hic`, locked together, at
+  the one window the two assemblies agree about to the base — and the metagenome
+  last, because it is the file this viewer exists for and the one that needs the
+  other three to be legible. `demo/` on disk is laid out the way the bucket is,
+  so publishing is a small JSON sync rather than a second copy of 49 MB.
+
+  Note that the fix is only half in this repository: the bucket has to be
+  re-synced with `scripts/publish-demo.sh` before the site sees any of it.
+
+- **Sequence lengths inferred from a feature file were inflated by up to 85%.**
+  Open a browser on a GTF, a BED or a narrowPeak — a file that carries no
+  lengths — and each sequence was rounded up to *one significant figure*, a step
+  equal to the value's own order of magnitude. Yeast IV (1.53 Mb) and VII
+  (1.09 Mb) therefore both came out as exactly 2.00 Mb, 441 kb apart and
+  indistinguishable; the genome total read 31% high; every chromosome ended in a
+  long blank pannable margin; and the bar chart in the Sequences card was drawn
+  to the wrong shape. The step jumped discontinuously at each power of ten, so
+  the error was worst just above one.
+
+  The margin the rounding was written for is kept — a browser opened on a peak
+  set should not appear to *end* at the last peak — at two orders of magnitude
+  less: three significant figures, always strictly past the last feature, about
+  a half-percent instead of a third. Yeast now totals 12.11 Mb against a true
+  12.07, where it read 15.99.
+
+  Two things the interface claimed and the code did not do are now true as well.
+  The browser's summary no longer says a sequence ends at its last feature, which
+  it never did; and dropping a **bigWig** really does replace inferred lengths
+  with real ones, as the Genome card has always offered — along with a bigBed, a
+  BAM, a FASTA or a VCF that declares its contigs, any of which knows the answer
+  exactly. It is adopted *as well as* loading the file as a track, never instead
+  of it, and it can only ever replace a guess: an assembly that already knows its
+  lengths is never overwritten. This works from the Tracks card's own file button
+  as well as from a drop, which is one gesture two inches from the other.
+
+- **Hiding a curve recoloured the others.** The legend filtered the hidden series
+  out and the renderer then coloured by position in what was left, so hiding the
+  first of three moved the second onto its colour and the third onto the second's
+  — every curve, its confidence band and its legend swatch, all shifting one step
+  up the palette at once. Nothing said so, and it went into the PNG and the PDF.
+  The most visible face of it was alt-click *isolate*, which hides all but one
+  series and therefore always drew whichever you isolated in the first palette
+  colour. Colours are now settled against the full list before anything is
+  hidden. Affected P(s), the P(s) slope, the metaplot and the all-maps deck
+  overlay — every figure that draws more than one curve.
+
+- **The share dialog was clipped, cramped, and made you press a button.** Its
+  body asked for a width 4 rem greater than the panel containing it, and that
+  panel is `overflow: hidden` — so the right-hand edge, which is exactly where
+  the copy and shorten buttons live, was cut off with no way to scroll to it. It
+  also had no padding at all, so the text sat against the border. The link is now
+  a box that scrolls by wheel and by drag rather than a field only a caret can
+  move through, the copy control is the icon alone, and **the link is put on the
+  clipboard the moment it is generated**, with a notification saying so — and
+  again when the shortener replaces it, since that is what you will paste. Where
+  the browser refuses the clipboard, which is every insecure origin, nothing
+  claims success: the link is selected and a sentence says to copy it.
+
+- **The show/hide tooltip control was missing from the 1D browser.** The matrix's
+  Tracks card builds its overlay row from the list of track options; the
+  browser's spelled six of them out by hand and `tooltip` was not among them. The
+  flag was honoured — the browser reads it on every hover — but reachable only
+  from the `p` shortcut or the command palette, never from the column the rest of
+  the switches are in.
 
 - **An incomplete `.pairs` file is now said to be incomplete.** A truncated
   BGZF — a cancelled upload, an interrupted `bgzip`, a partial copy — imported

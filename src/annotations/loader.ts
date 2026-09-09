@@ -76,6 +76,27 @@ export class AnnotationLoader {
      * thing that can veto a match made across two nomenclatures.
      */
     private readonly mapContigs: NamedSequence[],
+    /**
+     * Told about every file handed to {@link addFiles}, before it is read.
+     *
+     * The session uses it to ask a dropped track whether it also knows the
+     * assembly's real lengths, and it is a hook here rather than a line at the
+     * one call site because there is not one call site. A file reaches a loader
+     * from `Session.dropped`, from the Tracks card's own file button, from the
+     * sizes path when a `chrom.sizes`-shaped name turns out not to be one, and
+     * from the pair a BAM opens with — and a browser whose lengths were fixed by
+     * dragging a bigWig onto the plot but *not* by choosing the same bigWig from
+     * the button two inches away is the kind of difference nobody can see the
+     * rule behind. So the notice is raised where every road already converges.
+     *
+     * The *paired* files, not the raw list: a `.tbi` beside its BAM is an index
+     * rather than a file with an opinion about the genome, and passing it on
+     * would buy a wasted read of a sidecar that can never answer.
+     *
+     * Optional because a loader is a loader without it, and the deck's
+     * companions build one where nothing is watching.
+     */
+    private readonly onFilesAdded?: (files: readonly File[]) => void,
   ) {
     // Tell the worker when a row goes. Nothing did, before this: `client.drop`
     // had exactly one caller — the refusal path below — and `AnnotationStore.remove`
@@ -146,7 +167,9 @@ export class AnnotationLoader {
     // "select both and drag" the whole of the gesture. A `.tbi` dropped alone
     // has nothing to index and is passed through to be refused by name, which
     // is more use than silently doing nothing.
-    for (const { file, index } of pairIndexes(files)) {
+    const paired = pairIndexes(files)
+    this.onFilesAdded?.(paired.map((pair) => pair.file))
+    for (const { file, index } of paired) {
       // Every detached row of that name, not the first. A BAM comes back from a
       // reload as two of them (§8.13), and reattaching one would leave a reader
       // who dropped the file again looking at a depth lane with the pile still

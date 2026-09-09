@@ -16,7 +16,17 @@
  * folded panels stand side by side at the edge and opening the outer one pushes
  * the inner one's tab out against it. That is a fact about the four specs, and it
  * is the one that would break silently if somebody renumbered them.
+ *
+ * The third is the **fold on the column itself**: a folded one advertises the
+ * way back on its tab, and an open one advertised nothing at all until the
+ * chevron beside the key badge, so what is asserted here is the pair of facts a
+ * reader depends on — that the chevron points the way its own column travels,
+ * and that clicking it is the same fold the header button performs rather than a
+ * second path to it.
  */
+
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -24,10 +34,12 @@ import {
   AESTHETICS_PANEL,
   ANALYSIS_PANEL,
   ANNOTATION_PANEL,
+  FILES_PANEL,
   GENERAL_PANEL,
   SidePanel,
   type SidePanelSpec,
 } from '@/ui/SidePanel'
+import { icon } from '@/ui/icons'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -61,6 +73,29 @@ function mount(spec: SidePanelSpec = GENERAL_PANEL): Mounted {
 
 const tabOf = (panel: SidePanel): HTMLElement | null =>
   panel.el.querySelector<HTMLElement>('.panel-tab')
+
+const foldOf = (panel: SidePanel): HTMLButtonElement | null =>
+  panel.el.querySelector<HTMLButtonElement>('.panel-column-fold')
+
+/**
+ * Which chevron a control draws, against the icon set's own geometry.
+ *
+ * The direction is the whole of what this button says, and it is the one thing
+ * about it that cannot be read off a class name — the shapes come from upstream
+ * through `npm run icons`, so the honest comparison is with `icon()` rather than
+ * with a path copied into a test that would then agree with itself forever.
+ */
+function chevronOf(node: Element | null): 'left' | 'right' | 'neither' {
+  const drawn = node?.querySelector('path')?.getAttribute('d') ?? null
+  const shapeOf = (name: 'chevron-left' | 'chevron-right'): string | null =>
+    icon(name).querySelector('path')?.getAttribute('d') ?? null
+  if (drawn !== null && drawn === shapeOf('chevron-left')) return 'left'
+  if (drawn !== null && drawn === shapeOf('chevron-right')) return 'right'
+  return 'neither'
+}
+
+/** All five, in the order they stand on the screen: three from the left edge, two from the right. */
+const ALL_PANELS = [FILES_PANEL, GENERAL_PANEL, ANNOTATION_PANEL, AESTHETICS_PANEL, ANALYSIS_PANEL]
 
 describe('a side panel', () => {
   it('is a column with a heading, a key and no tab while it is open', () => {
@@ -243,3 +278,108 @@ describe('a column as a saved workspace carries it', () => {
     expect(panel.layout.folded).toBe(false)
   })
 })
+
+/**
+ * The chevron beside the key badge, which is the fold written on the column.
+ *
+ * The header's row of marks has always been able to fold a column, but it is two
+ * columns away from the thing it acts on and says neither which panel it belongs
+ * to nor which way that panel goes. A folded column answers both on its tab; an
+ * open one answered neither, and this is the half of the pair that was missing.
+ */
+describe('a column’s own fold button', () => {
+  it('is in every column’s heading, named and carrying its key', () => {
+    for (const spec of ALL_PANELS) {
+      const { panel } = mount(spec)
+      const fold = foldOf(panel)
+      expect(fold).not.toBeNull()
+      // Named without the key and titled with it, exactly as the tab is: a label
+      // read aloud as "(B)" spells a shortcut out to the one reader who cannot
+      // watch for it.
+      expect(fold?.getAttribute('aria-label')).toBe(`Fold the ${spec.title} panel`)
+      expect(fold?.title).toBe(`Fold the ${spec.title} panel (${spec.keys.toUpperCase()})`)
+      expect(fold?.getAttribute('type')).toBe('button')
+    }
+  })
+
+  it('points the way its own column travels, which is the tab’s chevron mirrored', () => {
+    // The rule a later reader will get backwards, so it is asserted for both
+    // sides at once: the tab offers to *open* and points away from its edge into
+    // the window; this offers to *close* and points at the edge the column goes
+    // back against. Files, General and Annotations are on the left and fold left;
+    // Aesthetics and Analysis are on the right and fold right.
+    for (const spec of ALL_PANELS) {
+      const { panel } = mount(spec)
+      expect(chevronOf(foldOf(panel))).toBe(spec.side)
+      const onTheTab = tabOf(panel)?.querySelector('.panel-tab-chevron') ?? null
+      expect(chevronOf(onTheTab)).toBe(spec.side === 'left' ? 'right' : 'left')
+    }
+  })
+
+  it('folds through the same path as the header button, storage and all', () => {
+    const { panel, resizes } = mount()
+    const before = resizes()
+    foldOf(panel)?.click()
+
+    expect(panel.isCollapsed).toBe(true)
+    expect(panel.el.classList.contains('collapsed')).toBe(true)
+    // The three observable effects of a fold, whichever control did it: the
+    // preference is written, the shell is told to re-measure, and a second window
+    // opens folded. Anything that duplicated `fold` instead of calling it would
+    // miss at least one of these.
+    expect(window.localStorage.getItem(GENERAL_PANEL.key)).toBe('1')
+    expect(resizes()).toBe(before + 1)
+    expect(new SidePanel(GENERAL_PANEL).isCollapsed).toBe(true)
+  })
+
+  it('folds and nothing more: a second click on it cannot re-open the column', () => {
+    // Not a toggle. The way back is the tab, which is the affordance a folded
+    // column already has, and a button that opened what it had just closed would
+    // be a chevron pointing the wrong way half the time.
+    const { panel } = mount()
+    const fold = foldOf(panel)
+    fold?.click()
+    fold?.click()
+    expect(panel.isCollapsed).toBe(true)
+  })
+
+  it('goes away with the heading when the column folds, by the rule that hides it', () => {
+    // jsdom applies no stylesheet, so the mechanism is asserted in two halves
+    // rather than by measuring a hidden box — and in two halves *on purpose*,
+    // because the whole point is that there is no second mechanism here. The
+    // button carries no state of its own: it is inside the heading, the heading
+    // is one of the column's own children, and one rule takes every one of those
+    // away when the column collapses.
+    const { panel } = mount()
+    const fold = foldOf(panel)
+    const head = [...panel.el.children].find((child) => child.contains(fold as Node))
+    expect(head?.classList.contains('panel-column-head')).toBe(true)
+    expect(head?.classList.contains('panel-tab')).toBe(false)
+    expect(collapsedHidesEveryChildButTheTab()).toBe(true)
+
+    panel.toggle.click()
+    // Still in the DOM and still itself — the stylesheet is what took it off the
+    // screen, so nothing here should have changed the button.
+    expect(panel.el.contains(fold as Node)).toBe(true)
+    expect(fold?.classList.contains('hidden')).toBe(false)
+    expect(fold?.disabled).toBe(false)
+  })
+})
+
+/**
+ * The one rule the test above leans on, read out of the stylesheet itself.
+ *
+ * `ui/styles.css` hides every child of a collapsed column except its tab — `> *`
+ * rather than a list, so that a part added later is folded away with the rest
+ * instead of appearing edge-on in a 28-pixel strip. The fold button is such a
+ * part, and this is how it disappears; deleting the rule would leave a chevron
+ * standing in a folded strip, which no test on the DOM alone could see.
+ */
+function collapsedHidesEveryChildButTheTab(): boolean {
+  // From the working directory rather than from `import.meta.url`, which is the
+  // road `test/unit/deck-plot-css.test.ts` takes: under jsdom the module's own
+  // URL is not a `file:` one, and resolving against it throws.
+  const css = readFileSync(resolve(process.cwd(), 'src/ui/styles.css'), 'utf8')
+  const rule = /\.panel-column\.collapsed\s*>\s*\*:not\(\.panel-tab\)\s*\{([^}]*)\}/.exec(css)
+  return rule !== null && /display:\s*none/.test(rule[1] ?? '')
+}
