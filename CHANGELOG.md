@@ -49,12 +49,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the seams. A run declines a pattern that is not IUPAC before it starts, with
   the character it could not read named.
 
-  One limit, and it is not this task's: in a **genome-browser session there is
-  no bin grid**, so the density half is declined with a note rather than
-  emitted as a lane that would be permanently empty. The sites lane is
-  unaffected and draws there normally. That applies to any task producing a
-  per-bin profile in a browser session; the motif search is simply the first
-  one that can be *offered* there, so it is the first to meet it.
+  It works in a **genome-browser session** as well as over a map, which is the
+  session a reader who came in through a FASTA is actually in. That took
+  fixing something older: a session with no contact map reported its bin size
+  as `0`, a placeholder that was safe only while nothing producing a per-bin
+  result could be run without a matrix. A task answering from the sequence
+  broke that assumption, and a zero bin size gives every contig zero bins — a
+  lane that is permanently *empty* rather than one that is visibly wrong,
+  which is the failure nothing reports. A mapless session is now given a
+  browsing grid chosen from the assembly's own length; it is a resolution to
+  draw at and never a claim that anything was measured at it, so the tasks
+  that genuinely need a matrix go on saying they are waiting for one.
 
 - **A fold button on every panel header.** Each of the five columns now carries a
   chevron beside its shortcut chip, pointing the way that column travels — left

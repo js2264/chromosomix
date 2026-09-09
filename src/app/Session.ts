@@ -95,6 +95,7 @@ import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import {
   assemblyOf,
+  browsingBinsize,
   findContig,
   formatLocus,
   lengthsAreExact,
@@ -6918,15 +6919,27 @@ export class Session {
     // does not compare two of them.
     //
     // The map tasks are not hidden either: they are `waiting`, with a line
-    // saying to open a contact map. `hasMap` is what tells them apart, and the
-    // zeros below never reach a runner because a waiting task cannot be run.
+    // saying to open a contact map. `hasMap` is what tells them apart, and it
+    // stays false here because `nBins` is zero however real the bin size is.
+    //
+    // The **bin size is not zero**, and it used to be. The zero was safe for as
+    // long as the assumption under it held — that nothing producing a per-bin
+    // result could be run without a matrix, so no runner would ever see it — and
+    // the motif search broke that assumption by answering from the *sequence*,
+    // which is present with or without a map. A zero bin size gives every contig
+    // zero bins, and a profile registered against that grid is a lane that is
+    // permanently empty rather than one that is visibly wrong, which is the
+    // failure nothing reports. So a mapless session is given a browsing grid
+    // chosen from the assembly's own length ({@link browsingBinsize}); it is a
+    // resolution to *draw* at and never a claim that anything was measured at
+    // it, which is exactly what `hasMap` remains false to say.
     if (file === null) {
       const assembly = this.assembly
       if (assembly === null) return null
       return buildAnalysisContext({
         uri: assembly.uri,
         layout: 'cool',
-        binsize: 0,
+        binsize: browsingBinsize(assembly.total),
         nBins: 0,
         hasGenomes: false,
         hasWeights: false,

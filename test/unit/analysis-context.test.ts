@@ -28,6 +28,7 @@ import {
   type ContextInput,
 } from '../../src/analysis/context'
 import type { AnalysisFraming } from '../../src/analysis/types'
+import { browsingBinsize } from '../../src/genome/assembly'
 
 function table(
   names: string[],
@@ -179,5 +180,53 @@ describe('framingCovers', () => {
 
   it('is false with no framing at all', () => {
     expect(framingCovers(null, [0, 1])).toBe(false)
+  })
+})
+
+/**
+ * The shape a **genome-browser session** builds a context in, pinned.
+ *
+ * Two facts have to hold at once and they pull in opposite directions, which is
+ * why they are asserted together rather than separately. There is no matrix, so
+ * every task needing one must stay `waiting` — that is `hasMap`, and `nBins` of
+ * zero is what keeps it false. And yet a task answering from the *sequence* can
+ * run here and produce a per-bin lane, so the grid must be real — which the bin
+ * size is what decides.
+ *
+ * Reporting the bin size as `0` satisfied the first and quietly broke the
+ * second: `binsForLength` returns zero bins for a zero bin size, so every contig
+ * got no bins, and a profile registered against that grid is a lane that is
+ * permanently empty rather than one that is visibly wrong. Nothing reports that.
+ */
+describe('a session with tracks and no contact map', () => {
+  const contigs = table(['chrI', 'chrII'], [230_218, 813_184])
+  const total = 230_218 + 813_184
+
+  it('has a real bin grid, laid end to end', () => {
+    const context = buildAnalysisContext(
+      input({ contigs, binsize: browsingBinsize(total), nBins: 0 }),
+    )
+    const binsize = browsingBinsize(total)
+    expect(context.contigs.map((contig) => contig.bins)).toEqual([
+      Math.ceil(230_218 / binsize),
+      Math.ceil(813_184 / binsize),
+    ])
+    expect(context.contigs[0].startBin).toBe(0)
+    expect(context.contigs[1].startBin).toBe(context.contigs[0].bins)
+    for (const contig of context.contigs) expect(contig.bins).toBeGreaterThan(0)
+  })
+
+  it('still says it has no map, so the tasks that need one keep waiting', () => {
+    const context = buildAnalysisContext(
+      input({ contigs, binsize: browsingBinsize(total), nBins: 0 }),
+    )
+    expect(context.hasMap).toBe(false)
+  })
+
+  it('is the case a bin size of zero got wrong', () => {
+    // The regression this pair exists to catch: no bins anywhere, and so a lane
+    // with nothing in it rather than a lane with the wrong thing in it.
+    const context = buildAnalysisContext(input({ contigs, binsize: 0, nBins: 0 }))
+    expect(context.contigs.every((contig) => contig.bins === 0)).toBe(true)
   })
 })

@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  browsingBinsize,
   assemblyAxis,
   assemblyOf,
   findContig,
@@ -274,5 +275,53 @@ describe('replacesLengths', () => {
     // An empty list is not a smaller genome — an HDF5 is reported with no
     // contigs at all — and adopting it would leave the browser with no axis.
     expect(replacesLengths(guessed, { origin: 'bigwig', contigs: [] })).toBe(false)
+  })
+})
+
+/**
+ * The bin size a genome with no contact map is drawn at.
+ *
+ * It exists because the placeholder it replaced — a bin size of `0` for a
+ * mapless session — was safe only while no per-bin result could be produced
+ * without a matrix. A task answering from the *sequence* broke that, and a zero
+ * gives every contig zero bins: a lane that is permanently empty rather than one
+ * that is visibly wrong, which is the failure nothing reports. So what is
+ * asserted here is that the number is always usable, not merely plausible.
+ */
+describe('browsingBinsize', () => {
+  it('is always a positive, usable bin size', () => {
+    for (const total of [0, 1, 1_000, 12_100_000, 3_100_000_000]) {
+      expect(browsingBinsize(total), `total ${total}`).toBeGreaterThan(0)
+      expect(Number.isFinite(browsingBinsize(total))).toBe(true)
+      expect(Number.isInteger(browsingBinsize(total))).toBe(true)
+    }
+  })
+
+  it('scales with the genome rather than fixing a number', () => {
+    // 1 kb bins are right for yeast and are three million bins of a human
+    // assembly, which is a vector nobody can draw.
+    expect(browsingBinsize(3_100_000_000)).toBeGreaterThan(browsingBinsize(12_100_000))
+  })
+
+  it('lands on a round number, on the ladder the rulers step by', () => {
+    for (const total of [5e5, 1e6, 1.21e7, 1e8, 3.1e9]) {
+      const step = browsingBinsize(total)
+      const decade = 10 ** Math.floor(Math.log10(step))
+      expect([1, 2, 5, 10], `total ${total} gave ${step}`).toContain(Math.round(step / decade))
+    }
+  })
+
+  it('keeps the bin count in a range a lane can actually draw', () => {
+    for (const total of [1e6, 1.21e7, 1e8, 3.1e9]) {
+      const bins = total / browsingBinsize(total)
+      expect(bins, `total ${total}`).toBeGreaterThan(1_000)
+      expect(bins, `total ${total}`).toBeLessThan(200_000)
+    }
+  })
+
+  it('does not go below a floor, however small the genome', () => {
+    // A plasmid is not a reason to bin at one base.
+    expect(browsingBinsize(1_000)).toBeGreaterThanOrEqual(100)
+    expect(browsingBinsize(0)).toBeGreaterThanOrEqual(100)
   })
 })

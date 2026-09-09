@@ -202,6 +202,41 @@ export function assemblyOf(options: {
  * track is fetched at is decided per frame from the pixels available, which is
  * what `AnnotationLanes` already does for the lanes beside a map.
  */
+/**
+ * A bin size for a genome nothing has binned.
+ *
+ * A contact map brings its own — the resolution it was written at — and every
+ * per-bin quantity in this application is laid out on that. A **browser session
+ * has no map**, and used to report its bin size as `0`: a placeholder that was
+ * safe for exactly as long as the assumption behind it held, which was that no
+ * task producing a per-bin result could be run without a matrix. That stopped
+ * being true the moment a task could be answered from the *sequence* — the motif
+ * search reads a FASTA and a FASTA is present with or without a map — and a zero
+ * bin size gives every contig zero bins, which is a lane that is permanently
+ * empty rather than a lane that is wrong, so nothing reports it.
+ *
+ * So a genome with no map gets a bin size chosen from its own length. The target
+ * is a bin *count*: enough that a whole-genome lane has more bins than a wide
+ * screen has pixels, and few enough that the vector costs less than whatever
+ * filled it. Snapped up to 1, 2 or 5 times a power of ten, which is the ladder
+ * the rulers already step by — 2 kb reads as a decision where 1,732 bp reads as
+ * an accident, even though the two are equally arbitrary.
+ *
+ * It is a *browsing* grid and never a claim about the data: nothing here was
+ * measured at this resolution, and `AnalysisContext.hasMap` stays false, so the
+ * tasks that genuinely need a matrix go on saying so.
+ */
+export function browsingBinsize(total: number): number {
+  const TARGET_BINS = 20_000
+  const SMALLEST = 100
+  const wanted = Math.max(SMALLEST, total / TARGET_BINS)
+  const decade = 10 ** Math.floor(Math.log10(wanted))
+  for (const step of [1, 2, 5]) {
+    if (decade * step >= wanted) return decade * step
+  }
+  return decade * 10
+}
+
 export function assemblyAxis(assembly: Assembly): LocusAxis {
   const segments: LocusSegment[] = []
   let at = 0
