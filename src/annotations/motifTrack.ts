@@ -1,11 +1,11 @@
 /**
  * Turning a motif's coordinates into the two things a reader can look at.
  *
- * `motif.ts` finds the sites and `annotations/worker/annotations.worker.ts`
- * ships them back as three typed arrays per sequence. Neither of those is a
- * lane. This module is the last step, and it is deliberately two steps rather
- * than one, because a set of sites answers two different questions and no single
- * picture answers both:
+ * `motif.ts` finds the sites and `analysis/run/motif.ts` walks a whole reference
+ * with it, gathering three typed arrays per sequence ({@link MotifScanResult}).
+ * Neither of those is a lane. This module is the last step, and it is
+ * deliberately two steps rather than one, because a set of sites answers two
+ * different questions and no single picture answers both:
  *
  * - **Where exactly is it?** A `FeatureSet` — one interval per site, strand
  *   kept, clickable, exportable as BED, and eligible as an input to overlap, to
@@ -20,18 +20,67 @@
  * same answer §18.5 gives for an analysis result — the shape a number wants to
  * be looked at in is a property of the zoom, not of the number.
  *
- * Both builders are pure functions over the wire result. They are here rather
- * than in the card so they can be tested without a DOM, and rather than in the
- * worker because a `FeatureSet` lives on the main thread anyway (a pan must
- * redraw with no round trip) and because the worker should ship coordinates, not
- * a rendering decision about how to bin them.
+ * Both builders are pure functions over the scan's result. They are here rather
+ * than in the runner so they can be tested without a worker, and they are two
+ * functions rather than one object because the two lanes they make are adopted
+ * by different halves of `analysis/workspace.ts` — a `FeatureSet` goes straight
+ * onto an entry, while a vector has to be registered before anything can sample
+ * it.
  */
 
 import type { Contig } from '../genome/assembly'
 import { FeatureBuilder } from './featureset'
 import type { FeatureSet } from './types'
 import type { BinVector, BinVectorContig } from './worker/binVector'
-import type { MotifScanResult } from './worker/protocol'
+
+/**
+ * Where a motif occurs on one sequence: three parallel arrays, not objects.
+ *
+ * A yeast genome asked for `GATC` answers with about forty thousand sites and a
+ * human one with millions, and forty thousand `{start, end, strand}` objects is
+ * forty thousand allocations to build and then walk again to bin. Three typed
+ * arrays are three buffers. That is the same argument `TrackSampleSet` and
+ * `FeatureSet` already make, and the reason this does not simply reuse
+ * `MotifHit[]` from `annotations/motif.ts`, which is the shape the matcher finds
+ * convenient rather than the shape the consumers below want.
+ *
+ * It lived in the worker protocol while a `motif` *request* existed to carry it
+ * across a thread. Nothing carries it now — the scan and both builders below run
+ * in the annotations worker, inside the analysis task (`analysis/run/motif.ts`),
+ * and what leaves that thread is a `FeatureSet` and a vector — so it belongs
+ * beside the functions that read it rather than in a vocabulary of messages it
+ * is no longer one of.
+ */
+export interface MotifHits {
+  contig: string
+  /** 0-based, half-open, ascending. */
+  starts: Int32Array
+  ends: Int32Array
+  /** `1` forward, `-1` reverse, `0` for a palindrome searched on both. */
+  strands: Int8Array
+}
+
+/**
+ * Every occurrence of a motif in one loaded reference.
+ *
+ * `truncated` is the half of this that is easy to leave out and must not be: a
+ * search stopped by its budget has to say so, or a reader counts the sites in a
+ * lane and gets the cap rather than the answer.
+ *
+ * There is no member for a pattern that would not compile, and that is a
+ * decision rather than an omission. "`X` is not a IUPAC base" is a sentence
+ * about what the reader typed, and it is said where a reader is looking: by the
+ * task's estimate, in front of a greyed-out **Run**, and by the runner as a note
+ * on a run that produced nothing (`analysis/run/motif.ts`). Carrying it in the
+ * *result* would mean every consumer of one had to check a field that is null on
+ * every scan that ever happened.
+ */
+export interface MotifScanResult {
+  hits: MotifHits[]
+  /** Sites found, summed over `hits` — the number a reader is told. */
+  total: number
+  truncated: boolean
+}
 
 /** How a strand code is spelled in a feature's name and in an exported BED. */
 function strandMark(strand: number): string {
@@ -66,34 +115,6 @@ export function motifFeatures(result: MotifScanResult, pattern: string): Feature
     }
   }
   return build.finish()
-}
-
-/**
- * A bin size that makes the density picture legible for this genome.
- *
- * Not a fixed number, because the genomes this viewer opens span four orders of
- * magnitude: 1 kb bins are right for yeast and give three million bins for a
- * human assembly, which is a vector nobody can draw and several megabytes to
- * hold. So the target is a bin *count* — enough that a whole-genome lane has
- * more bins than a wide screen has pixels, and not so many that the vector costs
- * more than the scan that filled it — snapped down to a round number a reader
- * can recognise in the lane's tooltip.
- *
- * Exported so the card can show the number it chose. A density track whose bin
- * size is invisible is a track whose values cannot be compared with anything.
- */
-export function motifBinsize(total: number): number {
-  const TARGET_BINS = 20_000
-  const MIN = 100
-  const wanted = Math.max(MIN, total / TARGET_BINS)
-  // Snap up to 1, 2 or 5 times a power of ten, which is the same ladder the
-  // rulers step by — a bin of 2 kb reads as a decision and one of 1,732 bp reads
-  // as an accident, even when they are equally arbitrary.
-  const decade = 10 ** Math.floor(Math.log10(wanted))
-  for (const step of [1, 2, 5, 10]) {
-    if (decade * step >= wanted) return decade * step
-  }
-  return decade * 10
 }
 
 /**

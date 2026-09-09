@@ -37,6 +37,7 @@ import {
 import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
+import { MOTIF_TASK } from "./tasks/motif";
 import { INSULATION_TASK } from "./tasks/insulation";
 import { EXPECTED_TASK } from "./tasks/ps";
 import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
@@ -57,6 +58,12 @@ export const TASKS: readonly AnalysisTask[] = [
   COMPARTMENTS_TASK,
   CID_TASK,
   CHROMOSIGHT_TASK,
+  // The tracks group opens with the one task that *makes* an interval set out of
+  // the file rather than reading one somebody loaded: a motif search answers
+  // where a sequence occurs, and what it produces is exactly the input the three
+  // below it take. Same reading order as the map group's — the thing that comes
+  // first is the thing the next one is built on.
+  MOTIF_TASK,
   METAPLOT_TASK,
   APA_TASK,
   TRACK_CORRELATION_TASK,

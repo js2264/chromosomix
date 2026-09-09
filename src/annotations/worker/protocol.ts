@@ -119,53 +119,10 @@ export interface BaseResult {
   regions: BaseRegion[]
 }
 
-/**
- * Where a motif occurs on one sequence: three parallel arrays, not objects.
- *
- * A yeast genome asked for `GATC` answers with about forty thousand sites and a
- * human one with millions, and forty thousand `{start, end, strand}` objects is
- * forty thousand allocations to build, structured-clone and then walk again on
- * the other side. Three typed arrays are three buffers, and `transfersFor` moves
- * them rather than copying them — the same argument `TrackSampleSet` and
- * `FeatureSet` already make, and the reason this does not simply reuse
- * `MotifHit[]` from `annotations/motif.ts`, which is the shape the matcher finds
- * convenient rather than the shape the wire wants.
- */
-export interface MotifHits {
-  contig: string
-  /** 0-based, half-open, ascending. */
-  starts: Int32Array
-  ends: Int32Array
-  /** `1` forward, `-1` reverse, `0` for a palindrome searched on both. */
-  strands: Int8Array
-}
-
-/**
- * Every occurrence of a motif in one loaded reference.
- *
- * `refusal` rather than a thrown error for a pattern that does not compile,
- * because "`X` is not a IUPAC base" is a sentence about what the reader typed
- * and belongs under the input they typed it into — an exception here would
- * arrive at the main thread as a failed request, which is the shape reserved for
- * something having gone wrong.
- *
- * `truncated` is the other half of the same honesty: a search stopped by its
- * budget has to say so, or a reader counts the sites in a lane and gets the cap
- * rather than the answer.
- */
-export interface MotifScanResult {
-  hits: MotifHits[]
-  /** Sites found, summed over `hits` — the number a reader is told. */
-  total: number
-  truncated: boolean
-  refusal: string | null
-}
-
 export interface AnnotationResultMap {
   load: LoadResult
   sample: TrackSampleSet
   bases: BaseResult
-  motif: MotifScanResult
   assembly: AssemblyResult
   register: null
   run: TaskResult
@@ -226,32 +183,6 @@ export type AnnotationRequest =
   // pixel — and because the window it is asked over is the one a screen of
   // single bases covers, never a chromosome.
   | { id: number; kind: 'bases'; entry: string; regions: Region[] }
-  /**
-   * Every place a short sequence occurs in a loaded reference (§8.3).
-   *
-   * Here rather than on the main thread for one reason that decides it: the
-   * residues are here and nowhere else. A genome is parsed into this worker and
-   * deliberately never shipped out whole — `bases` answers a *window* and is
-   * capped at 400 kb a request — so a main-thread search would mean either
-   * pulling twelve megabytes across the boundary or issuing thirty separate
-   * windowed reads and stitching the seams. The scan is a single pass with no
-   * allocation per position, so it is cheaper to do it beside the bytes and post
-   * back the handful of coordinates that came out.
-   *
-   * Whole-reference rather than per-region, unlike every other request in this
-   * union: a reader searching for a motif is asking where it *is*, and an answer
-   * bounded by what is currently on screen would be a different and much less
-   * useful question. `limit` is what bounds it instead.
-   */
-  | {
-      id: number
-      kind: 'motif'
-      entry: string
-      /** IUPAC, compiled in the worker so the refusal text is made once. */
-      pattern: string
-      bothStrands: boolean
-      limit?: number
-    }
   // A lane whose values were computed rather than read (§18.5). Registered
   // once, and answered by `sample` from then on exactly as a bigWig is —
   // which is the whole of what makes a synthetic track a track. See

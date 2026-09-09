@@ -12,8 +12,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { motifBinsize, motifDensity, motifFeatures, motifLabel } from '@/annotations/motifTrack'
-import type { MotifScanResult } from '@/annotations/worker/protocol'
+import { motifDensity, motifFeatures, motifLabel } from '@/annotations/motifTrack'
+import type { MotifScanResult } from '@/annotations/motifTrack'
 
 /** A scan result, written the way the wire carries one. */
 function scan(
@@ -27,7 +27,7 @@ function scan(
     strands: Int8Array.from(rows.map((row) => row[2])),
   }))
   const total = Object.values(sites).reduce((sum, rows) => sum + rows.length, 0)
-  return { hits, total, truncated: false, refusal: null, ...extra }
+  return { hits, total, truncated: false, ...extra }
 }
 
 describe('motifFeatures', () => {
@@ -135,35 +135,6 @@ describe('motifDensity', () => {
   it('drops a sequence the assembly does not list rather than guessing', () => {
     const vector = motifDensity(scan({ chrZ: [[0, 4, 1]] }), CONTIGS, 100)
     expect(vector.values.reduce((sum, value) => sum + value, 0)).toBe(0)
-  })
-})
-
-describe('motifBinsize', () => {
-  it('scales with the genome instead of fixing a number', () => {
-    const yeast = motifBinsize(12_100_000)
-    const human = motifBinsize(3_100_000_000)
-    expect(human).toBeGreaterThan(yeast)
-  })
-
-  it('picks a round number a reader recognises', () => {
-    for (const total of [1e6, 1.2e7, 1e8, 3.1e9, 5e5]) {
-      const step = motifBinsize(total)
-      const decade = 10 ** Math.floor(Math.log10(step))
-      expect([1, 2, 5, 10]).toContain(Math.round(step / decade))
-    }
-  })
-
-  it('keeps the bin count in a range a lane can actually draw', () => {
-    for (const total of [1e6, 1.2e7, 1e8, 3.1e9]) {
-      const bins = total / motifBinsize(total)
-      expect(bins).toBeGreaterThan(1_000)
-      expect(bins).toBeLessThan(200_000)
-    }
-  })
-
-  it('never goes below a floor, however small the genome', () => {
-    expect(motifBinsize(1000)).toBeGreaterThanOrEqual(100)
-    expect(motifBinsize(0)).toBeGreaterThanOrEqual(100)
   })
 })
 

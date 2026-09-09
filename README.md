@@ -153,7 +153,7 @@ does next. `versions.json` lists what is published.
 
 ## Using the metacooler.js analysis CLI
 
-The fifteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. 
+The sixteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. 
 
 To install the CLI, run the following commands in a terminal:
 
@@ -245,6 +245,13 @@ metacooler-run tasks
 ##       --nMads (default 5)  Detectability cut
 ##       --maxQvalue (default 1)  Report down to a q-value of
 ##       --balance (default false)  Use balancing weights
+## 
+## motif
+##     Find a sequence
+##       --sequence  Reference
+##       --pattern  Sequence
+##       --bothStrands (default true)  Both strands
+##       --limit (default 500000)  Most sites
 ## 
 ## metaplot
 ##     Metaplot over a feature set

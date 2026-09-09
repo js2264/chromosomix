@@ -1,0 +1,190 @@
+// @vitest-environment jsdom
+/**
+ * What the motif task offers, refuses, and asks the reader for.
+ *
+ * The three halves of a descriptor that are not the run itself, and each is here
+ * because it would be wrong invisibly.
+ *
+ * **Availability is `waiting`, never `absent`.** §18.1 has two kinds of
+ * "cannot", and a motif search with no reference open is the kind that is one
+ * drag away — so the row is listed and greyed with a sentence saying what to
+ * load. Absence would teach a reader who has not met this app before that it
+ * cannot search a sequence at all, which is the wrong lesson and the harder one
+ * to unlearn. **And it is ready with no contact map**, because a 1D browser
+ * session (§5.8) is exactly where a reader has a genome and no matrix.
+ *
+ * **The estimate refuses before the run rather than after it.** `compileMotif`
+ * is the same function the runner calls, so the sentence under a greyed-out
+ * **Run** is the sentence the run would have produced — a reader who typed
+ * `ACGX` reads why without pressing anything.
+ *
+ * **The pattern is a box.** It is the one free-text parameter in the catalogue
+ * (`TextParam`), and the reason it is not the locus box — which would offer this
+ * file's chromosome names as suggestions — is exactly that a form should not
+ * suggest `chrIV` to somebody typing `GATC`.
+ */
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { MOTIF_TASK } from '@/analysis/tasks/motif'
+import { defaultParams, type AnalysisContext } from '@/analysis/types'
+import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
+import { ParamForm } from '@/ui/ParamForm'
+import { setUpDom, type DomTeardown } from '../support/dom'
+
+let teardown: DomTeardown
+
+beforeEach(() => {
+  teardown = setUpDom()
+})
+
+afterEach(() => {
+  teardown()
+})
+
+function sequenceEntry(): AnnotationEntry {
+  return {
+    id: 'seq1',
+    card: 'linear',
+    kind: 'sequence',
+    label: 'sacCer3.fa',
+    source: { kind: 'remote', url: 'https://example.invalid/sacCer3.fa', name: 'sacCer3.fa' },
+    status: 'ready',
+    visible: true,
+    placement: { top: false, right: false, bottom: true, left: false },
+    style: defaultStyle('sequence', '#0072b2'),
+  }
+}
+
+/** A session with a map by default, and one without when `hasMap` is false. */
+function context(options: { entries?: AnnotationEntry[]; hasMap?: boolean } = {}): AnalysisContext {
+  const hasMap = options.hasMap !== false
+  return {
+    uri: hasMap ? 'yeast.cool' : 'sacCer3.fa',
+    layout: 'cool',
+    hasGenomes: false,
+    hasWeights: false,
+    scoreColumns: ['count'],
+    binsize: hasMap ? 1000 : 0,
+    nBins: hasMap ? 2574 : 0,
+    hasMap,
+    contigs: [
+      { name: 'I', startBin: 0, bins: 230, length: 230_218, genome: -1 },
+      { name: 'II', startBin: 230, bins: 813, length: 813_184, genome: -1 },
+      { name: 'IV', startBin: 1043, bins: 1531, length: 1_531_933, genome: -1 },
+    ],
+    genomes: null,
+    entries: options.entries ?? [],
+    framing: null,
+    blockLoaded: false,
+    blockBytes: 0,
+  }
+}
+
+describe('whether the task is offered', () => {
+  it('waits for a reference rather than hiding itself', () => {
+    const state = MOTIF_TASK.availability(context())
+    expect(state.state).toBe('waiting')
+    expect(state.state === 'waiting' && state.needs).toMatch(/FASTA/i)
+  })
+
+  it('is ready the moment one is loaded', () => {
+    expect(MOTIF_TASK.availability(context({ entries: [sequenceEntry()] })).state).toBe('ready')
+  })
+
+  it('is ready in a session with no contact map at all', () => {
+    // The 1D browser: a genome and some tracks, no matrix. Nothing this task
+    // reads is on the map, so nothing about it should wait for one.
+    const state = MOTIF_TASK.availability(context({ entries: [sequenceEntry()], hasMap: false }))
+    expect(state.state).toBe('ready')
+  })
+})
+
+describe('what it costs, and what it refuses', () => {
+  const price = (pattern: string, sequence = 'seq1'): ReturnType<typeof MOTIF_TASK.estimate> =>
+    MOTIF_TASK.estimate(context({ entries: [sequenceEntry()] }), {
+      ...defaultParams(MOTIF_TASK.params),
+      sequence,
+      pattern,
+    })
+
+  it('reads nothing, because the residues are already in memory', () => {
+    const estimate = price('GATC')
+    expect(estimate.class).toBe('free')
+    expect(estimate.requests).toBe(0)
+    expect(estimate.refusal).toBeUndefined()
+    // And says what it will cost in *time*, which is the honesty a class of
+    // `free` does not carry on its own.
+    expect(estimate.note).toMatch(/pass over/i)
+  })
+
+  it('refuses a pattern that is not IUPAC, in the matcher’s own words', () => {
+    const estimate = price('ACGX')
+    expect(estimate.refusal).toContain('X')
+    expect(estimate.refusal).toMatch(/IUPAC/)
+  })
+
+  it('refuses an empty box, which is a form to finish', () => {
+    expect(price('')?.refusal).toMatch(/type a sequence/i)
+  })
+
+  it('refuses when no reference has been chosen', () => {
+    expect(price('GATC', '')?.refusal).toMatch(/Choose a reference/i)
+  })
+
+  it('accepts a pattern with the spaces a paper prints it with', () => {
+    expect(price('GGTCA NNN TGACC').refusal).toBeUndefined()
+  })
+})
+
+describe('the form it renders', () => {
+  const form = (): ParamForm =>
+    new ParamForm({
+      specs: MOTIF_TASK.params,
+      context: context({ entries: [sequenceEntry()] }),
+      value: defaultParams(MOTIF_TASK.params),
+      onChange: () => {},
+    })
+
+  it('asks for the pattern in a plain box, not in a locus box', () => {
+    const view = form()
+    const boxes = [...view.el.querySelectorAll<HTMLInputElement>('input[type="text"]')]
+    expect(boxes).toHaveLength(1)
+    const box = boxes[0]
+    expect(box.placeholder).toBe('GGTCANNNTGACC')
+    // A locus box carries a `<datalist>` of the file's sequence names. Offering
+    // `chrIV` to somebody typing `GATC` is the whole reason this is its own kind.
+    expect(box.getAttribute('list')).toBeNull()
+    expect(view.el.querySelector('datalist')).toBeNull()
+  })
+
+  it('starts empty rather than seeded from wherever the map is framed', () => {
+    const box = form().el.querySelector<HTMLInputElement>('input[type="text"]')
+    expect(box?.value).toBe('')
+  })
+
+  it('commits what was typed, trimmed, when the box changes', () => {
+    const view = form()
+    const box = view.el.querySelector<HTMLInputElement>('input[type="text"]')
+    expect(box).not.toBeNull()
+    if (box === null) return
+    box.value = '  GGTCANNNTGACC '
+    box.dispatchEvent(new Event('change'))
+    expect(view.value.pattern).toBe('GGTCANNNTGACC')
+  })
+
+  it('commits on Enter too, which is the gesture for a one-box question', () => {
+    const view = form()
+    const box = view.el.querySelector<HTMLInputElement>('input[type="text"]')
+    if (box === null) return
+    box.value = 'TTAGGG'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(view.value.pattern).toBe('TTAGGG')
+  })
+
+  it('offers the loaded reference and the strand question beside it', () => {
+    const text = form().el.textContent ?? ''
+    expect(text).toContain('Reference')
+    expect(text).toContain('Both strands')
+  })
+})

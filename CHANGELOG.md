@@ -14,13 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **Find a sequence.** A reference loaded, a motif typed, and every place it
-  occurs becomes two lanes. The pattern is IUPAC — `GGTCANNNTGACC`, `GATC`,
-  `TTAGGG` — spaces are ignored, and both strands are searched unless you say
-  otherwise; a palindrome is reported once rather than twice, because searching
-  both strands of `GAATTC` would otherwise count every site again and a reader
-  totting up a lane would get double the answer with nothing on screen to
-  explain it.
+- **Find a sequence** — a new analysis task. Choose a loaded reference, type a
+  motif, and every place it occurs comes back as two lanes. The pattern is
+  IUPAC — `GGTCANNNTGACC`, `GATC`, `TTAGGG` — spaces are ignored, and both
+  strands are searched unless you say otherwise; a palindrome is reported once
+  rather than twice, because searching both strands of `GAATTC` would otherwise
+  count every site again and a reader totting up a lane would get double the
+  answer with nothing on screen to explain it.
 
   **Two lanes, not one, and that is the point.** A set of sites answers two
   questions and no single picture answers both: *where exactly is it*, which is
@@ -29,8 +29,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (§18.3) — and *how dense is it here*, which is sites per bin and is the only
   one of the two that means anything at chromosome scale. The first is a picket
   fence when you zoom out; the second is a bar chart of ones when you zoom in.
-  So both are made, from one scan, and either can be closed with the same × as
-  every other row.
 
   Two decisions inside it are worth stating because they are the ones that
   would be wrong by default. An `N` in the *reference* does not satisfy a
@@ -40,15 +38,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   bin in the density lane is a **zero**, never a gap: `NaN` in a per-bin vector
   draws as a hole, and "there is no site here" is the answer, not missing data.
 
-  The scan runs in the annotations worker, beside the residues, because that is
-  where they are — a genome is parsed into that thread and deliberately never
-  shipped out whole, so searching on the main thread would mean either hauling
-  twelve megabytes across the boundary or issuing thirty windowed reads and
-  stitching the seams. The card appears only while a reference is loaded, and
-  re-running a pattern replaces its own two rows rather than stacking a ninth
-  copy. The rows do not survive a reload, which is deliberate: the alternative
-  is inventing an analysis task purely to own a persistence path, and a search
-  is a few seconds with the pattern still on screen.
+  It is a registered task rather than a card of its own, which is what earns it
+  the parameter form, a recipe that travels in the session, provenance on both
+  outputs, a place in the deck's all-maps overlay, and **Recompute** on a
+  reload — none of which a bespoke card would have had, and all of which every
+  other task already has. `venue: 'annotations'`, because the residues are in
+  that worker and nowhere else: a genome is parsed into it and deliberately
+  never shipped out whole, so searching anywhere else would mean hauling
+  megabytes across the boundary or stitching thirty windowed reads together at
+  the seams. A run declines a pattern that is not IUPAC before it starts, with
+  the character it could not read named.
+
+  One limit, and it is not this task's: in a **genome-browser session there is
+  no bin grid**, so the density half is declined with a note rather than
+  emitted as a lane that would be permanently empty. The sites lane is
+  unaffected and draws there normally. That applies to any task producing a
+  per-bin profile in a browser session; the motif search is simply the first
+  one that can be *offered* there, so it is the first to meet it.
 
 - **A fold button on every panel header.** Each of the five columns now carries a
   chevron beside its shortcut chip, pointing the way that column travels — left
