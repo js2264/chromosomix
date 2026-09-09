@@ -1,6 +1,13 @@
 {
-  "latest": "48eb4bd",
+  "latest": "e96a513",
   "versions": [
+    {
+      "commit": "e96a513",
+      "version": "0.11.0",
+      "date": "2026-09-09T18:18:11+02:00",
+      "subject": "Open .pairs files at a resolution you choose, and write the .mcool back out (#39)",
+      "tag": ""
+    },
     {
       "commit": "48eb4bd",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-12T18:50:58+02:00",
       "subject": "Add bucket browser to every URL input box (#23)",
-      "tag": ""
-    },
-    {
-      "commit": "32ab9ec",
-      "version": "0.10.0",
-      "date": "2026-08-12T15:07:12+02:00",
-      "subject": "Support chromosome naming conventions across genome files (#22)",
       "tag": ""
     },
     {
