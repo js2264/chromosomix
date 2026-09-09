@@ -1,6 +1,13 @@
 {
-  "latest": "4d5a5ad",
+  "latest": "48eb4bd",
   "versions": [
+    {
+      "commit": "48eb4bd",
+      "version": "0.11.0",
+      "date": "2026-09-09T17:15:30+02:00",
+      "subject": "An embed with a bar of its own, and a copy of the viewer on npm (#38)",
+      "tag": ""
+    },
     {
       "commit": "4d5a5ad",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-12T15:07:12+02:00",
       "subject": "Support chromosome naming conventions across genome files (#22)",
-      "tag": ""
-    },
-    {
-      "commit": "9e9ed3b",
-      "version": "0.10.0",
-      "date": "2026-08-12T12:01:45+02:00",
-      "subject": "Fix the desktop header's broken mark; suspend the Windows release leg",
       "tag": ""
     },
     {
