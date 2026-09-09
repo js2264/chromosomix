@@ -132,8 +132,6 @@
       there to be compared with. The summary carries the deck's own count on the end of it: `113 ×
       113 bins · … · 3 maps`.
 
-## FOR NOW
-
 The deck of maps (§16) is a data feature that works and an interaction feature
 that is now half there: N files open and navigate together, the arrangement can
 be drawn before it is filled, and what is left is moving maps around inside it
