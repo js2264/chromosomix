@@ -356,48 +356,44 @@ export class App implements SessionHost {
           appMark(26),
           home,
         ),
-        // …and the four columns after it, not before. They are controls over
-        // the window's own furniture, and a row that opens with four unlabelled
-        // marks makes a reader identify them before reaching the thing that
-        // says what they are looking at. The strapline that used to hold this
-        // side of the header is gone with them: it explained the app to
-        // somebody who has already opened it, and this is the row where the
-        // panels are reached from.
+        // …and the ways files get into this tab, not before. They are
+        // controls over the window's own furniture, and a row that opened
+        // with unlabelled marks made a reader identify them before reaching
+        // the thing that says what they are looking at. The strapline that
+        // used to hold this side of the header is gone with them: it
+        // explained the app to somebody who has already opened it.
+        el(
+          'div',
+          { class: 'head-files' },
+          // The column itself, first: it is the outermost on the left, and it
+          // is the one a reader arrives through rather than one they drive
+          // the picture with.
+          this.filesPanel.toggle,
+          // Then the two ways to bring a file to it, place before one-off:
+          // Connect attaches somewhere files keep coming from, and a reader
+          // working out of a directory for an afternoon wants that read
+          // before the `+` that costs a click each. Dropping is still the
+          // gesture the app is opened with and the whole content area still
+          // takes it — this is the same gesture for a reader who has no
+          // window to drag from, and the only door to a file that is on
+          // screen in every view. See {@link addFileDialog} for why the `+`
+          // *adds* rather than replaces.
+          iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
+            this.openConnectDialog(),
+          ),
+          iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
+            this.addFileDialog(),
+          ),
+        ),
+        // Past a divider, because these four are not about getting a file in —
+        // they are controls over the picture of one that is already open.
         el(
           'div',
           { class: 'head-panels' },
-          // Files first, matching the columns' own order out from the map:
-          // it is the outermost on the left, and it is the one a reader
-          // arrives through rather than one they drive the picture with.
-          this.filesPanel.toggle,
           this.generalPanel.toggle,
           this.annotationsPanel.toggle,
           this.aestheticsPanel.toggle,
           this.analysisPanel.toggle,
-        ),
-        // Past a second divider, because it is not a fifth panel: those four
-        // fold furniture this window already has, and this one brings
-        // something into it. Dropping is still the gesture the app is opened
-        // with and the whole content area still takes it — this is the same
-        // gesture for a reader who has no window to drag from, and the only
-        // door to a file that is on screen in every view. See
-        // {@link addFileDialog} for why it *adds* rather than replaces.
-        el(
-          'div',
-          { class: 'head-add' },
-          iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
-            this.addFileDialog(),
-          ),
-          // Beside the `+` and not instead of it, because they answer
-          // different questions. The `+` brings in **one file**, now, and
-          // closes; this attaches a **place** and leaves it attached, so the
-          // next twenty files cost a click each. A reader with one URL wants
-          // the first; a reader working out of a directory for an afternoon
-          // wants the second, and until now the app only offered them the
-          // first, twenty times.
-          iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
-            this.openConnectDialog(),
-          ),
         ),
       ),
       palette,
