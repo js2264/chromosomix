@@ -15,6 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { resetMounting } from '@/embed'
 import { closeMenu, openMenu } from '@/ui/Menu'
 import { Modal } from '@/ui/Modal'
 import { stepper } from '@/ui/Stepper'
@@ -252,6 +253,35 @@ describe('the theme toggle', () => {
   it('reads an unknown stored value as system rather than writing it out', () => {
     window.localStorage.setItem('metacooler-viewer:theme', 'sepia')
     expect(initTheme()).toBe('system')
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+  })
+})
+
+describe('the theme toggle, embedded', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/')
+    resetMounting()
+  })
+
+  it('is fixed to light on startup, over a stored dark preference and the system one', () => {
+    window.localStorage.setItem('metacooler-viewer:theme', 'dark')
+    window.history.replaceState(null, '', '/?embed=1')
+    resetMounting()
+    expect(initTheme()).toBe('light')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+
+  it('ignores a click, so the "theme" command cannot flip a published figure dark', () => {
+    // The button this drives is never mounted in an embed's own bar
+    // (`app/App.ts`), but the command palette's "theme" entry still runs
+    // there like every other bound command — this is what keeps that path a
+    // no-op instead of a second way to reach the toggle.
+    window.history.replaceState(null, '', '/?embed=1')
+    resetMounting()
+    const toggle = new ThemeToggle()
+    toggle.el.click()
+    toggle.el.click()
+    toggle.el.click()
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 })

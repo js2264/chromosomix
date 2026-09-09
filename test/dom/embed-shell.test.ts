@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '@/app/App'
 import { resetMounting } from '@/embed'
 import type { ViewState } from '@/types'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { all, setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
 
@@ -89,15 +89,23 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('.restore-slot')).toBeNull()
   })
 
-  it('leaves out the five columns, which are the width of the frame', () => {
-    // Not tidiness. A column is opened by a toggle in the header, so columns
-    // mounted without one can be neither closed nor opened — and a published
-    // session carries the layout it was saved with, so a figure saved from a
-    // full window arrived in a 1,200-pixel frame with five open columns and
-    // thirty-two pixels of map. Measured in Chromium, before this line existed.
+  it('keeps the two columns that are about the picture, folded', () => {
+    // Annotations and Aesthetics say what is drawn and how it is coloured; the
+    // other three are about the window. And they arrive folded whatever a saved
+    // session asks for: honouring the layout put a published figure in a
+    // 1,200-pixel frame behind five open columns and thirty-two pixels of map,
+    // measured in Chromium before this line existed.
     const { root } = windowAt('?embed=1')
-    expect(root.querySelectorAll('.panel-column')).toHaveLength(0)
-    expect(root.querySelector('.app-body')?.children).toHaveLength(2)
+    const columns = all(root, '.panel-column')
+    expect(columns.map((column) => column.className.includes('panel-annotations'))).toEqual([
+      true,
+      false,
+    ])
+    expect(columns).toHaveLength(2)
+    expect(columns.every((column) => column.classList.contains('collapsed'))).toBe(true)
+    // A folded column is not a dead 30-pixel rail: it stands its own named tab,
+    // which is what opens it where there is no header to open it from.
+    expect(all(root, '.panel-column .panel-tab')).toHaveLength(2)
   })
 
   it('keeps the view and the place a remark can land', () => {
@@ -111,9 +119,10 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('.drawer-slot')).not.toBeNull()
   })
 
-  it('keeps all five in a window of its own', () => {
+  it('keeps all five in a window of its own, and no bar', () => {
     const { root } = windowAt('')
     expect(root.querySelectorAll('.panel-column')).toHaveLength(5)
+    expect(root.querySelector('.embed-bar')).toBeNull()
   })
 
   it('builds the whole window when nothing was asked for', () => {
@@ -127,6 +136,46 @@ describe('a window mounted as an embed', () => {
     const { root } = windowAt('?embed=0')
     expect(root.querySelector('.app-head')).not.toBeNull()
   })
+})
+
+describe('the bar an embed has instead of a header', () => {
+  it('carries the brand, the breadcrumb, the two toggles and About', () => {
+    const { root } = windowAt('?embed=1')
+    const bar = root.querySelector('.embed-bar')
+    expect(bar).not.toBeNull()
+    expect(bar?.querySelector('.embed-brand-name')?.textContent).toBe('(meta)cooler')
+    // The breadcrumb moved *into* the bar rather than being duplicated: one
+    // slot, which the session fills exactly as it does in a window.
+    expect(bar?.querySelector('.breadcrumb-slot')).not.toBeNull()
+    expect(all(root, '.breadcrumb-slot')).toHaveLength(1)
+    // The two toggles are the panels' own buttons, so they say what they do and
+    // which key does it without this row knowing anything about either.
+    expect(all<HTMLButtonElement>(root, '.embed-tools button').map((button) => button.title)).toEqual(
+      ['Show the Annotations panel (A)', 'Show the Aesthetics panel (M)', 'About this viewer'],
+    )
+  })
+
+  it('points the brand at this same view, in the full application', () => {
+    // Not the way home. In a window the brand goes back to the picker, which
+    // inside a frame would throw away the figure the page named with no back
+    // button to return by — so it drops `embed` and keeps everything else.
+    const { root } = windowAt('?embed=1&config=x.json#uri=f.mcool&view=genomes')
+    const brand = root.querySelector<HTMLAnchorElement>('.embed-brand')
+    const href = new URL(brand?.href ?? '', 'http://localhost/')
+    expect(href.searchParams.has('embed')).toBe(false)
+    expect(href.searchParams.get('config')).toBe('x.json')
+    expect(href.hash).toBe('#uri=f.mcool&view=genomes')
+    expect(brand?.target).toBe('_blank')
+    expect(brand?.rel).toBe('noopener noreferrer')
+  })
+
+  it('follows the reader, so copying the link copies where they are', () => {
+    const { root, app } = windowAt('?embed=1')
+    navigate(app, AT)
+    const brand = root.querySelector<HTMLAnchorElement>('.embed-brand')
+    expect(brand?.href).toContain('#uri=https://data.example/f.mcool')
+  })
+
 })
 
 describe('the address bar, from inside a frame', () => {

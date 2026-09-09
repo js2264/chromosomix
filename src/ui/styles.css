@@ -344,10 +344,11 @@ p {
   letter-spacing: -0.015em;
 }
 
-/* The title block, then the four panel buttons, then the one that adds a file.
-   In that order because the name is what says which application this is and the
-   buttons are furniture over its columns; a row that opened with four unlabelled
-   marks made a reader identify them before reaching the thing they act on. */
+/* The title block, then how a file gets into this tab, then the four panels
+   over one that is already open. In that order because the name is what says
+   which application this is, and getting a file in comes before controls over
+   its picture — a row that opened with unlabelled marks made a reader
+   identify them before reaching the thing they act on. */
 .head-left {
   display: flex;
   align-items: center;
@@ -364,8 +365,8 @@ p {
    here is a property of the group that follows it: hiding one of these groups
    takes its own line with it, which a separator standing on its own would not
    do. */
-.head-panels,
-.head-add {
+.head-files,
+.head-panels {
   display: flex;
   gap: 0.25rem;
   margin-left: 0.9rem;
@@ -1212,6 +1213,81 @@ p {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/*
+ * The one row an embed has, in place of a header, a tab strip and a status bar.
+ *
+ * It carries four things and they are in the order a reader needs them: whose
+ * viewer this is, which file and where in it, the two controls over the picture,
+ * and the way to find out what any of it means. Everything else the window's
+ * header holds is about the window — tabs, theme, share, save — and an embed has
+ * no window to hold it for.
+ *
+ * The breadcrumb keeps its own markup and gives up its frame: inside this row a
+ * second background and a second bottom border would read as a strip within a
+ * strip, so both are taken off and the divider before it is what says the two
+ * halves are different things. `:empty` still hides the slot on the picker,
+ * where there is no file to say anything about, and the row stays — the brand
+ * and the About button are the two things an embed shows before it shows
+ * anything at all.
+ */
+.embed-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.embed-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  color: inherit;
+  text-decoration: none;
+}
+
+.embed-brand-name {
+  font-size: var(--step-0);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.embed-brand:hover .embed-brand-name {
+  color: var(--accent);
+}
+
+.embed-bar > .breadcrumb-slot {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.embed-bar > .breadcrumb-slot:not(:empty) {
+  border-left: 1px solid var(--border);
+  padding-left: 0.55rem;
+}
+
+.embed-bar .breadcrumb-host {
+  border-bottom: 0;
+  background: none;
+}
+
+.embed-bar .breadcrumb {
+  padding: 0;
+}
+
+/* Pushed right whatever is beside it, so the controls sit on the frame's edge
+   even when there is no breadcrumb to fill the middle. */
+.embed-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /*
@@ -4916,8 +4992,8 @@ canvas.is-frozen {
   /* The rules the groups after the name are set apart by: on a phone the header
      has one row of room, and two dividers in it are lines asking for width that
      what they point at does not have. */
-  .head-panels,
-  .head-add {
+  .head-files,
+  .head-panels {
     margin-left: 0.35rem;
     padding-left: 0;
     border-left: 0;

@@ -54,13 +54,34 @@ describe('stripPwaTagsFrom', () => {
     expect(absolute).toEqual(['/src/main.ts'])
   })
 
-  it('replaces the paragraph that describes them, rather than leaving it lying', () => {
-    // It says the app is installable and works offline after the first visit,
-    // which is false in a build with no manifest and no worker — and it is what
-    // whoever wonders where the worker went will read.
-    expect(source).toContain('`src/pwa.ts`')
-    expect(stripped).not.toContain('`src/pwa.ts`')
+  it('leaves a note where the manifest link was, rather than a silent gap', () => {
+    // Somebody reading a stripped document is usually working out why there is
+    // no service worker, and a sentence saying the tags were removed on purpose
+    // is what answers them.
     expect(stripped).toContain('stripped for this build')
+    // Once, and at the indentation of the tag it replaced.
+    expect(stripped.match(/stripped for this build/g)).toHaveLength(1)
+    expect(stripped).toContain(
+      '    <!-- The manifest, touch-icon and theme-color tags are stripped for this build. -->',
+    )
+  })
+
+  it('keys the note on a tag, because prose is the thing people edit', () => {
+    // The regression this pins. The note used to replace the *paragraph* in
+    // `index.html` that described the three tags, matched by `src/pwa.ts`
+    // inside it — and a documentation pass removed that paragraph, at which
+    // point the substitution matched nothing. No build check could see it: the
+    // tags were still stripped and only the sentence explaining their absence
+    // was gone. `index.html` cannot lose its manifest link the same way.
+    const reworded = source.replace(/^[ \t]*<!--[\s\S]*?-->\r?\n/gm, '')
+    expect(reworded).not.toContain('<!--')
+    expect(stripPwaTagsFrom(reworded)).toContain('stripped for this build')
+  })
+
+  it('does nothing the second time, because it consumes its own anchor', () => {
+    // `transformIndexHtml` is called once per build, but a substitution that
+    // stacked a note per run would say so only in a build somebody ran twice.
+    expect(stripPwaTagsFrom(stripped)).toBe(stripped)
   })
 
   it('keeps the favicon, the module script and the mount point', () => {

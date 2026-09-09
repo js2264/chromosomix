@@ -18,9 +18,10 @@
  * holding data nobody has published — it would put somebody else's unpublished
  * figure on screen for whoever sat down next.
  *
- * So the banner asks, and **Start fresh forgets the record** rather than merely
- * hiding the banner. An offer that comes back tomorrow having been declined
- * today is not an offer.
+ * So the banner asks, and **closing it forgets the record** rather than merely
+ * hiding the banner — the × is a close cross in the corner, not a second,
+ * unlabelled way to hide the note without answering it. An offer that comes
+ * back tomorrow having been declined today is not an offer.
  *
  * ## Why the banner is the window's rather than the picker's
  *
@@ -33,7 +34,7 @@
 
 import { Modal } from './Modal'
 import { button, el } from './dom'
-import { cardTitle } from './icons'
+import { cardTitle, iconButton } from './icons'
 import { fileLabel } from './labels'
 import type { WorkspaceSummary } from '../state/workspace'
 import type { StoredItem } from '../state/stored'
@@ -43,7 +44,7 @@ export interface RestoreBannerProps {
   /** ISO stamp the record carries, or `''` when it carries none. */
   savedAt: string
   onRestore(): void
-  /** Start fresh: the record is forgotten, not merely dismissed. */
+  /** The × was clicked: the record is forgotten, not merely dismissed. */
   onDismiss(): void
 }
 
@@ -111,12 +112,15 @@ export function restoreBanner(props: RestoreBannerProps): HTMLElement {
         class: 'btn btn-primary',
         title: 'Reopen those tabs, with their tracks, marks and filters.',
       }),
-      button('Start fresh', () => props.onDismiss(), {
-        class: 'btn',
-        // Said out loud, because a dismiss that also deletes is not what a
-        // reader expects a secondary button to do.
-        title: 'Forget them. This deletes the remembered workspace rather than hiding this note.',
-      }),
+      // Said out loud in the title, because a close cross that also deletes is
+      // not what a reader expects one to do — an icon alone cannot carry that,
+      // so the accessible name does.
+      iconButton(
+        'x',
+        'Close. This deletes the remembered workspace rather than hiding this note.',
+        () => props.onDismiss(),
+        { class: 'btn-close' },
+      ),
     ),
   )
 }

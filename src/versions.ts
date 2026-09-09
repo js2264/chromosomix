@@ -118,6 +118,30 @@ export const SITE_BASE: string = HERE.site
 export const PINNED_COMMIT: string | null = HERE.commit
 
 /**
+ * `true` when this build does not know where it is served from.
+ *
+ * Every other build bakes a root-absolute base: the site's `/metacooler.js/`, an
+ * archived copy's `/metacooler.js/v/<commit>/`, the desktop renderer's `/`. The
+ * package build (`vite.package.config.ts`) is the one that cannot — a tarball is
+ * unpacked into a lab site, a course page or a registry CDN, and the whole point
+ * of it is that one published version serves all three — so its base is `./`.
+ *
+ * Two things follow, and both are absences rather than behaviours. **There is no
+ * site root**: `SITE_BASE` resolves against the document, so asking it for
+ * `versions.json` would be asking whichever directory the copy was unpacked into
+ * for a manifest that only the deployment has. And **there is no scope to
+ * claim**: a service worker registered from a path this build does not own would
+ * be claiming one on somebody else's site, or on a CDN, over somebody else's
+ * package.
+ *
+ * Read off `BASE_URL` rather than out of a `define`, for the reason this module's
+ * header gives about `SITE_BASE`: the base is already baked in and already has
+ * to be right for the page to load at all, so an answer derived from it cannot
+ * disagree with reality.
+ */
+export const IS_PORTABLE = !import.meta.env.BASE_URL.startsWith('/')
+
+/**
  * Is this page running something older than what the site root now serves?
  *
  * Only ever true at the root itself, and it means one thing: a service worker
@@ -210,6 +234,11 @@ function text(value: unknown, limit: number): string {
  */
 export async function fetchVersions(): Promise<Versions | null> {
   if (TARGET !== 'web') return null
+  // …and nothing published beside a copy that was unpacked somewhere, which is
+  // not the same refusal: the desktop build has no site, and this one has no way
+  // to know whether the directory it is sitting in belongs to one. Asking would
+  // be a 404 against a stranger's server every time somebody opens About.
+  if (IS_PORTABLE) return null
   try {
     const response = await fetch(`${SITE_BASE}${MANIFEST_FILE}`, { cache: 'no-cache' })
     if (!response.ok) return null

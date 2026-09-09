@@ -340,9 +340,26 @@ export class SidePanel {
      * per frame of a drag is what the separation buys.
      */
     private readonly onSettle: () => void = () => {},
+    /**
+     * Whether this column's fold and width belong to the reader's browser.
+     *
+     * `true` everywhere a window is the whole page, and the reason the two are
+     * in `localStorage` at all: how wide somebody keeps their Annotations column
+     * is a preference about *them*, not about a file (§5.6).
+     *
+     * `false` in an embed, and it has to be, in **both** directions. Reading
+     * would open a column inside somebody's figure because the reader once left
+     * it open on the app's own site — an arrangement they made for a window this
+     * is not. Writing would be worse: a reader who opens a panel to look at one
+     * lane in an embedded figure would find the app itself rearranged the next
+     * time they went to it, by a page they were only reading. So an embed's
+     * columns start folded and leave no trace, which is the same rule
+     * `App.remember` states one level up about the window as a whole.
+     */
+    private readonly remembers = true,
   ) {
-    this.collapsed = readFlag(spec.key)
-    this.width = readWidth(spec) ?? spec.defaultWidth
+    this.collapsed = this.remembers ? readFlag(spec.key) : true
+    this.width = (this.remembers ? readWidth(spec) : null) ?? spec.defaultWidth
 
     this.tab = this.spine()
     this.el = el(
@@ -413,7 +430,7 @@ export class SidePanel {
   private fold(collapsed: boolean): void {
     if (collapsed === this.collapsed) return
     this.collapsed = collapsed
-    writeFlag(this.spec.key, collapsed)
+    if (this.remembers) writeFlag(this.spec.key, collapsed)
     this.paint()
     this.onResize()
     this.onSettle()
@@ -474,7 +491,7 @@ export class SidePanel {
   applyLayout(state: PanelState | undefined): void {
     if (state === undefined) return
     this.setWidth(state.width ?? this.spec.defaultWidth)
-    writeWidth(this.spec, state.width ?? null)
+    if (this.remembers) writeWidth(this.spec, state.width ?? null)
     this.fold(state.folded)
     // `fold` returns early when nothing changed, so a state that only moved the
     // width has still to be painted — which `setWidth` did, unless the width
@@ -509,12 +526,12 @@ export class SidePanel {
       width: () => this.width,
       resize: (px) => this.setWidth(px),
       commit: () => {
-        writeWidth(this.spec, this.width)
+        if (this.remembers) writeWidth(this.spec, this.width)
         this.onSettle()
       },
       reset: () => {
         this.setWidth(this.spec.defaultWidth)
-        writeWidth(this.spec, null)
+        if (this.remembers) writeWidth(this.spec, null)
         this.onSettle()
       },
     })

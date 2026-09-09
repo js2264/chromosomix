@@ -207,11 +207,18 @@ none of them.
 
 **What was built**, over `src/embed.ts`, `app/EmbedChannel.ts` and four gates elsewhere:
 
-- `?embed=1` mounts the same web build without the header, the tab strip, the restore slot, the
-  status bar or the five columns, and turns off the service worker and the version notice with them.
-  The columns were the surprise: they are opened from a toggle in a header an embed does not have,
-  and a published session carries the layout it was saved with — so the first real embed of the
-  yeast figure came up in a 1,200-pixel frame with five open columns and thirty-two pixels of map.
+- `?embed=1` mounts the same web build without the header, the tab strip, the restore slot or the
+  status bar, and turns off the service worker and the version notice with them. In their place is
+  one bar: the mark and the name — a link out to this same view in the full application — the file's
+  breadcrumb, and on the right the Annotations and Aesthetics toggles and **About**, which is where
+  an embedded figure says what it is, that nothing is uploaded, and which build drew it.
+- **Two of the five columns stay**, folded, standing as their own spines on either edge: Annotations
+  and Aesthetics are controls over the picture, and the other three are about the window. The fold
+  was the surprise, and it was measured rather than reasoned — a column is open until somebody folds
+  it, so the first real embed of the yeast figure came up in a 1,200-pixel frame with five open
+  columns and thirty-two pixels of map between them. Worth noting for its own sake: **the full app
+  does the same thing** on a fresh profile at 1,400 pixels with a file that offers all five, which
+  is a separate question from this one and is not answered here.
 - **An embed never pushes history.** This was the one real defect the exercise turned up rather than
   a feature it added: a frame's `pushState` writes into the joint session history, so an embedded
   figure was going to take over the reader's Back button on any page that used one.
@@ -226,9 +233,13 @@ none of them.
   the frame as well as the function. Before that, an embedded Choose-files button did nothing at all
   and the rejection was indistinguishable from a cancelled dialog.
 
-What is **not** in it, and is the natural next step: an npm-installable wrapper. The argument in
-`package.json` still holds — what ships is the built site, and there is nothing here a registry would
-want — so the embed is a URL, which is one fewer thing for a host page to keep up to date.
+What was **not** in it was a way to embed the viewer without depending on this project's own
+hosting — and that is now built too, at SPECS §22. The package is published to npm as a *built
+directory with a relative base*, so one tarball runs from a registry CDN, from a lab site's
+`/viewer/`, or from any other path, with no rebuild. `package.json`'s old argument against it
+survives in a narrower form: this is still an application rather than a library, and nothing imports
+it. What a registry turned out to be wanted for is hosting nobody has to trust, which is a different
+claim from the one `private: true` was refusing.
 
 ### G8. bedGraph and wig in
 

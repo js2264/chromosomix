@@ -10,10 +10,20 @@
  * The choice is a preference, not a train of thought, so it lives in
  * `localStorage` — unlike the table filters in `state/UiMemory`, which are
  * deliberately per-session.
+ *
+ * **An embed is fixed to light**, in `read()` rather than only in the button
+ * that is absent from its bar (`embed.ts`, `app/App.ts`): a figure inside
+ * somebody else's page has to render the same way for every reader, not go
+ * dark because the reader's OS does, or because a stray keyboard shortcut
+ * reaches a control that was never mounted. Guarding `read()` covers the
+ * startup paint; the click handler below is the second half, for the one
+ * remaining path to a change — the command palette's "theme" entry, which
+ * still runs in an embed like every other bound command.
  */
 
 import { el } from './dom'
 import { KEYS, withKey } from './commands'
+import { embedded } from '../embed'
 import { icon, type IconName } from './icons'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -28,6 +38,7 @@ const ICON: Record<ThemeChoice, IconName> = {
 }
 
 function read(): ThemeChoice {
+  if (embedded()) return 'light'
   try {
     const raw = window.localStorage.getItem(KEY)
     return raw === 'light' || raw === 'dark' ? raw : 'system'
@@ -76,6 +87,11 @@ export class ThemeToggle {
       attrs: { 'aria-label': 'colour theme' },
     })
     this.el.addEventListener('click', () => {
+      // Never mounted in an embed's own bar, but still reachable through the
+      // "theme" command — which, like every other bound command, still runs
+      // there. Without this the palette or its shortcut could flip a figure
+      // dark despite `read()` seeding it light.
+      if (embedded()) return
       this.choice = this.next()
       write(this.choice)
       applyTheme(this.choice)

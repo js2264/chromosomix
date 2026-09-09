@@ -25,9 +25,10 @@
  */
 
 import { builtinModules } from 'node:module'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync } from 'node:fs'
+import { join as joinPath } from 'node:path'
 
 const VERSION = (
   JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
@@ -47,7 +48,33 @@ function gitCommit(): string {
   }
 }
 
+/**
+ * Set the executable bit Rollup never does — it writes a file, not a program.
+ *
+ * `bin`'s whole point is `npm link`/`npm install -g` handing back a
+ * `metacooler-run` a shell can run directly, with no `.mjs` and no explicit
+ * `node`. npm chmods the target the moment it creates that link, but every
+ * `vite build` afterwards writes a fresh file at the same path with the
+ * default `0644` and quietly takes the bit back — the symlink still resolves,
+ * `node dist-cli/metacooler-run.mjs` still runs it by naming the interpreter,
+ * and only the one form the whole feature is for starts failing with
+ * "permission denied".
+ */
+function executable(): Plugin {
+  let outDir = 'dist-cli'
+  return {
+    name: 'metacooler-cli-executable',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      chmodSync(joinPath(outDir, 'metacooler-run.mjs'), 0o755)
+    },
+  }
+}
+
 export default defineConfig({
+  plugins: [executable()],
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
     __APP_COMMIT__: JSON.stringify(gitCommit()),

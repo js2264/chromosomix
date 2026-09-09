@@ -4081,23 +4081,31 @@ read by one parser.
 A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept:
 the value is about to be fetched, and the other schemes are the ones with no server on the other end.
 
-### 21.2 What an embed does not have, and why each one
+### 21.2 What it keeps and what it drops, and why each one
 
-- **The window furniture.** Header, tab strip, restore slot, status bar, and the five columns. The
-  header is controls over a window; the tab strip offers tabs an embed does not keep; the restore
-  slot offers *the reader's own* previous workspace, which inside an article would be six of their
-  files on a page that never asked for them (§11); the status bar is a byte counter under a figure.
+- **The window furniture.** Header, tab strip, restore slot, status bar. The header is controls over
+  a window; the tab strip offers tabs an embed does not keep; the restore slot offers *the reader's
+  own* previous workspace, which inside an article would be six of their files on a page that never
+  asked for them (§11); the status bar is a byte counter under a figure.
+- **Three of the five columns.** Files is the places this window has been connected to (§20),
+  General is a reference card about the file, and Analysis starts jobs and writes results — all
+  three about the window and the work around it. **Annotations and Aesthetics stay**, because they
+  are controls over the *picture*: which lanes are drawn, how they are coloured, scaled and clipped.
+  A reader looking at somebody else's figure has every reason to reach for those two.
 
-  The columns are the one that is about width rather than taste, and it was measured before it was
-  decided: a column is opened by a toggle *in the header*, so columns mounted without one can be
-  neither closed nor opened — and a published session carries the panel layout it was saved with, so
-  a figure saved from a full window arrived in a 1,200-pixel frame with five open columns and
-  **thirty-two pixels of map**. What is lost with them is a set of *controls*; every track in the
-  session is still drawn, because a lane is part of the view.
+  They arrive **folded**, whatever anything else says, and stand as their own named spines on either
+  edge. This one was measured rather than reasoned. A column is open unless it has been folded — a
+  fresh browser has nothing stored, and a session may carry a layout of its own — so the first real
+  embed of a published figure came up in a 1,200-pixel frame behind five open columns, with
+  **thirty-two pixels of map** between them. An embed is a picture first.
 
-  Everything else — the view, the breadcrumb, the analysis drawer, the content area, dropping a
-  file, every keyboard shortcut — is built exactly as it is for a top-level window, so no view knows
-  it is embedded.
+  An embed's columns also neither read nor write the stored fold and width. Reading would open a
+  column inside somebody's figure because the reader once left it open on the app's own site;
+  writing would rearrange the application for a reader who opened a panel in a page they were only
+  reading. Same rule as the window's memory above, one level down.
+
+  Everything else — the view, the analysis drawer, the content area, dropping a file, every keyboard
+  shortcut — is built exactly as it is for a top-level window, so no view knows it is embedded.
 - **History entries.** A frame's `pushState` writes into the *joint* session history, so an embed
   that pushed would take over the reader's Back button: clicking a genome and pressing Back would
   step the map instead of leaving the page. Every write replaces. The bar is still written — a
@@ -4117,7 +4125,28 @@ Firefox and Safari have always taken — an `<input type="file">` for files, the
 directory (§20). **Dropping is untouched**, so "drop your own file on this figure" is an embed a page
 can offer. A same-origin frame is deliberately not caught: the pickers work there.
 
-### 21.3 The channel
+### 21.3 The one bar it has
+
+Not a smaller header: the breadcrumb row with three things added, and what is on it is what a figure
+in somebody else's page owes its reader.
+
+**The mark and the name**, left. In a window the brand is the way home — back to the picker, which is
+one click away and catastrophic in a frame, since it would throw away the figure the page named with
+no back button to return by (§21.2). So it is a link *out*: this same view in the full application, in
+a new tab, with `embed` dropped from the query string and the fragment carried across untouched. Its
+address is rewritten on every navigation, so copying it copies where the reader actually is.
+
+**The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
+session fills in a window, with its own frame taken off so the row reads as one bar.
+
+**The two panel toggles and About**, right. The toggles are the panels' *own* buttons — the same
+objects the header holds in a window, so there is one fold path and not a second written for frames —
+and each hides itself when its column has nothing to show. About is the same dialog the header opens,
+and it is the answer to every question this bar raises: what this viewer is, that nothing is uploaded
+(§11), which build is in the frame, and where the source is. An embedded figure that could not say
+those four things would be asking a reader to trust a picture with no provenance.
+
+### 21.4 The channel
 
 An embed that can only be linked to is a picture. `postMessage` is the other half, and it is four
 messages (`app/EmbedChannel.ts`). Out: `metacooler:ready`, once, carrying the protocol version and
@@ -4139,3 +4168,73 @@ one reader that validates every key, clamps what needs clamping and drops what i
 A `view` this build has never heard of falls back; a smoothing radius it does not offer is dropped;
 an array where a genome name should be is not stringified into one. What the host is told afterwards
 is where the view actually **went**, which for a trimmed patch is not always where it asked to go.
+
+## 22. The package: the copy that goes to npm
+
+A sixth build of the same source, after the site, the archived pin, the desktop shell, the CLI and
+the standalone page. It emits `dist/` — the ordinary web app — and it is published to a registry as
+a **built directory rather than as something to import**. Nothing depends on it; things *serve* it.
+
+**What it is for is one question §21 could not answer.** An embed is an `<iframe>` and a URL, and
+until now that URL was this project's GitHub Pages site. A page that frames it takes on a dependency
+on somebody else's domain, deployment and lifetime — which is a reasonable thing to decline, and a
+thing a figure in a paper should decline. A published version is the alternative: immutable,
+checksummed, mirrored, and unpackable into any server the reader's institution already runs.
+
+`package.json` used to say `private: true`, on the argument that this is an application rather than a
+library and that a registry has no use for it. The first half is still true and is not what
+publishing changes. What a registry is wanted for here is not dependency resolution; it is **hosting
+nobody has to trust**, which is a distribution channel beside Pages rather than a claim that anyone
+should `import` this.
+
+### 22.1 The relative base, which is the whole of the build
+
+Every other build knows where it will be served from and bakes absolute asset URLs accordingly: the
+site root, `/v/<commit>/` for an archive (§21), `/` inside an asar. A tarball knows nothing — it is
+unpacked into `/viewer/` on one site, `/npm/<name>@<version>/dist/` on a CDN, a deep path on the
+next — so its base is `./`, and one published version serves all of them with no rebuild.
+
+The rule that comes with it is the reader's: **the URL has to end in a slash, or name `index.html`.**
+A relative base resolves against the document, so `…/viewer` without the slash looks for the assets
+one directory too high. Most servers redirect; a CDN generally does not.
+
+Two absences follow from not knowing where it is, and both are enforced rather than assumed
+(`IS_PORTABLE`, `src/versions.ts`):
+
+- **No service worker.** A copy mounted under a path it does not own must not claim a scope there —
+  on a registry CDN that scope covers other people's packages.
+- **No version manifest.** `SITE_BASE` resolves against the document, so asking for `versions.json`
+  would be asking whichever directory the copy was unpacked into for a file only the deployment has.
+  The About dialog therefore lists no other builds, which is correct: there is no site to list.
+
+It also carries no source maps and nothing from `public/` — ~20 MB of a ~26 MB site build — because
+a tarball is downloaded by everyone who installs it and cached for ever by every mirror. What is left
+is ~6 MB unpacked, 1.7 MB compressed.
+
+### 22.2 What is in it, and the one thing that rides along
+
+`files` is `dist/` and `dist-cli/`, and it is the whole of what stands between a publish and 250 MB of
+demo data: npm's default is everything not ignored by git. `dist-cli/` is there so the declared `bin`
+resolves inside the package — `npx metacooler-run` then works against a published version with no
+clone, which is what makes `h5wasm` and `@gmod/bbi` runtime dependencies rather than dev ones.
+
+npm **force-includes the file `main` names**, ahead of `files` and ahead of a negation. `main` is the
+Electron entry point (§15) and cannot be dropped without breaking `electron .`, so a pack run in a
+working tree that has built the desktop target carries 18 KB of compiled main process with it. It is
+inert — nothing in the package requires it — but it makes the tarball depend on local state, which is
+why publishing happens from CI, on a clean checkout, where the directory does not exist.
+
+### 22.3 Why the shape is asserted before it can be packed
+
+`prepack` runs the build, so `npm pack` and `npm publish` both fill `dist/` from source at that
+moment rather than shipping whatever was there. Then `check-package-build.mjs` refuses the result if
+it is wrong, and the rules are held by a test (`package-shape.mjs`, `test/unit/package-shape.test.ts`)
+in the arrangement §15 and §21's archived build both use.
+
+That check earns its place twice over here. `dist/` is written by **two** builds — the site's and this
+one — and only one of them may be published; a tarball packed over a site build would carry absolute
+asset URLs that 404 on every mount that is not the site root, plus 20 MB of maps. And unlike every
+other artifact in this repository, **a published version cannot be corrected**: an archived build is
+rebuilt over on the next push and a deployment is redeployed, while a tarball is on the registry for
+ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
+week. The pack is the last moment any of it is cheap to notice.

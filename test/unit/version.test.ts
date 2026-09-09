@@ -23,6 +23,10 @@ const root = new URL('../../', import.meta.url)
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8')) as {
   version: string
   private?: boolean
+  files?: string[]
+  bin?: Record<string, string>
+  scripts?: Record<string, string>
+  license?: string
   repository?: { url?: string }
   engines?: { node?: string }
 }
@@ -33,8 +37,40 @@ describe('the package', () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[\w.]+)?$/)
   })
 
-  it('is private, because what ships is a site and not a library', () => {
-    expect(pkg.private).toBe(true)
+  it('is publishable, and ships two directories and no more', () => {
+    // This was `private: true` until the viewer became embeddable (§21) and the
+    // question "whose hosting does an embed depend on" needed a second answer
+    // (§22). What replaced the flag is the allowlist, which is doing far more
+    // work than the flag ever did: npm's default is *everything not ignored by
+    // git*, and this repository carries 250 MB of demo data.
+    expect(pkg.private).toBeUndefined()
+    expect(pkg.files).toEqual(['dist', 'dist-cli'])
+  })
+
+  it('builds what it packs, rather than packing what is there', () => {
+    // `dist/` is written by two builds and only one of them may be published.
+    // Without this hook, a tarball takes whatever a developer last built — for
+    // the site, that is absolute asset URLs that 404 on every mount but the
+    // site root, and 20 MB of source maps.
+    expect(pkg.scripts?.prepack).toBe('npm run build:package')
+    expect(pkg.scripts?.['build:package']).toContain('vite.package.config.ts')
+    expect(pkg.scripts?.['build:package']).toContain('check-package-build.mjs')
+  })
+
+  it('declares no command that the tarball does not carry', () => {
+    // A `bin` outside `files` is a symlink to nothing on everybody's PATH, and
+    // npm reports it as a successful install.
+    for (const target of Object.values(pkg.bin ?? {})) {
+      const top = target.replace(/^\.\//, '').split('/')[0] as string
+      expect(pkg.files).toContain(top)
+    }
+  })
+
+  it('carries the licence it claims', () => {
+    // npm shows a package's licence, and a tarball that declares MIT without
+    // the text is asking to be taken on trust.
+    expect(pkg.license).toBe('MIT')
+    expect(readFileSync(new URL('LICENSE', root), 'utf8')).toContain('MIT License')
   })
 
   it('says where it lives and what it needs', () => {

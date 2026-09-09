@@ -244,6 +244,78 @@ jobs:
           # its size. Worth the seconds on an artefact this large.
           compression-level: 9
 
+  npm:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tag, for the reason the other two jobs give — `__APP_COMMIT__`
+          # and `__APP_VERSION__` are baked into the build — and for one more
+          # that is this job's own: a *clean* checkout has no `dist-electron/`,
+          # and npm force-includes the file `main` names ahead of `files`. A
+          # publish from somebody's working tree would carry 18 KB of compiled
+          # Electron main process with it, inert but not intended. Here there is
+          # nothing to carry.
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          # What makes `npm publish` authenticate with NODE_AUTH_TOKEN below
+          # rather than with whatever is in a runner's `.npmrc`, which is
+          # nothing.
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      # Two ways this job should do nothing, and neither is a failure.
+      #
+      # **No token.** Publishing needs a secret only the repository owner can
+      # add, and a fork, or this repository before anyone has added one, must
+      # not turn a green release into a red one over a channel it was never
+      # set up for. `secrets` cannot be read in an `if:`, so it comes through
+      # the environment, where it can.
+      #
+      # **Already published.** A version on npm is immutable, so a
+      # `workflow_dispatch` re-run of a tag — which is the documented way to
+      # rebuild installers for a release — would otherwise fail on its second
+      # invocation, every time, for doing exactly what it was asked to do.
+      - name: Should this publish?
+        id: decide
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "no NPM_TOKEN secret — skipping the registry" >> "$GITHUB_STEP_SUMMARY"
+            echo "publish=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on the registry — skipping" >> "$GITHUB_STEP_SUMMARY"
+            echo "publish=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      # `prepack` runs `build:package` here, so what is uploaded is built from
+      # this checkout at this moment and then asserted by
+      # `check-package-build.mjs` — which is the only thing standing between a
+      # site build's absolute asset URLs and a version that can never be
+      # corrected. `--access public` is stated rather than assumed: the default
+      # for an unscoped name is already public, and saying so is what keeps this
+      # working if the package is ever moved under a scope.
+      - name: Publish
+        if: steps.decide.outputs.publish == 'yes'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
   collect:
     name: attach to the release
     needs: [build, standalone]
