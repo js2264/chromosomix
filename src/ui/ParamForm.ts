@@ -1511,6 +1511,52 @@ export class ParamForm {
   }
 
   /**
+   * A box with nothing in it but what the reader types.
+   *
+   * The plainest control on the form, and the only one that offers no help at
+   * all: no list to pick from, no bounds, no rewriting of what was typed beyond
+   * trimming the ends. That is the point of {@link TextParam} — a motif is a
+   * string in an alphabet the *task* knows and the form does not, so a control
+   * that tried to be clever here would be guessing.
+   *
+   * Committed on `change` and on Enter, exactly as the locus box is, so a reader
+   * who types a pattern and presses Enter has answered the form rather than
+   * submitted it. Not committed per keystroke: every commit re-prices the run
+   * and re-evaluates every `when`, and half a motif is a refusal the reader
+   * would watch flicker past under their own typing.
+   */
+  private textControl(spec: TextParam): Control {
+    const id = `${this.id}-${spec.key}`
+    const box = el('input', {
+      class: 'input',
+      type: 'text',
+      attrs: { id },
+      ...(spec.placeholder === undefined ? {} : { placeholder: spec.placeholder }),
+      // The same reason the locus box carries one: a bare `input` in a grid
+      // track asks for its own default width and overflows the card.
+      style: { width: '100%' },
+    })
+    const commit = (): void => this.commit(spec.key, box.value.trim())
+    box.addEventListener('change', commit)
+    box.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        // Or the drawer's own Enter handling would submit a form the box has
+        // not yet handed its value to.
+        event.preventDefault()
+        commit()
+      }
+    })
+    const sync = (): void => {
+      // Never under the cursor: a re-render lands mid-word otherwise, and the
+      // held value is one keystroke behind what is on screen.
+      if (document.activeElement === box) return
+      box.value = stringOr(this.params[spec.key], '')
+    }
+    sync()
+    return { spec, wrapper: this.wrap(spec, this.labelled(spec, box, id)), shown: false, sync }
+  }
+
+  /**
    * The seed, and a button that rolls a new one.
    *
    * The seed is on the form rather than hidden behind it because §18.4 asks for
