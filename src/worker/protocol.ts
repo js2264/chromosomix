@@ -48,9 +48,43 @@ export type SourceKind = 'local' | 'remote'
  * demo bucket is read with no `Authorization` header, no preflight, and no
  * credential ever reaching this message.
  */
-export type SourceSpec =
+/**
+ * Where a file's bytes are, and — for the one format that is two files — where
+ * its other half's are.
+ *
+ * `bins` is the HiC-Pro pair (§3.9), and it is the same shape as the thing it
+ * hangs off because it is the same question asked twice: a bin file may be a
+ * local drop or a URL exactly as its matrix may. It is not a sidecar index in
+ * the §8.11 sense — the matrix is unreadable without it rather than merely
+ * slower — so its absence is a refusal rather than a fallback.
+ */
+export type SourceSpec = SourceLocation & {
+  bins?: SourceLocation
+  /**
+   * How to read this file, when the default is known to be wrong for it.
+   *
+   * Absent is the default, and is what every file takes. It is set only by the
+   * shell re-issuing an open with the reader's answer to a load gate, and it
+   * doubles as the token that says the gate has been answered — which is why it
+   * sits out here rather than on the remote arm: §3.8's gate is about round
+   * trips and fires only over the network, but §3.9's is about parsing and
+   * memory and fires on a local file just the same.
+   *
+   * - `whole` — one `GET` of the entire object, then everything is instant.
+   *   The only answer a HiC-Pro pair has, since it is read whole regardless.
+   * - `fine` — small chunks, little bandwidth, many round trips. An `.scool`
+   *   only (§3.8); nothing else has a scattered-metadata problem to trade against.
+   */
+  reading?: 'whole' | 'fine'
+}
+
+type SourceLocation =
   | { kind: 'local'; file: File; index?: File }
-  | { kind: 'remote'; url: string; credential?: S3Credential }
+  | {
+      kind: 'remote'
+      url: string
+      credential?: S3Credential
+    }
 
 /**
  * How a `.pairs` file is turned into a map (§3.7).
@@ -248,6 +282,44 @@ export interface OpenResult {
   entries: string[]
   /** The group they live under: `entries` (mmetacool) or `resolutions` (mcool). */
   entryGroup: string
+  /**
+   * Every cell of an `.scool`, in file order; `[]` for every other container.
+   *
+   * Separate from {@link entries} on purpose, though both are sibling coolers
+   * in one file. An mcool's resolutions are *rungs of the same map* and belong
+   * in the breadcrumb's picker beside it; an scool's cells are the map's
+   * **subject**, thousands of them, sorted and filtered and ticked — a table,
+   * not a drop-down. Folding them into one list would put four thousand entries
+   * in a menu and lose the columns that make them choosable.
+   *
+   * Paid for at open, and it is the one thing an scool costs: the names come
+   * from walking the container's HDF5 link storage, which writers scatter
+   * across the whole file (§12).
+   */
+  cells: string[]
+  /**
+   * The cells the open map is currently summing, in file order.
+   *
+   * Equal to {@link cells} for a file opened with nothing chosen, which is what
+   * dropping one means: an scool with no selection is the pseudo-bulk of
+   * everything in it. `[]` for every other container.
+   */
+  activeCells: string[]
+  /**
+   * Stored pixels across {@link activeCells}; `null` for every other container.
+   *
+   * The cost forecast the whole-file gate asks for, and an scool is the one
+   * file where the root's own `nnz` cannot answer it: a standard container does
+   * not write one (it has no pixels of its own) and a flat one writes nothing
+   * at all. What the reader would otherwise conclude is "this file declares no
+   * cost", and the read it then starts unwarned is a pass over every pixel of
+   * every selected cell — the most expensive thing the format can be asked for.
+   *
+   * Recomputed whenever the set changes, because it is a property of the set:
+   * one cell of a 3,882-cell file is four orders of magnitude cheaper than all
+   * of them, and a gate quoting the file's total would fire on both.
+   */
+  cellNnz: number | null
   /** `false` for a plain cooler, which has no genome layer to browse. */
   hasGenomes: boolean
   /** `true` when `/bins/weight` exists, so balanced counts can be offered. */
@@ -286,6 +358,36 @@ export interface GenomesResult {
 
 export interface ContigsResult {
   table: TablePayload
+}
+
+/**
+ * The cells table (§5.1's sibling for an `.scool`).
+ *
+ * One row per cell, and the columns are **discovered**, exactly as the genomes
+ * table's are: `name`, `nnz` and `sum` are guaranteed because every cooler
+ * writes them, and anything else a writer put on its cells that actually
+ * *differs* between them comes through as a column of its own.
+ *
+ * Attributes that are the same on every cell are dropped rather than shown.
+ * They describe the file — its bin size, its storage mode, the cooler that
+ * wrote it — and a column repeating one value four thousand times is a column
+ * that cannot be sorted, cannot be filtered, and pushes the two that can off
+ * the side of the screen. The info panel is where a file-level fact belongs.
+ */
+export interface CellsResult {
+  table: TablePayload
+  /** Row indices currently summed into the map, as offsets into `table`. */
+  selected: Int32Array
+}
+
+/** What changed when a reader ticked a different set of cells. */
+export interface CellsSelectedResult {
+  /** The resolved set, in file order — deduplicated and validated. */
+  names: string[]
+  /** Stored pixels the new set will walk; the read-cost forecast. */
+  nnz: number
+  /** Value columns every cell of the new set offers. */
+  scoreColumns: string[]
 }
 
 /**
@@ -541,6 +643,8 @@ export interface ResultMap {
   open: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult
+  cells: CellsResult
+  selectCells: CellsSelectedResult
   binColumns: BinColumnsResult
   binColumn: BinColumnResult
   range: ParsedRange
@@ -571,6 +675,18 @@ export type WorkerRequest =
   | { id: number; kind: 'exportMcool' }
   | { id: number; kind: 'genomes' }
   | { id: number; kind: 'contigs' }
+  | { id: number; kind: 'cells' }
+  /**
+   * Change which cells the open map sums (§3.8).
+   *
+   * A cell set is not part of the URI — `file.scool::/cells/one` addresses one
+   * cell as a plain cooler, and there is no group path that means *these eight*
+   * — so it is state on the open map, swapped here rather than by re-opening.
+   * The swap costs one small index read per cell and no re-mount.
+   *
+   * `null` is every cell, which is what an scool with nothing ticked shows.
+   */
+  | { id: number; kind: 'selectCells'; names: string[] | null }
   | { id: number; kind: 'binColumns' }
   // One `/bins` column over the bins a picture actually covers (§8.12). The
   // range is the caller's because the caller is the side that knows what is on

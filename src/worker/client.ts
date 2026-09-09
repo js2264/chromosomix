@@ -38,6 +38,20 @@ export class ReaderClient {
   private nextId = 1
   /** This worker's line in the status bar's CPU figure. */
   private readonly thread = registerThread('reader')
+  /**
+   * Progress from a request whose caller did not ask to follow it.
+   *
+   * Almost every read in this application is bounded and finishes before a
+   * reader could want news of it, so the dozen call sites that fetch a block
+   * pass no handler and should not have to. One read is not like that: summing
+   * a cell set is linear in *cells*, so a four-thousand-cell pseudo-bulk is
+   * four thousand small reads behind one veil that would otherwise say
+   * `loading…` for a minute and never say more.
+   *
+   * Rather than thread a handler through every view that asks for a matrix,
+   * the shell sets this once and the veil gets the news wherever it came from.
+   */
+  onNotice: ProgressHandler | null = null
 
   /** Constructed through `worker/spawn.ts`, which is the seam the standalone
    * build swaps: a `file://` page cannot construct a module worker at all. */
@@ -57,7 +71,11 @@ export class ReaderClient {
     if (entry === undefined) return
     switch (response.type) {
       case 'progress':
-        entry.onProgress?.(response.done, response.total, response.note)
+        // A request that asked to be followed is followed; one that did not
+        // still has something worth saying, and {@link ReaderClient.onNotice}
+        // is where it goes. See the field.
+        if (entry.onProgress !== undefined) entry.onProgress(response.done, response.total, response.note)
+        else this.onNotice?.(response.done, response.total, response.note)
         return
       case 'result':
         this.pending.delete(response.id)

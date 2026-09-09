@@ -88,7 +88,11 @@ export async function openHdf5(
   let rootEntryGroup = ''
   try {
     for (const group of ['entries', 'resolutions']) {
-      if (!file.keys().includes(group)) continue
+      // `get_type`, not `keys().includes(...)`: a listing of the root walks
+      // every link in it, and a single-cell container has one per cell —
+      // several thousand records scattered across the whole file (§12). Asking
+      // whether *one* name exists is a lookup, and it is the same answer.
+      if (file.get_type(`/${group}`) < 0) continue
       const node = file.get(group)
       if (!(node instanceof h5.Group)) continue
       rootEntries = orderEntries(node.keys())
@@ -112,6 +116,8 @@ class Hdf5File implements Hdf5Handle {
   private readonly file: H5wasmFile
   private readonly source: ByteSource
   private closed = false
+  /** A view from {@link at}, which shares the mount and must not close it. */
+  private readonly borrowed: boolean
 
   constructor(
     uri: string,
@@ -121,11 +127,13 @@ class Hdf5File implements Hdf5Handle {
     source: ByteSource,
     rootEntries: string[] = [],
     rootEntryGroup = '',
+    borrowed = false,
   ) {
     this.uri = uri
     this.group = group
     this.rootEntries = rootEntries
     this.rootEntryGroup = rootEntryGroup
+    this.borrowed = borrowed
     this.h5 = h5
     this.file = file
     this.source = source
@@ -241,8 +249,26 @@ class Hdf5File implements Hdf5Handle {
     return readTableGroup(this.h5, this.file, entity, label, lo, hi, columns)
   }
 
+  at(path: string): Hdf5Handle {
+    const rooted = this.resolve(path)
+    // `borrowed`, so this view's `close` is inert — see `Hdf5Handle.at`.
+    const view = new Hdf5File(
+      this.uri,
+      rooted,
+      this.h5,
+      this.file,
+      this.source,
+      this.rootEntries,
+      this.rootEntryGroup,
+      true,
+    )
+    return view
+  }
+
   close(): void {
-    if (this.closed) return
+    // A borrowed view shares the mount with the handle it came from; closing
+    // it here would pull the file out from under that one (`Hdf5Handle.at`).
+    if (this.closed || this.borrowed) return
     this.closed = true
     try {
       this.file.close()

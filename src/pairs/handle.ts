@@ -235,6 +235,16 @@ export function pairsHandle(init: PairsHandleInit): Hdf5Handle {
 
     // Nothing to release: the bytes are this object's own arrays, and the
     // source they came from was closed when the import finished.
+    // An imported `.pairs` is one pixel table per rung and has no group tree to
+    // re-root into — the same answer a `.hic` gives, and for the same reason.
+    // The sibling rungs are reached as they always were, by opening the import
+    // again at another `::/resolutions/<n>`.
+    at(path: string): never {
+      throw new ViewerError('unsupported', `An imported .pairs has no /${path} group to open.`, {
+        path,
+      })
+    },
+
     close: () => {},
   }
 }

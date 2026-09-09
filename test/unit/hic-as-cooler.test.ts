@@ -22,6 +22,7 @@ import { writeHic, type HicRecord } from '../support/hicWriter'
 class BytesSource implements ByteSource {
   readonly id: string
   readonly size: number
+  readonly isRemote = false
   constructor(
     private readonly data: Uint8Array,
     id = 'sample.hic',

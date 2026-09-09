@@ -34,7 +34,8 @@ import { MetaCooler } from '../../metacooler/MetaCooler'
 import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
-import { createSource, releaseSources } from '../../worker/sources'
+import { releaseSources } from '../../worker/sources'
+import { openMap } from '../../worker/open'
 import { correlationField, type CorrelationField } from '../compartments'
 import { adaptiveSmoothValues } from '../../render/smooth'
 import { abortError, type JobContext } from '../job'
@@ -106,8 +107,19 @@ async function handleOpen(
   // the ids belonged to.
   cancelled.clear()
 
-  const source = await createSource(request.source)
-  const mc = await MetaCooler.open(request.uri, source)
+  // Through `openMap`, not `MetaCooler.open`: a HiC-Pro pair is two text files
+  // and no HDF5 at all, and calling the HDF5 road directly reached h5wasm with a
+  // `.matrix` and failed inside it — `error - name not defined!` — for every
+  // task on a map that was on screen and perfectly fine (`worker/open.ts`).
+  const { mc, source } = await openMap(request.uri, request.source, {
+    report: (done, total, note) => post({ type: 'progress', id: request.id, done, total, note }),
+    cancelled: () => cancelled.has(request.id),
+  })
+  // The cells the reader has ticked, not the file's whole set. A task measures
+  // what is on screen, and an scool with two cells selected draws two: opening
+  // the pseudo-bulk here would answer a question about four thousand cells with
+  // the same number every time and no way to tell (§3.8).
+  if (request.cells !== undefined && mc.cells.length > 0) mc.selectCells(request.cells)
   session = { mc, source }
 
   // Two numbers and no table. Everything else about the file is already on the

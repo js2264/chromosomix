@@ -178,6 +178,13 @@ export function hicHandle(uri: string, file: HicFile): Hdf5Handle {
       throw new ViewerError('unsupported', `A .hic has no /${path} table.`, { path })
     },
 
+    // A `.hic` is one matrix per resolution and has no group tree to re-root
+    // into. The sibling resolutions are reached the way they always were, by
+    // opening the file again at another `::/resolutions/<n>`.
+    at(path: string) {
+      throw new ViewerError('unsupported', `A .hic has no /${path} group to open.`, { path })
+    },
+
     close: () => file.close(),
   }
 }

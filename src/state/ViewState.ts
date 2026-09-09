@@ -25,6 +25,7 @@ import type { Transform, ViewKind, ViewState } from '../types'
 
 const VIEW_KINDS: ViewKind[] = [
   'genomes',
+  'cells',
   'contigs',
   'genome',
   'pair',
@@ -50,6 +51,7 @@ const KEY_ORDER = [
   'region2',
   'focus',
   'regions',
+  'cells',
   'locus',
   'level',
   'transform',
@@ -75,6 +77,7 @@ const OPTIONAL_KEYS = [
   'region2',
   'focus',
   'regions',
+  'cells',
   'locus',
   'level',
   'transform',
@@ -188,6 +191,10 @@ export function parseViewState(hash: string): ViewState | null {
   if (genomes !== undefined) state.genomes = genomes
   const regions = raw.get('regions')
   if (regions !== undefined) state.regions = regions
+  // Empty is dropped: `cells=` would name a selection of none, and the view it
+  // reached would draw a blank map rather than the whole file the reader meant.
+  const cells = raw.get('cells')
+  if (cells !== undefined && cells !== '') state.cells = cells
   const locus = raw.get('locus')
   if (locus !== undefined && locus !== '') state.locus = locus
   const colormap = raw.get('colormap')
@@ -393,6 +400,23 @@ export const COMPANION_KEYS = ['maps', 'uri2'] as const
 export const READING_KEYS = ['flip', 'oe', 'smooth'] as const
 
 /**
+ * The keys that say **which data the file is being read through**, and outlive
+ * a navigation for a different reason than {@link READING_KEYS} do.
+ *
+ * One member, and it is the cell set of an `.scool` (§3.8). It is carried not
+ * because it is a preference — it is the opposite, it is the subject — but
+ * because a container of four thousand cells is browsed the way a file is: you
+ * choose the cells once, in the cells table, and then look at chromosome 3, and
+ * then a locus on it, and then back out. Dropping the set on the way into a
+ * chromosome would silently re-read every cell in the file, which is both the
+ * wrong picture and the most expensive read the format has.
+ *
+ * The same believe-what-was-said rule as the other two: a state that names a
+ * cell set has one, including the sentinel that names all of them.
+ */
+export const SUBJECT_KEYS = ['cells'] as const
+
+/**
  * `true` when two states select the same block and differ only in how it is
  * painted, what arithmetic is done to it, or what is drawn beside it — the
  * things a mounted view can be *told*, rather than rebuilt for.
@@ -493,6 +517,42 @@ export function selectionOf(state: ViewState): UnitSelection | null {
 function splitNames(value: string | undefined): string[] {
   if (value === undefined || value === '') return []
   return value.split(',').map((name) => name.trim()).filter((name) => name !== '')
+}
+
+// ---------------------------------------------------------------------------
+// The cell set of an .scool (§3.8)
+// ---------------------------------------------------------------------------
+
+/** What `cells` is written as when the selection is the whole file. */
+export const ALL_CELLS = '*'
+
+/**
+ * The cells a state names, or `null` for every cell in the file.
+ *
+ * `null` covers both spellings of "all of them" — the key absent, and the key
+ * present as `*` — because they mean the same picture and the reader arrives at
+ * them by different routes: an scool opened fresh has no key at all, and one
+ * whose reader pressed *sum all* has the sentinel. A single answer here is what
+ * keeps the two from drifting into two behaviours.
+ */
+export function cellsOf(state: ViewState): string[] | null {
+  const value = state.cells
+  if (value === undefined || value === ALL_CELLS) return null
+  const names = splitNames(value)
+  return names.length > 0 ? names : null
+}
+
+/**
+ * Write a cell set into a state patch.
+ *
+ * `null`, and any set that is the whole file, is written as the sentinel rather
+ * than enumerated: four thousand cell names is not a URL, and "every cell" is
+ * the one selection whose meaning does not depend on the file's contents — so
+ * the sentinel survives being shared where the enumeration could not.
+ */
+export function cellsPatch(names: readonly string[] | null, total: number): { cells?: string } {
+  if (names === null || names.length === 0 || names.length >= total) return { cells: ALL_CELLS }
+  return { cells: names.join(',') }
 }
 
 // ---------------------------------------------------------------------------

@@ -68,6 +68,8 @@ let counter = 0
 export class LocalFileSource implements ByteSource {
   readonly id: string
   readonly size: number
+  /** Always: the bytes are on this machine, and seeking is free. */
+  readonly isRemote = false
 
   private readonly bytes: Uint8Array | null
   private readonly blob: Blob | null

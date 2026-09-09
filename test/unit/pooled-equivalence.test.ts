@@ -32,6 +32,7 @@ import { writeHic, type HicRecord } from '../support/hicWriter'
 class BytesSource implements ByteSource {
   readonly id = 'pooling.hic'
   readonly size: number
+  readonly isRemote = false
   constructor(private readonly data: Uint8Array) {
     this.size = data.byteLength
   }

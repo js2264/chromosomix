@@ -24,8 +24,10 @@ import type { AttrValue, Hdf5Handle } from '../h5/api'
 import { NameIndex } from '../genome/naming'
 import { openHdf5 } from '../h5/Hdf5File'
 import { dtypeKind } from '../h5/typed'
+import { makeTable } from '../h5/readTable'
 import type {
   ByteSource,
+  Column,
   DenseMatrix,
   Extent,
   Info,
@@ -49,7 +51,15 @@ import {
   type BinPooling,
   type PoolPlan,
 } from './pooling'
-import { assertAcceptable, detectLayout, extractMetadata, normaliseInfo } from './detect'
+import {
+  assertAcceptable,
+  cellPath,
+  detectLayout,
+  extractMetadata,
+  normaliseInfo,
+  scoolGeometry,
+  willListCells,
+} from './detect'
 import {
   DEFAULT_WEIGHT_COLUMN,
   DENSE_HINTS,
@@ -59,6 +69,7 @@ import {
   resolveCountKind,
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
+import { resolveCells, ScoolStore } from './scool'
 import { HicFile } from '../hic/HicFile'
 import { isHicMagic } from '../hic/format'
 import { hicHandle } from '../hic/handle'
@@ -68,6 +79,7 @@ import { isPairsFile, readPairsHeader, type PairsHeader } from '../pairs/format'
 import { isGzip as isGzipMagic } from '../pairs/stream'
 import { pairsHandle } from '../pairs/handle'
 import { PairsStore } from '../pairs/store'
+import { hicProHandle, type HicProFile } from '../hicpro/handle'
 import { parseRegion, regionToExtent } from './range'
 import { parseUri } from '../uri'
 
@@ -88,6 +100,19 @@ const READER_CONTIG_COLUMNS = ['name', 'length', 'genome_id'] as const
 
 /** The `/genomes` columns the reader uses; the rest are the table view's. */
 const READER_GENOME_COLUMNS = ['name', 'length', 'n_contigs', 'n_bins'] as const
+
+/**
+ * The attributes an scool's root may leave to its cells.
+ *
+ * Geometry only, and it is a whitelist rather than a merge for the reason
+ * {@link MetaCooler.fromScool} gives: a cell's `nnz` and `sum` are that cell's,
+ * and letting them stand as the container's would have the light validation
+ * check one cell's pixel count against the whole selection's.
+ */
+const SCOOL_GEOMETRY_ATTRS = ['bin-size', 'bin-type', 'storage-mode'] as const
+
+/** Cell-table columns that lead, and are shown even when every cell agrees. */
+const CELL_TABLE_LEADING: readonly string[] = ['nnz', 'sum']
 
 /**
  * Everything `MetaCooler` needs, already read.
@@ -111,6 +136,21 @@ export interface MetaCoolerInit {
    * which is the one caller whose pixels are indexed some other way.
    */
   store?: PixelStore
+  /**
+   * Where the *tables* come from, when they do not come from `handle`.
+   *
+   * One container needs this and it is the `.scool`: its root holds a set of
+   * coolers rather than being one, so `/pixels` is not there to take a dtype
+   * from and — in the flat layout — neither is `/chroms` or `/bins`. Those
+   * questions are answered by a representative cell, which shares its bin space
+   * with every other cell by construction.
+   *
+   * Deliberately **not** where weights come from. `bins/weight` stays on
+   * `handle`, so a cell set is balanced by the *shared* bins or not at all
+   * (`metacooler/scool.ts`). Absent for every other layout, where the two
+   * handles are the same object.
+   */
+  tables?: Hdf5Handle
   /** `indexes/chrom_offset`, length `nContigs + 1`. */
   chromOffset: Float64Array
   /**
@@ -124,6 +164,21 @@ export interface MetaCoolerInit {
   genomes?: Table
   /** `indexes/genome_offset`, length `nGenomes + 1`; absent for a cooler. */
   genomeOffset?: Float64Array
+}
+
+/** Anything `MetaCooler.open` needs that is not the file or its bytes. */
+export interface OpenOptions {
+  /**
+   * The reader has already agreed to what listing this file's cells costs.
+   *
+   * Set on the *second* open of a container over the network — the one made
+   * with their answer to the §12 gate on the source — and it is what stops that
+   * gate from asking the same question again forever. Choosing *download it
+   * whole* changes the source's own answer to `isRemote` and would pass
+   * regardless; choosing *small pieces* does not, and did not, which is the bug
+   * this exists to have fixed rather than a defensive flag.
+   */
+  listingAgreed?: boolean
 }
 
 /** The §7.4 QC statistic: how much of the file binning failed to assign. */
@@ -169,6 +224,8 @@ export class MetaCooler {
   readonly entries: string[]
   /** The group those siblings live under — `entries` or `resolutions`. */
   readonly entryGroup: string
+  /** The handle that answers table and pixel-shape questions — see `MetaCoolerInit.tables`. */
+  private readonly tables: Hdf5Handle
   /** Normalised root attributes (`MetaCooler.info`). */
   readonly info: Info
   /** The optional user `metadata` object, `{}` when absent. */
@@ -243,7 +300,19 @@ export class MetaCooler {
    * the same seam the views do; see `metacooler/store.ts` for why the seam is
    * at the operation rather than at the dataset.
    */
-  readonly store: PixelStore
+  /**
+   * Where the pixels come from.
+   *
+   * Behind a getter because one container replaces it: an `.scool` swaps the
+   * store when the cell set changes ({@link selectCells}), and every reader of
+   * it — `readDenseMatrix` through `MatrixSource`, the scans, the pooled
+   * aggregations — must see the current one rather than a captured reference.
+   */
+  private pixelStore: PixelStore
+
+  get store(): PixelStore {
+    return this.pixelStore
+  }
   private readonly chromOffset: Float64Array
   private readonly genomeOffset: Float64Array
   private readonly genomeIds: Map<string, number>
@@ -265,7 +334,11 @@ export class MetaCooler {
    * and a remote range-request file (§6.1); everything below this line is
    * identical for both.
    */
-  static async open(uri: string, source: ByteSource): Promise<MetaCooler> {
+  static async open(
+    uri: string,
+    source: ByteSource,
+    options: OpenOptions = {},
+  ): Promise<MetaCooler> {
     // Mounted first so the sniff below has a byte accessor in every backing —
     // a path-backed source resolves its filesystem at mount and has nowhere
     // else to await one. Idempotent, and `openHdf5` reuses the same mount.
@@ -312,6 +385,7 @@ export class MetaCooler {
     // plain `file.metacool` reach the handle already resolved (§3.5).
     const handle = await openHdf5(uri, source, parseUri(uri).group)
     try {
+      if (options.listingAgreed !== true) assertListingAffordable(handle, source)
       return MetaCooler.fromHandle(handle)
     } catch (error) {
       handle.close()
@@ -414,6 +488,104 @@ export class MetaCooler {
   }
 
   /**
+   * Open an `.scool` as one cooler over a set of its cells (§3.8).
+   *
+   * The file is a container of coolers sharing one bin space, so the object
+   * this returns is a `MetaCooler` in the same full sense a `.hic` is: the
+   * coordinate system comes from the cells' shared tables and the pixels come
+   * from {@link ScoolStore}, which sums the selected set. Every view above it —
+   * the chromosome table, a region, the whole map, the axis runs, the pooled
+   * reads — works with no knowledge that a cell exists.
+   *
+   * `cells` is the ticked set, or `null` for **all of them**. All is what a file
+   * dropped and pressed on through means: an scool with nothing chosen is the
+   * pseudo-bulk of everything in it. It is also the expensive one, which is why
+   * the count is on {@link OpenResult} and gated in the caller rather than here
+   * — the reader refuses nothing it was asked for.
+   *
+   * ## Where each table comes from
+   *
+   * A **representative cell**, in both layouts and for both tables. The
+   * standard container hard-links `/chroms` and `/bins` into every cell from
+   * the root, so reading a cell's is reading the root's; the flat one has
+   * nothing at its root to read. One path, and it is correct for both.
+   *
+   * The attributes are the other way round: the root's win, and the cell's fill
+   * the gaps. A standard root states the geometry it has a `/bins` to describe;
+   * a flat root states only provenance, and the geometry is inside the cells.
+   * Whitelisted rather than merged wholesale, because a cell's `nnz` and `sum`
+   * describe *that cell* and would be validated here against the whole set.
+   */
+  static fromScool(
+    handle: Hdf5Handle,
+    layout: Layout,
+    attrs: Record<string, AttrValue>,
+    cells: readonly string[] | null,
+  ): MetaCooler {
+    const names = resolveCells(layout.entries ?? [], cells)
+    // The representative is the file's first cell, not the selection's: it
+    // answers questions about the *shared* bin space, which every cell agrees
+    // on, and pinning it to the file rather than the selection keeps the
+    // coordinate system identical as the ticks change.
+    const representative = handle.at(cellPath(layout, (layout.entries ?? [])[0]))
+    const geometry = scoolGeometry(handle, layout, attrs).attrs
+    const merged: Record<string, AttrValue> = { ...attrs }
+    for (const key of SCOOL_GEOMETRY_ATTRS) {
+      if (merged[key] === undefined && geometry[key] !== undefined) merged[key] = geometry[key]
+    }
+    const chromOffset = representative.readNumeric('indexes/chrom_offset')
+    const countKind = resolveCountKind(representative.dtype('pixels/count'))
+    const nBins = Number(chromOffset[chromOffset.length - 1] ?? 0)
+    return new MetaCooler({
+      uri: handle.uri,
+      handle,
+      tables: representative,
+      layout,
+      attrs: merged,
+      contigs: representative.readTable('chroms', undefined, undefined, READER_CONTIG_COLUMNS),
+      chromOffset,
+      store: new ScoolStore(handle, layout, names, nBins, countKind),
+    })
+  }
+
+  /**
+   * Open a HiC-Pro pair as one of these (§3.9).
+   *
+   * Shorter than {@link fromHic} by a whole module, and the reason is worth
+   * keeping: a HiC-Pro matrix has no index, so it was read whole before this
+   * point, and what the parser hands back is what a cooler stores — sorted
+   * triplets and a cumulative `bin1_offset`. So the handle serves the pixel
+   * datasets honestly and the **default {@link CoolerStore} reads them**, which
+   * makes the pixel path for this container the cooler path exactly rather than
+   * a second implementation of it.
+   *
+   * The refusal below is §3.3's, applied where the evidence is: a HiC-Pro map
+   * binned by restriction fragment (`GENOME_FRAGMENT`) is a variable-bin file,
+   * and the only place that is visible is the widths in the BED.
+   */
+  static fromHicPro(uri: string, file: HicProFile): MetaCooler {
+    if (!file.bins.fixed || file.bins.binsize === null) {
+      throw new ViewerError(
+        'variable-bins',
+        `The viewer supports fixed-bin files only, and ${file.binsName} is not one: its ` +
+          `intervals are of differing widths, which is what a fragment-level map ` +
+          `(\`GENOME_FRAGMENT\` in HiC-Pro's config) looks like. Re-run HiC-Pro with a ` +
+          '`BIN_SIZE`, or open the fixed-bin matrix beside this one.',
+        { 'bin-type': 'variable', 'bin-size': null, bins: file.binsName },
+      )
+    }
+    const handle = hicProHandle(uri, file)
+    return new MetaCooler({
+      uri,
+      handle,
+      layout: { kind: 'hicpro', group: '/' },
+      attrs: handle.attrs(),
+      contigs: handle.readTable('chroms'),
+      chromOffset: file.bins.chromOffset,
+    })
+  }
+
+  /**
    * Build a map from an already-open handle: detect, gate, then read the four
    * small things §3.2 allows.
    *
@@ -434,6 +606,8 @@ export class MetaCooler {
     // itself: its `/chroms` is the contig table, and there is no genome layer
     // to read. Everything below this point is bin arithmetic over
     // `chrom_offset` and contig lengths, which is the same in both files.
+    if (layout.kind === 'scool') return MetaCooler.fromScool(handle, layout, attrs, null)
+
     if (layout.kind !== 'metacool') {
       return new MetaCooler({
         uri: handle.uri,
@@ -470,7 +644,7 @@ export class MetaCooler {
    * because the view is reached by navigation and comes back.
    */
   fullContigs(): Table {
-    this.fullContigTable ??= this.handle.readTable(
+    this.fullContigTable ??= this.tables.readTable(
       this.layout.kind === 'metacool' ? 'contigs' : 'chroms',
     )
     return this.fullContigTable
@@ -486,6 +660,7 @@ export class MetaCooler {
   constructor(init: MetaCoolerInit) {
     this.uri = init.uri
     this.handle = init.handle
+    this.tables = init.tables ?? init.handle
     this.layout = init.layout
     this.entries = init.handle.rootEntries
     this.entryGroup = init.handle.rootEntryGroup
@@ -525,10 +700,10 @@ export class MetaCooler {
     this.genomeIds = new Map()
     for (let i = 0; i < this.genomeNames.length; i++) this.genomeIds.set(this.genomeNames[i], i)
 
-    this.countKind = resolveCountKind(this.handle.dtype('pixels/count'))
+    this.countKind = resolveCountKind(this.tables.dtype('pixels/count'))
     // After `countKind` and after `chromOffset`, because the default store is
     // built from both. A supplied one already knows its own answers.
-    this.store = init.store ?? new CoolerStore(this.handle, this.nBins, this.countKind)
+    this.pixelStore = init.store ?? new CoolerStore(this.handle, this.nBins, this.countKind)
     this.validateLight()
   }
 
@@ -1136,14 +1311,14 @@ export class MetaCooler {
    * for.
    */
   binColumns(): Array<{ name: string; text: boolean }> {
-    if (!this.handle.has('bins')) return []
+    if (!this.tables.has('bins')) return []
     const out: Array<{ name: string; text: boolean }> = []
-    for (const name of this.handle.keys('bins')) {
+    for (const name of this.tables.keys('bins')) {
       // A column whose dtype this reader cannot interpret — a compound, a
       // reference, an enum — is left out rather than reported as a number.
       // Nothing downstream could draw it, and the honest place to decline is
       // the list rather than the lane.
-      const text = columnIsText(this.handle.dtype(`bins/${name}`))
+      const text = columnIsText(this.tables.dtype(`bins/${name}`))
       if (text !== null) out.push({ name, text })
     }
     return out
@@ -1160,7 +1335,7 @@ export class MetaCooler {
    */
   binColumn(column: string, lo: number, hi: number): Float64Array | string[] {
     const path = `bins/${column}`
-    if (!this.handle.has(path)) {
+    if (!this.tables.has(path)) {
       throw new ViewerError(
         'unsupported',
         `This file has no /${path} column.`,
@@ -1169,9 +1344,9 @@ export class MetaCooler {
     }
     const from = Math.max(0, Math.min(lo, this.nBins))
     const to = Math.max(from, Math.min(hi, this.nBins))
-    return columnIsText(this.handle.dtype(path)) === true
-      ? this.handle.readStrings(path, from, to)
-      : this.handle.readNumeric(path, from, to)
+    return columnIsText(this.tables.dtype(path)) === true
+      ? this.tables.readStrings(path, from, to)
+      : this.tables.readNumeric(path, from, to)
   }
 
   /** The two bounded weight slices a balanced roll-up multiplies by. */
@@ -1201,6 +1376,90 @@ export class MetaCooler {
       level,
       this.storageMode === 'symmetric-upper',
     )
+  }
+
+  // -------------------------------------------------------------------------
+  // Cells (spec §3.8)
+  // -------------------------------------------------------------------------
+
+  /** Every cell of an `.scool`, in file order; `[]` for any other container. */
+  get cells(): string[] {
+    return this.layout.kind === 'scool' ? (this.layout.entries ?? []) : []
+  }
+
+  /**
+   * The cells currently summed into this map.
+   *
+   * Equal to {@link cells} until something ticks a subset, and `[]` on a file
+   * that has none — which is what lets every caller ask without branching on
+   * the container first.
+   */
+  get activeCells(): string[] {
+    return this.pixelStore instanceof ScoolStore ? this.pixelStore.names : []
+  }
+
+  /**
+   * Sum a different set of cells, in place. `null` is every cell.
+   *
+   * A swap rather than a re-open, and the difference is what makes ticking
+   * boxes feel like ticking boxes: the mount, the chrom table, the coordinate
+   * system and the bin space are all shared by every cell, so what actually
+   * changes is which pixel tables get walked. The cost is one small index read
+   * per newly selected cell.
+   */
+  selectCells(names: readonly string[] | null): void {
+    if (this.layout.kind !== 'scool') {
+      throw new ViewerError(
+        'unsupported',
+        `${this.uri} is not a single-cell container, so it has no cells to choose.`,
+        { layout: this.layout.kind },
+      )
+    }
+    const resolved = resolveCells(this.cells, names)
+    this.pixelStore = new ScoolStore(this.handle, this.layout, resolved, this.nBins, this.countKind)
+  }
+
+  /**
+   * One row per cell, with the columns its attributes actually distinguish.
+   *
+   * `name`, `nnz` and `sum` first, because every cooler writes the latter two
+   * and they are what a reader ranks cells by — a single-cell library is a
+   * distribution of depths, and the useful ones are at one end of it. After
+   * them, any other attribute that **differs** across cells, discovered rather
+   * than listed: a writer that records a phase, a batch or a QC call per cell
+   * gets a sortable column for free.
+   *
+   * A constant attribute is deliberately not a column — see {@link CellsResult}.
+   * `metadata` is dropped whatever it does, being a JSON blob rather than a
+   * cell of a table.
+   */
+  cellTable(): Table {
+    const names = this.cells
+    const rows = names.map((name) => this.handle.attrsAt(cellPath(this.layout, name)))
+    const columns: string[] = ['name']
+    const data: Record<string, Column> = { name: names }
+
+    const discovered = new Set<string>()
+    for (const attrs of rows) for (const key of Object.keys(attrs)) discovered.add(key)
+    // Order: the two guaranteed numbers, then whatever else varies, by name, so
+    // the table is stable across files rather than following HDF5's iteration.
+    const rest = [...discovered]
+      .filter((key) => !CELL_TABLE_LEADING.includes(key) && key !== 'metadata')
+      .sort()
+    for (const key of [...CELL_TABLE_LEADING, ...rest]) {
+      if (!discovered.has(key)) continue
+      const values = rows.map((attrs) => attrs[key])
+      // A column every row agrees on describes the file, not the cell.
+      if (!CELL_TABLE_LEADING.includes(key) && values.every((v) => v === values[0])) continue
+      const numeric = values.every((v) => typeof v === 'number' || typeof v === 'boolean')
+      if (numeric) {
+        data[key] = Float64Array.from(values, (v) => Number(v))
+      } else {
+        data[key] = values.map((v) => (v === null || v === undefined ? '' : String(v)))
+      }
+      columns.push(key)
+    }
+    return makeTable(names.length, columns, data)
   }
 
   // -------------------------------------------------------------------------
@@ -1420,7 +1679,7 @@ export class MetaCooler {
             string,
           ][])),
       ['nbins', this.info.nbins, this.nBins, 'len(/bins)'],
-      ['nnz', this.info.nnz, this.handle.datasetLength('pixels/bin1_id'), 'len(/pixels)'],
+      ['nnz', this.info.nnz, this.tables.datasetLength('pixels/bin1_id'), 'len(/pixels)'],
     ]
     for (const [name, value, actual, label] of declared) {
       if (value !== null && value !== actual) {
@@ -1516,4 +1775,46 @@ function weightAt(
   if (bin >= rows[0] && bin < rows[1]) return weights.rows[bin - rows[0]]
   if (bin >= cols[0] && bin < cols[1]) return weights.cols[bin - cols[0]]
   return 1
+}
+
+/**
+ * Refuse to list a container's cells over a source that cannot afford it (§12).
+ *
+ * Every other open in this application is a bounded read, and this is the one
+ * that is not: a container's cell names live in HDF5 link storage that writers
+ * interleave with the cells' own data, so reading them is a thousand small
+ * requests spread over the whole object. Measured on a 3,882-cell file: 1,015
+ * reads averaging 512 bytes, uniformly distributed across 327 MB. Neither
+ * chunk size wins — at the default 1 MiB the listing fetches the entire object,
+ * and small enough to avoid that is small enough to need a thousand round trips.
+ *
+ * So the reader is asked, which is what this refusal is: a question with the
+ * numbers in it, thrown where the cost is about to be incurred and caught by
+ * the shell, which re-opens with the answer on the source (`SourceSpec.reading`).
+ * A source that already holds the whole object in memory — a dropped file, or a
+ * download the reader has just agreed to — has nothing to be asked about and
+ * passes straight through.
+ *
+ * @throws ViewerError `scool-listing-cost`, carrying the object's size.
+ */
+function assertListingAffordable(handle: Hdf5Handle, source: ByteSource): void {
+  if (!source.isRemote) return
+  if (!willListCells(handle, handle.attrs())) return
+  const { path } = parseUri(handle.uri)
+  throw new ViewerError(
+    'scool-listing-cost',
+    `${path} is a single-cell container, and listing its cells is not a bounded read: the ` +
+      `names live in HDF5 link records spread across the whole object. Reading them over the ` +
+      `network costs either one download of ${fmtMib(source.size)} or a few percent of that in ` +
+      `about a thousand separate requests. Choose which to pay, or open a local copy, where ` +
+      `neither cost applies.`,
+    { path, size: source.size },
+  )
+}
+
+/** `326 MB`, for a sentence. */
+function fmtMib(bytes: number): string {
+  return bytes >= 1 << 30
+    ? `${(bytes / (1 << 30)).toFixed(1)} GB`
+    : `${Math.round(bytes / (1 << 20))} MB`
 }

@@ -106,6 +106,21 @@ export interface Hdf5Handle {
    */
   readTable(path: string, lo?: number, hi?: number, columns?: readonly string[]): Table
 
+  /**
+   * The same open file, rooted at a group inside this one.
+   *
+   * One mount, many roots. An `.scool` is several thousand coolers in one file
+   * and a read across a set of them has to address each in turn; re-opening the
+   * file per cell would mean an `h5.File` and a fresh metadata walk each time,
+   * where what actually differs between them is a path prefix.
+   *
+   * The view does **not** own the file. Its {@link close} is a no-op, because
+   * closing it would take the mount out from under every other view and under
+   * the handle it came from; the owner is the handle `openHdf5` returned, and
+   * that one is closed exactly once as it always was.
+   */
+  at(path: string): Hdf5Handle
+
   /** Release the handle and its byte source. Idempotent. */
   close(): void
 }

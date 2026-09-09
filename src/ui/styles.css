@@ -4091,6 +4091,24 @@ canvas.is-frozen {
   margin: 0.6rem 0;
 }
 
+/* The two buttons of the §12 listing gate, side by side and equally weighted:
+   neither reading is the recommended one — which is cheaper depends on the
+   connection and on whether the file will be opened again — so the panel must
+   not put its thumb on the scale by making one of them look like the default
+   with the other beside it as an escape. They wrap on a narrow window rather
+   than shrinking, since both labels carry a number that has to stay readable. */
+.scool-gate .modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0 0.4rem;
+}
+
+.scool-gate .modal-actions .btn {
+  flex: 1 1 14rem;
+  justify-content: center;
+}
+
 /* The build stamp: monospace because it is meant to be copied into an issue,
    quiet because nobody opens this dialog to read it. */
 .about-build {
@@ -5132,6 +5150,21 @@ canvas.is-frozen {
   align-items: center;
   gap: 0.6rem;
   margin: 0.6rem 0;
+}
+
+/* The same bar on the loading screen, which is a centred column rather than a
+   left-aligned panel — so it centres with the text above it and the spinner
+   above that, and the tabular figures keep the line from twitching as the
+   numbers climb. */
+.loading .progress-box {
+  justify-content: center;
+  margin: 0;
+}
+
+.loading .loading-text {
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  min-height: 1.4em;
 }
 
 .progress {

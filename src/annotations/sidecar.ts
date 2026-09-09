@@ -45,6 +45,28 @@ export function splitIndexFragment(url: string): { address: string; index?: stri
 }
 
 /**
+ * Split `<url>#bins=<url>` into the two URLs it names.
+ *
+ * The HiC-Pro twin of {@link splitIndexFragment}, and it exists for the same
+ * reason: the guess cannot always be made. A presigned matrix URL, one carrying
+ * a query string, or a bucket that publishes the two halves under unrelated
+ * keys all defeat the convention, and a pair that cannot travel as one string
+ * cannot be shared at all (§11).
+ */
+export function splitBinsFragment(url: string): { address: string; bins?: string } {
+  const at = url.indexOf('#bins=')
+  if (at < 0) return { address: url }
+  const bins = url.slice(at + '#bins='.length).trim()
+  const address = url.slice(0, at)
+  if (bins === '') return { address }
+  try {
+    return { address, bins: decodeURIComponent(bins) }
+  } catch {
+    return { address, bins }
+  }
+}
+
+/**
  * The sidecar suffixes this app pairs with the file they index.
  *
  * `.tbi` indexes a bgzipped text file and is opportunistic — the file opens
@@ -59,9 +81,31 @@ export function splitIndexFragment(url: string): { address: string; index?: stri
  */
 const INDEX_SUFFIX = /\.(tbi|bai|csi|px2)$/i
 
+/**
+ * The bin file beside a HiC-Pro matrix (§3.9).
+ *
+ * A fourth kind of companion, paired by the same gesture as the three above and
+ * for the reason the comment on {@link INDEX_SUFFIX} gives: what differs
+ * between them is only what happens when the pairing fails. This one fails
+ * hardest — a `.tbi` is an optimisation and a `.bai` is a format's only bounded
+ * read, but an `_abs.bed` is the matrix's **coordinate system**, so without it
+ * there is not a slower map or a refused one but no map at all.
+ *
+ * Deliberately narrow. An ordinary BED must not be captured by this, or a
+ * feature file dropped beside a contact map would be silently swallowed as its
+ * bins; HiC-Pro's own `<prefix>_<res>_abs.bed` is the only spelling matched,
+ * and a lone one still opens as the track it also is.
+ */
+const HICPRO_BINS = /_abs\.bed(\.gz)?$/i
+
+/** The matrix half of a HiC-Pro pair, by name. */
+export function isHicProMatrix(name: string): boolean {
+  return /\.matrix(\.gz)?$/i.test(name)
+}
+
 /** Whether this file is a sidecar index rather than something to draw. */
 export function isIndexName(name: string): boolean {
-  return INDEX_SUFFIX.test(name)
+  return INDEX_SUFFIX.test(name) || HICPRO_BINS.test(name)
 }
 
 /**
@@ -73,10 +117,37 @@ export function isIndexName(name: string): boolean {
  * have must not have to know which convention produced it.
  */
 export function basesForIndex(name: string): string[] {
+  if (HICPRO_BINS.test(name)) return hicProMatrixNames(name)
   const stem = name.replace(INDEX_SUFFIX, '')
   return /\.(bai|csi)$/i.test(name) && !/\.bam$/i.test(stem)
     ? [stem, `${stem}.bam`]
     : [stem]
+}
+
+/**
+ * The matrices a `<prefix>_<res>_abs.bed` could belong to.
+ *
+ * Four spellings, and each is a real HiC-Pro output: the raw matrix beside the
+ * bed in `raw/<res>/`, the ICE-normalised one in `iced/<res>/` which carries an
+ * `_iced` before its extension, and either of them gzipped. The bed is written
+ * once per resolution and both matrices share it, which is why a reader may
+ * drop the bed with whichever of the two they meant.
+ */
+function hicProMatrixNames(bins: string): string[] {
+  const stem = bins.replace(HICPRO_BINS, '')
+  return [`${stem}.matrix`, `${stem}_iced.matrix`, `${stem}.matrix.gz`, `${stem}_iced.matrix.gz`]
+}
+
+/**
+ * The bin file a HiC-Pro matrix needs, by name, most likely first.
+ *
+ * The reverse of {@link hicProMatrixNames}, and the road a matrix dropped or
+ * linked **alone** takes: the same rule §8.11 uses to find a `<url>.tbi` beside
+ * the file it indexes, applied to a companion that is not optional.
+ */
+export function hicProBinsNames(matrix: string): string[] {
+  const stem = matrix.replace(/\.matrix(\.gz)?$/i, '').replace(/_iced$/i, '')
+  return [`${stem}_abs.bed`, `${stem}_abs.bed.gz`]
 }
 
 /**
@@ -89,6 +160,7 @@ export function basesForIndex(name: string): string[] {
  * the one taken.
  */
 export function indexNamesFor(base: string): string[] {
+  if (isHicProMatrix(base)) return hicProBinsNames(base)
   if (/\.bam$/i.test(base)) {
     const stem = base.replace(/\.bam$/i, '')
     return [`${base}.bai`, `${base}.csi`, `${stem}.bai`, `${stem}.csi`]

@@ -93,7 +93,7 @@ export type JobState =
  */
 export interface RunnerHost {
   context(): AnalysisContext | null
-  source(): { uri: string; source: SourceSpec } | null
+  source(): { uri: string; source: SourceSpec; cells?: readonly string[] } | null
   /** Which map a plain Run files its results against — the star (§18.2). */
   targetMap?(): MapId
   /** Every map on screen, in reading order, for {@link AnalysisRunner.runAll}. */
@@ -251,6 +251,18 @@ export function resultKey(map: MapId, taskId: string): string {
   return `${map}\u0000${taskId}`
 }
 
+/**
+ * What the analysis worker's mount is identified by.
+ *
+ * The file, and — for a single-cell container — the cells it is summing. Two
+ * runs of the same task over the same scool with different cells ticked are two
+ * different measurements, and a mount cached on the URI alone would give the
+ * second the first one's answer with nothing on screen to say so.
+ */
+function mountKey(uri: string, cells?: readonly string[]): string {
+  return cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
+}
+
 export interface RunTarget {
   /** Which map, for filing what the run produces (`annotations/placement.ts`). */
   map: MapId
@@ -266,6 +278,15 @@ export interface RunTarget {
    * a 1D browser session.
    */
   source?: SourceSpec
+  /**
+   * The cells this map is summing, where it is a single-cell container (§3.8).
+   *
+   * Absent everywhere else, and absent means *all of them*. It is part of the
+   * target rather than of the source because it is a property of the *view* —
+   * the same file with two cells ticked and with four thousand is two different
+   * experiments, and a task measures the one on screen.
+   */
+  cells?: readonly string[]
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -570,6 +591,10 @@ export class AnalysisRunner {
       map: this.host.targetMap?.() ?? LEAD_MAP,
       uri: source?.uri ?? framing.uri,
       ...(source === null ? {} : { source: source.source }),
+      // Carried, not dropped: this is the target a plain Run builds, so a cell
+      // set lost here is lost for every single-map run — which is all of them
+      // outside a batch (§3.8).
+      ...(source?.cells === undefined ? {} : { cells: source.cells }),
       label: framing.uri,
     }
   }
@@ -764,7 +789,11 @@ export class AnalysisRunner {
         `${job.task.title} reads a contact map, and this session is browsing a genome without one.`,
       )
     }
-    if (this.mounted === source.uri) return
+    // Keyed on the cell set as well as the file: an scool re-ticked between two
+    // runs is the same URI and a different map, and a mount kept for the name
+    // alone would answer the second question with the first one's cells.
+    const key = mountKey(source.uri, source.cells)
+    if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
       done: 0,
@@ -777,8 +806,13 @@ export class AnalysisRunner {
     // nothing, and a `mounted` still naming the previous file would make the
     // next job skip the open it now needs.
     this.mounted = null
-    await client.request<'open'>({ kind: 'open', uri: source.uri, source: source.source })
-    this.mounted = source.uri
+    await client.request<'open'>({
+      kind: 'open',
+      uri: source.uri,
+      source: source.source,
+      ...(source.cells === undefined ? {} : { cells: source.cells }),
+    })
+    this.mounted = key
   }
 
   private async runStep(

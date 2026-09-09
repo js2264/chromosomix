@@ -54,6 +54,13 @@ export const KEYS = {
    * of the two silently lost. One box, one key.
    */
   find: '/',
+  /**
+   * The file's own landing table — Genomes on a metacool, Cells on an `.scool`.
+   *
+   * One binding rather than two, because it is one action: no file has both
+   * tables, and a reader who learns `g` on one should not have to learn a
+   * second letter for the other. The command's *title* is what changes.
+   */
   genomes: 'g',
   contigs: 'c',
   whole: 'w',

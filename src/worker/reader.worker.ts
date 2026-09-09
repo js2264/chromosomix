@@ -16,6 +16,7 @@ import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
+import { ScoolStore } from '../metacooler/scool'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { NameContext, NameMatch } from '../genome/naming'
@@ -39,6 +40,8 @@ import {
   type AxisGroup,
   type BinColumnResult,
   type BinColumnsResult,
+  type CellsResult,
+  type CellsSelectedResult,
   type ContigsResult,
   type DeepValidation,
   type GenomesResult,
@@ -56,6 +59,7 @@ import {
 import { createSource, openIndexSource, releaseSources } from './sources'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { writeMcool } from '../pairs/write'
+import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 
 /**
@@ -366,6 +370,27 @@ function importedRungFor(
   return size === null ? null : { pairs: active.pairs, size }
 }
 
+/**
+ * Say what an open is doing, in the units of whatever it is doing.
+ *
+ * Bytes while a file is coming across, pixels while it is being parsed, and the
+ * `note` says which — because the two have different denominators and a bar
+ * that silently switched from one to the other would look like it had gone
+ * backwards. Two sweeps with a label each is what a reader can actually follow.
+ */
+function reporter(id: number): (done: number, total: number, note: string) => void {
+  let last = 0
+  return (done, total, note) => {
+    // Throttled to ~20 Hz. The download loop fires per network chunk and the
+    // parse per hundredth of a file, and posting every one of them would put
+    // more messages on the thread than the read it is describing.
+    const now = Date.now()
+    if (now - last < 50 && done < total) return
+    last = now
+    post({ type: 'progress', id, done, total, note })
+  }
+}
+
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
   // Before the session is torn down, because it is the thing being reused.
   const reusable = importedRungFor(session, request.uri)
@@ -378,40 +403,51 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // the ids belonged to.
   cancelled.clear()
 
-  const source = await createSource(request.source)
+  // `openMap` knows the two roads a container can arrive by: HDF5 through a
+  // mount, or a HiC-Pro pair read whole as two text files (`worker/open.ts`).
+  // What it cannot know is the third, because a `.pairs` is not opened at all —
+  // it is *imported*, at a resolution the file does not carry — so that one is
+  // reached through the refusal the mount raises, below.
+  const say = reporter(request.id)
+  const hooks = { report: say, cancelled: () => cancelled.has(request.id) }
   let mc: MetaCooler
+  let source: ByteSource
   let pairs: PairsImport | null = reusable?.pairs ?? null
-  try {
-    if (reusable !== null) {
-      // A rung switch inside a file already imported: no read, no dialog, no
-      // second pass. The table is in hand.
-      mc = MetaCooler.fromPairs({
-        uri: request.uri,
-        header: reusable.pairs.header,
-        pixels: reusable.pairs.tables.get(reusable.size)!,
-        rungs: reusable.pairs.rungs,
-        indexed: reusable.pairs.indexed,
-        declaredRecords: reusable.pairs.declaredRecords,
-      })
-    } else {
-      mc = await MetaCooler.open(request.uri, source)
-    }
-  } catch (error) {
-    // A `.pairs` is the one input that cannot be opened from its own bytes: it
-    // declares no resolution, so there is nothing to open it *at*. The first
-    // open is therefore always refused, and what comes back is what the dialog
-    // needs to make the choice a decision rather than a guess.
-    if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
-    pairs = await openPairs(request, source)
-    if (pairs === null) throw abortError()
+  if (reusable !== null) {
+    // A rung switch inside a file already imported: no read, no dialog, no
+    // second pass. The table is in hand.
+    source = await createSource(request.source)
     mc = MetaCooler.fromPairs({
       uri: request.uri,
-      header: pairs.header,
-      pixels: pairs.tables.get(pairs.rungs[0])!,
-      rungs: pairs.rungs,
-      indexed: pairs.indexed,
-      declaredRecords: pairs.declaredRecords,
+      header: reusable.pairs.header,
+      pixels: reusable.pairs.tables.get(reusable.size)!,
+      rungs: reusable.pairs.rungs,
+      indexed: reusable.pairs.indexed,
+      declaredRecords: reusable.pairs.declaredRecords,
     })
+  } else {
+    try {
+      ;({ mc, source } = await openMap(request.uri, request.source, hooks))
+    } catch (error) {
+      // A `.pairs` is the one input that cannot be opened from its own bytes: it
+      // declares no resolution, so there is nothing to open it *at*. The first
+      // open is therefore always refused, and what comes back is what the dialog
+      // needs to make the choice a decision rather than a guess.
+      if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
+      // The mount the refusal came from, handed back rather than made again:
+      // `createSource` retains a source per file, so this is the same one.
+      source = await createSource(request.source)
+      pairs = await openPairs(request, source)
+      if (pairs === null) throw abortError()
+      mc = MetaCooler.fromPairs({
+        uri: request.uri,
+        header: pairs.header,
+        pixels: pairs.tables.get(pairs.rungs[0])!,
+        rungs: pairs.rungs,
+        indexed: pairs.indexed,
+        declaredRecords: pairs.declaredRecords,
+      })
+    }
   }
   session = {
     mc,
@@ -437,6 +473,9 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     displayExtent: mc.displayBinExtent(),
     entries: mc.entries,
     entryGroup: mc.entryGroup,
+    cells: mc.cells,
+    activeCells: mc.activeCells,
+    cellNnz: mc.cells.length > 0 ? mc.nnz : null,
     hasGenomes: mc.hasGenomes,
     hasWeights: mc.hasWeights,
     scoreColumns: mc.scoreColumns,
@@ -474,6 +513,36 @@ function handleGenomes(): GenomesResult {
 
 function handleContigs(): ContigsResult {
   return { table: tableToPayload(requireSession().mc.fullContigs()) }
+}
+
+/**
+ * The cells table: one row per cell, columns discovered from their attributes.
+ *
+ * Free, on any file that opened at all. The names were the cost, and they were
+ * paid at open; every cell's attribute block sits in HDF5 metadata the listing
+ * already brought across, measured at **zero** additional source chunks on both
+ * a 3,882-cell HiCMatrix file and a cooler-written one (§12). So the columns
+ * that make the table worth having — the stored pixels and the contact total
+ * per cell, which is what separates a deeply sequenced cell from an empty one —
+ * cost nothing to offer and are read here rather than being made optional.
+ */
+function handleCells(): CellsResult {
+  const { mc } = requireSession()
+  const table = mc.cellTable()
+  const active = new Set(mc.activeCells)
+  const names = mc.cells
+  const selected: number[] = []
+  for (let i = 0; i < names.length; i++) if (active.has(names[i])) selected.push(i)
+  return { table: tableToPayload(table), selected: Int32Array.from(selected) }
+}
+
+/** Swap the cells the open map sums, in place — see the request's note. */
+function handleSelectCells(
+  request: Extract<WorkerRequest, { kind: 'selectCells' }>,
+): CellsSelectedResult {
+  const { mc } = requireSession()
+  mc.selectCells(request.names)
+  return { names: mc.activeCells, nnz: mc.nnz ?? 0, scoreColumns: mc.scoreColumns }
 }
 
 /** What `/bins` holds, by name and kind — no values (§8.12). */
@@ -1330,6 +1399,10 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleGenomes()
     case 'contigs':
       return handleContigs()
+    case 'cells':
+      return handleCells()
+    case 'selectCells':
+      return handleSelectCells(request)
     case 'binColumns':
       return handleBinColumns()
     case 'binColumn':
@@ -1371,6 +1444,7 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
 async function handle(request: WorkerRequest): Promise<void> {
   calls++
   const before = session?.source.stats()
+  const summing = followCells(request.id)
   try {
     const payload = await dispatch(request)
     if (isViewRequest(request.kind) && before && session) {
@@ -1381,7 +1455,36 @@ async function handle(request: WorkerRequest): Promise<void> {
   } catch (err) {
     post({ type: 'error', id: request.id, error: serialiseError(err) })
   } finally {
+    summing()
     cancelled.delete(request.id)
+  }
+}
+
+/**
+ * Report the cell fan-out of whatever this request turns out to read.
+ *
+ * Attached here, around the whole dispatch, rather than inside the handlers
+ * that read a block: a cell set is summed by `matrix`, by `aggregate`, by
+ * `selection` and by the overview, and every one of them reaches the store
+ * through several layers that have no reason to learn about cells. The store is
+ * per selection and lives on the session, so this is the one place that knows
+ * both it and the id the news belongs to.
+ *
+ * Returns the undo, which the caller runs in its `finally` — a sink left
+ * attached would post against a request that has already been answered.
+ */
+function followCells(id: number): () => void {
+  const store = session?.mc.store
+  // One cell is not a sum, and a bar that says `1 of 1` says nothing.
+  if (!(store instanceof ScoolStore) || store.names.length < 2) return () => {}
+  const say = reporter(id)
+  const sink = (done: number, total: number): void => say(done, total, 'summing cells')
+  store.onCells = sink
+  // Cleared only if it is still ours: two reads can be in flight at once — a
+  // map and the overview behind it — and the one that finishes first must not
+  // silence the one still running.
+  return () => {
+    if (store.onCells === sink) store.onCells = null
   }
 }
 

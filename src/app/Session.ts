@@ -40,9 +40,12 @@ import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
   READING_KEYS,
+  SUBJECT_KEYS,
   ViewStore,
   differsOnlyInFocus,
   differsOnlyInPresentation,
+  cellsOf,
+  cellsPatch,
   landingState,
   matrixLevel,
   overviewLevel,
@@ -65,7 +68,7 @@ import {
   SESSION_NAME_SCOPE,
   type SessionConfig,
 } from '../state/SessionConfig'
-import type { CompareOp, Transform, ViewState } from '../types'
+import type { CompareOp, Transform, ViewKind, ViewState } from '../types'
 import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/derive'
 import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
@@ -73,6 +76,7 @@ import { LEAD_MAP, type Lane } from '../annotations/placement'
 import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
+  CellsResult,
   ContigsResult,
   GenomesResult,
   McoolExport,
@@ -86,6 +90,7 @@ import type {
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeOf, type FileRoute } from '../browse/route'
+import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
@@ -114,7 +119,9 @@ import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
+import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
+import { CellsTable } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
 import { Overview, wholeFileLevelCard } from '../ui/Overview'
@@ -125,7 +132,7 @@ import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
-import { el, fmt } from '../ui/dom'
+import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsFor, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
@@ -208,6 +215,22 @@ export interface OpenFile {
   info: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult | null
+  /**
+   * The cells table of an `.scool`, fetched the first time it is shown.
+   *
+   * Lazily like `contigs` and for the same reason: it is a view's data, not an
+   * open's. The *names* did arrive at open — they had to, since the reader
+   * cannot address a cell without them — and this is the rest of the table.
+   */
+  cells: CellsResult | null
+  /**
+   * Which cells the worker is currently summing.
+   *
+   * The session's copy of state that lives in the worker, so a navigation that
+   * does not change the set does not pay for a swap. `null` on a file with no
+   * cells, and on one whose set is still every cell.
+   */
+  activeCells: string[] | null
   source: SourceSpec
   genomeNames: string[]
   displayNames: string[]
@@ -744,6 +767,11 @@ export class Session {
     return this.file?.info.layout.kind === 'metacool'
   }
 
+  /** `true` while the open file is a single-cell container (§3.8). */
+  get isScool(): boolean {
+    return this.file?.info.layout.kind === 'scool'
+  }
+
   /** The reader client, or `null` where nothing has ever been opened here. */
   get client(): ReaderClient | null {
     return this.reader
@@ -1023,6 +1051,7 @@ export class Session {
     const state = this.store.state
     const file = this.file
     const isMetacool = this.isMetacool
+    const isScool = this.isScool
     // A browser session answers a different set: there is no genomes table and
     // no whole-metagenome scan, and the two things it *does* have — a locus and
     // a zoom — have no counterpart on a map. Listing a map's actions beside a
@@ -1256,13 +1285,19 @@ export class Session {
         run: () => this.current?.panel?.autoscaleTracks(),
       },
       {
+        // One command and one key for the file's own landing table, whichever
+        // of the two it is: a metacool's genomes, or an scool's cells. No file
+        // has both, so a second entry would be a second key that is disabled on
+        // every file the first one works on.
         id: 'go-genomes',
         group: 'Go',
-        title: 'Genomes table',
+        title: isScool ? 'Cells table' : 'Genomes table',
         keys: KEYS.genomes,
-        enabled: file !== null && isMetacool,
+        enabled: file !== null && (isMetacool || isScool),
         run: () => {
-          if (state !== null) this.navigate({ uri: state.uri, view: 'genomes' })
+          if (state !== null) {
+            this.navigate({ uri: state.uri, view: isScool ? 'cells' : 'genomes' })
+          }
         },
       },
       {
@@ -1505,8 +1540,30 @@ export class Session {
 
   /** The worker, built the first time anything needs one. */
   private clientOf(): ReaderClient {
-    this.reader ??= new ReaderClient()
+    if (this.reader === null) {
+      this.reader = new ReaderClient()
+      this.reader.onNotice = (done, total, note) => this.notice(done, total, note)
+    }
     return this.reader
+  }
+
+  /**
+   * News from a read nobody asked to follow — onto the veil that is already up.
+   *
+   * The views raise the veil themselves when they ask for a block and drop it
+   * when the block arrives, so this only ever writes on a veil that is up and
+   * never leaves one behind: the view's own `setBusy(false)` follows. What it
+   * changes is what the veil *says* while a cell set is being summed, which is
+   * a wait proportional to the number of cells rather than to the picture.
+   */
+  private notice(done: number, total: number, note?: string): void {
+    const panel = this.current?.panel
+    if (panel === undefined) return
+    if (note === 'summing cells') {
+      panel.setBusy(true, `summing ${fmt.int(done)} of ${fmt.int(total)} cells…`)
+      return
+    }
+    if (note !== undefined) panel.setBusy(true, `${note}…`)
   }
 
   /**
@@ -1854,14 +1911,23 @@ export class Session {
       await this.openGenome(uri, source, carry?.locus, false, index)
       return
     }
-    // A sidecar dropped with the file reaches the *map* door too, and only one
-    // format uses it there: a `.px2` beside a `.pairs.gz`. Folded into the spec
-    // rather than carried alongside it, because the worker builds its sources
-    // from the spec alone and a second channel for one format would be a second
-    // way for the pairing to be lost (`worker/sources.ts`).
+    // A sidecar dropped with the file reaches the *map* door too, and two
+    // formats use it there. Both are folded into the spec rather than carried
+    // alongside it, because the worker builds its sources from the spec alone
+    // and a second channel for one format would be a second way for the pairing
+    // to be lost (`worker/sources.ts`).
+    //
+    // A `.px2` beside a `.pairs.gz` is an index: an optimisation, and the file
+    // opens without it.
     if (index !== undefined && source.kind === 'local' && source.index === undefined) {
       source = { ...source, index }
     }
+    // A bin file beside a HiC-Pro matrix is not. The matrix is half a contact
+    // map, so whatever this session already knows about its other half is
+    // attached before the worker is asked; what it does not know — a bin file
+    // sitting beside a URL — the worker probes for by convention, and refuses by
+    // name when there is none (§3.9).
+    source = withHicProBins(uri, source, index)
     // The tracks this session is holding, before anything is torn down. A map
     // opened over a genome browser is the same genome by a different file, and
     // the tracks were drawn against it.
@@ -1872,20 +1938,27 @@ export class Session {
     this.carryCompare(uri)
     this.opening = uri
     this.noteGrant(uri, source)
-    this.showContent(loading(`Opening ${fileLabel(uri)}`))
+    const client = this.clientOf()
+    // A spinner until the worker has something to say, and a bar and a cancel
+    // from the first word onward. Only the three indexless containers ever say
+    // anything (§3.7, §3.8, §3.9); every other open resolves before the first
+    // report. A `.pairs` is *binned* rather than opened, and the heading says
+    // so, because the wait is a pass over its records rather than a read.
+    let task: Cancellable<OpenResult> | null = null
+    const screen = new LoadingView(
+      `${binning === undefined ? 'Opening' : 'Binning'} ${fileLabel(uri)}`,
+      () => task?.cancel(),
+    )
+    this.showContent(screen.el)
     this.host.sessionChanged(this)
     try {
-      const client = this.clientOf()
-      // A `.pairs` import is the one open with a denominator and a real wait,
-      // so it gets a bar rather than a spinner — and the bar is wired to the
-      // worker's own progress messages (`pairs/import.ts` weights the pass
-      // against the rungs so it does not stall at 99%).
-      const bar = binning === undefined ? null : progressView(`Binning ${fileLabel(uri)}`)
-      if (bar !== null) this.showContent(bar.el)
-      const info = await client.request<'open'>(
+      // `pairs/import.ts` weights its pass against the rungs so the bar does
+      // not stall at 99%; the other two report bytes and then pixels.
+      task = client.cancellable<'open'>(
         { kind: 'open', uri, source, ...(binning === undefined ? {} : { binning }) },
-        bar === null ? undefined : (done, total, note) => bar.update(done, total, note),
+        (done, total, note) => screen.report(done, total, note),
       )
+      const info = await task.promise
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       const names = genomes.table.data['name'] as string[]
@@ -1908,6 +1981,8 @@ export class Session {
         info,
         genomes,
         contigs: null,
+        cells: null,
+        activeCells: info.cells.length > 0 ? info.activeCells : null,
         source,
         genomeNames: names,
         displayNames: Array.from(genomes.display, (index) => names[index]).filter(
@@ -1917,26 +1992,36 @@ export class Session {
         currentEntry,
       }
       const isMetacool = info.layout.kind === 'metacool'
+      // An scool's landing table is its cells, and its Genomes entry is greyed
+      // out for the reason a cooler's is: every cell holds one genome. What it
+      // has instead of genomes is the thing the file is a container of.
+      const isScool = info.layout.kind === 'scool'
       this.breadcrumb = new Breadcrumb({
-        rootKind: isMetacool ? 'genomes' : 'contigs',
+        rootKind: isMetacool ? 'genomes' : isScool ? 'cells' : 'contigs',
         // A metacool offers both landing tables and the scanned whole-genome
         // view. A cooler offers its chromosomes and, when it fits, the whole
         // genome in one read — and still lists Genomes, greyed out, because
         // "this file has none" is a more useful answer than an absent entry.
         rootChoices: isMetacool
           ? ['genomes', 'contigs', 'overview']
-          : ['genomes', 'contigs', 'whole'],
+          : isScool
+            ? ['cells', 'contigs', 'whole']
+            : ['genomes', 'contigs', 'whole'],
         ...(isMetacool
           ? {}
           : {
-              disabledChoices: {
-                genomes: 'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
-              },
+              disabledChoices: isScool
+                ? {}
+                : {
+                    genomes:
+                      'A cooler holds one genome, so there is no genomes table — its chromosomes are below.',
+                  },
               contigNoun: 'Chromosomes',
             }),
         fileLabel: fileLabel(uri),
         entries,
         entryNoun: info.entryGroup === 'resolutions' ? 'resolution' : 'entry',
+        cellCount: info.cells.length,
         ...(currentEntry === undefined ? {} : { currentEntry }),
         onNavigate: (state) => this.navigate(state),
         onOpenFile: () => this.host.openFileDialog(this),
@@ -1968,7 +2053,8 @@ export class Session {
 
       // A link may already have named a view inside this file (§5.5); honour it
       // rather than bouncing the recipient to the landing table.
-      const rootView = info.layout.kind === 'metacool' ? 'genomes' : 'contigs'
+      const rootView: ViewKind =
+        info.layout.kind === 'metacool' ? 'genomes' : isScool ? 'cells' : 'contigs'
       const wanted = carry ?? this.store.state
       // `view=browser` is the one view a map session cannot hold: it names the
       // *other* shape of session, and carrying it here would leave the store
@@ -2013,6 +2099,40 @@ export class Session {
       if (info.pairs !== undefined) reportImportGaps(info.pairs)
       if (info.pairs?.download === true) void this.exportImportedMcool()
     } catch (err) {
+      // Cancelling is not a failure and must not look like one. The reader
+      // stopped a read they were told the cost of and chose to stop — so the
+      // way back is the picker, exactly as dismissing the gate is, and not an
+      // error screen about a file that is perfectly fine.
+      if (isCancellation(err)) {
+        this.opening = null
+        this.showContent(this.picker.el)
+        this.host.sessionChanged(this)
+        return
+      }
+      // The §12 listing gate is a question, not a failure: a single-cell
+      // container over the network cannot be opened without paying one of two
+      // costs, and which to pay is the reader's to choose. Asked here rather
+      // than in the worker for the obvious reason — the worker has no screen —
+      // and re-issued as the *same* open with the answer written on the source.
+      // Both §12 load gates land here: an `.scool`'s listing cost and a
+      // HiC-Pro pair's parse cost. The second fires on a local file too, which
+      // is why this no longer asks whether the source is remote — the gate
+      // itself decides when it applies, and reaching here means it has.
+      if (isLoadGate(err)) {
+        this.opening = null
+        const reading = await askLoadCost(err, fileLabel(uri))
+        if (this.destroyed) return
+        if (reading === null) {
+          // Dismissed is an answer: neither cost, so nothing is read. Back to
+          // the picker rather than to an error screen about a file that is
+          // perfectly fine and simply was not opened.
+          this.showContent(this.picker.el)
+          this.host.sessionChanged(this)
+          return
+        }
+        await this.open(uri, { ...source, reading }, carry, index)
+        return
+      }
       // An `.mmetacool` opened at its root is a `KeyError` in Python, and the
       // reader mirrors that faithfully (§3.4). But a *user* who dropped a
       // collection meant "show me this data", so the app answers by opening an
@@ -4980,7 +5100,24 @@ export class Session {
     }
 
     if (state.view === 'genomes' && !this.file.info.hasGenomes) {
-      this.navigate({ uri: state.uri, view: 'contigs' }, { replace: true })
+      // An scool's landing table is its cells, and `genomes` is the default a
+      // hash with no `view` in it parses to — so without this, dropping one or
+      // following a bare link to one arrived on Chromosomes, past the table the
+      // file exists to offer. A cooler has no such table and keeps going to
+      // its chromosomes, which is the case this redirect was written for.
+      const instead = this.isScool ? 'cells' : 'contigs'
+      this.navigate({ ...state, view: instead }, { replace: true })
+      return
+    }
+
+    // The mirror, for a link that names a cells table on a file that has none.
+    // Every other container answers `cells` with an empty view and no way off
+    // it, which is the failure this whole block exists to prevent.
+    if (state.view === 'cells' && !this.isScool) {
+      this.navigate(
+        { uri: state.uri, view: this.file.info.hasGenomes ? 'genomes' : 'contigs' },
+        { replace: true },
+      )
       return
     }
 
@@ -5131,11 +5268,18 @@ export class Session {
 
     this.breadcrumb?.render(state)
     this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
+    // Before the view mounts, because the view is what issues the reads and a
+    // block drawn from the previous set would be a picture of the wrong cells.
+    await this.syncCells(state)
+    if (this.destroyed || this.store.state !== state) return
     this.mounted = state
 
     switch (state.view) {
       case 'genomes':
         this.mountGenomes(state)
+        break
+      case 'cells':
+        await this.mountCells(state)
         break
       case 'contigs':
         await this.mountContigs(state)
@@ -5318,6 +5462,88 @@ export class Session {
   }
 
   /**
+   * The cells table of an `.scool` (§3.8), fetched on first sight.
+   *
+   * Ticking rows does two things at once, and that is the view's whole design:
+   * it names the picture to draw *and* sets which cells the file is read
+   * through from here on. So the navigation carries both — a whole-genome view
+   * of the sum, and the set itself, which every view the reader moves to next
+   * inherits until they come back here and change it.
+   */
+  private async mountCells(state: ViewState): Promise<void> {
+    const file = this.file
+    if (file === null) return
+    const data = await this.cells()
+    if (this.destroyed || this.store.state !== state) return
+    const total = data.table.length
+    const show = (names: readonly string[] | null): void => {
+      this.navigate({
+        uri: state.uri,
+        view: this.wholeFileView(),
+        ...cellsPatch(names, total),
+      })
+    }
+    const view = new CellsTable({
+      data,
+      persistence: this.tableMemory(state.uri, 'cells'),
+      onShowCells: (names) => show(names),
+      onShowAll: () => show(null),
+    })
+    this.showContent(view.el, view)
+  }
+
+  /** The cells table payload, read once per open file. */
+  private async cells(): Promise<CellsResult> {
+    const file = this.file
+    if (file === null) throw new Error('no file open')
+    if (file.cells === null) {
+      file.cells = await this.clientOf().request<'cells'>({ kind: 'cells' })
+    }
+    return file.cells
+  }
+
+  /**
+   * Put the worker on the cell set this state names, before anything reads.
+   *
+   * The one piece of worker state a *navigation* can change, and the reason it
+   * is reconciled here rather than sent with each read: a cell set is a property
+   * of the open map, so a matrix, a scan and a pooled aggregation over the same
+   * set must all see the same one, and threading it through every request kind
+   * would give six places for the two to disagree.
+   *
+   * A no-op when the set has not moved, which is every navigation but the ones
+   * through the cells table — so panning, zooming and stepping into a
+   * chromosome cost nothing at all.
+   */
+  private async syncCells(state: ViewState): Promise<void> {
+    const file = this.file
+    if (file === null || file.info.cells.length === 0) return
+    const wanted = cellsOf(state)
+    const resolved = wanted ?? file.info.cells
+    const current = file.activeCells
+    if (current !== null && sameNames(current, resolved)) return
+    const result = await this.clientOf().request<'selectCells'>({
+      kind: 'selectCells',
+      names: wanted === null ? null : [...wanted],
+    })
+    if (this.destroyed) return
+    file.activeCells = result.names
+    // The score picker is per cell set, not per file: a column one cell of the
+    // set lacks cannot be summed across it (`metacooler/scool.ts`).
+    file.info = {
+      ...file.info,
+      activeCells: result.names,
+      cellNnz: result.nnz,
+      scoreColumns: result.scoreColumns,
+    }
+    // The panel is painted once at open, because a file's facts do not move —
+    // except these two, which are the reader's own choice and the cost it
+    // implies. Without this it went on reporting the whole file's pixel count
+    // over a map summed from two of its cells.
+    this.infoPanel?.refresh(file.info)
+  }
+
+  /**
    * Which of the two whole-file views this file has: the metagenome's scan, or
    * the cooler's single map. Both are called "Whole genome" wherever they are
    * offered, because they answer the same question by the means the file allows.
@@ -5416,7 +5642,7 @@ export class Session {
           // The file's own count of stored pixels, which is what the read walks.
           // A cooler that does not declare it is not gated rather than gated on
           // a guess; the same number is in the File card, from the same place.
-          nnz: numberOr(file.info.info['nnz']),
+          nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
           level,
           scale: this.scaleOf(state),
           balance,
@@ -5493,7 +5719,7 @@ export class Session {
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
       displayExtent: file.info.displayExtent,
-      nnz: numberOr(file.info.info['nnz']),
+      nnz: file.info.cellNnz ?? numberOr(file.info.info['nnz']),
       level: 'bin',
       scale: this.scaleOf(state),
       balance: this.balanceOf(state),
@@ -5864,7 +6090,12 @@ export class Session {
     // itself down (`onMapsChange(undefined)`) and the compare card close its
     // file, without either having to know this rule exists — and what lets a
     // reader who asked for the square keep it, `flip: false` being a thing said.
-    const carry = <K extends (typeof COMPANION_KEYS)[number] | (typeof READING_KEYS)[number]>(
+    const carry = <
+      K extends
+        | (typeof COMPANION_KEYS)[number]
+        | (typeof READING_KEYS)[number]
+        | (typeof SUBJECT_KEYS)[number],
+    >(
       key: K,
     ): void => {
       if (key in next) return
@@ -5873,6 +6104,7 @@ export class Session {
     }
     for (const key of COMPANION_KEYS) carry(key)
     for (const key of READING_KEYS) carry(key)
+    for (const key of SUBJECT_KEYS) carry(key)
     return out
   }
 
@@ -6100,9 +6332,17 @@ export class Session {
     return {
       source: () => {
         const starred = this.starredFacts()
-        if (starred !== null) return { uri: starred.uri, source: starred.source }
+        if (starred !== null) {
+          return { uri: starred.uri, source: starred.source, ...cellsOfMap(starred.info) }
+        }
         const file = this.file
-        if (file !== null) return { uri: file.uri, source: file.source }
+        if (file !== null) {
+          // The ticked cells, so a task measures the map that is drawn rather
+          // than the pseudo-bulk of every cell in the file (§3.8). The analysis
+          // worker mounts the file for itself and would otherwise have no way to
+          // know a selection exists.
+          return { uri: file.uri, source: file.source, ...cellsOfMap(file.info) }
+        }
         // **The genome, where there is no map.** Three tasks run entirely on
         // loaded tracks and a 1D browser session is exactly where a reader has
         // the tracks and not the matrix (§18.3) — `analysisContext` says so and
@@ -6262,7 +6502,13 @@ export class Session {
     const out: RunTarget[] = []
     const file = this.file
     if (file !== null) {
-      out.push({ map: LEAD_MAP, uri: file.uri, source: file.source, label: fileLabel(file.uri) })
+      out.push({
+        map: LEAD_MAP,
+        uri: file.uri,
+        source: file.source,
+        ...cellsOfMap(file.info),
+        label: fileLabel(file.uri),
+      })
     }
     for (const { map, panel } of this.deck?.analysable() ?? []) {
       const facts = panel.analysisFacts()
@@ -6270,7 +6516,13 @@ export class Session {
         if (options.start) void panel.prepareAnalysis(() => this.analysis?.refresh())
         continue
       }
-      out.push({ map, uri: facts.uri, source: facts.source, label: fileLabel(facts.uri) })
+      out.push({
+        map,
+        uri: facts.uri,
+        source: facts.source,
+        ...cellsOfMap(facts.info),
+        label: fileLabel(facts.uri),
+      })
     }
     return out
   }
@@ -6541,6 +6793,101 @@ export function loading(message: string): HTMLElement {
 }
 
 /**
+ * The loading screen an open can talk back to.
+ *
+ * A spinner says *something is happening* and is the right answer for an open
+ * that takes a moment. It is the wrong answer for one that takes a minute — a
+ * HiC-Pro matrix read whole (§3.9), or an `.scool` downloaded whole (§3.8) —
+ * where a reader watching it has no way to tell a slow connection from a hung
+ * one, and no way out.
+ *
+ * So the spinner stays until the worker says otherwise, and the first progress
+ * report replaces it with a bar, a line of prose and a way to stop. The bar is
+ * per *phase* rather than across the whole open: downloading is measured in
+ * bytes and parsing in pixels, and one bar sliding between two denominators
+ * would look like it had gone backwards. Two labelled sweeps is what a reader
+ * can actually follow.
+ */
+export class LoadingView {
+  readonly el: HTMLElement
+  private readonly text: HTMLElement
+  private readonly bar: HTMLProgressElement
+  private readonly box: HTMLElement
+
+  constructor(message: string, onCancel?: () => void) {
+    this.text = el('p', { class: 'loading-text', text: `${message}…` })
+    this.bar = el('progress', { class: 'progress' }) as HTMLProgressElement
+    this.bar.max = 1
+    this.bar.value = 0
+    const stop =
+      onCancel === undefined
+        ? null
+        : button('cancel', () => onCancel(), { class: 'btn btn-quiet' })
+    this.box = el(
+      'div',
+      { class: 'progress-box hidden' },
+      this.bar,
+      ...(stop === null ? [] : [stop]),
+    )
+    this.el = el(
+      'div',
+      { class: 'loading' },
+      el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } }),
+      this.text,
+      this.box,
+    )
+  }
+
+  /**
+   * Show what the worker is doing now.
+   *
+   * A `total` of zero is *indeterminate* rather than *finished* — a host that
+   * states no `Content-Length` gives one — so the bar loses its value and the
+   * browser draws it as the barber's pole it has for exactly this.
+   */
+  report(done: number, total: number, note?: string): void {
+    this.box.classList.remove('hidden')
+    const phase = note ?? 'reading'
+    if (total > 0) {
+      this.bar.value = Math.min(1, done / total)
+      this.text.textContent = `${phase} — ${describe(done, total, note)}`
+    } else {
+      this.bar.removeAttribute('value')
+      // Nothing counted *and* nothing to count it against is a phase that has
+      // only a name — the cell listing is one, and `0 B` beside it would read
+      // as a stalled download rather than as a wait with no meter on it.
+      this.text.textContent = done > 0 ? `${phase} — ${fmt.bytes(done)}` : `${phase}…`
+    }
+  }
+}
+
+/**
+ * The two halves of an open, each in the units it is actually counted in.
+ *
+ * Bytes look like bytes and pixels look like counts; saying "14,769,558 of
+ * 14,769,558" in megabytes, or a download in pixels, is the kind of small lie
+ * that makes a reader distrust the whole bar.
+ */
+function describe(done: number, total: number, note?: string): string {
+  const counted = note?.includes('pixel') === true || note?.includes('cell') === true
+  return counted
+    ? `${fmt.int(done)} of ${fmt.int(total)}`
+    : `${fmt.bytes(done)} of ${fmt.bytes(total)}`
+}
+
+/**
+ * The cell set of a map, for the analysis worker's own mount of it.
+ *
+ * Spread rather than returned, so a file with no cells contributes no key at
+ * all: `cells: undefined` on the request would be a field the protocol has to
+ * mean something by, and *absent* already means the only thing it could —
+ * every cell, which is what an scool with nothing ticked draws.
+ */
+function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
+  return info.cells.length === 0 ? {} : { cells: info.activeCells }
+}
+
+/**
  * The genome a contig belongs to, named as the rest of the app names it.
  *
  * `__unbinned__` is not a genome and §7.4 keeps it invisible everywhere but the
@@ -6584,6 +6931,49 @@ function numberOr(value: unknown): number | null {
  * `Session.balancedByDefault`. Everything else absent means the §7.1 default,
  * which `MatrixPanel` supplies.
  */
+/**
+ * Two name lists holding the same names in the same order.
+ *
+ * Order counts because the worker resolves a set into file order, and a list
+ * that matches it element for element is one that needs no swap. Two sets with
+ * the same members in a different order compare unequal here and cost one
+ * redundant swap, which is cheaper than sorting four thousand names to find out.
+ */
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
+/**
+ * Attach the bin file this session already holds for a HiC-Pro matrix.
+ *
+ * Two of §3.9's three roads in, and both are things only the *shell* knows: a
+ * file dropped alongside the matrix, or picked out of a connected folder beside
+ * it, arrives as `index` exactly as a `.bai` does; and a URL may name its bin
+ * file in a `#bins=` fragment, which is the escape hatch for a bucket the
+ * convention cannot guess at.
+ *
+ * The third road — probing the conventional name — is deliberately *not* here.
+ * It costs a request, the worker is where requests are made and counted, and
+ * putting it here would mean two places that know where HiC-Pro writes its bin
+ * files.
+ */
+function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
+  const { address, bins } = splitBinsFragment(uri)
+  if (!isHicProMatrix(splitUri(address).path)) return source
+  if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
+  if (bins === undefined) return source
+  // The fragment is stripped from the *source*, not from the URI. A `#` is
+  // never sent to a server, so the fetch would have worked either way — but the
+  // name is read off this URL to decide the file is a matrix at all, and
+  // `orphan.matrix#bins=…` does not end in `.matrix`. The URI keeps its
+  // fragment, because that is what makes the pair one shareable string (§11).
+  const at: SourceSpec =
+    source.kind === 'remote' ? { ...source, url: splitUri(address).path } : source
+  return { ...at, bins: { kind: 'remote', url: bins } }
+}
+
 function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {
   const scale: ScaleState = {}
   if (fallback.transform !== undefined) scale.transform = fallback.transform

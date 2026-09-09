@@ -143,6 +143,8 @@ export interface CountingOptions {
 export class CountingRangeSource implements ByteSource {
   readonly id: string
   readonly size: number
+  /** It wraps a `RemoteRangeSource`, so every seek it answers is a request. */
+  readonly isRemote = true
   /** Reads HDF5 issued against this file — the un-coalesced lower bound. */
   rawReads = 0
 

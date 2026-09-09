@@ -201,6 +201,164 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Specified at SPECS §21, with a picture of a real one and the worked example in
   the README.
 
+- **A progress bar on the two opens that are worth watching, with a way out.**
+  Almost every read here is bounded and finishes before anyone could want news
+  of it. Two are not: a HiC-Pro pair is read whole and parsed at open (§3.9),
+  and an `.scool` over the network pays its listing cost up front (§3.8) — and
+  a spinner in front of either gives a reader no way to tell a slow connection
+  from a hung one, and no way to stop.
+
+  So the loading screen now talks back. It stays a spinner until the worker has
+  something to say, and from the first word it is a labelled bar and a
+  **cancel**: bytes while a file is coming across, pixels while it is parsed —
+  two sweeps with a denominator each, rather than one bar sliding between two
+  and appearing to go backwards. Cancelling is not a failure and does not look
+  like one: it stops the download mid-stream and goes back to the picker, the
+  way dismissing the gate does. A 258 MB pair reads in about four seconds, and
+  the bar spends three of them on the download.
+
+  The `.scool` listing is the one wait that cannot be measured *while* it
+  happens — it is a single call into HDF5 that issues a thousand small reads and
+  returns when it has them, so the thread is not free to say anything until it
+  already has the answer. What it can say is which wait it is, before it starts:
+  an indeterminate bar under the name of the phase.
+
+- **A cell sum says how far it has got.** Summing a cell set is the one read in
+  this application that is linear in something other than the picture: the same
+  window that draws instantly over one cell is four thousand small reads over a
+  whole file, and the veil in front of the map said `loading…` for all of it.
+  It now counts cells — `summing 1,204 of 3,882 cells…` — in every map view, and
+  the whole-file view's own bar names the unit it is counting rather than
+  calling three hundred cells three hundred pixels.
+
+- **HiC-Pro's `.matrix` + `_abs.bed` pair, as one contact map.** The output of
+  the pipeline most published Hi-C was processed with, and it opens as what it
+  is: the BED is the coordinate system, the matrix is the pixels, and between
+  them they are an ordinary map — the chromosome table, every region, the
+  analysis panel, tracks, export, the deck. All four `MATRIX_FORMAT` variants
+  read, `iced/` matrices included.
+
+  **The bin file is found three ways, because it is not optional.** A `.tbi` is
+  an optimisation and a `.bai` is a format's only bounded read; an `_abs.bed` is
+  the matrix's *coordinate system*, so without it there is not a slower map but
+  no map. So it is paired when both are dropped together, handed over when the
+  matrix is picked out of a connected folder, and probed for beside a URL where
+  HiC-Pro writes it — `raw/` and `iced/` share one bed per resolution, so the
+  `_iced` matrices are tried against the raw directory's too. A URL whose bin
+  file is somewhere unguessable can name it: `<matrix>#bins=<url>`. A matrix
+  with none of the three is refused by name, and the refusal lists all three.
+
+  **Read whole once, and then it is a cooler.** This is the one format here that
+  cannot be indexed: the rows are text of variable width, so byte offset and bin
+  id have no relation, and `asis` says outright they need not be sorted. So the
+  matrix is parsed at open — byte by byte, never a string per line, at a measured
+  6.8 M pixels/s — and a counting sort by `bin1` produces the sorted triplets and
+  the cumulative index together. After that every read is bounded and in memory,
+  and panning costs nothing.
+
+  The sort behind that is a **radix sort — two stable counting passes, by
+  column then by row — and not a sort per row band**, which is what it was
+  first. Bands are wide: a row of a 100 kb human matrix has thousands of
+  non-zero columns, and sorting each on its own is quadratic in that width. On a
+  211 MB file it took 59 seconds where the radix sort takes 3.7, and the parse
+  itself runs at 100 MB/s — the sort must not be what decides the wait. The
+  second pass's bucket boundaries *are* the cumulative `bin1_offset`, so the
+  index falls out of the sort rather than being built after it.
+
+  **Which is why there is no `HicProStore`.** A `.hic` cannot answer `pixels/*`
+  or `indexes/bin1_offset` and needs a pixel store of its own; this container
+  was read whole by necessity, so it serves those datasets honestly and
+  `CoolerStore` reads them unchanged. The pixel path for a HiC-Pro map is the
+  cooler path, byte for byte.
+
+  **A mirror and a repeat are not the same duplicate.** Two rows can land on one
+  cell and they mean opposite things: `(a, b)` and `(b, a)` is one contact
+  stated twice, which `MATRIX_FORMAT=complete` writes and which must be
+  *dropped* — adding it doubles every off-diagonal cell and leaves the diagonal
+  alone, giving a picture that still looks entirely like a contact map. Two rows
+  on the same side are more evidence, and are *summed*. Once both have been
+  folded onto the upper triangle they are indistinguishable, so the side each
+  row was stored on is carried as far as the collapse.
+
+  Not read, and both deliberate: fragment-level maps (`GENOME_FRAGMENT`), since
+  a fragment grid is variable bins under another name — refused with the config
+  key that produced it; and the `.biases` file, since those biases normalise the
+  *raw* matrix while the `iced/` one is already normalised, and offering them as
+  a weight column would let somebody normalise twice.
+
+- **A second load gate, on bytes rather than on the network.** Past 200 MB of
+  matrix the reader is told what the read costs — the size, the pixel count it
+  works out to, and that it is paid once rather than per view, which is the part
+  that turns a bad number into an acceptable one. It shares a module with the
+  `.scool` gate below because the two are the same shape; they differ in that an
+  `.scool` offers two readings and this offers one, and that an `.scool`'s cost
+  is round trips so a local file is never asked, where this one's is parsing and
+  memory and a local file pays in full. The panel also names the way out for a
+  map too fine to hold: `cooler load -f coo` turns the same two files into a
+  `.cool` that opens in a handful of requests at any size.
+
+- **`.scool` — single-cell coolers, per cell and summed.** The container from
+  [Wolff *et al.* 2021](https://academic.oup.com/bioinformatics/article/37/14/2053/5948994):
+  one cooler per cell over one shared bin space. It opens as what it is. A
+  **Cells** table is the landing view — every cell in the file, with the `nnz`
+  and contact total its own attributes record, sortable and filterable like the
+  genomes table beside it — a click opens one cell's map, and ticking any number
+  of them **adds them together**. Tick all of them and that is the pseudo-bulk.
+
+  **Both layouts, and neither is the special case.** The standard `/cells`
+  container `cooler.create_scool` writes, and the flat one HiCMatrix and
+  scHiCExplorer produced before the format was standardised in cooler 0.8.11 —
+  cells at the file root, no shared tables, and a root that announces nothing.
+  The second is the majority of what exists (every published `.scool` predating
+  2021 is one), so it is detected by elimination and tested at every step
+  alongside the first.
+
+  **Summing needs no arithmetic, and that is the whole design.** Every cell
+  indexes the same bins, so a bin id means the same thing in all of them; and
+  the dense scatter was already additive per pixel, because a bounded rectangle
+  may arrive in several chunks. A store that hands one callback each selected
+  cell's chunks in turn therefore *is* their sum — no summing code, no
+  intermediate matrix, a peak footprint of one chunk. The same falls out twice
+  more: `nnz` is a total over the set, and a sum of cumulative indexes is the
+  cumulative index of the sum, so the density proxy, the band planner and the
+  selection read all work over a cell set without knowing one exists.
+
+  **The set is a property of the file, not of the view.** Chosen cells stay
+  chosen through a chromosome and back out, they show in the breadcrumb in every
+  view — a map summed from one cell and one summed from four thousand are
+  different experiments and that must not be inferrable only from the picture —
+  and they travel in the link as `cells=`, with `*` for all of them, because
+  four thousand names is not a URL. Balancing sums the raw counts and applies
+  the file's *shared* `/bins/weight` once to the result, which is cooler's own
+  definition applied to the pseudo-bulk; it is offered only where such a column
+  exists. One cell is addressable on its own as `file.scool::/cells/<name>` and
+  is an ordinary cooler there, weights included.
+
+- **A gate before a remote `.scool` is read, with both costs on the buttons.**
+  The first and only open in this viewer that asks a question, and the reason is
+  worth stating because it is a property of HDF5 rather than of the format: a
+  container's cell *names* live in the group's link storage, which the library
+  allocates as members are added — immediately after each cell's pixels, for
+  every writer there is. The index of the file is interleaved with its data
+  rather than gathered anywhere.
+
+  Measured on the 3,882-cell Nagano 2017 file: listing the cells is **1,015
+  reads averaging 512 bytes, spread uniformly across all 327 MB**. Not a quirk
+  of that writer — a container written by `cooler.create_scool` behaves
+  identically, and a synthetic 800-cell 50 MB one touches all 48 of its megabyte
+  blocks. So no chunk size wins: the reads are ~500 bytes about 320 KB apart, so
+  anything large enough to coalesce them fetches the whole file and anything
+  small enough to avoid that needs a round trip each. Rather than pick one
+  silently, the reader is offered both with the numbers on them — one download,
+  or ~1,000 small requests for ~5% of the bytes — and told that a local copy
+  costs neither. **A local file is never asked**: the question is about round
+  trips, and a file on disk seeks for free.
+
+  The consolation is that the listing is the only cost. Every cell's attributes
+  sit in metadata the listing already brought across — measured at *zero*
+  additional chunks on both files — so the cells table's columns are free once
+  the names are paid for.
+
 - **A despeckle whose window sizes itself, in the `smooth` picker.** One new
   setting, `adaptive`, beside the fixed `3 × 3`, `5 × 5` and `7 × 7`. Each cell's
   window grows until it covers enough evidence to average, so it stays narrow
@@ -698,6 +856,78 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   type="file">` for files, the snapshot shape for a directory. Dropping was never
   affected. A **same-origin** frame is deliberately not caught, since the pickers
   work there.
+
+- **Every analysis task failed on a HiC-Pro map** with `error - name not
+  defined!` — HDF5's own words, for a `.matrix` that is not HDF5 at all. The two
+  threads that mount a contact map had drifted apart: the reader worker grew the
+  HiC-Pro road (two text files, read whole, no HDF5 anywhere) and the analysis
+  worker, which mounts the same file a second time so a long task cannot block a
+  pan, went on calling `MetaCooler.open` directly. The map was drawn and
+  perfectly fine; the task said the file was broken.
+
+  The fix is one road rather than a second branch. `worker/open.ts` now holds the
+  knowledge of *how many ways there are into a map*, and the reader worker, the
+  analysis worker and the `metacooler-run` CLI all go through it — so the CLI,
+  which had the same defect and no one had hit it yet, is fixed by the same
+  change rather than by remembering to.
+
+- **A task on a selection of cells measured every cell in the file.** Because
+  the analysis worker mounts the file itself, it never learned that an `.scool`
+  had a selection: it opened the pseudo-bulk, so two cells ticked and four
+  thousand gave the same answer with nothing on screen to say so — silently
+  wrong numbers, which is worse than the error above. The ticked set now travels
+  with the target, and the worker's mount is keyed on it as well as on the file,
+  because re-ticking is a new map at the same URI and a cache on the name alone
+  would answer the second question with the first one's cells.
+
+- **A HiC-Pro matrix parsed nineteen times slower than it reads**, and only
+  ever in the application: 35 seconds for a 258 MB file where the same code
+  measured 1.8. The scan shared its integer reader with the bin-file parser, and
+  V8 will not optimise a function whose inline caches are still moving —
+  `--trace-opt-verbose` says `delaying optimization of scanSlice, IC changed`,
+  once per tick, forever — so having read a bin file first left the scan running
+  interpreted from the first byte to the last. It reads its own digits now.
+
+  The reason it was invisible is worth recording: the bins are parsed *before*
+  the matrix in the application and never before it in a test, so every timing
+  taken of this file was of the fast path. The fix carries the measurement and
+  the reason beside it, because re-sharing the helper would restore the slow
+  path silently.
+
+  Two things fell out of inlining the scan, both of which the old scanner had
+  wrong and nothing had noticed: an exponent written with its sign (`1e+2`, what
+  `%g` and numpy print) stopped at the `+` and quietly kept the mantissa, so the
+  pixel was 1 rather than 100; and a negative fractional value (`-0.5`) asked
+  its integer part which way it went, got `-0`, and came out positive.
+
+- **A diagonal pixel was counting as both triangles**, so the `MATRIX_FORMAT`
+  a HiC-Pro file turned out to be written with was reported as `mixed` for
+  every real file — every real file has a diagonal. Caught against HiCExplorer's
+  own HiC-Pro test pair, which is upper-triangular and was labelled `mixed`;
+  the comparison is now strict, and a file of nothing but its diagonal reports
+  the default it would have been written as.
+
+- **A URL fragment is not part of a file name.** `<matrix>#bins=<url>` ends in
+  `.bed`, so the name test sent the *matrix* through the genome door and drew
+  its bin file as a feature track. Both places that take a name off a URL — the
+  router and the worker — now drop the query string and the fragment, which the
+  first was already half doing for presigned bucket URLs.
+
+- **Answering the `.scool` gate with *small pieces* asked the same question
+  again, forever.** Two causes, both worth naming. The retained remote source
+  was keyed on the URL alone, so re-opening with the reader's answer handed back
+  the mount built for the other reading and discarded the answer; and the gate
+  itself only knew about the source, which is still remote after that choice —
+  choosing *download it whole* passed only incidentally, because that source
+  stops being remote. The reading is now part of a mount's identity, and the
+  agreement is passed explicitly rather than inferred.
+
+- **`2 << 30` is not two gigabytes.** The shift operators coerce to signed
+  32-bit, so the whole-object download limit evaluated to −2,147,483,648 and
+  refused every file, including a 114 kB one, with "more than a browser tab can
+  hold in memory". Found by driving the built app in a browser rather than by a
+  test, which is the kind of arithmetic no unit test was ever going to be
+  pointed at.
 
 - **A bgzipped file with no index is read to its end, not to the end of its
   first block.** `bgzip` writes a gzip member per block — roughly one per 64 KiB
