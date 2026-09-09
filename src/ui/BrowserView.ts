@@ -3754,8 +3754,12 @@ function sameSpan(one: ManualSpan, two: ManualSpan): boolean {
  * of each track's label, which moved every name along and could only show the
  * handle on hover — because a permanent one would have been sitting on the
  * signal.
+ *
+ * Exported because it is where the axis *begins*, and a test that puts a click
+ * on this canvas has to know that: a gesture aimed at the left edge lands in the
+ * margin, where there is no coordinate at all and nothing is meant to happen.
  */
-const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
+export const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
 
 /**
  * How strongly a handle nobody is pointing at is drawn.
