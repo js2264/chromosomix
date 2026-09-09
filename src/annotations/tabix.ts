@@ -41,6 +41,7 @@
  */
 
 import { NameIndex } from '../genome/naming'
+import { inflateMember } from '../pairs/stream'
 
 /** A BGZF member header is always at least this long. */
 const BGZF_HEADER_BYTES = 12
@@ -87,13 +88,17 @@ export function blockSize(bytes: Uint8Array): number | null {
   return null
 }
 
-/** Inflate one BGZF block's deflate payload. */
-async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart])
-    .stream()
-    .pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
-}
+/**
+ * Inflate one BGZF block's deflate payload.
+ *
+ * Delegated to `pairs/stream.ts`, which takes the writer and reader off the
+ * `DecompressionStream` directly instead of going through a `Blob` and a
+ * `Response`. That is not a tidy-up: measured in Chromium over 433 members, the
+ * `Blob` spelling this used to be runs at **34 MB/s** and the delegate at
+ * **260 MB/s**. Three objects per 64 KiB block is most of what a GTF span costs
+ * to inflate.
+ */
+const inflateRaw = inflateMember
 
 /**
  * Inflate every whole BGZF block in `bytes`, concatenated.

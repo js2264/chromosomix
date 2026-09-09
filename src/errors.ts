@@ -14,6 +14,7 @@ export type ErrorCode =
   | 'not-a-cooler'
   | 'mmetacool-root'
   | 'mcool-root'
+  | 'pairs-binning-needed'
   | 'entry-not-found'
   | 'bad-format-version'
   | 'bad-ordering'

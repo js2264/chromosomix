@@ -3703,6 +3703,188 @@ canvas.is-frozen {
   width: min(46rem, 100%);
 }
 
+/* --- the pairs binning dialog ------------------------------------------
+   The one dialog in the app that has to be filled in before anything can be
+   drawn, because a .pairs file states no resolution and there is no map behind
+   it to fall back to. So it is laid out as a short form rather than as a
+   confirmation: two fields side by side, and beneath them the three lines that
+   turn the choice into a decision — the ladder it produces, what it would cost,
+   and the one warning worth reading before a long read. */
+
+.pairs-body {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow-y: auto;
+}
+
+.pairs-summary {
+  color: var(--text);
+}
+
+.pairs-fields {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.pairs-body .field-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.pairs-base {
+  width: 9rem;
+}
+
+.pairs-rungs {
+  width: 6rem;
+}
+
+/* The ladder is the line a reader actually checks before pressing the button,
+   so it is not dimmed the way the surrounding hints are. */
+.pairs-ladder {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pairs-cost {
+  font-variant-numeric: tabular-nums;
+}
+
+.pairs-warning {
+  color: var(--warn, var(--accent));
+}
+
+.pairs-download {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pairs-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.2rem;
+}
+
+/* The import's own progress, shown in place of the map because there is no map
+   yet. Two lines and a bar: what is happening, and how far in. */
+.pairs-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.pairs-progress-bar {
+  width: min(24rem, 80%);
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-sunken, var(--border));
+  overflow: hidden;
+}
+
+.pairs-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.pairs-progress-note {
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the corner note ---------------------------------------------------
+   For work that finishes after the thing the reader was waiting for: the
+   .mcool written from a pairs import, which runs while the map it came from is
+   already on screen. Bottom-right rather than top, because the top-right is the
+   theme and menu corner and a note that covers a control is worse than one that
+   covers nothing. */
+
+.toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.55rem 0.6rem 0.6rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.toast-label {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.toast-bar {
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--bg-sunken, var(--border));
+  overflow: hidden;
+}
+
+.toast-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.toast-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--step--2, var(--step--1));
+  font-variant-numeric: tabular-nums;
+}
+
+.toast-close {
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+}
+
+.toast-close:hover {
+  color: var(--text);
+}
+
+/* A finished note fades rather than vanishing, so a reader glancing over sees
+   that something completed rather than that something disappeared. */
+.toast-done {
+  opacity: 0.75;
+  transition: opacity 400ms ease-in;
+}
+
+.toast-failed {
+  border-color: var(--danger, var(--accent));
+}
+
 .modal-head {
   display: flex;
   align-items: center;

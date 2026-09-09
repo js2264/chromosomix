@@ -39,7 +39,7 @@
  * `package.json` already applies to the bundle. It is about forty lines.
  */
 
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -59,6 +59,9 @@ import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
 import type { AnalysisFraming, AnalysisTask, Params, TaskResult } from '../analysis/types'
 import type { TaskInputs } from '../analysis/worker/protocol'
+import { importPairs, probePairs } from '../pairs/import'
+import { ViewerError } from '../errors'
+import type { ByteSource } from '../types'
 import { VERSION } from '../version'
 
 // ---------------------------------------------------------------------------
@@ -110,6 +113,20 @@ function parseArgs(argv: readonly string[]): Args {
 
 const one = (args: Args, key: string): string | undefined => args.flags.get(key)?.[0]
 const all = (args: Args, key: string): string[] => args.flags.get(key) ?? []
+
+/**
+ * `--bin-size` and `--rungs`, or `undefined` when neither was given.
+ *
+ * Only consulted for a `.pairs`, and harmless everywhere else: a cooler states
+ * its own resolutions, so a bin size named on the command line for one would be
+ * a second answer to a question the file already answered.
+ */
+function pairsBinningOf(args: Args): PairsBinning | undefined {
+  const base = Number(one(args, 'bin-size') ?? one(args, 'binsize') ?? NaN)
+  if (!Number.isFinite(base) || base < 1) return undefined
+  const rungs = Number(one(args, 'rungs') ?? 1)
+  return { base: Math.floor(base), rungs: Number.isFinite(rungs) ? Math.max(1, Math.floor(rungs)) : 1 }
+}
 const flag = (args: Args, key: string): boolean => {
   const value = one(args, key)
   return value !== undefined && value !== 'false'
@@ -180,6 +197,13 @@ const RESERVED = new Set([
   'over',
   'quiet',
   'help',
+  // How a `.pairs` positional is binned (§3.7). Reserved rather than declared
+  // per task because it is a property of the *input*, not of the analysis: it
+  // decides which grid the file is read on, and every task then runs on that
+  // grid exactly as it would over a cooler.
+  'bin-size',
+  'binsize',
+  'rungs',
 ])
 
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
@@ -215,6 +239,91 @@ interface RunOptions {
   balance?: boolean | undefined
   inputs: TaskInputs
   quiet: boolean
+  /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
+  binning?: PairsBinning | undefined
+}
+
+/** `--bin-size` and `--rungs`, the CLI's answer to the browser's dialog. */
+interface PairsBinning {
+  base: number
+  rungs: number
+}
+
+/**
+ * Open a file for a task, importing it first when it is a `.pairs`.
+ *
+ * The browser answers "at what resolution?" with a dialog; a shell answers it
+ * with a flag, and the refusal names the flag rather than describing a dialog
+ * nobody here can see. Everything after the open is identical, which is the
+ * point of GAPS G4: a number computed in a batch and a number computed by
+ * clicking come out of one implementation.
+ *
+ * The ladder is built even though a task reads one rung, and that is deliberate
+ * rather than wasteful — it costs a walk over the base pixel table, and it is
+ * what makes `--out` able to carry a `.mcool` that opens in the app at the same
+ * resolutions a session would have had.
+ */
+async function openForTask(path: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+  try {
+    return await MetaCooler.open(path, source)
+  } catch (error) {
+    if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
+    const binning = options.binning
+    if (binning === undefined) {
+      throw new ViewerError(
+        'pairs-binning-needed',
+        `${basename(path)} is a .pairs file: a list of contacts with no resolution of its own. ` +
+          'Say what to bin it at, e.g. `--bin-size 5000 --rungs 4`.',
+        error.detail,
+      )
+    }
+    const probe = await probePairs(source, () => openPairsIndex(path))
+    if (!options.quiet) {
+      const known = probe.records === null ? 'an unindexed file' : `${probe.records.toLocaleString()} records`
+      process.stderr.write(`  binning ${known} at ${binning.base} bp\n`)
+    }
+    const imported = await importPairs(source, probe, {
+      base: binning.base,
+      rungs: binning.rungs,
+      ...(options.quiet
+        ? {}
+        : {
+            onProgress: (done, total, note) => {
+              if (total > 0 && done % Math.max(1, Math.floor(total / 10)) < 2) {
+                process.stderr.write(`  ${note ?? 'working'} ${Math.round((done / total) * 100)}%\n`)
+              }
+            },
+          }),
+    })
+    if (imported === null) throw new Error('the pairs import was interrupted')
+    return MetaCooler.fromPairs({
+      uri: path,
+      header: imported.header,
+      pixels: imported.tables.get(imported.rungs[0])!,
+      rungs: imported.rungs,
+      indexed: imported.indexed,
+      declaredRecords: imported.declaredRecords,
+    })
+  }
+}
+
+/**
+ * The `.px2` beside a pairs file on disk, or `null`.
+ *
+ * Both spellings `pairix` writes, most specific first — the same rule
+ * `annotations/sidecar.ts` states for a `.bai`, and for the same reason: a
+ * reader must not have to know which convention produced the pair they have.
+ */
+async function openPairsIndex(path: string): Promise<ByteSource | null> {
+  for (const candidate of [`${path}.px2`, `${path.replace(/\.gz$/i, '')}.px2`]) {
+    if (!existsSync(candidate)) continue
+    try {
+      return await LocalFileSource.fromPath(candidate)
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 /**
@@ -229,7 +338,7 @@ interface RunOptions {
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, params, path } = options
   const source = await LocalFileSource.fromPath(resolve(path))
-  const mc = await MetaCooler.open(resolve(path), source)
+  const mc = await openForTask(resolve(path), source, options)
   try {
     const runner = RUNNERS[task.id]
     if (runner === undefined) {
@@ -451,14 +560,21 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
   metacooler-run tasks
       Every task, its id, and the parameters it takes.
 
-  metacooler-run <task> <file.cool|file.mcool|file.metacool|file.hic> [...]
+  metacooler-run <task> <file.cool|file.mcool|file.metacool|file.hic|file.pairs.gz> [...]
       Run one task over one or more files.
 
       --out <dir>          where to write (default: .)
       --window <chr:a-b>   a window rather than the whole file
       --balance            force balancing on; --balance=false forces it off
       --features <file>    a BED/narrowPeak/loop table a task needs
-      --pairs <file>       a BEDPE, for an off-diagonal pileup
+      --pairs <file>       a BEDPE, for an off-diagonal pileup. Note this is a
+                           *feature* table and not a contact list — a .pairs
+                           file to bin is a positional argument, and takes
+                           --bin-size below
+      --bin-size <bp>      required for a .pairs input, which states no
+                           resolution of its own; ignored for every other format
+      --rungs <n>          how many ladder resolutions to build from it
+                           (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
       --<param> <value>    any parameter the task takes; see \`tasks\`
 
@@ -522,6 +638,7 @@ async function runCommand(args: Args): Promise<number> {
         task,
         params,
         path,
+        binning: pairsBinningOf(args),
         // Not `one(args, 'window')`. `apa` declares a parameter of that name —
         // a half-width in bins — and `paramsFor` already gives a task's own
         // parameters the flag where the two collide. The framing was reading it
@@ -621,6 +738,7 @@ async function replayCommand(args: Args): Promise<number> {
           params: entry.params,
           path: file,
           balance: undefined,
+          binning: pairsBinningOf(args),
           // Per task, because a replayed workspace can hold several that name
           // different sets under different keys.
           inputs: bindInputs(task, entry.params, loaded),

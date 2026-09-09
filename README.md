@@ -1,6 +1,6 @@
 # metacooler-viewer
 
-A unified genome browser for `.*cool`, `.hic`, HiC-Pro, and other similar formats, 
+A unified genome browser for `.*cool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
 and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, BAM and VCF. 
 It is a single-page application that runs entirely in the browser, with no 
 server-side processing or data upload.
@@ -29,6 +29,16 @@ server-side processing or data upload.
 genomic data on a laptop with the network cable out.
 
 1. **No pre-parsing of genomic files is required.** Contact maps and 1D genomic files are read in bounded reads, and the rest is pure canvas transforms with **zero** further I/O. That is the central difference from HiGlass, which needs a tile server, a tile cache and a tile compositor to stream contact maps. 
+
+1. **A `.pairs` file is imported, not merely opened.** Everything above is a matrix — the thing a pipeline produces at its end. What is on disk after running one is a list of contacts, with no grid in it, and turning it into something openable used to mean leaving for `cooler cload` or `metacooler create pairs` first. Now you drop it, pick a base resolution and how many ladder rungs you want, and the file is read **once**: every rung is built in that pass, and every view afterwards costs no I/O at all. Plain, gzipped or bgzipped; a `pairix` `.px2` beside it makes the cost known before the read starts, and its absence changes nothing except that the whole file is read. The input is gigabytes and the output is tens of megabytes — yeast Micro-C is 179 M records and 13.7 M stored pixels at 1 kb — so you pay for the file once and answer from memory afterwards. `demo/ecoli/SRR19500734.pairs.gz` is 238 MB and 17.7 M records, and imports in about forty seconds.
+
+   How long that takes is decided mostly by **how the file was bgzipped**, which is worth knowing because you can change it: a `.pairs.gz` is a sequence of independently compressed blocks, and a deflate block costs about the same to start whether it holds 1 KB or 64 KB. That E. coli file is framed in ~1.4 KB blocks — 165,000 of them — and runs at 0.12 M records/s; the same records at the 64 KB blocks `bgzip` writes by default run at 0.69 M records/s. If a file feels slow, re-block it:
+
+   ```sh
+   bgzip -d < slow.pairs.gz | bgzip > fast.pairs.gz   # ~5x, on a file framed finely
+   ```
+
+1. **The `.mcool` is written back out, and downloads when it is ready.** Every rung, as a real cooler, with the pairs header carried verbatim in `metadata` and raw counts that say `unbalanced` so nobody mistakes them for balanced ones. It is the one file this viewer writes that another tool reads as a *format* rather than as a picture, and the [spec](SPECS.md) says at §18.9 exactly which refusal that narrowed and what it was checked against. What it is not is a `.metacool`: `#chromsize:` has no concept of a genome, so an imported map has chromosomes and no MAG layer — `metacooler create pairs` still wants the contig and genome tables for that.
 
 ## Using metacooler.js
 
@@ -281,6 +291,21 @@ metacooler-run tasks
 ##       --balance (default false)  Use balancing weights
 ##       --minContigs (default 4)  Least contigs before judging a MAG
 ##       --flagBelow (default 0.1)  Flag below this cross-block ratio
+```
+
+Every task takes as many files as you like, and writes its results where `--out` points:
+
+```bash
+metacooler-run insulation *.mcool --window chrII --out results/
+metacooler-run chromosight sample.cool --pattern borders --balance --out results/
+metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
+
+# A .pairs is binned first, at a resolution you name — the shell's answer to
+# the browser's dialog. `--pairs` above is a BEDPE of features; the contact
+# list is the positional argument.
+metacooler-run coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
+
+metacooler-run replay workspace.metacooler.json --over 'data/*.hic'
 ```
 
 ## Licence

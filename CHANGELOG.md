@@ -61,6 +61,95 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shows the licence of a package it can find one for, and a tarball that
   declares MIT without carrying it is asking to be taken on trust.
 
+- **`.pairs` files open, at a resolution you choose.** A 4DN pairs file — plain,
+  gzipped or bgzipped, with a `.px2` beside it or without one — is now an
+  accepted input, and it is the first one the app **imports** rather than opens.
+  Everything else in §3 is a matrix in a container; a pairs file is a list of
+  contacts, and there is no grid in it. So the first open is refused, a dialog
+  asks for a base resolution and a number of ladder rungs, and the file is read
+  once. After that it is a map like any other: the same views, the same deck,
+  the same turn, the same fourteen analysis tasks, none of which learns the
+  container exists.
+
+  **The grid could not be guessed**, and that is why there is a dialog rather
+  than a default. A bin table inferred from the largest coordinate observed
+  would differ between two subsamples of the same library — the one way of being
+  wrong that survives every check downstream and makes two files silently
+  incomparable.
+
+  **The ladder is nearly free**, so it is offered rather than rationed: the base
+  rung costs a pass over the records, and every rung above it is derived from
+  that table, which is smaller than the record stream by the ratio of records to
+  stored pixels — thirteen to one on `demo/yeast/`. The rungs are spelled the
+  way an `.mcool`'s resolutions are, which wires them into the resolution
+  picker, the refine ladder and a deck descending to its lead's rung with no
+  code in any of them.
+
+  **The shape of the data is what makes this the right design.** On this
+  repository's own demo files, yeast Micro-C is 179 M records and 13.7 M stored
+  pixels at 1 kb; the mock community is 10.9 M records and 7.1 M pixels. The
+  input is gigabytes and the output is tens of megabytes — so the file is paid
+  for once, at open, and every view afterwards costs no I/O at all.
+  `demo/ecoli/SRR19500734.pairs.gz` — 238 MB, 17.7 M records — imports in about
+  forty seconds.
+
+  **What decides that time is the file's BGZF framing rather than this code**,
+  and it is worth knowing because it can be changed. A deflate block costs about
+  the same to start whether it holds 1 KB or 64 KB, so a finely framed file pays
+  that fixed cost tens of thousands of times over: measured on the same 1.39 M
+  records, **0.69 M records/s** at the 64 KiB blocks `bgzip` writes and
+  **0.12 M records/s** at the ~1.4 KB blocks that E. coli file has. Re-blocking
+  it (`bgzip -d < f.pairs.gz | bgzip > g.pairs.gz`) is worth about 5×.
+
+  An imported map is a *fuller* citizen than a `.hic`: because the file was
+  read, the per-bin pixel index is a by-product rather than a whole-file scan,
+  so `binOffsets()` answers where a `.hic`'s refuses and `nnz` is a real number.
+
+  What it is not is a `.metacool`. `#chromsize:` has no concept of a genome, so
+  an imported map is a cooler-class citizen (§9) — chromosomes table, no genomes
+  table, the four metagenome tasks absent rather than disabled.
+
+- Switching resolution on an imported map no longer re-reads the file. The
+  rungs are spelled as an `.mcool`'s resolutions — which is what wires them
+  into the picker, the hash and the refine ladder for free — so a switch
+  arrives as an ordinary open carrying no binning, and the ordinary path
+  would drop the ladder and ask for a bin size that had already been given.
+
+- **`metacooler-run` takes a `.pairs` too**, with `--bin-size` and `--rungs`
+  standing in for the dialog the browser shows. Everything after the open is
+  the same code, which is the whole point of the CLI: a number computed in a
+  batch and a number computed by clicking come out of one implementation. Note
+  the older `--pairs` flag is a BEDPE of *features* for a pileup — a contact
+  list is the positional argument, and the usage now says so.
+
+- **The `.mcool` is written back out, and downloads when it is ready.** Every
+  rung, as a real cooler: `chroms`, `bins`, `pixels`, `indexes`, cooler's own
+  format attributes, and the pairs preamble carried verbatim in `metadata`
+  beside the record count and whatever the import skipped, clamped or had to
+  merge. Raw counts and no weights — `generated-by` says `unbalanced`, and
+  `cooler balance` is the answer. It runs beside the open map rather than in
+  front of it, because the reader has already waited once and what they are
+  waiting for now is a file rather than a picture.
+
+  This required narrowing a stated non-feature, and it is narrowed in the open
+  at SPECS §18.9 rather than stepped around. Writing a matrix *derived from an
+  opened map* is still refused, for the reason that clause gave: provenance,
+  balancing and the bin table would be choices this app makes on the reader's
+  behalf and then seals into a file that outlives the session. A file binned
+  from a `.pairs` answers all three from its input — the bin table from
+  `#chromsize:` and a size the reader picked, provenance from the header, and no
+  balancing at all — and what is written is *what is on screen*, off the arrays
+  the map is drawn from, so there is no second computation to disagree with the
+  first.
+
+  Checked two ways, because a round trip alone would only prove the reader and
+  the writer agree — which is exactly what they did about `.hic` endianness: the
+  file is read back through this app's own reader **and** compared cell for cell
+  against an independent binning of the same records written the slow obvious
+  way. One structural difference from `cooler cload` is stated rather than left
+  to be found: `bins/chrom` is int32 codes rather than an HDF5 enum, because
+  h5wasm exposes no enum construction. Everything numeric is identical.
+
 - **The viewer, inside somebody else's page.** `?embed=1` mounts the same web
   build with no window around it — no header, no tab strip, no status bar — so
   it can be the figure in a portal, a lab site, a course page or a paper's
@@ -561,6 +650,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **An incomplete `.pairs` file is now said to be incomplete.** A truncated
+  BGZF — a cancelled upload, an interrupted `bgzip`, a partial copy — imported
+  without complaint and drew a map of whatever had arrived. Every number in
+  that map is true of the records that were there, which is exactly the
+  problem: nothing on screen distinguishes *this library has no contacts on
+  chromosome XIII* from *this file stops before chromosome XIII*.
+
+  A BGZF file marks its own end with an empty member, so the two states are
+  distinguishable and now are: a file that ends mid-member or without that
+  marker is reported as incomplete, alongside any sequences that have nothing
+  on their own diagonal — the visible form of the same fact. Both are carried
+  into the written `.mcool` as well, since a cooler binned from an incomplete
+  file is itself incomplete and will outlive the window that knew.
+
+  Found on `demo/yeast/CH128.pairs.gz`, which is cut off after chromosome XII
+  and silently produced a map with four empty chromosomes.
+
+- **A bgzipped `.pairs.gz` failed to open in the browser** with `Junk found
+  after end of compressed data.` BGZF is a concatenation of gzip members, and
+  the specification says a decoder walks them — Node's does, and that is where
+  it was verified. **Chromium's does not**: `DecompressionStream('gzip')` stops
+  after the first member and throws. Because BGZF's end-of-file marker is
+  itself an empty second member, this was true of *every* bgzipped file, not
+  only a large one; the fixtures that passed were plain single-member gzip,
+  which is the one shape that works either way.
+
+  Members are now decompressed one at a time, which is what the format is. That
+  turned out to cost nothing: taking the writer and reader off the
+  `DecompressionStream` directly, rather than through a `Blob` and a `Response`,
+  runs at 260 MB/s against the `Blob` form's 34 MB/s — so
+  `annotations/tabix.ts`, which reads `.tbi` and GTF spans the slow way, now
+  shares the fast one.
 
 - **A Choose-files button in a framed page no longer does nothing at all.**
   Anybody could already put this site in an `<iframe>`, and in a cross-origin one

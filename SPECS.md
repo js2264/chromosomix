@@ -94,6 +94,12 @@ binary container, and asking h5wasm to open one produces a stack trace rather th
 requires. So the first four bytes decide the *container* before any attribute is read.
 
 0. bytes `48 49 43 00` (`HIC\0`) → **hic** (§3.6), and nothing below is consulted
+0b. bytes `1f 8b` (gzip, which BGZF also is) → not HDF5 in any case, so the first line is decoded:
+    `## pairs format` → **pairs** (§3.7), refused with `pairs-binning-needed` until a resolution is
+    chosen. Anything else gzipped is refused *here* rather than handed to h5wasm, whose answer to a
+    request for a non-HDF5 file's attributes is `error - name not defined!` — a sentence about
+    nothing the reader did
+0c. a first line of `## pairs format` with no compression → **pairs**, as above
 
 Within HDF5, attribute-based, in this order. Order matters: **a `.metacool` also satisfies cooler's
 `is_cooler()`** because of the `/chroms → /contigs` soft link and `format = "HDF5::Cooler"`, so
@@ -244,6 +250,120 @@ reference implementation, as a devDependency oracle on every one of those fixtur
 `MetaCooler` itself, asserting that the ordinary cooler surface answers identically. The second of the
 three is not optional and the reason is recorded: the first version of the reader and the first version
 of the writer agreed with each other that the format is big-endian. It is not.
+
+---
+
+### 3.7 `.pairs` — imported, not opened
+
+A 4DN `.pairs` file — plain, gzipped or bgzipped, with a `.px2` beside it or without one — is
+accepted, and it is the only input that is **imported** rather than opened. Everything else in §3
+is a matrix in a container; a pairs file is a list of contacts, and the difference decides the whole
+of how it behaves.
+
+**Why it cannot simply be opened.** Every other container states its resolutions: a cooler has one,
+an `.mcool` and an `.mmetacool` list theirs, a `.hic` carries a ladder. A pairs file has none. The
+grid is not in the file and cannot be inferred from it — a grid guessed from the largest coordinate
+observed would differ between two subsamples of the same library, which is the one way of being
+wrong that survives every check downstream and makes two files silently incomparable. So the first
+open is **refused**, with `pairs-binning-needed`, and the refusal carries what a choice needs: the
+sequences, the assembly, the record count where an index supplied one, and a suggested base
+resolution. The app turns that into a dialog and opens again. It is the same two-step an `.mcool`
+addressed at its root already takes (§3.4); what differs is only that a collection's answer is in
+the file and this one is not.
+
+**The cost is the framing, not the format.** A `.pairs.gz` is BGZF — a sequence of
+independently-deflated members — and **Chromium's `DecompressionStream('gzip')` will not walk them**:
+it stops after the first and throws `Junk found after end of compressed data.` Since BGZF's
+end-of-file marker is itself an empty second member, that is true of every bgzipped file, not just a
+large one. So members are decompressed one at a time, which is what the format is.
+
+What that costs depends entirely on how finely the file was framed, because a deflate stream has a
+fixed cost however little it carries. Inflate alone, measured in Chromium: **260 MB/s** at the 64 KiB
+members `bgzip` writes, **78 MB/s** at the ~1.4 KB members `demo/ecoli/SRR19500734.pairs.gz` has —
+165,000 of them. That ceiling belongs to deflate rather than to the browser API: `fflate`'s pure-JS
+inflate measures 76 MB/s on the same members, so a dependency would buy nothing, and issuing members
+concurrently is slower still. **Re-blocking a finely framed file is the fix that works**
+(`bgzip -d < f.pairs.gz | bgzip > g.pairs.gz`), and the app says so rather than pretending the
+difference is not there.
+
+**One pass, and then it is a cooler.** The chosen resolution is binned in a single streaming pass
+over the records, and every rung above it is derived from that table rather than from the file. The
+result is held in memory and *is* the map: every view, the deck, the turn and all fourteen §18 tasks
+read it through `PixelStore` exactly as they read a cooler, and none of them learns that the
+container exists. The shape that makes this the right design is the data's own — on this
+repository's demo files, yeast Micro-C is 179 M records and 13.7 M stored pixels at 1 kb, and the
+mock community is 10.9 M records and 7.1 M pixels. **The input is gigabytes and the output is tens
+of megabytes.** Pay for the file once; answer from memory afterwards.
+
+This is §2's assumption honoured rather than bent. The pass is bounded, has a denominator, reports
+progress and can be called off — §18's "one streaming pass with progress, cancel and a pre-flight
+estimate", applied at open rather than to a task — and nothing after it costs a read at all.
+
+**A fuller citizen than a `.hic`.** Because the file *was* read, the per-bin pixel index is a
+by-product rather than a whole-file scan, so `binOffsets()` answers where `HicStore`'s refuses,
+`nnz` is a real number rather than `null`, and no code downstream carries a branch for the case
+where it is not.
+
+**Three things the header decides, and one it cannot.**
+
+- **`#chromsize:` is the bin table**, and is required by name. `#samheader: @SQ` is accepted as a
+  fallback because pairtools writes both. A file with neither is refused with the command that adds
+  them.
+- **`#columns:` is honoured, never assumed.** The spec fixes an order and then permits any other;
+  pairtools writes `chrom1` where the spec writes `chr1`, and real files carry extra columns and
+  different orders. The spec's order is the fallback when no `#columns:` line is present.
+- **Positions are 1-based**, per the spec and per `cooler cload pairs`. This is one subtraction and
+  getting it wrong shifts every record at a bin boundary into its neighbour — invisible in a
+  picture, permanent in a written file.
+- **What it cannot decide is the genome layer.** `#chromsize:` has no concept of one, so an
+  imported map is a **cooler-class citizen** in §9's sense: the contigs table is the landing view,
+  `genomes` is `null`, and the four metagenome tasks are absent rather than disabled. Getting the
+  MAG layer needs the contig and genome tables `metacooler create pairs` takes, and requiring those
+  would be a second companion file — which is C3's line, and it is not crossed.
+
+**The index is opportunistic, in §3.4's exact sense.** A `.px2` makes the import's cost knowable
+before it starts — the pairix header carries an exact record count, which no other Hi-C container
+hands over — and lets the import be scoped to a set of chromosome pairs. Without one, the file is
+read whole and the progress bar counts compressed bytes instead. Both work; the index only ever
+makes the same file cheaper. It is **not** §8.13's case: a pairs file has a whole-file fallback that
+respects §12, so its absence is never a refusal.
+
+**What is deliberately not read**: the strand, pair-type and mapping-quality columns, and any
+filtering on them. A pairs file is the output of a pipeline that has already made those decisions,
+and re-making them here would be the second application §13 refuses — the importer counts the
+records the file contains, and if a reader wants different records they filter with `pairtools
+select` and import the result. Nothing is inferred about restriction fragments, and no matrix is
+ever built from alignments (§13); a `.pairs` is a contact list, which is a different thing and is
+the reason this fits.
+
+**Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
+from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
+diagonal, `forEachBands`, `scanAll` and `binOffsets`. That is the property every view and all
+fourteen §18 tasks actually depend on, and the way it would fail is the way that matters: not an
+error, but one number differing for whichever tasks happen to use the method that diverged.
+
+**An incomplete file is reported, not drawn in silence.** A BGZF file says where each of its
+members ends and marks its own end with an empty one, so a file that stops mid-member or carries no
+end-of-file marker was never finished — a cancelled upload, an interrupted `bgzip`, a partial copy.
+Every record that did arrive is binned and drawn, because it is real; what is refused is doing that
+*quietly*. Nothing in a contact map distinguishes *this library has no contacts on chromosome XIII*
+from *this file stops before chromosome XIII*, and a reader cannot be left to work out which.
+
+Reported alongside it: sequences with **nothing on their own diagonal**. That is the visible form of
+the same fact — a diagonal is a map's most populated feature and a sequence without one is missing
+from the data — and it is deliberately not "sequences no record named", which the file this was
+written for would have passed: a list sorted by first chromosome and then cut still mentions the
+sequences it never reaches, as the *second* chromosome of a trans contact.
+
+A plain `.gz` gets no such claim. It carries no framing this side can check, and silence there means
+*unknown* rather than *whole*.
+
+**Correctness.** The binning is checked against a second implementation of the same arithmetic,
+written the slow obvious way, over sorted, shuffled, gzipped, bgzipped and uncompressed files, at
+contig boundaries and short final bins. The written `.mcool` is checked twice — read back through
+this app's own reader, and compared cell for cell against that same independent binning — because a
+round trip alone only proves the reader and the writer agree, which is exactly what they did about
+`.hic` endianness (§3.6).
 
 ---
 
@@ -2251,6 +2371,18 @@ satisfy and is therefore the one that is tested first:
 | Adaptive smoothing of a block | 0 range requests; the arrays go over and back. Inline below 1 M cells (78 ms at 353²); on the analysis thread above it — 1.5 s at 4 M, 7.4 s at the 16 M cap. The map draws **unsmoothed** meanwhile, never blank and never captioned as smoothed |
 | Analysis worker mount | opened on first use, never at session open |
 
+And for a `.pairs` import (§3.7), which is the one open in this application with a denominator and a
+real wait — everything else is a bounded read costing a handful of range requests, and this walks a
+whole file:
+
+| Operation | Budget |
+|---|---|
+| Probe a `.pairs`: header, and the index if there is one | ≤ 3 range requests. One BGZF member for the format check — cut *exactly*, from the member's own header — then the preamble, then the `.px2` whole, which is small by construction |
+| The binning pass | **one sequential read of the file**, and no second pass ever. Measured on `demo/ecoli/SRR19500734.pairs.gz` (17.7 M records, 238 MB): **0.69 M records/s** at the 64 KiB BGZF framing `bgzip` writes, and **0.12 M records/s** at the ~1.4 KB framing that file actually has. The 5.7× is decompression, not parsing — see below. Progress in records where a `.px2` gave an exact count, in compressed bytes otherwise; cancellable throughout |
+| Every rung above the base | 0 reads. Derived from the base pixel table, which is smaller than the record stream by the ratio of records to stored pixels — thirteen to one on `demo/yeast/` |
+| Every view, afterwards | **0 reads, ever.** The map is in memory; a rung switch, a pan, a zoom, the deck and all fourteen §18 tasks cost no I/O at all |
+| Writing the `.mcool` | 0 reads. Runs beside the open map, with its own bar and its own cancel; the int64 conversion buffer is capped at one chunk rather than one column |
+
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;
 `hdf5-indexed-reader` addresses it with a pre-built path → offset index and was built for `.cndb`
 chromatin files. Held in reserve — adopting it would not change any file format, only the reader.
@@ -2276,8 +2408,10 @@ them needs a server. The distinction is between authoring an output and editing 
 second is refused.
 
 Four further non-features arrive with §18, for reasons given at §18.9: no loop or dot calling; no
-contact-based contig reordering or scaffolding; **no writing of `.cool`, `.mcool` or `.metacool`** —
-a decision rather than a limitation, since h5wasm could create one; and no differential APA.
+contact-based contig reordering or scaffolding; ~~no writing of `.cool`, `.mcool` or
+`.metacool`~~ — **narrowed**, see §18.9 and §3.7: writing a matrix *derived from an opened map* is
+still refused, and writing the **primary reduction of a `.pairs` file** is not; and no differential
+APA.
 
 Five more arrive with §8.13, each with its own reason rather than one shared one: no **mate
 fetching** (one uncoalescable request per visible read, with no locality to coalesce on); no
@@ -3704,11 +3838,53 @@ the entire value of having it.
 be written back into a file, and it cannot — see the next paragraph — so it would produce an ordering
 with nowhere to go.
 
-**No writing of `.cool`, `.mcool` or `.metacool`.** This is a decision and not a limitation: h5wasm can
-create a file in its virtual filesystem, and the app declines to. A derived contact matrix is a format
-contract, and owning one means owning every question about what its provenance, its balancing and its
-bin table mean. §13's rule is therefore read as covering files the app *derives* and not only the file
-it opened.
+**No writing of a `.cool`, `.mcool` or `.metacool` this app derived.** ~~No writing of `.cool`,
+`.mcool` or `.metacool`.~~ The original rule was the second sentence, and its reason still stands: a
+derived contact matrix is a format contract, and owning one means owning every question about what
+its provenance, its balancing and its bin table mean. §13's rule is therefore read as covering files
+the app *derives* and not only the file it opened.
+
+What that argument is against is writing a matrix **derived from an opened map** — smoothed,
+balanced, transformed, a rung the file did not carry — where every one of those questions is a
+choice this app would be making on the reader's behalf and then sealing into a file that outlives
+the session. That is still refused, and the reason is stronger than it looks: a picture drawn wrong
+is wrong in one figure that somebody is looking at, and a `.cool` written wrong opens perfectly in
+cooler, HiGlass and Juicebox, lands in supplementary data, and is re-binned by people who will never
+see this app.
+
+It does **not** reach the one case §3.7 adds, and the distinction is the whole of the reversal. An
+`.mcool` written from an imported `.pairs` is not derived from anything: it is the **primary
+reduction of a primary file**, and the three questions the paragraph above names are answered by the
+input rather than by us.
+
+- **The bin table** comes from `#chromsize:` and a bin size the reader chose in a dialog. Nothing is
+  inferred and nothing is negotiated.
+- **Provenance** is the source file's name, its preamble carried verbatim, the record count, and
+  what the import skipped, clamped or had to merge — in named attributes and in `metadata`, so a
+  file handed to somebody else says exactly what this session says.
+- **Balancing** does not exist. No weights are written, none are implied, and `generated-by` says
+  `unbalanced` so that a reader who wants them runs `cooler balance`.
+
+And what is written is *what is on screen*: `sum` and `nnz` are the numbers the info panel is
+showing, off the arrays the map is being drawn from. There is no second computation that could
+disagree with the first — which was the other half of the original worry, and is the half that
+would have applied to a derived matrix and does not apply here.
+
+**The price of the reversal, and it is paid rather than argued away.** §18.9's own rule for a port
+is that it arrives with a golden built from the reference implementation's output, and a written
+format is held to the same bar. `cooler cload pairs` is the reference and is already in this
+repository's own workflow (`data/README.md`), so the comparison is available rather than
+hypothetical. What is checked today is two things, and neither is a self-comparison: the written
+file is read back through this app's own reader and matched against the in-memory table, **and**
+compared cell for cell against an independent binning of the same records written the slow obvious
+way in `test/support/pairs.ts`. The round trip alone would only prove the reader and the writer
+agree — which is exactly what they did about `.hic` endianness (§3.6), and why it is not the whole
+of the check.
+
+One structural difference from `cooler cload` is stated rather than left to be discovered:
+`bins/chrom` is written as plain `int32` codes rather than as an HDF5 enum, because h5wasm exposes
+no way to construct an enum type. cooler reads it, and `Cooler.bins()` returns integer codes where a
+file from `cooler cload` returns a categorical of chromosome names. Everything numeric is identical.
 
 **No differential APA**, and **no differential insulation task**. Two insulation tracks from two files
 are two synthetic tracks, and comparing tracks is something the app already does; a task that only

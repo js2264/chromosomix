@@ -16,6 +16,13 @@
 > that was already there, which is that a frame writing `pushState` spends the
 > host page's Back button.
 >
+> **Since, G12 is built**: `.pairs` files import into a map at a resolution the reader
+> chooses, with a ladder derived in the same pass and an `.mcool` written back out —
+> specified at SPECS §3.7, with the §18.9 clause it required narrowed there rather than
+> quietly stepped around. It is the first input this app *imports* rather than opens,
+> and the first file it writes that another tool will read as a format rather than as a
+> picture.
+>
 > Three defects were found on the way and are worth naming here, because each was
 > silent: `.hic` is little-endian and a self-consistent reader and writer had
 > agreed it was not; a v9 straddle clause lost every near-diagonal block while
@@ -142,6 +149,41 @@ that folds the held results for one task across targets into one `CurveOutput` w
 panel, named by the panel's own label. Applies immediately to P(s), coverage, insulation-at-a-window,
 4C and the saddle. Falls out for free on the metaplot and APA, which are the other two comparisons
 worth having.
+
+---
+
+### G12. Read the format the data actually arrives in — **built** (SPECS §3.7)
+
+**The gap.** Every format this app read was a *matrix*, and a matrix is what a pipeline produces at
+its end. The thing a reader has on disk after running one — and the thing this project's own
+`data/README.md` starts from — is a `.pairs.gz`: the contact list, before anybody chose a bin size.
+Turning one into something openable meant leaving the browser for `cooler cload` or `metacooler
+create pairs`, which is exactly the preprocessing step C3 exists to deny, applied to the one input
+where the app could not deny it.
+
+**Why it fits rather than fights.** The objection to reading contacts is §13's, and it is about
+*alignments*: a viewer that builds matrices from a BAM is two applications, because it would have to
+decide what a contact is — mate pairing, mapping quality, duplicates, restriction fragments,
+ligation junctions. A `.pairs` file is the output of that decision, made by a pipeline, recorded in
+a header. Binning a contact list is a histogram, not a method. Nothing about strands, pair types or
+mapping quality is read or re-decided; a reader who wants different records runs `pairtools select`
+and imports the result.
+
+**What made it affordable** is the shape of the data rather than any cleverness: the input is
+gigabytes and the output is tens of megabytes — 179 M records to 13.7 M pixels on `demo/yeast/` —
+so the file is read once, at open, and every view afterwards is free. Measured at 2.9 M records/s
+against a decompression ceiling of ~195 MB/s, which is the platform's floor and not this code's.
+
+**What it cost doctrinally**, paid at §18.9 rather than avoided: writing a `.cool` was refused, and
+the refusal's own reason turns out to be about a matrix *derived from an opened map*, where
+provenance, balancing and the bin table are choices the app would be making for the reader. A file
+binned from a `.pairs` answers all three from its input. The clause is narrowed there, in the open,
+with the golden that the narrowing requires.
+
+**What it did not buy.** A genome layer. `#chromsize:` has no concept of one, so an imported map is
+a cooler-class citizen and the four metagenome tasks are absent — G2 still wants a `.metacool`, and
+getting one in the browser would need the contig and genome tables as a second required companion
+file, which is C3's line.
 
 ---
 
