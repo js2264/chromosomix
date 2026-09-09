@@ -63,8 +63,8 @@ The five published datasets live on the lab bucket, one folder per dataset under
 
 | file | data | provenance |
 | --- | --- | --- |
-| `mock-community/Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
-| `mock-community/Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
+| `metagenomics/mock-community/Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
+| `metagenomics/mock-community/Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
 | `yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
 | `ecoli/Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
 | `yeast/Yeast_microC_G2M_1kb.cool` (19 MB) | 16 chromosomes of synthetic yeast (`XIII-syn40` carries a 40 kb insertion), 12,118 bins of 1 kb, 13.7 M pixels, 179 M contacts, balanced | mitotic micro-C, Dauban et al., *Science* (DOI `10.1126/science.adm9466`) |

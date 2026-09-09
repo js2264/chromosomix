@@ -92,7 +92,15 @@ import type { PickedFile } from '../browse/folder'
 import { routeOf, type FileRoute } from '../browse/route'
 import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
-import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
+import {
+  assemblyOf,
+  lengthsAreExact,
+  parseLocus,
+  replacesLengths,
+  type Assembly,
+  type AssemblyOrigin,
+  type Contig,
+} from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
@@ -2950,6 +2958,21 @@ export class Session {
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
+    // …and, if this browser is still guessing its lengths, ask this file
+    // whether it knows them. A bigWig, a bigBed, a BAM, a FASTA and a VCF with
+    // `##contig` lines each carry every sequence and its true length, which is
+    // exactly what the Genome card offers to replace the guesses with — so the
+    // offer is kept for all of them rather than for sizes files alone. **After**
+    // the load and never instead of it: the file is a track, and adopting its
+    // lengths is something done with it as well (§8.3).
+    //
+    // Only while the lengths are inferred, which is what bounds the cost: the
+    // extra question re-reads the dropped file, and the first exact answer ends
+    // it for the session. A file that turns out to know nothing — another BED —
+    // is simply not adopted.
+    if (this.assembly !== null && !lengthsAreExact(this.assembly)) {
+      void this.adoptExactLengths(file)
+    }
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -2968,10 +2991,13 @@ export class Session {
    *
    * The case it exists for is a browser opened on a BED or a GTF, whose
    * sequences end at their last feature because that is all such a file knows.
-   * Dropping the assembly's own sizes replaces the guesses with the lengths —
-   * and replaces *only* those: the URI, the session memory and every loaded
-   * track are what they were, because the genome did not change, only what is
-   * known about it.
+   * Dropping the assembly's own sizes replaces the guesses with the lengths
+   * ({@link takeLengths}), and this is the one road on which that happens
+   * *instead of* loading the file: a `chrom.sizes` is not a track, so there is
+   * no lane to make and nothing else for the drop to mean. Every other file
+   * that knows its lengths — a bigWig, a BAM, a VCF with `##contig` lines — is
+   * a track first and answers this question as well, on {@link
+   * adoptExactLengths}.
    */
   private async adoptSizes(file: File): Promise<void> {
     const assembly = this.assembly
@@ -2989,24 +3015,84 @@ export class Session {
         this.annotations?.loader.addFiles([file])
         return
       }
-      this.assembly = assemblyOf({
-        uri: assembly.uri,
-        name: assembly.name,
-        contigs: result.contigs,
-        origin: 'sizes',
-      })
-      this.setGeneral([this.genomeCardFor(this.assembly)])
-      const state = this.store.state
-      if (state === null) return
-      // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
-      // *of*, and its axis is built once from it.
-      this.mounted = state
-      this.mountBrowser(state)
+      this.takeLengths(assembly, result.contigs, 'sizes')
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
       client.destroy()
     }
+  }
+
+  /**
+   * Take the lengths from a file that was dropped to be a *track*.
+   *
+   * The other half of {@link adoptSizes}, and the half the Genome card was
+   * already promising: a bigWig, a bigBed, a BAM, a FASTA or a VCF that
+   * declares its contigs answers "how long is each sequence" exactly, and a
+   * browser opened on a GTF is asking. {@link replacesLengths} is the whole of
+   * the decision — inferred lengths in, exact lengths out, never the reverse —
+   * so this cannot downgrade an assembly and cannot let two exact files fight
+   * over one axis.
+   *
+   * The track is already loading when this is called and this never touches it:
+   * the file is a lane, and its header being a `chrom.sizes` too is a second
+   * thing about it, not an alternative to being drawn.
+   *
+   * Its own client rather than `annotations.client`, which is the thread that is
+   * at this moment parsing the same file as a track: a worker handles one
+   * message at a time, so asking there would put the extra read *in front of*
+   * the lane the reader is waiting for. Errors are swallowed rather than shown,
+   * because the file's real answer — it opened, or it did not — is the loader's
+   * to report, and a second failure notice for the same drop describes a
+   * question the reader never asked.
+   */
+  private async adoptExactLengths(file: File): Promise<void> {
+    const assembly = this.assembly
+    if (assembly === null || lengthsAreExact(assembly)) return
+    const client = new AnnotationClient()
+    try {
+      const result = await client.request<'assembly'>({
+        kind: 'assembly',
+        source: { kind: 'local', file, name: file.name },
+      })
+      // Re-checked after the await, not only before it: two files dropped
+      // together are two of these in flight, and the second must not overwrite
+      // what the first just settled. `this.assembly !== assembly` is what says
+      // so — `takeLengths` replaces the object, so the loser sees a stranger.
+      if (this.destroyed || this.assembly !== assembly) return
+      if (!replacesLengths(assembly, result)) return
+      this.takeLengths(assembly, result.contigs, result.origin)
+    } catch {
+      // Deliberately silent; see above.
+    } finally {
+      client.destroy()
+    }
+  }
+
+  /**
+   * Put real lengths under a browser that had guessed ones.
+   *
+   * Replaces *only* those: the URI, the name, the session memory and every
+   * loaded track are what they were, because the genome did not change, only
+   * what is known about it. The origin comes from the file that answered so the
+   * Genome card names it truthfully — "from the bigWig header" is a different
+   * claim from "declared by a chrom.sizes", and both are different from the
+   * guess they replace.
+   */
+  private takeLengths(previous: Assembly, contigs: Contig[], origin: AssemblyOrigin): void {
+    this.assembly = assemblyOf({
+      uri: previous.uri,
+      name: previous.name,
+      contigs,
+      origin,
+    })
+    this.setGeneral([this.genomeCardFor(this.assembly)])
+    const state = this.store.state
+    if (state === null) return
+    // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
+    // *of*, and its axis is built once from it.
+    this.mounted = state
+    this.mountBrowser(state)
   }
 
   /** Whether the map behind this browser can be brought back. */

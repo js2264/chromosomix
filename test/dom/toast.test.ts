@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { progressToast } from '@/ui/toast'
+import { messageToast, progressToast } from '@/ui/toast'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -77,5 +77,52 @@ describe('progressToast', () => {
     expect(document.querySelector('.toast-bar')).toBeNull()
     expect(note()).toBe('could not write it')
     expect(document.querySelector('.toast')).not.toBeNull()
+  })
+})
+
+/**
+ * The one-shot note, and the two things about it that are not cosmetic either.
+ *
+ * A bar on it would promise a second event that never comes — there is nothing
+ * running behind this note, the thing it reports has already happened — and a
+ * second note landing on top of the first would leave one illegible box with two
+ * × in it. The share dialog produces exactly that pair: it copies the link when
+ * it opens and copies the shortened one a moment later, well inside the four
+ * seconds the first note stays.
+ */
+describe('messageToast', () => {
+  it('is one settled line, with nothing that suggests work in progress', () => {
+    messageToast('Link copied to the clipboard.')
+    const toast = document.querySelector('.toast') as HTMLElement
+    expect(toast).not.toBeNull()
+    expect(toast.getAttribute('role')).toBe('status')
+    expect(document.querySelector('.toast-label')?.textContent).toBe('Link copied to the clipboard.')
+    expect(document.querySelector('.toast-bar')).toBeNull()
+    expect(document.querySelector('.toast-note')).toBeNull()
+    expect(toast.classList.contains('toast-done')).toBe(true)
+  })
+
+  it('replaces the note already standing rather than stacking on it', () => {
+    messageToast('Link copied to the clipboard.')
+    messageToast('Short link copied to the clipboard.')
+    expect(document.querySelectorAll('.toast')).toHaveLength(1)
+    expect(document.querySelector('.toast-label')?.textContent).toBe(
+      'Short link copied to the clipboard.',
+    )
+  })
+
+  it('goes on its own, and goes when it is closed', () => {
+    vi.useFakeTimers()
+    try {
+      messageToast('Link copied to the clipboard.')
+      close().click()
+      expect(document.querySelector('.toast')).toBeNull()
+
+      messageToast('Link copied to the clipboard.')
+      vi.advanceTimersByTime(4_000)
+      expect(document.querySelector('.toast')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openSync, readSync, statSync, closeSync } from 'node:fs'
 import { requireGenomes } from './_golden'
 
-const FILE = new URL('../../demo/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
+const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
 const URL_FOR = (path: string): string => `https://example.test/${path.replace(/^\//, '')}`
 
 let fd: number

@@ -145,7 +145,7 @@ The text below is a live version of the above `<iframe>` (it will not work on Gi
 | --- | --- | --- |
 | `#uri=…&view=…` | one file at one view | a map or a browser at a place, as above |
 | `?config=<url>` | a saved `.metacooler.json` config | a composed figure — tracks, colours, marks |
-| `#s=…` | a whole session, deflated into the link | what **Share** produces; no bucket needed |
+| `#session=…` | a whole session, deflated into the link | what **Share** produces; no bucket needed |
 
 **For a paper, pin the build.** Every push is archived, so
 `…/metacooler.js/v/<commit>/?embed=1#…` renders the same picture in five years, whatever the site

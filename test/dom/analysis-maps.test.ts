@@ -15,12 +15,20 @@
  * The third is that an interactive figure is a *plain figure of a derived
  * output* — the property that makes the PDF export show what is on screen rather
  * than what the task returned.
+ *
+ * The fourth is that what the reader hides changes *which* lines are drawn and
+ * nothing else. Colours used to be taken from a series' position in whatever
+ * array the renderer was handed, so hiding one recoloured every line after it —
+ * curve, band and legend swatch alike, all the way into the PNG and the PDF —
+ * and isolating a series always drew it in the first palette entry whichever one
+ * had been picked.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AnalysisDrawer } from '@/ui/AnalysisDrawer'
 import { combineResults } from '@/analysis/combine'
+import { resolveSeriesColours } from '@/ui/analysisPlots'
 import { interactiveCurve } from '@/ui/interactivePlot'
 import type { AnalysisRunner, RunTarget } from '@/analysis/runner'
 import type {
@@ -355,6 +363,141 @@ describe('an interactive curve', () => {
     click(chip('trans'))
     expect(chip('cis')?.classList.contains('is-off')).toBe(false)
     expect(chip('trans')?.classList.contains('is-off')).toBe(false)
+  })
+
+  /**
+   * The derived outputs a figure hands its renderer, in order.
+   *
+   * The same mock the export test below turns on, kept to itself: `curveFigure`
+   * is replaced so the `CurveOutput` each rebuild produces can be read back,
+   * which is the only way to see what colour a line was *given* rather than what
+   * colour it ended up on a canvas nobody can query. Callers unmock at the end.
+   */
+  async function capture(): Promise<{
+    interactive: typeof interactiveCurve
+    seen: CurveOutput[]
+  }> {
+    const seen: CurveOutput[] = []
+    vi.resetModules()
+    vi.doMock('@/ui/analysisPlots', async () => {
+      const actual = await vi.importActual<typeof import('@/ui/analysisPlots')>(
+        '@/ui/analysisPlots',
+      )
+      return {
+        ...actual,
+        curveFigure: (output: CurveOutput) => {
+          seen.push(output)
+          return {
+            el: document.createElement('div'),
+            draw: () => {},
+            destroy: () => {},
+          }
+        },
+      }
+    })
+    const { interactiveCurve: mocked } = await import('@/ui/interactivePlot')
+    return { interactive: mocked, seen }
+  }
+
+  /** Three series with no colours of their own — the palette decides. */
+  const threeSeries = (): CurveOutput => ({
+    ...curve('ps', 'P(s)', 'a'),
+    series: ['a', 'b', 'c'].map((name) => ({
+      name,
+      x: Float64Array.from([1, 2]),
+      y: Float64Array.from([2, 1]),
+    })),
+  })
+
+  const chip = (figure: { el: HTMLElement }, name: string): Element | undefined =>
+    [...figure.el.querySelectorAll('.plot-series')].find((node) => node.textContent === name)
+
+  it('keeps a series in its own colour when another is hidden', async () => {
+    const { interactive, seen } = await capture()
+    const figure = interactive(threeSeries())
+    document.body.appendChild(figure.el)
+
+    const before = seen[0].series.map((series) => series.colour)
+    // Three lines, three colours: the palette is still assigned by position, it
+    // is just assigned once, before anything can be filtered out of the list.
+    expect(new Set(before).size).toBe(3)
+
+    click(chip(figure, 'a'))
+    const after = seen[seen.length - 1].series
+    expect(after.map((series) => series.name)).toEqual(['b', 'c'])
+    // The bug: `b` took `a`'s colour and `c` took `b`'s, silently, in the figure
+    // and in everything exported from it.
+    expect(after.map((series) => series.colour)).toEqual([before[1], before[2]])
+
+    vi.doUnmock('@/ui/analysisPlots')
+    vi.resetModules()
+  })
+
+  it('isolates a series in the colour it already had', async () => {
+    const { interactive, seen } = await capture()
+    const figure = interactive(threeSeries())
+    document.body.appendChild(figure.el)
+    const before = seen[0].series.map((series) => series.colour)
+
+    // Alt-click hides everything else. Drawn against the filtered list of one,
+    // the isolated series always came out in the first palette entry — so the
+    // reader picked out the third line and was shown the first line's colour.
+    chip(figure, 'c')?.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true }))
+    const shown = seen[seen.length - 1].series
+    expect(shown.map((series) => series.name)).toEqual(['c'])
+    expect(shown[0].colour).toBe(before[2])
+    expect(shown[0].colour).not.toBe(before[0])
+
+    vi.doUnmock('@/ui/analysisPlots')
+    vi.resetModules()
+  })
+
+  it('does not recolour anything when the last series is switched off', async () => {
+    const { interactive, seen } = await capture()
+    const figure = interactive(threeSeries())
+    document.body.appendChild(figure.el)
+    const before = seen[0].series.map((series) => series.colour)
+    // Resolved, not left open: the fallback below hands the renderer this list,
+    // and a list of series with no colours on them is a list that gets coloured
+    // by position all over again.
+    expect(before.every((colour) => typeof colour === 'string')).toBe(true)
+
+    click(chip(figure, 'a'))
+    click(chip(figure, 'b'))
+    expect(seen[seen.length - 1].series.map((series) => series.colour)).toEqual([before[2]])
+    // Hiding the last one shows them all again rather than an empty box — and
+    // the picture the reader comes back to has to be the one they left.
+    click(chip(figure, 'c'))
+    const back = seen[seen.length - 1].series
+    expect(back.map((series) => series.name)).toEqual(['a', 'b', 'c'])
+    expect(back.map((series) => series.colour)).toEqual(before)
+
+    vi.doUnmock('@/ui/analysisPlots')
+    vi.resetModules()
+  })
+
+  it('leaves a colour a series already carries, sentinel included', () => {
+    // Two things `resolveSeriesColours` must not touch: a task that coloured its
+    // own lines meant something by it, and the legend's "+N more" entry carries
+    // `colour: 'none'` precisely so no swatch is drawn beside a name that stands
+    // for several series at once.
+    const resolved = resolveSeriesColours([
+      { name: 'own', x: Float64Array.from([1]), y: Float64Array.from([1]), colour: '#123456' },
+      { name: 'palette', x: Float64Array.from([1]), y: Float64Array.from([1]) },
+      { name: '+2 more', x: Float64Array.from([]), y: Float64Array.from([]), colour: 'none' },
+    ])
+    expect(resolved[0].colour).toBe('#123456')
+    expect(resolved[2].colour).toBe('none')
+    // The one with none of its own is given the *second* palette entry, because
+    // it is second in the list — which is what `analysis/combine.ts` leans on to
+    // give one map per colour on the all-maps overlay.
+    expect(resolved[1].colour).toBeDefined()
+    expect(resolved[1].colour).not.toBe(resolved[0].colour)
+    expect(
+      resolveSeriesColours([
+        { name: 'first', x: Float64Array.from([1]), y: Float64Array.from([1]) },
+      ])[0].colour,
+    ).not.toBe(resolved[1].colour)
   })
 
   it('exports what is on screen: draw follows the derived output', async () => {

@@ -41,8 +41,25 @@ import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConf
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 import { sharedMapNames } from '../ui/mapNames'
 
-/** The fragment key a shared session travels under. */
-export const SHARE_KEY = 's'
+/**
+ * The fragment key a shared session travels under.
+ *
+ * Spelled out rather than abbreviated to `s`. A share link is read by people
+ * before it is read by a browser — it is pasted into chat, into a paper, into a
+ * mail — and `#session=…` says what the two kilobytes after it are, where `#s=`
+ * looked like one of the view state's own short keys and invited exactly the
+ * wrong guess about what could be edited by hand. It also keeps the two
+ * fragment grammars visibly apart: {@link readShareHash} is asked before
+ * `parseViewState` precisely because both are `key=value` pairs in the same
+ * place, and a key nobody would coin for a view is a key that cannot collide
+ * with one (`state/ViewState.ts` `KEY_ORDER` has no `session`).
+ *
+ * This is the only spelling written *and* the only one read: a link made by an
+ * older build does not open here. That is a deliberate break rather than an
+ * oversight — a reader silently accepting `#s=` would have to keep accepting it
+ * forever, and the shared links in the wild are days old, not years.
+ */
+export const SHARE_KEY = 'session'
 
 /**
  * Base64url, which is base64 with two characters swapped and the padding gone.

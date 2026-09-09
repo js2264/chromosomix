@@ -755,13 +755,40 @@ function note(ends: Map<string, number>, contig: string, end: number): void {
  *
  * Rounded *up* to a round number, so a browser opened on a peak set does not
  * end each chromosome exactly on the last peak — which reads as a sequence that
- * stops there rather than as the limit of what this file knows.
+ * stops there rather than as the limit of what this file knows. That intent is
+ * right; the size of the rounding is what was wrong.
+ *
+ * The step is **two orders of magnitude below** the coordinate — three
+ * significant figures — and it used to be the coordinate's *own* order of
+ * magnitude, one significant figure. One figure is not a nudge, it is a step
+ * that grows tenfold at every power of ten and can be almost the whole value
+ * on the wrong side of one: yeast
+ * VII, whose last feature ends at 1,090,940, was handed 2,000,000, and so was
+ * IV at 1,531,933 — two chromosomes 441 kb apart given exactly the same length,
+ * which is the failure a reader sees. It shows up three ways at once: every
+ * sequence gets a blank pannable margin on its right (VII 83% of it), the
+ * SEQUENCES card draws each bar as `length / longest` and so draws a genome
+ * that is not this one, and the whole yeast annotation set came out as 15.99 Mb
+ * of a 12.16 Mb genome. At three figures VII is 1,100,000 and IV 1,540,000, and
+ * the total lands within 1% — the overshoot is under one step, and a step is at
+ * most a hundredth of the value, so the margin is never more than 1% for any
+ * coordinate of 1 kb or more and never jumps at a power of ten.
+ *
+ * `floor(end / step) + 1` rather than `ceil(end / step)`, because the point is
+ * a length **strictly** greater than the furthest coordinate: a peak set whose
+ * last peak ends at exactly 1,200,000 would round to 1,200,000 under `ceil` and
+ * be back to ending on its own last feature — the very reading this rounding
+ * exists to avoid — and it is the round numbers, not the ragged ones, that a
+ * feature file is most likely to end on. The step floors at 1 bp so a contig
+ * whose only feature ends at 0 or 1 still gets a positive length; `assemblyOf`
+ * drops a contig of length 0 outright, and a sequence silently missing from the
+ * axis is worse than a one-base one.
  */
-function contigsOf(ends: Map<string, number>): Contig[] {
+export function contigsOf(ends: Map<string, number>): Contig[] {
   const out: Contig[] = []
   for (const [name, end] of ends) {
-    const magnitude = 10 ** Math.max(3, Math.floor(Math.log10(Math.max(1, end))))
-    out.push({ name, length: Math.ceil(end / magnitude) * magnitude })
+    const step = 10 ** Math.max(0, Math.floor(Math.log10(Math.max(1, end))) - 2)
+    out.push({ name, length: (Math.floor(end / step) + 1) * step })
   }
   return out
 }

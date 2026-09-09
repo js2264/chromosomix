@@ -1553,8 +1553,9 @@ export class App implements SessionHost {
   private readHash(): void {
     if (this.writingHash) return
     // Asked before the view state, because the two live in the same fragment
-    // and a shared session is not a view: `parseViewState` would read `s=…` as
-    // an unknown key, ignore it, and navigate to the default view of nothing.
+    // and a shared session is not a view: `parseViewState` would read
+    // `session=…` as an unknown key, ignore it, and navigate to the default
+    // view of nothing.
     if (readShareHash(window.location.hash) !== null) {
       void this.openSharedHash()
       return

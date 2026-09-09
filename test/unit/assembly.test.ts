@@ -21,6 +21,7 @@ import {
   parseChromSizes,
   parseLocus,
   rangeToUnits,
+  replacesLengths,
   unitsToRange,
 } from '../../src/genome/assembly'
 
@@ -227,5 +228,51 @@ describe('lengthsAreExact', () => {
       expect(lengthsAreExact({ ...YEAST, origin })).toBe(true)
     }
     expect(lengthsAreExact({ ...YEAST, origin: 'features' })).toBe(false)
+  })
+})
+
+/**
+ * Which file is allowed to put lengths under a browser that guessed them.
+ *
+ * The Genome card offers *"drop a chrom.sizes or a bigWig to replace them with
+ * the real ones"*, and the rule behind that sentence has to be both halves of
+ * an inequality: an exact answer replaces a guess, and nothing replaces an
+ * exact answer. Getting the second half wrong is the silent one — a second BED
+ * dropped after a bigWig would quietly put invented edges back under a genome
+ * that was already right, and the card would go on saying so.
+ */
+describe('replacesLengths', () => {
+  const guessed = assemblyOf({
+    uri: 'peaks.bed',
+    name: 'peaks',
+    origin: 'features',
+    contigs: [{ name: 'I', length: 231_000 }],
+  })
+  const real = [{ name: 'I', length: 230_218 }]
+
+  it('takes exact lengths over inferred ones, whichever file states them', () => {
+    // Every origin the worker can answer exactly with, not just `sizes`: a
+    // bigWig header, a bigBed header, a FASTA, a BAM `@SQ` table and a VCF's
+    // `##contig` block each carry a length per sequence (§8.13, §8.14).
+    for (const origin of ['sizes', 'bigwig', 'bigbed', 'fasta', 'bam', 'vcf', 'cooler'] as const) {
+      expect(replacesLengths(guessed, { origin, contigs: real })).toBe(true)
+    }
+  })
+
+  it('never puts a guess over an answer', () => {
+    // Both directions of the downgrade. A feature file's lower bound replaces
+    // nothing, and an assembly that is already exact is never overwritten —
+    // including by another exact file, which would otherwise let the second of
+    // two bigWigs redraw a genome that was already right.
+    expect(replacesLengths(guessed, { origin: 'features', contigs: real })).toBe(false)
+    for (const origin of ['sizes', 'bigwig', 'features'] as const) {
+      expect(replacesLengths({ ...guessed, origin: 'sizes' }, { origin, contigs: real })).toBe(false)
+    }
+  })
+
+  it('refuses a file that answered nothing', () => {
+    // An empty list is not a smaller genome — an HDF5 is reported with no
+    // contigs at all — and adopting it would leave the browser with no axis.
+    expect(replacesLengths(guessed, { origin: 'bigwig', contigs: [] })).toBe(false)
   })
 })

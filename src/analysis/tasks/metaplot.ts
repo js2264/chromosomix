@@ -137,6 +137,22 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Ranking',
   },
   {
+    // Before `average` rather than after it, because that is the order the two
+    // are applied in and the order they have to be read in: the rows are
+    // standardised, and *then* the summary is taken over the standardised
+    // values. Off by default — it changes the numbers of every figure it is on,
+    // so a stored recipe that never asked for it must come back unchanged.
+    kind: 'toggle',
+    key: 'zscore',
+    label: 'Z-score tracks first',
+    hint:
+      'Centre and scale each track by its own mean and SD, across every window in ' +
+      'this run — so tracks in different units share one axis. Ranking groups are ' +
+      'standardised together, keeping their offsets.',
+    default: false,
+    section: 'Summary',
+  },
+  {
     kind: 'choice',
     key: 'average',
     label: 'Average',

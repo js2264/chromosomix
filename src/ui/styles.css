@@ -7568,14 +7568,29 @@ span.deck-name {
 
 /* The share dialog.
    One row for the link and its copy button, one for the shortener and the
-   sentence naming it. The field is `readonly` rather than disabled so the text
-   can still be selected where the clipboard API is refused — which is every
-   insecure origin, and is the fallback the dialog offers by name. */
+   sentence naming it. The text can still be selected where the clipboard API is
+   refused — which is every insecure origin, and is the fallback the dialog
+   offers by name, so `user-select` on the box below is load-bearing.
+
+   No `min-width` here, and that is the whole of a bug rather than a tidy-up: a
+   body wider than `.modal-panel` is not a panel that grows, because the panel
+   is `overflow: hidden`. The old `min(38rem, 80vw)` against a 34rem panel put
+   four rem of this dialog — the right-hand end of the row, which is where both
+   buttons are — outside the clip and unreachable. The body now takes the
+   panel's width and the panel is asked for the wide variant instead.
+
+   Padding because the panel has none of its own, matching `.pairs-body`: every
+   other dialog body in the app sets its own inset and this one was flush
+   against the border on all four sides. And `overflow-y` because the panel caps
+   at 80vh and hides what passes it — the length advice can run to three lines
+   on a workspace, and a paragraph that says the link may be too long for some
+   chat clients is not one to lose off the bottom. */
 .share-body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  min-width: min(38rem, 80vw);
+  padding: 0.8rem;
+  overflow-y: auto;
 }
 
 .share-row {
@@ -7585,16 +7600,36 @@ span.deck-name {
   flex-wrap: wrap;
 }
 
+/* The link, in a box that scrolls rather than a line that is cut off.
+   It is a `div`, not an input: one unbroken run of a few thousand base64
+   characters is read by scrolling, and an input scrolls only under a caret —
+   no wheel, no drag. `nowrap` keeps it one line so the scroll is horizontal and
+   the box a fixed height; `user-select: all` makes one click take the whole
+   link, which is the fallback for a browser that refuses the clipboard. */
 .share-link {
   flex: 1 1 20rem;
   min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-user-select: all;
+  user-select: all;
+  cursor: text;
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 0.8rem;
+  line-height: 1.5;
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--bg-inset, var(--bg));
   color: var(--fg);
+}
+
+/* Focusable, so it says so. The dialog opens with the caret here — it is the
+   first thing in the body — and an outline is the only thing that tells a
+   keyboard reader the box under it is the thing they can copy from. */
+.share-link:focus-visible {
+  outline: 2px solid var(--accent, #1f5fa9);
+  outline-offset: 1px;
 }
 
 .share-body .hint.warn {

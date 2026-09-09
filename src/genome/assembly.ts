@@ -66,8 +66,47 @@ export interface Assembly {
  * edge of each sequence is a guess, and the info card says so rather than
  * letting a reader measure a telomere against it.
  */
-export function lengthsAreExact(assembly: Assembly): boolean {
+export function lengthsAreExact(assembly: Pick<Assembly, 'origin'>): boolean {
   return assembly.origin !== 'features'
+}
+
+/**
+ * `true` when `incoming`'s lengths should be taken over `current`'s.
+ *
+ * The Genome card offers this in so many words — *"Drop a chrom.sizes or a
+ * bigWig to replace them with the real ones"* — and for a long time only the
+ * first half of that sentence was true: the lengths were adopted from a file
+ * whose *name* looked like a sizes file, so a bigWig, a bigBed, a BAM, a FASTA
+ * or a VCF with `##contig` lines came in as a track and left the browser's
+ * invented edges exactly where they were, under a hint promising otherwise.
+ * Every one of those files answers the question exactly, and the worker already
+ * says so in the assembly's `origin`; this is the one rule that reads it.
+ *
+ * Two conditions, and both are about not going backwards:
+ *
+ * - the assembly on screen must be **inferred** — lengths rounded up from the
+ *   last feature ({@link lengthsAreExact}) — because an exact one is already
+ *   the answer and replacing it with another file's would let the second of two
+ *   bigWigs, or a subset one, redraw a genome that was already right;
+ * - the incoming one must be **exact**, so a second BED can never overwrite a
+ *   bigWig's header, and a feature file's lower bound never replaces another's.
+ *
+ * An empty contig list is refused for the same reason: it is not a smaller
+ * genome, it is a file that answered nothing, and adopting it would leave the
+ * browser with no axis at all.
+ *
+ * Nothing here checks that the two files are the *same* genome, deliberately —
+ * dropping a file on a browser is the reader saying it belongs to what is open,
+ * which is the standing a dropped `chrom.sizes` has always been given, and a
+ * name that matches nothing simply draws no track (§5.9).
+ */
+export function replacesLengths(
+  current: Assembly,
+  incoming: { origin: AssemblyOrigin; contigs: readonly Contig[] },
+): boolean {
+  if (lengthsAreExact(current)) return false
+  if (incoming.contigs.length === 0) return false
+  return lengthsAreExact(incoming)
 }
 
 /**

@@ -614,10 +614,17 @@ export class BrowserView {
           this.zoomNote,
           el('span', {
             class: 'hint',
+            // What the Genome card says, in one line: *rounded up*, not "at its
+            // last one". The lengths are the last feature on each sequence
+            // rounded up to three figures (`contigsOf`), so a reader told the
+            // sequence ends at its last feature would read the blank margin
+            // past it as real sequence with nothing in it — and would take the
+            // right-hand edge for a coordinate this file supports, which is the
+            // one thing an inferred length cannot be.
             text: lengthsAreExact(props.assembly)
               ? ''
               : ' · lengths inferred from the features in this file, so each sequence ends at ' +
-                'its last one rather than at its true end',
+                'its last feature rounded up rather than at its true end',
           }),
         ),
       ),

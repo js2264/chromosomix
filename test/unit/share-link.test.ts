@@ -167,8 +167,8 @@ describe('a session in a fragment', () => {
 
 describe('reading a link', () => {
   it('finds the payload in a fragment', () => {
-    expect(readShareHash('#s=abc')).toBe('abc')
-    expect(readShareHash('s=abc')).toBe('abc')
+    expect(readShareHash('#session=abc')).toBe('abc')
+    expect(readShareHash('session=abc')).toBe('abc')
     expect(readShareHash(`#other=1&${SHARE_KEY}=abc`)).toBe('abc')
   })
 
@@ -182,9 +182,9 @@ describe('reading a link', () => {
 
   it('builds a link onto a page address, replacing any fragment already there', () => {
     expect(shareUrl('https://js2264.github.io/metacooler.js/', 'PAY')).toBe(
-      'https://js2264.github.io/metacooler.js/#s=PAY',
+      'https://js2264.github.io/metacooler.js/#session=PAY',
     )
-    expect(shareUrl('https://x/y#uri=old', 'PAY')).toBe('https://x/y#s=PAY')
+    expect(shareUrl('https://x/y#uri=old', 'PAY')).toBe('https://x/y#session=PAY')
   })
 
   it('answers null for a link that was cut short in transit', async () => {

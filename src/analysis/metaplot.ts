@@ -13,7 +13,7 @@
  * wildly different lengths averages the middle of a short gene against the start
  * of a long one and produces a shape that belongs to neither.
  *
- * Three decisions in here are the ones that decide whether the answer means
+ * Four decisions in here are the ones that decide whether the answer means
  * anything.
  *
  * **Strand.** A feature on the minus strand is read right to left, or every
@@ -29,6 +29,13 @@
  * **Missing data.** A window that runs off the end of a sequence is clipped, and
  * the slots outside it are `NaN` rather than zero — so a feature near a telomere
  * contributes to the slots it has evidence for and to no others.
+ *
+ * **Comparing tracks.** Two tracks share a pair of axes only if they share a
+ * unit, and a CPM bigWig and a log2 ratio do not. {@link standardiseTrack} is
+ * the way out — each track centred and scaled by its *own* spread, which is the
+ * one unit they have in common — and its whole difficulty is which population
+ * the statistics are taken over. That is answered there, at length, because
+ * getting it wrong deletes the ranking the reader split the set to see.
  */
 
 import type { TrackSamples } from '../annotations/types'
@@ -271,6 +278,10 @@ export function aggregate(
   if (count === 0) return { mean, low, high, n: 0 }
 
   const column = new Float64Array(count)
+  // One block, reused: {@link nanSd} takes a list because the *other* caller has
+  // a track's rows spread across one array per group, and allocating a fresh
+  // wrapper inside the slot loop would be an allocation per column for nothing.
+  const columnBlock: Float64Array[] = [column]
   const collapse = (values: Float64Array): number =>
     options.average === 'median'
       ? nanMedian(values)
@@ -282,7 +293,7 @@ export function aggregate(
     for (let row = 0; row < count; row++) column[row] = rows[row * slots + slot]
     mean[slot] = collapse(column)
     if (options.band === 'sd') {
-      const sd = nanSd(column, mean[slot])
+      const sd = nanSd(columnBlock, mean[slot])
       if (Number.isFinite(sd)) {
         low[slot] = mean[slot] - sd
         high[slot] = mean[slot] + sd
@@ -327,15 +338,106 @@ export function aggregate(
   return { mean, low, high, n }
 }
 
-/** Standard deviation about a known mean, skipping gaps. */
-function nanSd(values: Float64Array, mean: number): number {
+/**
+ * Centre and scale one track's rows by that track's own spread, in place.
+ *
+ * A metaplot of two tracks on one pair of axes is a comparison only if the two
+ * are in the same units, and a CPM bigWig and a log2 ratio are not: one runs
+ * over tens and the other over ±2, so drawn together the second is a flat line
+ * along the bottom of the frame and whatever shape it was loaded for cannot be
+ * seen. Standardising each track against itself puts both on an axis whose unit
+ * is *this track's own spread*, which is the only unit they have in common. The
+ * y axis then names z-scores rather than the raw quantity, and the caller has to
+ * say so — `run/metaplot.ts` relabels it.
+ *
+ * **The population is the track, over every one of its groups.** `blocks` is one
+ * array of rows per ranking group and the mean and the standard deviation are
+ * taken over all of them together, which is why this takes a list rather than
+ * being called once per group. Per group, each group would be re-centred on
+ * itself and every one of them would sit on zero — deleting exactly the thing
+ * the reader split the feature set to see, that the strongest quartile is
+ * *above* the weakest. The ranking would survive in the legend and nowhere in
+ * the picture, which is the worst way for a figure to be wrong.
+ *
+ * Gaps stay gaps. A `NaN` slot is no evidence, it enters neither statistic and
+ * it comes back `NaN` — `analysis/stats.ts` opens with the rule, and turning an
+ * uncovered slot into a 0 here would plant a value one standard deviation below
+ * the track's mean at every position no read reached.
+ *
+ * **A track with no spread is centred and not scaled.** A constant track, or one
+ * with a single covered slot in the whole run, has a standard deviation of zero
+ * or none at all; dividing by it would fill the plot with `±Infinity`, which is
+ * not a picture of anything and which propagates through the average and the
+ * bootstrap alike. Subtracting the mean and stopping there draws the flat line
+ * such a track honestly is. `scaled` reports which of the two happened, so a
+ * caller that wants to say so out loud can.
+ */
+export function standardiseTrack(
+  blocks: ReadonlyArray<Float64Array>,
+): { mean: number; sd: number; scaled: boolean } {
+  const mean = nanMeanOf(blocks)
+  const sd = nanSd(blocks, mean)
+  // Nothing finite anywhere: there is nothing to centre and the rows are already
+  // all gaps. Rewriting them would only turn `NaN` into `NaN` more slowly.
+  if (!Number.isFinite(mean)) return { mean, sd, scaled: false }
+  const scaled = Number.isFinite(sd) && sd > 0
+  for (const rows of blocks) {
+    for (let i = 0; i < rows.length; i++) {
+      const value = rows[i]
+      if (!Number.isFinite(value)) continue
+      rows[i] = scaled ? (value - mean) / sd : value - mean
+    }
+  }
+  return { mean, sd, scaled }
+}
+
+/**
+ * The mean of the finite values across several blocks; `NaN` when there are
+ * none.
+ *
+ * `stats.ts`'s `nanMean` over one array at a time would need the counts carried
+ * between the calls to weight them, and a mean of per-group means is not the
+ * mean of the population unless the groups are the same size — which the top-N
+ * and bottom-N subsets are not.
+ *
+ * Skips everything non-finite rather than only `NaN`, which is where this parts
+ * company with `nanMean`: one infinity in one row would otherwise make the mean
+ * infinite and take every slot of every group down with it.
+ */
+function nanMeanOf(blocks: ReadonlyArray<ArrayLike<number>>): number {
+  let total = 0
+  let seen = 0
+  for (const values of blocks) {
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i]
+      if (!Number.isFinite(value)) continue
+      total += value
+      seen++
+    }
+  }
+  return seen === 0 ? Number.NaN : total / seen
+}
+
+/**
+ * Standard deviation about a known mean, skipping gaps.
+ *
+ * Takes *blocks* because its two callers have their population in different
+ * shapes — one column of an aggregation, or a whole track's rows held as one
+ * array per ranking group — and they are one population each. The sample
+ * denominator (`n - 1`) needs a second observation, and one observation gets
+ * `NaN` rather than `0`: no spread measured is not a spread of none.
+ */
+function nanSd(blocks: ReadonlyArray<ArrayLike<number>>, mean: number): number {
   if (!Number.isFinite(mean)) return Number.NaN
   let total = 0
   let seen = 0
-  for (const value of values) {
-    if (!Number.isFinite(value)) continue
-    total += (value - mean) ** 2
-    seen++
+  for (const values of blocks) {
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i]
+      if (!Number.isFinite(value)) continue
+      total += (value - mean) ** 2
+      seen++
+    }
   }
   return seen > 1 ? Math.sqrt(total / (seen - 1)) : Number.NaN
 }

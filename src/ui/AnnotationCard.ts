@@ -130,6 +130,42 @@ export class AnnotationCard {
    * not survive a reload the way a colour does.
    */
   private readonly ticked = new Set<string>()
+  /**
+   * The row a shift-click counts *from*, and the reason ten tracks are two
+   * gestures rather than ten.
+   *
+   * Ticking the first ten rows of a long stack was ten aims at an eleven-pixel
+   * box, so the gesture every file list has — click one, shift-click another,
+   * take everything between — is here too, and this is the "one" it counts
+   * from. Every plain click sets it; a shift-click deliberately leaves it
+   * alone, so a second shift-click re-extends the same span from the same start
+   * rather than walking that start down the list one box at a time.
+   *
+   * An **id and never a position**, which is the subtle part. A position in this
+   * list is only true for as long as nobody touches the list, and touching it is
+   * ordinary: the rows are reorderable by drag and by arrow key ({@link grip}),
+   * a row can be removed between the two clicks, and {@link fileRows} is a
+   * *filter* over the store, so a store index is not a list index either. An
+   * index remembered at the first click would name a different track by the
+   * second. The id is resolved against {@link fileRows} at the moment the span
+   * is taken, which is also what makes a stale anchor harmless: a row that has
+   * gone is simply not found there, and the shift-click falls back to being a
+   * plain one rather than selecting a span nobody asked for.
+   */
+  private anchor: string | null = null
+  /**
+   * Whether the toggle now being committed was made with shift held.
+   *
+   * A relay between two events, and it exists because neither of them carries
+   * both halves of what the gesture needs: `change` says a checkbox has a new
+   * value and carries no modifier keys, while `click` — which a checkbox fires
+   * first, for a pointer press and for the space bar alike — carries the
+   * modifiers and not yet the decision to act. So the shift is caught on the way
+   * past and read a moment later by the handler that acts on it. Cleared as it
+   * is read, so a `change` arriving with no click in front of it is an ordinary
+   * toggle rather than one that inherits a shift from the click before.
+   */
+  private extending = false
 
   constructor(private readonly props: AnnotationCardProps) {
     // Where a file goes in, above the list of what is already in. What was here
@@ -440,19 +476,79 @@ export class AnnotationCard {
    * Beside the name rather than in a mode of its own: a selection you have to
    * turn on is a selection nobody finds, and the box costs eleven pixels in a
    * row that already has five controls in it.
+   *
+   * Three listeners on one control, which is one more than a checkbox usually
+   * needs and one fewer than a div pretending to be one would need. The control
+   * stays a real `input[type=checkbox]` — the space bar still toggles it, a
+   * screen reader still calls it a checkbox — and the range gesture is layered
+   * on top of it rather than reimplemented around it. See {@link anchor} for
+   * what a span is counted from and {@link extending} for why the modifier has
+   * to be caught an event early.
    */
   private tick(entry: AnnotationEntry): HTMLElement {
     const input = el('input', {
       class: 'checkbox ann-tick',
       type: 'checkbox',
-      title: `Include ${entry.label} in the batch below`,
+      // The gesture is named in the tooltip because there is nowhere else a
+      // reader could meet it: a modifier held over a box that looks exactly like
+      // every other box is undiscoverable otherwise, and this card has no room
+      // for a line of help text.
+      title:
+        `Include ${entry.label} in the batch below — shift-click to take every ` +
+        `row between this one and the last one you clicked`,
       attrs: { 'data-tick': entry.id },
     })
     input.checked = this.ticked.has(entry.id)
+
+    // A shift-click anywhere in a document also extends the *text* selection,
+    // which comes up as the rows between the two boxes turning blue — the card
+    // looking mid-drag every time a span is taken. That default belongs to
+    // `mousedown`, so `mousedown` is the only place it can be refused; refusing
+    // the *click* would cancel the tick itself, which is the whole gesture. The
+    // focus that the prevented `mousedown` would have given the box is put back
+    // by `refocus` a moment later, after the rebuild the tick asks for.
+    input.addEventListener('mousedown', (event) => {
+      if (event.shiftKey) event.preventDefault()
+    })
+    input.addEventListener('click', (event) => {
+      this.extending = event.shiftKey
+    })
+
     input.addEventListener('change', () => {
-      if (input.checked) this.ticked.add(entry.id)
-      else this.ticked.delete(entry.id)
+      const extending = this.extending
+      this.extending = false
+      // The rows **as they are now**, and the anchor found in them by id: this
+      // is the resolution {@link anchor} exists to defer, and doing it here is
+      // what survives a reorder, a removal or a filter between the two clicks.
+      const rows = this.fileRows()
+      const from =
+        extending && this.anchor !== null
+          ? rows.findIndex((row) => row.id === this.anchor)
+          : -1
+      const to = rows.findIndex((row) => row.id === entry.id)
+      // No anchor, or an anchor whose row has gone: a plain toggle of the one
+      // box, which is also what the gesture degrades to for a keyboard toggle —
+      // there is no such thing as a shift-held space bar here.
+      const span =
+        from < 0 || to < 0
+          ? [entry.id]
+          : rows.slice(Math.min(from, to), Math.max(from, to) + 1).map((row) => row.id)
+      // The state the *clicked* box is moving to, given to the whole span, in
+      // either direction: shift-clicking an empty box fills the span and
+      // shift-clicking a full one empties it, which is what a file explorer and
+      // a diff view both do and what makes the second gesture undo the first.
+      for (const id of span) {
+        if (input.checked) this.ticked.add(id)
+        else this.ticked.delete(id)
+      }
+      // Only a click that was *not* a range moves the anchor. A shift-click that
+      // moved it would walk the start of the span forward, so extending a
+      // selection by one more row would shrink it to two.
+      if (from < 0) this.anchor = entry.id
       this.refocus = { attribute: 'data-tick', id: entry.id }
+      // One rebuild for the whole span, not one per row: the set is filled
+      // first and the list redrawn once, so ten rows cost the single repaint a
+      // single tick costs — see {@link render}, which rebuilds every row.
       this.render()
     })
     return input

@@ -147,11 +147,17 @@ describe('the picker examples', () => {
    * at the root would still open — `resolveConfig` would find its files beside
    * it — right up until a second dataset arrived wanting a file of the same
    * name. Naming the folder is what keeps `demo/yeast/` a thing you can copy.
+   *
+   * The folder may be nested, which the first version of this check forbade by
+   * accident: it asked for exactly one slash, and the bucket groups the
+   * metagenomic datasets under `demo/metagenomics/`. A nested path is the same
+   * promise — the session sits in the directory holding its data — so what is
+   * asserted is that there *is* a directory, not how deep it is.
    */
   it('puts every session in a dataset folder', () => {
     for (const file of DEMO_FILES) {
       expect(file, `${file} is at the root of demo/ rather than in a dataset folder`).toMatch(
-        /^[^/]+\/[^/]+$/,
+        /^[^/]+(?:\/[^/]+)*\/[^/]+$/,
       )
     }
   })
