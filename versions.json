@@ -1,6 +1,13 @@
 {
-  "latest": "e96a513",
+  "latest": "d9530e4",
   "versions": [
+    {
+      "commit": "d9530e4",
+      "version": "0.11.0",
+      "date": "2026-09-09T19:02:08+02:00",
+      "subject": "Add support for .scool and HiC-Pro formats with progress tracking (#40)",
+      "tag": ""
+    },
     {
       "commit": "e96a513",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-12T23:42:09+02:00",
       "subject": "fix(deck): the six things a deck of turned maps got wrong (#24)",
-      "tag": ""
-    },
-    {
-      "commit": "7bb7578",
-      "version": "0.10.0",
-      "date": "2026-08-12T18:50:58+02:00",
-      "subject": "Add bucket browser to every URL input box (#23)",
       "tag": ""
     },
     {
