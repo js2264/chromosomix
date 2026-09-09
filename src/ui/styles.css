@@ -344,10 +344,11 @@ p {
   letter-spacing: -0.015em;
 }
 
-/* The title block, then the four panel buttons, then the one that adds a file.
-   In that order because the name is what says which application this is and the
-   buttons are furniture over its columns; a row that opened with four unlabelled
-   marks made a reader identify them before reaching the thing they act on. */
+/* The title block, then how a file gets into this tab, then the four panels
+   over one that is already open. In that order because the name is what says
+   which application this is, and getting a file in comes before controls over
+   its picture — a row that opened with unlabelled marks made a reader
+   identify them before reaching the thing they act on. */
 .head-left {
   display: flex;
   align-items: center;
@@ -364,8 +365,8 @@ p {
    here is a property of the group that follows it: hiding one of these groups
    takes its own line with it, which a separator standing on its own would not
    do. */
-.head-panels,
-.head-add {
+.head-files,
+.head-panels {
   display: flex;
   gap: 0.25rem;
   margin-left: 0.9rem;
@@ -4991,8 +4992,8 @@ canvas.is-frozen {
   /* The rules the groups after the name are set apart by: on a phone the header
      has one row of room, and two dividers in it are lines asking for width that
      what they point at does not have. */
-  .head-panels,
-  .head-add {
+  .head-files,
+  .head-panels {
     margin-left: 0.35rem;
     padding-left: 0;
     border-left: 0;

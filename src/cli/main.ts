@@ -39,8 +39,10 @@
  * `package.json` already applies to the bundle. It is about forty lines.
  */
 
+import { realpathSync } from 'node:fs'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
@@ -677,8 +679,23 @@ export async function main(argv: readonly string[]): Promise<number> {
 }
 
 // `import.meta.url` against `process.argv[1]` is the ESM spelling of "am I the
-// entry point"; importing this module from a test must not run it.
-const invoked = process.argv[1] !== undefined && import.meta.url.endsWith(basename(process.argv[1]))
+// entry point"; importing this module from a test must not run it. Compared
+// by realpath rather than by name: Node resolves the entry file's own symlinks
+// before it becomes `import.meta.url`, so an extensionless `bin` link — the
+// whole point of `package.json`'s `bin` field — has `argv[1]` end in
+// `metacooler-run` while the module it loaded ends in `metacooler-run.mjs`.
+// A name or suffix comparison never matches there; realpath resolves both
+// sides to the same file underneath the symlink.
+function isEntryPoint(argv1: string | undefined): boolean {
+  if (argv1 === undefined) return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(argv1)).href
+  } catch {
+    // Not a path Node can stat — cannot be the file that is executing.
+    return false
+  }
+}
+const invoked = isEntryPoint(process.argv[1])
 if (invoked) {
   main(process.argv.slice(2))
     .then((code) => {
