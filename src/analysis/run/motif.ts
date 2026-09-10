@@ -82,6 +82,12 @@ export function scanMotif(
   motif: Motif,
   options: { bothStrands: boolean; limit: number },
 ): MotifScanResult {
+  // The same ceiling {@link MOTIF_SITE_LIMIT} names and `runMotif` has already
+  // applied, kept here as the last line of defence for a caller that reaches
+  // this function directly. It must not be the *only* place it is applied: when
+  // it was, a run asked for two million sites capped at five hundred thousand
+  // and then reported the two million back, which is the one thing a truncation
+  // note must never do.
   const cap = Math.max(1, Math.min(options.limit, MOTIF_SITE_LIMIT))
   const hits: MotifHits[] = []
   let total = 0
@@ -161,7 +167,16 @@ export const runMotif: TrackTaskRunner = async (job) => {
   }
 
   const bothStrands = boolParam(job.params, 'bothStrands', true)
-  const limit = Math.max(1, Math.round(numParam(job.params, 'limit', MOTIF_SITE_LIMIT)))
+  // Clamped to the ceiling here and not only inside `scanMotif`, because this is
+  // the number every sentence below quotes. The spec carries the same `max`, so
+  // a form can no longer submit a larger one — but a stored recipe written
+  // before it did, a batch and the CLI never pass through a form, and a note
+  // naming a limit the scan never used is a note that sends the reader to raise
+  // a control which cannot help them.
+  const limit = Math.min(
+    MOTIF_SITE_LIMIT,
+    Math.max(1, Math.round(numParam(job.params, 'limit', MOTIF_SITE_LIMIT))),
+  )
 
   job.progress(0, 1, `Searching ${reader.contigs.length.toLocaleString()} sequences`)
   const result = scanMotif(reader, compiled, { bothStrands, limit })
@@ -173,10 +188,20 @@ export const runMotif: TrackTaskRunner = async (job) => {
     return []
   }
   const sites = `${result.total.toLocaleString()} site${result.total === 1 ? '' : 's'}`
+  // Two remedies, because only one of them is ever true. Below the ceiling the
+  // reader owns the limit and raising it finds more; *at* the ceiling there is
+  // nothing to raise — 500,000 is the most one run reports — and the old
+  // sentence prescribed the raise anyway, so a reader who followed it got the
+  // identical answer back with the identical note under it and no way to learn
+  // why. `limit` is the clamped number, so the figure quoted is the one the
+  // scan actually stopped at.
   job.note(
     result.truncated
       ? `${sites} — the search stopped at the limit of ${limit.toLocaleString()} and there are ` +
-          'more. Raise “Most sites”, or narrow the pattern.'
+          'more. ' +
+          (limit < MOTIF_SITE_LIMIT
+            ? 'Raise “Most sites”, or narrow the pattern.'
+            : 'That is the most one run reports, so narrow the pattern.')
       : `${sites}, on ${result.hits.length.toLocaleString()} ` +
           `${result.hits.length === 1 ? 'sequence' : 'sequences'}.`,
   )

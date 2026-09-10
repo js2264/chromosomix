@@ -10,6 +10,16 @@
  * Focus is returned to whatever had it when the dialog opened. That is not
  * politeness: the palette is opened from the keyboard, and a keyboard user who
  * closes it should still be where they were.
+ *
+ * What `showModal()` also brings, and what therefore has to be brought by hand,
+ * is **containment**: while a dialog is up, the rest of the document is neither
+ * tabbable nor operable. Both halves are here — the page behind the backdrop is
+ * marked `inert`, and Tab is cycled within the panel — because without them
+ * `aria-modal="true"` below is a claim and not a fact. A reader who pressed Tab
+ * once left the panel, landed on a control the dimmed backdrop was covering, and
+ * closed a session or folded a column with Enter under a dialog they were still
+ * looking at; a screen reader, meanwhile, was told to ignore a page that was
+ * fully exposed and fully operable.
  */
 
 import { el } from './dom'
@@ -39,6 +49,8 @@ export class Modal {
   private readonly root: HTMLElement
   private readonly previouslyFocused: HTMLElement | null
   private readonly onKeyDown: (event: KeyboardEvent) => void
+  /** What this dialog took out of the page, and must put back. */
+  private readonly inerted: readonly HTMLElement[]
 
   constructor(props: ModalProps) {
     this.props = props
@@ -71,9 +83,57 @@ export class Modal {
       if (event.key === 'Escape') {
         event.preventDefault()
         close()
+        return
+      }
+      if (event.key !== 'Tab') return
+      // The caret cycles inside the panel: off the last stop it wraps to the
+      // first, off the first it wraps back to the last, and anything focused
+      // outside — a background control the reader reached before this dialog
+      // opened, or nothing at all — is pulled in. `inert` does this for us in
+      // every browser that has it; this is the half that does not depend on
+      // that, and the only half a jsdom test can see.
+      //
+      // `FOCUSABLE` ends in a bare `[tabindex]`, which matches `-1` as well, so
+      // the stops are filtered down to the ones a Tab could actually reach.
+      const stops = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (node) => node.tabIndex >= 0,
+      )
+      // A dialog with nothing to land on keeps the caret rather than handing it
+      // to the page behind: there is no stop to move to, and the next Tab out
+      // would be the escape this whole branch exists to close.
+      if (stops.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const first = stops[0]
+      const last = stops[stops.length - 1]
+      const at = document.activeElement
+      if (at === null || !panel.contains(at)) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first).focus()
+      } else if (event.shiftKey && at === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && at === last) {
+        event.preventDefault()
+        first.focus()
       }
     }
     window.addEventListener('keydown', this.onKeyDown, true)
+
+    // Everything the backdrop covers is taken out of the page for as long as
+    // the dialog is up, which is what `aria-modal` above has always said and
+    // never enforced.
+    //
+    // Read **before** the root is appended, so the dialog is never in its own
+    // list, and skipping what is already inert is what makes a dialog opened
+    // over another safe: the inner one puts back only what it took, leaving the
+    // outer one's page still inert when it goes.
+    this.inerted = [...document.body.children].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement && !node.hasAttribute('inert'),
+    )
+    for (const node of this.inerted) node.setAttribute('inert', '')
+
     document.body.appendChild(this.root)
 
     // The **body's** first control, and the panel's only if the body has none.
@@ -94,6 +154,10 @@ export class Modal {
     this.closed = true
     window.removeEventListener('keydown', this.onKeyDown, true)
     this.root.remove()
+    // Before the caret is handed back, and the order is not cosmetic: an inert
+    // subtree refuses focus, so restoring first would leave the keyboard on
+    // nothing — which is the failure this dialog exists to avoid.
+    for (const node of this.inerted) node.removeAttribute('inert')
     this.previouslyFocused?.focus?.()
     this.props.onClose?.()
   }

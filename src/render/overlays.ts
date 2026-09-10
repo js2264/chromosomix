@@ -112,10 +112,13 @@ function axisRow(turn: OverlayTurn): number {
 /**
  * Keep a turned mark inside the picture.
  *
- * The square's marks are each at one point and are guarded by
- * {@link insideX}/{@link insideY}, but a turned domain is an *extent* whose apex
- * is a consequence of its own width — a domain wider than the band on screen has
- * its apex above the plot, and unclipped it would be drawn over the ruler.
+ * A turned domain is an *extent* whose apex is a consequence of its own width —
+ * a domain wider than the band on screen has its apex above the plot, and
+ * unclipped it would be drawn over the ruler. The square map needs no clip of
+ * its own here, because its caller already has one
+ * (`HeatmapView.drawOverlay`); what both presentations need, and what the
+ * point tests {@link insideX}/{@link insideY} cannot give an extent, is the
+ * overlap test each shape's own branch makes before it draws.
  */
 function clipToData(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
   ctx.beginPath()
@@ -218,12 +221,15 @@ export function drawDiagonalFeatures(
         // map and down the screen on the mirrored half of a comparison.
         const away = turn.direction === 'up' ? -1 : 1
         const mid = toX(frame, (colFrom + colTo) / 2)
-        if (!insideX(frame, mid)) continue
         if (paint.shape === 'border') {
           // A tick standing on the axis rather than a cross over it: the whole
           // of a turned map's signal is in the first few rows above the
           // diagonal, and a cross centred there covers what it is pointing at.
           // Snapped, because it is a hairline; the triangle below is not.
+          // The midpoint *is* the mark here, so a midpoint off screen is a mark
+          // off screen — which is why this guard belongs inside this branch and
+          // not above it.
+          if (!insideX(frame, mid)) continue
           const x = snap(mid, frame.dpr)
           ctx.moveTo(x, base)
           ctx.lineTo(x, base + away * 9)
@@ -235,9 +241,19 @@ export function drawDiagonalFeatures(
         // on the axis, which is the shape a reader of a turned map is looking
         // for and the reason the picture is worth turning.
         const apart = Math.abs(set.end[i] - set.start[i]) / turn.binsize
-        ctx.moveTo(toX(frame, colFrom), base)
+        const footFrom = toX(frame, colFrom)
+        const footTo = toX(frame, colTo)
+        // On the feet, because the triangle is an extent and its midpoint is a
+        // consequence of its own width rather than the thing being pointed at.
+        // Culling on the midpoint — the border tick's test, applied to both
+        // shapes — dropped a domain panned so that only one of its feet is on
+        // screen, the same corner-versus-overlap mistake the square path made.
+        // The apex needs no test: this path draws under `clipToData`.
+        if (Math.max(footFrom, footTo) < frame.data.x) continue
+        if (Math.min(footFrom, footTo) > frame.data.x + frame.data.width) continue
+        ctx.moveTo(footFrom, base)
         ctx.lineTo(mid, toY(frame, rowForSeparation(turn, apart) + 0.5))
-        ctx.lineTo(toX(frame, colTo), base)
+        ctx.lineTo(footTo, base)
         ctx.closePath()
         continue
       }
@@ -247,14 +263,24 @@ export function drawDiagonalFeatures(
       if (rowFrom === null || rowTo === null) continue
 
       if (paint.shape === 'border') {
-        // A cross on the diagonal at the feature's midpoint: it marks the place
-        // without asserting a width the picture cannot show.
+        // A short rule *across* the diagonal at the feature's midpoint: it
+        // marks the place without asserting a width the picture cannot show.
+        //
+        // Across, and the sign on one axis is the whole of it. Rows increase
+        // downward and columns rightward, so on a symmetric block `row == col`
+        // is pixel slope +1 — and a rule drawn from `(x - reach, y - reach)` to
+        // `(x + reach, y + reach)` lay *along* the diagonal, painting over the
+        // brightest row in the picture, which is the one thing the module
+        // header forbids. A run of adjacent boundary calls then merged into a
+        // stripe down the diagonal instead of reading as a row of ticks
+        // crossing it. One stroke, not two: an X would put an arm back along
+        // the diagonal and re-break the rule.
         const x = snap(toX(frame, (colFrom + colTo) / 2), frame.dpr)
         const y = snap(toY(frame, (rowFrom + rowTo) / 2), frame.dpr)
         if (!insideX(frame, x) || !insideY(frame, y)) continue
         const reach = 7
-        ctx.moveTo(x - reach, y - reach)
-        ctx.lineTo(x + reach, y + reach)
+        ctx.moveTo(x - reach, y + reach)
+        ctx.lineTo(x + reach, y - reach)
         continue
       }
 
@@ -262,12 +288,27 @@ export function drawDiagonalFeatures(
       const x1 = toX(frame, colTo)
       const y0 = toY(frame, rowFrom)
       const y1 = toY(frame, rowTo)
-      if (!insideX(frame, x1) || !insideY(frame, y1)) continue
+      const left = Math.min(x0, x1)
+      const right = Math.max(x0, x1)
+      const top = Math.min(y0, y1)
+      const bottom = Math.max(y0, y1)
+      // Overlap, not corner-in-view, and the same test {@link drawManualRects}
+      // makes for the same reason: an element is an *extent*, and an extent is
+      // very often bigger than the window it is read in — zoom into a domain and
+      // its box surrounds the view. Guarding it by `insideX(x1)`/`insideY(y1)`
+      // asked whether its bottom-right corner was on screen, so the outline
+      // disappeared at exactly the zoom the reader reached for to inspect the
+      // block it is claiming, and asymmetrically at that: `locusToUnit` grows
+      // with bp, so a pan that kept only the domain's start drew nothing while
+      // the mirror pan kept drawing. Nothing is at risk unclipped — the caller
+      // (`HeatmapView.drawOverlay`) clips the painter to the data rect.
+      if (right < frame.data.x || left > frame.data.x + frame.data.width) continue
+      if (bottom < frame.data.y || top > frame.data.y + frame.data.height) continue
       ctx.rect(
-        snap(Math.min(x0, x1), frame.dpr),
-        snap(Math.min(y0, y1), frame.dpr),
-        Math.max(2, Math.abs(x1 - x0)),
-        Math.max(2, Math.abs(y1 - y0)),
+        snap(left, frame.dpr),
+        snap(top, frame.dpr),
+        Math.max(2, right - left),
+        Math.max(2, bottom - top),
       )
     }
   }

@@ -25,19 +25,33 @@
  *   is `annotations/motif.ts`', and it is re-asserted through the runner because
  *   it is the one that decides whether a draft assembly reads as a genome or as a
  *   solid bar of fictional hits.
+ * - **A sentence about the limit names the limit the scan used.** The cap is
+ *   `MOTIF_SITE_LIMIT` whatever the parameter says, and a note quoting the
+ *   parameter instead told a reader to raise a control that could not help them.
+ *
+ * The last section is the odd one out: it drives the real `AnalysisRunner`
+ * rather than `runMotif`, because the thing being asserted is what a **Stop**
+ * means for a task in this venue — a question about the runner that only a task
+ * routed to the annotations worker can ask.
  */
 
 import { describe, expect, it } from 'vitest'
 
 import { runMotif } from '@/analysis/run/motif'
 import type { SequenceReader, TrackJobContext } from '@/analysis/job'
+import { AnalysisRunner, type RunnerHost, type RunTarget } from '@/analysis/runner'
+import { MOTIF_SITE_LIMIT, MOTIF_TASK } from '@/analysis/tasks/motif'
 import type {
+  AnalysisContext,
   AnalysisFraming,
   IntervalsOutput,
   Params,
   ProfileOutput,
   TaskOutput,
+  TaskResult,
 } from '@/analysis/types'
+import type { AnalysisClient } from '@/analysis/worker/client'
+import type { AnnotationClient } from '@/annotations/worker/client'
 import type { FeatureSet } from '@/annotations/types'
 
 /**
@@ -92,22 +106,33 @@ interface Ran {
   notes: string[]
 }
 
-async function run(params: Params, options: { binsize?: number } = {}): Promise<Ran> {
+async function run(
+  params: Params,
+  // `reference` for the one case that cannot use the toy sequences above: the
+  // site ceiling needs half a million hits, and no other case should carry half
+  // a megabyte of residues to get them.
+  options: { binsize?: number; reference?: SequenceReader } = {},
+): Promise<Ran> {
   const notes: string[] = []
+  const residues = options.reference ?? reader()
+  const lengths: Record<string, number> =
+    options.reference === undefined
+      ? LENGTHS
+      : Object.fromEntries(options.reference.contigs.map((one) => [one.name, one.length]))
   const job: TrackJobContext = {
     params: { sequence: 'seq1', bothStrands: false, ...params },
     framing: framing(options.binsize ?? 8),
-    inputs: { contigLengths: LENGTHS },
+    inputs: { contigLengths: lengths },
     cancelled: () => false,
     throwIfCancelled: () => {},
     progress: () => {},
     note: (text) => notes.push(text),
     sample: () => Promise.reject(new Error('a motif search reads no tracks')),
-    lengthOf: (contig) => LENGTHS[contig],
+    lengthOf: (contig) => lengths[contig],
     // Keyed on the parameter's value, exactly as the worker's is on its store:
     // a runner that reached for "the reference" rather than for the one the
     // reader chose would pass every other case in this file.
-    residues: (entry) => (entry === 'seq1' ? reader() : undefined),
+    residues: (entry) => (entry === 'seq1' ? residues : undefined),
   }
   return { outputs: await runMotif(job), notes }
 }
@@ -265,5 +290,204 @@ describe('a reference that is not there', () => {
     const { outputs, notes } = await run({ sequence: '', pattern: 'GATC' })
     expect(outputs).toEqual([])
     expect(notes.join(' ')).toMatch(/No reference was chosen/i)
+  })
+})
+
+/**
+ * One sequence with one site per base, one longer than a run may report.
+ *
+ * Generated from {@link MOTIF_SITE_LIMIT} rather than from a literal, so a
+ * change to the ceiling moves the reference with it instead of turning this into
+ * a case that no longer reaches the cap.
+ */
+function crowded(): SequenceReader {
+  const bases = new Uint8Array(MOTIF_SITE_LIMIT + 1).fill('A'.charCodeAt(0))
+  return {
+    contigs: [{ name: 'chrCrowd', length: bases.length }],
+    bases: (contig) => (contig === 'chrCrowd' ? bases : undefined),
+  }
+}
+
+/**
+ * The ceiling, and the sentence a reader gets when it bites.
+ *
+ * `scanMotif` has always capped at {@link MOTIF_SITE_LIMIT} whatever the
+ * parameter asked for, and the note used to quote the *parameter*: a run asked
+ * for two million sites stopped at five hundred thousand and reported "the
+ * limit of 2,000,000 … Raise “Most sites”". Both halves were wrong in the same
+ * way — a limit the scan never reached, and a remedy that is inert once the
+ * number is already above the ceiling, so a reader who followed the instruction
+ * got the identical answer with the identical note under it.
+ */
+describe('the site ceiling', () => {
+  it('quotes the limit the scan stopped at rather than the one that was asked for', async () => {
+    const asked = MOTIF_SITE_LIMIT * 4
+    const { notes } = await run(
+      { pattern: 'A', limit: asked },
+      // No bin grid: the density lane is another half-million values that this
+      // case has no assertion about.
+      { binsize: 0, reference: crowded() },
+    )
+    const note = notes.find((text) => text.includes('stopped at the limit')) ?? ''
+    expect(note).toContain(MOTIF_SITE_LIMIT.toLocaleString())
+    expect(note).not.toContain(asked.toLocaleString())
+    // And the remedy is the one that can work. There is nothing left to raise.
+    expect(note).not.toMatch(/raise/i)
+    expect(note).toMatch(/most one run reports/i)
+  })
+
+  it('still points at the control when the reader is the one who set the limit', async () => {
+    // Below the ceiling the parameter is honoured, so "Raise “Most sites”" is
+    // true and must survive the fix that removed it from the other branch.
+    const { notes } = await run({ pattern: 'A', limit: 2 })
+    const note = notes.find((text) => text.includes('stopped at the limit')) ?? ''
+    expect(note).toContain('limit of 2')
+    expect(note).toMatch(/raise/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// What Stop means for a task in this venue
+// ---------------------------------------------------------------------------
+
+/** A session with a reference and a bin grid; the shape `queueOne` reads. */
+function sessionContext(): AnalysisContext {
+  return {
+    uri: 'test.cool',
+    layout: 'cool',
+    hasGenomes: false,
+    hasWeights: false,
+    scoreColumns: ['count'],
+    binsize: 8,
+    nBins: 6,
+    hasMap: true,
+    contigs: REFERENCE.map(([name, text], at) => ({
+      name,
+      startBin: at * 2,
+      bins: 2,
+      length: text.length,
+      genome: -1,
+    })),
+    genomes: null,
+    entries: [],
+    framing: framing(8),
+    blockLoaded: false,
+    blockBytes: 0,
+  }
+}
+
+/**
+ * What the annotations worker answers a finished `run` with.
+ *
+ * The outputs are left empty: what is asserted below is whether `finished` is
+ * called at all, and the lanes it would adopt are `motifTrack.ts`' business and
+ * are covered above.
+ */
+function trackResult(): TaskResult {
+  return {
+    outputs: [],
+    provenance: {
+      task: 'motif',
+      taskVersion: 0,
+      params: {},
+      framing: framing(8),
+      app: '0.0.0-test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    notes: [],
+    ms: 7,
+  }
+}
+
+async function settle(): Promise<void> {
+  for (let turn = 0; turn < 8; turn++) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/**
+ * **Stop must not end in `done`, whatever the worker goes on to answer.**
+ *
+ * A motif scan is a synchronous pass over a whole reference inside the
+ * annotations worker, which never returns to its event loop, so a `cancel` there
+ * cannot be read and the run finishes regardless — the venue has no cancellation
+ * that reaches the work (`analysis/runner.ts`, the `annotations` branch of
+ * `runStep`). That is a bounded wait and it is not what this asserts. What it
+ * asserts is the half the runner owns: the reader pressed Stop, so the answer is
+ * *refused*. Before this was checked, the runner's only cancellation test sat at
+ * the top of the step loop — before the step, never after it — so a Stop pressed
+ * while the step was in flight left the row saying `running` until the scan
+ * returned, then set it to `done` and handed the result to `finished`, which put
+ * a sites overlay and a density lane on the Annotations panel for a run the
+ * reader had called off. The row is the only place a Stop is visible here, so a
+ * Stop that lands as `done` is a button that lies.
+ *
+ * Its natural home is `test/unit/analysis-runner.test.ts` beside the venue's
+ * other cases; it is here because motif is the task that makes the window wide
+ * enough for a reader to hit.
+ */
+describe('a Stop pressed while a motif run is on the annotations worker', () => {
+  function bench(): {
+    runner: AnalysisRunner
+    finish: (result: TaskResult) => void
+    finished: string[]
+  } {
+    const finished: string[] = []
+    let release: ((result: TaskResult) => void) | null = null
+    const tracks = {
+      request: () =>
+        new Promise<TaskResult>((resolve) => {
+          release = resolve
+        }),
+    }
+    const host: RunnerHost = {
+      context: () => sessionContext(),
+      // No byte source: a track-only chain mounts nothing, which is also what
+      // makes the analysis client below safe to leave unbuilt.
+      source: () => null,
+      block: () => null,
+      payload: () => undefined,
+      annotations: () => tracks as unknown as AnnotationClient,
+      finished: (task: { id: string }, _result: TaskResult, _target: RunTarget) => {
+        finished.push(task.id)
+      },
+    }
+    const client = { terminate: () => {} } as unknown as AnalysisClient
+    return {
+      runner: new AnalysisRunner(host, () => client),
+      finish: (result) => release?.(result),
+      finished,
+    }
+  }
+
+  it('leaves the row cancelled and adopts nothing when the scan answers anyway', async () => {
+    const { runner, finish, finished } = bench()
+    runner.run(MOTIF_TASK, { sequence: 'seq1', pattern: 'GATC', bothStrands: false })
+    await settle()
+    expect(runner.stateOf('motif').status).toBe('running')
+
+    runner.cancel('motif')
+    // The scan was already past the point of stopping, so the worker answers.
+    finish(trackResult())
+    await settle()
+
+    const state = runner.stateOf('motif')
+    expect(state.status).toBe('cancelled')
+    // No red card either: a cancellation is not a failure (§18.3).
+    expect(state).not.toHaveProperty('message')
+    expect(finished).toEqual([])
+    expect(runner.resultOf('motif')).toBeNull()
+    runner.destroy()
+  })
+
+  it('still reaches done and adopts the lanes when nobody pressed Stop', async () => {
+    // The other half, so the guard above cannot pass by refusing everything.
+    const { runner, finish, finished } = bench()
+    runner.run(MOTIF_TASK, { sequence: 'seq1', pattern: 'GATC', bothStrands: false })
+    await settle()
+    finish(trackResult())
+    await settle()
+
+    expect(runner.stateOf('motif').status).toBe('done')
+    expect(finished).toEqual(['motif'])
+    runner.destroy()
   })
 })

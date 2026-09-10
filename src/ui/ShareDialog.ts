@@ -41,6 +41,16 @@ export interface ShareDialogProps {
   config: SessionConfig
   /** The page's own address, without a fragment. */
   base: string
+  /**
+   * Called however the dialog was dismissed, so the opener can forget it.
+   *
+   * Every other opener in the application takes one and the shell relies on it:
+   * `App` keeps the modal it opened in a field and treats a non-null field as
+   * "a dialog owns the keyboard", so a dialog that never says it closed leaves
+   * every shortcut, the command palette and every other dialog dead until the
+   * page is reloaded. This one used not to take it.
+   */
+  onClose?(): void
 }
 
 /**
@@ -205,6 +215,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
     // row wrapped the button under a box already too short to show a useful
     // stretch of the payload.
     variant: 'modal-wide',
+    ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: () =>
       el(
         'div',

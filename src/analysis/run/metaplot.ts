@@ -159,11 +159,33 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
   const body = Math.max(10, Math.round(numParam(job.params, 'body', 100)))
   const lengthOf = (contig: string): number => job.lengthOf(contig) ?? Number.MAX_SAFE_INTEGER
 
+  // **Planned once, and read by every track.** A plan depends on the group's
+  // features and on the window shape and on nothing whatever about the file
+  // being read, so building one inside the track loop re-did the same work —
+  // and, worse, added the same `dropped` count once per ticked track. Three
+  // bigWigs over a set of a thousand with forty features under the body width
+  // reported a hundred and twenty dropped: a number the reader cannot arrive at
+  // from the set in front of them, out of a note whose whole job
+  // (`analysis/job.ts`) is to be arrived at.
+  const plans = groups.map((group) =>
+    scaled
+      ? scaledWindows(group.features, { body, flank, step, lengthOf })
+      : {
+          ...referenceWindows(group.features, {
+            at: strParam(job.params, 'at', 'start') as Reference,
+            flank,
+            step,
+            lengthOf,
+          }),
+          dropped: 0,
+        },
+  )
+  const dropped = plans.reduce((count, plan) => count + plan.dropped, 0)
+
   const series: CurveSeries[] = []
   const outputs: TaskOutput[] = []
-  let layout: Layout | null = null
+  const layout: Layout | null = plans.length === 0 ? null : plans[0].layout
   let firstRows: { rows: Float64Array; count: number; name: string } | null = null
-  let dropped = 0
 
   const total = entries.length * groups.length
   let done = 0
@@ -182,21 +204,12 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     // keeps hold of for the whole run — and the tracks are still read one after
     // another rather than all together.
     const built: Array<{ group: string; rows: Float64Array; count: number; layout: Layout }> = []
-    for (const group of groups) {
+    for (const [index, group] of groups.entries()) {
       job.throwIfCancelled()
       job.progress(done, total, `${job.inputs.labels?.[entry] ?? entry} · ${group.name}`)
       done++
 
-      const plan = scaled
-        ? scaledWindows(group.features, { body, flank, step, lengthOf })
-        : { ...referenceWindows(group.features, {
-            at: strParam(job.params, 'at', 'start') as Reference,
-            flank,
-            step,
-            lengthOf,
-          }), dropped: 0 }
-      dropped += plan.dropped
-      layout ??= plan.layout
+      const plan = plans[index]
       if (plan.windows.length === 0) continue
 
       built.push({
@@ -250,7 +263,13 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     return []
   }
   if (dropped > 0) {
-    job.note(`${dropped.toLocaleString()} features were shorter than the body width and were dropped.`)
+    // Both of the reasons `scaledWindows` drops one, because a reader counting
+    // the short features in their own set has to be able to arrive at this
+    // number: most are under the body width, but a feature whose flanks leave
+    // it no columns at the edge of a sequence is dropped here too.
+    job.note(
+      `${dropped.toLocaleString()} features were dropped: shorter than the body width, or with no window left after clipping to the sequence.`,
+    )
   }
 
   const axis = axisFor(layout)

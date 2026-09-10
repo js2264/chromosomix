@@ -101,6 +101,61 @@ describe('BED family', () => {
     expect(Array.from(set.exonEnd)).toEqual([150, 400])
     expect(set.cdsStart[0]).toBe(120)
   })
+
+  // A gappedPeak is BED12+3, not BED6+3. Every peak format used to read
+  // signalValue from column 7, which in this row is thickStart — so the score
+  // was the coordinate 1000 and the tooltip read "signal 1000 · -log10 p 2000 ·
+  // -log10 q 0", three columns of geometry presented as MACS statistics.
+  const GAPPED =
+    'chrI\t1000\t2000\tpeak1\t500\t+\t1000\t2000\t0\t2\t200,300\t0,700\t7.75\t12.3\t9.1\n'
+
+  it('takes a gappedPeak signal from column 13, not column 7', () => {
+    const set = parseBed(GAPPED, 'sample.gappedPeak')
+    expect(set.score[0]).toBeCloseTo(7.75, 3)
+    expect(set.detail[0]).toContain('signal 7.75')
+    expect(set.detail[0]).toContain('-log10 p 12.3')
+    expect(set.detail[0]).toContain('-log10 q 9.1')
+    // Column 10 is blockCount here, not a summit offset, so no summit line.
+    expect(set.detail[0]).not.toContain('summit')
+    // And unlike narrowPeak and broadPeak, a gappedPeak really does carry a
+    // thick span in columns 7 and 8, alongside its blocks.
+    expect(set.cdsStart[0]).toBe(1000)
+    expect(set.cdsEnd[0]).toBe(2000)
+    expect(Array.from(set.exonStart)).toEqual([1000, 1700])
+    expect(Array.from(set.exonEnd)).toEqual([1200, 2000])
+  })
+
+  it('recognises a gappedPeak by its fifteen columns when the name is gone', () => {
+    const set = parseBed(GAPPED, '')
+    expect(set.score[0]).toBeCloseTo(7.75, 3)
+    expect(set.detail[0]).toContain('signal 7.75')
+  })
+
+  // Twelve columns is not proof of BED12: this headed table's eleventh and
+  // twelfth columns are a gene name and a fold change, and decoding them as
+  // blockSizes/blockStarts hung an invented exon at 10002–0 on a peak that has
+  // no sub-structure. The shape test is what refuses them.
+  it('does not read a headed peak table as BED12 blocks', () => {
+    const text =
+      'chrom\tstart\tend\tname\tscore\tstrand\tsignalValue\tpValue\tqValue\tpeak\tgene\tlog2FC\tpadj\n' +
+      'chrI\t10000\t11000\tpeak1\t500\t+\t7.75\t12.3\t9.1\t480\tMYC\t2.31\t0.001\n'
+    const set = parseBed(text, 'peaks_annotated.tsv')
+    expect(set.length).toBe(1)
+    expect(set.exonStart.length).toBe(0)
+    expect(set.exonAt[1] - set.exonAt[0]).toBe(0)
+    expect(set.start[0]).toBe(10000)
+    expect(set.end[0]).toBe(11000)
+  })
+
+  // The same test, on the case a headed table hits by accident: blockCount
+  // agrees with the list length and both parts are integers, but the blocks do
+  // not tile the feature, so they are two ordinary columns rather than blocks.
+  it('refuses blocks that do not tile the feature', () => {
+    const set = parseBed('I\t100\t400\tt\t0\t+\t120\t380\t0\t1\t50\t40\n')
+    expect(set.exonStart.length).toBe(0)
+    // The thick span still parses: only the block decode was in doubt.
+    expect(set.cdsStart[0]).toBe(120)
+  })
 })
 
 describe('GTF', () => {

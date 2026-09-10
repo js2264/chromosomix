@@ -13,7 +13,15 @@
  */
 
 import { BigBed, BigWig } from '@gmod/bbi'
-import { inflateBgzf, isBgzf, matchNames, parseTabix, spansFor } from '../tabix'
+import {
+  blockSize,
+  inflateBgzf,
+  isBgzf,
+  matchNames,
+  parseTabix,
+  spansFor,
+  type ByteSpan,
+} from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
@@ -888,11 +896,22 @@ async function tryIndexedText(
       const compressed = await handle.read(span.to - span.from, span.from)
       // `span.lastBlock` is where the records stop mattering; everything past it
       // is the slack the fetch had to over-ask for. Fetched, not decoded.
-      parts.push(
-        new TextDecoder().decode(await inflateBgzf(compressed, span.lastBlock - span.from)),
+      const part = new TextDecoder().decode(
+        await inflateBgzf(compressed, span.lastBlock - span.from),
       )
+      // …and what comes back is not lines. See {@link wholeLines}: a block
+      // boundary is not a line boundary, so every span but the file's first
+      // opens mid-record and every one but the file's last stops mid-record.
+      parts.push(wholeLines(part, span.from === 0, decodesToFileEnd(compressed, span, size)))
     }
-    return parts.join('\n')
+    // Joined with nothing rather than with a newline, because every part now
+    // ends in one — except a final unterminated line, which only the last span
+    // of the file can hold.
+    const text = parts.join('')
+    // Nothing whole in any span is an index that did not work, and the answer to
+    // that is the read that always worked — not "this file is empty", which is
+    // what `load` would tell the reader about a file that is nothing of the kind.
+    return text === '' ? null : text
   } catch {
     // Every failure here is "this index did not work", and the answer to that is
     // the read that always worked. A sidecar that is corrupt, truncated, for a
@@ -900,6 +919,111 @@ async function tryIndexedText(
     // a track cannot be opened.
     return null
   }
+}
+
+/**
+ * The whole lines of one decoded span, and nothing else.
+ *
+ * **A BGZF block boundary is not a line boundary.** `bgzf_write` copies bytes
+ * into a 64 KiB buffer and flushes it when it is full, without looking at what
+ * it is cutting — which is the whole reason a tabix virtual offset carries a
+ * 16-bit *within-block* part beside the block's own offset. `tabix.ts` reads
+ * only the block half of it (it is the half a byte range is made of), so a span
+ * begins at the first byte of the block holding the wanted contig's first
+ * record — routinely the tail of the record the previous block ran out on — and
+ * ends at the last byte of the block holding its last one, routinely mid-record
+ * again.
+ *
+ * Handing those two fragments to the sniffers is what used to happen, and it
+ * lost the file: `sniffFormat` read the piece of a GTF attribute column that
+ * opened the span as its first data row, found no integers where a GTF keeps
+ * them, and fell through to its last line, `return 'bed'` — so an indexed
+ * `.gtf.gz` was refused by `parseBed` with *"all N lines failed the contig,
+ * start, end test"*, a message naming a format the reader never handed over.
+ * `sniffVcf` answered `false` on the same fragment and the VCF was refused with
+ * that same BED message, which defeats §8.14's shape road exactly where it is
+ * load-bearing: the indexed path is the one where every `#` line is in the part
+ * of the file that was never fetched. Which of the two happens depends on where
+ * the boundary fell inside the record before, and the minority is no better —
+ * swept across one GENCODE-shaped line, better than nine cuts in ten refuse the
+ * file and most of the rest sniff `bed` and open a **one-row** track. At the
+ * other seam a record cut mid-coordinate still parses: `chrB 45000 455` becomes
+ * a feature and `FeatureBuilder.add` orders its ends into a 44.5 kb box drawn
+ * where nothing exists, and a fragment cut inside a contig name puts a contig
+ * called `A` in the set and in the §8.2 overlap report. None of it is rare: the
+ * seam is on every span the index serves, and the 80% guard means it fires only
+ * on the subset map the index exists for.
+ *
+ * The two ends are **not** symmetric, and the obvious rule — drop the first and
+ * last line of every part — is wrong at both of them:
+ *
+ * - `atFileStart`: the file's first span really does begin at a line start, and
+ *   that line is a VCF's `##fileformat`, a headed TSV's column names, or simply
+ *   the first record. Trimming there throws away the line the sniffers most
+ *   need.
+ * - `atFileEnd`: a file's last line need not be terminated. Trimming an
+ *   unterminated tail that is really the end of the data drops a record the
+ *   whole-file road keeps, and the index is only ever allowed to make the same
+ *   file *cheaper* (§3.4), never to change what it says.
+ *
+ * What is deliberately *not* a case: two fragments meeting across the join of
+ * two parts. `spansFor` merges any two spans within a mebibyte of each other,
+ * so two spans that survive as separate entries have more than a mebibyte of
+ * unfetched file between them — the fragment ending one part and the fragment
+ * opening the next are halves of two *different* records whose other halves
+ * were never read. Joining them would fabricate a record rather than repair
+ * one, which is why the parts are trimmed independently and then concatenated.
+ *
+ * A part with no newline in it at all is one long fragment of a record that
+ * began before the span, so it is dropped whole rather than kept as a line. The
+ * cost of all this is at most one record per seam: a block boundary that
+ * happens to land exactly on a newline (about one in a line-length, so under
+ * 1% of spans) loses the record after it, which is the cheap side of the trade
+ * against refusing the file. Carrying the within-block offset through
+ * `tabix.ts` would settle the leading seam exactly, but not the trailing one.
+ */
+export function wholeLines(text: string, atFileStart: boolean, atFileEnd: boolean): string {
+  let out = text
+  if (!atFileStart) {
+    const firstBreak = out.indexOf('\n')
+    out = firstBreak < 0 ? '' : out.slice(firstBreak + 1)
+  }
+  if (!atFileEnd && !out.endsWith('\n')) {
+    const lastBreak = out.lastIndexOf('\n')
+    out = lastBreak < 0 ? '' : out.slice(0, lastBreak + 1)
+  }
+  return out
+}
+
+/** The 28 bytes of the empty BGZF member a bgzipped file ends with. */
+const BGZF_EOF_BYTES = 28
+
+/**
+ * Whether the text decoded from this span runs to the end of the file's data.
+ *
+ * Which is *not* the question `span.to >= size` answers. That one says the
+ * fetch reached the end of the file, and the fetch over-asks by a whole block
+ * on purpose — so on any file whose last wanted record sits within 64 KiB of
+ * the end, `spansFor` clamps `to` to `size` while `inflateBgzf` still stops
+ * after the block at `lastBlock`, several blocks short of it. Trusting `to`
+ * alone would keep an unterminated fragment on every such file, which includes
+ * the everyday one: a `.gtf.gz` whose final contig is a `chrM` the map does not
+ * have.
+ *
+ * So the bytes are asked instead. The block at `lastBlock` is measured from its
+ * own `BSIZE`, and what follows it in the buffer has to be nothing at all or
+ * the empty member the file ends with; anything longer is another block with
+ * records in it. A file ending in two empty members answers `false` and loses
+ * an unterminated last line — the conservative direction, and the one that
+ * cannot draw a feature that does not exist.
+ */
+function decodesToFileEnd(compressed: Uint8Array, span: ByteSpan, size: number): boolean {
+  if (span.to < size) return false
+  const at = span.lastBlock - span.from
+  if (at < 0 || at >= compressed.length) return false
+  const length = blockSize(compressed.subarray(at, Math.min(at + 64, compressed.length)))
+  if (length === null || at + length > compressed.length) return false
+  return compressed.length - (at + length) <= BGZF_EOF_BYTES
 }
 
 /** The sidecar named beside this source, as a source of its own. */

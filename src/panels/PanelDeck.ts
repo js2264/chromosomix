@@ -99,7 +99,7 @@ import {
   type GrowDirection,
   type PanelRef,
 } from './deck'
-import { ViewportLock, spansAgree } from './lock'
+import { ViewportLock, spansAgree, type LockUnit } from './lock'
 import type { PickHandlers } from '../ui/mapPick'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
@@ -107,6 +107,47 @@ import { fileLabel } from '../ui/labels'
 
 /** The id the lock knows the session's own map by. */
 const LEAD = 'lead'
+
+/**
+ * What the deck's shared window counts in, for one panel (`panels/lock.ts`).
+ *
+ * Base pairs at bin level and everywhere nothing has been read yet, which is
+ * every deck this class was written for. **Cells above it**, because a
+ * contig-level cell is a whole chromosome: it has no width in base pairs, the
+ * number `bpPerCell` answers there is the file's bin size, and a window
+ * converted through it put chromosomes 10–14 of a 1 kb roll-up on chromosomes
+ * 2–3 of the 5 kb roll-up beside it. Cell `i` is sequence `i` in both, so the
+ * index is the thing the two grids share — and carrying it is what makes a deck
+ * navigate at chromosome level at all.
+ */
+function lockUnit(panel: MatrixPanel): LockUnit {
+  const level = panel.blockLevel()
+  return level === null || level === 'bin' ? 'bp' : 'cell'
+}
+
+/**
+ * How one panel's cell offsets convert on the way to another's — the deck's
+ * currency for a pointer, as {@link lockUnit} is for a window.
+ *
+ * `null` where there is nothing honest to carry: the two panels are at
+ * different levels, so one's cells are stretches of sequence and the other's
+ * are whole sequences, and no number means the same thing on both. The pointer
+ * echoes answer that with *nothing here*, which is the same refusal they make
+ * off the end of a shorter block and for the same reason — a mark that is
+ * confidently in the wrong place is the one claim a deck must never make.
+ *
+ * Otherwise the pair of steps to divide by: base pairs per cell at bin level,
+ * and one apiece above it, where the cell index is carried across untouched.
+ */
+function carryBetween(
+  source: MatrixPanel,
+  target: MatrixPanel,
+): { mine: number; theirs: number } | null {
+  const level = source.blockLevel()
+  if (level !== target.blockLevel()) return null
+  if (level !== null && level !== 'bin') return { mine: 1, theirs: 1 }
+  return { mine: source.bpPerCell(), theirs: target.bpPerCell() }
+}
 
 /**
  * A remembered local companion, once the session has asked whether it can still
@@ -625,6 +666,7 @@ export class PanelDeck {
     }
     this.lock.join({
       id: LEAD,
+      unit: () => lockUnit(panel),
       bpPerCell: () => panel.bpPerCell(),
       cells: () => panel.cellCount(),
       locked: () => this.leadLocked,
@@ -876,7 +918,20 @@ export class PanelDeck {
       // not the ref's URI either, because a companion that descended into an
       // entry of a collection is showing `rep2.mcool::1000` and the ref catches
       // up to that only after `onResolved` has been round the houses.
-      out.push({ id: slot.id, label: fileLabel(slot.panel.uri) })
+      //
+      // Through `mapLabel`, so a companion the reader has **renamed** is called
+      // what they called it here too (§16.10: one name, everywhere the map is
+      // named). This row was written before renaming existed and kept the file
+      // name after it landed, so the one control that lists the whole deck said
+      // "G1" for cell 0 and `mat_G2M.mcool::1000` for the cell beside it. A
+      // name is filed under the path before `::` (`ui/mapNames.ts`), so
+      // resolving the entry above costs nothing here: the rename is found
+      // either way, and `Session.mapLabel` falls back to this same `fileLabel`
+      // for a map nobody has named.
+      out.push({
+        id: slot.id,
+        label: this.props.mapLabel?.(slot.panel.uri) ?? fileLabel(slot.panel.uri),
+      })
     }
     return out
   }
@@ -935,25 +990,29 @@ export class PanelDeck {
    * five times too far along the coarse one. Cheap enough to run per pointer
    * move — two divisions per panel, and each panel repaints only when its own
    * cell actually changed.
+   *
+   * Base pairs at bin level, that is. Above it a cell is a whole sequence with
+   * no width in base pairs, and dividing by the file's bin size anyway put the
+   * pointer over chromosome 12 of a 1 kb roll-up and a mark on chromosome 3 of
+   * the 5 kb one beside it, with nothing said anywhere — {@link carryBetween}
+   * is where that decision lives now, for this and for the lane echo alike.
    */
   private echoHover(
     from: string,
     source: MatrixPanel,
     cell: { row: number; col: number } | null,
   ): void {
-    const bpPerCell = source.bpPerCell()
-    const at =
-      cell === null ? null : { rows: (cell.row + 0.5) * bpPerCell, cols: (cell.col + 0.5) * bpPerCell }
     const show = (id: string, panel: MatrixPanel | null): void => {
       if (panel === null || id === from) return
-      if (at === null) {
+      const carry = cell === null ? null : carryBetween(source, panel)
+      if (cell === null || carry === null) {
         panel.showHoverEcho(null)
         return
       }
-      const theirs = panel.bpPerCell()
+      const theirs = carry.theirs > 0 ? carry.theirs : 1
       const extent = panel.cellCount()
-      const row = Math.floor(at.rows / (theirs > 0 ? theirs : 1))
-      const col = Math.floor(at.cols / (theirs > 0 ? theirs : 1))
+      const row = Math.floor(((cell.row + 0.5) * carry.mine) / theirs)
+      const col = Math.floor(((cell.col + 0.5) * carry.mine) / theirs)
       // Off the end of a shorter block is *nothing here*, not the last cell: a
       // mark clamped to the edge would say the pointer is over a place this
       // file has, which is the one thing a deck must not claim.
@@ -990,18 +1049,22 @@ export class PanelDeck {
     source: MatrixPanel,
     at: { axis: 'rows' | 'cols'; unit: number } | null,
   ): void {
-    const bpPerCell = source.bpPerCell()
     const show = (id: string, panel: MatrixPanel | null): void => {
       if (panel === null || id === from) return
-      if (at === null) {
+      // The same currency the cell echo uses, and above bin level the same
+      // refusal: a cell there is a whole sequence, so the index is carried
+      // untouched and a panel drawing a different level gets nothing rather
+      // than a mark on the wrong chromosome.
+      const carry = at === null ? null : carryBetween(source, panel)
+      if (at === null || carry === null) {
         panel.showLaneEcho(null)
         return
       }
       const extent = panel.cellCount()
       const unit = carriedUnit(
-        { unit: at.unit, bpPerCell },
+        { unit: at.unit, bpPerCell: carry.mine },
         {
-          bpPerCell: panel.bpPerCell(),
+          bpPerCell: carry.theirs,
           cells: at.axis === 'cols' ? extent.cols : extent.rows,
         },
       )
@@ -1292,6 +1355,7 @@ export class PanelDeck {
     // be brought into line with.
     this.lock.join({
       id: slot.id,
+      unit: () => lockUnit(map),
       bpPerCell: () => map.bpPerCell(),
       cells: () => map.cellCount(),
       locked: () => this.lockNote(slot) === null,
@@ -1342,9 +1406,16 @@ export class PanelDeck {
    */
   private seedFromLead(): void {
     if (!this.leadLocked) return
-    const view = this.lead?.viewport()
-    if (view === undefined || view === null) return
-    this.lock.seed(view.rows, view.cols, this.lead?.bpPerCell() ?? 1)
+    const lead = this.lead
+    if (lead === null) return
+    const view = lead.viewport()
+    if (view === null) return
+    // In the lead's own currency, which above bin level is the cell index
+    // rather than base pairs ({@link lockUnit}) — a seed stated in the wrong
+    // one is the same wrong window as a report in the wrong one, arriving
+    // before anybody has had the chance to correct it.
+    const unit = lockUnit(lead)
+    this.lock.seed(view.rows, view.cols, unit === 'cell' ? 1 : lead.bpPerCell(), unit)
   }
 
   /**
@@ -1369,17 +1440,62 @@ export class PanelDeck {
     // Nothing is owed here: `settle` runs again when the lead reports, and the
     // note is recomputed then against two real blocks.
     if (!map.hasBlock || !lead.hasBlock) return null
-    const mine = map.cellCount()
-    const theirs = lead.cellCount()
+
+    // **What a cell is has to agree before what it holds is compared.** A cell
+    // is part of a sequence at bin level and a whole sequence above it, and no
+    // one number is a window on both — so the lock skips such a pairing
+    // (`panels/lock.ts`) and this is what keeps the chain icon from saying
+    // "following" over a panel nothing is driving. It is a transient: the
+    // companion is mid-read of the level the deck has just moved to, and
+    // `settle` re-asks the moment that read lands.
+    const level = map.blockLevel()
+    if (level !== lead.blockLevel()) {
+      return (
+        'not following yet: this map is still drawing the level the deck has just left. A cell ' +
+        'is part of a sequence at bin level and a whole sequence above it, so one window cannot ' +
+        'be both. It comes back into step when its own read of this level lands.'
+      )
+    }
+
+    // The spans, and **not** `cells × bpPerCell`: above bin level a cell is a
+    // whole sequence, so the cell count is a number of chromosomes and the bin
+    // size is a fact about the file, and their product is not a length of
+    // anything. Multiplying them told two roll-ups of one 16-chromosome genome,
+    // at 1 kb and 5 kb, that they spanned 16 kb and 80 kb and that the same
+    // names had resolved against different sequences — the false accusation
+    // this whole gate exists to avoid making (§16.4).
+    const mine = map.blockSpan()
+    const theirs = lead.blockSpan()
     const rows = spansAgree(
-      { spanBp: mine.rows * map.bpPerCell(), bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.rows * lead.bpPerCell(), bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.rows, bpPerCell: map.bpPerCell() },
+      { spanBp: theirs.rows, bpPerCell: lead.bpPerCell() },
+      Math.max(mine.sequences.rows, theirs.sequences.rows),
     )
     const cols = spansAgree(
-      { spanBp: mine.cols * map.bpPerCell(), bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.cols * lead.bpPerCell(), bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.cols, bpPerCell: map.bpPerCell() },
+      { spanBp: theirs.cols, bpPerCell: lead.bpPerCell() },
+      Math.max(mine.sequences.cols, theirs.sequences.cols),
     )
-    if (rows && cols) return null
+    if (rows && cols) {
+      if (level === null || level === 'bin') return null
+      // Above bin level the deck carries the **cell index** ({@link lockUnit}),
+      // and that is only honest while cell `i` is the same sequence on both
+      // sides. Two axes of equal length that agree about how much sequence they
+      // hold are that; two that rolled the same assembly up into different
+      // numbers of cells — one of them pooling several small sequences per cell
+      // because its panel is narrower — are not, and there is no index to
+      // carry between them.
+      const cells = map.cellCount()
+      const leadCells = lead.cellCount()
+      if (cells.rows === leadCells.rows && cells.cols === leadCells.cols) return null
+      return (
+        'not following: this map rolls up into ' +
+        `${fmt.int(cells.rows)} × ${fmt.int(cells.cols)} cells where the first map makes ` +
+        `${fmt.int(leadCells.rows)} × ${fmt.int(leadCells.cols)}. Above bin level a window is ` +
+        'carried as a cell index, and cell for cell these two are not the same sequences. ' +
+        'Switching back to bin level puts this panel in step.'
+      )
+    }
 
     // A turned panel's rows are **separation**, not position, so a row
     // disagreement there is a different fact from a column one and must not
@@ -1396,8 +1512,8 @@ export class PanelDeck {
     if (map.isTurned() && lead.isTurned() && cols) {
       return (
         'not following while turned: this band reaches ' +
-        `${fmt.bp(mine.rows * map.bpPerCell() * 2)} from the diagonal where the first map ` +
-        `reaches ${fmt.bp(theirs.rows * lead.bpPerCell() * 2)}. Each map opens on a fraction of ` +
+        `${fmt.bp(mine.rows * 2)} from the diagonal where the first map ` +
+        `reaches ${fmt.bp(theirs.rows * 2)}. Each map opens on a fraction of ` +
         'its own block and rounds that to a whole bin, so two files at different resolutions do ' +
         'not turn to the same depth — and one row window would be two distances. Turning the ' +
         'deck back off puts this panel in step.'
@@ -1406,9 +1522,9 @@ export class PanelDeck {
 
     return (
       'not following: this block spans ' +
-      `${fmt.bp(mine.rows * map.bpPerCell())} × ${fmt.bp(mine.cols * map.bpPerCell())} where the ` +
-      `first map spans ${fmt.bp(theirs.rows * lead.bpPerCell())} × ` +
-      `${fmt.bp(theirs.cols * lead.bpPerCell())}. The same name resolved against different ` +
+      `${fmt.bp(mine.rows)} × ${fmt.bp(mine.cols)} where the ` +
+      `first map spans ${fmt.bp(theirs.rows)} × ` +
+      `${fmt.bp(theirs.cols)}. The same name resolved against different ` +
       'sequences, so one window would be two places.'
     )
   }

@@ -25,6 +25,9 @@ afterEach(() => {
 })
 
 const close = (): HTMLButtonElement => document.querySelector('.toast-close') as HTMLButtonElement
+/** Every note on screen, in the order they sit in the corner. */
+const notes = (): string[] =>
+  Array.from(document.querySelectorAll('.toast .toast-label')).map((node) => node.textContent ?? '')
 const note = (): string => document.querySelector('.toast-note')?.textContent ?? ''
 /** The bar's width as a number: jsdom normalises `25.0%` to `25%`. */
 const width = (): number =>
@@ -85,10 +88,10 @@ describe('progressToast', () => {
  *
  * A bar on it would promise a second event that never comes — there is nothing
  * running behind this note, the thing it reports has already happened — and a
- * second note landing on top of the first would leave one illegible box with two
- * × in it. The share dialog produces exactly that pair: it copies the link when
- * it opens and copies the shortened one a moment later, well inside the four
- * seconds the first note stays.
+ * second copy of the same line would be a row saying nothing the first did not.
+ * The share dialog produces exactly that pair: it copies the link when it opens
+ * and copies the shortened one a moment later, well inside the four seconds the
+ * first note stays.
  */
 describe('messageToast', () => {
   it('is one settled line, with nothing that suggests work in progress', () => {
@@ -124,5 +127,64 @@ describe('messageToast', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+/**
+ * Two notes at once, which is not a hypothetical pair.
+ *
+ * A truncated `.pairs` import raises the "Incomplete file" warning — the one
+ * note in the application that is promised to stay until it is dismissed
+ * (`app/Session.ts`) — and then starts the `.mcool` write on the very next
+ * statement, whose progress note used to be drawn on exactly the same pixels.
+ * The reader could not read the warning, could not always reach its ×, and was
+ * left believing a chromosome genuinely has no contacts.
+ *
+ * The guard that existed was `standing`, and it was only ever consulted by
+ * `messageToast`, so it could not see this pair at all. Making the progress
+ * note take part in it would have been the wrong repair: it would have deleted
+ * the warning instead of covering it. So the corner is a column, one both
+ * constructors go through.
+ */
+describe('two notes at once', () => {
+  it('stand in one column instead of on top of each other', () => {
+    const warning = progressToast('Incomplete file')
+    warning.fail('This .pairs file is incomplete: chrXIII has no contacts.')
+    progressToast('Writing .mcool')
+
+    expect(notes()).toEqual(['Incomplete file', 'Writing .mcool'])
+    const column = document.querySelector('.toast-stack')
+    expect(column, 'the notes share no column').not.toBeNull()
+    expect(Array.from(column?.children ?? []).map((node) => node.className)).toEqual([
+      'toast toast-failed',
+      'toast',
+    ])
+    // Each is placed by the column: `.toast` anchors itself to the corner in
+    // the stylesheet, and two notes doing that is the whole of the bug.
+    for (const node of Array.from(document.querySelectorAll<HTMLElement>('.toast'))) {
+      expect(node.style.position).toBe('static')
+    }
+  })
+
+  it('keeps a × of its own on each', () => {
+    progressToast('Incomplete file').fail('chrXIII has no contacts.')
+    const writing = progressToast('Writing .mcool')
+    expect(document.querySelectorAll('.toast-close')).toHaveLength(2)
+    writing.dismiss()
+    // The warning is still there, still dismissible: it outlives the job that
+    // used to cover it.
+    expect(notes()).toEqual(['Incomplete file'])
+    close().click()
+    expect(notes()).toEqual([])
+  })
+
+  it('takes the column away with the last note', () => {
+    const one = progressToast('Writing .mcool')
+    expect(document.querySelector('.toast-stack')).not.toBeNull()
+    one.dismiss()
+    // Nothing outlives the notes it holds: an empty column left in the body
+    // would be marked inert by the next dialog that opens and would take the ×
+    // off a note raised while that dialog was up (`ui/Modal.ts`).
+    expect(document.querySelector('.toast-stack')).toBeNull()
   })
 })

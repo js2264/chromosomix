@@ -3,7 +3,7 @@
  *
  * ## Why this exists
  *
- * The Analysis panel computes fifteen things and every one of them is goldened
+ * The Analysis panel computes sixteen things and every one of them is goldened
  * against cooltools, coolpuppy, chromosight, pyBigWig and numpy (§18.10). That is a lot of
  * verified arithmetic reachable only by clicking, and the moment a reader has
  * two hundred files rather than one, clicking stops being the interface. They
@@ -12,10 +12,19 @@
  * longer the same numbers.
  *
  * So: the same kernels, the same writers, the same provenance lines, driven from
- * a shell. Not a reimplementation and not a port — `RUNNERS` is imported from
- * `analysis/run/index.ts` and the job handed to it is built exactly as
- * `analysis/worker/analysis.worker.ts` builds one. If the two ever disagree, one
- * of them is wrong and there is a golden that says which.
+ * a shell. Not a reimplementation and not a port — `RUNNERS` and `TRACK_RUNNERS`
+ * are imported from `analysis/run/`, and the job handed to each is built exactly
+ * as `analysis/worker/analysis.worker.ts` and
+ * `annotations/worker/annotations.worker.ts` build theirs. If the two ever
+ * disagree, one of them is wrong and there is a golden that says which.
+ *
+ * **Both maps, because there are two venues.** A task states which worker it
+ * belongs in (`analysis/job.ts`), and reading only `RUNNERS` is what made this
+ * command list sixteen tasks and honour twelve: `motif`, `metaplot`, `trackcorr`
+ * and `overlap` were offered with a flag per parameter and then died with *no
+ * analysis runner is registered* — after the mount, once per file, exit 1. Two
+ * of those need nothing a shell has not got and now run; the other two are
+ * refused before anything is opened, and say why. See {@link cliCannotRun}.
  *
  * ## And why `replay` is the half that matters
  *
@@ -27,7 +36,15 @@
  * picture and adjusting until it is right; and then applies exactly those, with
  * no retyping and no transcription error, to the other hundred and ninety-nine.
  *
- * ## The two things it cannot do, and why
+ * ## The three things it cannot do, and why
+ *
+ * **No tracks.** `metaplot` and `trackcorr` take a bigWig, and the reader for
+ * one is `@gmod/bbi` — imported by the annotations worker and by nothing else,
+ * which is one of the three layering rules this repository enforces rather than
+ * encourages (README). Everything else those two tasks need is already here, so
+ * what is missing is a loader and a decision about that rule, not arithmetic;
+ * until it is made they are refused before a file is opened rather than
+ * advertised with flags that cannot be honoured.
  *
  * **No remote files.** `RemoteRangeSource` reads through synchronous
  * `XMLHttpRequest`, which exists in a worker and not in Node. A CLI is on a
@@ -48,9 +65,10 @@ import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
 import { yieldToEventLoop } from '../async'
 import { RUNNERS } from '../analysis/run/index'
+import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
 import { abortError } from '../analysis/job'
-import type { JobContext } from '../analysis/job'
+import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
 import { outputToTsv } from '../analysis/write/tsv'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
@@ -61,12 +79,20 @@ import {
   parseBedpe,
   sniffFormat,
 } from '../annotations/parse'
+import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
+import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
 import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
-import type { AnalysisFraming, AnalysisTask, Params, TaskResult } from '../analysis/types'
+import type {
+  AnalysisFraming,
+  AnalysisTask,
+  Params,
+  TaskOutput,
+  TaskResult,
+} from '../analysis/types'
 import type { TaskInputs } from '../analysis/worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
 import { ViewerError } from '../errors'
@@ -247,6 +273,15 @@ interface RunOptions {
   window?: string | undefined
   balance?: boolean | undefined
   inputs: TaskInputs
+  /**
+   * References named with `--sequence`, by the string the reader typed.
+   *
+   * Beside `inputs` rather than inside it, because {@link TaskInputs} is what
+   * crosses a `postMessage` and a parsed genome is the one input this codebase
+   * deliberately never sends anywhere (`analysis/job.ts`, {@link SequenceReader}).
+   * Here it does not have to: the store and the runner are on one stack.
+   */
+  sequences: Map<string, SequenceStore>
   quiet: boolean
   /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
   binning?: PairsBinning | undefined
@@ -390,10 +425,6 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
   const { task, params, path } = options
   const { mc } = await openLocal(resolve(path), options)
   try {
-    const runner = RUNNERS[task.id]
-    if (runner === undefined) {
-      throw new Error(`no analysis runner is registered for the task ${task.id}`)
-    }
     const extent =
       options.window === undefined
         ? ([0, mc.nBins] as [number, number])
@@ -450,7 +481,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       toBins: (bp) => Math.max(1, Math.round(bp / mc.binsize)),
     }
 
-    const outputs = await runner(job)
+    const outputs = await runFor(task, job, options.sequences)
     if (!options.quiet) process.stderr.write('\r')
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -476,6 +507,147 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
   } finally {
     mc.close()
   }
+}
+
+// ---------------------------------------------------------------------------
+// The other venue
+// ---------------------------------------------------------------------------
+
+/**
+ * Hand the job to whichever map holds this task's runner.
+ *
+ * A task declares the worker it belongs in and there are two of them
+ * (`analysis/job.ts`), so there are two runner maps and this is the only place
+ * that has to know it. Dispatching on `task.venue` rather than on which map
+ * happens to answer is deliberate: the venue is the fact the descriptor states,
+ * and a task present in both maps under one id would be a build error worth
+ * failing on rather than a coin toss resolved by lookup order.
+ *
+ * A shell can be either venue, which is what the split does *not* say and what
+ * this is allowed to exploit. The annotations worker earns its own context by
+ * holding open bigWig handles and a parsed genome; the reason a task runs beside
+ * them is that the data must not be shipped, and nothing is shipped here — the
+ * store, the runner and the writer are one stack in one process.
+ */
+async function runFor(
+  task: AnalysisTask,
+  job: JobContext,
+  sequences: Map<string, SequenceStore>,
+): Promise<TaskOutput[]> {
+  if (task.venue === 'annotations') {
+    const runner = TRACK_RUNNERS[task.id]
+    if (runner === undefined) {
+      throw new Error(`no analysis runner is registered for the task ${task.id}`)
+    }
+    return runner(trackJobOf(job, sequences))
+  }
+  const runner = RUNNERS[task.id]
+  if (runner === undefined) {
+    throw new Error(`no analysis runner is registered for the task ${task.id}`)
+  }
+  return runner(job)
+}
+
+/**
+ * The same job, seen from the annotations venue.
+ *
+ * `analysis/job.ts` says what the two contexts share — parameters, framing,
+ * inputs, cancellation, progress and notes — and this is that sentence as code:
+ * each of those is the very function the map venue was handed, not a second one
+ * built from the same ingredients, so the two cannot come to differ in this
+ * file. What is added is the pair of capabilities that venue exists for.
+ *
+ * Only one of the pair can be answered from a shell, and the asymmetry is the
+ * whole of what {@link cliCannotRun} refuses on: residues are a file this
+ * process can read, and a track is a bigWig handle this process may not open.
+ */
+function trackJobOf(job: JobContext, sequences: Map<string, SequenceStore>): TrackJobContext {
+  return {
+    params: job.params,
+    framing: job.framing,
+    inputs: job.inputs,
+    cancelled: job.cancelled,
+    throwIfCancelled: job.throwIfCancelled,
+    progress: job.progress,
+    note: job.note,
+    // Unreachable, and throwing rather than absent for the reason
+    // `analysis/run/index.ts` gives for never stubbing a runner: a `sample`
+    // that answered with an empty set would let a metaplot report a clean
+    // average over nothing, which is the one failure nobody downstream can see.
+    // The capability is not optional in the interface, so it is present and
+    // says what it is; `cliCannotRun` is what stops it ever being called.
+    sample: () => {
+      throw new Error(
+        'Sampling a track needs the bigWig reader, which this command does not have.',
+      )
+    },
+    // Exactly the annotations worker's own answer: the assembly is what
+    // `inputs.contigLengths` carries, because this venue is handed no other.
+    lengthOf: (contig) => job.inputs.contigLengths?.[contig],
+    residues: (entry) => readerFor(sequences, entry),
+  }
+}
+
+/**
+ * A loaded reference, by whatever name the `sequence` parameter holds.
+ *
+ * Three steps, because the parameter arrives by three roads. Typed on the
+ * command line it is a **path**, and that is the key `loadSequences` filed it
+ * under. Recorded in a workspace it is an **entry id** — `a3` — allocated by a
+ * store this process does not have, which is the absence `bindInputs` is a
+ * whole paragraph about; so a replay that named one reference gets that one,
+ * there being nothing else it could have meant. Two references and an id that
+ * matches neither is genuinely ambiguous and answers `undefined`, which
+ * `analysis/run/motif.ts` turns into a sentence rather than a guess.
+ */
+function readerFor(
+  held: Map<string, SequenceStore>,
+  entry: string,
+): SequenceReader | undefined {
+  const store =
+    held.get(entry) ??
+    [...held].find(([path]) => basename(path) === basename(entry))?.[1] ??
+    (held.size === 1 ? [...held.values()][0] : undefined)
+  if (store === undefined) return undefined
+  return {
+    contigs: store.contigs,
+    // The worker's `basesOf`, step for step: exact first, then the §5.9 ladder,
+    // because a FASTA writes `chrI` where a `.hic` beside it writes `I` and a
+    // search under the map's spelling has to reach the reference's.
+    bases: (contig) => {
+      const direct = store.bases.get(contig)
+      if (direct !== undefined) return direct
+      const at = contigIndexOf(store.contigs, contig)
+      return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
+    },
+  }
+}
+
+/**
+ * Why this task cannot be run from a shell, or `null` when it can.
+ *
+ * Read off the **descriptor** rather than from a list of ids, because what
+ * decides it is an input kind. `EntryParam` names four — a feature set, a pair
+ * set, a reference and a track — and `--features`, `--pairs` and `--sequence`
+ * supply three of them. The fourth is an open bigWig, and `@gmod/bbi` is
+ * imported by the annotations worker and by nothing else (README, the layering
+ * rules), so a task that declares a `track` parameter is one this venue cannot
+ * feed whatever it happens to be called. A fifth kind added tomorrow makes this
+ * say so on its own rather than silently letting a new task through.
+ *
+ * The alternative was to refuse the whole `annotations` venue, which would have
+ * been a sentence that is not true: `overlap` compares two BED files and
+ * `motif` reads a FASTA, and both of those are things a shell has. Refusing
+ * them to keep one rule simple would have thrown away working arithmetic to
+ * describe a limit that is really about one dependency.
+ */
+function cliCannotRun(task: AnalysisTask): string | null {
+  const tracks = task.params.filter((param) => param.kind === 'track')
+  if (tracks.length === 0) return null
+  return (
+    `${task.id} reads a track (${tracks.map((param) => `--${param.key}`).join(', ')}); ` +
+    'the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.'
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +740,41 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
 }
 
 /**
+ * References named with `--sequence`, parsed where they lie.
+ *
+ * {@link SequenceReader} is declared optional on its context precisely because
+ * the hosts that can answer it are *"the annotations worker"* and not *"a test
+ * harness, a future venue, or a session that has never opened a FASTA"*
+ * (`analysis/job.ts`). This is that future venue, and it is the cheap half of
+ * it: `parseFasta` is the same parser the worker runs, over bytes read from the
+ * disk the file is already on, with no thread to cross and therefore none of
+ * the reason for the cap that keeps a genome inside that worker.
+ *
+ * Keyed by the string the reader typed, because that string is what comes back
+ * out of `params.sequence` — there is no entry store here to allocate an id
+ * from, which is the same absence `bindInputs` argues about at length.
+ *
+ * Through `decodeAnnotationBytes` rather than `readFile` alone, so a `.fa.gz`
+ * is a reference and not a parse error: every other path into this command
+ * already accepts one, and a reference is the file most likely to be big enough
+ * that somebody kept it compressed.
+ */
+async function loadSequences(args: Args): Promise<Map<string, SequenceStore>> {
+  const held = new Map<string, SequenceStore>()
+  for (const path of all(args, 'sequence')) {
+    const bytes = await decodeAnnotationBytes(new Uint8Array(await readFile(path)))
+    if (!looksLikeFasta(bytes)) {
+      throw new Error(
+        `${basename(path)} is not a FASTA: a reference begins with a > line naming its first ` +
+          'sequence, and this one does not.',
+      )
+    }
+    held.set(path, parseFasta(bytes))
+  }
+  return held
+}
+
+/**
  * File each loaded set under the **parameter key** that chose it.
  *
  * {@link TaskInputs} is keyed by parameter key — `analysis/job.ts`'s
@@ -617,6 +824,8 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       --window <chr:a-b>   a window rather than the whole file
       --balance            force balancing on; --balance=false forces it off
       --features <file>    a BED/narrowPeak/loop table a task needs
+      --sequence <ref.fa>  a reference, for a task that reads residues (motif).
+                           Gzipped or not
       --pairs <file>       a BEDPE, for an off-diagonal pileup. Note this is a
                            *feature* table and not a contact list — a .pairs
                            file to bin is a positional argument, and takes
@@ -642,6 +851,19 @@ which exist in a worker and not in Node. Fetch it first.
 function listTasks(): void {
   for (const task of TASKS) {
     process.stdout.write(`${task.id}\n    ${task.title}\n`)
+    const refusal = cliCannotRun(task)
+    if (refusal !== null) {
+      // The row stays and its flags go. The panel's rule is the stronger one —
+      // a task that cannot run is absent rather than greyed out
+      // (`analysis/registry.ts`, §8.5) — but the reader of this listing is
+      // asking what the *catalogue* holds as much as what this command will
+      // start, and a task missing from a list of sixteen teaches them it does
+      // not exist. Printing `--tracks` under a task that refuses to start is
+      // the other half: it is what let a batch script be written against a
+      // flag and find out after the first file had been mounted.
+      process.stdout.write(`      ${refusal}\n\n`)
+      continue
+    }
     for (const param of task.params) {
       const fallback = (param as { default?: unknown }).default
       process.stdout.write(
@@ -660,6 +882,16 @@ async function runCommand(args: Args): Promise<number> {
     process.stderr.write(`Unknown task ${JSON.stringify(args.command)}. Try \`tasks\`.\n`)
     return 2
   }
+  // Ahead of the file check, and well ahead of any mount. A task this command
+  // cannot start is a fault in the command line exactly as an unknown flag is,
+  // and it deserves the same treatment the comment below spells out: one
+  // sentence and exit 2, rather than the same failure two hundred times with a
+  // file opened before each of them.
+  const refusal = cliCannotRun(task)
+  if (refusal !== null) {
+    process.stderr.write(`${refusal}\n`)
+    return 2
+  }
   if (args.positional.length === 0) {
     process.stderr.write(`${task.id} needs at least one file.\n`)
     return 2
@@ -670,9 +902,11 @@ async function runCommand(args: Args): Promise<number> {
   // spends an hour being wrong two hundred times.
   let params: Params
   let inputs: TaskInputs
+  let sequences: Map<string, SequenceStore>
   try {
     params = paramsFor(task, args)
     inputs = bindInputs(task, params, await loadInputs(args))
+    sequences = await loadSequences(args)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
@@ -700,6 +934,7 @@ async function runCommand(args: Args): Promise<number> {
           : one(args, 'window'),
         balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
         inputs,
+        sequences,
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
@@ -765,6 +1000,7 @@ async function replayCommand(args: Args): Promise<number> {
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
   const loaded = await loadInputs(args)
+  const sequences = await loadSequences(args)
 
   process.stderr.write(
     `${recorded.length} task${recorded.length === 1 ? '' : 's'} from ${basename(path)}, ` +
@@ -781,6 +1017,16 @@ async function replayCommand(args: Args): Promise<number> {
         process.stderr.write(`  skipped ${entry.task}: this build has no such task\n`)
         continue
       }
+      const refusal = cliCannotRun(task)
+      if (refusal !== null) {
+        // Beside the skip above and for the same reason: the count printed a
+        // moment ago said how many tasks would run, and a tab that recorded a
+        // metaplot is owed the reason one of them did not. Skipped rather than
+        // attempted, so it costs no mount and does not turn a replay's exit
+        // code into a failure over something the workspace was right to record.
+        process.stderr.write(`  skipped ${entry.task}: ${refusal}\n`)
+        continue
+      }
       try {
         if (!quiet) process.stderr.write(`${file} · ${task.title}\n`)
         const result = await runOne({
@@ -792,6 +1038,7 @@ async function replayCommand(args: Args): Promise<number> {
           // Per task, because a replayed workspace can hold several that name
           // different sets under different keys.
           inputs: bindInputs(task, entry.params, loaded),
+          sequences,
           quiet,
         })
         await writeOutputs(result, stemOf(file), directory, result.contigs, quiet)

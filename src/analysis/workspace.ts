@@ -268,8 +268,14 @@ export class AnalysisWorkspace {
       // The question is therefore whether a profile can be **drawn**, not
       // whether a list exists to put it in.
       hasLanes: () => this.laneable(),
+      // The grid is passed rather than left to be looked up, because the two
+      // callers of `writeProfile` do not agree about which one is right: the
+      // drawer only ever holds what this workspace has just computed, so the
+      // assembly under it now *is* the grid those values are on, while a row on
+      // the card may have been carried from another resolution and must be
+      // written over the grid it was measured on.
       writeProfile: (output, provenance, format) =>
-        this.writeProfile(output, provenance, format),
+        this.writeProfile(output, provenance, format, this.grid()),
     })
     this.drawerEl = this.drawer.el
 
@@ -873,7 +879,10 @@ export class AnalysisWorkspace {
       return
     }
 
-    await this.writeProfile(held.output, held.provenance, format, base)
+    // `held.grid`, emphatically not `host.contigs()`: after a change of
+    // resolution the two are different assemblies and only the held one belongs
+    // to these numbers ({@link HeldProfile.grid}).
+    await this.writeProfile(held.output, held.provenance, format, held.grid, base)
   }
 
   /**
@@ -886,18 +895,35 @@ export class AnalysisWorkspace {
    * claim this app did not keep on that layout. One implementation for both,
    * rather than the drawer growing a second copy of the writers and a second
    * opinion about where a bin ends.
+   *
+   * **`grid` is the assembly these values were computed over, and the caller
+   * supplies it because this method cannot know it.** It used to read
+   * `host.contigs()` — the grid the session is on *now* — which is the same list
+   * right up until a profile is carried across a change of resolution
+   * ({@link carry}), and wrong from then on. A 1 kb vector exported after a
+   * switch to 5 kb was laid out over the 5 kb contig offsets: every contig after
+   * the first took its rows from the previous contig's values, and each stopped
+   * after its 5 kb bin count, so about four fifths of the vector was never
+   * written at all. The bigWig came out right anyway — `writeBigWig` rebuilds
+   * the offsets from each contig's `length` and the profile's own `binsize`,
+   * both of which are invariant under the switch — which made it worse rather
+   * than better: the two files offered for one row disagreed, and agreeing cell
+   * for cell is the first thing `write/bedgraph.ts` claims. Both writers are
+   * given the same list here so there is one answer about which assembly a file
+   * is laid out over, and so a contig set that genuinely changed would take the
+   * bigWig with it instead of being silently absorbed.
    */
   private async writeProfile(
     output: ProfileOutput,
     provenance: Provenance,
     format: 'bigwig' | 'bedgraph',
+    grid: readonly BedGraphContig[],
     name = exportBaseName(output.label),
   ): Promise<void> {
     const stamp = fileStamp(new Date())
-    const contigs = this.host.contigs()
     if (format === 'bedgraph') {
       downloadBlob(
-        new Blob([profileToBedGraph(output, contigs, provenance)], { type: 'text/plain' }),
+        new Blob([profileToBedGraph(output, grid, provenance)], { type: 'text/plain' }),
         `${name}-${stamp}.bedGraph`,
       )
       return
@@ -907,7 +933,7 @@ export class AnalysisWorkspace {
     // `CompressionStream` still produces a legal file, but a vector that does
     // not line up with the assembly is a caller bug and throws.
     const blob = await writeBigWig({
-      contigs: contigs.map((contig) => ({ name: contig.name, length: contig.length })),
+      contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
       values: output.values,
       firstBin: output.extent[0],
       binsize: output.binsize,

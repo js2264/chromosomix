@@ -38,6 +38,50 @@ export interface ProgressToast {
 const LINGER_MS = 4_000
 
 /**
+ * The corner the notes are drawn in: one column, made on demand, shared by both
+ * kinds of note.
+ *
+ * `.toast` anchors *itself* to the bottom-right, which is right for one note and
+ * wrong for two — the second is drawn on exactly the same pixels as the first
+ * and hides it. That is not hypothetical. A truncated `.pairs` import raises the
+ * "Incomplete file" warning, which is the one note in this application promised
+ * to stay until it is dismissed, and then starts the `.mcool` write on the very
+ * next statement (`app/Session.ts`); the progress note landed over the warning
+ * and left the reader believing a chromosome genuinely has no contacts.
+ *
+ * So the corner is a column rather than a point. `column-reverse` keeps the
+ * newest note nearest the corner and pushes the older ones up, so each keeps its
+ * own text and its own ×. Both constructors reach it through
+ * {@link toastShell}: one rule about where a note goes rather than one per kind,
+ * which is how the two came to disagree in the first place.
+ */
+function stack(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('.toast-stack')
+  if (found !== null) return found
+  const node = el('div', {
+    class: 'toast-stack',
+    // The anchoring `.toast` carries in the stylesheet, one level up, so the
+    // notes inside are otherwise exactly the boxes it describes. The column is
+    // as wide as its widest note, so `pointer-events` is off on it and on again
+    // for each note: a strip of nothing beside a short note must not swallow a
+    // click meant for the map behind it.
+    style: {
+      position: 'fixed',
+      right: '1rem',
+      bottom: '1rem',
+      zIndex: '90',
+      display: 'flex',
+      flexDirection: 'column-reverse',
+      alignItems: 'flex-end',
+      gap: '0.5rem',
+      pointerEvents: 'none',
+    },
+  })
+  document.body.appendChild(node)
+  return node
+}
+
+/**
  * The box itself: the corner panel, the line of text, and the ×.
  *
  * Both notes are the same object to a reader — same corner, same border, same
@@ -54,28 +98,51 @@ const LINGER_MS = 4_000
 function toastShell(
   message: string,
   ...rows: HTMLElement[]
-): { root: HTMLElement; close: HTMLButtonElement } {
+): { root: HTMLElement; close: HTMLButtonElement; remove: () => void } {
   const label = el('p', { class: 'toast-label', text: message })
   const close = el('button', { class: 'toast-close', text: '×', title: 'Dismiss' })
 
   const root = el(
     'div',
-    { class: 'toast', attrs: { role: 'status', 'aria-live': 'polite' } },
+    {
+      class: 'toast',
+      // Placed by the column rather than by itself; see {@link stack}. The
+      // stylesheet anchors every `.toast` to the same corner, which is the
+      // whole of why two of them used to be drawn on top of each other.
+      style: { position: 'static', pointerEvents: 'auto' },
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    },
     el('div', { class: 'toast-text' }, label, ...rows),
     close,
   )
-  document.body.appendChild(root)
-  return { root, close }
+  stack().appendChild(root)
+  /**
+   * Take this note away — and the column with it, when it was the last one.
+   *
+   * A column left standing would be inherited by whatever opens next: `Modal`
+   * marks every child of the body inert while a dialog is up, so an empty one
+   * kept from an hour ago would take the × off a note raised *during* the
+   * dialog. Nothing outlives the notes it holds.
+   */
+  const remove = (): void => {
+    const column = root.parentElement
+    root.remove()
+    if (column !== null && column.childElementCount === 0) column.remove()
+  }
+  return { root, close, remove }
 }
 
 /**
- * The one standing message note, so a second one replaces it rather than
- * landing on top of it.
+ * The one standing message note, so a second one replaces it rather than being
+ * added under it.
  *
- * Every note is drawn in the same fixed corner. Two at once are one illegible
- * box with two × in it, and the share dialog produces exactly that pair — the
- * link is copied when the dialog opens, and copied again a second or two later
- * if the reader shortens it, well inside the four seconds the first note stays.
+ * Not about overlap any more — {@link stack} is what keeps two notes off each
+ * other, and it keeps *every* pair off each other rather than only this one.
+ * What is left here is a rule about repetition: the share dialog copies the
+ * link when it opens and copies the shortened one a second or two later, well
+ * inside the four seconds the first note stays, and "Link copied" twice in a
+ * column is a second row saying nothing the first did not. A progress note is
+ * never a repeat of the note beside it, which is why it does not take part.
  */
 let standing: (() => void) | null = null
 
@@ -94,13 +161,13 @@ let standing: (() => void) | null = null
 export function messageToast(message: string): void {
   standing?.()
 
-  const { root, close } = toastShell(message)
+  const { root, close, remove } = toastShell(message)
   let timer: ReturnType<typeof setTimeout> | null = null
   const dismiss = (): void => {
     if (timer !== null) clearTimeout(timer)
     timer = null
     if (standing === dismiss) standing = null
-    root.remove()
+    remove()
   }
   close.addEventListener('click', dismiss)
   // Settled from the first frame: this note is never anything but finished, and
@@ -125,14 +192,14 @@ export function progressToast(
   const fill = el('div', { class: 'toast-fill' })
   const bar = el('div', { class: 'toast-bar' }, fill)
   const note = el('p', { class: 'toast-note', text: 'Starting…' })
-  const { root, close } = toastShell(message, bar, note)
+  const { root, close, remove } = toastShell(message, bar, note)
 
   let timer: ReturnType<typeof setTimeout> | null = null
   let settled = false
   const dismiss = (): void => {
     if (timer !== null) clearTimeout(timer)
     timer = null
-    root.remove()
+    remove()
   }
   close.addEventListener('click', () => {
     // Only while the work is still running: closing a *finished* note is

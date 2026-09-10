@@ -31,6 +31,7 @@ import {
   windowsAgree,
   type CellSpan,
   type LockMember,
+  type LockUnit,
 } from '../../src/panels/lock'
 
 describe('cell ↔ base-pair translation', () => {
@@ -77,10 +78,10 @@ describe('cell ↔ base-pair translation', () => {
 })
 
 describe('windowsAgree', () => {
-  const window = { rows: { lo: 0, hi: 1000 }, cols: { lo: 0, hi: 1000 } }
+  const window = { rows: { lo: 0, hi: 1000 }, cols: { lo: 0, hi: 1000 }, unit: 'bp' as const }
 
   it('accepts a difference under the tolerance', () => {
-    const nudged = { rows: { lo: 40, hi: 1040 }, cols: { lo: 0, hi: 1000 } }
+    const nudged = { rows: { lo: 40, hi: 1040 }, cols: { lo: 0, hi: 1000 }, unit: 'bp' as const }
     expect(windowsAgree(window, nudged, 50)).toBe(true)
     expect(windowsAgree(window, nudged, 10)).toBe(false)
   })
@@ -108,6 +109,31 @@ describe('spansAgree', () => {
       spansAgree({ spanBp: 400_000, bpPerCell: 1000 }, { spanBp: 250_000, bpPerCell: 1000 }),
     ).toBe(false)
   })
+
+  /**
+   * The allowance is per **sequence**, not per axis, and getting that wrong is
+   * how two roll-ups of one genome came to accuse each other.
+   *
+   * A cell never straddles a sequence, so an axis of sixteen chromosomes rounds
+   * sixteen last cells up. A 12.16 Mb genome is 12,168 kb of grid at 1 kb and
+   * 12,200 kb at 5 kb — 32 kb apart, which is six of the coarse panel's cells
+   * and well inside sixteen of them. Refused at a one-cell allowance, which is
+   * the false claim §16.4 calls worse than saying nothing at all.
+   */
+  it('allows one short last cell per sequence on the axis', () => {
+    const fine = { spanBp: 12_168_000, bpPerCell: 1000 }
+    const coarse = { spanBp: 12_200_000, bpPerCell: 5000 }
+    expect(spansAgree(fine, coarse, 16)).toBe(true)
+    expect(spansAgree(fine, coarse)).toBe(false)
+  })
+
+  it('still refuses a genuinely different assembly of the same many sequences', () => {
+    // Sixteen sequences either side, so the allowance is at its widest — and a
+    // genome half the length of the other is still not the same genome.
+    expect(
+      spansAgree({ spanBp: 12_200_000, bpPerCell: 5000 }, { spanBp: 6_000_000, bpPerCell: 5000 }, 16),
+    ).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -119,7 +145,7 @@ describe('spansAgree', () => {
  * clamps it to its own block, and it reports back what it actually shows —
  * which is the echo the lock has to recognise.
  */
-function panel(id: string, bpPerCell: number, cells: number) {
+function panel(id: string, bpPerCell: number, cells: number, unit: LockUnit = 'bp') {
   const state = {
     rows: [0, cells] as CellSpan,
     cols: [0, cells] as CellSpan,
@@ -127,9 +153,12 @@ function panel(id: string, bpPerCell: number, cells: number) {
     shown: 0,
     /** `false` stands in for a panel whose block has not arrived. */
     loaded: true,
+    /** What this panel counts its window in — `'cell'` above bin level. */
+    unit,
   }
   const member: LockMember = {
     id,
+    unit: () => state.unit,
     bpPerCell: () => bpPerCell,
     cells: () => ({ rows: cells, cols: cells }),
     locked: () => state.locked,
@@ -330,7 +359,7 @@ describe('ViewportLock', () => {
 
       const late = panel('late', 2000, 200)
       lock.join(late.member)
-      lock.seed(lead.state.rows, lead.state.cols, 1000)
+      lock.seed(lead.state.rows, lead.state.cols, 1000, 'bp')
       lock.catchUp('late')
 
       expect(late.state.rows).toEqual([50, 100])
@@ -344,10 +373,14 @@ describe('ViewportLock', () => {
       const b = panel('b', 1000, 400)
       lock.join(a.member)
       lock.join(b.member)
-      lock.seed([10, 60], [10, 60], 1000)
+      lock.seed([10, 60], [10, 60], 1000, 'bp')
       expect(a.state.shown).toBe(0)
       expect(b.state.shown).toBe(0)
-      expect(lock.window).toEqual({ rows: { lo: 10_000, hi: 60_000 }, cols: { lo: 10_000, hi: 60_000 } })
+      expect(lock.window).toEqual({
+        rows: { lo: 10_000, hi: 60_000 },
+        cols: { lo: 10_000, hi: 60_000 },
+        unit: 'bp',
+      })
     })
 
     /**
@@ -363,15 +396,19 @@ describe('ViewportLock', () => {
       lock.join(a.member)
       lock.join(b.member)
       drag(lock, b, [300, 340], [300, 340])
-      lock.seed([0, 400], [0, 400], 1000)
-      expect(lock.window).toEqual({ rows: { lo: 300_000, hi: 340_000 }, cols: { lo: 300_000, hi: 340_000 } })
+      lock.seed([0, 400], [0, 400], 1000, 'bp')
+      expect(lock.window).toEqual({
+        rows: { lo: 300_000, hi: 340_000 },
+        cols: { lo: 300_000, hi: 340_000 },
+        unit: 'bp',
+      })
     })
 
     it('is forgotten with the rest of the window when the deck navigates', () => {
       const lock = new ViewportLock()
       const a = panel('a', 1000, 400)
       lock.join(a.member)
-      lock.seed([10, 60], [10, 60], 1000)
+      lock.seed([10, 60], [10, 60], 1000, 'bp')
       lock.reset()
       expect(lock.window).toBeNull()
     })
@@ -385,7 +422,7 @@ describe('ViewportLock', () => {
       const b = panel('b', 1000, 400)
       lock.join(a.member)
       lock.join(b.member)
-      lock.seed([0, 400], [0, 400], 1000)
+      lock.seed([0, 400], [0, 400], 1000, 'bp')
       drag(lock, a, [10, 60], [10, 60])
       expect(b.state.rows).toEqual([10, 60])
     })
@@ -460,5 +497,80 @@ describe('navigating to a different block', () => {
     const before = other.state.shown
     lock.catchUp('other')
     expect(other.state.shown).toBe(before)
+  })
+})
+
+/**
+ * Above bin level, where a cell is a whole sequence (§16.3).
+ *
+ * The module's currency is base pairs *because* a cell has a width in them, and
+ * at contig level it has not: one cell is a whole chromosome, and the number a
+ * panel answers for `bpPerCell` there is the file's bin size — a fact about the
+ * file and not a length of anything drawn. Converting through it took a window
+ * on chromosomes 10–14 of a 1 kb roll-up and handed the 5 kb roll-up beside it
+ * chromosomes 2–3, with the bar still saying one navigation. What the two grids
+ * genuinely share is the **index**: cell `i` is sequence `i` in both.
+ */
+describe('a deck above bin level', () => {
+  it('carries the cell index between two roll-ups of one genome', () => {
+    const lock = new ViewportLock()
+    // The same sixteen chromosomes, one file binned at 1 kb and one at 5 kb.
+    const fine = panel('fine', 1000, 16, 'cell')
+    const coarse = panel('coarse', 5000, 16, 'cell')
+    lock.join(fine.member)
+    lock.join(coarse.member)
+
+    drag(lock, fine, [10, 14], [10, 14])
+    // Chromosomes 10–14, not the 2–3 that dividing 10,000 bp by 5,000 gives.
+    expect(coarse.state.rows).toEqual([10, 14])
+    expect(coarse.state.cols).toEqual([10, 14])
+  })
+
+  it('seeds and catches a newcomer up in the same currency', () => {
+    const lock = new ViewportLock()
+    const lead = panel('lead', 1000, 16, 'cell')
+    lead.state.rows = [4, 9]
+    lead.state.cols = [4, 9]
+    lock.join(lead.member)
+    const late = panel('late', 5000, 16, 'cell')
+    lock.join(late.member)
+
+    lock.seed(lead.state.rows, lead.state.cols, 1, 'cell')
+    lock.catchUp('late')
+    expect(late.state.rows).toEqual([4, 9])
+  })
+
+  /**
+   * A companion mid-read between two levels is the one way the two currencies
+   * meet, and the deck's own gate prints a sentence about it. Here the lock
+   * makes the same refusal for itself: a window counted in sequences is not a
+   * window a bin-level panel can read as base pairs, and standing still is the
+   * only honest thing to do with a number that means something else.
+   */
+  it('does not move a panel that is counting the other currency', () => {
+    const lock = new ViewportLock()
+    const rolled = panel('rolled', 1000, 16, 'cell')
+    const binned = panel('binned', 1000, 400, 'bp')
+    lock.join(rolled.member)
+    lock.join(binned.member)
+
+    drag(lock, rolled, [2, 6], [2, 6])
+    expect(binned.state.shown).toBe(0)
+    expect(binned.state.rows).toEqual([0, 400])
+  })
+
+  it('takes the level toggle as a move rather than as a nudge under the tolerance', () => {
+    // Both windows read `[0, 16)`, and the second means something else. A
+    // tolerance comparison across currencies would swallow it and leave the
+    // deck driving in sequences from a window stated in base pairs.
+    const lock = new ViewportLock()
+    const map = panel('map', 1000, 16, 'bp')
+    lock.join(map.member)
+    lock.report('map', [0, 16], [0, 16])
+    expect(lock.window?.unit).toBe('bp')
+    map.state.unit = 'cell'
+    lock.report('map', [0, 16], [0, 16])
+    expect(lock.window?.unit).toBe('cell')
+    expect(lock.window?.rows).toEqual({ lo: 0, hi: 16 })
   })
 })

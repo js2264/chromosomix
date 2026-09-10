@@ -86,6 +86,8 @@ const WRITE_DELAY_MS = 500
 let timer: ReturnType<typeof setTimeout> | null = null
 let pending: Workspace | null = null
 let inFlight: Promise<void> = Promise.resolve()
+/** Set once by {@link suspendWorkspace}; see there for why nothing clears it. */
+let suspended = false
 
 /**
  * Remember this workspace, shortly.
@@ -95,6 +97,10 @@ let inFlight: Promise<void> = Promise.resolve()
  * put storage between a click and a repaint.
  */
 export function writeWorkspace(value: Workspace): void {
+  // The reader asked, in this window, that nothing be kept ({@link
+  // suspendWorkspace}). Dropped rather than deferred: there is no later moment
+  // at which this value becomes one they asked for.
+  if (suspended) return
   pending = value
   if (timer !== null) return
   timer = setTimeout(() => {
@@ -188,6 +194,10 @@ export async function readWorkspace(): Promise<Workspace | null> {
  * Both "Start fresh" and "Forget everything" land here. Any write still waiting
  * is dropped with it, or the debounce would put the workspace straight back a
  * moment after the reader asked for it to go.
+ *
+ * Dropping is all this does, and for "Forget everything" that is deliberately
+ * not enough on its own — see {@link suspendWorkspace}, which `state/stored.ts`
+ * calls beside this one.
  */
 export async function forgetWorkspace(): Promise<void> {
   if (timer !== null) {
@@ -196,6 +206,47 @@ export async function forgetWorkspace(): Promise<void> {
   }
   pending = null
   await workspaceStore.delete(KEY)
+}
+
+/**
+ * Stop writing the record at all, for the rest of this page load.
+ *
+ * The second half of "Forget everything" (`state/stored.ts`), and the half that
+ * is easy to leave out because the first half *looks* complete: the record is
+ * gone the moment the button is pressed. It comes back on its own.
+ * `App.rememberDurably()` sits on the state-change path and writes
+ * unconditionally once the boot has settled, and `pagehide` flushes whatever is
+ * waiting — so a reader on a borrowed laptop pressed the button, watched the
+ * record go, panned the map once (or simply closed the browser) and the next
+ * person to open the site was met by the banner naming the file they had been
+ * reading. That is the §11 outcome the button exists to prevent, reached
+ * without the reader doing anything they would recognise as undoing it.
+ *
+ * **Nothing clears this, and {@link forgetWorkspace} deliberately does not.**
+ * Re-arming there is the tempting shortcut and it hands the leak straight back:
+ * closing the last tab is `recordAction`'s `'forget'`, so a reader who forgot
+ * everything and then closed their one tab would be recorded again by the next
+ * file they opened, having asked for exactly the opposite. Being forgotten is
+ * not a state that a pan, a tab close or a "Start fresh" should be able to talk
+ * this window out of.
+ *
+ * A **reload** re-arms it, because module state does not survive one — and that
+ * is the right line rather than a leak in the flag. It is the same line
+ * `stored.ts` draws when it refuses to reload the page on the reader's behalf:
+ * a live tab is something they are looking at, not something that was kept, and
+ * a window they have deliberately started again is a new answer to the same
+ * question.
+ */
+export function suspendWorkspace(): void {
+  suspended = true
+  // The write already on the debounce goes too. It was queued before the button
+  // and would land half a second after it, which is the failure `forgetWorkspace`
+  // above cancels for "Start fresh" and the one the sweep used to walk into.
+  if (timer !== null) {
+    clearTimeout(timer)
+    timer = null
+  }
+  pending = null
 }
 
 /**

@@ -121,6 +121,11 @@ function isNumber(value: string | undefined): boolean {
   return value !== undefined && value !== '' && Number.isFinite(Number(value))
 }
 
+/** An integer that is not negative — a block size or offset, or a count of them. */
+function isWholeNumber(value: string | undefined): boolean {
+  return isInteger(value) && Number(value) >= 0
+}
+
 // ---------------------------------------------------------------------------
 // Sniffing
 // ---------------------------------------------------------------------------
@@ -200,8 +205,11 @@ function columnOf(header: string[], candidates: string[]): number {
  *
  * `score` is what a colour or a height would be driven by, and the right column
  * for it differs: plain BED's column 5 is the 0–1000 display score, while
- * MACS's narrowPeak and broadPeak carry the number anyone actually wants —
- * `signalValue` — in column 7. So the peak formats take column 7 and say so in
+ * MACS's peak formats carry the number anyone actually wants — `signalValue` —
+ * further along. narrowPeak and broadPeak keep it in column 7; a gappedPeak is
+ * BED12+3, so its columns 7 to 9 are thickStart, thickEnd and itemRgb and its
+ * statistics only start at column 13. So each peak format takes signalValue
+ * from where its own layout keeps it — see {@link signalAt} — and says so in
  * the tooltip; everything else takes column 5.
  */
 export function parseBed(text: string, fileName = ''): FeatureSet {
@@ -226,12 +234,12 @@ export function parseBed(text: string, fileName = ''): FeatureSet {
     const end = Number(columns[2])
     const name = columns[3] !== undefined && columns[3] !== '.' ? columns[3] : ''
     const strand = strandOf(columns[5])
-    const score = peak === null ? numberOr(columns[4]) : numberOr(columns[6])
+    const score = peak === null ? numberOr(columns[4]) : numberOr(columns[signalAt(peak)])
 
     // BED12's blocks are the same sub-structure a GTF transcript has, expressed
     // as two comma-separated lists relative to the feature's own start.
-    const exons = blocksOf(columns, start)
-    const cds = thickOf(columns, peak !== null)
+    const exons = blocksOf(columns, start, end)
+    const cds = thickOf(columns, peak)
 
     builder.add(contig, start, end, {
       strand,
@@ -252,28 +260,46 @@ export function parseBed(text: string, fileName = ''): FeatureSet {
   return builder.finish()
 }
 
+/** Which peak format a BED-like file is. `null` alongside it means a plain BED. */
+type PeakFlavour = 'narrow' | 'broad' | 'gapped'
+
 /**
- * `narrow`, `broad`, or `null` for a plain BED.
+ * `narrow`, `broad`, `gapped`, or `null` for a plain BED.
  *
  * The **column count** is what settles most of this, because these formats are
  * fixed-width where BED is not: narrowPeak is exactly 10 columns, broadPeak
- * exactly 9, and BED12 exactly 12. Only nine columns is genuinely ambiguous —
- * BED9 and broadPeak agree on the count — and there the ninth column decides:
- * BED9's is an RGB triple, broadPeak's is a -log10 q-value. A comma proves the
- * first; a decimal point is what is left to distinguish the second, since BED9's
+ * exactly 9, gappedPeak exactly 15 (BED12 with three statistics appended) and
+ * BED12 exactly 12. Only nine columns is genuinely ambiguous — BED9 and
+ * broadPeak agree on the count — and there the ninth column decides: BED9's is
+ * an RGB triple, broadPeak's is a -log10 q-value. A comma proves the first; a
+ * decimal point is what is left to distinguish the second, since BED9's
  * thickStart, thickEnd and `0`-for-black are all integers.
  *
  * An earlier version tested only "are columns 7 to 9 numeric", which is true of
  * a BED12 whose itemRgb is `0` — so `thickStart` was read as a signal value and
  * the coding span vanished from every gene in the file.
+ *
+ * gappedPeak used to be folded in with `broad`, on the reasoning that a peak is
+ * a peak. It is not: a gappedPeak is BED12 with the three statistics appended,
+ * so reading its signalValue from column 7 reported thickStart — a genomic
+ * coordinate — as a MACS signal, and calling it a peak threw away the thick
+ * span it genuinely carries. It gets its own flavour for exactly that reason,
+ * and the suffix is no longer the only thing that can spot one.
  */
-function peakFlavour(text: string, fileName: string): 'narrow' | 'broad' | null {
+function peakFlavour(text: string, fileName: string): PeakFlavour | null {
   if (/\.narrowpeak(\.gz)?$/i.test(fileName)) return 'narrow'
-  if (/\.(broad|gapped)peak(\.gz)?$/i.test(fileName)) return 'broad'
+  if (/\.gappedpeak(\.gz)?$/i.test(fileName)) return 'gapped'
+  if (/\.broadpeak(\.gz)?$/i.test(fileName)) return 'broad'
   const row = firstRow(text)
   if (row === null) return null
   if (row.length === 10 && isNumber(row[6]) && isNumber(row[7]) && isNumber(row[8])) {
     return isInteger(row[9]) ? 'narrow' : null
+  }
+  // BED12 plus three trailing numbers is a gappedPeak, and nothing else in the
+  // family is fifteen columns wide — so a file renamed away from .gappedPeak is
+  // still read as one, the way a renamed narrowPeak is.
+  if (row.length === 15 && isNumber(row[12]) && isNumber(row[13]) && isNumber(row[14])) {
+    return 'gapped'
   }
   if (row.length !== 9) return null
   if (row[8] !== undefined && row[8].includes(',')) return null
@@ -291,12 +317,48 @@ function numberOr(value: string | undefined): number {
   return value === undefined || value === '' || value === '.' ? Number.NaN : Number(value)
 }
 
-/** BED12 blocks as flattened absolute `[start, end, …]`, or `null`. */
-function blocksOf(columns: string[], start: number): number[] | null {
+/**
+ * Which column holds `signalValue`, and so where the three statistics begin.
+ *
+ * narrowPeak and broadPeak are BED6 with signalValue, pValue and qValue bolted
+ * on, so they begin at column 7. A gappedPeak is BED12+3: its columns 7 to 9
+ * are thickStart, thickEnd and itemRgb, and the statistics begin at column 13.
+ * Hard-coding 7 for every peak format is what made a gappedPeak's "signal" a
+ * genomic coordinate.
+ */
+function signalAt(peak: PeakFlavour): number {
+  return peak === 'gapped' ? 12 : 6
+}
+
+/**
+ * BED12 blocks as flattened absolute `[start, end, …]`, or `null`.
+ *
+ * Twelve columns is not proof of BED12. {@link parseBed} accepts a headed
+ * annotation table too — a peak table with `gene`, `log2FC` and `padj` bolted
+ * on is thirteen columns — and its eleventh and twelfth columns are whatever
+ * its author put there, so a width test alone read `MYC` and `2.31` as a block
+ * list and hung one invented, backwards exon on a peak with no sub-structure
+ * at all.
+ *
+ * Its **shape** is what tells a real block table from two unrelated columns,
+ * and BED12 pins that shape down completely: `blockCount` agrees with the list
+ * length, every part is a whole non-negative number, and the blocks tile the
+ * feature — the first starts at its start, the last ends at its end. A row
+ * failing any of that is not BED12 whatever its width, and keeps its own span.
+ * Testing the data rather than the presence of a header is deliberate: a headed
+ * file whose columns really are blocks still gets them, and a headerless
+ * fifteen-column gappedPeak, whose blocks are real, is unaffected.
+ */
+function blocksOf(columns: string[], start: number, end: number): number[] | null {
   if (columns.length < 12) return null
   const sizes = (columns[10] ?? '').split(',').filter((part) => part !== '')
   const offsets = (columns[11] ?? '').split(',').filter((part) => part !== '')
   if (sizes.length === 0 || sizes.length !== offsets.length) return null
+  if (!isInteger(columns[9]) || Number(columns[9]) !== sizes.length) return null
+  if (!sizes.every(isWholeNumber) || !offsets.every(isWholeNumber)) return null
+  const last = sizes.length - 1
+  if (Number(offsets[0]) !== 0) return null
+  if (start + Number(offsets[last]) + Number(sizes[last]) !== end) return null
   const out: number[] = []
   for (let i = 0; i < sizes.length; i++) {
     const from = start + Number(offsets[i])
@@ -305,9 +367,16 @@ function blocksOf(columns: string[], start: number): number[] | null {
   return out
 }
 
-/** BED's thick span, which is the coding region. Absent on the peak formats. */
-function thickOf(columns: string[], isPeak: boolean): [number, number] | null {
-  if (isPeak || columns.length < 8) return null
+/**
+ * BED's thick span, which is the coding region.
+ *
+ * Absent on narrowPeak and broadPeak, whose columns 7 and 8 are signalValue and
+ * pValue rather than a span. A gappedPeak is the exception among the peaks: it
+ * is BED12+3, its 7 and 8 really are thickStart and thickEnd, and lumping it in
+ * with the others silently dropped a span it does carry.
+ */
+function thickOf(columns: string[], peak: PeakFlavour | null): [number, number] | null {
+  if (peak === 'narrow' || peak === 'broad' || columns.length < 8) return null
   if (!isInteger(columns[6]) || !isInteger(columns[7])) return null
   const from = Number(columns[6])
   const to = Number(columns[7])
@@ -315,15 +384,16 @@ function thickOf(columns: string[], isPeak: boolean): [number, number] | null {
 }
 
 /** The tooltip's extra lines for one BED row. */
-function bedDetail(columns: string[], peak: 'narrow' | 'broad' | null): string {
+function bedDetail(columns: string[], peak: PeakFlavour | null): string {
   if (peak === null) {
     const score = columns[4]
     return score === undefined || score === '' || score === '.' ? '' : `score ${score}`
   }
+  const at = signalAt(peak)
   const parts = [
-    `signal ${columns[6] ?? '—'}`,
-    `-log10 p ${columns[7] ?? '—'}`,
-    `-log10 q ${columns[8] ?? '—'}`,
+    `signal ${columns[at] ?? '—'}`,
+    `-log10 p ${columns[at + 1] ?? '—'}`,
+    `-log10 q ${columns[at + 2] ?? '—'}`,
   ]
   if (peak === 'narrow' && columns[9] !== undefined && columns[9] !== '-1') {
     parts.push(`summit +${columns[9]}`)

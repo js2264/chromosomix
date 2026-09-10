@@ -26,7 +26,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { MOTIF_TASK } from '@/analysis/tasks/motif'
+import { MOTIF_SITE_LIMIT, MOTIF_TASK } from '@/analysis/tasks/motif'
 import { defaultParams, type AnalysisContext } from '@/analysis/types'
 import { defaultStyle, type AnnotationEntry } from '@/annotations/types'
 import { ParamForm } from '@/ui/ParamForm'
@@ -186,5 +186,37 @@ describe('the form it renders', () => {
     const text = form().el.textContent ?? ''
     expect(text).toContain('Reference')
     expect(text).toContain('Both strands')
+  })
+
+  /**
+   * **Most sites** carries the ceiling as well as the floor.
+   *
+   * `MOTIF_SITE_LIMIT` is what `analysis/run/motif.ts` caps every scan at, and
+   * the spec used to declare `min` and no `max` — so `ParamForm.numberControl`,
+   * which applies each bound only where it is defined, committed 2,000,000
+   * unchanged. The run then capped at 500,000 and told the reader to raise a
+   * control that had already stopped meaning anything. A form that cannot
+   * produce the impossible number is the half of the fix a reader sees.
+   */
+  it('will not commit a site limit above the ceiling the run enforces', () => {
+    const view = form()
+    const box = view.el.querySelector<HTMLInputElement>('input[type="number"]')
+    expect(box).not.toBeNull()
+    if (box === null) return
+    // In the DOM as well as in the clamp, so the box itself says what it takes.
+    expect(box.max).toBe(String(MOTIF_SITE_LIMIT))
+    box.value = '2000000'
+    box.dispatchEvent(new Event('change'))
+    expect(view.value.limit).toBe(MOTIF_SITE_LIMIT)
+    expect(box.value).toBe(String(MOTIF_SITE_LIMIT))
+  })
+
+  it('still takes a smaller limit, which is the reader’s to choose', () => {
+    const view = form()
+    const box = view.el.querySelector<HTMLInputElement>('input[type="number"]')
+    if (box === null) return
+    box.value = '1000'
+    box.dispatchEvent(new Event('change'))
+    expect(view.value.limit).toBe(1000)
   })
 })

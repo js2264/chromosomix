@@ -427,6 +427,20 @@ export class MapPanel {
    */
   private opened: OpenResult | null = null
   /**
+   * A bin size the deck asked for **before this panel had opened**, held until
+   * it can be answered.
+   *
+   * Nothing about this file's resolution ladder is known until the first open
+   * lands: {@link entries} is empty and {@link binsize} is `undefined`, so
+   * {@link useBinsize} would read a three-rung `.mcool` as a file that "carries
+   * one resolution only" and print that under a panel whose very next act is to
+   * descend onto the rung it was said to lack — `firstEntry` lands a collection
+   * on {@link MapPanelProps.preferBinsize}, which is this same number. Held
+   * rather than refused, because the refusal is a claim about the file made out
+   * of a race, and nothing on the descent path ever clears it.
+   */
+  private wantedBinsize: number | undefined
+  /**
    * The zoom's own reader for this panel.
    *
    * Its ceiling is the block this panel read, not the file: a companion
@@ -644,9 +658,25 @@ export class MapPanel {
    * for, and otherwise says it has only the one. Published through
    * {@link MapPanelProps.onResolved} by {@link openEntry}, so a rung reached
    * this way is in the link exactly as one the reader picked is.
+   *
+   * **A panel that has not opened yet says nothing and follows later**, which
+   * is a different state from having one rung and is now told apart from it:
+   * see {@link wantedBinsize} and the answer {@link load} gives it.
    */
   useBinsize(bp: number): boolean {
     if (!Number.isFinite(bp) || bp <= 0) return false
+    // **A panel that has not opened is held, not accused.** See
+    // {@link wantedBinsize}: before the first read this file has no known
+    // ladder at all, so every one of the answers below would be about
+    // `this.entries` being empty rather than about the file — and a collection
+    // is on its way to this very rung anyway. `true` because the deck's
+    // question is "will you follow", and the honest answer is yes-as-soon-as-I-
+    // can; naming it in the bar's list of files that could not follow is the
+    // same false claim in the deck's own voice.
+    if (this.opened === null) {
+      this.wantedBinsize = bp
+      return true
+    }
     // Already there, whatever the ladder looks like — including a plain cooler
     // that happens to be at the resolution the deck is moving to.
     if (this.binsize() === bp) {
@@ -656,8 +686,14 @@ export class MapPanel {
     const rungs = rungsOf(this.entries)
     const match = rungs.find((rung) => rung.binsize === bp)
     if (match === undefined) {
+      const here = this.binsize()
+      // "Staying at 0 bp" is what `?? 0` used to render for a file whose open
+      // answered no bin size at all — a measurement in a sentence about
+      // honesty, and not one this panel has. Where there is no number the
+      // sentence simply does not offer one.
       this.sayResolution(
-        `staying at ${fmt.bp(this.binsize() ?? 0)}: this file has no ${fmt.bp(bp)} level` +
+        `${here === undefined ? 'staying where it is' : `staying at ${fmt.bp(here)}`}: ` +
+          `this file has no ${fmt.bp(bp)} level` +
           (rungs.length === 0
             ? ', and carries one resolution only.'
             : ` — it has ${rungs.map((rung) => fmt.bp(rung.binsize)).join(', ')}.`),
@@ -1014,6 +1050,16 @@ export class MapPanel {
       if (this.disposed) return
       this.opened = info
       this.paintEntries(info)
+      // The ladder is known now, so a press this panel was too early to answer
+      // can be answered honestly: either this *is* the rung it asked for and
+      // there was never anything to say, or it is one this file has — in which
+      // case `useBinsize` has fired `openEntry`, which clears `opening` and
+      // `read` and re-enters here, and carrying on would fetch the same block
+      // twice — or it is one this file has not, and the note it writes now has
+      // a real bin size in it. See {@link wantedBinsize}.
+      const wanted = this.wantedBinsize
+      this.wantedBinsize = undefined
+      if (wanted !== undefined && wanted !== info.binsize && this.useBinsize(wanted)) return
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
       this.read = key

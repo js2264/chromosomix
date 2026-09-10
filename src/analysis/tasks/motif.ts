@@ -64,6 +64,23 @@ import { READY, waitingFor } from '../types'
  * in the header of every table exported from it. Past it the search stops and
  * says so — in a note, and in the lane's own summary — because a lane that is
  * silently a prefix of the answer is the one failure a reader cannot see.
+ *
+ * **It is the ceiling as well as the default, and that has to be said out
+ * loud.** `analysis/run/motif.ts` clamps the scan to this number whatever the
+ * parameter asks for — the memory it guards is the annotations worker's, and a
+ * reader who types eight digits into a box would exhaust it before anything
+ * reached the screen. For a while only the clamp knew that: the spec below
+ * carried `min` and no `max`, so the form accepted 2,000,000, the run capped at
+ * 500,000 anyway, and the truncation note quoted the reader's number and told
+ * them to *raise* a control that had stopped meaning anything. A reader who
+ * followed that instruction got a byte-identical answer and the same sentence
+ * again. So the bound is on the spec — the form cannot produce an impossible
+ * number — and the runner clamps a second time for the stored recipe, the batch
+ * and the CLI, none of which pass through a form. What the provenance records is
+ * still the number that was *asked* for and not the one the run used
+ * (`analysis/worker/analysis.worker.ts` argues that policy), which is exactly
+ * why the ceiling must be visible in the form and in the note rather than
+ * applied silently inside the scan.
  */
 export const MOTIF_SITE_LIMIT = 500_000
 
@@ -99,9 +116,20 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'limit',
     label: 'Most sites',
-    hint: 'A backstop against a pattern like N. The run says so when it bites.',
+    // The ceiling is written from the constant rather than typed out, so a hint
+    // promising a number the scan does not honour cannot come back by drift.
+    hint:
+      `A backstop against a pattern like N. Up to ${MOTIF_SITE_LIMIT.toLocaleString()}; ` +
+      'the run says so when it bites.',
     default: MOTIF_SITE_LIMIT,
     min: 1,
+    // Both bounds, because {@link MOTIF_SITE_LIMIT} is the ceiling and not only
+    // the default: `ParamForm.numberControl` clamps on `change` and on Enter
+    // only for a bound that is defined, so a `min` alone let the box commit a
+    // number the run would quietly ignore. With the `max` here the box carries
+    // it in the DOM too, and the value that reaches the provenance is one the
+    // run can honour.
+    max: MOTIF_SITE_LIMIT,
     integer: true,
   },
 ]
@@ -127,10 +155,20 @@ export function motifPattern(params: Params): string {
  * residues are already in memory, having been read when the reader dropped the
  * file, and the scan is one linear pass over them.
  *
- * That is not the same as free of *time*: a mammalian genome is three billion
- * mask tests. The note says so, because a class that prices the reads and a
- * sentence that prices the wait are two different honesties and the reader needs
- * both.
+ * That is not the same as free of *time*: a scan is one mask test per base of
+ * the motif at every position of the reference. The note says so, because a
+ * class that prices the reads and a sentence that prices the wait are two
+ * different honesties and the reader needs both.
+ *
+ * **The wait it prices is the one this app can actually reach.** The sentence
+ * used to end "a minute or so on a mammalian one", which was a price for a run
+ * nobody can start: `annotations/worker/annotations.worker.ts` refuses a FASTA
+ * over `FASTA_BYTE_CAP` — 300 MB, checked on the local file's size and again on
+ * the decoded bytes — with a refusal saying in as many words that a mammalian
+ * genome is the wrong thing to open this way. The largest reference that reaches
+ * this task is therefore a few hundred megabases, which is seconds and not a
+ * minute, and a sentence that overprices the wait teaches a reader to expect a
+ * hang the code has already ruled out.
  */
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const free = { class: 'free' as const, requests: 0, bytes: 0, note: 'Nothing to read.' }
@@ -157,7 +195,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       `No file reads at all: one pass over ${sequence?.label ?? 'the reference'}` +
       `${bases === 0 ? '' : `, ${(bases / 1e6).toFixed(1)} Mb`}, in the worker that already ` +
       `holds it. ${compiled.length} ${compiled.length === 1 ? 'base' : 'bases'} tested per ` +
-      'position, so it is seconds on a yeast genome and a minute or so on a mammalian one.',
+      'position, so it is a moment on a yeast genome and a few seconds on the largest ' +
+      'reference this can hold.',
   }
 }
 

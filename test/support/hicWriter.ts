@@ -52,6 +52,53 @@ export interface HicWriteOptions {
   dense?: boolean
   /** Normalisation vectors per `"<type>/<chromIdx>/<binSize>"`, as divisors. */
   norms?: Record<string, Float64Array>
+  /**
+   * Write the two expected-value sections **populated** rather than empty.
+   *
+   * Off by default, because a file without them is legal and every fixture
+   * written before this option existed is byte-identical without it. It should
+   * be on wherever the footer itself is what is under test, and here is why:
+   * the reader does not decode these vectors — it walks past them to reach the
+   * normalisation index behind them — and an empty section is a walk whose loop
+   * body never runs. Three of the fields inside that body changed width at v9
+   * (`nValues` widened to int64, the values and the per-chromosome scale
+   * factors both narrowed to float32), and the scale-factor narrowing was
+   * missing from the reader for as long as no fixture made it execute. An empty
+   * section proves the count is read; only a populated one proves the widths.
+   *
+   * What is written is the shape Juicer writes: one vector per resolution in
+   * the plain section, and one per resolution per normalisation in the
+   * normalised section, each carrying one scale factor per chromosome.
+   */
+  expectedValues?: boolean
+  /**
+   * v9 only: leave the header's pointer to the normalisation index at zero.
+   *
+   * v9 added that pointer so a reader can reach the normalisations without
+   * walking the expected-value sections, and `hic-straw` uses it when it is
+   * there — which means a v9 fixture that carries it cannot be an oracle for
+   * the walk, because straw never performs one. Zeroing it puts straw back on
+   * its own `skipExpectedValues`, so the two implementations are then compared
+   * on the thing that actually differs between v8 and v9. Straw treats a zero
+   * pointer as "not known" and falls back, so the file stays readable by it.
+   */
+  withoutNormIndexPointer?: boolean
+  /**
+   * Write the normalisation-vector *data* after the index, as Juicer does.
+   *
+   * This writer's default puts it before the footer, which is legal — the index
+   * carries an absolute offset and every reader seeks to it — and which leaves
+   * the file ending within a few dozen bytes of the index. That is fine for
+   * this reader and fatal for `hic-straw`'s walk: when it has no pointer to the
+   * index it reads it with `Math.max(1000, …)`-byte requests and re-reads the
+   * *same* range whenever fewer than a hundred bytes come back, so a file that
+   * ends just past the index spins forever. Real files never do, because this
+   * is where their vector data lives.
+   *
+   * Off by default so that every fixture written before this option existed is
+   * byte-identical without it; on wherever straw is asked to walk.
+   */
+  normVectorsAfterFooter?: boolean
   /** Free-form header attributes, as a real file carries. */
   attributes?: Record<string, string>
   /**
@@ -294,6 +341,116 @@ async function deflate(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
+/**
+ * One expected-value vector, as a footer section carries it.
+ *
+ * `type` is present in the **normalised** section and absent from the plain
+ * one, and that leading string is the only structural difference between the
+ * two — which is why the reader's walk takes a `normed` flag rather than having
+ * two functions.
+ */
+interface ExpectedValueVector {
+  type?: string
+  unit: string
+  binSize: number
+  values: Float64Array
+  /** `[fileChromIndex, factor]` pairs, one per chromosome. */
+  scaleFactors: Array<[number, number]>
+}
+
+/**
+ * The vectors one section carries.
+ *
+ * Shaped after what Juicer writes rather than after what is convenient: the
+ * plain section holds one vector per resolution, the normalised section one per
+ * resolution per normalisation, and every vector is as long as the longest
+ * chromosome is in bins and carries one scale factor per chromosome. Nothing
+ * reads the numbers themselves — the reader skips the section and straw skips
+ * it too — so they are arbitrary but deterministic, and it is the *counts* that
+ * decide how far the walk has to travel.
+ *
+ * A fixture with no normalisation vectors still gets one normalised vector,
+ * named `VC`. That is the one unfaithful thing here and it is deliberate: the
+ * normalised walk is the half that reads a leading type string, and a section
+ * left empty because the file happens to carry no weights would leave that half
+ * unexecuted in exactly the fixtures most likely to be pointed at the footer.
+ */
+function expectedValueVectorsFor(
+  options: HicWriteOptions,
+  fileChroms: HicWriteChrom[],
+  normed: boolean,
+): ExpectedValueVector[] {
+  if (options.expectedValues !== true) return []
+  const names = Object.keys(options.norms ?? {}).map((key) => key.split('/')[0])
+  const types = normed ? [...new Set(names)] : []
+  if (normed && types.length === 0) types.push('VC')
+  const scaleFactors: Array<[number, number]> = fileChroms.map((_, at) => [at, 1 + at / 10])
+  const out: ExpectedValueVector[] = []
+  for (const type of normed ? types : [undefined]) {
+    for (const binSize of options.resolutions) {
+      const length = Math.max(...fileChroms.map((chrom) => binsOf(chrom.length, binSize)))
+      const values = new Float64Array(length)
+      for (let i = 0; i < length; i++) values[i] = 1000 / (i + 1)
+      out.push({
+        ...(type === undefined ? {} : { type }),
+        unit: 'BP',
+        binSize,
+        values,
+        scaleFactors,
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * One expected-value section, written at the version's widths.
+ *
+ * Three fields moved at v9 and all three are here: `nValues` widened from
+ * int32 to int64, the values narrowed from float64 to float32, and the
+ * per-chromosome scale factor narrowed with them. A reader that misses any one
+ * of the three walks off the end of the section rather than to the start of the
+ * next one, and — because the normalisation index sits behind both sections —
+ * loses the file's weights rather than its expected values.
+ */
+function writeExpectedValues(w: Writer, version: number, vectors: ExpectedValueVector[]): void {
+  w.int32(vectors.length)
+  for (const vector of vectors) {
+    if (vector.type !== undefined) w.string(vector.type)
+    w.string(vector.unit)
+    w.int32(vector.binSize)
+    if (version >= 9) w.int64(vector.values.length)
+    else w.int32(vector.values.length)
+    for (const value of vector.values) {
+      if (version >= 9) w.float32(value)
+      else w.float64(value)
+    }
+    w.int32(vector.scaleFactors.length)
+    for (const [chromIdx, factor] of vector.scaleFactors) {
+      w.int32(chromIdx)
+      if (version >= 9) w.float32(factor)
+      else w.float64(factor)
+    }
+  }
+}
+
+/**
+ * One normalisation vector's payload, at the version's widths.
+ *
+ * v9 widened the count to int64 and narrowed the values to float32 — the same
+ * pair of moves the expected-value vectors made, and the reader's
+ * `readNormVector` mirrors it.
+ */
+function writeNormVector(w: Writer, version: number, vector: Float64Array): void {
+  if (version >= 9) {
+    w.int64(vector.length)
+    for (const value of vector) w.float32(value)
+  } else {
+    w.int32(vector.length)
+    for (const value of vector) w.float64(value)
+  }
+}
+
 /** Everything the caller needs to assert against what came back. */
 export interface HicFixture {
   bytes: Uint8Array
@@ -436,17 +593,15 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
   }
 
   // ---- normalisation vectors ----------------------------------------------
+  // Before the footer by default, after the index under
+  // `normVectorsAfterFooter`; the index carries an absolute offset either way.
   const normPositions = new Map<string, { position: number; nBytes: number }>()
-  for (const [key, vector] of Object.entries(options.norms ?? {})) {
-    const position = w.length
-    if (version >= 9) {
-      w.int64(vector.length)
-      for (const value of vector) w.float32(value)
-    } else {
-      w.int32(vector.length)
-      for (const value of vector) w.float64(value)
+  if (options.normVectorsAfterFooter !== true) {
+    for (const [key, vector] of Object.entries(options.norms ?? {})) {
+      const position = w.length
+      writeNormVector(w, version, vector)
+      normPositions.set(key, { position, nBytes: w.length - position })
     }
-    normPositions.set(key, { position, nBytes: w.length - position })
   }
 
   // ---- footer --------------------------------------------------------------
@@ -465,9 +620,10 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
     w.int64(at.position)
     w.int32(at.size)
   }
-  // The plain expected-value section, empty. Real files carry it populated; the
-  // reader walks past it, and an empty one still exercises the walk.
-  w.int32(0)
+  // The plain expected-value section. Empty by default and populated under
+  // `expectedValues`; see that option for why an empty one is not enough. The
+  // reader walks past it either way.
+  writeExpectedValues(w, version, expectedValueVectorsFor(options, fileChroms, false))
   // **The declared length stops here**, and that is the format rather than a
   // choice: the field is the size of the master index *plus the expected values*
   // and excludes everything after them, which is how a reader locates the
@@ -477,8 +633,12 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
   const bodyEnd = w.length
   if (version >= 9) w.patchInt64(leadSlot, bodyEnd - bodyStart)
   else w.patchInt32(leadSlot, bodyEnd - bodyStart)
-  // The normalised-expected section, likewise empty, outside the declared length.
-  w.int32(0)
+  // The normalised-expected section, outside the declared length. It differs
+  // from the plain one by a leading normalisation name per vector, and it is
+  // the section `hic-straw` itself walks when it has no pointer to the
+  // normalisation index — so a fixture that populates it is checked by two
+  // readers rather than one.
+  writeExpectedValues(w, version, expectedValueVectorsFor(options, fileChroms, true))
 
   const normEntries = Object.entries(options.norms ?? {})
   // v9's header carries a pointer straight to *this* section, so a reader can
@@ -488,6 +648,11 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
   // normalisation index, and the counts it finds there allocate gigabytes.
   const normIndexStart = w.length
   w.int32(normEntries.length)
+  // The two offset fields are remembered rather than only written: under
+  // `normVectorsAfterFooter` the payload they point at does not exist yet, and
+  // an entry pointing at a position the writer has not reached is the one
+  // mistake this index can make that no reader can detect.
+  const entrySlots: Array<{ position: number; nBytes: number }> = []
   for (const [key] of normEntries) {
     const [type, chromIdx, binSize] = key.split('/')
     const at = normPositions.get(key)
@@ -495,13 +660,28 @@ export async function writeHic(options: HicWriteOptions): Promise<HicFixture> {
     w.int32(Number.parseInt(chromIdx, 10))
     w.string('BP')
     w.int32(Number.parseInt(binSize, 10))
+    const positionSlot = w.length
     w.int64(at?.position ?? 0)
+    const nBytesSlot = w.length
     if (version >= 9) w.int64(at?.nBytes ?? 0)
     else w.int32(at?.nBytes ?? 0)
+    entrySlots.push({ position: positionSlot, nBytes: nBytesSlot })
   }
-  if (version >= 9 && normSlot >= 0) {
+  if (version >= 9 && normSlot >= 0 && options.withoutNormIndexPointer !== true) {
+    // Patched before any payload is appended: the pointer's size field is the
+    // size of the *index*, not of the index plus what follows it.
     w.patchInt64(normSlot, normIndexStart)
     w.patchInt64(normSlot + 8, w.length - normIndexStart)
+  }
+  if (options.normVectorsAfterFooter === true) {
+    normEntries.forEach(([, vector], at) => {
+      const position = w.length
+      writeNormVector(w, version, vector)
+      const nBytes = w.length - position
+      w.patchInt64(entrySlots[at].position, position)
+      if (version >= 9) w.patchInt64(entrySlots[at].nBytes, nBytes)
+      else w.patchInt32(entrySlots[at].nBytes, nBytes)
+    })
   }
 
   return { bytes: w.bytes(), chroms: displayChroms, fileIndexOf }

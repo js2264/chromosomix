@@ -153,7 +153,7 @@ does next. `versions.json` lists what is published.
 
 ## Using the metacooler.js analysis CLI
 
-The sixteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. 
+Fourteen of the sixteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. The two exceptions are `metaplot` and `trackcorr`, which read a bigWig: the reader for one lives in the annotations worker and nowhere else, which is a layering rule this repository enforces (see below). `tasks` says so on their rows, and running one is refused before any file is opened rather than after. 
 
 To install the CLI, run the following commands in a terminal:
 
@@ -255,24 +255,7 @@ metacooler-run tasks
 ## 
 ## metaplot
 ##     Metaplot over a feature set
-##       --tracks  Tracks
-##       --features  Features
-##       --mode (default "reference")  Mode
-##       --at (default "start")  Anchor on
-##       --flank (default 2000)  Flank
-##       --step (default 50)  Resolution
-##       --body (default 100)  Body columns
-##       --stranded (default true)  Respect strand
-##       --rankBy  Rank by
-##       --subset (default "all")  Then
-##       --count (default 500)  N
-##       --groups (default 4)  Groups
-##       --zscore (default false)  Z-score tracks first
-##       --average (default "mean")  Average
-##       --band (default "bootstrap")  Band
-##       --iterations (default 200)  Bootstrap draws
-##       --seed (default 1)  Seed
-##       --heatmap (default true)  Also draw the per-feature heatmap
+##       metaplot reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
 ## 
 ## apa
 ##     Aggregate peak analysis
@@ -297,11 +280,7 @@ metacooler-run tasks
 ## 
 ## trackcorr
 ##     Track correlation
-##       --tracks  Tracks
-##       --over (default "bins")  Compare over
-##       --binsize (default 100)  Bin size
-##       --features  Features
-##       --method (default "spearman")  Method
+##       trackcorr reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
 ## 
 ## overlap
 ##     Interval set overlap
@@ -339,6 +318,12 @@ Every task takes as many files as you like, and writes its results where `--out`
 metacooler-run insulation *.mcool --window chrII --out results/
 metacooler-run chromosight sample.cool --pattern borders --balance --out results/
 metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
+
+# Two of the tasks that run beside the tracks rather than on the map. A motif
+# search reads the reference `--sequence` names and writes both halves: the
+# sites as a BED-shaped table, and their density on the open map's bin grid.
+metacooler-run motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --out results/
+metacooler-run overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
 
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact

@@ -496,6 +496,36 @@ describe('the square map, unchanged', () => {
   /** Four canvas pixels per bin: 100 bins of 1 kb across a 400 px plot. */
   const pxOf = (bp: number): number => (bp / BINSIZE) * 4
 
+  // The one square-map shape nothing covered. `border` is the point-like call —
+  // an insulation minimum, a TAD boundary — and its docstring asks for "a short
+  // rule *across* the diagonal". It was drawn from `(x - reach, y - reach)` to
+  // `(x + reach, y + reach)`, which on a symmetric block is slope +1: the map
+  // diagonal itself. The mark lay over the brightest row in the picture, and a
+  // run of adjacent calls merged into a stripe down the diagonal rather than
+  // reading as a row of ticks crossing it.
+  it('rules a boundary across the diagonal, not along it', () => {
+    const rec = ctx()
+    drawDiagonalFeatures(as2d(rec), squareFrame(), squareAxes(), features([[40_000, 42_000]]), {
+      colour: '#f00',
+      opacity: 1,
+      shape: 'border',
+    })
+    expect(rec.moves).toHaveLength(1)
+    expect(rec.lines).toHaveLength(1)
+    const [mx, my] = rec.moves[0]
+    const [lx, ly] = rec.lines[0]
+    // Perpendicular to `row == col`, which is pixel slope +1 here.
+    expect((ly - my) / (lx - mx)).toBeCloseTo(-1, 6)
+    // Centred on the feature's own midpoint, which is on the diagonal — half a
+    // pixel off exact because a hairline is snapped to the device-pixel grid.
+    expect((mx + lx) / 2).toBeCloseTo(pxOf(41_000), -0.5)
+    expect((mx + lx) / 2).toBeCloseTo((my + ly) / 2, 6)
+    // …and it genuinely crosses: one end above the diagonal, one below, and
+    // neither end on it.
+    expect(Math.sign(my - mx)).toBe(-Math.sign(ly - lx))
+    expect(Math.sign(my - mx)).not.toBe(0)
+  })
+
   it('draws a box as the rows and columns it was drawn across', () => {
     const rec = ctx()
     drawManualRects(as2d(rec), squareFrame(), squareAxes(), [

@@ -181,6 +181,128 @@ describe('running a task', () => {
   })
 })
 
+/**
+ * The half of the catalogue that runs in the *other* worker.
+ *
+ * Four tasks declare `venue: 'annotations'`, and the command used to dispatch
+ * through `RUNNERS` alone — so `tasks` listed all sixteen with a flag apiece and
+ * `run` died on four of them with *no analysis runner is registered*, after the
+ * mount and once per file. Two of the four need only what a shell already has,
+ * and these pin that they now run; the two that read a bigWig are refused before
+ * anything is opened, and these pin that the refusal is what the listing says
+ * too. A batch script is written from `tasks`, so the listing and the dispatch
+ * disagreeing is the bug, not a cosmetic one.
+ */
+describe('the annotations venue', () => {
+  let aBed = ''
+  let bBed = ''
+  let reference = ''
+
+  beforeAll(async () => {
+    aBed = join(directory, 'a.bed')
+    bBed = join(directory, 'b.bed')
+    reference = join(directory, 'ref.fa')
+    await writeFile(aBed, 'chrI\t1000\t2000\nchrI\t5000\t6000\n')
+    await writeFile(bBed, 'chrI\t1500\t2500\n')
+    // Named as the map names it, so the sites land on the map's own bin grid
+    // and the density half of the task has somewhere to be per (§5.9).
+    await writeFile(reference, '>chrI\nACGTACGTGGTCAACGTACGT\n')
+  })
+
+  it('runs overlap, which needs two BED files and no bigWig', async () => {
+    reset()
+    const where = join(directory, 'overlap')
+    // Both sets named twice over: `--features` loads them, and `--a`/`--b` are
+    // the task's own parameters choosing between what was loaded — the same two
+    // steps the form makes the reader take, and what `bindInputs` reconciles.
+    const flags = ['--features', aBed, '--features', bBed, '--a', aBed, '--b', bBed]
+    expect(await main(['overlap', sample, ...flags, '--out', where, '--quiet'])).toBe(0)
+    const text = await readFile(join(where, 'sample.overlap.overlap.tsv'), 'utf8')
+    expect(text).toMatch(/^# task: overlap/m)
+    // 500 shared bases over 2,500 in either. The arithmetic is `analysis/
+    // overlap.ts`'s and is goldened there; what is being pinned here is that
+    // the CLI reaches it at all.
+    expect(text).toMatch(/Jaccard \(bases\)\t0\.2\b/)
+  })
+
+  it('runs motif against a FASTA named on the command line', async () => {
+    reset()
+    const where = join(directory, 'motif')
+    expect(
+      await main(['motif', sample, '--sequence', reference, '--pattern', 'GGTCA', '--out', where, '--quiet']),
+    ).toBe(0)
+    const files = await readdir(where)
+    // Both halves §18.5 asks a task like this for: the sites as an interval
+    // set, and the per-bin density on the open map's grid — which is what makes
+    // it a per-file run rather than one answer copied sixteen times.
+    expect(files).toContain('sample.motif.motif-GGTCA-both.tsv')
+    expect(files).toContain('sample.motif.motif-GGTCA-both-density.bedGraph')
+    expect(await readFile(join(where, 'sample.motif.motif-GGTCA-both.tsv'), 'utf8')).toMatch(
+      /^# task: motif/m,
+    )
+    expect(complained()).toMatch(/1 site/)
+  })
+
+  it('refuses a task that reads a track before it opens anything', async () => {
+    reset()
+    // A path that does not exist: reaching the filesystem at all would report
+    // that instead, so the exit code and the sentence together are the proof
+    // that nothing was mounted.
+    expect(await main(['metaplot', join(directory, 'absent.cool'), '--out', out])).toBe(2)
+    expect(complained()).toMatch(/metaplot reads a track \(--tracks\)/)
+    expect(complained()).toMatch(/Run it in the app/)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('lists a task it cannot run without advertising its flags', async () => {
+    reset()
+    expect(await main(['tasks'])).toBe(0)
+    const text = said()
+    // The row stays, so the reader still learns the task exists.
+    expect(text).toMatch(/^metaplot$/m)
+    expect(text).toMatch(/^trackcorr$/m)
+    expect(text).toMatch(/trackcorr reads a track \(--tracks\)/)
+    // The flags go. `--tracks` in a listing is a flag somebody writes into a
+    // batch script and finds out about after the first file is mounted.
+    expect(text).not.toMatch(/--tracks /)
+    expect(text).not.toMatch(/--heatmap/)
+    // The two that do run keep theirs.
+    expect(text).toMatch(/--sequence {2}Reference/)
+    expect(text).toMatch(/--minFraction/)
+  })
+
+  it('skips a replayed task it cannot run, with the reason', async () => {
+    reset()
+    const path = join(directory, 'trackcorr.metacooler.json')
+    await writeFile(
+      path,
+      JSON.stringify({
+        kind: 'metacooler.workspace',
+        version: 1,
+        createdAt: '2026-08-12T00:00:00.000Z',
+        active: 0,
+        tabs: [
+          {
+            version: 1,
+            createdAt: '2026-08-12T00:00:00.000Z',
+            state: { uri: 'sample.hic', view: 'contigs' },
+            tracks: [],
+            manual: [],
+            bookmarks: [],
+            analysis: { trackcorr: { tracks: ['a1'], method: 'spearman' } },
+          },
+        ],
+      }),
+    )
+    // Exit 0, not 1: a workspace that recorded a track correlation recorded
+    // something real, and a replay that cannot run it here has failed at
+    // nothing — it is the venue that is missing, not the tab that is wrong.
+    expect(await main(['replay', path, '--over', sample, '--out', join(directory, 'r4')])).toBe(0)
+    expect(complained()).toMatch(/skipped trackcorr: trackcorr reads a track/)
+    expect(complained()).not.toMatch(/no analysis runner is registered/)
+  })
+})
+
 describe('replaying a workspace', () => {
   /** A workspace file of one tab — what the save button writes for one tab. */
   const tabOf = (analysis: unknown, uri = 'sample.hic') => ({

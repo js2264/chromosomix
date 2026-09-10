@@ -7352,8 +7352,13 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
  * It costs a request, the worker is where requests are made and counted, and
  * putting it here would mean two places that know where HiC-Pro writes its bin
  * files.
+ *
+ * Exported for the test: the signing below is invisible from anywhere the
+ * session can be driven — the credential is on a message this function's caller
+ * hands to a worker — and it is the half of a private pair that was silently
+ * being read unsigned.
  */
-function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
+export function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
   const { address, bins } = splitBinsFragment(uri)
   if (!isHicProMatrix(splitUri(address).path)) return source
   if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
@@ -7365,7 +7370,31 @@ function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSp
   // fragment, because that is what makes the pair one shareable string (§11).
   const at: SourceSpec =
     source.kind === 'remote' ? { ...source, url: splitUri(address).path } : source
-  return { ...at, bins: { kind: 'remote', url: bins } }
+  // Signed here, against the bin file's **own** URL.
+  //
+  // Everywhere else a credential is stamped at the worker boundary
+  // (`s3/attach.ts`), and that stamper knows only `message.source` — it has
+  // never looked at the second half hanging off it. So a pair under a private
+  // prefix went out with a signed matrix and an unsigned bin file, and S3
+  // answered 403 to the half that carries the coordinates: the open failed on
+  // exactly the arrangement `#bins=` exists for. The conventional road does not
+  // have this hole — `probeBins` passes the matrix's credential to the bed it
+  // guesses (`worker/open.ts`) — so the guessed bin file worked and the named
+  // one did not.
+  //
+  // Its own URL rather than the matrix's, because `#bins=` is the escape hatch
+  // for a bucket that publishes the two halves under unrelated keys: the bed
+  // may sit outside every scope the matrix is in, and a public request that
+  // gets signed anyway is the failure this repo guards hardest against
+  // (`s3/credentials.ts`). Unscoped stays unsigned, as it was.
+  const credential = credentialFor(bins)
+  return {
+    ...at,
+    bins:
+      credential === null
+        ? { kind: 'remote', url: bins }
+        : { kind: 'remote', url: bins, credential },
+  }
 }
 
 function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {

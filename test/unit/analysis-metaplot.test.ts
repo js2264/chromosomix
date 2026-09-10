@@ -48,6 +48,32 @@ function samples(contig: string, from: number, to: number, value = 1): TrackSamp
   }
 }
 
+/**
+ * A track that reads 1 inside `[from, to)` and 0 across the rest of a window.
+ *
+ * An exact step function, which is what makes a scaled-region row readable by
+ * inspection: every column is either wholly inside the feature or wholly
+ * outside it, so the row says which columns the body was given.
+ */
+function indicator(
+  window: { contig: string; start: number; end: number },
+  from: number,
+  to: number,
+): TrackSamples {
+  return {
+    contig: window.contig,
+    start: window.start,
+    end: window.end,
+    starts: Int32Array.from([window.start, from, to]),
+    ends: Int32Array.from([from, to, window.end]),
+    values: Float32Array.from([0, 1, 0]),
+    min: null,
+    max: null,
+    variant: null,
+    summary: false,
+  }
+}
+
 /** A `count × slots` block of rows, row-major, as the runner builds one. */
 const rows = (values: number[][]): Float64Array => Float64Array.from(values.flat())
 
@@ -124,6 +150,48 @@ describe('scaledWindows', () => {
     expect(dropped).toBe(1)
     expect(windows).toHaveLength(1)
   })
+
+  it('gives every feature body the same columns, whatever its length', () => {
+    // The promise the layout above makes, kept — and it is `windowRow` that has
+    // to keep it, which is why the window carries the body's extent. Mapping
+    // the whole window uniformly instead handed each feature a share of the row
+    // set by its own length: with these shipped defaults a 20 kb gene's body
+    // occupied columns 15 to 165 and a 100 kb gene's columns 4 to 176, against
+    // a layout promising 40 to 140 for both. Nothing was resampled to a fixed
+    // width, no two features were aligned, and the average was the middle of a
+    // short gene against the start of a long one.
+    const shipped = { body: 100, flank: 2000, step: 50, lengthOf: (): number => 1e9 }
+    for (const length of [5000, 20_000, 100_000]) {
+      for (const strand of [1, -1]) {
+        const start = 100_000
+        const { windows, layout } = scaledWindows(
+          [{ contig: 'chrI', start, end: start + length, strand }],
+          shipped,
+        )
+        const row = windowRow(indicator(windows[0], start, start + length), windows[0], layout.slots)
+        const body = Array.from({ length: layout.slots }, (_, column) =>
+          column >= layout.bodyFrom && column < layout.bodyTo ? 1 : 0,
+        )
+        // Exactly, not nearly: a column is wholly body or wholly flank here, so
+        // anything in between is a boundary in the wrong place.
+        expect(Array.from(row), `${length} bp on strand ${strand}`).toEqual(body)
+      }
+    }
+  })
+
+  it('keeps the flanks in base pairs while the body is resampled', () => {
+    // The other half of the same promise, and the half a body-only fix would
+    // break: the ends of a scaled plot are `step` base pairs a column at the
+    // feature's own coordinates, however long the feature is. The first upstream
+    // column of a 2 kb flank at 500 bp holds [-2000, -1500) from the start.
+    const { windows, layout } = scaledWindows(
+      [{ contig: 'chrI', start: 100_000, end: 150_000, strand: 1 }],
+      { body: 10, flank: 2000, step: 500, lengthOf: (): number => 1e9 },
+    )
+    const row = windowRow(indicator(windows[0], 98_000, 98_500), windows[0], layout.slots)
+    expect(layout.bodyFrom).toBe(4)
+    expect(Array.from(row.slice(0, 4))).toEqual([1, 0, 0, 0])
+  })
 })
 
 describe('windowRow', () => {
@@ -155,6 +223,43 @@ describe('windowRow', () => {
     // The same signal, read right to left, so the filled half is the far one.
     for (const value of row.slice(0, 5)) expect(value).toBeNaN()
     expect(Array.from(row.slice(5))).toEqual([1, 1, 1, 1, 1])
+  })
+
+  it('maps a reference-point window exactly as it always has', () => {
+    // Reference-point mode is what the pyBigWig goldens compare against, and
+    // teaching `windowRow` about scaled-region bodies must not have moved it by
+    // a single bit. These are the numbers the one linear map produced before
+    // `Window.body` existed, over intervals deliberately out of step with the
+    // columns so that every column is a genuine mixture of two of them —
+    // asserted exactly rather than to a tolerance, because a tolerance is
+    // precisely what would let a reformulation drift.
+    const uneven: TrackSamples = {
+      contig: 'chrI',
+      start: 1000,
+      end: 1500,
+      starts: Int32Array.from([950, 1063, 1211, 1288, 1402]),
+      ends: Int32Array.from([1063, 1211, 1288, 1402, 1600]),
+      values: Float32Array.from([2, 5, 11, 7, 3]),
+      min: null,
+      max: null,
+      variant: null,
+      summary: false,
+    }
+    const at = (strand: number, slotFrom: number, slotTo: number): number[] =>
+      Array.from(
+        windowRow(uneven, { contig: 'chrI', start: 1000, end: 1500, strand, slotFrom, slotTo }, 10),
+      )
+    expect(at(1, 0, 10)).toEqual([
+      2, 4.22, 5, 5.000000000000001, 9.680000000000001, 10.039999999999997, 7, 7, 3.16, 3,
+    ])
+    expect(at(-1, 0, 10)).toEqual([
+      3.0000000000000004, 3.160000000000002, 7, 6.999999999999999, 10.039999999999997,
+      9.680000000000005, 5, 5, 4.219999999999999, 2,
+    ])
+    const NA = Number.NaN
+    expect(at(1, 3, 8)).toEqual([
+      NA, NA, NA, 3.1100000000000003, 5, 9.860000000000001, 6.999999999999999, 3.08, NA, NA,
+    ])
   })
 
   it('lands a clipped window in the slots it covers and no others', () => {

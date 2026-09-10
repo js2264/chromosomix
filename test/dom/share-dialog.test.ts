@@ -18,6 +18,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Blob as NodeBlob } from 'node:buffer'
 
+import { App } from '@/app/App'
+import { resetMounting } from '@/embed'
 import { CONFIG_VERSION, type SessionConfig } from '@/state/SessionConfig'
 import { SHARE_KEY } from '@/state/shareLink'
 import { openShareDialog } from '@/ui/ShareDialog'
@@ -125,6 +127,27 @@ describe('the modal itself', () => {
     expect(document.querySelector('.modal-panel')?.classList.contains('modal-wide')).toBe(true)
   })
 
+  /**
+   * The shell keeps the dialog it opened in a field and treats that field as
+   * "a dialog owns the keyboard". This was the one opener in the application
+   * that took no `onClose`, so the field went on pointing at a dialog that was
+   * no longer on screen: after one Escape here, every shortcut, the command
+   * palette and every other dialog were dead until the page was reloaded.
+   */
+  it('tells its opener that it closed, however it was closed', () => {
+    const closes: string[] = []
+    const modal = openShareDialog({
+      config: configOf(),
+      base: BASE,
+      onClose: () => closes.push('closed'),
+    })
+    open.push(modal)
+    expect(closes).toHaveLength(0)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('.modal-backdrop')).toBeNull()
+    expect(closes).toHaveLength(1)
+  })
+
   it('offers copying as an icon button with a name, and no label text', async () => {
     await opened()
     const copy = Array.from(document.querySelectorAll('.share-row button')).find(
@@ -185,5 +208,44 @@ describe('when the clipboard is refused', () => {
     await settle()
     expect(toast()).toBeNull()
     expect(hints()).toMatch(/select/i)
+  })
+})
+
+/**
+ * The shell's own use of the dialog, which is where the missing `onClose` was
+ * actually felt.
+ *
+ * `App` holds the dialog it opened in one field and reads `modal !== null` as
+ * "a dialog owns the keyboard": it is the guard on every shortcut, on the
+ * command palette, and on every other dialog in the application. This opener
+ * was the only one that never told the field it had closed, so one Escape here
+ * left the whole window keyboard-dead until the page was reloaded — with the
+ * dialog itself gone from the screen, so nothing said why.
+ */
+describe('as the shell opens it', () => {
+  it('hands the keyboard back to the window when it is dismissed', () => {
+    resetMounting()
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const app = new App(root)
+    // A tab with something in it, so the button offers the dialog rather than
+    // the "nothing open to share" refusal.
+    app['current']?.store.adopt({ uri: 'https://data.example/f.mcool', view: 'genomes' })
+
+    const share = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Share this session as a link"]',
+    )
+    expect(share, 'the header has no share button').not.toBeNull()
+    share?.click()
+    expect(document.querySelector('.modal-title')?.textContent).toBe('Share this session')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('.modal-backdrop')).toBeNull()
+    expect(app['modal']).toBeNull()
+
+    // And the window really does answer keys again: `t` is the theme.
+    const before = document.documentElement.getAttribute('data-theme')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }))
+    expect(document.documentElement.getAttribute('data-theme')).not.toBe(before)
   })
 })
