@@ -1243,7 +1243,19 @@ export class MetaCooler {
   async selectionMatrix(
     units: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
     aim: PoolPlan,
-    options: SpanScanOptions & { balance?: boolean; cellCap?: number } = {},
+    options: SpanScanOptions & {
+      balance?: boolean
+      cellCap?: number
+      /**
+       * Keep every pooled cell inside one genome (`selectionPooling`).
+       *
+       * Set where the selection is *of* genomes, because that picture is drawn
+       * with the genome boundaries as its dividers and a cell holding the tail
+       * of one MAG beside the head of the next puts a divider a cell late. A
+       * selection of contigs asks for no such thing: its axis is the choice.
+       */
+      byGenome?: boolean
+    } = {},
   ): Promise<
     Omit<AggregatedMatrix, 'level'> & {
       binsPerCell: number
@@ -1256,10 +1268,14 @@ export class MetaCooler {
     // budget resolves to here: the block is square, so a byte budget divides
     // into a cells-per-axis cap and nothing else has to change. Absent means
     // `selectionPooling`'s own cap, which is the raster's.
-    const pooling =
-      options.cellCap === undefined
-        ? selectionPooling(this.nBins, units, aim)
-        : selectionPooling(this.nBins, units, aim, options.cellCap)
+    const groups = options.byGenome === true ? this.contigGenomeIds : undefined
+    const pooling = selectionPooling(
+      this.nBins,
+      units,
+      aim,
+      options.cellCap === undefined ? POOLED_CELL_CAP : options.cellCap,
+      groups,
+    )
     // On the diagonal by construction: one axis, used twice. `planRead` decides
     // what that means for the store rather than this function assuming it — a
     // `square` file holds both triangles and each stored pixel is its own cell,

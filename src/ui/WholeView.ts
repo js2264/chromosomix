@@ -740,24 +740,6 @@ export class WholeView {
   }
 
   /**
-   * Mark the block's genome runs as the axis, where this is the whole-file
-   * level.
-   *
-   * A presentation flag and not a second read: the reader already returns
-   * `rowGenomes`/`colGenomes` for this block (it is asked for them by
-   * `namesGenomes`, for the tooltip), and `separatorsFor` promotes them to the
-   * drawn boundaries *and* the labels when this is set. So the change is which
-   * of two run lists the picture is divided by, decided by the view that knows
-   * what it is a picture of.
-   *
-   * Left off everywhere else on purpose. A whole-genome map of a cooler has no
-   * genomes, and a map of a chosen handful of sequences is a picture of the
-   * choice — its axis names what was ticked, which is the answer to "what did I
-   * pick" and would be lost by coarsening to the genomes those contigs came
-   * from. Only here is the axis the whole metagenome, and only here are 2,082
-   * contig hairlines a grey wash over the 48 blocks that are the point.
-   */
-  /**
    * Let the zoom read inside the whole-file picture.
    *
    * Three things this deliberately does *not* do. It is not armed at contig
@@ -822,6 +804,25 @@ export class WholeView {
     this.ladder.adopt(this.byGenome(result))
   }
 
+  /**
+   * Mark the block's genome runs as the axis, where this is the whole-file
+   * level.
+   *
+   * A presentation flag and not a second read: the reader already returns
+   * `rowGenomes`/`colGenomes` for this block (it is asked for them by
+   * `namesGenomes`, for the tooltip), and `separatorsFor` promotes them to the
+   * drawn boundaries *and* the labels when this is set. So the change is which
+   * of two run lists the picture is divided by, decided by the view that knows
+   * what it is a picture of.
+   *
+   * Left off everywhere else on purpose. A whole-genome map of a cooler has no
+   * genomes, and a map of a chosen handful of *contigs* is a picture of the
+   * choice — its axis names what was ticked, which is the answer to "what did I
+   * pick" and would be lost by coarsening to the genomes those contigs came
+   * from. A selection of *genomes* is that same rule the other way up and the
+   * reader decides it there, on the read that knows what was ticked
+   * (`handleSelection`): the flag arrives set and this method passes it through.
+   */
   private byGenome(result: MatrixResult): MatrixResult {
     if (this.props.wholeFileLevel === undefined) return result
     if (result.rowGenomes === undefined || result.colGenomes === undefined) return result

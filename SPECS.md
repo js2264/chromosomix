@@ -1290,8 +1290,14 @@ every pixel never starts on its own, and a threshold would make it hold on large
 small ones. So the bin level is gated whatever the file declares `nnz` to be, behind the same
 sentence and the same button as the scans. It is also labelled and divided by **genome** rather than
 by contig — the axis is the whole metagenome at every level, 2,082 contig hairlines over 48 blocks
-are a grey wash, and an axis label that names a genome opens that genome. A *selection* is not
-affected: its axis names what was ticked, which is the answer to a different question.
+are a grey wash, and an axis label that names a genome opens that genome. A *selection* follows the
+same rule one level down, because it is the same rule: its axis names **what was ticked**. Tick
+several genomes and it is divided and labelled by genome, exactly as the three levels above it are —
+four ticked MAGs are four blocks, and the two thousand contig hairlines across them are the same
+grey wash hiding the same structure. Tick contigs, or one genome, and the contigs keep the lines:
+there the ticked names *are* the contigs, and a single genome has nothing coarser inside it than its
+own. Where the axis is pooled the cells are held inside one genome for it, so a boundary drawn on it
+is the boundary and not a cell past it.
 
 **And a click on a cell opens a genome at all three levels.** "Read by genome" is a claim about the
 picture, and it has to be a claim about the gestures on it or it is only a claim about the ink: the

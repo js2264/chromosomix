@@ -554,13 +554,18 @@ export interface MatrixResult {
   /**
    * Whether the genome runs above are the boundaries to *draw*.
    *
-   * Naming and drawing are separate decisions, and the whole-metagenome
-   * overview is the only view that wants both. There, 20,000 contig hairlines
-   * over 4,000 genome blocks is a grey wash that hides the block structure the
-   * view exists to show, so the genome runs become the separators and the axis
-   * labels. Everywhere else the genome is a fact for the tooltip and the
-   * contigs keep the lines — a whole-genome view of a metacool is still read
-   * contig by contig.
+   * Naming and drawing are separate decisions, and two pictures want both,
+   * because in both the subject is genomes. The whole-metagenome overview: there
+   * 20,000 contig hairlines over 4,000 genome blocks is a grey wash that hides
+   * the block structure the view exists to show, so the genome runs become the
+   * separators and the axis labels. And a **selection of several genomes**,
+   * which is the same picture of a chosen few — ticking four MAGs asks for four
+   * blocks, and their two thousand contigs are the wash again.
+   *
+   * Everywhere else the genome is a fact for the tooltip and the contigs keep
+   * the lines: a whole-genome view of a metacool is still read contig by contig,
+   * a selection of *contigs* is a picture of the contigs that were ticked, and
+   * one genome on its own has nothing coarser than its own contigs to show.
    */
   genomeBoundaries?: boolean
   level: 'bin' | 'contig' | 'genome'

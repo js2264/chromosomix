@@ -98,6 +98,31 @@ export function aggregatedGenomeRuns(mc: MetaCooler, contigIds: Int32Array): Axi
 }
 
 /**
+ * Whether a selection's genome runs are the lines to *draw*, or only a name for
+ * the tooltip (`MatrixResult.genomeBoundaries`).
+ *
+ * **What was ticked is what the axis is divided and labelled by.** Ticking four
+ * MAGs asks for four blocks, and their two thousand contig hairlines drawn
+ * across them are the grey wash the whole-metagenome view already refuses
+ * (`ui/MatrixPanel.separatorsFor`) — they hide exactly the block structure that
+ * was the reason for ticking. Ticking *contigs* is the same rule read the other
+ * way: there the choice was the contigs, their names are the answer to "what did
+ * I pick", and coarsening to the genomes they came from would lose it.
+ *
+ * One genome is not a selection of genomes to divide by — its own contigs are
+ * the only structure inside it, which is what a single genome's map has always
+ * shown. Hence the runs rather than the names asked for: a name this file does
+ * not have is already gone from them, so four ticks that matched one genome are
+ * one genome here.
+ */
+export function selectionDrawsGenomes(
+  unit: 'genome' | 'contig',
+  genomeRuns: readonly AxisGroup[] | undefined,
+): boolean {
+  return unit === 'genome' && genomeRuns !== undefined && genomeRuns.length > 1
+}
+
+/**
  * One run per output row of an aggregated block: after a roll-up each row *is*
  * one contig or one genome, so the runs are unit width and carry the id's name.
  */

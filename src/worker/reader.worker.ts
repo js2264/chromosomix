@@ -30,6 +30,7 @@ import {
   contigRuns,
   genomeRuns,
   idRuns,
+  selectionDrawsGenomes,
 } from './groups'
 import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
 import { needsWrapping } from './wrap'
@@ -1080,10 +1081,15 @@ async function handleSelection(
     binsPerCell: Math.max(1, aim.binsPerCell),
     contigsPerCell: 1,
   }
+  // A selection *of genomes* is a picture of those genomes, so its cells are
+  // kept inside one — see `selectionPooling`. Ticking contigs asks for no such
+  // thing, and a cooler has no genomes to keep cells inside of.
+  const byGenome = request.unit === 'genome' && mc.hasGenomes
   const selected = await mc.selectionMatrix(units, plan, {
     ...scanHooks(id),
     ...(request.balance === true ? { balance: true } : {}),
     ...(request.value === undefined ? {} : { value: request.value }),
+    ...(byGenome ? { byGenome: true } : {}),
     // A byte budget is a cells-per-axis cap on a square block: four bytes a
     // cell, so `cap = √(budget / 4)`. Floored at one cell so a budget too small
     // to hold anything still produces a picture rather than an empty axis —
@@ -1100,7 +1106,11 @@ async function handleSelection(
     undefined,
     (contig) => mc.coords.contigLengths[contig],
   )
-  const withGenomes = mc.hasGenomes
+  // Named rather than shadowing the module's `genomeRuns`, which walks bins.
+  const genomeAxis = mc.hasGenomes ? aggregatedGenomeRuns(mc, selected.ids) : undefined
+  // Ticked genomes are drawn *as* genomes; ticked contigs keep the contig lines.
+  // See `selectionDrawsGenomes` for the rule and why it asks the runs.
+  const dividedByGenome = selectionDrawsGenomes(request.unit, genomeAxis)
   const named = withMembers(mc, runs, selected.pooling)
   return {
     nrows: selected.nrows,
@@ -1113,12 +1123,8 @@ async function handleSelection(
     colExtent: [0, selected.ncols],
     rowGroups: named,
     colGroups: named,
-    ...(withGenomes
-      ? {
-          rowGenomes: aggregatedGenomeRuns(mc, selected.ids),
-          colGenomes: aggregatedGenomeRuns(mc, selected.ids),
-        }
-      : {}),
+    ...(genomeAxis === undefined ? {} : { rowGenomes: genomeAxis, colGenomes: genomeAxis }),
+    ...(dividedByGenome ? { genomeBoundaries: true } : {}),
     level: 'bin',
     binsPerCell: selected.binsPerCell,
     contigsPerCell: selected.contigsPerCell,
