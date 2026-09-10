@@ -88,6 +88,7 @@ import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
+  scaleOf,
   LANE_EDGES,
   drawnFromSamples,
   drawsAProfile,
@@ -1047,7 +1048,12 @@ export class AnnotationLanes {
         if (axis === null || !drawnFromSamples(member.kind)) continue
         profiles.push({
           entry: member,
-          profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
+          profile: profileOf(
+            frame,
+            axis,
+            this.samplesFor(member, edge, axis, frame),
+            scaleOf(member.style),
+          ),
         })
       }
       return {

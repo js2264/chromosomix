@@ -19,11 +19,14 @@ import type { AnnotationStore } from '../annotations/store'
 import {
   COLOUR_BY,
   PAIR_LAYOUTS,
+  TRACK_SCALES,
   readsOf,
+  scaleOf,
   type AnnotationEntry,
   type ColourBy,
   type PairLayout,
   type ReadStyle,
+  type TrackScale,
 } from '../annotations/types'
 import { groupsFor } from '../annotations/bam/reads'
 import { readPalette } from '../render/alignments'
@@ -108,6 +111,41 @@ export function modeField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
     'label',
     { class: 'field ann-field ann-field-tight' },
     el('span', { class: 'field-label', text: 'style' }),
+    select,
+  )
+}
+
+/**
+ * The axis this lane's values are drawn on: linear, or log₂.
+ *
+ * Beside the drawing style rather than beside the limits, because it is a
+ * question about the *lane* and not about its range — the limits then follow it,
+ * reading in whatever units the axis is in, which is what makes an autoscaled
+ * log lane land on its own data rather than on the linear span of it.
+ *
+ * The one lane that needs it is a ratio. Linear puts "half" in the bottom
+ * half-unit and "double" a whole unit above the middle, so the same finding is
+ * drawn at two very different sizes; log₂ makes them symmetric about a baseline
+ * the plot already draws. Which is why the combine control no longer offers a
+ * log₂ *operation*: a ratio and its logarithm were two rows holding the same
+ * numbers, and only one of them could be exported as the quantity it measured.
+ */
+export function scaleField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const select = el('select', { class: 'select' })
+  for (const scale of TRACK_SCALES) {
+    select.appendChild(el('option', { value: scale, text: scale === 'log2' ? 'log₂' : scale }))
+  }
+  select.value = scaleOf(entry.style)
+  select.title =
+    'The axis this lane is drawn on. A value at or below zero has no logarithm and is drawn as a ' +
+    'gap, so log₂ suits a ratio and not a difference.'
+  select.addEventListener('change', () =>
+    store.restyle(entry.id, { scale: select.value as TrackScale }),
+  )
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'scale' }),
     select,
   )
 }

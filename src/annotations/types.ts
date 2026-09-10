@@ -591,6 +591,28 @@ export type OverlayShape = 'border' | 'element'
  * stays a plain serialisable object, and adding a control to one kind does not
  * mean widening a union that three other call sites switch on.
  */
+/** The axis a track's values are drawn on. See {@link AnnotationStyle.scale}. */
+export type TrackScale = 'linear' | 'log2'
+
+/** Every scale, in the order the picker offers them. */
+export const TRACK_SCALES: readonly TrackScale[] = ['linear', 'log2']
+
+/** This lane's scale, or the linear one every lane starts on. */
+export function scaleOf(style: { scale?: TrackScale }): TrackScale {
+  return style.scale === 'log2' ? 'log2' : 'linear'
+}
+
+/**
+ * A value as the axis draws it.
+ *
+ * `NaN` for anything a logarithm cannot answer for, which the renderer already
+ * knows to leave as a hole. See {@link AnnotationStyle.scale}.
+ */
+export function onScale(value: number, scale: TrackScale): number {
+  if (scale !== 'log2') return value
+  return value > 0 ? Math.log2(value) : Number.NaN
+}
+
 export interface AnnotationStyle {
   /**
    * The controls only an alignment lane has (§8.13).
@@ -613,6 +635,33 @@ export interface AnnotationStyle {
   /** Radius of an off-diagonal pair circle, in CSS pixels. */
   radius: number
   opacity: number
+  /**
+   * The axis this lane's values are drawn on.
+   *
+   * **A display scale and nothing else** — the numbers behind the lane, and
+   * every number that leaves it as a file, stay exactly as they were read or
+   * computed. What changes is where a value lands between the two limits, which
+   * is why the tick labels come out in the same units the axis is in and need no
+   * separate handling.
+   *
+   * `log2` exists for the one lane that is systematically unreadable without it:
+   * a ratio. On a linear axis "half" occupies the bottom half-unit and "double"
+   * a whole unit above the middle — the same finding at two very different
+   * sizes, with depletion squashed into a sliver against the floor. The
+   * logarithm makes the two symmetric and puts *no change* on the baseline the
+   * plot already draws.
+   *
+   * A value at or below zero has no logarithm and comes back as a **gap**, which
+   * is the same answer this app gives everywhere a log would be an infinity: a
+   * `-Infinity` cannot be drawn between two limits, would take the axis of the
+   * whole lane with it, and is not a reading. It is therefore the wrong scale
+   * for a difference track, which crosses zero on purpose, and the right one for
+   * a ratio, which cannot.
+   *
+   * Optional so that nothing else changes shape and a stored session written by
+   * an older build restores unchanged — {@link scaleOf} is the one reader.
+   */
+  scale?: TrackScale
   /**
    * Draw the value axis upside down, floor at the top.
    *

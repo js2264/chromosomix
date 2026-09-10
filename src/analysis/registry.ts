@@ -26,7 +26,6 @@ import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
 import { COVERAGE_TASK } from "./tasks/coverage";
 import { FOURC_TASK } from "./tasks/fourc";
 import { APA_TASK } from "./tasks/apa";
-import { CID_TASK } from "./tasks/cid";
 import { COMPARTMENTS_TASK } from "./tasks/compartments";
 import {
   MAG_NETWORK_TASK,
@@ -56,7 +55,6 @@ export const TASKS: readonly AnalysisTask[] = [
   FOURC_TASK,
   INSULATION_TASK,
   COMPARTMENTS_TASK,
-  CID_TASK,
   CHROMOSIGHT_TASK,
   // The tracks group opens with the one task that *makes* an interval set out of
   // the file rather than reading one somebody loaded: a motif search answers

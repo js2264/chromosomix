@@ -76,6 +76,71 @@ function samples(
   }
 }
 
+describe('the lane’s value axis', () => {
+  it('draws the values as they are, on the linear axis every lane starts on', () => {
+    const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples([[0, 100_000, 8]]))
+    expect(profile.mean[0]).toBeCloseTo(8, 6)
+    expect(profile.extent).toEqual({ min: 8, max: 8 })
+  })
+
+  it('puts a doubling and a halving the same distance either side of zero', () => {
+    // The whole reason the log₂ axis exists, and the reason the combine control
+    // no longer offers a log₂ *operation*: a ratio lane on a linear axis draws
+    // the same finding at two very different sizes.
+    const profile = profileOf(
+      frameOf([0, 100], 100),
+      yeastAxis(),
+      samples([[0, 50_000, 2], [50_000, 100_000, 0.5]]),
+      'log2',
+    )
+    expect(profile.mean[0]).toBeCloseTo(1, 6)
+    expect(profile.mean[99]).toBeCloseTo(-1, 6)
+    expect(profile.extent).toEqual({ min: -1, max: 1 })
+  })
+
+  it('takes the logarithm of the pixel, not of every interval under it', () => {
+    // A log *axis* draws `log(mean)`. Transforming each interval first and then
+    // averaging would draw the mean of the logs — the geometric mean, which is a
+    // different number and one nobody asked for by picking an axis. One pixel,
+    // two halves at 1 and 4: the mean is 2.5 and its log₂ is not 1.
+    const profile = profileOf(
+      frameOf([0, 1], 1),
+      yeastAxis(),
+      samples([[0, 500, 1], [500, 1000, 4]]),
+      'log2',
+    )
+    expect(profile.mean[0]).toBeCloseTo(Math.log2(2.5), 6)
+    expect(profile.mean[0]).not.toBeCloseTo(1, 3)
+  })
+
+  it('leaves a value the logarithm has no answer for as a gap', () => {
+    // Zero and below have no logarithm. A `-Infinity` cannot be drawn between
+    // two limits and would take the axis of the whole lane with it, so the
+    // answer is *no value here* — which is why log₂ suits a ratio and not a
+    // difference.
+    const profile = profileOf(
+      frameOf([0, 100], 100),
+      yeastAxis(),
+      samples([[0, 50_000, 0], [50_000, 100_000, 4]]),
+      'log2',
+    )
+    expect(Number.isFinite(profile.mean[0])).toBe(false)
+    expect(profile.mean[99]).toBeCloseTo(2, 6)
+    // And a gap decides nothing about the axis.
+    expect(profile.extent).toEqual({ min: 2, max: 2 })
+  })
+
+  it('has nothing to draw when the whole lane is off the scale', () => {
+    const profile = profileOf(
+      frameOf([0, 100], 100),
+      yeastAxis(),
+      samples([[0, 100_000, -3]]),
+      'log2',
+    )
+    expect(profile.extent).toBeNull()
+  })
+})
+
 describe('per-pixel reduction', () => {
   it('carries a constant track through unchanged', () => {
     const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples([[0, 100_000, 7]]))

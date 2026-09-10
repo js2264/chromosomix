@@ -16,7 +16,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  TRACK_OPS,
   combineSamples,
+  combineVectors,
   derivedTrackLabel,
   isTrackOp,
   neutralOf,
@@ -128,32 +130,6 @@ describe('the three answers a comparison can give', () => {
   })
 })
 
-describe('the log ratio', () => {
-  it('puts a doubling and a halving the same distance either side of zero', () => {
-    const a = set(region([[0, 10, 4], [10, 20, 1]]))
-    const b = set(region([[0, 10, 2], [10, 20, 2]]))
-    const out = triples(combineSamples(a, b, 'log2ratio'))
-    expect(out[0][2]).toBeCloseTo(1, 6)
-    expect(out[1][2]).toBeCloseTo(-1, 6)
-  })
-
-  it('keeps an empty numerator on the axis rather than at minus infinity', () => {
-    // A lane is drawn between two limits and cannot draw `-Infinity`; "none of
-    // this here" is a real finding and belongs at the floor, not off the bottom.
-    const a = set(region([[0, 10, 0]]))
-    const b = set(region([[0, 10, 4]]))
-    const value = triples(combineSamples(a, b, 'log2ratio'))[0][2]
-    expect(Number.isFinite(value)).toBe(true)
-    expect(value).toBeLessThan(0)
-  })
-
-  it('still has no answer where neither side does', () => {
-    const a = set(region([[0, 10, 0]]))
-    const b = set(region([[0, 10, 0]]))
-    expect(Number.isNaN(triples(combineSamples(a, b, 'log2ratio'))[0][2])).toBe(true)
-  })
-})
-
 describe('what the lane reports about itself', () => {
   it('drops a region the other track has no counterpart for', () => {
     // Half a comparison drawn as though it were a whole one is the failure.
@@ -187,18 +163,56 @@ describe('what the lane reports about itself', () => {
 
 describe('how a derived lane names and centres itself', () => {
   it('names itself after the operation it is', () => {
-    expect(derivedTrackLabel('treated', 'control', 'log2ratio')).toBe('log₂(treated / control)')
+    expect(derivedTrackLabel('treated', 'control', 'ratio')).toBe('treated / control')
     expect(derivedTrackLabel('treated', 'control', 'difference')).toBe('treated − control')
   })
 
   it('knows the line a reader reads departures from', () => {
     expect(neutralOf('ratio')).toBe(1)
-    expect(neutralOf('log2ratio')).toBe(0)
     expect(neutralOf('difference')).toBe(0)
   })
 
   it('accepts only operations it can serve', () => {
     expect(isTrackOp('ratio')).toBe(true)
     expect(isTrackOp('quotient' as TrackOp)).toBe(false)
+  })
+})
+
+describe('the same comparison as a file', () => {
+  it('is the operation over two per-bin vectors', () => {
+    const a = Float32Array.from([8, 2, 5])
+    const b = Float32Array.from([2, 4, 5])
+    expect(Array.from(combineVectors(a, b, 'ratio'))).toEqual([4, 0.5, 1])
+    expect(Array.from(combineVectors(a, b, 'difference'))).toEqual([6, -2, 0])
+  })
+
+  it('writes no value where a lane would draw a clamped infinity', () => {
+    // A lane brings `x / 0` back onto its own axis because a pixel has to go
+    // somewhere. A file says nothing there: an infinity cannot be written to a
+    // bigWig, would take the range of whatever read it back, and is not a
+    // measurement — the denominator had nothing there, which is what a gap says.
+    const out = combineVectors(Float32Array.from([5, 0]), Float32Array.from([0, 0]), 'ratio')
+    expect(Number.isNaN(out[0])).toBe(true)
+    expect(Number.isNaN(out[1])).toBe(true)
+  })
+
+  it('carries a gap in either operand straight through', () => {
+    const out = combineVectors(
+      Float32Array.from([Number.NaN, 4]),
+      Float32Array.from([2, Number.NaN]),
+      'ratio',
+    )
+    expect(Number.isNaN(out[0])).toBe(true)
+    expect(Number.isNaN(out[1])).toBe(true)
+  })
+})
+
+describe('the operations offered', () => {
+  it('is a ratio and a difference, and no logarithm', () => {
+    // log₂ was a scale wearing an operation's clothes: it put the same finding
+    // in two rows and left only one exportable as the quantity it measured. It
+    // is a lane's axis now (`AnnotationStyle.scale`).
+    expect(TRACK_OPS).toEqual(['ratio', 'difference'])
+    expect(isTrackOp('log2ratio')).toBe(false)
   })
 })

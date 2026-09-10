@@ -161,3 +161,95 @@ describe('a computed track’s row', () => {
     expect(made.store.entries.map((entry) => entry.id)).toEqual([made.id])
   })
 })
+
+/**
+ * A comparison of two loaded tracks is a track this app made.
+ *
+ * It used to open on the **Tracks** card, among the files it was computed from,
+ * which put it in the one place a reader does not look for a result and — more
+ * to the point — the one card with no exports on it. There was no way to get a
+ * ratio out of the app at all.
+ */
+describe('a derived track’s row', () => {
+  function derived(): { store: AnnotationStore; card: SyntheticCard; id: string } {
+    const store = new AnnotationStore(`derived-${Math.random()}.cool`, { persist: false })
+    for (const name of ['treated', 'control']) {
+      store.begin({
+        card: 'linear',
+        kind: 'track',
+        id: name,
+        label: name,
+        source: { kind: 'remote', url: `${name}.bw`, name },
+        placement: {},
+      })
+      store.update(name, { status: 'ready' })
+    }
+    const entry = store.begin({
+      card: 'synthetic',
+      kind: 'track',
+      source: { kind: 'derived', name: 'treated / control' },
+      label: 'treated / control',
+      placement: {},
+    })
+    store.update(entry.id, {
+      derivedFrom: { a: 'treated', b: 'control', op: 'ratio' },
+      status: 'ready',
+    })
+    const card = new SyntheticCard({ store, onExport: () => {}, onRecompute: () => {} })
+    built.push(card)
+    document.body.append(card.el)
+    return { store, card, id: entry.id }
+  }
+
+  it('is listed here, beside what the analysis panel computed', () => {
+    const made = derived()
+    const rows = all<HTMLElement>(made.card.el, '.ann-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].dataset.id).toBe(made.id)
+    expect(made.card.el.classList.contains('hidden')).toBe(false)
+  })
+
+  it('says what it is made of, and claims no framing of its own', () => {
+    // It holds no numbers: it is recomputed from its two operands every time it
+    // is drawn, so what it is a reading of is whatever they are.
+    const made = derived()
+    const notes = all<HTMLElement>(made.card.el, '.ann-note').map((node) => node.textContent)
+    expect(notes.join(' ')).toMatch(/ratio/)
+    expect(all<HTMLElement>(made.card.el, '.ann-origin')).toHaveLength(0)
+  })
+
+  it('offers the two files a genome browser opens, and the table', () => {
+    const made = derived()
+    const labels = all<HTMLButtonElement>(made.card.el, 'button')
+      .map((node) => node.textContent ?? '')
+      .filter((text) => text !== '')
+    expect(labels).toContain('bigWig')
+    expect(labels).toContain('bedGraph')
+    expect(labels).toContain('TSV')
+  })
+
+  it('hands the export the row it was pressed on', () => {
+    const store = new AnnotationStore(`derived-${Math.random()}.cool`, { persist: false })
+    const entry = store.begin({
+      card: 'synthetic',
+      kind: 'track',
+      source: { kind: 'derived', name: 'a / b' },
+      label: 'a / b',
+      placement: {},
+    })
+    store.update(entry.id, { derivedFrom: { a: 'a', b: 'b', op: 'ratio' }, status: 'ready' })
+    const asked: Array<[string, string]> = []
+    const card = new SyntheticCard({
+      store,
+      onExport: (row, format) => asked.push([row.id, format]),
+      onRecompute: () => {},
+    })
+    built.push(card)
+    document.body.append(card.el)
+    const bigwig = all<HTMLButtonElement>(card.el, 'button').find(
+      (node) => node.textContent === 'bigWig',
+    )
+    bigwig?.click()
+    expect(asked).toEqual([[entry.id, 'bigwig']])
+  })
+})

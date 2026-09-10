@@ -31,6 +31,7 @@
  */
 
 import { taskById } from '../analysis/registry'
+import { TRACK_OP_LABELS } from '../annotations/derived'
 import type { ProfileOutput } from '../analysis/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry, ComputedSource, LaneEdge } from '../annotations/types'
@@ -39,6 +40,7 @@ import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
+import { scaleField } from './laneSettings'
 
 /** The three formats a per-bin result can leave the app as (§18.7). */
 export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
@@ -116,7 +118,14 @@ export class SyntheticCard {
     // I just ran", and insulation's boundaries belong beside the insulation
     // profile they were called from rather than three cards away among the
     // dropped files. `source.kind` is what they actually share.
-    const rows = this.options.store.entries.filter((entry) => entry.source.kind === 'computed')
+    // `derived` beside `computed` for the same reason the two kinds of computed
+    // output are together: a comparison of two loaded tracks is a track this app
+    // made, and what a reader wants from it — the provenance, and a way to get
+    // the numbers out — is exactly what this card carries and the Tracks card
+    // does not.
+    const rows = this.options.store.entries.filter(
+      (entry) => entry.source.kind === 'computed' || entry.source.kind === 'derived',
+    )
     this.el.classList.toggle('hidden', rows.length === 0)
     this.list.replaceChildren(...rows.map((entry) => this.row(entry)))
   }
@@ -163,6 +172,15 @@ export class SyntheticCard {
     // the picture in front of the reader and the second is about what leaves the
     // app. The same control the Tracks card carries, from the same module, so a
     // computed lane and a loaded one are moved by one gesture and not two.
+    // The axis, for the rows that have one. The card is otherwise deliberately
+    // spare — §18.5's point is that a computed track is a track, so its colour,
+    // its height and its limits are the lane's own controls and not a second set
+    // here — but the scale is the one setting a reader reaches for on *this*
+    // card in particular, because the row this card exists for is a ratio and a
+    // ratio on a linear axis is the picture the log was invented for.
+    if (entry.kind === 'track') {
+      row.appendChild(el('div', { class: 'ann-inline' }, scaleField(this.options.store, entry)))
+    }
     row.appendChild(placementField(this.options.store, entry, mapsOrLead(this.options.maps)))
     row.appendChild(entry.status === 'detached' ? this.recompute(entry) : this.exports(entry))
     return row
@@ -466,12 +484,22 @@ function computedSourceOf(entry: AnnotationEntry): ComputedSource | null {
  * fallback at the same door).
  */
 function madeBy(entry: AnnotationEntry): string | null {
+  if (entry.source.kind === 'derived') {
+    const op = entry.derivedFrom?.op
+    return op === undefined ? 'Two tracks compared' : `Two tracks, as their ${TRACK_OP_LABELS[op]}`
+  }
   const source = computedSourceOf(entry)
   if (source === null) return null
   return taskById(source.task)?.title ?? source.task
 }
 
-/** `chrIV:1–1,531,933 at 1 kb, balanced` — the framing it is a reading of. */
+/**
+ * `chrIV:1–1,531,933 at 1 kb, balanced` — the framing it is a reading of.
+ *
+ * A derived row has none, and that is not an omission: it holds no values of its
+ * own and is recomputed from its two operands every time it is drawn, so what it
+ * is a reading of is whatever *they* are — which their own rows say.
+ */
 function framingOf(entry: AnnotationEntry): string | null {
   const framing = computedSourceOf(entry)?.framing
   return framing === undefined || framing === '' ? null : framing

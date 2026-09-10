@@ -220,17 +220,6 @@ metacooler-run tasks
 ##       --quantiles (default 50)  Quantile groups
 ##       --balance (default false)  Use balancing weights
 ## 
-## cid
-##     Domains (CIDs)
-##       --window (default 10000)  Window
-##       --region  Sequence
-##       --prominence (default 0.2)  Minimum prominence
-##       --minSize (default 20000)  Smallest domain
-##       --aggregate (default true)  Aggregate the boundaries that were called
-##       --apaWindow (default 20)  Pileup half-width
-##       --strata (default 2)  Strength groups
-##       --balance (default false)  Use balancing weights
-## 
 ## chromosight
 ##     Pattern detection
 ##       --pattern (default "loops")  Pattern

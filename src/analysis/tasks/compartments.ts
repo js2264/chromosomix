@@ -14,7 +14,7 @@
  * technical reason. Compartments are a property of a large eukaryotic
  * chromosome; a bacterial MAG has domains and does not have compartments, and
  * offering the row would invite a reader to compute an eigenvector of a thing
- * that has none. `analysis/tasks/cid.ts` is the domain concept that does apply
+ * that has none. insulation and the domains it calls between its boundaries are the domain concept that does apply
  * there, and it is offered on both.
  *
  * **Phasing is a dropdown over what is already loaded**, defaulting to the

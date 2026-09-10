@@ -32,7 +32,7 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
+import { drawnFromSamples, hasTrackControls, readsOf, scaleOf } from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
   packPile,
@@ -2308,7 +2308,10 @@ export class BrowserView {
           ? { reads: readsOf(member.style), reference: this.referenceKey() }
           : {}),
       })
-      lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
+      lane.profiles.push({
+        entry: member,
+        profile: profileOf(lane.frame, this.axis, samples, scaleOf(member.style)),
+      })
     }
   }
 

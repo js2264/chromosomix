@@ -3986,10 +3986,13 @@ rather than where the pattern did; and a table of the strongest calls. This is t
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
 against loop calling is answered in that section rather than here, and why its golden is the
 package's own output rather than a re-derivation (§18.10).
-*CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the
-panel for now**, since everything it does is reachable through insulation's own boundary calls and an
-APA over them, and a composite whose two halves disagree about their units is worth holding back rather
-than shipping with a caveat.
+*CID* — insulation plus boundary calls plus a pileup over those calls — is **gone**, and its going is
+the argument that withheld it carried to its end. Everything it did is reachable and now in one place:
+insulation calls the boundaries, calls the domains between them, and an APA over those domains is the
+pileup. What it added over that was a composite whose three settings never reached the step they named
+— `AnalysisRunner.plan` walks a required task at *that task's* defaults — so its window, its region and
+its prominence were controls that changed nothing, and its estimate read a window labelled base pairs
+as a count of bins. A task nobody could run, whose settings did not work, duplicating two that do.
 
 **Which settings are settings.** A parameter is a question the reader is *entitled to a different
 answer to*; anything with one right answer per file belongs to the file. **Balancing** is the case that
@@ -4081,10 +4084,8 @@ the reasons are worth recording where the descriptions are:
   three normalisations. `requires` is resolved before every run, so declaring it would compute a
   whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
   pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
-  span, which it accumulates from squares it is already reading. **CID and the inter-MAG network
-  are** genuine composites, and for the mirror-image reason: their upstream is the whole input,
-  unconditionally. (CID is not currently offered; the argument is about its shape, not its
-  availability.)
+  span, which it accumulates from squares it is already reading. **The inter-MAG network is** a
+  genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
   own, to express what a base and a count express exactly. A genuinely irregular set of widths is two

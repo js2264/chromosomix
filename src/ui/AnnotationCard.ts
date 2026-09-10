@@ -46,6 +46,7 @@ import {
   colourLegend,
   fillLegend,
   flipButton,
+  scaleField,
   heightField,
   layoutField,
   limitsField,
@@ -666,7 +667,11 @@ export class AnnotationCard {
       const op = select.value
       if (!isTrackOp(op)) return
       const entry = this.props.store.begin({
-        card: 'linear',
+        // **Synthetic, not linear.** A comparison is a track this app computed,
+        // and §18.5's rule is that such a track belongs on the card that carries
+        // the exports — which is the whole of what the reader wants from it once
+        // it is on screen.
+        card: 'synthetic',
         kind: 'track',
         // Nothing to name and nothing to re-read: the values are computed from
         // two rows that are already here, exactly as the 4C profile is computed
@@ -829,8 +834,17 @@ export class AnnotationCard {
    * is the one thing this card exists to show.
    */
   private fileRows(): AnnotationEntry[] {
+    // `derived` is here with `computed` and `metadata` because it is the same
+    // kind of row: something this app made, not something the reader gave it.
+    // A comparison of two tracks belongs beside the other things that were
+    // computed — where the exports are — rather than among the files it was
+    // computed from, which is also where a reader looks for it when they want
+    // the numbers out.
     return this.props.store.entries.filter(
-      (entry) => entry.source.kind !== 'computed' && entry.source.kind !== 'metadata',
+      (entry) =>
+        entry.source.kind !== 'computed' &&
+        entry.source.kind !== 'metadata' &&
+        entry.source.kind !== 'derived',
     )
   }
 
@@ -1054,7 +1068,9 @@ export class AnnotationCard {
       'div',
       { class: 'ann-inline' },
       heightField(this.props.store, entry),
-      ...(hasTrackControls(entry.kind) ? [this.mode(entry), this.flip(entry)] : []),
+      ...(hasTrackControls(entry.kind)
+        ? [this.mode(entry), scaleField(this.props.store, entry), this.flip(entry)]
+        : []),
       ...(entry.kind === 'sequence' ? [this.mode(entry)] : []),
     )
   }

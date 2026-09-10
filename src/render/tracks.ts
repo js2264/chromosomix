@@ -19,7 +19,7 @@
 
 import { valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
-import type { Limits, TrackSampleSet } from '../annotations/types'
+import { onScale, type Limits, type TrackScale, type TrackSampleSet } from '../annotations/types'
 
 /**
  * One value per canvas pixel along the genomic axis.
@@ -87,6 +87,7 @@ export function profileOf(
   frame: LaneFrame,
   axis: LocusAxis,
   samples: TrackSampleSet | null,
+  scale: TrackScale = 'linear',
 ): PixelProfile {
   const from = Math.floor(frame.alongFrom)
   const slots = Math.max(1, Math.ceil(frame.alongTo) - from)
@@ -164,10 +165,21 @@ export function profileOf(
   let drawn = 0
   for (let slot = 0; slot < slots; slot++) {
     if (weight[slot] <= 0) continue
-    const value = sum[slot] / weight[slot]
+    // **The scale is applied to the pixel, not to the interval.** A log axis
+    // draws `log(mean)`; transforming each interval first and then averaging
+    // draws the mean of the logs, which is the geometric mean — a different
+    // number, and one nobody asked for by picking an axis. The band's two ends
+    // go through the same transform for the same reason, so a readout that says
+    // what a pixel hid says it in the units the pixel is drawn in.
+    const value = onScale(sum[slot] / weight[slot], scale)
     mean[slot] = value
     if (Number.isNaN(low[slot])) low[slot] = value
+    else low[slot] = onScale(low[slot], scale)
     if (Number.isNaN(high[slot])) high[slot] = value
+    else high[slot] = onScale(high[slot], scale)
+    // A value the scale has no answer for — zero or below, under a logarithm —
+    // is a gap, and a gap decides nothing about the axis and draws no ink.
+    if (!Number.isFinite(value)) continue
     // The means, and the means at *both* ends: `low[slot]` used to be folded
     // into the floor with no `high[slot]` twin, so a single hidden sub-zero
     // base inside a summary window decided the axis. An all-positive

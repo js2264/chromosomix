@@ -15,7 +15,6 @@
 import type { TaskRunner } from '../job'
 import { runApa } from './apa'
 import { runChromosight } from './chromosight'
-import { runCid } from './cid'
 import { runCompartments } from './compartments'
 import { runCoverage } from './coverage'
 import { runExpected } from './expected'
@@ -39,7 +38,6 @@ export const RUNNERS: Record<string, TaskRunner> = {
   fourc: runFourC,
   apa: runApa,
   chromosight: runChromosight,
-  cid: runCid,
   compartments: runCompartments,
   magqc: runMagQc,
   magnetwork: runMagNetwork,

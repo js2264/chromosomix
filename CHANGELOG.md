@@ -14,6 +14,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A comparison of two tracks is a synthetic track.** Combining two loaded
+  bigWigs used to open a row on the **Tracks** card, among the files it was
+  computed from — the one card with no exports on it, so there was no way to get
+  a ratio out of the app at all. It lands on **Synthetic tracks** now, beside
+  what the analysis panel computed, with the provenance line and the three
+  exports every computed track carries: **bigWig**, bedGraph and TSV.
+
+  The lane itself is unchanged and still lazy: it cuts at every boundary of
+  either operand, so the step function it draws is exact at any zoom. A *file*
+  has to be on some grid, so the export evaluates both operands onto the map's
+  own bins — the same grid every other synthetic track is written on — and says
+  so in its header, because a reader comparing the file against the lane should
+  be told which of the two they are holding. Where a lane brings `x / 0` back
+  onto its axis, the file writes no value: an infinity cannot go in a bigWig.
+
+- **Each track's lane has a scale: linear or log₂.** Beside the drawing style,
+  on the Tracks card and on Synthetic tracks. It is a display scale and nothing
+  else — the numbers behind the lane, and every number that leaves it as a file,
+  are untouched — and the logarithm is taken of the *pixel*, not of every
+  interval under it, because a log axis draws `log(mean)` and not the geometric
+  mean. A value at or below zero has no logarithm and is drawn as a gap, so log₂
+  suits a ratio and not a difference.
+
+### Removed
+
+- **The `log₂ ratio` combine operation.** It was a scale wearing an operation's
+  clothes: it put the same finding in two rows and left only one of them
+  exportable as the quantity it measured — a bigWig of log₂ ratios is a file of
+  a *picture*, and anything downstream that wanted the ratio had to undo it. The
+  reason it existed is real and is answered above, on the lane's own axis. Two
+  operations remain, a ratio and a difference, and either can be *drawn* as a
+  logarithm.
+
+- **The `Domains (CIDs)` task**, which was withheld from the panel on every file
+  and is now redundant. Everything it did is reachable and in one place:
+  insulation calls the boundaries, calls the domains between them, and an APA
+  over those domains is the pileup. What it added over that was a composite
+  whose three settings never reached the step they named — `AnalysisRunner.plan`
+  walks a required task at *that task's* defaults — so its window, its region
+  and its prominence changed nothing, and its estimate read a window labelled
+  base pairs as a count of bins. A task nobody could run, whose settings did not
+  work, duplicating two that do.
+
 - **Diamond insulation calls the domains between its boundaries, and does it by
   default.** A second overlay beside the calls: the span from each boundary to
   the next, drawn as a segmentation the way the A/B compartment track is, and
