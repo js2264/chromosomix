@@ -81,6 +81,8 @@ import {
   type TaskResult,
 } from '../analysis/types'
 import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
+import { cliCannotRun, cliCommandFor } from '../analysis/cliCommand'
+import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
 import { profileCurve } from './analysisPlots'
 import { interactiveCurve, interactiveMatrix } from './interactivePlot'
@@ -416,6 +418,15 @@ export class AnalysisDrawer {
   /** The result the output blocks were built from, compared by identity. */
   private drawn: TaskResult | null = null
   /**
+   * `copy CLI command`, whose enabled state is a property of the task.
+   *
+   * Built once and repainted, like {@link runButton} beside it, because a task
+   * that reads a track cannot be run from a shell at all and the button has to
+   * say so rather than hand over a line the command rejects
+   * (`analysis/cliCommand.ts`).
+   */
+  private readonly cliButton: HTMLButtonElement
+  /**
    * Which map's result is on screen — a `MapId`, or `ALL_MAPS` for the overlay.
    *
    * Held per task, because walking a deck's panels on one task and then opening
@@ -456,6 +467,9 @@ export class AnalysisDrawer {
       class: 'btn btn-quiet',
       title: 'Stop this job. The worker checks between chunks, so it stops at the next one.',
     })
+    this.cliButton = button('copy CLI command', () => this.copyCliCommand(), {
+      class: 'btn btn-quiet',
+    })
     this.progressEl = el('div', { class: 'analysis-progress' }, this.progressFill)
     this.recordEl = el(
       'div',
@@ -467,6 +481,11 @@ export class AnalysisDrawer {
           'The task, its version, every parameter, the framing, the file and the build — the ' +
           'same lines every export carries at its head (§18.4).',
       }),
+      // The other half of the same fact, for the reader whose next file is the
+      // second of two hundred. Whether it can be pressed, and what it says when
+      // it cannot, are written in {@link paintCli} — both are properties of the
+      // task the result came from rather than of the drawer.
+      this.cliButton,
     )
 
     this.el = el(
@@ -1087,6 +1106,7 @@ export class AnalysisDrawer {
     const provenance = result.provenance
     this.recordEl.classList.remove('hidden')
     this.recordNote.textContent = `computed in ${durationText(result.ms)} · ${provenance.createdAt}`
+    this.paintCli(provenance)
 
     // The things the reader must be told that are not errors — *412 of 5,000
     // windows dropped for missing data*. Above the pictures, because a note that
@@ -1386,6 +1406,71 @@ export class AnalysisDrawer {
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : String(err))
     }
+  }
+
+  /**
+   * Whether the shell can be offered this run, and what the button then says.
+   *
+   * **Disabled with a reason, rather than absent.** A row of one button says
+   * nothing about the second while a greyed one with a sentence in its tooltip
+   * says exactly when it applies — the argument `ui/SyntheticCard.ts` makes
+   * about its own bigWig button, and the same alternative to avoid: a button
+   * wired to something that writes a command line the command then rejects,
+   * which the reader finds out somewhere else, later, with the app closed.
+   */
+  private paintCli(provenance: Provenance): void {
+    const task = taskById(provenance.task)
+    const refusal = task === undefined ? null : cliCannotRun(task)
+    // A task this build has never heard of — a result restored from a session
+    // written by a later one. There is nothing to write a command from, since
+    // the flags are the descriptor's, so the button goes quiet rather than
+    // guessing at them.
+    const unknown = task === undefined
+    this.cliButton.disabled = unknown || refusal !== null
+    this.cliButton.title =
+      refusal ??
+      (unknown
+        ? `This build does not have the task ${provenance.task}, so it cannot write its flags.`
+        : 'The same run as a `metacooler-run` line — the file, the window, the balancing and ' +
+          'every parameter — for the other two hundred files.')
+  }
+
+  /**
+   * Put the command on the clipboard, and say what it left behind.
+   *
+   * The status line names the notes rather than repeating them: they are on the
+   * clipboard as `#` lines above the command, where a reader pasting into a
+   * script will actually meet them, and a drawer that printed them twice would
+   * be the second place they can go stale.
+   */
+  private copyCliCommand(): void {
+    const result = this.drawn
+    if (result === null) return
+    const task = taskById(result.provenance.task)
+    if (task === undefined) return
+    const command = cliCommandFor({
+      task,
+      provenance: result.provenance,
+      context: this.options.context(),
+    })
+    if (command.refusal !== null) {
+      this.setStatus(command.refusal)
+      return
+    }
+    const caveats = command.text.split('\n').filter((line) => line.startsWith('#')).length
+    void copyTextToClipboard(command.text).then(
+      () => {
+        this.setStatus(
+          caveats === 0
+            ? 'CLI command copied.'
+            : `CLI command copied, with ${caveats} note${caveats === 1 ? '' : 's'} on what a ` +
+              'shell cannot be told.',
+        )
+      },
+      (err: unknown) => {
+        this.setStatus(err instanceof Error ? err.message : String(err))
+      },
+    )
   }
 
   /**

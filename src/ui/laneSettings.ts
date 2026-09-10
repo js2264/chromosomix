@@ -238,6 +238,41 @@ export function flipButton(store: AnnotationStore, entry: AnnotationEntry): HTML
 }
 
 /** How solid the lane is drawn, for the ones that can overlap something. */
+/**
+ * How a called interval set is drawn on the matrix face: as a box, or as a mark.
+ *
+ * Here rather than on the Tracks card, which is where it was, because a computed
+ * boundary set is an overlay exactly as a dropped BED one is and appears on a
+ * different card — so a control that lived as a private method of the one card
+ * was a control the other kind of row could not be given at all.
+ */
+export function shapeField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const select = el('select', { class: 'select' })
+  select.appendChild(el('option', { value: 'element', text: 'element (box)' }))
+  select.appendChild(el('option', { value: 'border', text: 'border (mark)' }))
+  select.value = entry.style.shape
+  select.title =
+    'An element is an extent — a domain — and is drawn as the box it occupies. A border is a ' +
+    'point call and is drawn as a mark across the diagonal, which stays visible at any zoom.'
+  select.addEventListener('change', () =>
+    store.restyle(entry.id, { shape: select.value as 'element' | 'border' }),
+  )
+  return settingsField('shape', select)
+}
+
+/** How big a pair's circle is drawn, in pixels. Moved here for {@link shapeField}'s reason. */
+export function radiusField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const input = el('input', {
+    class: 'ann-range',
+    type: 'range',
+    value: String(entry.style.radius),
+  })
+  input.min = '3'
+  input.max = '24'
+  input.addEventListener('input', () => store.restyle(entry.id, { radius: Number(input.value) }))
+  return settingsField('radius', input)
+}
+
 export function opacityField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
   const input = el('input', {
     class: 'ann-range',

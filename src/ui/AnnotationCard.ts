@@ -52,6 +52,8 @@ import {
   limitsField,
   mapqField,
   modeField,
+  radiusField,
+  shapeField,
   styleFields,
   opacityField,
   duplicatesToggle,
@@ -686,7 +688,12 @@ export class AnnotationCard {
         // Ready the moment it exists: there is no file behind it to wait for,
         // and a lane is drawn when it is ready.
         status: 'ready',
-        summary: `${TRACK_OP_LABELS[op]} of two tracks`,
+        // No `summary`. It said `ratio of two tracks`, which is word for word
+        // what the Synthetic card's own provenance line says about a derived
+        // row — invisible while that card showed no summary, and one line of
+        // pure repetition the moment it did. The count a summary carries on
+        // every other computed row is a fact a comparison has not got: it holds
+        // no elements, only a value wherever both its operands have one.
       })
       this.ticked.clear()
       this.render()
@@ -1181,27 +1188,11 @@ export class AnnotationCard {
   }
 
   private shape(entry: AnnotationEntry): HTMLElement {
-    const select = el('select', { class: 'select' })
-    select.appendChild(el('option', { value: 'element', text: 'element (box)' }))
-    select.appendChild(el('option', { value: 'border', text: 'border (mark)' }))
-    select.value = entry.style.shape
-    select.title =
-      'An element is an extent — a domain — and is drawn as the box it occupies. A border is a ' +
-      'point call and is drawn as a mark across the diagonal, which stays visible at any zoom.'
-    select.addEventListener('change', () =>
-      this.props.store.restyle(entry.id, { shape: select.value as 'element' | 'border' }),
-    )
-    return this.field('shape', select)
+    return shapeField(this.props.store, entry)
   }
 
   private radius(entry: AnnotationEntry): HTMLElement {
-    const input = el('input', { class: 'ann-range', type: 'range', value: String(entry.style.radius) })
-    input.min = '3'
-    input.max = '24'
-    input.addEventListener('input', () =>
-      this.props.store.restyle(entry.id, { radius: Number(input.value) }),
-    )
-    return this.field('radius', input)
+    return radiusField(this.props.store, entry)
   }
 
   private opacity(entry: AnnotationEntry): HTMLElement {

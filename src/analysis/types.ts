@@ -701,6 +701,27 @@ export interface IntervalsOutput {
   id: string
   label: string
   payload: AnnotationPayload
+  /**
+   * What one of these *is*, so the row can say how many there are.
+   *
+   * A called set is a number of things, and the number is the first thing a
+   * reader wants from it — a run that found 3 loops and a run that found 3,000
+   * are different results, and until this the row said neither. A dropped BEDPE
+   * has carried `1,204 pairs` under its name since there were rows at all
+   * (`annotations/worker`); a computed one had nothing, which made the two kinds
+   * of row unlike each other for no reason except that nobody had written it.
+   *
+   * The **task's own word**, not the payload's. Both halves of a loop set are
+   * `pairs` to the parser and `loops` to the person who ran the detector, and a
+   * row headed *Detected loops* that says `1,204 pairs` underneath is answering
+   * a question about the file format. Absent falls back to the payload's word,
+   * which is right for a task that has not been given one and is what every
+   * loaded row already says.
+   *
+   * Both numbers, because English: `1 boundary`, `412 boundaries`, and no
+   * `boundarys` anywhere.
+   */
+  noun?: { one: string; many: string }
 }
 
 export type TaskOutput =

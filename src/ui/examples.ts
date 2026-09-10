@@ -238,6 +238,33 @@ export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
 }
 
 /**
+ * The published tracks to *offer*, which is none once a session has its own.
+ *
+ * A separate question from {@link demoAnnotationsFor}, and worth its own name
+ * because the two are about different things: that one asks what is published
+ * beside this map, and this one asks whether the reader should be shown a button
+ * that loads it. The button says *here is a set of tracks to look at*, which is
+ * an offer to somebody who has none.
+ *
+ * A **restored session already names the tracks it wants** and is a moment away
+ * from putting them on screen. Offered anyway, the button appeared under rows
+ * that were already appearing and proposed ten more, most of them the same files
+ * a second time — and worst on the published sessions, which are saved over
+ * exactly this map, so a reader opening one met a viewer volunteering to
+ * duplicate what it had just handed them.
+ *
+ * `restoring` covers an imported workspace, a `?config=` link and a plain
+ * reload alike, because all three arrive the same way: rows in session memory,
+ * written before the column is built.
+ */
+export function demoAnnotationsToOffer(
+  uri: string,
+  options: { restoring: boolean },
+): DemoAnnotationLink[] {
+  return options.restoring ? [] : demoAnnotationsFor(uri)
+}
+
+/**
  * Every published annotation, as its path under `demo/`, for the test that
  * checks they are on disk — and so for the sync that puts them on the bucket.
  */

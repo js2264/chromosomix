@@ -588,6 +588,9 @@ export const runCompartments: TaskRunner = async (job) => {
       id: 'compartment-ab',
       label: `A/B compartments · ${label}`,
       payload: { kind: 'features', data: segments.finish() },
+      // Segments and not compartments: there are two compartments and several
+      // hundred stretches of them, and the number worth reporting is the second.
+      noun: { one: 'segment', many: 'segments' },
     },
   )
 

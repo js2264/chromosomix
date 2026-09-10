@@ -43,7 +43,7 @@ import type { Placement } from '../annotations/types'
 import type { AnnotationEntry, ComputedSource } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { GroupSettings } from '../annotations/groups'
-import { el } from '../ui/dom'
+import { el, fmt } from '../ui/dom'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
@@ -587,7 +587,7 @@ export class AnalysisWorkspace {
       style: defaultStyle(kind, colour),
     })
     this.placeOnTarget(store, id, emptyPlacement(), map)
-    store.update(id, { status: 'ready', payload: output.payload })
+    store.update(id, { status: 'ready', payload: output.payload, summary: countedAs(output) })
     this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
   }
 
@@ -712,6 +712,38 @@ export class AnalysisWorkspace {
   }
 
   /**
+   * How many bins that grid has — the length of a vector laid out over it.
+   *
+   * **Not `context.nBins`, and the difference is the whole of a bug.** A matrix
+   * bin count is what a *map* has, and `Session.analysisContext` reports zero
+   * for a session that has none: a 1D browser session (§5.8) is given a real bin
+   * grid — a browsing resolution and a `startBin` per sequence, so a per-bin
+   * result computed from a track or a sequence is a lane there like anywhere
+   * else — while `nBins` stays zero deliberately, because that is what keeps
+   * `hasMap` false and the map tasks waiting.
+   *
+   * Reading the vector's length off `nBins` therefore made every whole-assembly
+   * vector in a browser session **empty**, which is a file rather than an error:
+   * a comparison of two bigWigs drew perfectly (the lane combines the operands'
+   * own samples and never asks this) and then exported as a bigWig with a legal
+   * header, no data blocks, and no complaint — and as a bedGraph and a TSV with
+   * their provenance comments and not one row under them. The grid is the thing
+   * both writers actually lay a vector out over, so the grid is what says how
+   * long the vector is.
+   *
+   * `startBin + bins` maxed over the list rather than read off the last entry,
+   * so a caller handing the contigs in some other order still gets the total
+   * rather than one contig's end.
+   */
+  private gridBins(): number {
+    let total = 0
+    for (const contig of this.host.contigs()) {
+      total = Math.max(total, contig.startBin + contig.bins)
+    }
+    return total
+  }
+
+  /**
    * Any annotation entry, read onto this file's bin grid.
    *
    * The other direction from {@link register}, and the one that lets a task in
@@ -739,6 +771,12 @@ export class AnalysisWorkspace {
     if (contigs.length === 0) return undefined
 
     const binsize = context.binsize
+    // The grid's own total, never `context.nBins` — see {@link gridBins}. Zero
+    // means there is no grid to read onto at all, which is a bin size of zero
+    // and nothing this can answer; `undefined` says so, and every caller already
+    // handles a row it could not read.
+    const nBins = this.gridBins()
+    if (!(binsize > 0) || nBins === 0) return undefined
     const regions = contigs
       .filter((contig) => contig.length > 0)
       .map((contig) => ({ contig: contig.name, start: 0, end: contig.length }))
@@ -758,9 +796,9 @@ export class AnalysisWorkspace {
     }
 
     const startOf = new Map(contigs.map((contig) => [contig.name, contig.startBin]))
-    const out = new Float32Array(context.nBins).fill(Number.NaN)
-    const weight = new Float64Array(context.nBins)
-    const total = new Float64Array(context.nBins)
+    const out = new Float32Array(nBins).fill(Number.NaN)
+    const weight = new Float64Array(nBins)
+    const total = new Float64Array(nBins)
     for (const region of samples.regions) {
       const base = startOf.get(region.contig)
       if (base === undefined) continue
@@ -977,12 +1015,17 @@ export class AnalysisWorkspace {
     // (`annotations/store.ts`), so this is the moment between the two.
     if (a === undefined || b === undefined) return
 
+    // The combined vector's own length, not a bin count read off somewhere
+    // else: `combineVectors` takes the shorter of its two operands, so any
+    // other number here is a claim about rows that are not in the array —
+    // which `write/bedgraph.ts` walks `extent` to find.
+    const values = combineVectors(a, b, recipe.op)
     const output: ProfileOutput = {
       kind: 'profile',
       id: entry.id,
       label: entry.label,
-      values: combineVectors(a, b, recipe.op),
-      extent: [0, context.nBins],
+      values,
+      extent: [0, values.length],
       binsize: context.binsize,
       unit: TRACK_OP_LABELS[recipe.op],
     }
@@ -1028,6 +1071,33 @@ export class AnalysisWorkspace {
 }
 
 /**
+ * `1,204 pairs` — how many things a task called.
+ *
+ * The first thing a reader wants from a called set and the last thing the row
+ * used to say. A dropped BEDPE has carried its count under its name since there
+ * were rows at all (`annotations/worker`), and a *computed* set carried nothing:
+ * so a run that found three loops and a run that found three thousand were the
+ * same row, and the only way to tell them apart was to export the file and count
+ * it. Written here, on the same `summary` field the loaded rows use and read by
+ * the same line of the same card, so the two kinds of row say the number the
+ * same way rather than in two places that can drift.
+ *
+ * The task's own noun where it gave one ({@link IntervalsOutput.noun}) and the
+ * payload's shape where it did not — the fallback is what a reader would say
+ * about a set nobody has named, and it is never wrong, only general.
+ */
+function countedAs(output: IntervalsOutput): string {
+  const payload = output.payload
+  const total = payload.data.length
+  const noun =
+    output.noun ??
+    (payload.kind === 'pairs'
+      ? { one: 'pair', many: 'pairs' }
+      : { one: 'interval', many: 'intervals' })
+  return `${fmt.int(total)} ${total === 1 ? noun.one : noun.many}`
+}
+
+/**
  * The header a derived export carries.
  *
  * There is no task behind it, and inventing one would be worse than saying so:
@@ -1035,19 +1105,29 @@ export class AnalysisWorkspace {
  * chose, which is exactly what goes in `task` and `params`. The framing line is
  * the one that earns its place — it names the grid the file is on, which is the
  * single way this file differs from the lane it came from.
+ *
+ * Which grid that is depends on whether there is a map. With one it is the open
+ * file's own bins, and saying so is the point. Without one — a 1D browser
+ * session, where comparing two bigWigs is the likeliest reason to be here at all
+ * — there is no file whose bins these are: the grid is the browsing resolution
+ * the assembly was given, and calling it “this file’s” would name a resolution
+ * nothing was measured at.
  */
 function derivedProvenance(
   entry: AnnotationEntry,
   op: TrackOp,
   context: AnalysisContext,
 ): Provenance {
+  const bins = `${context.binsize.toLocaleString()} bp bins`
   return {
     task: `track ${TRACK_OP_LABELS[op]}`,
     taskVersion: 1,
     params: { operation: op, of: entry.label },
     framing: {
       uri: context.uri,
-      label: `two loaded tracks, read onto this file’s ${context.binsize.toLocaleString()} bp bins`,
+      label: context.hasMap
+        ? `two loaded tracks, read onto this file’s ${bins}`
+        : `two loaded tracks, read onto the assembly’s ${bins}`,
       binsize: context.binsize,
       binsPerCell: 1,
       rows: [0, context.nBins],

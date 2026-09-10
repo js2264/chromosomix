@@ -345,6 +345,7 @@ function boundaryOutput(
     id: 'insulation-boundaries',
     label: 'Insulation boundaries',
     payload: { kind: 'features', data: builder.finish() },
+    noun: { one: 'boundary', many: 'boundaries' },
   }
 }
 
@@ -398,6 +399,7 @@ function domainOutput(
       id: 'insulation-domains',
       label: 'Insulation domains',
       payload: { kind: 'features', data: builder.finish() },
+      noun: { one: 'domain', many: 'domains' },
     },
   }
 }

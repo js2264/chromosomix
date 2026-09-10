@@ -147,7 +147,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { demoAnnotationsFor, demoExamples } from '../ui/examples'
+import { demoAnnotationsToOffer, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import {
   MAP_NAMES_SCOPE,
@@ -3875,8 +3875,20 @@ export class Session {
 
     // The demo map ships ten annotation files on its own assembly. Offering
     // them as one click is the difference between a viewer that demonstrably
-    // works and one a reader has to assemble a test case for.
-    const published = demoAnnotationsFor(uri)
+    // works and one a reader has to assemble a test case for — and offering them
+    // to a session that is bringing its own tracks back is the opposite of that
+    // ({@link demoAnnotationsToOffer}).
+    //
+    // Asked of **storage** rather than of the store, because the store is empty
+    // at this point in the build and the rows are not: `applyConfig` writes an
+    // imported session's tracks into the same session memory a reload leaves
+    // behind, under the same scope `AnnotationStore.stored` reads, and both
+    // happen before this line. So one question answers for an imported
+    // workspace, a `?config=` link and a plain reload alike, rather than three
+    // flags that would each have to be threaded down here.
+    const published = demoAnnotationsToOffer(uri, {
+      restoring: AnnotationStore.stored(scope).length > 0,
+    })
     // Contact maps first, and that is the change of mind this card's eyes made
     // necessary: while it was only "load a second file to compare against" it
     // belonged under the tracks, as the rarest thing in the column. It is now

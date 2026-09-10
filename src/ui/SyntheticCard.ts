@@ -40,7 +40,13 @@ import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
-import { scaleField, styleFields } from './laneSettings'
+import {
+  opacityField,
+  radiusField,
+  scaleField,
+  shapeField,
+  styleFields,
+} from './laneSettings'
 
 /** The three formats a per-bin result can leave the app as (§18.7). */
 export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
@@ -163,6 +169,19 @@ export class SyntheticCard {
     // takes on a loaded row — it is looked up rather than read.
     const made = madeBy(entry)
     if (made !== null) row.appendChild(el('p', { class: 'ann-note', text: made }))
+
+    // **How many.** The same `summary` field and the same `ann-note` line a
+    // dropped BEDPE gets on the Tracks card, because it is the same fact: a
+    // called set is a number of things, and the number is what a reader looks
+    // for first. This card listed the task and the framing and never the count,
+    // so *Detected loops* said everything about the run except its result — and
+    // the row for the same loops loaded back from a file said it plainly.
+    // Above the framing, because it is about the answer and the framing is
+    // about the question.
+    if (entry.summary !== undefined && entry.summary !== '') {
+      row.appendChild(el('p', { class: 'ann-note', text: entry.summary }))
+    }
+
     const framing = framingOf(entry)
     if (framing !== null) {
       row.appendChild(el('p', { class: 'ann-origin', text: framing, title: framing }))
@@ -195,7 +214,41 @@ export class SyntheticCard {
         ),
       )
     }
-    row.appendChild(placementField(this.options.store, entry, mapsOrLead(this.options.maps)))
+
+    // **Where it is drawn, or how — never both, because only one of them is
+    // true of a given row.**
+    //
+    // A *lane* is placed: it is drawn along an edge, and which edges is the
+    // question the four buttons answer. An **overlay** is not placed at all —
+    // `MatrixPanel.paintOverlays` walks `store.overlays()` and draws every
+    // ready, visible one on the matrix face, consulting no placement whatever —
+    // so this card was offering a called loop set four buttons that could not
+    // move it and one of which (its last edge) quietly filed it under a map it
+    // is not drawn on the strength of. The Tracks card has always got this
+    // right for a *loaded* interval set: `card === 'overlay'` gets the controls
+    // that change the marks, and placement is for `card === 'linear'`. This is
+    // that same rule, applied to the rows the Tracks card does not list.
+    //
+    // Which also closes the other half: a computed loop set could not be given
+    // an opacity or a radius by any control anywhere, because the only card
+    // that offers them is the only card it never appears on.
+    if (entry.card === 'overlay') {
+      row.appendChild(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          ...(entry.kind === 'pairs'
+            ? [radiusField(this.options.store, entry)]
+            : entry.kind === 'segments'
+              ? [shapeField(this.options.store, entry)]
+              : []),
+          opacityField(this.options.store, entry),
+        ),
+      )
+    } else {
+      row.appendChild(placementField(this.options.store, entry, mapsOrLead(this.options.maps)))
+    }
+
     row.appendChild(entry.status === 'detached' ? this.recompute(entry) : this.exports(entry))
     return row
   }

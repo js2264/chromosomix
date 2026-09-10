@@ -84,9 +84,26 @@ export function icon(name: IconName, options: { size?: number; class?: string } 
  * 13 px, against a 12 px cap height: the mark is a label for the word, not a
  * second thing beside it, and anything larger starts competing.
  *
+ * **The heading is also the card's fold**, and that is why this is the only
+ * place it had to be written. The Genome minimap had the behaviour first, as a
+ * `<details>` with its heading for a summary, and its own note said there was no
+ * per-card collapse idiom in this codebase to follow. There is now, and it is
+ * this: every card in every panel gets a chevron on the right-hand end of its
+ * heading, and a press anywhere along that line folds the card away to the line
+ * itself. Generalising it here rather than card by card is what keeps twenty
+ * cards from each growing their own wrapper, their own marker and their own
+ * opinion about where the control sits — the gesture is one gesture because it
+ * is one implementation.
+ *
+ * A heading that is not a card's — the empty-metadata box uses one — keeps the
+ * type and loses the control; see {@link foldCard}.
+ *
  * @param extra Classes the heading needs *as well* — `controls-title` for the
  * cards in the Aesthetics column, which are folded into the panel header in the
- * inline layout and hide their titles there.
+ * inline layout and hide their titles there. That layout takes the heading away
+ * altogether, so a card sitting in a panel header does not fold: the stylesheet
+ * leaves it alone rather than letting a fold made in the column hide controls
+ * with nothing left on screen to bring them back.
  */
 export function cardTitle(text: string, name: IconName, extra?: string): HTMLElement {
   const node = document.createElement('h3')
@@ -95,7 +112,72 @@ export function cardTitle(text: string, name: IconName, extra?: string): HTMLEle
   const label = document.createElement('span')
   label.textContent = text
   node.appendChild(label)
+  node.appendChild(foldChevron(text))
+  // On the heading and not on the chevron, which is what makes the whole strip
+  // the control: a press on the button bubbles to here, so one listener serves
+  // the pointer, the Enter key and the space bar without the two of them ever
+  // being able to disagree about which way the card is going.
+  node.addEventListener('click', () => foldCard(node))
   return node
+}
+
+/**
+ * The mark on the right-hand end of a card's heading, and the state it carries.
+ *
+ * One chevron that **turns** rather than two that are swapped. A swap is two
+ * shapes to keep in step and a hard cut between them; a rotation is one node,
+ * one transition, and a direction of travel the eye follows into the fold —
+ * which is the whole of why the card reads as opening rather than as being
+ * replaced. `chevron-down` is the open state, so the resting card points at what
+ * is under it and a folded one points along the row it has become.
+ *
+ * A real `<button>`, though the heading beside it is what is usually pressed:
+ * the fold has to be reachable by keyboard and has to say which way it will go,
+ * and `aria-expanded` on a focusable control is how that is said. It carries no
+ * listener of its own — {@link cardTitle} explains why.
+ */
+function foldChevron(text: string): HTMLButtonElement {
+  const node = document.createElement('button')
+  node.type = 'button'
+  node.className = 'card-fold'
+  node.setAttribute('aria-expanded', 'true')
+  // The card's own name in the label, because a column of five of these read
+  // aloud as "collapse" five times over says nothing about which one is which.
+  node.setAttribute('aria-label', `Collapse ${text}`)
+  node.title = 'Collapse'
+  node.appendChild(icon('chevron-down', { size: 14 }))
+  return node
+}
+
+/**
+ * Fold or unfold the card a heading belongs to.
+ *
+ * The class goes on the **card**, not on the heading, because what folds is
+ * everything the card holds *except* the heading — a rule the stylesheet can
+ * state once for every card in the application rather than each card hiding its
+ * own parts. Which is also why this walks up exactly one level and checks what
+ * it found: a heading used somewhere that is not a card — the empty-metadata
+ * box is the one — has nothing to fold, and quietly doing nothing is better than
+ * hiding half of a box that was never built to lose it.
+ *
+ * The choice is **not remembered**, following the Genome minimap this was
+ * generalised from: the house mechanisms for a per-reader preference are modules
+ * over `localStorage` (`ui/textScale.ts`, `ui/mapSize.ts`), and a new storage
+ * scheme for a disclosure triangle would be a scheme to migrate, key and forget
+ * about. A card that survives a repaint keeps its fold because the element does.
+ */
+function foldCard(head: HTMLElement): void {
+  const card = head.parentElement
+  if (card === null) return
+  if (!card.classList.contains('card') && !card.classList.contains('controls-card')) return
+  const folded = card.classList.toggle('is-folded')
+  const chevron = head.querySelector('.card-fold')
+  if (chevron === null) return
+  chevron.setAttribute('aria-expanded', String(!folded))
+  const label = chevron.getAttribute('aria-label') ?? ''
+  const name = label.replace(/^(Collapse|Expand) /, '')
+  chevron.setAttribute('aria-label', `${folded ? 'Expand' : 'Collapse'} ${name}`)
+  if (chevron instanceof HTMLElement) chevron.title = folded ? 'Expand' : 'Collapse'
 }
 
 /** A button whose whole content is one icon. The title is the accessible name. */

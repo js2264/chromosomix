@@ -23,6 +23,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { HeatmapView, bpTicks, chooseBpStep, formatBpTick } from '@/render/heatmap'
+import { separationCoords } from '@/render/rotate'
 import { axisCoordsFor, axisSpansFor } from '@/ui/MatrixPanel'
 import type { DenseMatrix } from '@/types'
 import type { AxisGroup } from '@/worker/protocol'
@@ -441,6 +442,43 @@ describe('the range a figure is framed at', () => {
     const v = new HeatmapView(fakeCanvas(600, 600), { devicePixelRatio: 1 })
     v.setMatrix(block(400), [])
     expect(v.framedRange('rows')).toBeNull()
+  })
+
+  /**
+   * A turned map's rows are a **separation**, and a separation is not a place.
+   *
+   * The line draws the same either way — that is why nothing caught this — but
+   * everything that asks *where is this picture* gets an answer made of gaps.
+   * An `up` band runs backwards, so the range came back with its end below its
+   * start and often below zero, and `MatrixPanel.framedSubject` printed the pair
+   * as a locus: `16:49,540,000--20,000` went onto the exported figure's caption
+   * and into the provenance line of every track computed from that view, where
+   * it is a chromosome coordinate with a negative end in the record of what a
+   * result is a measurement of.
+   */
+  it('refuses an axis that measures separation rather than position', () => {
+    const v = new HeatmapView(fakeCanvas(600, 600), { devicePixelRatio: 1, autoMargin: true })
+    v.setMatrix(block(400), [{ at: 0, label: 'NODE_1' }])
+    v.setAxisCoords({
+      rows: separationCoords({ maxSeparation: 200, direction: 'up' }, BIN),
+      cols: { bpPerCell: BIN / 2, bpAtOrigin: 0 },
+    })
+    expect(v.framedRange('rows')).toBeNull()
+
+    // The other direction is the same refusal for the same reason, and it is
+    // the one a `bpPerCell < 0` guard would have missed: `down` counts upwards
+    // from a negative half-bin, so it produced a locus starting before base
+    // zero rather than one running backwards.
+    v.setAxisCoords({
+      rows: separationCoords({ maxSeparation: 200, direction: 'down' }, BIN),
+      cols: { bpPerCell: BIN / 2, bpAtOrigin: 0 },
+    })
+    expect(v.framedRange('rows')).toBeNull()
+
+    // The genomic axis of a turned band is its columns, and that one answers —
+    // which is what lets a caption name the region instead of merely not
+    // naming it wrong.
+    expect(v.framedRange('cols')).not.toBeNull()
   })
 })
 

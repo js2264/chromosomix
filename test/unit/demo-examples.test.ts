@@ -38,6 +38,7 @@ import {
   DEMO_BUCKET,
   DEMO_FILES,
   demoAnnotationsFor,
+  demoAnnotationsToOffer,
 } from '../../src/ui/examples'
 import {
   isRefusal,
@@ -302,5 +303,34 @@ describe('the annotations published beside a demo map', () => {
     for (const link of demoAnnotationsFor('https://example.org/demo/Yeast_microC_G2M_1kb.cool')) {
       expect(DEMO_FILES).not.toContain(link.file)
     }
+  })
+
+  /**
+   * And not at all to a session that is bringing its own tracks back.
+   *
+   * The button says *here is a set of tracks to look at*, which is only ever an
+   * offer to a reader who has none. A restored session — an imported workspace,
+   * a `?config=` link, a plain reload — names the tracks it wants and is a
+   * moment from drawing them, so the offer arrived under rows that were already
+   * appearing and proposed ten more, most of them the same files a second time.
+   * Worst on the published sessions, which are saved over exactly these maps.
+   */
+  describe('and whether to offer them at all', () => {
+    const map = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+
+    it('offers the published set to a session starting empty', () => {
+      expect(demoAnnotationsToOffer(map, { restoring: false }).length).toBeGreaterThan(0)
+      expect(demoAnnotationsToOffer(map, { restoring: false })).toEqual(demoAnnotationsFor(map))
+    })
+
+    it('offers nothing to a session that is restoring its own tracks', () => {
+      expect(demoAnnotationsToOffer(map, { restoring: true })).toEqual([])
+    })
+
+    it('still offers nothing for a map that publishes none', () => {
+      const other = 'https://example.org/demo/somebody-elses.cool'
+      expect(demoAnnotationsToOffer(other, { restoring: false })).toEqual([])
+      expect(demoAnnotationsToOffer(other, { restoring: true })).toEqual([])
+    })
   })
 })
