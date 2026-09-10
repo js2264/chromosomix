@@ -898,6 +898,27 @@ export interface AxisCoords {
    */
   tickGapPx?: number
   /**
+   * This line measures **distance along the axis, not position on it**.
+   *
+   * One case, and it is the turned map: rotating a contact map puts separation
+   * on the vertical axis — *how far apart*, counted from the diagonal — so a
+   * row of it is not anywhere and the ruler's numbers are gaps rather than
+   * coordinates ({@link separationCoords}).
+   *
+   * The ruler never needed to be told: an affine line draws the same either way,
+   * which is why this field did not exist and why what went wrong went wrong
+   * quietly. Everything *else* that reads a line does need to be told, because
+   * "where is this picture" is a question a separation cannot answer. Framing a
+   * turned map handed the row line to {@link HeatmapView.framedRange} and
+   * printed what came back as a region: an `up` band runs backwards, so the
+   * caption on the figure and the provenance line on every track computed from
+   * it read `16:49,540,000--20,000` — a locus with a negative end, on a
+   * chromosome, in the record of what a result is a measurement of.
+   *
+   * `undefined` for every ordinary axis, which is every axis that is a place.
+   */
+  separation?: true
+  /**
    * The matrix coordinate the ruler turns around, for an axis that is measured
    * outwards in two directions from a line in the middle of it.
    *
@@ -3564,6 +3585,12 @@ export class HeatmapView {
     // A folded axis is measured outwards from a line in the middle of it, so it
     // names no single range — the same reason a multi-contig axis answers `null`.
     if (coords === null || coords.fold !== undefined) return null
+    // And a separation axis names no range at all: its numbers are distances
+    // from the diagonal, so the two ends of the picture are two gaps rather
+    // than two coordinates ({@link AxisCoords.separation}). Refusing it here,
+    // in the one place a caller asks *where* the picture is, is what stops a
+    // turned map's band being written down as a locus.
+    if (coords.separation === true) return null
     const scale = axis === 'rows' ? this.rowScale : this.colScale
     const n = axis === 'rows' ? this.dims().nrows : this.dims().ncols
     const [d0, d1] = scale.domain

@@ -3445,11 +3445,21 @@ export class MatrixPanel {
    * Omitted only where it would add nothing: an axis with no single coordinate
    * system (a genome, whose axis is contigs), a block with two different axes
    * (contig × contig), and a picture that is the whole sequence from base zero.
+   *
+   * **Rows, and then columns, because a turned map has no row positions.**
+   * Rotating a map puts *separation* on the vertical axis, so its rows measure
+   * how far apart rather than where; asking them where the picture is used to
+   * produce a locus with a negative end — `16:49,540,000--20,000` — which then
+   * went into the figure's caption and into the provenance line of every track
+   * computed from it. `framedRange` refuses a separation axis now
+   * ({@link AxisCoords.separation}), and the genomic axis of a turned band is
+   * its columns, so asking them next is what gets the region right rather than
+   * merely stops it being wrong.
    */
   private framedSubject(): string {
     const subject = this.exportName
     if (subject.includes(' × ')) return subject
-    const range = this.heatmap.framedRange('rows')
+    const range = this.heatmap.framedRange('rows') ?? this.heatmap.framedRange('cols')
     if (range === null || range.whole) return subject
     const name = subject.split(':')[0]
     return `${name}:${fmt.int(Math.round(range.start))}-${fmt.int(Math.round(range.end))}`
@@ -3528,7 +3538,19 @@ export class MatrixPanel {
     const normalise = choice?.normalise ?? null
 
     const parts = [this.framedSubject()]
-    if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize * binsPerCell)} bins`)
+    // **The file's bin size, not the screen's.** `binsPerCell` is how many bins
+    // the *view* sums into one drawn cell when it is zoomed out, and it was
+    // multiplied in here — so a 20 kb file being looked at four bins to the cell
+    // reported `80.0 kb bins`, and every track computed from it carried that
+    // line as the resolution it was measured at. No task is ever measured at it:
+    // `run/blocks.ts` refuses a pooled block outright, so every one of them
+    // reads the file at its own resolution. The pooling is a fact about the
+    // picture rather than about the numbers, so it is said as one, and only
+    // where there is any.
+    if (this.options.binsize > 0) {
+      parts.push(`${fmt.bp(this.options.binsize)} bins`)
+      if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
+    }
     if (this.level === 'contig') parts.push('contig level')
     if (balance) parts.push('balanced')
     parts.push(choice?.label ?? value)

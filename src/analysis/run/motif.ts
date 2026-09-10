@@ -241,6 +241,7 @@ function sitesOutput(
     id,
     label,
     payload: { kind: 'features', data: motifFeatures(result, pattern) },
+    noun: { one: 'site', many: 'sites' },
   }
 }
 

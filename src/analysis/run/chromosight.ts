@@ -464,6 +464,12 @@ function pairOutput(calls: Call[], label: string, binsize: number): TaskOutput {
     id: 'chromosight-patterns',
     label: `Detected ${label}`,
     payload: { kind: 'pairs', data: builder.finish() },
+    // The payload's word rather than the preset's, and chosen rather than
+    // defaulted: the preset names are plural phrases (`loops_small`) with no
+    // singular to derive, the row above already says which pattern was looked
+    // for, and *pairs* is the half a reader needs that the label does not give
+    // — it is why the button beside it writes BEDPE.
+    noun: { one: 'pair', many: 'pairs' },
   }
 }
 
@@ -483,6 +489,7 @@ function featureOutput(calls: Call[], label: string, binsize: number): TaskOutpu
     id: 'chromosight-patterns',
     label: `Detected ${label}`,
     payload: { kind: 'features', data: builder.finish() },
+    noun: { one: 'interval', many: 'intervals' },
   }
 }
 

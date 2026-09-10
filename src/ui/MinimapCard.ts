@@ -240,15 +240,18 @@ export interface MinimapCardProps {
 }
 
 /**
- * The card. Collapsible and open by default, as a `<details open>`.
+ * The card. Collapsible and open by default, on the same fold every card has.
  *
- * There is no per-card collapse idiom in this codebase to follow — `.collapsed`
- * belongs to a whole panel column and to the analysis drawer — but there is a
- * `<details>` idiom *inside* cards (`.ann-url` on the Contact maps card, `.meta`
- * on the info panel), and this is that with the card's own heading as its
- * summary.
+ * This card had the behaviour first, as a `<details open>` whose summary was its
+ * own heading, and said here that there was no per-card collapse idiom in the
+ * codebase to follow. There is one now — `cardTitle` gives every card in every
+ * panel a chevron on the right of its heading and folds the card on a press
+ * anywhere along that line (`ui/icons.ts`) — so what was a `<details>` is an
+ * ordinary card, and the marker that used to sit at the *start* of the line in
+ * whatever size the browser chose is a mark at the end of it in the size the
+ * page did.
  *
- * The choice is **not remembered**, and that is a decision rather than an
+ * The choice is still **not remembered**, and that is a decision rather than an
  * omission: the house mechanisms for a per-reader preference are modules of
  * their own over `localStorage` (`ui/textScale.ts`, `ui/mapSize.ts`), a new one
  * would be a new storage scheme invented for one disclosure triangle, and this
@@ -260,7 +263,8 @@ export class MinimapCard {
   private readonly canvas = el('canvas', { class: 'minimap-canvas' })
   /** The pointer target and the thing that has a width worth measuring. */
   private readonly stage = el('div', { class: 'minimap-stage' })
-  private readonly body: HTMLDetailsElement
+  /** The heading, which is also the fold — see {@link open}. */
+  private readonly head: HTMLElement
   /** Where you are, in words — and, while one is out, what the drag would open. */
   private readonly readout = el('p', { class: 'minimap-where' })
   private readonly note = el('p', { class: 'summary hint minimap-note' })
@@ -284,20 +288,19 @@ export class MinimapCard {
     this.axis = assemblyAxis(props.assembly)
     this.where = props.where ?? null
 
-    this.body = el(
-      'details',
-      { class: 'minimap-body' },
-      el('summary', { class: 'minimap-summary' }, cardTitle('Genome minimap', 'scan')),
+    this.head = cardTitle('Genome minimap', 'scan')
+    // The strip, the readout and the note are the card's own children rather
+    // than a body element's: what folds is "everything but the heading", and the
+    // stylesheet says that for every card at once. A wrapper here would be this
+    // card asking for the rule to be written a second time about it.
+    this.el = el(
+      'section',
+      { class: 'card minimap-card' },
+      this.head,
       this.stage,
       this.readout,
       this.note,
     )
-    // The property rather than the attribute, so the reader's later toggle is
-    // the only thing that owns it — an `open=""` written into the markup and a
-    // `<details>` the reader has since closed are the same element, and setting
-    // the attribute again on a repaint would spring it back open under them.
-    this.body.open = true
-    this.el = el('section', { class: 'card minimap-card' }, this.body)
     this.stage.appendChild(this.canvas)
     // Before the first paint, or the cards below jump by the strip's height on
     // the frame after mounting.
@@ -418,7 +421,7 @@ export class MinimapCard {
 
   /** Whether the card is expanded. `true` on a fresh mount. */
   get open(): boolean {
-    return this.body.open
+    return !this.el.classList.contains('is-folded')
   }
 
   /**
@@ -797,8 +800,9 @@ export class MinimapCard {
 
     stage.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return
-      // A press on the strip must not toggle the `<details>` it is inside, and
-      // must not start a text selection across the card.
+      // A press on the strip must not start a text selection across the card.
+      // It cannot fold the card — the heading is the only thing that does that,
+      // and it is a sibling — so there is nothing here to stop bubbling for.
       event.preventDefault()
       down = at(event)
       moved = false

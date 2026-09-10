@@ -113,20 +113,33 @@ describe('the strip', () => {
   })
 
   /**
-   * Collapsible and open when the reader arrives. A `<details>`, because that is
-   * the disclosure idiom already inside cards here (`.ann-url`, `.meta`) and
-   * there is no per-card collapse mechanism to follow instead.
+   * Collapsible and open when the reader arrives — on the fold every card has.
+   *
+   * This card had the behaviour first as a `<details>`, and its own note said
+   * there was no per-card collapse mechanism to follow; there is one now, so
+   * what is pinned here is that the minimap uses *that* one rather than keeping
+   * a second of its own. The strip, the readout and the note are the card's own
+   * children, which is what lets the stylesheet's one rule — hide everything but
+   * the heading — reach them.
    */
   it('is a card that is expanded until the reader closes it', () => {
     const view = open()
     expect(view.card.el.classList.contains('card')).toBe(true)
-    const body = view.card.el.querySelector('details') as HTMLDetailsElement
-    expect(body).not.toBeNull()
-    expect(view.card.open).toBe(true)
-    expect(body.querySelector('summary')?.textContent).toContain('Genome minimap')
+    expect(view.card.el.querySelector('details')).toBeNull()
 
-    body.open = false
+    const head = view.card.el.querySelector('.card-head') as HTMLElement
+    expect(head).not.toBeNull()
+    expect(head.textContent).toContain('Genome minimap')
+    expect(head.parentElement).toBe(view.card.el)
+    expect(view.card.el.querySelector('.minimap-stage')?.parentElement).toBe(view.card.el)
+    expect(view.card.open).toBe(true)
+
+    head.click()
     expect(view.card.open).toBe(false)
+    expect(view.card.el.classList.contains('is-folded')).toBe(true)
+
+    head.click()
+    expect(view.card.open).toBe(true)
     view.card.destroy()
   })
 })

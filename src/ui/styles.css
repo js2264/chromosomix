@@ -910,26 +910,11 @@ p {
   flex-direction: column;
 }
 
-/* The card's heading *is* the disclosure control, so the triangle is the marker
-   `<summary>` already carries and the heading keeps `.card-head`'s own spacing.
-   `list-style` twice because Safari answers to neither one alone. */
-.minimap-summary {
-  cursor: pointer;
-  list-style-position: outside;
-}
-
-.minimap-summary::-webkit-details-marker {
-  color: var(--text-dim);
-}
-
-/* The heading inside the summary: `display: flex` on an `h3` would put it on its
-   own line and leave the triangle above it, so it goes inline and the icon keeps
-   the `.card-head` alignment it was given. */
-.minimap-summary > .card-head {
-  display: inline-flex;
-  vertical-align: middle;
-  margin: 0;
-}
+/* The heading *is* the disclosure control, and there is nothing card-specific
+   left to say about it: this card folds on `.card-head`'s own chevron like every
+   other one, and the `<details>` it used to be — with a UA triangle at the start
+   of the line in a size the page did not choose — is gone with the rules that
+   dressed it. See `ui/icons.ts` and the `--- folding a card ---` block. */
 
 /* The strip. Height is set from the script, because it follows the text scale
    and the card must not jump on the frame after mounting.
@@ -4960,6 +4945,135 @@ canvas.is-frozen {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+/* --- folding a card ------------------------------------------------------
+
+   Every card in every panel folds away to its own heading, and the heading is
+   the control: a press anywhere along that line closes the card, the chevron on
+   its right-hand end says which way it will go, and `ui/icons.ts` wires both
+   from the one place every card's heading is built.
+
+   The Genome minimap had the behaviour first, as a `<details>` whose summary was
+   its heading, and its own note said there was no per-card collapse idiom in
+   this codebase to follow. This is that idiom, and the minimap is now one card
+   among twenty rather than the only one that could be put away.
+
+   The whole of it is *hide a card's children except its heading*, stated once
+   here instead of each card knowing which of its own parts are body. Direct
+   children only, and nothing is removed — a card's nested disclosure triangles,
+   its scroll positions and its half-typed fields are all exactly as they were
+   when it opens again. */
+.card.is-folded > :not(.card-head),
+/* A controls card that is **not** sitting in a panel header. In the inline
+   layout those cards move up into the header and the rule below takes their
+   headings away entirely (`.panel-head > .controls-card .controls-title`), so a
+   fold made while the card was down in the Aesthetics column would hide the
+   controls there with nothing left on screen to press. The class stays on the
+   card, so it folds again the moment it goes back to the column. */
+:not(.panel-head) > .controls-card.is-folded > :not(.card-head) {
+  display: none;
+}
+
+/* A folded card is one line: the padding that held a body clear of the heading
+   would otherwise read as a box with an empty lower half, and a card built to
+   fill the column it is last in (`.contig-box`) would fold into seven empty
+   rems of border. */
+.card.is-folded,
+:not(.panel-head) > .controls-card.is-folded {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding-bottom: 0.5rem;
+}
+
+.card.is-folded > .card-head,
+:not(.panel-head) > .controls-card.is-folded > .card-head {
+  margin-bottom: 0;
+}
+
+/* The heading as a control. The pointer and the `user-select` cover the whole
+   line rather than the chevron alone, because the whole line is what answers a
+   press — and a heading that brightens under the cursor is what says so before
+   the press is made. */
+.card > .card-head,
+.controls-card > .card-head {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card > .card-head:hover,
+.controls-card > .card-head:hover {
+  color: var(--text);
+}
+
+/* The mark, and the reason it is not a `<details>` marker.
+
+   A UA triangle sits at the *start* of the line, in a size and colour the page
+   does not choose, and it pushes the icon and the word along by however wide it
+   happens to be. This is a button at the far end of the line: `margin-left:
+   auto` puts it there and keeps it there as the word beside it changes length,
+   which is what makes a column of five headings line their chevrons up.
+
+   Hidden unless the heading belongs to something that folds, so the
+   empty-metadata box keeps its heading and does not offer a control that would
+   do nothing. */
+.card-head > .card-fold {
+  display: none;
+}
+
+.card > .card-head > .card-fold,
+.controls-card > .card-head > .card-fold {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  /* Pulled back into the heading's own box, so a line of small caps does not
+     grow a button's worth of height around a 14 px mark. */
+  margin-block: -0.25rem;
+  padding: 0.15rem;
+  line-height: 1;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  transition:
+    opacity 0.12s ease,
+    transform 0.15s ease;
+}
+
+/* Quiet until the heading is under the cursor — the same restraint the panel's
+   own fold button shows, so a column of cards is a column of words rather than a
+   column of controls. */
+.card > .card-head:hover > .card-fold,
+.controls-card > .card-head:hover > .card-fold,
+.card-head > .card-fold:focus-visible {
+  opacity: 1;
+}
+
+.card-head > .card-fold:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* One chevron that **turns**, rather than two that are swapped: a swap is two
+   shapes to keep in step and a hard cut between them, while a quarter turn is
+   one node and a direction of travel the eye follows into the fold. Down is
+   open, pointing at what is under it; a quarter turn anticlockwise is closed,
+   pointing along the line the card has become — which is the way every tree
+   control in every file browser has said it for thirty years. */
+.card.is-folded > .card-head > .card-fold,
+:not(.panel-head) > .controls-card.is-folded > .card-head > .card-fold {
+  transform: rotate(-90deg);
+}
+
+/* A reader who has asked for less movement gets the two states and not the
+   journey between them. */
+@media (prefers-reduced-motion: reduce) {
+  .card-head > .card-fold {
+    transition: none;
+  }
 }
 
 /* --- the sequences in a genome ------------------------------------------ */

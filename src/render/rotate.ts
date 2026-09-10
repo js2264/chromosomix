@@ -628,8 +628,11 @@ export function turnDepthFor(block: { nrows: number; ncols: number }, asked: num
 export function separationCoords(
   rotated: Pick<RotatedBlock, 'maxSeparation' | 'direction' | 'fold'>,
   binsize: number,
-): { bpPerCell: number; bpAtOrigin: number; tickGapPx: number; fold?: number } {
-  const gap = { tickGapPx: SEPARATION_TICK_GAP_PX }
+): { bpPerCell: number; bpAtOrigin: number; tickGapPx: number; separation: true; fold?: number } {
+  // `separation: true` on every one of the three: what this function returns is
+  // always a distance from the diagonal, and {@link AxisCoords.separation}
+  // records that for the callers that would otherwise read it as a place.
+  const gap = { tickGapPx: SEPARATION_TICK_GAP_PX, separation: true as const }
   // A mirrored pair is that same line and its own reflection, meeting at the
   // fold — one ruler read outwards in both directions, which is what says the
   // two bands are the same measurement of two files rather than two pictures.

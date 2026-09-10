@@ -376,6 +376,7 @@ export const runMagPurity: TaskRunner = async (job) => {
       id: 'magpurity-flagged',
       label: 'Contigs to look at',
       payload: { kind: 'features', data: flagged.finish() },
+      noun: { one: 'contig', many: 'contigs' },
     } satisfies IntervalsOutput)
   }
   return outputs
@@ -508,6 +509,7 @@ export const runMagSplit: TaskRunner = async (job) => {
       id: 'magsplit-flagged',
       label: 'MAGs that look like two things',
       payload: { kind: 'features', data: flagged.finish() },
+      noun: { one: 'MAG', many: 'MAGs' },
     } satisfies IntervalsOutput)
   }
   return outputs
