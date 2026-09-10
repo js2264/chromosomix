@@ -14,6 +14,83 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Find a sequence** — a new analysis task. Choose a loaded reference, type a
+  motif, and every place it occurs comes back as two lanes. The pattern is
+  IUPAC — `GGTCANNNTGACC`, `GATC`, `TTAGGG` — spaces are ignored, and both
+  strands are searched unless you say otherwise; a palindrome is reported once
+  rather than twice, because searching both strands of `GAATTC` would otherwise
+  count every site again and a reader totting up a lane would get double the
+  answer with nothing on screen to explain it.
+
+  **Two lanes, not one, and that is the point.** A set of sites answers two
+  questions and no single picture answers both: *where exactly is it*, which is
+  an interval per site — clickable, strand-carrying, exportable as BED, and an
+  eligible input to overlap, the metaplot and APA like any other interval set
+  (§18.3) — and *how dense is it here*, which is sites per bin and is the only
+  one of the two that means anything at chromosome scale. The first is a picket
+  fence when you zoom out; the second is a bar chart of ones when you zoom in.
+
+  Two decisions inside it are worth stating because they are the ones that
+  would be wrong by default. An `N` in the *reference* does not satisfy a
+  pattern that names a base: an assembly gap is a base nobody knows, not a base
+  that is any of four, and matching it would turn every gap into a solid bar of
+  fictional hits — most of what you would see on a draft genome. And an empty
+  bin in the density lane is a **zero**, never a gap: `NaN` in a per-bin vector
+  draws as a hole, and "there is no site here" is the answer, not missing data.
+
+  It is a registered task rather than a card of its own, which is what earns it
+  the parameter form, a recipe that travels in the session, provenance on both
+  outputs, a place in the deck's all-maps overlay, and **Recompute** on a
+  reload — none of which a bespoke card would have had, and all of which every
+  other task already has. `venue: 'annotations'`, because the residues are in
+  that worker and nowhere else: a genome is parsed into it and deliberately
+  never shipped out whole, so searching anywhere else would mean hauling
+  megabytes across the boundary or stitching thirty windowed reads together at
+  the seams. A run declines a pattern that is not IUPAC before it starts, with
+  the character it could not read named.
+
+  It works in a **genome-browser session** as well as over a map, which is the
+  session a reader who came in through a FASTA is actually in. That took
+  fixing something older: a session with no contact map reported its bin size
+  as `0`, a placeholder that was safe only while nothing producing a per-bin
+  result could be run without a matrix. A task answering from the sequence
+  broke that assumption, and a zero bin size gives every contig zero bins — a
+  lane that is permanently *empty* rather than one that is visibly wrong,
+  which is the failure nothing reports. A mapless session is now given a
+  browsing grid chosen from the assembly's own length; it is a resolution to
+  draw at and never a claim that anything was measured at it, so the tasks
+  that genuinely need a matrix go on saying they are waiting for one.
+
+- **A fold button on every panel header.** Each of the five columns now carries a
+  chevron beside its shortcut chip, pointing the way that column travels — left
+  for the three on the left, right for the two on the right. The affordance
+  existed when a panel was *folded* (the rotated spine tab, which points the
+  other way because it offers to open) and was missing when it was open, so the
+  only way to close a column was a button in the header bar that does not look
+  like it belongs to it. It goes through the same `fold` every other entry point
+  does, so the remembered state, the relayout and the settle all happen once.
+
+- **Shift-click ticks a range in the Tracks card.** Ticking the first ten of
+  thirty tracks was ten clicks on an eleven-pixel box, which is the arithmetic
+  that makes a batch action cost more than doing the ten by hand. Click one box,
+  shift-click another, and every row between the two takes the state the clicked
+  box is moving to — the gesture every file list has. The anchor is remembered as
+  a row's **id** and resolved to a position at click time, because the rows are
+  drag-reorderable and the card's list is not the store's: an index cached at the
+  first click is a lie the moment anything moves.
+
+- **Z-score the tracks first, on the metaplot.** A new option under *Summary*,
+  off by default. Two tracks in different units — a CPM bigWig and a log2 ratio —
+  plotted on one axis compare nothing; standardising each by its own mean and SD
+  before the metric puts them on one scale. The statistics are taken per **track**
+  and shared across that track's ranking groups, which is the part that is easy
+  to get wrong: standardising each group separately would re-centre every one of
+  them on zero and erase the ranking the reader split them by. A constant track
+  is centred and not divided, so nothing comes back as ±∞, and gaps stay gaps.
+  The heatmap shows the standardised values too, so the two halves of one figure
+  cannot disagree, and the y axis is relabelled rather than left claiming a unit
+  the numbers no longer have.
+
 - **The viewer is published to npm**, as a built directory rather than as
   something to import — so a page can embed a copy that depends on nobody's
   hosting, including ours:
@@ -808,6 +885,189 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   thousands of pixel-wide contigs carry none.
 
 ### Fixed
+
+- **A deep scan of the source, and the thirty-one defects it confirmed.** Ten
+  review passes over `src/` — the binary readers, the text parsers, rendering,
+  the analysis tasks, session state, the network path, the UI, the deck, the
+  workers, and documented-versus-actual behaviour — with every finding handed
+  to a second reader whose brief was to *refute* it. Six claims died there.
+  What survived is below, grouped by what it cost rather than by where it
+  lived. Every one carries a test that fails without its fix.
+
+  **Wrong answers, silently.** A version-9 `.hic` was walked with version 8's
+  footer layout: v9 narrowed each per-chromosome scale factor from float64 to
+  float32, and the walk still advanced twelve bytes per chromosome per vector
+  instead of eight, overshooting the normalisation index. Depending on what the
+  misplaced cursor met, the file either failed to open with a raw
+  `RangeError` or opened with its balancing weights silently missing. The
+  reason it shipped is the more interesting half: the fixture writer emitted an
+  *empty* expected-value section, so no test ever executed the loop, and the
+  `hic-straw` oracle reads v9 through a header pointer rather than by walking —
+  so it agreed with us no matter what we did. The fixtures now write those
+  sections populated, at each version's widths, and the oracle fixture zeroes
+  that pointer to force both readers down the same path.
+
+  A tabix-indexed `.gtf.gz` or `.vcf.gz` was refused outright. Byte spans from
+  the index start at BGZF *block* boundaries, which are not line boundaries, so
+  the first and last lines of every fetched span were record fragments handed
+  straight to the parsers — twenty-two lines, none of them parseable, and a
+  message blaming the file. The seams are trimmed now, with the two edge cases
+  that make the obvious rule wrong handled explicitly: a span starting at byte
+  0 begins on a real record, and a file whose last read reached EOF may
+  legitimately end without a newline.
+
+  A `drain()` sized its buffer by `Content-Length` while reading a body the
+  host had gzipped in transit — so the declared length was the *compressed*
+  size and the file was cut to a fraction of itself and returned as complete.
+  A body arriving *shorter* than promised was likewise accepted in silence. Of
+  everything here this is the one that most deserved finding: silent truncation
+  of scientific data that nothing downstream can detect.
+
+  A scaled-region metaplot mapped each window's base pairs uniformly across all
+  of its columns, which is only correct when a feature happens to be exactly
+  `body × step` long. Every other feature had its flanks compressed and its
+  body stretched by a different amount, so an average over features that are
+  genuinely aligned came out smeared. The mapping is piecewise now — flank,
+  body, flank — and reference-point mode was verified bit-identical across four
+  hundred randomised windows before and after.
+
+  A BED domain vanished the moment you zoomed inside it: an `element` overlay
+  was culled by its bottom-right corner rather than tested for overlap, so any
+  feature larger than the view drew nowhere. A `border` mark was stroked
+  *along* the diagonal, over the pixels it exists to point at. A gappedPeak's
+  signal statistics were read from columns 7-9, which in BED12+3 are
+  thickStart, thickEnd and itemRgb. A headed annotation table with twelve or
+  more columns had two unrelated columns decoded as BED12 blocks — now settled
+  by checking that the blocks actually *tile* the feature rather than by
+  counting columns, which also catches the headerless case a header could not
+  have saved. And a per-bin profile carried across a resolution change was
+  exported against the grid the session is on *now* rather than the one its
+  values were computed on.
+
+  **Privacy.** "Forget everything" cleared the stores and then let the very next
+  state change write the durable record straight back. And a share link, which
+  carefully strips private local filenames from two of the three places they
+  appear, carried the third: a lane's companion URI rode through untouched, so
+  a link still spelled the sender's filename into the fragment.
+
+  **Things that stopped working, or never did.** Closing the share dialog left
+  `App.modal` pointing at it forever, and every command guarded by "no dialog is
+  open" — the palette, the shortcut sheet, About — was dead for the rest of the
+  tab. Clearing a number box set it to the minimum, because the guard tested
+  `Number.isFinite(Number(''))` and `Number('')` is `0` — the comment beside it
+  said exactly that and the code did it anyway; the same dead guard was in four
+  places, including a mapping-quality floor where the wrong answer was quieter
+  still, since `0` legally means "keep everything". A modal set
+  `aria-modal="true"` and never trapped Tab, so a keyboard user walked out onto
+  controls the backdrop was covering. Two notes shared one fixed corner, so a
+  progress note covered the truncation warning that is specified to stay until
+  dismissed — both are placed by a column now, which is also why the warning
+  can outlive the job. Importing a workspace into a full window imported
+  nothing and still overwrote the reader's overlay preferences and column
+  layout. In a deck at chromosome level the lock compared spans in bin sizes
+  rather than in sequence lengths, so two panels showing the identical
+  chromosome list were told they could not be locked and the deck blamed the
+  files; a companion still opening was reported as having one resolution, and
+  the false line never cleared; and the deck's own map list ignored the names
+  the reader had given. Every ordinary multi-chromosome `.pairs` import was
+  labelled unsorted, because the sortedness test assumed a global ordering the
+  declared `chr1-chr2-pos1-pos2` sort does not have — the repair pass it
+  triggered was harmless but the label was not, and it is now raised only for
+  disorder that ordering cannot explain. A `metacooler-run` that listed sixteen
+  tasks could run twelve; `overlap` and `motif` now genuinely run, and
+  `metaplot` and `trackcorr` are refused before a file is opened, because they
+  need a bigWig reader the repo's own layering confines to the annotations
+  worker.
+
+  **Retention and lifecycle.** A `HeatmapView` destroyed while frozen kept
+  re-scheduling `requestAnimationFrame` on a detached canvas for the life of the
+  tab; the ladder that took the freeze never gave it back on teardown, leaving a
+  panel frozen for a read that would never report; and a deck navigating to a
+  table went on parenting the previous, already-destroyed map — a canvas with a
+  full-resolution backing store behind it. The bin file of a private HiC-Pro
+  pair was never signed, so the half carrying every coordinate came back 403
+  while the half carrying the counts arrived. A Stop pressed while a task was
+  in flight was read only *before* the step, so a run cancelled mid-step still
+  finished, cached and adopted its result.
+
+  Two smaller ones for completeness: an S3 bucket scope whose prefix contained
+  an escaped character listed nothing, because the prefix was handed to S3
+  still percent-encoded; and a dropped-feature count was reported once per
+  ticked track rather than once.
+
+- **Every published demo failed to open.** The picker offered three sessions and
+  each one answered a click with *not a workspace*: `App.openWorkspaceFile` reads
+  `kind: "metacooler.workspace"` and refuses anything else, and the copies on the
+  bucket are still written in the older single-session shape. The mock-community
+  entry was a 404 on top of that — the bucket had moved that dataset under
+  `demo/metagenomics/` and `ui/examples.ts` went on naming the old prefix.
+
+  The catalogue is now **four** sessions, ordered as an argument rather than by
+  dataset: one map with its tracks, then the same assembly with no map at all,
+  then two maps side by side — a `.cool` and a Juicer `.hic`, locked together, at
+  the one window the two assemblies agree about to the base — and the metagenome
+  last, because it is the file this viewer exists for and the one that needs the
+  other three to be legible. `demo/` on disk is laid out the way the bucket is,
+  so publishing is a small JSON sync rather than a second copy of 49 MB.
+
+  Note that the fix is only half in this repository: the bucket has to be
+  re-synced with `scripts/publish-demo.sh` before the site sees any of it.
+
+- **Sequence lengths inferred from a feature file were inflated by up to 85%.**
+  Open a browser on a GTF, a BED or a narrowPeak — a file that carries no
+  lengths — and each sequence was rounded up to *one significant figure*, a step
+  equal to the value's own order of magnitude. Yeast IV (1.53 Mb) and VII
+  (1.09 Mb) therefore both came out as exactly 2.00 Mb, 441 kb apart and
+  indistinguishable; the genome total read 31% high; every chromosome ended in a
+  long blank pannable margin; and the bar chart in the Sequences card was drawn
+  to the wrong shape. The step jumped discontinuously at each power of ten, so
+  the error was worst just above one.
+
+  The margin the rounding was written for is kept — a browser opened on a peak
+  set should not appear to *end* at the last peak — at two orders of magnitude
+  less: three significant figures, always strictly past the last feature, about
+  a half-percent instead of a third. Yeast now totals 12.11 Mb against a true
+  12.07, where it read 15.99.
+
+  Two things the interface claimed and the code did not do are now true as well.
+  The browser's summary no longer says a sequence ends at its last feature, which
+  it never did; and dropping a **bigWig** really does replace inferred lengths
+  with real ones, as the Genome card has always offered — along with a bigBed, a
+  BAM, a FASTA or a VCF that declares its contigs, any of which knows the answer
+  exactly. It is adopted *as well as* loading the file as a track, never instead
+  of it, and it can only ever replace a guess: an assembly that already knows its
+  lengths is never overwritten. This works from the Tracks card's own file button
+  as well as from a drop, which is one gesture two inches from the other.
+
+- **Hiding a curve recoloured the others.** The legend filtered the hidden series
+  out and the renderer then coloured by position in what was left, so hiding the
+  first of three moved the second onto its colour and the third onto the second's
+  — every curve, its confidence band and its legend swatch, all shifting one step
+  up the palette at once. Nothing said so, and it went into the PNG and the PDF.
+  The most visible face of it was alt-click *isolate*, which hides all but one
+  series and therefore always drew whichever you isolated in the first palette
+  colour. Colours are now settled against the full list before anything is
+  hidden. Affected P(s), the P(s) slope, the metaplot and the all-maps deck
+  overlay — every figure that draws more than one curve.
+
+- **The share dialog was clipped, cramped, and made you press a button.** Its
+  body asked for a width 4 rem greater than the panel containing it, and that
+  panel is `overflow: hidden` — so the right-hand edge, which is exactly where
+  the copy and shorten buttons live, was cut off with no way to scroll to it. It
+  also had no padding at all, so the text sat against the border. The link is now
+  a box that scrolls by wheel and by drag rather than a field only a caret can
+  move through, the copy control is the icon alone, and **the link is put on the
+  clipboard the moment it is generated**, with a notification saying so — and
+  again when the shortener replaces it, since that is what you will paste. Where
+  the browser refuses the clipboard, which is every insecure origin, nothing
+  claims success: the link is selected and a sentence says to copy it.
+
+- **The show/hide tooltip control was missing from the 1D browser.** The matrix's
+  Tracks card builds its overlay row from the list of track options; the
+  browser's spelled six of them out by hand and `tooltip` was not among them. The
+  flag was honoured — the browser reads it on every hover — but reachable only
+  from the `p` shortcut or the command palette, never from the column the rest of
+  the switches are in.
 
 - **An incomplete `.pairs` file is now said to be incomplete.** A truncated
   BGZF — a cancelled upload, an interrupted `bgzip`, a partial copy — imported

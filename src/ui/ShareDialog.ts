@@ -13,11 +13,20 @@
  * The long link is on screen from the moment the dialog opens and stays there
  * through every outcome, including a failed shortening. Nothing here can leave
  * a reader with nothing to copy.
+ *
+ * And it is copied for them, the moment there is something to copy — opening
+ * this dialog is already the whole of the intention, and the press of a button
+ * afterwards was a step that existed only because nobody had removed it. The
+ * clipboard is not silently taken, though: a note in the corner says it was
+ * written, because a clipboard that changed without a word is how somebody
+ * pastes a link where they meant to paste the paragraph they had copied before.
  */
 
 import { Modal } from './Modal'
 import { button, el } from './dom'
-import { icon } from './icons'
+import { icon, iconButton } from './icons'
+import { copyTextToClipboard } from './export'
+import { messageToast } from './toast'
 import {
   SHORTENER,
   encodeShare,
@@ -32,12 +41,52 @@ export interface ShareDialogProps {
   config: SessionConfig
   /** The page's own address, without a fragment. */
   base: string
+  /**
+   * Called however the dialog was dismissed, so the opener can forget it.
+   *
+   * Every other opener in the application takes one and the shell relies on it:
+   * `App` keeps the modal it opened in a field and treats a non-null field as
+   * "a dialog owns the keyboard", so a dialog that never says it closed leaves
+   * every shortcut, the command palette and every other dialog dead until the
+   * page is reloaded. This one used not to take it.
+   */
+  onClose?(): void
 }
 
+/**
+ * What the reader is told when the browser will not write the clipboard for us.
+ *
+ * Not phrased as an error, because from where the reader sits nothing has gone
+ * wrong: the link is on screen, selected, and one keystroke from being theirs.
+ */
+const REFUSED = 'Select-and-copy: this browser did not allow the clipboard to be written.'
+
 export function openShareDialog(props: ShareDialogProps): Modal {
-  const field = el('input', { class: 'share-link', type: 'text' }) as HTMLInputElement
-  field.readOnly = true
-  field.value = 'preparing…'
+  // A box rather than an `<input>`. The link is a few hundred to a few thousand
+  // characters of base64 on one line, and an input can only be scrolled through
+  // it with the caret — no wheel, no drag past the edge, and nothing at all for
+  // a reader who just wants to see how it ends. A `div` with `overflow-x` is
+  // scrolled by every means a reader already knows, and `tabindex` keeps it on
+  // the Tab order the input was on, so the dialog still opens with the caret on
+  // the link (`Modal` focuses the body's first focusable) rather than on ✕.
+  //
+  // The `role` and the label are not decoration. An `<input readOnly>` is
+  // announced by a screen reader as a named field holding a value; a bare
+  // focusable `div` is announced as nothing at all, which would trade a
+  // scrollable box for a stop on the Tab order that says why it is there to
+  // nobody. `aria-readonly` because it is genuinely not editable — a reader who
+  // is told they can type here and then cannot has been told a worse thing than
+  // silence.
+  const field = el('div', {
+    class: 'share-link',
+    attrs: {
+      tabindex: '0',
+      role: 'textbox',
+      'aria-readonly': 'true',
+      'aria-label': 'The link to this session',
+    },
+    text: 'preparing…',
+  })
 
   const note = el('p', { class: 'hint' })
   const advice = el('p', { class: 'hint' })
@@ -50,19 +99,84 @@ export function openShareDialog(props: ShareDialogProps): Modal {
     note.classList.toggle('warn', kind === 'warn')
   }
 
+  /**
+   * Add a sentence to whatever the note already says instead of replacing it.
+   *
+   * Two of these can be true at the same moment and both are worth reading: the
+   * shortener succeeded *and* the clipboard was refused. Replacing would drop
+   * the first, which is the one that changed the link in the box.
+   */
+  const alsoSay = (message: string): void => {
+    const already = note.textContent ?? ''
+    note.textContent = already === '' ? message : `${already} ${message}`
+  }
+
+  /**
+   * Select the whole link, as `input.select()` used to.
+   *
+   * This is the load-bearing half of the clipboard fallback and not a flourish:
+   * where the clipboard API is refused — every insecure origin, which includes a
+   * colleague's `file://` copy of this app — selecting the text is the entire
+   * remedy the dialog can offer, and asking somebody to drag-select two thousand
+   * characters of base64 by hand is not offering one.
+   */
+  const selectLink = (): void => {
+    field.focus()
+    const selection = window.getSelection?.()
+    if (selection == null) return
+    const range = document.createRange()
+    range.selectNodeContents(field)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
+  /**
+   * The clipboard write, and whether it landed. Never throws.
+   *
+   * Through the shared helper rather than `navigator.clipboard.writeText`: the
+   * API is missing outright in an insecure context, so the raw call throws a
+   * `TypeError` on a property of `undefined` instead of rejecting, and this
+   * dialog had its own copy of that reading (`ui/export.ts`).
+   */
+  const putOnClipboard = async (): Promise<boolean> => {
+    try {
+      await copyTextToClipboard(link)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** The button: the reader asked, so the answer goes in the dialog they are looking at. */
   const copy = async (): Promise<void> => {
     if (link === '') return
-    try {
-      await navigator.clipboard.writeText(link)
+    if (await putOnClipboard()) {
       say('Copied.')
-    } catch {
-      // Clipboard access is refused on an insecure origin and in some
-      // embeddings, and the field is right there — so the fallback is to select
-      // it and say so, rather than to report a failure the reader can trivially
-      // work around.
-      field.select()
-      say('Select-and-copy: this browser did not allow the clipboard to be written.')
+      return
     }
+    selectLink()
+    say(REFUSED)
+  }
+
+  /**
+   * The copy nobody pressed a button for, on every link this dialog produces.
+   *
+   * The corner note rather than the note in the dialog, because this is the one
+   * copy the reader did not ask for and the one they therefore have to be told
+   * about; and it must not overwrite what the dialog is already saying about
+   * where the link came from. A refusal falls back to exactly what the button
+   * falls back to — the text selected and the sentence explaining why — and
+   * shows no note at all, since a corner note claiming a copy that did not
+   * happen is worse than the silence it replaced.
+   */
+  const copyOnArrival = async (): Promise<void> => {
+    if (link === '') return
+    if (await putOnClipboard()) {
+      messageToast('Link copied to the clipboard.')
+      return
+    }
+    selectLink()
+    alsoSay(REFUSED)
   }
 
   const shortenIt = async (target: HTMLButtonElement): Promise<void> => {
@@ -72,10 +186,16 @@ export function openShareDialog(props: ShareDialogProps): Modal {
     try {
       const short = await shorten(link)
       link = short
-      field.value = short
+      field.textContent = short
       advice.textContent = ''
       say(`Shortened by ${SHORTENER.name}. The long link still works if you kept it.`)
       target.remove()
+      // The short one is now what the reader will paste, so it is what the
+      // clipboard should hold: leaving the long link there would hand somebody
+      // the opposite of what they just pressed a button for. Not waited on, for
+      // the same reason as on arrival — the button is already gone and the note
+      // already says what happened.
+      void copyOnArrival()
     } catch (error) {
       target.disabled = false
       target.textContent = previous ?? `shorten with ${SHORTENER.name}`
@@ -90,6 +210,12 @@ export function openShareDialog(props: ShareDialogProps): Modal {
 
   const modal = new Modal({
     title: 'Share this session',
+    // The wide panel, because the narrow one is narrower than this body wants to
+    // be: the link and its button sit on one row, and in `min(34rem, 100%)` the
+    // row wrapped the button under a box already too short to show a useful
+    // stretch of the payload.
+    variant: 'modal-wide',
+    ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: () =>
       el(
         'div',
@@ -101,7 +227,20 @@ export function openShareDialog(props: ShareDialogProps): Modal {
             'bookmarks — encoded into the link itself. No server holds it, so it cannot expire ' +
             'and nothing about it reaches the site serving this page.',
         }),
-        el('div', { class: 'share-row' }, field, button('copy', () => void copy(), { class: 'btn' })),
+        el(
+          'div',
+          { class: 'share-row' },
+          field,
+          // The mark alone: the link is copied on arrival, so this button is the
+          // second chance rather than the way through, and a word beside the box
+          // reads as the instruction — press me — that it no longer is. The
+          // title is its accessible name, which `iconButton` also sets as
+          // `aria-label`, so nothing is lost by dropping the word.
+          iconButton('clipboard-copy', 'Copy the link', () => void copy(), {
+            class: 'btn btn-icon',
+            size: 15,
+          }),
+        ),
         advice,
         shortRow,
         note,
@@ -111,8 +250,13 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   void (async () => {
     const payload = await encodeShare(props.config)
     link = shareUrl(props.base, payload)
-    field.value = link
-    field.select()
+    field.textContent = link
+    selectLink()
+    // Started, not waited on. `copyOnArrival` cannot reject — it swallows the
+    // one failure it has — but it can be *slow*, and a browser taking its time
+    // over a clipboard permission must not hold back the length advice and the
+    // shortener offer below, which are the rest of this dialog.
+    void copyOnArrival()
 
     const long = lengthAdvice(link.length)
     if (long !== null) advice.textContent = long

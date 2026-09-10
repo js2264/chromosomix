@@ -103,12 +103,16 @@ export function combineResults(
  * Several maps' curves as one.
  *
  * The series are renamed rather than recoloured here, and the distinction
- * matters: `drawCurve` assigns a palette colour by index where a series carries
- * none, so leaving the colours off is what makes four maps four *different*
- * colours instead of four copies of the first task's palette. A series that
- * carried its own colour keeps it — a task that coloured its lines meant
- * something by it — but the map's name goes in front either way, because a
- * legend reading `cis, cis, cis, cis` is a legend that names nothing.
+ * matters: a series that carries no colour of its own is given one **by its
+ * index in the list it is drawn as part of** — `ui/analysisPlots.ts`'s
+ * `resolveSeriesColours`, which the interactive figure applies to the full list
+ * before anything is hidden — so leaving the colours off is what makes four maps
+ * four *different* colours instead of four copies of the first task's palette.
+ * The merged list below is that list, and the four maps are four consecutive
+ * positions in it. A series that carried its own colour keeps it — a task that
+ * coloured its lines meant something by it — but the map's name goes in front
+ * either way, because a legend reading `cis, cis, cis, cis` is a legend that
+ * names nothing.
  */
 function mergeCurves(
   id: string,

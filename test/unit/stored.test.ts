@@ -98,6 +98,13 @@ describe('storedItems', () => {
   })
 })
 
+/**
+ * What the sweep clears. What it *keeps* cleared — that a pan or a `pagehide`
+ * does not write the durable workspace straight back — is one page load per
+ * test and therefore lives in `test/unit/forget-everything.test.ts`, since
+ * `forgetEverything` now suspends module state that only a reload re-arms.
+ * Nothing below this line may write a workspace and expect it to be stored.
+ */
 describe('forgetEverything', () => {
   it('clears both web storages and the durable stores, and leaves other apps alone', async () => {
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')

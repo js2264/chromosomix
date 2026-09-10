@@ -926,36 +926,60 @@ export class App implements SessionHost {
     }
     if (this.sessions.length === 0) this.sessions.push(new Session(this))
 
-    // Which tab ends up in front. On replace the ids are the file's own, so the
-    // active one is found by name; on append they have been re-minted, so it is
-    // found by *position* in the incoming list and offset past whatever was
-    // already here — which is also what puts the reader on the tab the sender
-    // was looking at rather than on the first one they happened to open.
-    const incoming = workspace.sessions.findIndex((row) => row.id === workspace.active)
-    const wanted =
-      mode === 'append'
-        ? first + Math.max(0, Math.min(incoming, plan.take - 1))
-        : this.sessions.findIndex((session) => session.id === workspace.active)
-    this.active = wanted >= 0 && wanted < this.sessions.length ? wanted : 0
-    // **The window's own preferences, from the tab that ends up in front.**
+    // **Nothing seated is nothing changed.** A window already holding the twelve
+    // tabs it may hold takes none of the incoming ones, and then no tab "ends up
+    // in front" at all: there is no tab to take the window's preferences from,
+    // and no reason to move the reader off the one they are reading. All of this
+    // used to run regardless, so an import that imported *nothing* still
+    // overwrote the reader's overlays and column layout with the sender's and
+    // threw them back to the first tab — underneath a notice that correctly said
+    // nothing had come in.
     //
-    // `plot` and `panels` are window-level and every tab in the file carries a
-    // copy, so restoring six of them would be five windows' worth of overlays
-    // applied and discarded — the one that means anything is the tab the reader
-    // is about to be looking at. `Session.openConfig` does exactly this for the
-    // one-tab roads; this road does not go through it, which is why a saved
-    // workspace used to come back with the sender's tracks and the *importing*
-    // window's overlays, silently, and looking like the toggles had not saved.
-    const front = workspace.sessions[incoming >= 0 ? incoming : 0]?.config
-    if (front !== undefined) {
-      setPlotOptions(front.plot)
-      this.applyPanelLayout(front.panels)
+    // `take === 0` also means nothing was destroyed above: an empty tab is
+    // consumed only where nothing else is open (`state/workspace.ts`), which is
+    // a window with room for all twelve. So the window is exactly as it was, and
+    // there is nothing to repaint either.
+    if (plan.take > 0) {
+      // Which tab ends up in front. On replace the ids are the file's own, so
+      // the active one is found by name; on append they have been re-minted, so
+      // it is found by *position* in the incoming list and offset past whatever
+      // was already here — which is also what puts the reader on the tab the
+      // sender was looking at rather than on the first one they happened to
+      // open.
+      const incoming = workspace.sessions.findIndex((row) => row.id === workspace.active)
+      const wanted =
+        mode === 'append'
+          ? first + Math.max(0, Math.min(incoming, plan.take - 1))
+          : this.sessions.findIndex((session) => session.id === workspace.active)
+      this.active = wanted >= 0 && wanted < this.sessions.length ? wanted : 0
+      // **The window's own preferences, from the tab that ends up in front.**
+      //
+      // `plot` and `panels` are window-level and every tab in the file carries a
+      // copy, so restoring six of them would be five windows' worth of overlays
+      // applied and discarded — the one that means anything is the tab the
+      // reader is about to be looking at. `Session.openConfig` does exactly this
+      // for the one-tab roads; this road does not go through it, which is why a
+      // saved workspace used to come back with the sender's tracks and the
+      // *importing* window's overlays, silently, and looking like the toggles
+      // had not saved.
+      //
+      // Read back off `this.active` rather than off the file's own active index,
+      // because the two part company the moment the sender's active tab is one
+      // of the ones that did not fit: the window then opens on the last tab that
+      // *did*, and the sentence above was false — the overlays came from a tab
+      // this window never seated.
+      const seated = mode === 'append' ? this.active - first : this.active
+      const front = workspace.sessions[seated >= 0 && seated < plan.take ? seated : 0]?.config
+      if (front !== undefined) {
+        setPlotOptions(front.plot)
+        this.applyPanelLayout(front.panels)
+      }
+      this.paintTabs()
+      this.mountActive()
+      this.writeHash(this.current?.state ?? null, { replace: true })
+      this.current?.activate()
+      this.remember()
     }
-    this.paintTabs()
-    this.mountActive()
-    this.writeHash(this.current?.state ?? null, { replace: true })
-    this.current?.activate()
-    this.remember()
     if (plan.dropped > 0) {
       // Named rather than dropped in silence: a partial import is useful, and a
       // reader who is quietly given nine of twelve tabs has no way to find out.
@@ -1455,6 +1479,14 @@ export class App implements SessionHost {
     this.modal = openShareDialog({
       config,
       base: `${window.location.origin}${window.location.pathname}${window.location.search}`,
+      // Every opener owes the field this, and this one used not to pay it: the
+      // dialog closed, `this.modal` went on pointing at it, and `modal !== null`
+      // — which is how the shell says "a dialog owns the keyboard" — stayed true
+      // for the life of the tab. One press of Escape here killed every shortcut
+      // and every other dialog until the page was reloaded.
+      onClose: () => {
+        this.modal = null
+      },
     })
   }
 
@@ -1553,8 +1585,9 @@ export class App implements SessionHost {
   private readHash(): void {
     if (this.writingHash) return
     // Asked before the view state, because the two live in the same fragment
-    // and a shared session is not a view: `parseViewState` would read `s=…` as
-    // an unknown key, ignore it, and navigate to the default view of nothing.
+    // and a shared session is not a view: `parseViewState` would read
+    // `session=…` as an unknown key, ignore it, and navigate to the default
+    // view of nothing.
     if (readShareHash(window.location.hash) !== null) {
       void this.openSharedHash()
       return

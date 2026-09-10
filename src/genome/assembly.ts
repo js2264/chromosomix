@@ -66,8 +66,47 @@ export interface Assembly {
  * edge of each sequence is a guess, and the info card says so rather than
  * letting a reader measure a telomere against it.
  */
-export function lengthsAreExact(assembly: Assembly): boolean {
+export function lengthsAreExact(assembly: Pick<Assembly, 'origin'>): boolean {
   return assembly.origin !== 'features'
+}
+
+/**
+ * `true` when `incoming`'s lengths should be taken over `current`'s.
+ *
+ * The Genome card offers this in so many words — *"Drop a chrom.sizes or a
+ * bigWig to replace them with the real ones"* — and for a long time only the
+ * first half of that sentence was true: the lengths were adopted from a file
+ * whose *name* looked like a sizes file, so a bigWig, a bigBed, a BAM, a FASTA
+ * or a VCF with `##contig` lines came in as a track and left the browser's
+ * invented edges exactly where they were, under a hint promising otherwise.
+ * Every one of those files answers the question exactly, and the worker already
+ * says so in the assembly's `origin`; this is the one rule that reads it.
+ *
+ * Two conditions, and both are about not going backwards:
+ *
+ * - the assembly on screen must be **inferred** — lengths rounded up from the
+ *   last feature ({@link lengthsAreExact}) — because an exact one is already
+ *   the answer and replacing it with another file's would let the second of two
+ *   bigWigs, or a subset one, redraw a genome that was already right;
+ * - the incoming one must be **exact**, so a second BED can never overwrite a
+ *   bigWig's header, and a feature file's lower bound never replaces another's.
+ *
+ * An empty contig list is refused for the same reason: it is not a smaller
+ * genome, it is a file that answered nothing, and adopting it would leave the
+ * browser with no axis at all.
+ *
+ * Nothing here checks that the two files are the *same* genome, deliberately —
+ * dropping a file on a browser is the reader saying it belongs to what is open,
+ * which is the standing a dropped `chrom.sizes` has always been given, and a
+ * name that matches nothing simply draws no track (§5.9).
+ */
+export function replacesLengths(
+  current: Assembly,
+  incoming: { origin: AssemblyOrigin; contigs: readonly Contig[] },
+): boolean {
+  if (lengthsAreExact(current)) return false
+  if (incoming.contigs.length === 0) return false
+  return lengthsAreExact(incoming)
 }
 
 /**
@@ -163,6 +202,41 @@ export function assemblyOf(options: {
  * track is fetched at is decided per frame from the pixels available, which is
  * what `AnnotationLanes` already does for the lanes beside a map.
  */
+/**
+ * A bin size for a genome nothing has binned.
+ *
+ * A contact map brings its own — the resolution it was written at — and every
+ * per-bin quantity in this application is laid out on that. A **browser session
+ * has no map**, and used to report its bin size as `0`: a placeholder that was
+ * safe for exactly as long as the assumption behind it held, which was that no
+ * task producing a per-bin result could be run without a matrix. That stopped
+ * being true the moment a task could be answered from the *sequence* — the motif
+ * search reads a FASTA and a FASTA is present with or without a map — and a zero
+ * bin size gives every contig zero bins, which is a lane that is permanently
+ * empty rather than a lane that is wrong, so nothing reports it.
+ *
+ * So a genome with no map gets a bin size chosen from its own length. The target
+ * is a bin *count*: enough that a whole-genome lane has more bins than a wide
+ * screen has pixels, and few enough that the vector costs less than whatever
+ * filled it. Snapped up to 1, 2 or 5 times a power of ten, which is the ladder
+ * the rulers already step by — 2 kb reads as a decision where 1,732 bp reads as
+ * an accident, even though the two are equally arbitrary.
+ *
+ * It is a *browsing* grid and never a claim about the data: nothing here was
+ * measured at this resolution, and `AnalysisContext.hasMap` stays false, so the
+ * tasks that genuinely need a matrix go on saying so.
+ */
+export function browsingBinsize(total: number): number {
+  const TARGET_BINS = 20_000
+  const SMALLEST = 100
+  const wanted = Math.max(SMALLEST, total / TARGET_BINS)
+  const decade = 10 ** Math.floor(Math.log10(wanted))
+  for (const step of [1, 2, 5]) {
+    if (decade * step >= wanted) return decade * step
+  }
+  return decade * 10
+}
+
 export function assemblyAxis(assembly: Assembly): LocusAxis {
   const segments: LocusSegment[] = []
   let at = 0

@@ -462,16 +462,36 @@ function isAbort(err: unknown): boolean {
  * connection from a hung one. Streaming the body costs one loop and turns that
  * into a bar.
  *
- * `Content-Length` is the denominator where the host states one. Where it does
- * not — a chunked response, or a proxy that strips it — the total is reported
- * as `0`, which the bar reads as *indeterminate* rather than as *finished*.
+ * `Content-Length` is the denominator where the host states one *and the
+ * response was not re-encoded in transit*. Where it does not — a chunked
+ * response, a proxy that strips it, or the compressed case below — the total is
+ * reported as `0`, which the bar reads as *indeterminate* rather than as
+ * *finished*.
+ *
+ * The one thing this function must never do is return a short buffer as though
+ * it were the file. Both ways that can happen are refused rather than passed
+ * on: a body that outruns its stated length keeps every byte, and one that
+ * falls short of it raises.
  *
  * Falls back to `arrayBuffer()` where the platform has no streaming body, which
  * is only very old runtimes and the odd test double.
  */
 async function drain(response: Response, watch?: ReadWatch): Promise<Uint8Array> {
   const declared = Number(response.headers.get('Content-Length') ?? Number.NaN)
-  const total = Number.isFinite(declared) && declared > 0 ? declared : 0
+  // `Content-Length` counts the octets the host put on the wire, and on a
+  // response it re-encoded in transit those are the *compressed* ones — while
+  // the browser inflates the body and hands JS the decoded stream. Believing
+  // the header there cut the file to a fraction of its length and returned it
+  // as complete: a 100,000-byte HiC-Pro `.matrix` served pre-gzipped with
+  // `Content-Encoding: gzip` and `Content-Length: 189` came back from here as
+  // 189 bytes, and `parseMatrix` drew a contact map out of the surviving 0.2%
+  // without raising. Nothing is wrong with the bytes — an unranged encoded
+  // stream inflates correctly, which is the whole basis of the whole-object
+  // fallback (docs/hosting.md, "Transfer compression breaks ranges") — so it is
+  // the *number* that is distrusted: no denominator, an indeterminate bar, and
+  // every byte kept.
+  const stated = Number.isFinite(declared) && declared > 0 ? declared : 0
+  const total = reEncoded(response) ? 0 : stated
   const body = response.body
   const onProgress = watch?.onProgress
   if (body === null || watch === undefined) {
@@ -499,24 +519,77 @@ async function drain(response: Response, watch?: ReadWatch): Promise<Uint8Array>
       if (done) break
       if (watch.cancelled?.() === true) stop()
       if (value === undefined) continue
-      // A host whose body outruns its own `Content-Length` is not something to
-      // crash on: keep what fits, and let the parser judge the result.
+      // The body has outrun its own `Content-Length`. This used to keep what
+      // fit and "let the parser judge the result", which is the same silent
+      // truncation the paragraph above describes, reached by the other door:
+      // a browser need not expose `Content-Encoding` to JS, so a re-encoded
+      // response can arrive here with the header apparently absent and the
+      // decoded body overflowing the encoded length. It is the identical tell
+      // `RemoteRangeSource.windowOf` reads as transfer compression, and it
+      // reaches the identical verdict — truncating to the claimed length "is
+      // exactly the silent corruption this class exists to refuse". The parser
+      // does not save it either: driven over 400 consecutive cut points, the
+      // real `parseMatrix` accepted 111 of them without a word, one of which
+      // built a plausible map from 28% of the contacts.
+      //
+      // Every byte arriving here is real file content, so the length is what
+      // gets thrown away, not the data: hand the tail to the same collect-and-
+      // join the no-length path uses and let the bar go indeterminate.
       if (received + value.length > total) {
-        out.set(value.subarray(0, total - received), received)
-        received = total
-        break
+        const held = [out.subarray(0, received), value]
+        return await collectRest(reader, watch, stop, held, received + value.length)
       }
       out.set(value, received)
       received += value.length
       onProgress?.(received, total)
     }
     onProgress?.(received, total)
-    return received === total ? out : out.subarray(0, received)
+    if (received < total) {
+      // The other direction: the stream ended before the length the host
+      // promised. Returning `out.subarray(0, received)`, which is what this
+      // did, is indistinguishable to every caller from a complete file —
+      // `readWhole` hands it straight to a parser, and `wholeObjectOf` mounts
+      // it as a `LocalFileSource` whose `length` then understates the object.
+      // Missing bytes cannot be recovered from here the way surplus ones can,
+      // so this is a refusal (§10). `remote-cors` is the union's general "the
+      // host did not deliver the bytes" code — the same one `failCrossOrigin`
+      // settles for — and the message carries the two numbers that matter.
+      // `response.url` is empty on a synthesized response and on a test double.
+      const where = response.url ?? ''
+      throw new ViewerError(
+        'remote-cors',
+        `${where === '' ? 'The response' : where} ` +
+          `ended after ${received} bytes, short of the ${total} its \`Content-Length\` promised. ` +
+          'The transfer was cut off; a partial file is not opened as though it were whole. ' +
+          'Retry it, or download the file and drop it here.',
+        { url: response.url, received, declared: total },
+      )
+    }
+    return out
   }
   // No length stated: collect, then join once. The bar is indeterminate here
   // and the second buffer is unavoidable, since the size is unknown until the
   // stream ends.
-  const chunks: Uint8Array[] = []
+  return await collectRest(reader, watch, stop, [], 0)
+}
+
+/**
+ * Read what is left of a body into `chunks` and join it once.
+ *
+ * The tail shared by the two indeterminate cases: a response that stated no
+ * length, and one whose body outran the length it stated. `received` counts
+ * what `chunks` already holds, so the bar keeps climbing across the switch from
+ * the single-allocation path rather than restarting from zero.
+ */
+async function collectRest(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  watch: ReadWatch,
+  stop: () => never,
+  chunks: Uint8Array[],
+  received: number,
+): Promise<Uint8Array> {
+  const onProgress = watch.onProgress
+  if (received > 0) onProgress?.(received, 0)
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
@@ -533,6 +606,23 @@ async function drain(response: Response, watch?: ReadWatch): Promise<Uint8Array>
     at += chunk.length
   }
   return out
+}
+
+/**
+ * Whether the host re-encoded this response in transit.
+ *
+ * The empty header and the explicit `identity` are both "it did not"; anything
+ * else — `gzip`, `br`, `deflate`, or a list of them — means the `Content-Length`
+ * beside it counts encoded octets while `response.body` streams decoded ones.
+ *
+ * A deliberate twin of the private `reEncoding()` in `RemoteRangeSource`, which
+ * asks the same question of a probe. Duplicated rather than shared because the
+ * two live on opposite sides of the source/worker boundary and neither module
+ * imports the other's internals; if a third caller appears, promote it.
+ */
+function reEncoded(response: Response): boolean {
+  const raw = (response.headers.get('Content-Encoding') ?? '').trim().toLowerCase()
+  return raw !== '' && raw !== 'identity'
 }
 
 /** Host part of a URL, or the raw string when it does not parse. */

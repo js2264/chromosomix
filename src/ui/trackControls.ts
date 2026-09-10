@@ -187,11 +187,23 @@ export function stepperField(spec: StepperSpec): HTMLElement {
   }
 
   const commit = (): void => {
-    const typed = Number(input.value)
-    // An unreadable box is put back rather than obeyed: `Number('')` is 0, and
-    // silently setting every lane to the floor is not what an empty field means.
+    // An unreadable box is put back rather than obeyed — and the test is on the
+    // *string*, not on `Number(input.value)`, because `Number('')` is 0 and 0 is
+    // finite. A `type="number"` box reports an empty string for a cleared box
+    // *and* for everything it could not parse (`abc`, `1e`, `--`), so the guard
+    // this replaces never fired once: clearing the track-height box committed
+    // `clamp(0)` and collapsed every lane in the stack to the twelve-pixel
+    // floor, which is precisely what the comment said it prevented. Same form
+    // as `ui/ClipRange.ts`, which learnt it the same way.
+    const raw = input.value.trim()
+    const typed = raw === '' ? Number.NaN : Number(raw)
     if (!Number.isFinite(typed)) {
-      sync()
+      // Written straight into the box rather than through {@link sync}, which
+      // leaves a focused box alone. `change` fires on Enter with the caret still
+      // in it, so refusing through the guard would be a refusal the reader
+      // cannot see for the one way of committing that does not move the focus.
+      const held = spec.read()
+      if (held !== null) input.value = String(clamp(held))
       return
     }
     const value = clamp(typed)

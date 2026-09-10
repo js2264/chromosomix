@@ -148,10 +148,63 @@ describe('per-pixel reduction', () => {
     }
     const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples(intervals, band))
     expect(profile.extent?.max).toBe(5)
-    expect(profile.extent?.min).toBe(0)
+    // Both ends, not just the ceiling: the floor used to be taken from the
+    // envelope's `low` while the ceiling was taken from the means, which is the
+    // asymmetry the case below is about. Nothing on screen turns on this one —
+    // `resolveLimits` anchors a one-signed track at zero either way — but the
+    // number the field promises is the means' own.
+    expect(profile.extent?.min).toBe(5)
     // …and the envelope is still recorded, because the readout can say what a
     // pixel hid even though the axis no longer answers to it.
     expect(profile.high[40]).toBe(1000)
+  })
+
+  // The failure the line above only half-covered. One base below zero inside a
+  // summary window is not on screen and must not decide the axis: folded into
+  // the floor it took an all-positive coverage track from `[0, max]` to a
+  // symmetric `[-reach, reach]`, moving the baseline to mid-lane and leaving
+  // the whole lower half of the track empty — over a value nobody can see.
+  it('does not let a hidden sub-zero base flip an all-positive track symmetric', () => {
+    const intervals: Array<[number, number, number]> = []
+    const band: Array<[number, number]> = []
+    for (let i = 0; i < 100; i++) {
+      intervals.push([i * 1000, (i + 1) * 1000, 5])
+      // Every mean is +5; one pixel's envelope dips to -1 and reaches 10.
+      band.push(i === 40 ? [-1, 10] : [5, 5])
+    }
+    const profile = profileOf(frameOf([0, 100], 100), yeastAxis(), samples(intervals, band))
+    expect(profile.extent).toEqual({ min: 5, max: 5 })
+    expect(resolveLimits({ auto: true, min: 0, max: 1 }, profile.extent)).toEqual({
+      min: 0,
+      max: 5,
+    })
+    // The envelope is still there for the readout; it just no longer votes.
+    expect(profile.low[40]).toBe(-1)
+  })
+
+  // …and the symmetry rule itself is untouched: a track whose *means* cross
+  // zero is a log ratio, and it still gets the axis that puts "no change" in
+  // the middle of the lane.
+  it('still gives a track whose means cross zero a symmetric axis', () => {
+    const profile = profileOf(
+      frameOf([0, 100], 100),
+      yeastAxis(),
+      samples(
+        [
+          [0, 50_000, -2],
+          [50_000, 100_000, 4],
+        ],
+        [
+          [-2, -2],
+          [4, 4],
+        ],
+      ),
+    )
+    expect(profile.extent).toEqual({ min: -2, max: 4 })
+    expect(resolveLimits({ auto: true, min: 0, max: 1 }, profile.extent)).toEqual({
+      min: -4,
+      max: 4,
+    })
   })
 
   // Whatever the envelope does, the *line* must fit: a lane whose drawn values

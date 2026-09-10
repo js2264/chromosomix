@@ -113,6 +113,17 @@ function leadPanel(
     remeasure: () => {},
     bpPerCell: () => bpPerCell,
     cellCount: () => ({ rows: cells, cols: cells }),
+    // A bin-level block, which is what every deck below is of. The deck asks
+    // both of these before it converts anything: above bin level a cell is a
+    // whole sequence and the currency is the cell index rather than base pairs
+    // (`panels/lock.ts`), and `test/dom/deck-lock-level.test.ts` is where that
+    // half is pinned.
+    blockLevel: () => 'bin',
+    blockSpan: () => ({
+      rows: cells * bpPerCell,
+      cols: cells * bpPerCell,
+      sequences: { rows: 1, cols: 1 },
+    }),
     viewport: () => ({ rows: state.window, cols: state.window }),
     get hasBlock(): boolean {
       return true
@@ -793,11 +804,113 @@ describe('the size the deck lays its cells out from', () => {
  * than being moved to the nearest thing and leaving the deck at two resolutions
  * without a word.
  *
- * The companions here have no ladder at all: their worker never answers, so
- * every one of them is a file that cannot follow, which is precisely the case
- * worth pinning.
+ * The companions here **open**, unlike everywhere else in this file, and that
+ * is the point of the swap: a panel that has not opened knows nothing about its
+ * own ladder, and reading its empty entry list as "this file carries one
+ * resolution only" accused a still-fetching `.mcool` of lacking the very rung it
+ * was about to land on — a sentence its own next read disproved, and which
+ * nothing on that path cleared. Refusing is a claim about a file, so it is made
+ * from a file that has answered. The last test here is the other half of that
+ * rule: a companion pressed *while* it fetches is held, not accused.
  */
 describe('one resolution across the deck', () => {
+  /** A plain `.cool`: one rung, at 1 kb, and no block behind it. */
+  class OneRungWorker {
+    onmessage: ((event: { data: unknown }) => void) | null = null
+    onerror: unknown = null
+    postMessage(message: { kind: string; id: number; uri?: string }): void {
+      const reply =
+        message.kind === 'open'
+          ? { type: 'result', id: message.id, payload: openedAt(message.uri ?? '', 1000, []) }
+          : {
+              type: 'error',
+              id: message.id,
+              error: { name: 'Error', code: null, message: 'no block here', detail: {} },
+            }
+      setTimeout(() => this.onmessage?.({ data: reply }), 0)
+    }
+    terminate(): void {}
+    addEventListener(): void {}
+    removeEventListener(): void {}
+  }
+
+  /**
+   * A remote `.mcool`: the root is a collection and refuses, and the rung under
+   * it opens — which is the shape that makes the ladder unknowable until the
+   * *second* round trip, and the case the held press is about.
+   */
+  class McoolWorker {
+    static readonly rungs = ['1000', '5000', '10000']
+    onmessage: ((event: { data: unknown }) => void) | null = null
+    onerror: unknown = null
+    postMessage(message: { kind: string; id: number; uri?: string }): void {
+      const uri = message.uri ?? ''
+      const reply =
+        message.kind !== 'open'
+          ? {
+              type: 'error',
+              id: message.id,
+              error: { name: 'Error', code: null, message: 'no block here', detail: {} },
+            }
+          : uri.includes('::')
+            ? {
+                type: 'result',
+                id: message.id,
+                payload: openedAt(uri, Number(uri.split('/').pop()), McoolWorker.rungs),
+              }
+            : {
+                type: 'error',
+                id: message.id,
+                error: {
+                  name: 'ViewerError',
+                  code: 'mcool-root',
+                  message: 'an .mcool is a collection of resolutions',
+                  detail: { entries: McoolWorker.rungs, group: 'resolutions' },
+                },
+              }
+      setTimeout(() => this.onmessage?.({ data: reply }), 0)
+    }
+    terminate(): void {}
+    addEventListener(): void {}
+    removeEventListener(): void {}
+  }
+
+  /** The least an `open` can answer with and still be a map a deck can hold. */
+  function openedAt(uri: string, binsize: number, entries: string[]): unknown {
+    return {
+      uri,
+      layout: { kind: 'cooler', group: '/' },
+      info: { format: 'HDF5::Cooler', 'bin-size': binsize, 'storage-mode': 'symmetric-upper' },
+      metadata: {},
+      binsize,
+      shape: [400, 400],
+      nGenomes: 0,
+      nContigs: 1,
+      nBins: 400,
+      unassigned: null,
+      displayExtent: [0, 400],
+      entries,
+      entryGroup: 'resolutions',
+      cells: [],
+      activeCells: [],
+      cellNnz: null,
+      hasGenomes: false,
+      hasWeights: false,
+      scoreColumns: ['count'],
+      sourceBytes: 1024,
+      sourceKind: 'remote',
+    }
+  }
+
+  /** Let the stubbed worker's replies land, and the reads they provoke settle. */
+  async function opened(): Promise<void> {
+    for (let i = 0; i < 20; i++) await new Promise((done) => setTimeout(done, 0))
+  }
+
+  beforeEach(() => {
+    ;(globalThis as Record<string, unknown>).Worker = OneRungWorker
+  })
+
   /**
    * What each companion is saying about the resolution it was asked for.
    *
@@ -811,11 +924,12 @@ describe('one resolution across the deck', () => {
       .filter((text) => text !== '')
   }
 
-  it('takes every companion with the first map when its rung changes', () => {
+  it('takes every companion with the first map when its rung changes', async () => {
     const made = make()
     made.leadBinsize = 1000
     made.deck.apply(view(made))
     made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    await opened()
     expect(notesUnder(made.deck).join(' ')).not.toContain('level')
 
     // The breadcrumb's own picker, a link, or this deck's button: all three end
@@ -835,24 +949,29 @@ describe('one resolution across the deck', () => {
     expect(notesUnder(made.deck)).toEqual([])
   })
 
-  it('names the file’s own resolution and what it has instead', () => {
+  it('names the file’s own resolution and what it has instead', async () => {
     const made = make()
     made.leadBinsize = 1000
     made.deck.apply(view(made))
     made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    await opened()
     made.leadBinsize = 20_000
     made.deck.apply(view(made))
     const note = notesUnder(made.deck).join(' ')
-    expect(note).toContain('staying at')
+    // Its own resolution, and a real one: `0 bp` is what this used to read for
+    // a panel with no answer yet, which is a measurement in a sentence about
+    // what a file has and is not one this panel had.
+    expect(note).toContain('staying at 1.0 kb')
     expect(note).toContain('carries one resolution only')
   })
 
   describe('the press', () => {
-    it('reads the bin size from the starred map', () => {
+    it('reads the bin size from the starred map', async () => {
       const made = make()
       made.leadBinsize = 2000
       made.deck.apply(view(made))
       made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+      await opened()
       barButton(made.deck, 'resolutions').click()
       // The star is on the first map, so nothing was asked of the session — it
       // is already where the deck is going.
@@ -873,16 +992,50 @@ describe('one resolution across the deck', () => {
       expect(made.askedBinsize).toEqual([])
     })
 
-    it('names in the deck’s own line the maps that could not follow', () => {
+    it('names in the deck’s own line the maps that could not follow', async () => {
       const made = make()
       made.leadBinsize = 4000
       made.deck.apply(view(made))
       made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+      await opened()
       barButton(made.deck, 'resolutions').click()
       const warning = made.deck.el.querySelector('.deck-warning')
       expect(warning?.classList.contains('hidden')).toBe(false)
       expect(warning?.textContent).toContain('b.cool')
       expect(warning?.textContent).toContain('4.0 kb')
+    })
+
+    /**
+     * The press that arrives before the bytes do.
+     *
+     * A remote `.mcool` is two round trips from knowing its own ladder — the
+     * root refuses with the list of rungs, and only then does one of them
+     * open — and the button is live throughout. Pressed in that window the
+     * panel used to answer out of an empty `entries`: "staying at 0 bp: this
+     * file has no 5.0 kb level, and carries one resolution only", under a
+     * three-rung file whose descent was already heading for 5 kb because
+     * `preferBinsize` is that very number. Nothing on that path calls
+     * `sayResolution(null)`, so the sentence stood over a panel sitting at the
+     * rung it was said to lack, and the deck's own line named the file in the
+     * bar. Held instead: no claim is made about a file that has not answered,
+     * and the press is settled from the ladder when it lands.
+     */
+    it('holds a press that a companion is still too early to answer', async () => {
+      ;(globalThis as Record<string, unknown>).Worker = McoolWorker
+      const made = make()
+      made.leadBinsize = 5000
+      made.deck.apply(view(made))
+      made.deck.add({ kind: 'remote', uri: 'https://x.example.org/b.mcool' })
+      // Pressed while the root open is still in flight — nothing has arrived,
+      // so nothing is known, so nothing may be said.
+      barButton(made.deck, 'resolutions').click()
+      expect(made.deck.el.querySelector('.deck-warning')?.classList.contains('hidden')).toBe(true)
+
+      await opened()
+      // …and the answer, once the ladder is known: it had the rung all along
+      // and is sitting on it, so there is nothing to say afterwards either.
+      expect(notesUnder(made.deck)).toEqual([])
+      expect(made.deck.mapList[1].label).toBe('b.mcool::5000')
     })
   })
 })

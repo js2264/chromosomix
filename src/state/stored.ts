@@ -32,7 +32,7 @@
 import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
-import { readWorkspace } from './workspace'
+import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -155,6 +155,13 @@ export async function storedItems(): Promise<StoredItem[]> {
  * a live tab holding a file it already opened is not something that was kept —
  * it is something they are looking at, and closing it for them would be
  * answering a question they did not ask.
+ *
+ * **And it stops this window writing the durable workspace again**, which is a
+ * separate act from clearing the store and was for a while the missing one. See
+ * `workspace.ts`'s {@link suspendWorkspace}: deleting the record answers the
+ * question only until the reader's next pan, because `App.rememberDurably()`
+ * runs on every state change and writes unconditionally — so the sweep was
+ * honest for about half a second and the reader was told it was permanent.
  */
 export async function forgetEverything(): Promise<void> {
   for (const key of localKeys()) {
@@ -171,6 +178,16 @@ export async function forgetEverything(): Promise<void> {
       /* as above */
     }
   }
+  // The workspace record, in both halves. Suspending is what makes the delete
+  // mean anything past this moment — the store is cleared below by
+  // `clearDurableStores` either way, and `App.rememberDurably()` would write a
+  // fresh record on the reader's next state change or on `pagehide`, naming the
+  // file they had been reading to whoever opened the site next (§11). Done
+  // first and synchronously, before any `await` below yields to an event that
+  // could queue a write behind the delete; `forgetWorkspace` then drops the key
+  // itself, which is the call its own docstring already claimed this one makes.
+  suspendWorkspace()
+  await forgetWorkspace()
   // Both halves of the durable side. `clearDurableStores` empties the object
   // stores; these also drop the copies `handles.ts` and `directories.ts` hold in
   // memory, without which the sweep would report success while the current page

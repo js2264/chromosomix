@@ -442,7 +442,18 @@ function skipExpectedValues(cursor: Cursor, version: number, normed: boolean): v
     // far and lands the cursor past the end of the section.
     cursor.position += nValues * (version >= 9 ? 4 : 8)
     const nScaleFactors = cursor.int32()
-    cursor.position += nScaleFactors * (4 + 8)
+    // The same narrowing applies to the per-chromosome scale factors, and this
+    // walked all three versions at the v8 width until a v9 file showed what
+    // that costs: a pair is `int32 chrIdx + float64 factor` in v7/v8 and
+    // `int32 + float32` in v9, so v9 was overshooting by 4 B per chromosome per
+    // vector — a hundred bytes on a human genome, times one vector per
+    // resolution — which lands the cursor inside the normalised expected-value
+    // section instead of at its end. From there the walk reads a nonsense count
+    // and the normalisation index is never reached, so a v9 file with SCALE
+    // weights either fails to open or opens with no weights at all.
+    // `hic-straw` states the same widths: `INT + nChrScaleFactors * (INT +
+    // (version < 9 ? DOUBLE : FLOAT))`.
+    cursor.position += nScaleFactors * (4 + (version >= 9 ? 4 : 8))
     if (cursor.position > cursor.position + cursor.remaining) {
       throw new HeaderTruncated('footer window too small')
     }

@@ -21,9 +21,25 @@
  * meet is the application doing its job — a window worth looking at, tracks on
  * both edges of the map, a group of two strands sharing a lane — and all of
  * that is exactly what `state/workspace.ts` writes down. So the catalogue is
- * three `.metacooler.json` files that live next to the data they name, and
+ * four `.metacooler.json` files that live next to the data they name, and
  * choosing one is the same gesture as dropping a workspace somebody sent you.
  * Nothing here is a second way of opening a file.
+ *
+ * The four are ordered as an argument rather than by dataset: **one map with
+ * its tracks**, then **the same assembly with no map at all**, then **two maps
+ * side by side**, and only then **the metagenome**. A reader meeting this
+ * viewer for the first time should meet the simplest complete thing it does
+ * first; the multi-genome file it exists for is the last of the four because it
+ * is the one that needs the other three to be legible.
+ *
+ * A note on the format, because it is what made every one of these stop
+ * opening once: `App.openWorkspaceFile` reads `kind: "metacooler.workspace"`
+ * and refuses anything else, so a published file still written in the older
+ * single-session shape (`kind: "metacooler.session"`) is a picker entry that
+ * fails on click with "not a workspace". The four files in `demo/` are the
+ * current shape; the copies on the bucket are only as current as the last run
+ * of `scripts/publish-demo.sh`, which is the step that makes the catalogue
+ * true.
  *
  * Each is a workspace of **one tab**, which is what the format's `active` index
  * and `tabs` list collapse to when there is one of them. Nothing stops a
@@ -89,9 +105,10 @@ export interface Example {
  * file, because that is the part a reader cannot see from the name.
  *
  * `folder` is the dataset's own directory under {@link DEMO_BUCKET}, and it is
- * where every file that session names is looked for: two entries sharing a
- * folder — as the two yeast sessions do — are two figures over one copy of the
- * data, not two copies of it.
+ * where every file that session names is looked for: entries sharing a folder —
+ * as the three yeast sessions do — are that many figures over one copy of the
+ * data, not that many copies of it. It may be nested (`metagenomics/mock-community`),
+ * which is how a bucket groups datasets by the kind of experiment they are.
  */
 const DEMO: Array<{
   folder: string
@@ -101,20 +118,9 @@ const DEMO: Array<{
   kind: 'map' | 'genome'
 }> = [
   {
-    folder: 'mock-community',
-    file: 'Mock_microbial_community.metacooler.json',
-    label: 'Mock microbial community — 49 MAGs, 1/2/4 kb ladder (mmetacool)',
-    kind: 'map',
-    note:
-      'A MetaTOR binning of a mock community profiled by metaHiC, zoomified: 49 genomes over ' +
-      '20,566 contigs at 1, 2 and 4 kb in one collection, opened at the finest (35 MB). Lands on ' +
-      'the genomes table, largest MAG first. ' +
-      '(SRA SRR32680160; DOI: 10.1038/s41564-025-02108-2)',
-  },
-  {
     folder: 'yeast',
     file: 'Yeast_microC.metacooler.json',
-    label: 'Yeast micro-C, G2/M — a map with tracks on both edges (cool)',
+    label: 'Yeast micro-C, G2/M — one map, tracks on both edges (cool)',
     kind: 'map',
     note:
       'A mitotic micro-C map of synthetic yeast at 1 kb (XIII carries a 40 kb insertion, hence ' +
@@ -126,13 +132,37 @@ const DEMO: Array<{
   {
     folder: 'yeast',
     file: 'Yeast_tracks.metacooler.json',
-    label: 'Yeast chromatin and transcription — a genome browser, no map (bigWig)',
+    label: 'Yeast chromatin and transcription — the browser, no map (bigWig)',
     kind: 'genome',
     note:
-      'The same assembly with no contact map at all: ten lanes over 50 kb of chromosome IV — the ' +
-      'sequence as GC content, the gene model, MNase and ATAC grouped on pinned axes, both peak ' +
-      'call sets, the two RNA strands on one shared axis with the reverse read downwards, and ' +
-      'the loop calls as arcs. Drop a .cool on it to turn the same session into a map.',
+      'The same assembly with no contact map at all: eleven lanes over 50 kb of chromosome IV — ' +
+      'the sequence as GC content, the gene model, MNase and ATAC grouped on pinned axes, both ' +
+      'peak call sets, the micro-C anchors as an interval lane, the two RNA strands on one ' +
+      'shared axis with the reverse read downwards, and the loop calls as arcs. Drop a .cool on ' +
+      'it to turn the same session into a map.',
+  },
+  {
+    folder: 'yeast',
+    file: 'Yeast_deck.metacooler.json',
+    label: 'Yeast micro-C beside Hi-C — two maps in a deck (cool + hic)',
+    kind: 'map',
+    note:
+      'The same locus read out of two files in two different formats, in two locked columns: ' +
+      'the micro-C .cool on the left and a Juicer .hic on the right, both balanced, both at ' +
+      'IV:1.0–1.4 Mb. IV is one of the sequences the two assemblies agree about to the base, ' +
+      'which is why the window is there. Panning either panel pans both. ' +
+      '(DOI: 10.1126/science.adm9466)',
+  },
+  {
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.metacooler.json',
+    label: 'Mock microbial community — 49 MAGs over 20,566 contigs (metacool)',
+    kind: 'map',
+    note:
+      'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
+      'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first — ' +
+      'the multi-genome file this viewer exists for. ' +
+      '(SRA SRR32680160; DOI: 10.1038/s41564-025-02108-2)',
   },
 ]
 
@@ -228,9 +258,7 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder
 
 /**
  * Absolute URLs for the published workspaces, in the order they should be
- * offered — the metagenomic ladder first, because a multi-genome map is the
- * file type this viewer exists for; then the same yeast assembly twice, as a
- * map with tracks around it and as the tracks with no map at all.
+ * offered — see {@link DEMO}, which is where that order is argued for.
  */
 export function demoExamples(): Example[] {
   const base = DEMO_BASE !== '' ? DEMO_BASE : DEMO_BUCKET

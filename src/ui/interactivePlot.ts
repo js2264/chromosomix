@@ -30,6 +30,7 @@ import { icon } from './icons'
 import {
   curveFigure,
   matrixFigure,
+  resolveSeriesColours,
   type CurveLayout,
   type PlotFigure,
 } from './analysisPlots'
@@ -425,12 +426,21 @@ function fromDrawSpace(value: number, log: boolean): number {
  * get the same object.
  */
 function derive(output: CurveOutput, view: CurveView): CurveOutput {
-  const series = output.series.filter((entry) => !view.hidden.has(entry.name))
+  // **Colours first, and against the whole list.** `drawCurve` takes a series'
+  // palette entry from its position in whatever array it is given, so handing it
+  // a filtered one recoloured every survivor: hide the first of three and the
+  // other two each moved a step up the palette, in the figure, in its legend and
+  // in the exported PDF. Resolving here, before anything is dropped, is what
+  // makes a line's colour a property of the series rather than of how many of
+  // its neighbours happen to be switched off (`resolveSeriesColours`).
+  const all = resolveSeriesColours(output.series)
+  const series = all.filter((entry) => !view.hidden.has(entry.name))
   return {
     ...output,
     // Never empty: hiding the last series is a reader isolating something, and
-    // an empty frame is a worse answer than the picture they started from.
-    series: series.length > 0 ? series : output.series,
+    // an empty frame is a worse answer than the picture they started from. The
+    // fallback is the *resolved* list, so falling back does not recolour either.
+    series: series.length > 0 ? series : all,
     xScale: view.xLog ? 'log' : 'linear',
     yScale: view.yLog ? 'log' : 'linear',
     // The window travels *on the output*, so the PDF is cut where the screen is

@@ -1,12 +1,12 @@
 {
   "kind": "metacooler.workspace",
   "version": 1,
-  "createdAt": "2026-08-06T18:13:36.751Z",
+  "createdAt": "2026-09-09T00:00:00.000Z",
   "active": 0,
   "tabs": [
     {
       "version": 1,
-      "createdAt": "2026-08-06T18:13:36.751Z",
+      "createdAt": "2026-09-09T00:00:00.000Z",
       "state": {
         "uri": "Yeast_ATAC.bw",
         "view": "browser",
@@ -24,7 +24,10 @@
             "url": "S288c_syn40-XIII.fa"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#8c6d31",
             "size": 46,
@@ -52,7 +55,10 @@
             "url": "Yeast_annotations.gtf"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#5b6169",
             "size": 92,
@@ -80,7 +86,10 @@
             "url": "Yeast_MNase.bw"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#0072b2",
             "size": 78,
@@ -108,7 +117,10 @@
             "url": "Yeast_ATAC.bw"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#d55e00",
             "size": 78,
@@ -136,12 +148,50 @@
             "url": "Yeast_ATAC.narrowPeak"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#d55e00",
             "size": 34,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "demo-anchors",
+          "card": "linear",
+          "kind": "segments",
+          "label": "micro-C anchors",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_microC_anchors.bed",
+            "url": "Yeast_microC_anchors.bed"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "",
             "shape": "element",
             "radius": 7,
@@ -160,12 +210,19 @@
             "url": "Yeast_ChIP_Pol2-vs-input.bw"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#009e73",
             "size": 78,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "",
             "shape": "element",
             "radius": 7,
@@ -184,12 +241,19 @@
             "url": "Yeast_ChIP_Pol2-vs-input.narrowPeak"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#009e73",
             "size": 34,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "",
             "shape": "element",
             "radius": 7,
@@ -208,12 +272,19 @@
             "url": "Yeast_RNA_fwd.bw"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#e69f00",
             "size": 96,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "RNA",
             "shape": "element",
             "radius": 7,
@@ -225,19 +296,26 @@
           "id": "demo-rna-rev",
           "card": "linear",
           "kind": "track",
-          "label": "RNA −",
+          "label": "RNA \u2212",
           "source": {
             "kind": "remote",
             "name": "Yeast_RNA_rev.bw",
             "url": "Yeast_RNA_rev.bw"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#56b4e9",
             "size": 96,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "RNA",
             "shape": "element",
             "radius": 7,
@@ -256,12 +334,19 @@
             "url": "Yeast_microC_loops.tsv"
           },
           "visible": true,
-          "placement": { "bottom": true, "right": false },
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
           "style": {
             "colour": "#cc79a7",
             "size": 60,
             "mode": "area",
-            "limits": { "auto": true, "min": 0, "max": 1 },
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
             "group": "",
             "shape": "element",
             "radius": 7,
@@ -271,7 +356,9 @@
         }
       ],
       "manual": [],
-      "sequences": ["IV"],
+      "sequences": [
+        "IV"
+      ],
       "groups": {
         "chromatin": "stacked",
         "RNA": "stacked"
@@ -293,7 +380,8 @@
         "breaks": true,
         "labels": false,
         "ticks": true
-      }
+      },
+      "name": "Yeast, no map"
     }
   ]
 }

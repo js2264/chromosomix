@@ -30,6 +30,7 @@
  */
 
 import type { Region, TrackSampleSet } from '../annotations/types'
+import type { Contig } from '../genome/assembly'
 import type { NameContext } from '../genome/naming'
 import type { MetaCooler } from '../metacooler/MetaCooler'
 import type { AnalysisFraming, Params, ParamValue, TaskOutput } from './types'
@@ -256,9 +257,37 @@ export function abortError(): Error {
  *
  * So a task declares its {@link TaskVenue} and the runner routes. What the two
  * contexts share is deliberate and complete: cancellation, progress, notes and
- * the inputs. What differs is the one capability each venue exists for — a
- * mounted `MetaCooler` there, a way to sample a track here.
+ * the inputs. What differs is the capability each venue exists for — a mounted
+ * `MetaCooler` there, and here the two things this worker is the only holder of:
+ * a way to sample a track, and a way to read a reference's residues
+ * ({@link SequenceReader}).
  */
+/**
+ * A loaded reference, read where it lies.
+ *
+ * The residues of a FASTA are parsed into the annotations worker and
+ * deliberately never shipped out whole: a `bases` request answers a *window* and
+ * is capped, precisely so that opening a genome does not put twelve megabytes on
+ * the main thread (`annotations/worker/protocol.ts`). Every other input a task
+ * takes crosses that boundary — a `FeatureSet` is typed arrays and a track
+ * arrives as one value per bin — and a genome is the one that must not.
+ *
+ * So a task that reads sequence is a task that runs *beside* it, and this is the
+ * door. Handed out by the worker that holds the store rather than reached for by
+ * the runner, for the same reason {@link TrackJobContext.sample} is: the runner
+ * names an entry, and what it gets back is bytes it may read and must not keep.
+ *
+ * `bases` resolves the spelling the way every other reader in that worker does
+ * (§5.9), so a FASTA renamed into the map's vocabulary at load time is searched
+ * under the names the rest of the application uses.
+ */
+export interface SequenceReader {
+  /** The reference's own sequences, in the reference's own order. */
+  readonly contigs: readonly Contig[]
+  /** One sequence's residues, one ASCII byte each; `undefined` for a name it has not got. */
+  bases(contig: string): Uint8Array | undefined
+}
+
 export interface TrackJobContext {
   readonly params: Params
   readonly framing: AnalysisFraming
@@ -277,6 +306,22 @@ export interface TrackJobContext {
   sample(entry: string, regions: Region[], basesPerPixel: number): Promise<TrackSampleSet>
   /** A sequence's length, so a window can be clamped to it rather than past it. */
   lengthOf(contig: string): number | undefined
+  /**
+   * The residues of a loaded reference, or `undefined` for an entry that is not
+   * one — see {@link SequenceReader}.
+   *
+   * **Optional, unlike everything else here**, and the asymmetry is the point.
+   * The four capabilities above are answerable by anything that can run a track
+   * task at all: they are the parameters, the record, the inputs it was handed
+   * and a sample of a track it named. This one is answerable only by a host that
+   * holds a parsed genome — which the annotations worker does and a test
+   * harness, a future venue, or a session that has never opened a FASTA does
+   * not. Declaring it required would make every one of those a liar; declaring
+   * it optional makes a runner that needs it say so in a sentence
+   * (`analysis/run/motif.ts`) instead of reading `undefined` out of a call that
+   * type-checked.
+   */
+  residues?(entry: string): SequenceReader | undefined
 }
 
 export type TrackTaskRunner = (job: TrackJobContext) => Promise<TaskOutput[]>

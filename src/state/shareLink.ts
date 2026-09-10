@@ -41,8 +41,25 @@ import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConf
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 import { sharedMapNames } from '../ui/mapNames'
 
-/** The fragment key a shared session travels under. */
-export const SHARE_KEY = 's'
+/**
+ * The fragment key a shared session travels under.
+ *
+ * Spelled out rather than abbreviated to `s`. A share link is read by people
+ * before it is read by a browser — it is pasted into chat, into a paper, into a
+ * mail — and `#session=…` says what the two kilobytes after it are, where `#s=`
+ * looked like one of the view state's own short keys and invited exactly the
+ * wrong guess about what could be edited by hand. It also keeps the two
+ * fragment grammars visibly apart: {@link readShareHash} is asked before
+ * `parseViewState` precisely because both are `key=value` pairs in the same
+ * place, and a key nobody would coin for a view is a key that cannot collide
+ * with one (`state/ViewState.ts` `KEY_ORDER` has no `session`).
+ *
+ * This is the only spelling written *and* the only one read: a link made by an
+ * older build does not open here. That is a deliberate break rather than an
+ * oversight — a reader silently accepting `#s=` would have to keep accepting it
+ * forever, and the shared links in the wild are days old, not years.
+ */
+export const SHARE_KEY = 'session'
 
 /**
  * Base64url, which is base64 with two characters swapped and the padding gone.
@@ -110,6 +127,21 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
 }
 
 /**
+ * Whether a recipient could address this URI at all.
+ *
+ * The one question every redaction in this file turns on, named once rather
+ * than spelled as a regex at each site: a `https:`, `http:` or `s3:` address
+ * means the same thing in anybody's browser, and everything else is a bare
+ * filename off the sender's own disk. `ui/mapNames.ts`'s `sharedMapNames` asks
+ * it of a map's key; {@link forSharing} asks it of a lane's; {@link shortenable}
+ * asks it of the session's own file. Three copies of one predicate is three
+ * places for it to drift, and drift here is a private name leaving the machine.
+ */
+function openableElsewhere(uri: string): boolean {
+  return /^(https?|s3):\/\//i.test(uri)
+}
+
+/**
  * A session with the parts a link may not carry taken out.
  *
  * Applied **inside** {@link encodeShare} rather than at its call site, and that
@@ -132,7 +164,12 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  * **`deck.looks`** is the one field that is neither kept nor dropped whole: a
  * look is keyed on the file it describes, so the ones naming local companions go
  * with `locals` and the ones naming remote companions travel. Same rule, applied
- * per member because the field has members of both kinds.
+ * per member because the field has members of both kinds. **`mapNames`** and
+ * **`lanes`** are keyed on a file the same way and are filtered the same way.
+ * `lanes` was the one that was missed: it is not named in the object below and
+ * so rode through on the `...config` spread, which meant a link could strip the
+ * companion and still spell its filename into the fragment — the sender's whole
+ * redaction undone by the one field nobody had written a line about.
  *
  * A **local track is kept**, and the rule that decides all four is the one
  * `resolveConfig` states: a private name is stripped only where the structure
@@ -172,6 +209,22 @@ export function forSharing(config: SessionConfig): SessionConfig {
   const names = sharedMapNames(config.mapNames ?? {})
   if (Object.keys(names).length === 0) delete shared.mapNames
   else shared.mapNames = names
+  // The placements a recipient can act on, and only those. A lane is keyed on
+  // the file the track was drawn over, so a track placed on a local companion
+  // carries the same bare filename `locals`, `looks` and `mapNames` are stripped
+  // for — and it buys the recipient nothing, because the companion it names went
+  // with `locals` and the slot arrives vacant.
+  //
+  // Filtered by the **address** rather than by membership of `deck.locals`,
+  // which is the near miss worth spelling out: a look is keyed on `slot.ref.uri`,
+  // the same string `DeckLocal.uri` records, but a lane is keyed on
+  // `slot.panel?.uri ?? slot.ref.uri` (`panels/PanelDeck.ts`) — so a local
+  // companion opened at one rung of a collection is stored here as
+  // `rep2.mcool::/resolutions/1000` while `locals` holds `rep2.mcool`, and a
+  // name-set test would wave it through.
+  const lanes = (config.lanes ?? []).filter((lane) => openableElsewhere(lane.uri))
+  if (lanes.length === 0) delete shared.lanes
+  else shared.lanes = lanes
   // Deleted rather than set to `undefined`: a key holding nothing is a third
   // state, it survives `JSON.stringify` as an absence anyway, and every reader
   // downstream treats absence as the answer.
@@ -233,7 +286,7 @@ export function shareUrl(base: string, payload: string): string {
  * for nothing at all.
  */
 export function shortenable(config: SessionConfig): boolean {
-  return /^(https?|s3):\/\//i.test(config.state.uri)
+  return openableElsewhere(config.state.uri)
 }
 
 /** The service, named in the interface rather than hidden behind a verb. */

@@ -44,6 +44,7 @@ import type {
   RegionParam,
   SequencesParam,
   SeedParam,
+  TextParam,
   ToggleParam,
 } from '../analysis/types'
 import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
@@ -846,6 +847,8 @@ export class ParamForm {
         return this.sequenceList(spec)
       case 'region':
         return this.regionControl(spec)
+      case 'text':
+        return this.textControl(spec)
       case 'seed':
         return this.seedControl(spec)
     }
@@ -919,7 +922,15 @@ export class ParamForm {
       showBins(value)
     }
     const commitBox = (): void => {
-      const typed = Number(box.value)
+      // On the *string*, not on `Number(box.value)`: `Number('')` is 0 and 0 is
+      // finite, so this guard never fired and an emptied box committed
+      // `clamp(0)` — the parameter's minimum — as though the reader had typed
+      // it. A `type="number"` box reports an empty string for a cleared box and
+      // for everything it could not parse alike (`1e`, `--`, a pasted word), so
+      // both now put the held value back. Same form as `ui/ClipRange.ts` and
+      // `ui/trackControls.ts`, which learnt it the same way.
+      const raw = box.value.trim()
+      const typed = raw === '' ? Number.NaN : Number(raw)
       if (!Number.isFinite(typed)) {
         show(held())
         return
@@ -937,7 +948,12 @@ export class ParamForm {
     // feedback about what is being typed, while a commit re-prices the run and
     // must wait for the reader to have finished.
     box.addEventListener('input', () => {
-      const typed = Number(box.value)
+      // Same string test, for the same reason one level down: an emptied box
+      // read as 0 repainted the caption as "0 bins", which is a statement about
+      // a run nobody has described yet. Leaving the last caption up is the
+      // honest answer while the box is empty.
+      const raw = box.value.trim()
+      const typed = raw === '' ? Number.NaN : Number(raw)
       if (Number.isFinite(typed)) showBins(typed)
     })
     if (slider !== null) {
@@ -1505,6 +1521,52 @@ export class ParamForm {
         sync()
       },
     }
+  }
+
+  /**
+   * A box with nothing in it but what the reader types.
+   *
+   * The plainest control on the form, and the only one that offers no help at
+   * all: no list to pick from, no bounds, no rewriting of what was typed beyond
+   * trimming the ends. That is the point of {@link TextParam} — a motif is a
+   * string in an alphabet the *task* knows and the form does not, so a control
+   * that tried to be clever here would be guessing.
+   *
+   * Committed on `change` and on Enter, exactly as the locus box is, so a reader
+   * who types a pattern and presses Enter has answered the form rather than
+   * submitted it. Not committed per keystroke: every commit re-prices the run
+   * and re-evaluates every `when`, and half a motif is a refusal the reader
+   * would watch flicker past under their own typing.
+   */
+  private textControl(spec: TextParam): Control {
+    const id = `${this.id}-${spec.key}`
+    const box = el('input', {
+      class: 'input',
+      type: 'text',
+      attrs: { id },
+      ...(spec.placeholder === undefined ? {} : { placeholder: spec.placeholder }),
+      // The same reason the locus box carries one: a bare `input` in a grid
+      // track asks for its own default width and overflows the card.
+      style: { width: '100%' },
+    })
+    const commit = (): void => this.commit(spec.key, box.value.trim())
+    box.addEventListener('change', commit)
+    box.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        // Or the drawer's own Enter handling would submit a form the box has
+        // not yet handed its value to.
+        event.preventDefault()
+        commit()
+      }
+    })
+    const sync = (): void => {
+      // Never under the cursor: a re-render lands mid-word otherwise, and the
+      // held value is one keystroke behind what is on screen.
+      if (document.activeElement === box) return
+      box.value = stringOr(this.params[spec.key], '')
+    }
+    sync()
+    return { spec, wrapper: this.wrap(spec, this.labelled(spec, box, id)), shown: false, sync }
   }
 
   /**

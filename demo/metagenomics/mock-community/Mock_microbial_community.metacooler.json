@@ -1,14 +1,14 @@
 {
   "kind": "metacooler.workspace",
   "version": 1,
-  "createdAt": "2026-08-06T00:00:00.000Z",
+  "createdAt": "2026-09-09T00:00:00.000Z",
   "active": 0,
   "tabs": [
     {
       "version": 1,
-      "createdAt": "2026-08-06T00:00:00.000Z",
+      "createdAt": "2026-09-09T00:00:00.000Z",
       "state": {
-        "uri": "Mock_microbial_community.mmetacool",
+        "uri": "Mock_microbial_community.metacool",
         "view": "genomes",
         "level": "bin",
         "balance": false,
@@ -40,7 +40,8 @@
         "breaks": true,
         "labels": false,
         "ticks": true
-      }
+      },
+      "name": "Mock community"
     }
   ]
 }

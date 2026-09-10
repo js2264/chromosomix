@@ -6982,6 +6982,72 @@ export class MatrixPanel {
   }
 
   /**
+   * What one cell of the drawn block *is* — a stretch of a sequence, a whole
+   * sequence, or a whole genome. `null` before anything has been read.
+   *
+   * Published because {@link bpPerCell} is only a length above bin level by
+   * accident. A contig-level cell is a whole chromosome, and the number this
+   * panel answers there is the file's bin size, which is a fact about the file
+   * and nothing at all about the width of a cell. Everything that multiplies
+   * cells by base pairs has to know which of those two worlds it is in first:
+   * the deck's lock and its pointer echoes did not, and marked chromosome 3 of
+   * a 5 kb map for chromosome 12 of the 1 kb map beside it (`panels/PanelDeck.ts`).
+   */
+  blockLevel(): 'bin' | 'contig' | 'genome' | null {
+    return this.data?.level ?? null
+  }
+
+  /**
+   * How much sequence each axis of the block covers, and across how many
+   * sequences it was rounded to whole cells — the deck's compatibility gate
+   * (§16.4, `panels/lock.ts`).
+   *
+   * `cells × bpPerCell` is the answer **at bin level only**, and using it
+   * everywhere is what made two roll-ups of one 16-chromosome genome, at 1 kb
+   * and at 5 kb, report spans of 16 kb and 80 kb and accuse each other of
+   * having resolved the same names against different sequences. Above bin level
+   * a cell is a whole sequence, so the length of the axis is not in the cell
+   * count at all: it is in the block's **bin** extent, which an aggregate still
+   * reports on the file's own grid, times the bin size — and there
+   * `options.binsize` is exactly that, because a roll-up carries no
+   * `binsPerCell` for {@link setResolution} to fold in.
+   *
+   * `sequences` is the width of the tolerance the comparison needs rather than
+   * a fact anybody draws. A cell never straddles a sequence
+   * (`metacooler/pooling.ts`), so an axis of N sequences rounds N last cells up
+   * — the same short-last-bin allowance §3.3 makes, N times over. A one-contig
+   * region view answers 1, which is the only case the old one-cell tolerance
+   * was ever right for.
+   */
+  blockSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } {
+    const data = this.data
+    const cells = this.cellCount()
+    const bp = this.bpPerCell()
+    // A turn only ever cuts a band out of a bin-level square, and its rows are
+    // separation rather than position — both of which the cell arithmetic gets
+    // right and the extent arithmetic below would not.
+    if (data === null || data.level === 'bin' || this.turned !== null) {
+      return {
+        rows: cells.rows * bp,
+        cols: cells.cols * bp,
+        sequences: {
+          rows: data?.rowContigs ?? data?.rowGroups.length ?? 1,
+          cols: data?.colContigs ?? data?.colGroups.length ?? 1,
+        },
+      }
+    }
+    const binsize = Math.max(1, this.options.binsize)
+    return {
+      rows: (data.rowExtent[1] - data.rowExtent[0]) * binsize,
+      cols: (data.colExtent[1] - data.colExtent[0]) * binsize,
+      sequences: {
+        rows: data.rowContigs ?? data.rowGroups.length,
+        cols: data.colContigs ?? data.colGroups.length,
+      },
+    }
+  }
+
+  /**
    * Show a cell window that came from outside — the deck's lock.
    *
    * The counterpart of {@link applyScale}, and separate from the panel's own

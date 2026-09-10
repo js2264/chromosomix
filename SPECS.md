@@ -4484,14 +4484,14 @@ origin, which is the viewer's, so §11's hosting requirements are exactly as the
 ### 21.1 What decides what an embed shows
 
 Three seeds, in the order they override one another, and each is reached only because the ones above
-it said nothing: a **shared session** in the fragment (`#s=`, a whole workspace deflated into the
+it said nothing: a **shared session** in the fragment (`#session=`, a whole workspace deflated into the
 URL); a **view state** in the fragment (`#uri=…`, which is what a navigation leaves behind, so it has
 to beat the `src=` or every reload would undo the reader's last click); and **`?config=<url>`**, a
 published `.metacooler.json` fetched and opened through `Session.openConfigUrl` — the same road the
 picker's own URL box takes, so a seeded session and a chosen one differ in nothing after the fetch.
 With none of the three, an embed is the file picker, which is a legitimate thing to embed.
 
-`?config=` is the pointer form of what `#s=` carries as a payload. A payload cannot be changed once
+`?config=` is the pointer form of what `#session=` carries as a payload. A payload cannot be changed once
 the embed is published and grows the URL by the size of the session; a pointer is a file on a bucket,
 editable afterwards, of no length, and — because the names inside it resolve against its own URL
 (`state/SessionConfig.ts`'s `resolveConfig`) — self-contained enough to be copied to another bucket with its data. Both are

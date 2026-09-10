@@ -21,6 +21,7 @@ import {
   axisFor,
   referenceWindows,
   scaledWindows,
+  standardiseTrack,
   windowRow,
   type Average,
   type Layout,
@@ -147,41 +148,92 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     groups: Math.max(2, Math.round(numParam(job.params, 'groups', 4))),
   })
 
+  // Off unless asked for, and read forgivingly like every other parameter: a
+  // session stored before this option existed has no `zscore` key at all, and
+  // must come back as the figure it was rather than as an error (`analysis/job.ts`).
+  const zscore = boolParam(job.params, 'zscore', false)
+
   const step = Math.max(1, Math.round(numParam(job.params, 'step', 50)))
   const flank = Math.max(0, Math.round(numParam(job.params, 'flank', 2000)))
   const scaled = strParam(job.params, 'mode', 'reference') === 'scaled'
   const body = Math.max(10, Math.round(numParam(job.params, 'body', 100)))
   const lengthOf = (contig: string): number => job.lengthOf(contig) ?? Number.MAX_SAFE_INTEGER
 
+  // **Planned once, and read by every track.** A plan depends on the group's
+  // features and on the window shape and on nothing whatever about the file
+  // being read, so building one inside the track loop re-did the same work —
+  // and, worse, added the same `dropped` count once per ticked track. Three
+  // bigWigs over a set of a thousand with forty features under the body width
+  // reported a hundred and twenty dropped: a number the reader cannot arrive at
+  // from the set in front of them, out of a note whose whole job
+  // (`analysis/job.ts`) is to be arrived at.
+  const plans = groups.map((group) =>
+    scaled
+      ? scaledWindows(group.features, { body, flank, step, lengthOf })
+      : {
+          ...referenceWindows(group.features, {
+            at: strParam(job.params, 'at', 'start') as Reference,
+            flank,
+            step,
+            lengthOf,
+          }),
+          dropped: 0,
+        },
+  )
+  const dropped = plans.reduce((count, plan) => count + plan.dropped, 0)
+
   const series: CurveSeries[] = []
   const outputs: TaskOutput[] = []
-  let layout: Layout | null = null
+  const layout: Layout | null = plans.length === 0 ? null : plans[0].layout
   let firstRows: { rows: Float64Array; count: number; name: string } | null = null
-  let dropped = 0
 
   const total = entries.length * groups.length
   let done = 0
 
   for (const entry of entries) {
-    for (const group of groups) {
+    // **Every group of this track is read before any of them is summarised**,
+    // which is a shape the z-score forces. Standardising is per *track* and over
+    // the union of its groups (see `standardiseTrack`), so the mean and the SD
+    // are not known until the last group has been sampled — and a loop that
+    // aggregated each group as it read it could only have standardised each
+    // group against itself, which is the one thing the option must not do.
+    //
+    // The cost is that one track's group rows are held at once rather than one
+    // at a time. They partition a single feature set between them, so that is
+    // one feature set's worth of rows for one track — the same thing the heatmap
+    // keeps hold of for the whole run — and the tracks are still read one after
+    // another rather than all together.
+    const built: Array<{ group: string; rows: Float64Array; count: number; layout: Layout }> = []
+    for (const [index, group] of groups.entries()) {
       job.throwIfCancelled()
       job.progress(done, total, `${job.inputs.labels?.[entry] ?? entry} · ${group.name}`)
       done++
 
-      const plan = scaled
-        ? scaledWindows(group.features, { body, flank, step, lengthOf })
-        : { ...referenceWindows(group.features, {
-            at: strParam(job.params, 'at', 'start') as Reference,
-            flank,
-            step,
-            lengthOf,
-          }), dropped: 0 }
-      dropped += plan.dropped
-      layout ??= plan.layout
+      const plan = plans[index]
       if (plan.windows.length === 0) continue
 
-      const rows = await rowsFor(job, entry, plan.windows, plan.layout, step)
-      const summary = aggregate(rows, plan.windows.length, plan.layout.slots, {
+      built.push({
+        group: group.name,
+        rows: await rowsFor(job, entry, plan.windows, plan.layout, step),
+        count: plan.windows.length,
+        layout: plan.layout,
+      })
+    }
+
+    // In place, and on purpose. `firstRows` below keeps the very array handed to
+    // `aggregate`, and that array is what `heatmapOf` draws — so standardising a
+    // copy would put a heatmap of raw values under a curve of z-scores, two
+    // pictures of one run disagreeing about what was measured. The heatmap shows
+    // what the curve shows. With the option off nothing here runs at all, and no
+    // copy is made either way.
+    //
+    // Before `aggregate`, which is also before the bootstrap it draws from: the
+    // band has to be an interval on the standardised values, not a raw interval
+    // rescaled afterwards.
+    if (zscore) standardiseTrack(built.map((one) => one.rows))
+
+    for (const one of built) {
+      const summary = aggregate(one.rows, one.count, one.layout.slots, {
         average: strParam(job.params, 'average', 'mean') as Average,
         trim: 0.1,
         band: strParam(job.params, 'band', 'bootstrap') as 'none' | 'bootstrap' | 'sd',
@@ -194,14 +246,14 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
       // `a1, a2` is a legend that has to be decoded against a panel.
       const track = job.inputs.labels?.[entry] ?? entry
       series.push({
-        name: groups.length === 1 ? track : `${track} · ${group.name}`,
-        x: axisFor(plan.layout).x,
+        name: groups.length === 1 ? track : `${track} · ${one.group}`,
+        x: axisFor(one.layout).x,
         y: summary.mean,
         low: summary.low,
         high: summary.high,
         n: summary.n,
       })
-      firstRows ??= { rows, count: plan.windows.length, name: series[series.length - 1].name }
+      firstRows ??= { rows: one.rows, count: one.count, name: series[series.length - 1].name }
     }
   }
   job.progress(total, total, 'Done')
@@ -211,7 +263,13 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     return []
   }
   if (dropped > 0) {
-    job.note(`${dropped.toLocaleString()} features were shorter than the body width and were dropped.`)
+    // Both of the reasons `scaledWindows` drops one, because a reader counting
+    // the short features in their own set has to be able to arrive at this
+    // number: most are under the body width, but a feature whose flanks leave
+    // it no columns at the edge of a sequence is dropped here too.
+    job.note(
+      `${dropped.toLocaleString()} features were dropped: shorter than the body width, or with no window left after clipping to the sequence.`,
+    )
   }
 
   const axis = axisFor(layout)
@@ -221,13 +279,15 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     label: 'Metaplot',
     series,
     xLabel: axis.label,
-    yLabel: 'Mean signal',
+    // A y axis still reading *Mean signal* over standardised rows would name a
+    // unit the numbers are no longer in — the one lie a relabelled axis is for.
+    yLabel: zscore ? 'Signal (z-score, per track)' : 'Mean signal',
     xScale: 'linear',
     yScale: 'linear',
   })
 
   if (boolParam(job.params, 'heatmap', true) && firstRows !== null) {
-    outputs.push(heatmapOf(firstRows, layout, axis.label))
+    outputs.push(heatmapOf(firstRows, layout, axis.label, zscore))
   }
   return outputs
 }
@@ -292,6 +352,7 @@ function heatmapOf(
   held: { rows: Float64Array; count: number; name: string },
   layout: Layout,
   xLabel: string,
+  zscore: boolean,
 ): MatrixOutput {
   const { rows, count } = held
   const order = Array.from({ length: count }, (_, i) => i)
@@ -322,7 +383,10 @@ function heatmapOf(
   return {
     kind: 'matrix',
     id: 'metaplot-heatmap',
-    label: `${held.name} · per feature`,
+    // The colour scale carries no unit of its own, so the label is the only
+    // place this picture can say that its cells are standard deviations from the
+    // track's mean rather than the track's own values.
+    label: `${held.name} · per feature${zscore ? ', z-scored' : ''}`,
     nrows: count,
     ncols: layout.slots,
     values,

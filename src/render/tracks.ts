@@ -168,9 +168,19 @@ export function profileOf(
     mean[slot] = value
     if (Number.isNaN(low[slot])) low[slot] = value
     if (Number.isNaN(high[slot])) high[slot] = value
+    // The means, and the means at *both* ends: `low[slot]` used to be folded
+    // into the floor with no `high[slot]` twin, so a single hidden sub-zero
+    // base inside a summary window decided the axis. An all-positive
+    // coverage track then resolved to `[-reach, reach]` instead of `[0, max]`
+    // and gave up half its lane, and a track that does cross zero was scaled to
+    // an envelope an order of magnitude wider than its own line. That is the
+    // same argument the field docstring gives for dropping the envelope's
+    // *maximum*; it holds below the line too. `low`/`high` stay populated —
+    // they are what the readout can say a pixel hid — they simply no longer
+    // decide the axis. A genuinely diverging track still gets its symmetric
+    // axis from `resolveLimits`, because its own means cross zero.
     if (value < min) min = value
     if (value > max) max = value
-    if (low[slot] < min) min = low[slot]
     drawn++
   }
   if (drawn === 0) return empty

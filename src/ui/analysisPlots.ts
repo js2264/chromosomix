@@ -451,6 +451,45 @@ function seriesColour(series: CurveSeries, index: number, theme: PlotTheme): str
   return series.colour ?? theme.series[index % theme.series.length]
 }
 
+/**
+ * Every series' colour fixed against the list it belongs to, once.
+ *
+ * {@link seriesColour} colours by **position**, which is right when it is handed
+ * the whole figure and wrong the moment anything filters the list first. Hiding
+ * a series in `ui/interactivePlot.ts` used to do exactly that: with series
+ * `A, B, C` and `A` switched off, `B` took `A`'s colour and `C` took `B`'s — the
+ * lines, their confidence bands and their legend swatches all stepping one place
+ * up the palette. It was silent, it survived into the PNG and the PDF, and its
+ * most visible form was alt-click *isolate*, which hides everything but one
+ * series and so always redrew that series in the first palette entry, whichever
+ * one the reader had picked out.
+ *
+ * So the colour is resolved here, against the full, unfiltered list, and stamped
+ * onto the series before anything is allowed to drop entries. `colour` already
+ * wins over the palette everywhere it is read, so nothing downstream changes:
+ * what a filtered list gets is a list of series that already know what colour
+ * they are.
+ *
+ * **A series that carries its own colour keeps it**, sentinels included — the
+ * `colour: 'none'` of the legend's "+N more" entry names no series and must go
+ * on naming none. And the *index* is the only thing this reads, so a task that
+ * left its colours off still gets one palette entry per line in list order,
+ * which is what `analysis/combine.ts` relies on to give four maps four colours.
+ *
+ * No theme is needed, and that is a fact about the palette rather than an
+ * oversight: `plotTheme` reads ink, grid and background off the host but hands
+ * back the *same* Okabe–Ito series list either way, because a figure is a figure
+ * in light and dark alike. Should the categorical palette ever come to depend on
+ * the host, this function is where the theme has to arrive.
+ */
+export function resolveSeriesColours(series: readonly CurveSeries[]): CurveSeries[] {
+  return series.map((entry, index) =>
+    entry.colour === undefined
+      ? { ...entry, colour: SERIES_COLOURS[index % SERIES_COLOURS.length] }
+      : entry,
+  )
+}
+
 function legendText(series: CurveSeries): string {
   return series.n === undefined || !Number.isFinite(series.n)
     ? series.name

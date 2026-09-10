@@ -268,9 +268,23 @@ export class AnalysisPanelCard {
     // Beside the chip and before the stop, so the row reads left to right as
     // "how far through this map, how far through the deck, and the way to stop".
     const batch = el('span', { class: 'analysis-chip analysis-batch hidden' })
+    // Two sentences, because the two venues stop differently and a tooltip that
+    // claimed the better one for both would be a promise the reader watches go
+    // unkept. A task in the analysis worker is genuinely cooperative: it reads
+    // the cancelled set between chunks and abandons the work. A task in the
+    // annotations worker is a single synchronous pass that never returns to its
+    // event loop, so the message is not read until the pass is over — pressing
+    // Stop discards the answer rather than preventing it. That is still worth
+    // doing (the row ends cancelled, nothing is cached and no lane is adopted),
+    // and it is not what "stops at the next chunk" describes. These passes are
+    // bounded by what the worker will hold — a reference over `FASTA_BYTE_CAP`
+    // is refused at load — so the wait is seconds, which is why the honest
+    // sentence is acceptable and a false one would not be.
     const stop = iconButton(
       'circle-stop',
-      `Stop ${task.title}. The worker checks between chunks, so it stops at the next one.`,
+      task.venue === 'annotations'
+        ? `Stop ${task.title}. This one runs in a single pass, so the result is discarded rather than cut short.`
+        : `Stop ${task.title}. The worker checks between chunks, so it stops at the next one.`,
       () => this.options.runner.cancel(task.id),
       { class: 'btn btn-icon', size: 14 },
     )

@@ -48,6 +48,8 @@ function installStorage(): Map<string, string> {
 
 const PUBLIC = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_ATAC.bw'
 const PRIVATE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/hum53/map.mcool'
+/** The other half of a HiC-Pro pair, under the same private scope. */
+const BINS = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/hum53/map_abs.bed'
 
 function scope(overrides: Partial<BucketScope> = {}): BucketScope {
   return {
@@ -294,6 +296,71 @@ describe('stamping a worker message', () => {
       'MINE',
     )
   })
+
+  /**
+   * A HiC-Pro pair is one source carrying another, and both have to be asked.
+   *
+   * This used to stamp `message.source` and stop, so the matrix went out signed
+   * and the bin file went out bare: a 403 on the half carrying every
+   * coordinate, while the half carrying the counts arrived. From the outside
+   * that is a private matrix that opens and then fails to be a matrix, naming
+   * neither file.
+   */
+  it('signs the bin file beside the matrix it belongs to', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PRIVATE,
+      source: {
+        kind: 'remote',
+        url: PRIVATE,
+        bins: { kind: 'remote', url: BINS },
+      },
+    })
+    const source = message.source as { credential?: unknown; bins: { credential?: unknown } }
+    expect(source.credential, 'the matrix').toBeDefined()
+    expect(source.bins.credential, 'the bin file').toBeDefined()
+  })
+
+  /**
+   * `#bins=` exists so the two halves can live under unrelated keys, so each is
+   * looked up on its own URL. Signing the bin file with the matrix's key would
+   * scope a request to a bucket it is not for.
+   */
+  it('signs the bin file even when the matrix is public', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PUBLIC,
+      source: { kind: 'remote', url: PUBLIC, bins: { kind: 'remote', url: BINS } },
+    })
+    const source = message.source as { credential?: unknown; bins: { credential?: unknown } }
+    expect(source.credential, 'the public matrix').toBeUndefined()
+    expect(source.bins.credential, 'the private bin file').toBeDefined()
+  })
+
+  it('leaves a bin file the caller already signed', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PRIVATE,
+      source: {
+        kind: 'remote',
+        url: PRIVATE,
+        bins: { kind: 'remote', url: BINS, credential: { accessKeyId: 'MINE' } },
+      },
+    })
+    const bins = (message.source as { bins: { credential: { accessKeyId: string } } }).bins
+    expect(bins.credential.accessKeyId).toBe('MINE')
+  })
+
+  it('allocates nothing when neither half needs a key', () => {
+    writeScopes([scope()])
+    const source = { kind: 'remote', url: PUBLIC, bins: { kind: 'remote', url: PUBLIC } }
+    const message = { kind: 'open', uri: PUBLIC, source }
+    // The same object, not a copy — the guard that keeps the common path free.
+    expect(withCredential(message)).toBe(message)
+  })
 })
 
 describe('taking a bucket URL apart', () => {
@@ -323,6 +390,78 @@ describe('taking a bucket URL apart', () => {
       bucket: 'rsglab-data',
       prefix: '',
     })
+  })
+
+  /**
+   * The prefix comes back as a **key**, not as the URL path it was cut from.
+   *
+   * `normaliseBase` stores what the reader typed as `url.href`, so a space in
+   * the folder name is `%20` from that point on. Handed straight to
+   * `listPrefix` that string is encoded a second time and S3 is asked for keys
+   * beginning with the literal text `Hi-C%20runs/` — which nothing is. The
+   * answer is a 200 with an empty `ListBucketResult`, so a bucket full of files
+   * draws as an empty folder with no error anywhere to act on. Everything
+   * below is that one bug seen from a different character.
+   */
+  it('decodes the key prefix, since S3 matches keys and not URL paths', () => {
+    expect(addressOf('https://rsglab-data.s3.eu-west-3.amazonaws.com/Hi-C%20runs/')?.prefix).toBe(
+      'Hi-C runs/',
+    )
+  })
+
+  /**
+   * Non-ASCII is the likelier way to meet this than a space: a `données/`
+   * folder is an ordinary thing on a lab bucket, and `URL` escapes it to
+   * `donn%C3%A9es/` without anyone typing an escape.
+   */
+  it('decodes a non-ASCII prefix', () => {
+    expect(addressOf('https://rsglab-data.s3.eu-west-3.amazonaws.com/donn%C3%A9es/')?.prefix).toBe(
+      'données/',
+    )
+  })
+
+  /** Path-style splits the bucket off first, so the decode reaches only the key. */
+  it('decodes the key half of a path-style URL and leaves the bucket alone', () => {
+    expect(addressOf('https://minio.lab.internal/rsglab-data/Hi-C%20runs/')).toEqual({
+      endpoint: 'https://minio.lab.internal',
+      bucket: 'rsglab-data',
+      prefix: 'Hi-C runs/',
+    })
+  })
+
+  /**
+   * A `+` in a key is a `+`, and decoding must not read it as a space.
+   *
+   * `+` means space in a *query string*, never in a path, and a key such as
+   * `runs+extra/` is left alone by `URL` precisely because of that. Unescaping
+   * with anything query-flavoured would rename the folder to `runs extra/` and
+   * list nothing — the same empty panel, arrived at from the opposite mistake.
+   */
+  it('leaves a plus in a key as a plus, not a space', () => {
+    expect(addressOf('https://rsglab-data.s3.eu-west-3.amazonaws.com/runs+extra/')?.prefix).toBe(
+      'runs+extra/',
+    )
+  })
+
+  /**
+   * A literal `%` is legal in a key and survives `URL` unescaped, so decoding
+   * it throws. Losing the whole address to that would take out browsing for a
+   * bucket that lists perfectly well, so the offending segment is kept as it
+   * came and its neighbours are still decoded.
+   */
+  it('keeps a segment that is not valid escaping, rather than losing the address', () => {
+    expect(addressOf('https://minio.lab.internal/rsglab-data/Hi-C%20runs/100%_reads/')).toEqual({
+      endpoint: 'https://minio.lab.internal',
+      bucket: 'rsglab-data',
+      prefix: 'Hi-C runs/100%_reads/',
+    })
+  })
+
+  /** Plain ASCII round-trips, which is why the demo scopes never showed this. */
+  it('leaves a prefix that needs no escaping untouched', () => {
+    expect(addressOf('https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/')?.prefix).toBe(
+      'collections/',
+    )
   })
 })
 
@@ -457,6 +596,30 @@ describe('listing a prefix', () => {
     expect(query.get('list-type')).toBe('2')
     expect(query.get('delimiter')).toBe('/')
     expect(query.get('prefix')).toBe('collections/hum53/')
+  })
+
+  /**
+   * The whole road from a typed URL to the wire, for a prefix that needs
+   * escaping.
+   *
+   * `bucketFolder` starts a browse at `addressOf(base).prefix`, so this is the
+   * first request a reader makes after adding such a bucket. Asserting the
+   * *decoded* query parameter is the point: `Hi-C%20runs/` on the wire would
+   * read back as `Hi-C%20runs/` here, and only `Hi-C runs/` means S3 was asked
+   * for the folder that exists.
+   */
+  it('sends the root prefix of an escaped base as the key S3 stores', async () => {
+    const base = normaliseBase('https://rsglab-data.s3.eu-west-3.amazonaws.com/Hi-C runs')
+    expect(base).toBe('https://rsglab-data.s3.eu-west-3.amazonaws.com/Hi-C%20runs/')
+    const escaped = scope({ base: base as string })
+    let seen = ''
+    await listPrefix(escaped, addressOf(escaped.base)?.prefix ?? '', {
+      fetchImpl: (async (url: string) => {
+        seen = url
+        return new Response(XML, { status: 200 })
+      }) as never,
+    })
+    expect(new URL(seen).searchParams.get('prefix')).toBe('Hi-C runs/')
   })
 
   /**

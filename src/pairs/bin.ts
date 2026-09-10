@@ -62,14 +62,27 @@
  * 2.79 M of 8 M records land in the wrong pixel and every total still balances.
  *
  * What *is* true is the weaker claim, and it is enough: **`bin1` is
- * non-decreasing**, because `pos1` ascends within a chromosome pair and the
- * pairs are grouped. So a row can be emitted the moment `bin1` advances, and
- * the accumulator is one row wide rather than one file wide.
+ * non-decreasing within one `(chrom1, chrom2)` block**, because `pos1` ascends
+ * inside a block and the blocks are contiguous. So a row can be emitted the
+ * moment `bin1` advances, and the accumulator stays one row wide rather than
+ * one file wide. That — and not any global order — is the property that buys
+ * the speed, and it holds on every file that is sorted at all.
  *
- * And it is checked rather than believed. A file that is not sorted — or is
- * sorted by some other key, or was concatenated from two that each were — sets
- * `needsMerge`, and {@link mergeDuplicates} repairs the result with a counting
- * sort at the end. The fast path stays fast; the wrong answer is not available.
+ * Across blocks the same claim is **false**, and an earlier version of this
+ * comment asserted it anyway. The key is `chr1-chr2-pos1-pos2`, so `chrom2`
+ * turns over faster than `chrom1`: for a fixed `chrom1` the entire `pos1` run
+ * restarts at every new `chrom2`, and `bin1` steps back to the start of that
+ * chromosome at each block boundary. A global reorder is therefore the *norm*
+ * for any file naming more than one sequence, not the exception — and the
+ * check below, written to the old comment, read a correctly sorted
+ * two-chromosome file as corrupt because of it.
+ *
+ * So {@link mergeDuplicates} runs at the end whenever `bin1` fell back at all,
+ * and it is not optional: the CSR row pointer in `pairs/store.ts` scans
+ * forward once and would silently index a table whose rows were interleaved.
+ * The wrong answer is not available. What *is* reported — see
+ * {@link BinnedPixels.wasUnsorted} — is the narrower and much rarer thing:
+ * disorder the declared sort does not account for.
  *
  * ## Positions are 1-based
  *
@@ -137,7 +150,26 @@ export interface BinnedPixels {
   skippedBadPosition: number
   /** Records whose position ran past the declared contig length. */
   clampedPosition: number
-  /** `true` when the file was not `bin1`-ordered and a merge pass was needed. */
+  /**
+   * `true` when the *file* was out of its own declared order.
+   *
+   * Deliberately not the same question as "did the table have to be
+   * reordered", which this used to conflate it with. A
+   * `#sorted: chr1-chr2-pos1-pos2` file restarts `pos1` at every new `chrom2`,
+   * so `bin1` falls back at every block boundary and the reorder runs on
+   * essentially every multi-chromosome import; a flag raised there is raised
+   * on every real file and carries no information at all.
+   *
+   * This one is raised only for disorder the declared sort cannot explain:
+   * `bin1` going backwards *inside* one `(chrom1, chrom2)` block, or a block
+   * reappearing after it was closed — which is what a concatenation of two
+   * separately sorted files looks like.
+   *
+   * It matters that it is right rather than merely conservative, because it
+   * does not stay in the importer: it reaches the info panel and the written
+   * `.mcool`'s `metadata`, where it is a durable claim about somebody else's
+   * file that will outlive the window that made it.
+   */
   wasUnsorted: boolean
   /**
    * The file ended without being finished: a partial final member, or no BGZF
@@ -257,6 +289,14 @@ export async function binPairs(
   const chromOffset = chromOffsetsFor(contigs, binSize)
   const nBins = binCountFor(contigs, binSize)
   const index = new ContigIndex(contigs)
+  const contigCount = contigs.length
+  // The highest column index the four coordinate fields live at, so the record
+  // scan can stop there rather than walking the trailing columns — `pair_type`,
+  // the two mapqs, and the `sam1`/`sam2` fields, which are hundreds of bytes a
+  // record on a pairtools file and are read by nothing here. `Math.max` because
+  // `#columns:` fixes no order: `chrom1 chrom2 pos1 pos2 readID` stops at 3 and
+  // the pairtools default at 4.
+  const want = Math.max(columns.chrom1, columns.chrom2, columns.pos1, columns.pos2)
 
   // Bin count per contig, so a position past the declared length is clamped
   // into the contig it belongs to rather than into its neighbour.
@@ -279,7 +319,21 @@ export async function binPairs(
   let skippedUnknownContig = 0
   let skippedBadPosition = 0
   let clampedPosition = 0
+  // Two questions, and one boolean used to answer both. `needsReorder` is the
+  // mechanical one — did `bin1` ever fall back, so must {@link mergeDuplicates}
+  // run — and it is true of almost every file with more than one sequence,
+  // because `pos1` restarts at each new `chrom2`. `wasUnsorted` is the one
+  // worth reporting: disorder the declared sort does not account for. See
+  // {@link BinnedPixels.wasUnsorted}.
+  let needsReorder = false
   let wasUnsorted = false
+  // The `(chrom1, chrom2)` block being read, normalised to the upper triangle
+  // exactly as `b1`/`b2` are below so the two agree, and the blocks already
+  // left behind. Tracking stops the moment `wasUnsorted` is set: the answer
+  // cannot change back, and the set would otherwise grow with every transition
+  // of a thoroughly shuffled file.
+  let curPair = -1
+  const closedPairs = new Set<number>()
   let truncated = false
   let framingSeen = false
   // One byte per declared sequence, set when a record lands on that sequence's
@@ -326,8 +380,11 @@ export async function binPairs(
   const onLine = (line: Uint8Array): void => {
     if (line.length === 0 || line[0] === HASH) return
 
-    // One left-to-right scan for the four fields. `want` is the highest column
-    // index needed, so a file with twenty columns stops after the fourth.
+    // One left-to-right scan for the four fields, stopped at `want` — the
+    // highest column index needed — so a file with twenty columns stops after
+    // the fourth. A record with fewer fields than `want` never reaches the
+    // bound, runs to end of line as before, and falls out below with its
+    // coordinates still `-1`.
     let field = 0
     let start = 0
     let c1 = -1
@@ -342,6 +399,7 @@ export async function binPairs(
       else if (field === columns.pos1) p1 = readInt(line, start, i)
       else if (field === columns.pos2) p2 = readInt(line, start, i)
       field++
+      if (field > want) break
       start = i + 1
     }
 
@@ -374,11 +432,42 @@ export async function binPairs(
 
     if (c1 === c2) cisContig[c1] = 1
 
+    // A new block is the one place the declared sort permits `bin1` to fall
+    // back. A block that has been here before is not: the file left it and
+    // came back, which is what a concatenation of two sorted halves looks
+    // like, and no single `chr1-chr2-pos1-pos2` sort produces it.
+    //
+    // The *order* the blocks come in is deliberately not checked. A sorter
+    // ranks chromosomes however its chromsizes file did, which need not be the
+    // order this header lists them in — `chr10` before `chr2` is a perfectly
+    // sorted file — so block order carries no signal and testing it would put
+    // back exactly the kind of false accusation this replaced.
+    let pairChanged = false
+    if (!wasUnsorted) {
+      const pair = c1 <= c2 ? c1 * contigCount + c2 : c2 * contigCount + c1
+      if (pair !== curPair) {
+        pairChanged = true
+        if (curPair >= 0) closedPairs.add(curPair)
+        if (closedPairs.has(pair)) {
+          wasUnsorted = true
+          closedPairs.clear()
+        }
+        curPair = pair
+      }
+    }
+
     if (b1 !== curRow) {
       // The one thing the sort is trusted for, and the one thing that is
-      // checked. A row that has already been emitted arriving again means the
-      // file is not `bin1`-ordered, and the merge pass repairs it.
-      if (b1 < curRow) wasUnsorted = true
+      // checked. `bin1` arriving below the open row means the rows are being
+      // emitted out of order and the merge pass has to repair them, whatever
+      // the cause — that is `needsReorder`, and on a multi-chromosome file it
+      // fires at every block boundary and means nothing is wrong. Falling back
+      // *within* a block has no such innocent reading: there the file is not
+      // in the order it declares.
+      if (b1 < curRow) {
+        needsReorder = true
+        if (!pairChanged) wasUnsorted = true
+      }
       flushRow()
       curRow = b1
     }
@@ -461,7 +550,7 @@ export async function binPairs(
       .filter((_, index) => cisContig[index] === 0)
       .map((contig) => contig.name),
   }
-  return wasUnsorted ? mergeDuplicates(result) : result
+  return needsReorder ? mergeDuplicates(result) : result
 }
 
 /** Double a typed array, preserving contents. */
@@ -484,12 +573,19 @@ function readInt(bytes: Uint8Array, from: number, to: number): number {
 }
 
 /**
- * Repair a pixel table built from a file that was not `bin1`-ordered.
+ * Put a pixel table whose `bin1` fell back into cooler's own order.
  *
  * A counting sort on `bin1` — which is exact, linear, and needs one pass to
- * count and one to place — then an insertion of each row's columns and a merge
- * of equal `(bin1, bin2)` pairs. Rows are short, so the per-row sort is on
- * tens of entries rather than on the whole table.
+ * count and one to place — then each row's columns put in order and equal
+ * `(bin1, bin2)` pairs merged. Rows are short, so the per-row work is on tens
+ * of entries rather than on the whole table.
+ *
+ * The name undersells what this mostly does. On a correctly sorted
+ * multi-chromosome file it merges *nothing* — distinct `chrom2` blocks occupy
+ * disjoint `bin2` ranges, so no cell is ever emitted twice — and every one of
+ * its passes is spent reordering the blocks `chr1-chr2-pos1-pos2` interleaved.
+ * That is the common case, not the broken one, which is why the row sort is
+ * skipped when the row does not need it.
  *
  * Exported for the test that feeds it a deliberately shuffled file: the
  * property that has to hold is that the merged table is identical to the one a
@@ -518,10 +614,28 @@ export function mergeDuplicates(pixels: BinnedPixels): BinnedPixels {
     const lo = starts[row]
     const hi = starts[row + 1]
     if (hi <= lo) continue
-    const order = Array.from({ length: hi - lo }, (_, i) => lo + i)
-    order.sort((a, b) => colOf[a] - colOf[b])
+    // Whether this row actually needs sorting, asked rather than assumed. The
+    // gather above is stable, so a row's columns arrive in file order — and
+    // that is already ascending on a well-formed file, because `flushRow`
+    // emitted each block's `touched` list sorted and successive blocks for one
+    // `bin1` fall in disjoint, ascending `bin2` ranges. Since the reorder now
+    // runs on nearly every multi-chromosome import rather than on the rare
+    // broken file, the sort it used to pay unconditionally is nearly always
+    // pure cost: one boxed `Array` and one comparator sort *per row*, which is
+    // one JS array per row of a 3 M-row human grid. The check is a linear scan
+    // of the row and allocates nothing.
+    let ordered = true
+    for (let at = lo + 1; at < hi; at++) {
+      if (colOf[at] < colOf[at - 1]) {
+        ordered = false
+        break
+      }
+    }
+    const order = ordered ? null : Array.from({ length: hi - lo }, (_, i) => lo + i)
+    order?.sort((a, b) => colOf[a] - colOf[b])
     let lastCol = -1
-    for (const at of order) {
+    for (let k = 0; k < hi - lo; k++) {
+      const at = order === null ? lo + k : order[k]
       const col = colOf[at]
       if (col === lastCol) {
         count[out - 1] += cntOf[at]

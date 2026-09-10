@@ -5418,6 +5418,25 @@ export class HeatmapView {
 
   /** Remove every listener {@link attach} installed. Idempotent. */
   detach(): void {
+    // End the freeze first, because a view torn down mid-freeze cannot escape
+    // one on its own: {@link stopSpin} is reachable only from
+    // `setFrozen(false)`, and no teardown path unfreezes — the ladder that
+    // froze this view is *destroyed* rather than aborted, so the `onBusy(false)`
+    // that would have released it never runs (`ui/refine.ts`). The spinner's
+    // `tick` then re-armed `requestAnimationFrame` and called `draw()` on a
+    // canvas no longer in the document, for the life of the tab, holding this
+    // view's matrix, raster and offscreen canvas with it.
+    //
+    // Cleared field by field rather than through `setFrozen(false)`, which
+    // would call `changed()` and schedule the very frame the lines below are
+    // cancelling. The flag has to go too, not just the timer: left `true`, any
+    // later `draw()` on this instance would take the frozen branch again.
+    this.frozen = false
+    this.frozenAt = 0
+    this.onCancelFreeze = null
+    this.canvas.classList.remove('is-frozen')
+    this.stopSpin()
+
     for (const fn of this.detachFns) fn()
     this.detachFns = []
     if (this.selfFrame !== 0) {

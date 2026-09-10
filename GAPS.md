@@ -12,7 +12,7 @@
 > **Since, G7 is built**: `?embed=1`, `?config=<url>` and a four-message
 > `postMessage` channel, specified at SPECS §21 and demonstrated in the README.
 > The share link it was once traded against turned out to be half of it — an
-> embed's payload seed is `#s=`, unchanged — and the other half found a defect
+> embed's payload seed is `#session=`, unchanged — and the other half found a defect
 > that was already there, which is that a frame writing `pushState` spends the
 > host page's Back button.
 >
@@ -265,7 +265,7 @@ none of them.
   a feature it added: a frame's `pushState` writes into the joint session history, so an embedded
   figure was going to take over the reader's Back button on any page that used one.
 - `?config=<url>` opens a published `.metacooler.json` named in the address — the pointer form of
-  what `#s=` carries as a payload, through the fetch, the signing and the resolving that
+  what `#session=` carries as a payload, through the fetch, the signing and the resolving that
   `Session.openConfigUrl` already did for the picker's URL box.
 - Four messages over `postMessage`: `ready`, `state`, `where`, `navigate`. Only the framing window
   is answered, only after it has spoken, only at the origin it spoke from — and a `navigate` patch is

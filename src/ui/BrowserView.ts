@@ -72,6 +72,7 @@ import type { SequenceSelection } from '../genome/selection'
 import {
   RULER_FONT,
   TICK_FONT,
+  drawAnchor,
   drawArcs,
   drawBoundaries,
   drawGuide,
@@ -80,6 +81,12 @@ import {
   rulerHeightFor,
   type RulerBand,
 } from '../render/browser'
+import {
+  orderedSpan,
+  type ManualPoint,
+  type ManualSpan,
+  type ManualStore,
+} from '../annotations/manual'
 import {
   getTextScale,
   scaleFont,
@@ -171,12 +178,12 @@ import {
   largestDpiThatFits,
   scaleForDpi,
 } from './export'
-import { locusText } from './mapPick'
+import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { searchKey } from './SearchBox'
 import { revealTrack } from './revealTrack'
-import { type IconName, cardTitle, iconButton } from './icons'
+import { cardTitle, iconButton } from './icons'
 import {
   CROSSHAIR_COLOR,
   SELECTION_CHIP,
@@ -186,8 +193,10 @@ import {
 import { transparencyField } from './AnnotationCard'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
+  PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
   PLOT_OPTION_LABELS,
+  TRACK_OPTIONS,
   getPlotOptions,
   setPlotOption,
   subscribePlotOptions,
@@ -238,6 +247,15 @@ const BASE_FONT = '600 11px system-ui, sans-serif'
 const DOUBLE_CLICK_MS = 250
 /** Smallest window the browser will zoom to: forty bases fill a wide screen. */
 const MIN_SPAN = 40
+/**
+ * How much ink a hand-drawn rectangle's wash is worth.
+ *
+ * A tenth, because the thing it is drawn over is the reason the reader put it
+ * there: a band that made the tracks under it harder to read would be a mark
+ * that hid its own subject. Enough to be seen against both themes' plot
+ * backgrounds and not enough to change the colour of a track through it.
+ */
+const MARK_WASH = 0.1
 
 export interface BrowserViewProps {
   assembly: Assembly
@@ -271,6 +289,16 @@ export interface BrowserViewProps {
    * (`annotations/groups.ts`).
    */
   groups: GroupSettings
+  /**
+   * The reader's own marks (§8.1), drawn over the tracks.
+   *
+   * The session's store and not a copy, exactly as `groups` is: a mark placed
+   * here is the same mark the map draws, which is the whole reason it is stated
+   * in (contig, base pair) rather than in pixels. Optional because a file that
+   * cannot carry marks (§8.5) has no store at all, and because a view that is
+   * handed none simply draws none.
+   */
+  manual?: ManualStore
 }
 
 /** One lane, resolved for a frame: where it goes and what goes in it. */
@@ -311,6 +339,32 @@ interface Lane {
      */
     placed: PileLayout[]
   }>
+}
+
+/**
+ * One hand-drawn mark (§8.1), resolved onto this view's single axis.
+ *
+ * The plan the paint draws from, and the plan a test reads: jsdom refuses a 2D
+ * context, so what a figure would put on the canvas has to be askable of the
+ * figure itself rather than scraped off it — the same bargain `SequenceBar`
+ * makes with its `hairlineAt`. Resolved to **axis units** and not to pixels,
+ * because that is where the decisions are: which contig a mark is on, whether it
+ * is on the axis at all, and whether it is in the window. The one step left,
+ * unit → pixel, is `Scale`'s and is the same call every track on screen makes.
+ */
+export interface BrowserMark {
+  /** The mark this came from, so two marks at one coordinate stay two. */
+  id: string
+  /**
+   * What to draw: a rule at a coordinate, a wash over a stretch, or a triangle
+   * pointing at one end of a mark whose other end is elsewhere.
+   */
+  kind: 'line' | 'band' | 'anchor'
+  colour: string
+  /** Where it starts on the axis; the coordinate itself for a line or anchor. */
+  from: number
+  /** Where it stops; the same number as {@link from} for a line or an anchor. */
+  to: number
 }
 
 export class BrowserView {
@@ -439,6 +493,11 @@ export class BrowserView {
     | { mode: 'scale'; lane: Lane; members: AnnotationEntry[]; from: number }
     | { mode: 'press'; x0: number; y0: number; lane: Lane | null; onBorder: boolean }
     | null = null
+  /** A picking mode in progress; see {@link armPicking}. */
+  private picking: (PickHandlers & {
+    /** Called once when the mode ends, however it ends. */
+    end(): void
+  }) | null = null
   /**
    * The lane whose ceiling is being dragged, and how far it has moved.
    *
@@ -614,10 +673,17 @@ export class BrowserView {
           this.zoomNote,
           el('span', {
             class: 'hint',
+            // What the Genome card says, in one line: *rounded up*, not "at its
+            // last one". The lengths are the last feature on each sequence
+            // rounded up to three figures (`contigsOf`), so a reader told the
+            // sequence ends at its last feature would read the blank margin
+            // past it as real sequence with nothing in it — and would take the
+            // right-hand edge for a coordinate this file supports, which is the
+            // one thing an inferred length cannot be.
             text: lengthsAreExact(props.assembly)
               ? ''
               : ' · lengths inferred from the features in this file, so each sequence ends at ' +
-                'its last one rather than at its true end',
+                'its last feature rounded up rather than at its true end',
           }),
         ),
       ),
@@ -659,6 +725,13 @@ export class BrowserView {
     this.piles = new ReadCache(props.client, () => this.schedule())
     this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
+    // The cards write to the store and this view reads from it, exactly as the
+    // matrix panel does: neither holds a reference to the other, which is what
+    // lets the Manual annotations card live in the shell's sidebar while the
+    // picture it marks up is inside a view the shell replaces.
+    if (props.manual !== undefined) {
+      this.unsubscribes.push(props.manual.subscribe(() => this.schedule()))
+    }
     this.unsubscribes.push(
       subscribePlotOptions((plot) => {
         // Put the card away now rather than on the next pointer move — see the
@@ -692,6 +765,13 @@ export class BrowserView {
 
   destroy(): void {
     this.disposed = true
+    // A picking mode outlives nothing: the picture it was placing marks on is
+    // going away. Ended here rather than left to be collected, because the card
+    // that armed it is *not* going away — it lives in the shell — and it learns
+    // the mode is over from this call. The map's panel does the same, for the
+    // same reason: without it, navigating with the mode on leaves a button
+    // reading "Done" that nothing will ever answer.
+    this.cancelPicking()
     this.featureDialog?.close()
     this.featureDialog = null
     this.editor.close()
@@ -707,6 +787,106 @@ export class BrowserView {
     this.bases.destroy()
     this.piles.destroy()
     setReadout('')
+  }
+
+  // -------------------------------------------------------------------------
+  // Picking (spec §8.1)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Place hand-drawn marks by pointing at the tracks, for as long as the mode
+   * lasts.
+   *
+   * The same method the matrix panel offers and the same {@link PickHandlers}
+   * it takes, because it is the same mode reached through the same card: the
+   * Manual annotations card arms whatever is mounted through `armAll`
+   * (`ui/mapPick.ts`), and a surface that answered a different call would be a
+   * second implementation of the arming, the `Done` state and the Escape road.
+   *
+   * What is this view's own is what a gesture on **one axis** can mean. A click
+   * names a base pair and a drag names a stretch of one — there is no second
+   * coordinate here to report, and inventing one would be a lie about where the
+   * reader pointed. So both are reported as the place on the map's diagonal that
+   * they are: the click as the same locus on both axes, flagged
+   * {@link PickedPlace.oneAxis} so the line form knows to draw a crosshair; the
+   * drag as the same stretch on both axes, which *is* the on-diagonal square.
+   * Every mark a track can make is therefore an ordinary two-axis mark, drawn
+   * here as one rule or one band and on the map as the shape it always was.
+   *
+   * While armed, a gesture *places* rather than navigates — the only sensible
+   * reading of a click during "pick a place", and the reason this is a mode
+   * rather than a modifier. A drag in a `box` mode draws the marquee this view
+   * already draws for a zoom, coordinate chips and all, so what the reader lets
+   * go of is what they were looking at.
+   *
+   * @returns a function that ends the mode, for a card being torn down.
+   */
+  armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
+    this.picking?.end()
+    this.picking = { ...handlers, end: onEnd }
+    // The mode has to be visible on the surface the gesture happens on, not only
+    // on the button across the window that turned it on. The class is the map's
+    // own (`ui/styles.css`); a stylesheet that has not yet been told about this
+    // canvas costs the cursor and nothing else.
+    this.canvas.classList.add('picking')
+    return () => this.cancelPicking()
+  }
+
+  /** End a picking mode. Safe to call when none is in progress. */
+  cancelPicking(): void {
+    const picking = this.picking
+    this.picking = null
+    this.canvas.classList.remove('picking')
+    picking?.end()
+  }
+
+  /** `true` while a gesture would place a mark rather than navigate. */
+  get isPicking(): boolean {
+    return this.picking !== null
+  }
+
+  /**
+   * A click, as the place on the diagonal it names.
+   *
+   * Through {@link atUnit} and the axis, which is the one mapping this view has
+   * (§8.4): the readout, the tooltip, the selection chips and this all ask the
+   * same two functions the same question, so a mark cannot land a pixel away
+   * from the coordinate the pointer said it was over. Nothing is placed for a
+   * press before the axis begins — the handles' margin and the name column hold
+   * no coordinate at all — or for one past the end of the last sequence.
+   */
+  private pickPlace(x: number): void {
+    const handler = this.picking?.point
+    if (handler === undefined) return
+    const at = this.pointAt(x)
+    if (at === null) return
+    handler({ rows: at, cols: at, oneAxis: true })
+  }
+
+  /**
+   * A drag, as the on-diagonal square it names.
+   *
+   * **Within one sequence only**, and refused rather than clamped when it is
+   * not — the same rule, for the same reason, that {@link copyBand} applies to
+   * the drag that copies a locus: the axis is a concatenation, so a drag can
+   * begin in one chromosome and end in another, and the near end of one of them
+   * is not what the reader drew.
+   */
+  private pickSpan(from: number, to: number): void {
+    const handler = this.picking?.box
+    if (handler === undefined) return
+    const start = this.axis.unitToLocus(from)
+    const end = this.axis.unitToLocus(to)
+    if (start === null || end === null || start.contig !== end.contig) return
+    const span: ManualSpan = orderedSpan(start.contig, start.bp, end.bp)
+    handler({ rows: span, cols: span })
+  }
+
+  /** A canvas x as a genomic point, or `null` where there is no coordinate. */
+  private pointAt(x: number): ManualPoint | null {
+    if (x < this.gutter) return null
+    const locus = this.axis.unitToLocus(this.atUnit(x))
+    return locus === null ? null : { contig: locus.contig, bp: Math.round(locus.bp) }
   }
 
   /**
@@ -1402,6 +1582,12 @@ export class BrowserView {
       },
     )
 
+    // The reader's own marks, over the tracks and under everything that follows
+    // the pointer. To the foot of the picture: on screen that is the bottom of
+    // the column, in a saved figure the last track — `height` is whichever the
+    // caller is drawing, which is what makes a mark end where the figure does.
+    this.paintManual(ctx, height)
+
     // Under the shared preference, like everything else drawn over the data: a
     // reader who turned the crosshair off beside a map meant it off.
     //
@@ -1531,6 +1717,113 @@ export class BrowserView {
       colour: CROSSHAIR_COLOR,
       halo: palette.labelHaloColor,
     })
+  }
+
+  /**
+   * The reader's own marks, as this view would draw them (§8.1).
+   *
+   * A **two-axis mark seen along one axis**, which is the whole of what this
+   * method decides. Beside a map a line is a column or a row, an arrowhead is a
+   * cell and a rectangle is rows by columns; here there is one axis, so each of
+   * them is one or two places on it:
+   *
+   * - a **line** is one rule, whatever its `axis` says. Vertical, horizontal and
+   *   both are three answers to a question this picture does not ask — there is
+   *   no second axis for them to differ on — so all three draw at the same
+   *   coordinate. `AnnotationLanes` already draws the lines beside a map this
+   *   way, per edge; this is the same rule with only one edge.
+   * - a **rectangle** is its extent, washed over the tracks. Both extents where
+   *   they differ: an off-diagonal box is genuinely *two* stretches of this axis
+   *   — a locus against an arm, two loci a megabase apart — and drawing one of
+   *   them would be a picture that says the mark is somewhere it is not.
+   * - an **arrowhead** is a triangle at each of its two ends, deduplicated when
+   *   they are the same place, exactly as the lanes beside a map do it.
+   *
+   * A mark on a sequence this axis has never heard of — a mark made against
+   * another file, or on a sequence the reader has unticked — resolves to `null`
+   * and is simply not drawn. A mark outside the window is dropped for the same
+   * reason and by the same test, which is what keeps a whole genome's worth of
+   * marks from costing anything at 20 kb of zoom.
+   */
+  get manualMarks(): readonly BrowserMark[] {
+    const store = this.props.manual
+    if (store === undefined) return []
+    const [low, high] = this.scale.domain
+    const out: BrowserMark[] = []
+    // Washes first, so the rules and the triangles that name the same coordinate
+    // are drawn over their own shading rather than under it.
+    for (const rect of store.rects) {
+      for (const span of sameSpan(rect.a, rect.b) ? [rect.a] : [rect.a, rect.b]) {
+        const from = this.axis.locusToUnit(span.contig, span.from)
+        const to = this.axis.locusToUnit(span.contig, span.to)
+        if (from === null || to === null || to < low || from > high) continue
+        // Clipped to the window rather than dropped at its edge: a domain wider
+        // than the screen is the ordinary case, and a box drawn only when both
+        // of its ends are in view would vanish exactly when it is zoomed into.
+        out.push({
+          id: rect.id,
+          kind: 'band',
+          colour: rect.colour,
+          from: Math.max(from, low),
+          to: Math.min(to, high),
+        })
+      }
+    }
+    for (const line of store.lines) {
+      const at = this.axis.locusToUnit(line.at.contig, line.at.bp)
+      if (at === null || at < low || at > high) continue
+      out.push({ id: line.id, kind: 'line', colour: line.colour, from: at, to: at })
+    }
+    for (const mark of store.arrowheads) {
+      const drawn = new Set<number>()
+      for (const end of [mark.a, mark.b]) {
+        const at = this.axis.locusToUnit(end.contig, end.bp)
+        if (at === null || at < low || at > high || drawn.has(at)) continue
+        drawn.add(at)
+        out.push({ id: mark.id, kind: 'anchor', colour: mark.colour, from: at, to: at })
+      }
+    }
+    return out
+  }
+
+  /**
+   * Put those marks on the canvas.
+   *
+   * Between the tracks and the crosshair, which is where a mark belongs: over
+   * the data, because it is pointing at it, and under the pointer's own line and
+   * the tooltip, because those answer *where is my hand* and a reader must never
+   * have to work out which of two marks is the one following them.
+   *
+   * Down to the foot of the picture rather than the foot of the canvas. On
+   * screen the canvas runs to the bottom of the column so that a reader can
+   * point below the stack ({@link screenHeight}); in a saved figure it stops at
+   * the last track. `bottom` is whichever of those the caller is drawing.
+   */
+  private paintManual(ctx: CanvasRenderingContext2D, bottom: number): void {
+    const top = this.rulerHeight
+    for (const mark of this.manualMarks) {
+      const from = this.gutter + this.scale.toPixel(mark.from)
+      if (mark.kind === 'line') {
+        drawGuide(ctx, from, top, bottom, mark.colour, this.dpr)
+        continue
+      }
+      if (mark.kind === 'anchor') {
+        drawAnchor(ctx, from, top, mark.colour)
+        continue
+      }
+      const to = this.gutter + this.scale.toPixel(mark.to)
+      ctx.save()
+      // A wash rather than an outline, and the one place this view parts company
+      // with the map's rectangles. There a box is drawn open because the reader
+      // is judging what is *inside* it and a fill would hide the answer; here
+      // what is inside it is a stretch of every track at once, so an outline
+      // would be two hairlines a screen apart with nothing tying them together —
+      // and the tracks stay readable through a tenth of an ink.
+      ctx.globalAlpha = MARK_WASH
+      ctx.fillStyle = mark.colour
+      ctx.fillRect(from, top, Math.max(1, to - from), Math.max(0, bottom - top))
+      ctx.restore()
+    }
   }
 
   /**
@@ -2077,11 +2370,16 @@ export class BrowserView {
    * lights this one up: the button never holds the state itself. Both live here
    * rather than beside the map because both are about the tracks, and the tracks
    * are the whole picture in this view.
+   *
+   * The mark comes from `PLOT_OPTION_ICONS` rather than from the caller, so a
+   * preference is the same glyph in both Tracks cards — a toggle drawn one way
+   * beside a map and another beside a browser is two controls as far as a reader
+   * is concerned, and the list it is offered from is what decides which exist.
    */
-  private optionToggle(key: PlotOptionKey, name: IconName): HTMLButtonElement {
+  private optionToggle(key: PlotOptionKey): HTMLButtonElement {
     const { label, hint } = PLOT_OPTION_LABELS[key]
     const node = iconButton(
-      name,
+      PLOT_OPTION_ICONS[key],
       withKey(`${label} — ${hint}`, PLOT_OPTION_KEYS[key]),
       () => setPlotOption(key, !getPlotOptions()[key]),
       { class: 'btn btn-icon btn-toggle', size: 15 },
@@ -2217,15 +2515,22 @@ export class BrowserView {
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'overlays' }),
+          // The shared list, in the shared order, exactly as the map's own
+          // Tracks card offers it — and then the one preference that is this
+          // view's alone. Spelled out by hand, this row was one toggle short of
+          // that list: `tooltip` was missing, so the card that follows the
+          // pointer could be turned off beside a map and only with the `p` key
+          // here, which is a control that exists in one of the two places the
+          // same preference is honoured. Driven from `TRACK_OPTIONS`, an option
+          // added to the set arrives in both cards or in neither.
           el(
             'div',
             { class: 'plot-icon-row' },
-            this.optionToggle('text', 'type'),
-            this.optionToggle('fills', 'chart-area'),
-            this.optionToggle('outline', 'chart-spline'),
-            this.optionToggle('baseline', 'align-end-horizontal'),
-            this.optionToggle('gutter', 'align-right'),
-            this.optionToggle('crosshair', 'crosshair'),
+            ...TRACK_OPTIONS.map((key) => this.optionToggle(key)),
+            // Last, and not in that list, because it is about this picture and
+            // no other: a heatmap's tracks have the map's own gutters to be
+            // named in, and there is no name column beside one to switch on.
+            this.optionToggle('gutter'),
           ),
         ),
         // The two legibility numbers on one line, under the overlays rather than
@@ -2434,6 +2739,23 @@ export class BrowserView {
       // dragged naming a position two hundred pixels away — and contradicting
       // the coordinates written at the selection's own edges.
       this.tooltip.classList.add('hidden')
+      // A picking mode owns the gesture outright, wherever on the canvas it
+      // began: the reader armed it from the sidebar and every press until they
+      // disarm it is one of the marks they armed it to place. Which gesture it
+      // is comes from the form, exactly as it does on the map — a form waiting
+      // for an extent takes the marquee this view already draws for a zoom, and
+      // one waiting for a place takes a press that becomes a point on release.
+      //
+      // The three editors above are still checked first. A limit, a handle and a
+      // name are controls that happen to be painted, and a mode over the data
+      // must not swallow the caret in a text box.
+      if (this.picking !== null) {
+        this.drag =
+          this.picking.box !== undefined
+            ? { mode: 'select', x0: x, x }
+            : { mode: 'press', x0: x, y0: y, lane: null, onBorder: false }
+        return
+      }
       // A press on the *ruler* is a range selection, with no modifier. The
       // coordinate strip is where a reader points to say "this much", and
       // asking them to hold a key to say it there — while a drag on the tracks
@@ -2599,6 +2921,15 @@ export class BrowserView {
       if (drag === null) return
       const { x, y } = at(event)
       if (drag.mode === 'press') {
+        // A press that did not travel, while a mode is on, is the mark it was
+        // armed to place — reported now rather than through {@link clickAt},
+        // which waits a quarter of a second for a second click that here would
+        // only mean a second mark. The mode stays on afterwards: marking up a
+        // figure is several marks, and it ends when the card or Escape says so.
+        if (this.picking !== null) {
+          this.pickPlace(x)
+          return
+        }
         this.clickAt(x, y)
         return
       }
@@ -2614,6 +2945,16 @@ export class BrowserView {
       if (drag.mode === 'select') {
         const from = this.atUnit(Math.min(drag.x0, x))
         const to = this.atUnit(Math.max(drag.x0, x))
+        // A marquee drawn while a form is waiting for an extent is that extent,
+        // and never a zoom: taking the picture out from under a reader who was
+        // drawing a box on it is the one thing this mode must not do. A drag
+        // that did not travel places nothing — it is a drag the reader gave up
+        // on — and, like the map's, it does not fall back to navigating either.
+        if (this.picking?.box !== undefined) {
+          if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) this.pickSpan(from, to)
+          this.schedule()
+          return
+        }
         if (to - from > 1 && Math.abs(x - drag.x0) > DRAG_SLACK) {
           this.copyBand(from, to)
           this.scale.setDomain([from, to])
@@ -2762,8 +3103,21 @@ export class BrowserView {
      * whatever the reader last clicked on.
      */
     const onAbort = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      // The way out of the *mode*, before the way out of the gesture inside it.
+      // On the window rather than the canvas, and for the reason the whole
+      // listener is: the mode is armed from a button in a side panel, so the
+      // focus at the moment the reader changes their mind is very often not on
+      // the plot — and a way out that only works if you first click the thing
+      // you were trying not to click is not a way out. The press is not stopped
+      // here: Escape closes menus and cancels drags elsewhere in this app, and
+      // one press putting away everything it can is what a reader expects.
+      if (this.picking !== null) {
+        event.preventDefault()
+        this.cancelPicking()
+      }
       const drag = this.drag
-      if (event.key !== 'Escape' || drag === null) return
+      if (drag === null) return
       event.preventDefault()
       event.stopPropagation()
       if (drag.mode === 'pan') {
@@ -3375,6 +3729,18 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   return tracks.length === 0 ? null : tracks
 }
 
+/**
+ * Whether a rectangle's two sides are the same stretch — the on-diagonal box.
+ *
+ * By value and not by identity: a mark that has been round-tripped through
+ * session storage is two equal objects rather than one shared one, and a
+ * diagonal box that came back from a previous visit would otherwise be washed
+ * over the tracks twice.
+ */
+function sameSpan(one: ManualSpan, two: ManualSpan): boolean {
+  return one.contig === two.contig && one.from === two.from && one.to === two.to
+}
+
 
 /**
  * The strip this view keeps at its left for the lane handles.
@@ -3388,8 +3754,12 @@ function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
  * of each track's label, which moved every name along and could only show the
  * handle on hover — because a permanent one would have been sitting on the
  * signal.
+ *
+ * Exported because it is where the axis *begins*, and a test that puts a click
+ * on this canvas has to know that: a gesture aimed at the left edge lands in the
+ * margin, where there is no coordinate at all and nothing is meant to happen.
  */
-const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
+export const GRIP_MARGIN = GROUP_BAR + 2 + GRIP_ROOM
 
 /**
  * How strongly a handle nobody is pointing at is drawn.

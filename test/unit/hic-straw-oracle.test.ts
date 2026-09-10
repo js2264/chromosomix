@@ -190,6 +190,71 @@ describe.each(CASES)('$name', (spec) => {
   })
 })
 
+/**
+ * The footer's expected-value sections, crossed by both readers.
+ *
+ * Every fixture above leaves those sections empty, which is legal and which
+ * means neither reader has to walk one. Straw does walk them — that is what
+ * `skipExpectedValues` is for — and it is the only path it has to the
+ * normalisation index when the file carries no pointer to one: always in v7 and
+ * v8, and in v9 whenever the pointer is absent. So a fixture that populates the
+ * sections is the one place the two implementations can be compared on the
+ * width arithmetic itself, and the widths are what changed at v9.
+ *
+ * The v9 case deliberately zeroes the pointer. With it present straw reads the
+ * index directly and never walks, so a v9 fixture that carried it would agree
+ * with this reader no matter what the reader did with the scale factors —
+ * which is exactly how a v9 walk at v8's width survived a suite that already
+ * had an oracle.
+ */
+describe.each([
+  { name: 'v8, walked because the format has no pointer', version: 8 as const, withoutNormIndexPointer: false },
+  { name: 'v9, walked because the pointer is absent', version: 9 as const, withoutNormIndexPointer: true },
+])('$name', (spec) => {
+  it('lands both readers on the same normalisation index', async () => {
+    const divisors = new Float64Array(200).fill(2)
+    divisors[7] = 5
+    const written = await writeHic({
+      version: spec.version,
+      chroms: CHROMS,
+      // Three resolutions, so each section holds three vectors and a per-vector
+      // drift accumulates rather than cancelling.
+      resolutions: [BIN, 500, 2000],
+      records: { '1_1': scatter(200, 200, 9, 5, true) },
+      blockBinCount: 32,
+      expectedValues: true,
+      norms: { [`KR/1/${BIN}`]: divisors },
+      // Juicer's layout, and here a precondition rather than a detail: straw's
+      // walk re-reads the same range when fewer than a hundred bytes follow the
+      // index, so a fixture that ends just past it never terminates.
+      normVectorsAfterFooter: true,
+      ...(spec.withoutNormIndexPointer ? { withoutNormIndexPointer: true } : {}),
+    })
+
+    const straw = new Straw({ file: new StrawBytesFile(written.bytes) })
+    await straw.getMetaData()
+    // Straw reached the index by walking the sections. If our writer's widths
+    // were wrong rather than the reader's, this is the assertion that says so.
+    expect(await straw.getNormalizationOptions()).toContain('KR')
+
+    const file = HicFile.open(new BytesSource(written.bytes))
+    expect(file.normType).toBe('KR')
+
+    const region = { chr: 'chr1', start: 0, end: CHROMS[0].length }
+    const normed = await straw.getContactRecords('KR', region, region, 'BP', BIN)
+    const raw = await straw.getContactRecords('NONE', region, region, 'BP', BIN)
+    expect(normed.length).toBeGreaterThan(0)
+    const weights = file.weights(0, 200)
+    const rawAt = indexOf(raw.map((r) => ({ x: r.bin1, y: r.bin2, value: r.counts })))
+    for (const record of normed.slice(0, 40)) {
+      const before = rawAt.get(`${record.bin1},${record.bin2}`)
+      expect(before).toBeDefined()
+      const ourNormed = (before as number) * weights[record.bin1] * weights[record.bin2]
+      expect(ourNormed).toBeCloseTo(record.counts, 5)
+    }
+  })
+})
+
 describe('normalisation vectors', () => {
   it('are the reciprocal of what straw divides by', async () => {
     const divisors = new Float64Array(200).fill(2)

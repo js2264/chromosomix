@@ -79,6 +79,22 @@ function configOf(overrides: Partial<SessionConfig> = {}): SessionConfig {
   } as SessionConfig
 }
 
+/**
+ * One placement, in the shape the `deck:lanes` scope stores.
+ *
+ * A full `Placement` rather than the one edge that matters, because that is
+ * what `AnnotationStore` writes and a test that trims it would be pinning a
+ * shape nothing produces.
+ */
+function laneOn(track: string, uri: string) {
+  return {
+    track,
+    uri,
+    placement: { top: false, right: false, bottom: true, left: false },
+    borrowedLead: false,
+  }
+}
+
 describe('a session in a fragment', () => {
   it('comes back as the object that went in', async () => {
     const config = configOf({
@@ -167,8 +183,8 @@ describe('a session in a fragment', () => {
 
 describe('reading a link', () => {
   it('finds the payload in a fragment', () => {
-    expect(readShareHash('#s=abc')).toBe('abc')
-    expect(readShareHash('s=abc')).toBe('abc')
+    expect(readShareHash('#session=abc')).toBe('abc')
+    expect(readShareHash('session=abc')).toBe('abc')
     expect(readShareHash(`#other=1&${SHARE_KEY}=abc`)).toBe('abc')
   })
 
@@ -182,9 +198,9 @@ describe('reading a link', () => {
 
   it('builds a link onto a page address, replacing any fragment already there', () => {
     expect(shareUrl('https://js2264.github.io/metacooler.js/', 'PAY')).toBe(
-      'https://js2264.github.io/metacooler.js/#s=PAY',
+      'https://js2264.github.io/metacooler.js/#session=PAY',
     )
-    expect(shareUrl('https://x/y#uri=old', 'PAY')).toBe('https://x/y#s=PAY')
+    expect(shareUrl('https://x/y#uri=old', 'PAY')).toBe('https://x/y#session=PAY')
   })
 
   it('answers null for a link that was cut short in transit', async () => {
@@ -280,6 +296,55 @@ describe('reading a link', () => {
       'https://example.org/lead.cool': 'wild type',
       'https://example.org/a.cool': 'replicate 2',
     })
+  })
+
+  it('sends a lane on a remote companion and holds a local one’s back', async () => {
+    // `lanes` says where each track was drawn, keyed on the file the companion
+    // was showing — so a placement on a local companion carries the same bare
+    // filename `locals`, `looks` and `mapNames` are stripped for. It used to
+    // carry it all the way into the fragment, because the field is not named in
+    // `forSharing`'s object and rode through on the `...config` spread: the
+    // companion was stripped, its look was stripped, its name was stripped, and
+    // the lane spelled it out anyway.
+    const config = configOf({
+      deck: { locals: [{ index: 1, uri: 'patient_04_hic.cool' }] },
+      lanes: [
+        laneOn('a3', 'patient_04_hic.cool'),
+        laneOn('a4', 'https://example.org/a.cool'),
+      ],
+      state: { uri: 'https://bucket.example.org/Hum53.metacool', view: 'region' },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    // Against the **payload** rather than only the decoded config: the promise
+    // is that the name never leaves the machine, not that the recipient's parser
+    // happens to drop it.
+    expect(JSON.stringify(await inflated(payload))).not.toContain('patient_04_hic.cool')
+    expect(decoded(await decodeShare(payload))?.lanes).toEqual([
+      laneOn('a4', 'https://example.org/a.cool'),
+    ])
+  })
+
+  it('holds back a lane on a local companion opened deep in a collection', async () => {
+    // Why the filter asks the *address* rather than whether the name is in
+    // `deck.locals`. A look is keyed on `slot.ref.uri`, the string `locals`
+    // records; a lane is keyed on `slot.panel?.uri ?? slot.ref.uri`
+    // (`panels/PanelDeck.ts`), so one dropped `rep2.mcool` is `rep2.mcool` in
+    // `locals` and `rep2.mcool::/resolutions/1000` here — and a set-membership
+    // test on the locals would wave it straight through.
+    const config = configOf({
+      deck: { locals: [{ index: 1, uri: 'rep2.mcool' }] },
+      lanes: [laneOn('a3', 'rep2.mcool::/resolutions/1000')],
+      state: { uri: 'https://bucket.example.org/Hum53.metacool', view: 'region' },
+    } as Partial<SessionConfig>)
+
+    const payload = await encodeShare(config)
+    expect(JSON.stringify(await inflated(payload))).not.toContain('rep2.mcool')
+    // Absent rather than empty, on the rule `mapNames` follows above and
+    // `applyConfig` enforces: it writes the field only when it is present, so
+    // `[]` would be a third state — a session asserting that none of these
+    // tracks is placed anywhere, which would clear the recipient's own.
+    expect(decoded(await decodeShare(payload))?.lanes).toBeUndefined()
   })
 
   it('says nothing about names where every map is a local one', async () => {

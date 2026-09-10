@@ -306,8 +306,46 @@ export interface BucketAddress {
   /** Where the listing request goes, with no path. */
   endpoint: string
   bucket: string
-  /** The key prefix, with no leading slash and a trailing one unless empty. */
+  /**
+   * The key prefix, with no leading slash and a trailing one unless empty.
+   *
+   * A **key** prefix, not a URL path: decoded, so a scope based at
+   * `…/Hi-C%20runs/` yields `Hi-C runs/`. That is the space `listPrefix` and
+   * `FolderEntry.path` work in, and it is the one S3 compares against.
+   */
   prefix: string
+}
+
+/**
+ * Undo the percent-encoding a `URL` pathname carries, one segment at a time.
+ *
+ * A `URL`'s `pathname` is escaped — a space typed into the bucket dialog is
+ * stored by {@link normaliseBase} as `%20` — while an S3 key prefix is the
+ * literal text of the key, which the listing request encodes once for itself.
+ * Passing the escaped form through encoded it a second time, so S3 was asked
+ * for keys whose text really did begin `Hi-C%20runs/`: a 200 with an empty
+ * `ListBucketResult`, and a bucket full of files drawn as an empty folder with
+ * no error to act on. `canonicalPath` in `sigv4.ts` states the same rule for
+ * the signature, and for the same reason.
+ *
+ * Per segment, because `/` separates keys and must survive as itself. Inside a
+ * `try`, because a literal `%` is a legal thing for a key to contain and a
+ * `URL` leaves it alone, so a prefix such as `100%_reads/` would throw here:
+ * keeping that segment raw loses only the prefix that was already ambiguous,
+ * where throwing would lose the whole address and with it the ability to list
+ * anything.
+ */
+function decodeKey(value: string): string {
+  return value
+    .split('/')
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment)
+      } catch {
+        return segment
+      }
+    })
+    .join('/')
 }
 
 /**
@@ -336,14 +374,22 @@ export function addressOf(base: string): BucketAddress | null {
   } catch {
     return null
   }
+  // The split for the bucket happens on the still-encoded path, because `/` is
+  // the one character a pathname never escapes: the segment arithmetic is
+  // therefore exact, and a bucket name is DNS-safe so it has nothing to decode.
+  // Only the key half goes through `decodeKey`.
   const path = url.pathname.replace(/^\/+/, '')
   const virtualHosted = /^([^.]+)\.s3([.-]|$)/i.exec(url.host)
   if (virtualHosted !== null) {
-    return { endpoint: url.origin, bucket: virtualHosted[1], prefix: path }
+    return { endpoint: url.origin, bucket: virtualHosted[1], prefix: decodeKey(path) }
   }
   const slash = path.indexOf('/')
   if (path === '') return null
   return slash === -1
     ? { endpoint: url.origin, bucket: path, prefix: '' }
-    : { endpoint: url.origin, bucket: path.slice(0, slash), prefix: path.slice(slash + 1) }
+    : {
+        endpoint: url.origin,
+        bucket: path.slice(0, slash),
+        prefix: decodeKey(path.slice(slash + 1)),
+      }
 }

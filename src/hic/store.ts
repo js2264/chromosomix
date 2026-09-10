@@ -130,7 +130,30 @@ export class HicStore implements PixelStore {
     )
   }
 
-  /** Every stored pixel, pair by pair — the genome × genome overview's read. */
+  /**
+   * Every stored pixel, pair by pair — the genome × genome overview's read.
+   *
+   * **`options.chunkSize` is not honoured, and that is a limitation rather than
+   * a decision.** `CoolerStore.scanAll` reads a bounded window of the pixel
+   * table at a time, which is what lets `estimateBlockBytes` charge a constant
+   * `PIXEL_CHUNK_BYTES` for the read instead of a term in `nnz`. A `.hic`'s
+   * pixels are reachable only through `HicFile.pairRecords`, whose unit is a
+   * whole chromosome pair: it holds every decoded block of that pair live and
+   * then allocates one combined COO buffer over their total, so peak memory is
+   * roughly 28 B per stored record of the largest pair — hundreds of MB for
+   * chr1 at a fine rung, against the constant the estimator assumes. The block
+   * LRU does not bound it: it bounds what is *cached*, and the read holds
+   * strong references to blocks it has already been handed.
+   *
+   * Narrowing it from this side is not available. `HicFile.localSpan` unions
+   * the two axes for an intra pair, so asking for a sub-rectangle of one asks
+   * for the bounding square, and two neighbouring sub-rectangles come back
+   * holding the same blocks — a pixel handed over twice, which is the one thing
+   * the doctrine at the head of this file forbids. The fix is a block-batched
+   * read inside `HicFile` that `pairRecords` is then written on top of; until
+   * that exists the same caveat applies to {@link forEachWindow} and
+   * {@link forEachBands}, whose `chunkSize` is dropped for the same reason.
+   */
   async scanAll(options: ScanAllOptions): Promise<void> {
     const whole: Extent = [0, this.file.nBins]
     const pairs = this.file.storedPairs()

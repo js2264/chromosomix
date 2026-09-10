@@ -1,0 +1,113 @@
+{
+  "kind": "metacooler.workspace",
+  "version": 1,
+  "createdAt": "2026-09-09T00:00:00.000Z",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-09-09T00:00:00.000Z",
+      "state": {
+        "uri": "Yeast_microC_G2M_1kb.cool",
+        "maps": "Yeast_hic.hic",
+        "view": "region",
+        "region": "IV:1000000-1400000",
+        "level": "bin",
+        "balance": true,
+        "transform": "log10",
+        "colormap": "default"
+      },
+      "tracks": [
+        {
+          "id": "demo-genes",
+          "card": "linear",
+          "kind": "gtf",
+          "label": "genes",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_annotations.gtf",
+            "url": "Yeast_annotations.gtf"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#5b6169",
+            "size": 62,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          },
+          "primary": true
+        },
+        {
+          "id": "demo-atac",
+          "card": "linear",
+          "kind": "track",
+          "label": "ATAC",
+          "source": {
+            "kind": "remote",
+            "name": "Yeast_ATAC.bw",
+            "url": "Yeast_ATAC.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 72,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ],
+      "manual": [],
+      "sequences": [],
+      "groups": {},
+      "scaling": {},
+      "compareNormalise": false,
+      "tables": {},
+      "plot": {
+        "text": true,
+        "fills": true,
+        "baseline": true,
+        "outline": true,
+        "gutter": false,
+        "crosshair": true,
+        "dividers": true,
+        "breaks": true,
+        "labels": true,
+        "ticks": true
+      },
+      "name": "micro-C vs Hi-C",
+      "deck": {
+        "columns": 2
+      },
+      "mapNames": {
+        "Yeast_microC_G2M_1kb.cool": "micro-C (cool)",
+        "Yeast_hic.hic": "Hi-C (hic)"
+      }
+    }
+  ]
+}

@@ -14,6 +14,12 @@
  * per axis, and it is what lets panels of unequal resolution follow each other
  * honestly.
  *
+ * **The one exception is above bin level**, where a cell is a whole sequence
+ * and therefore has no width in base pairs to convert through — see
+ * {@link LockUnit}. There the currency is the cell index itself, which is the
+ * same statement arrived at from the other side: carry the thing the two grids
+ * genuinely share.
+ *
  * The conversion is not lossless in the coarse direction and must not pretend
  * to be. A window of 60 fine cells lands between two coarse cells; the coarse
  * panel is given the smallest cell window that **contains** the request, so it
@@ -48,10 +54,37 @@ export interface AxisWindow {
   hi: number
 }
 
-/** What every panel in a locked deck is showing, in base pairs. */
+/**
+ * What the deck's window is counted in, for one panel.
+ *
+ * `'bp'` is the module header's currency and the one almost every deck uses.
+ * `'cell'` is the exception the header did not foresee: **above bin level a
+ * cell is a whole sequence**, so it has no width in base pairs at all — the
+ * number {@link LockMember.bpPerCell} answers there is the file's bin size,
+ * which is a fact about the file and not a length of anything on screen.
+ * Multiplying by it turned a window on chromosomes 10–14 of a 1 kb roll-up into
+ * chromosomes 2–3 of the 5 kb roll-up beside it.
+ *
+ * The honest currency there is the **cell index itself**: at contig level cell
+ * `i` is sequence `i`, and two panels over the same sequence list share that
+ * index however they bin. So a contig-level deck locks in cells and, for the
+ * first time, genuinely navigates at chromosome level. That is only true while
+ * the two lists *are* the same list, which is the deck's own gate to check
+ * ({@link spansAgree} and an equal cell count — see `panels/PanelDeck.ts`).
+ *
+ * Two panels in different currencies are never moved to one another's window.
+ * The deck's gate refuses that pairing and says why, so this is the second
+ * belt: a mixed deck stands still rather than moving somebody to a number that
+ * means something else in their grid.
+ */
+export type LockUnit = 'bp' | 'cell'
+
+/** What every panel in a locked deck is showing, in {@link LockWindow.unit}s. */
 export interface LockWindow {
   rows: AxisWindow
   cols: AxisWindow
+  /** What `lo` and `hi` count — see {@link LockUnit}. */
+  unit: LockUnit
 }
 
 /** A half-open cell interval `[lo, hi)` on one axis of one panel's grid. */
@@ -62,7 +95,8 @@ export type CellSpan = [number, number]
  *
  * Exact: a cell is `bpPerCell` base pairs wide by construction (§3.3's uniform
  * bin size, times whatever pooling the read chose), and the window's bounds are
- * cell offsets from the block's start.
+ * cell offsets from the block's start. A step of one is the cell index itself,
+ * which is what a panel above bin level carries ({@link LockUnit}).
  */
 export function cellsToBp(span: CellSpan, bpPerCell: number): AxisWindow {
   const k = bpPerCell > 0 ? bpPerCell : 1
@@ -136,17 +170,25 @@ export function windowsAgree(a: LockWindow, b: LockWindow, tolBp: number): boole
  * panels that resolved the same name to spans of different length resolved it
  * against different sequences, whatever the name says.
  *
- * The tolerance is one cell of the coarser panel: the last bin of a contig may
- * be short (§3.3), so two files at two resolutions round the same length to
- * spans that differ by less than one of the coarser cells, and refusing that
- * would refuse every honest pair with a bin size that does not divide the
- * contig.
+ * The tolerance is one cell of the coarser panel **per sequence on the axis**:
+ * the last bin of a contig may be short (§3.3), so two files at two resolutions
+ * round the same length to spans that differ by less than one of the coarser
+ * cells, and refusing that would refuse every honest pair with a bin size that
+ * does not divide the contig.
+ *
+ * Per sequence, because a cell never straddles one (`metacooler/pooling.ts`):
+ * an axis of sixteen chromosomes rounds sixteen last cells up, not one, and a
+ * single-cell allowance there refused two roll-ups of the same genome — the
+ * false accusation §16.4 calls worse than saying nothing. `sequences` defaults
+ * to one, which is the single-contig region view the old allowance was written
+ * for and the only case it was ever right for.
  */
 export function spansAgree(
   a: { spanBp: number; bpPerCell: number },
   b: { spanBp: number; bpPerCell: number },
+  sequences = 1,
 ): boolean {
-  const tol = Math.max(a.bpPerCell, b.bpPerCell)
+  const tol = Math.max(a.bpPerCell, b.bpPerCell) * Math.max(1, sequences)
   return Math.abs(a.spanBp - b.spanBp) <= tol
 }
 
@@ -161,7 +203,19 @@ export function spansAgree(
  */
 export interface LockMember {
   readonly id: string
-  /** Base pairs one matrix cell covers, on this panel's current block. */
+  /**
+   * What this panel's window is counted in — see {@link LockUnit}.
+   *
+   * Asked per call like everything else here: a level toggle changes it under a
+   * live deck, and a panel snapshotted as positional while it was reading bins
+   * is one the lock would drive in the wrong currency a frame later.
+   */
+  unit(): LockUnit
+  /**
+   * Base pairs one matrix cell covers, on this panel's current block. Read only
+   * where {@link LockMember.unit} is `'bp'`; above bin level a cell has no
+   * width in base pairs and the index is carried instead.
+   */
   bpPerCell(): number
   /** Cells per axis in the block this panel is showing. */
   cells(): { rows: number; cols: number }
@@ -178,6 +232,18 @@ export interface LockMember {
 }
 
 /**
+ * How wide one of this panel's cells is, in the currency it locks in.
+ *
+ * One for a panel counting cells, which makes every conversion below the
+ * identity rather than a second code path: `cellsToBp` at a step of one is the
+ * cell index, and `bpToCells` at a step of one is that index slid back inside
+ * the block, which is exactly the rule a shorter sequence list needs anyway.
+ */
+function stepOf(member: LockMember): number {
+  return member.unit() === 'cell' ? 1 : member.bpPerCell()
+}
+
+/**
  * The one owner of where every locked panel is looking.
  *
  * Single owner by construction: panels never speak to each other, they report
@@ -187,7 +253,10 @@ export interface LockMember {
  */
 export class ViewportLock {
   private members: LockMember[] = []
-  /** Where the deck is looking, in base pairs; `null` until anybody has moved. */
+  /**
+   * Where the deck is looking, in the currency of whichever panel established
+   * it ({@link LockUnit}); `null` until anybody has moved.
+   */
   private current: LockWindow | null = null
   /** Set while a broadcast is in progress, so its synchronous echo is ignored. */
   private driving = false
@@ -247,15 +316,24 @@ export class ViewportLock {
     if (this.pending.delete(id)) return
     const source = this.members.find((member) => member.id === id)
     if (source === undefined || !source.locked()) return
-    const bpPerCell = source.bpPerCell()
+    const step = stepOf(source)
     const window: LockWindow = {
-      rows: cellsToBp(rows, bpPerCell),
-      cols: cellsToBp(cols, bpPerCell),
+      rows: cellsToBp(rows, step),
+      cols: cellsToBp(cols, step),
+      unit: source.unit(),
     }
     // Half a cell of the *reporting* panel: the report is quantised to this
     // panel's grid, so anything finer than that is not a movement it could have
-    // expressed deliberately.
-    if (this.current !== null && windowsAgree(this.current, window, bpPerCell / 2)) return
+    // expressed deliberately. Compared only against a window in the same
+    // currency — the numbers are not otherwise about the same thing, and a
+    // level toggle would look like a nudge under the tolerance.
+    if (
+      this.current !== null &&
+      this.current.unit === window.unit &&
+      windowsAgree(this.current, window, step / 2)
+    ) {
+      return
+    }
     this.current = window
     this.pushTo(this.members.filter((member) => member.id !== id))
   }
@@ -287,9 +365,9 @@ export class ViewportLock {
    * Only where there is no window — an established one is a reader's choice and
    * outranks whatever the lead happens to be showing.
    */
-  seed(rows: CellSpan, cols: CellSpan, bpPerCell: number): void {
+  seed(rows: CellSpan, cols: CellSpan, step: number, unit: LockUnit): void {
     if (this.current !== null) return
-    this.current = { rows: cellsToBp(rows, bpPerCell), cols: cellsToBp(cols, bpPerCell) }
+    this.current = { rows: cellsToBp(rows, step), cols: cellsToBp(cols, step), unit }
   }
 
   /**
@@ -313,15 +391,21 @@ export class ViewportLock {
     try {
       for (const member of targets) {
         if (!member.locked()) continue
-        const bpPerCell = member.bpPerCell()
+        // A window counted in sequences is not a window this panel can read as
+        // base pairs, nor the other way about. The deck's gate refuses such a
+        // pairing and prints why, so reaching here at all is a panel mid-read
+        // between two levels — and standing still is the only honest thing to
+        // do with a number that means something else in its grid.
+        if (member.unit() !== window.unit) continue
+        const step = stepOf(member)
         const extent = member.cells()
         // A report is owed only where the panel actually moved. A panel whose
         // block has not arrived cannot, and never reports — so recording the
         // debt anyway left it owed forever and threw away that panel's first
         // real gesture once its block landed.
         const moved = member.show(
-          bpToCells(window.rows, bpPerCell, extent.rows),
-          bpToCells(window.cols, bpPerCell, extent.cols),
+          bpToCells(window.rows, step, extent.rows),
+          bpToCells(window.cols, step, extent.cols),
         )
         if (moved) this.pending.add(member.id)
       }

@@ -65,7 +65,7 @@ export interface Mounting {
   /**
    * A published workspace to open on arrival, absolute, or `null`.
    *
-   * The pointer form of a session, where `#s=` is the payload form. Both open
+   * The pointer form of a session, where `#session=` is the payload form. Both open
    * the same `.metacooler.json` through the same parser; the difference is who
    * holds it. A payload cannot be changed once an embed is published and grows
    * the URL by the size of the session; a pointer is a file on a bucket that can

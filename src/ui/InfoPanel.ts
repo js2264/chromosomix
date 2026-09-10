@@ -36,6 +36,13 @@
  * chosen. A metacool has no host filled here — its unit is the genome, and a
  * list of a hundred thousand contigs is not a picker (see `Session`).
  *
+ * **The minimap host** is under it, and it is the same file's sequences drawn
+ * rather than listed, with the current view marked on the strip
+ * (`ui/MinimapCard.ts`). It is gated on the same fact the Sequences card is —
+ * a metagenome's contigs are a texture and not a picture — and it is the one
+ * card in this panel that has to be *told* things as the reader navigates, so
+ * the session keeps the object and calls its own `update`.
+ *
  * The three annotation cards were here too, under the record card. They are now
  * the Annotations column (`SidePanel`): everything in this panel is read, and
  * everything in those is worked on, so the two wanted different amounts of room
@@ -89,6 +96,21 @@ export class InfoPanel {
    */
   private readonly sequenceHost = el('div', { class: 'sequence-host' })
   /**
+   * The Genome minimap's slot, under the Sequences card.
+   *
+   * A host for the same reason the one above it is: the *card* is the session's
+   * — it is built from the assembly and it has to be told where the reader is on
+   * every navigation — while this panel only says where in the column it goes.
+   * Directly under Sequences because the two answer one question between them:
+   * that card is the list of sequences and this one is the picture of them, with
+   * the current view marked on it (`ui/MinimapCard.ts`).
+   *
+   * Empty on a metagenome, and the session applies that gate with `suitsMinimap`
+   * — the same rule that withholds the Sequences card and the browser's bar.
+   * `.minimap-host:empty` is what keeps an absent card from spending a gap.
+   */
+  private readonly minimapHost = el('div', { class: 'minimap-host' })
+  /**
    * The File card(s). One while one file is open, two while two are.
    *
    * A host rather than a fixed card, because the second file arrives and leaves
@@ -105,6 +127,7 @@ export class InfoPanel {
       { class: 'info-panel' },
       this.fileHost,
       this.sequenceHost,
+      this.minimapHost,
       this.recordHost,
       this.unassignedBlock(),
       this.metadataBlock(),
@@ -122,6 +145,20 @@ export class InfoPanel {
    */
   setSequences(card: HTMLElement | null): void {
     this.sequenceHost.replaceChildren(...(card === null ? [] : [card]))
+  }
+
+  /**
+   * Hang the Genome minimap under the Sequences card, or take it away.
+   *
+   * Called once per file, with the card the session built — and then the card is
+   * *kept*: it owns a `ResizeObserver`, a text-scale subscription and a drag in
+   * flight, and where the reader is arrives through its own `update`, so
+   * replacing it on every navigation would throw all four away to redraw one
+   * highlight. `null` withdraws it, which is what a metagenome gets
+   * (`suitsMinimap`) and what a session with no assembly gets.
+   */
+  setMinimap(card: HTMLElement | null): void {
+    this.minimapHost.replaceChildren(...(card === null ? [] : [card]))
   }
 
   /**

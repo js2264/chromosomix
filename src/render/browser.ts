@@ -289,6 +289,43 @@ export function drawGuide(
   ctx.restore()
 }
 
+/** Tip to base, and half the base, of an {@link drawAnchor} triangle. */
+export const ANCHOR_LENGTH = 7
+export const ANCHOR_HALF = 4
+
+/**
+ * One end of a hand-drawn mark, as a small triangle pointing into the tracks.
+ *
+ * The 1D twin of the anchor `AnnotationLanes` puts in the band past the last
+ * lane beside a map, and deliberately the same glyph at the same size: it is the
+ * same statement — *this coordinate*, made by a mark whose other end is
+ * somewhere else — and a reader who has met it on one surface has met it on
+ * both. What differs is only which way "into the picture" points. Beside a map
+ * the tracks are between the reader and the matrix, so the triangle points back
+ * at the matrix; here the picture *is* the tracks, so it hangs from the foot of
+ * the ruler and points down into them.
+ *
+ * Drawn without an outline for the reason the lanes' is: it sits in the strip
+ * between the coordinates and the data, where there is no track ink to be lost
+ * against and none of the picture to take.
+ */
+export function drawAnchor(
+  ctx: CanvasRenderingContext2D,
+  at: number,
+  top: number,
+  colour: string,
+): void {
+  ctx.save()
+  ctx.fillStyle = colour
+  ctx.beginPath()
+  ctx.moveTo(at, top + ANCHOR_LENGTH)
+  ctx.lineTo(at - ANCHOR_HALF, top)
+  ctx.lineTo(at + ANCHOR_HALF, top)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
 /**
  * What a range being dragged out looks like, in one place.
  *

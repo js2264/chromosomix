@@ -30,7 +30,7 @@ import { createSource } from '@/worker/sources'
 import { MetaCooler } from '@/metacooler/MetaCooler'
 import { ViewerError } from '@/errors'
 
-const FILE = new URL('../../demo/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
+const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
 const URL_UNDER_TEST = 'https://example.test/demo/Mock_microbial_community.metacool'
 
 const identity = new Uint8Array(readFileSync(FILE))

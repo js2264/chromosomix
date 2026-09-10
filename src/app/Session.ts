@@ -22,7 +22,7 @@
  */
 
 import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
-import { ManualStore } from '../annotations/manual'
+import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
@@ -55,10 +55,11 @@ import {
   viewStateEquals,
   type UnitSelection,
 } from '../state/ViewState'
+import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
-import { armAll, resetPick } from '../ui/mapPick'
+import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
 import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
@@ -92,7 +93,18 @@ import type { PickedFile } from '../browse/folder'
 import { routeOf, type FileRoute } from '../browse/route'
 import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
-import { assemblyOf, lengthsAreExact, parseLocus, type Assembly } from '../genome/assembly'
+import {
+  assemblyOf,
+  browsingBinsize,
+  findContig,
+  formatLocus,
+  lengthsAreExact,
+  parseLocus,
+  replacesLengths,
+  type Assembly,
+  type AssemblyOrigin,
+  type Contig,
+} from '../genome/assembly'
 import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
@@ -124,6 +136,7 @@ import { GenomeView, type ScaleState } from '../ui/GenomeView'
 import { CellsTable } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
+import { MinimapCard, suitsMinimap, type MinimapRange } from '../ui/MinimapCard'
 import { Overview, wholeFileLevelCard } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
 import { findRow, recordFields, type RecordField, type RecordSpec } from '../ui/RecordCard'
@@ -266,6 +279,16 @@ function genomeCard(
   assembly: Assembly,
   onGoTo: (locus: string) => void,
   selection: SequenceSelection,
+  /**
+   * The minimap, where this genome is one a strip can usefully be drawn of.
+   *
+   * Passed in rather than built here because it is *kept*: the strip has to be
+   * told where the window moved to on every pan, and a card rebuilt from a
+   * function that takes no location could only ever show the place the column
+   * was last assembled at. `Session` holds it and updates it; this only decides
+   * where in the column it sits.
+   */
+  minimap?: HTMLElement,
 ): HTMLElement {
   const exact = lengthsAreExact(assembly)
   const rows: Array<[string, string]> = [
@@ -300,6 +323,10 @@ function genomeCard(
             }),
           ]),
     ),
+    // Above the sequence list rather than below it: the strip is the picture of
+    // the same thing the list is a table of, and a reader looking for *where am
+    // I* should not have to scroll past sixteen rows to find out.
+    ...(minimap === undefined ? [] : [minimap]),
     sequenceCard({
       contigs: assembly.contigs,
       selection,
@@ -312,6 +339,54 @@ function genomeCard(
     // about *what is on screen* rather than about what the file is. Two cards
     // offering to load a map, in two columns, is the state this replaced.
   )
+}
+
+/**
+ * A `contig:start-end` region as the range the minimap draws, or `null`.
+ *
+ * The region grammar is the map's — 0-based, half-open, and either coordinate
+ * may be omitted to mean the whole sequence — which is already what
+ * `MinimapRange` is, so this is a parse and a fill-in rather than a conversion.
+ * A name the assembly does not have yields `null` rather than a guess: a
+ * highlight in the wrong place is worse than no highlight, because it is not
+ * visibly wrong.
+ *
+ * `parseRegionString` throws on a malformed region, and a malformed region here
+ * is not an error worth surfacing — the state is already on screen and the map
+ * has already refused it — so it is caught and read as "nowhere".
+ */
+function minimapRange(region: string, assembly: Assembly): MinimapRange | null {
+  let name: string
+  let from: number | null
+  let to: number | null
+  try {
+    ;[name, from, to] = parseRegionString(region)
+  } catch {
+    return null
+  }
+  const contig = findContig(assembly, name)
+  if (contig === null) return null
+  return {
+    contig: contig.name,
+    start: from ?? 0,
+    end: to ?? contig.length,
+  }
+}
+
+/**
+ * The minimap's own `contig:first-last` back as a `LocusRange`.
+ *
+ * The card emits the string `SequenceBar` emits — 0-based, half-open, no
+ * thousands separators — and the browser is driven by `formatLocus`, which is
+ * 1-based and inclusive. One of the two has to convert and this is the seam;
+ * `state/ViewState.ts` and `ui/SequenceBar.ts` both explain why the two
+ * conventions are kept apart rather than reconciled.
+ */
+function rangeOfRegion(region: string): { contig: string; start: number; end: number } {
+  const at = region.lastIndexOf(':')
+  if (at < 0) return { contig: region, start: 0, end: 0 }
+  const [first, last] = region.slice(at + 1).split('-')
+  return { contig: region.slice(0, at), start: Number(first), end: Number(last) }
 }
 
 /** How each kind of source is described in the Genome card. */
@@ -467,6 +542,16 @@ export class Session {
   private file: OpenFile | null = null
   private breadcrumb: Breadcrumb | null = null
   private infoPanel: InfoPanel | null = null
+  /**
+   * The genome strip, where this session's genome is one worth drawing.
+   *
+   * Held rather than rebuilt, because it is told where the view moved to on
+   * every navigation and every pan ({@link syncMinimap}) — a card reassembled
+   * from a function that takes no location could only show the place the column
+   * was last built at. One at a time: a session is of one genome, and the map
+   * column and the browser column never both hold one.
+   */
+  private minimap: MinimapCard | null = null
   /**
    * The whole-file view, kept across navigations, and the read it holds.
    *
@@ -1016,6 +1101,8 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    this.minimap?.destroy()
+    this.minimap = null
     this.analysis?.destroy()
     this.analysis = null
     this.current?.destroy?.()
@@ -2036,6 +2123,22 @@ export class Session {
         info,
         onCloseFile: (which) => this.closeCompare(which),
       })
+      // The same strip the browser shows, over the map's own chromosome list, so
+      // "where am I in the genome" is answered in the same place and the same
+      // shape whichever picture is on screen. A cooler's `/chroms` table is an
+      // assembly; `assemblyOfFile` is the one that says so, and it answers
+      // `null` for a file with no contigs, which is a file with no strip.
+      const mapAssembly = this.file === null ? null : this.assemblyOfFile(this.file)
+      if (mapAssembly !== null) {
+        this.buildMinimap(mapAssembly, {
+          onOpenContig: (name) => this.navigate({ uri, view: 'region', region: name }),
+          onOpenRegion: (region) => this.navigate({ uri, view: 'region', region }),
+        })
+      } else {
+        this.minimap?.destroy()
+        this.minimap = null
+      }
+      this.infoPanel.setMinimap(this.minimap?.el ?? null)
       // Before the sidebar is mounted, so the cards are there on the first paint
       // rather than appearing a frame later.
       await this.setUpAnnotations(uri, info)
@@ -2406,6 +2509,48 @@ export class Session {
   }
 
   /**
+   * How the Manual annotations card reaches whatever picture is on screen
+   * (§8.1).
+   *
+   * One picker for both shapes of session, because there is one card and one
+   * store behind it: a session walks map → tracks → map without either being
+   * rebuilt, and two pickers would be two answers to "what can be pointed at
+   * now". That is the bug this replaced — the card was armed against a
+   * `MatrixPanel`, which a 1D view does not have, so in the browser every pick
+   * button sat disabled with nothing on screen to say why.
+   *
+   * **Everything mounted, not only the lead.** A mark is a coordinate and a
+   * companion is a map, so a deck of five pictures is five places a reader may
+   * reasonably point at — and the marks already appeared on all of them, because
+   * they live in one store every panel draws from. Only the *gesture* was the
+   * lead's, which made the feature look broken in exactly the layout it is most
+   * useful in: a domain boundary drawn across four replicates is the thing a
+   * deck is for. `armAll` is what makes the several into one mode, and the
+   * browser joins that list on the same terms — its picks carry one axis rather
+   * than two, which is a fact about the gesture and not about the arming, so
+   * nothing here has to know it.
+   */
+  private markPicker(): MapPicker {
+    return {
+      // The *mounted* view, and deliberately not "anything `armAll` would
+      // reach": a deck outlives a navigation to a table, and a card that lit its
+      // buttons there would be offering a gesture on a picture that is not on
+      // screen. Which is the same rule as before, with the browser added to it.
+      available: () => this.current?.panel !== undefined || this.browser !== null,
+      // What the reader would be pointing at, which is what the card's buttons
+      // call themselves. A mounted map wins where there is one: a browser is
+      // never on screen at the same time as the matrix it stands in front of.
+      surface: () => (this.current?.panel === undefined ? 'track' : 'map'),
+      start: (handlers, onEnd) => armAll(this.pickTargets(), handlers, onEnd),
+    }
+  }
+
+  /** Every surface a mark could be placed on as things stand. */
+  private pickTargets(): Array<Armable<PickHandlers> | null | undefined> {
+    return [this.current?.panel, this.deck, this.browser]
+  }
+
+  /**
    * The annotation machinery for a browser session.
    *
    * The same four pieces a map gets, against the assembly rather than against a
@@ -2435,7 +2580,9 @@ export class Session {
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
     // An assembly's contigs are already `{ name, length }`, which is what the
     // loader's rename wants (§5.9).
-    const loader = new AnnotationLoader(store, client, assembly.contigs)
+    const loader = new AnnotationLoader(store, client, assembly.contigs, (files) =>
+      this.considerLengths(files),
+    )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
     // `adopt` writes through `host.store()` to whichever is current — so a
@@ -2456,6 +2603,17 @@ export class Session {
     }
 
     this.compareCard = this.newCompareCard(assembly.uri)
+    // The marks card, in the place it holds beside a map: under the tracks it
+    // annotates. It was absent here, and the store above it was not — so a
+    // browser session read a previous visit's marks out of storage, held them in
+    // memory and offered no way to see, place or remove any of them. A genome
+    // browser is exactly where a reader wants to say *look at this coordinate*:
+    // the axis is base pairs, which is what a mark is stated in (§8.1).
+    this.manualCard = new ManualCard({
+      store: manual,
+      picker: this.markPicker(),
+      fileLabel: fileLabel(assembly.uri),
+    })
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card, not below it: what a reader just computed is what
@@ -2468,6 +2626,7 @@ export class Session {
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
       }).el,
+      this.manualCard.el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
@@ -2659,6 +2818,10 @@ export class Session {
       ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       groups: held.groups,
+      // The same store the card writes into and the map draws from. Handed over
+      // rather than read back through the session, for the reason the tracks and
+      // the groups are: a view is rebuilt on every navigation and a mark is not.
+      manual: held.manual,
     })
     this.browser = view
     this.showContent(view.el, {
@@ -2949,6 +3112,10 @@ export class Session {
     // so there is nothing a dropped track could join.
     if (held === null) return
     const before = new Set(held.store.entries.map((entry) => entry.id))
+    // The loader raises {@link considerLengths} for every file it is handed, so
+    // the "does this file also know the real lengths" question is asked from
+    // here without being asked *here* — see the hook's own comment for why it
+    // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
@@ -2968,10 +3135,13 @@ export class Session {
    *
    * The case it exists for is a browser opened on a BED or a GTF, whose
    * sequences end at their last feature because that is all such a file knows.
-   * Dropping the assembly's own sizes replaces the guesses with the lengths —
-   * and replaces *only* those: the URI, the session memory and every loaded
-   * track are what they were, because the genome did not change, only what is
-   * known about it.
+   * Dropping the assembly's own sizes replaces the guesses with the lengths
+   * ({@link takeLengths}), and this is the one road on which that happens
+   * *instead of* loading the file: a `chrom.sizes` is not a track, so there is
+   * no lane to make and nothing else for the drop to mean. Every other file
+   * that knows its lengths — a bigWig, a BAM, a VCF with `##contig` lines — is
+   * a track first and answers this question as well, on {@link
+   * adoptExactLengths}.
    */
   private async adoptSizes(file: File): Promise<void> {
     const assembly = this.assembly
@@ -2989,24 +3159,105 @@ export class Session {
         this.annotations?.loader.addFiles([file])
         return
       }
-      this.assembly = assemblyOf({
-        uri: assembly.uri,
-        name: assembly.name,
-        contigs: result.contigs,
-        origin: 'sizes',
-      })
-      this.setGeneral([this.genomeCardFor(this.assembly)])
-      const state = this.store.state
-      if (state === null) return
-      // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
-      // *of*, and its axis is built once from it.
-      this.mounted = state
-      this.mountBrowser(state)
+      this.takeLengths(assembly, result.contigs, 'sizes')
     } catch (err) {
       if (!this.destroyed) this.showError(err)
     } finally {
       client.destroy()
     }
+  }
+
+  /**
+   * Every file the loader was handed, asked whether it knows the real lengths.
+   *
+   * The gate rather than the work: this is called on **every** file that reaches
+   * a loader by any road, so the cheap check belongs here and the expensive one
+   * — a second read of the file, in a worker of its own — belongs behind it.
+   * Once the assembly's lengths are exact there is nothing left to improve, and
+   * `lengthsAreExact` says so without touching a byte, which is what keeps a
+   * reader who drops forty bigWigs onto a browser that already knows its genome
+   * from paying for forty pointless reads.
+   *
+   * Every file rather than the first: a reader selecting a bigWig and a BED
+   * together should get the lengths out of whichever of them has them, and
+   * `adoptExactLengths` already settles a race between two answers by checking
+   * that the assembly it started from is still the one in place.
+   */
+  private considerLengths(files: readonly File[]): void {
+    if (this.assembly === null || lengthsAreExact(this.assembly)) return
+    for (const file of files) void this.adoptExactLengths(file)
+  }
+
+  /**
+   * Take the lengths from a file that was dropped to be a *track*.
+   *
+   * The other half of {@link adoptSizes}, and the half the Genome card was
+   * already promising: a bigWig, a bigBed, a BAM, a FASTA or a VCF that
+   * declares its contigs answers "how long is each sequence" exactly, and a
+   * browser opened on a GTF is asking. {@link replacesLengths} is the whole of
+   * the decision — inferred lengths in, exact lengths out, never the reverse —
+   * so this cannot downgrade an assembly and cannot let two exact files fight
+   * over one axis.
+   *
+   * The track is already loading when this is called and this never touches it:
+   * the file is a lane, and its header being a `chrom.sizes` too is a second
+   * thing about it, not an alternative to being drawn.
+   *
+   * Its own client rather than `annotations.client`, which is the thread that is
+   * at this moment parsing the same file as a track: a worker handles one
+   * message at a time, so asking there would put the extra read *in front of*
+   * the lane the reader is waiting for. Errors are swallowed rather than shown,
+   * because the file's real answer — it opened, or it did not — is the loader's
+   * to report, and a second failure notice for the same drop describes a
+   * question the reader never asked.
+   */
+  private async adoptExactLengths(file: File): Promise<void> {
+    const assembly = this.assembly
+    if (assembly === null || lengthsAreExact(assembly)) return
+    const client = new AnnotationClient()
+    try {
+      const result = await client.request<'assembly'>({
+        kind: 'assembly',
+        source: { kind: 'local', file, name: file.name },
+      })
+      // Re-checked after the await, not only before it: two files dropped
+      // together are two of these in flight, and the second must not overwrite
+      // what the first just settled. `this.assembly !== assembly` is what says
+      // so — `takeLengths` replaces the object, so the loser sees a stranger.
+      if (this.destroyed || this.assembly !== assembly) return
+      if (!replacesLengths(assembly, result)) return
+      this.takeLengths(assembly, result.contigs, result.origin)
+    } catch {
+      // Deliberately silent; see above.
+    } finally {
+      client.destroy()
+    }
+  }
+
+  /**
+   * Put real lengths under a browser that had guessed ones.
+   *
+   * Replaces *only* those: the URI, the name, the session memory and every
+   * loaded track are what they were, because the genome did not change, only
+   * what is known about it. The origin comes from the file that answered so the
+   * Genome card names it truthfully — "from the bigWig header" is a different
+   * claim from "declared by a chrom.sizes", and both are different from the
+   * guess they replace.
+   */
+  private takeLengths(previous: Assembly, contigs: Contig[], origin: AssemblyOrigin): void {
+    this.assembly = assemblyOf({
+      uri: previous.uri,
+      name: previous.name,
+      contigs,
+      origin,
+    })
+    this.setGeneral([this.genomeCardFor(this.assembly)])
+    const state = this.store.state
+    if (state === null) return
+    // Rebuilt rather than told: an assembly is what a `BrowserView` is a view
+    // *of*, and its axis is built once from it.
+    this.mounted = state
+    this.mountBrowser(state)
   }
 
   /** Whether the map behind this browser can be brought back. */
@@ -3298,7 +3549,86 @@ export class Session {
 
   /** The Sequences card a browser steers its axis from. */
   private genomeCardFor(assembly: Assembly): HTMLElement {
-    return genomeCard(assembly, (locus) => this.goToLocus(locus), this.selectionFor(assembly))
+    this.buildMinimap(assembly, {
+      // A bare sequence name is already a locus the browser's own parser takes,
+      // so a click on a band needs no conversion at all.
+      onOpenContig: (name) => this.goToLocus(name),
+      onOpenRegion: (region) => this.goToLocus(formatLocus(rangeOfRegion(region))),
+    })
+    return genomeCard(
+      assembly,
+      (locus) => this.goToLocus(locus),
+      this.selectionFor(assembly),
+      this.minimap?.el,
+    )
+  }
+
+  /**
+   * A fresh minimap over this assembly, replacing whatever the last one was of.
+   *
+   * One card per assembly rather than one per session: the strip is laid out
+   * from the sequence list, and a browser that adopts real lengths
+   * ({@link takeLengths}) or opens a different genome is a different strip. The
+   * old one is destroyed rather than dropped — it holds a `ResizeObserver` and a
+   * text-scale subscription, and the column that showed it is about to be
+   * replaced wholesale by `setGeneral`, which calls nothing.
+   *
+   * `null` where a strip would not be a picture of anything: a metagenome is
+   * tens of thousands of contigs from thousands of independently assembled
+   * organisms, every band a fraction of a pixel, which is the same gate
+   * {@link paintSequences} and `ContigsTable` already apply (§7.4).
+   */
+  private buildMinimap(
+    assembly: Assembly,
+    go: { onOpenContig: (name: string) => void; onOpenRegion: (region: string) => void },
+  ): void {
+    this.minimap?.destroy()
+    this.minimap = suitsMinimap({ hasGenomes: this.file?.info.hasGenomes ?? false })
+      ? new MinimapCard({ assembly, ...go })
+      : null
+    this.syncMinimap(this.store.state)
+  }
+
+  /**
+   * Where the minimap should say we are, from the state alone.
+   *
+   * From the state rather than from the mounted view, because this runs on every
+   * navigation including the ones that mount nothing new — a pan reports its
+   * locus into the store (`mountBrowser`'s `onLocusChange`), so the store is the
+   * one place both a jump and a drag are visible.
+   *
+   * The two modes differ in exactly one thing and the strip does not know it:
+   * a browser has a window and a map has a row range and a column range. Equal
+   * ranges are what an on-diagonal block is, and `MinimapCard` collapses them
+   * back into the single highlight a 1D window draws — so the same place looks
+   * the same in both modes, which is what the card is for.
+   */
+  private syncMinimap(state: ViewState | null): void {
+    const card = this.minimap
+    if (card === undefined || card === null) return
+    const assembly = this.assembly ?? (this.file === null ? null : this.assemblyOfFile(this.file))
+    if (state === null || assembly === null) {
+      card.update(null)
+      return
+    }
+    if (state.view === 'browser') {
+      const here = state.locus === undefined ? null : parseLocus(state.locus, assembly)
+      // `'whole'` is the whole genome, which is the same "nowhere in particular"
+      // an absent locus is — and highlighting everything says nothing.
+      card.update(
+        here === null || here === 'whole' ? null : { kind: 'window', range: here },
+      )
+      return
+    }
+    const rows = state.region === undefined ? null : minimapRange(state.region, assembly)
+    if (rows === null) {
+      card.update(null)
+      return
+    }
+    // An absent `region2` is an on-diagonal block, which is the same range twice
+    // rather than a missing one (§5.5).
+    const columns = state.region2 === undefined ? rows : minimapRange(state.region2, assembly)
+    card.update({ kind: 'block', rows, columns: columns ?? rows })
   }
 
   /**
@@ -3485,6 +3815,7 @@ export class Session {
         length: lengths.get(name) ?? 0,
         ...(genomeOf.size === 0 ? {} : { genome: genomeOf.get(name) ?? '' }),
       })),
+      (files) => this.considerLengths(files),
     )
     // A new store means the workspace that was watching the old one is stale.
     // `SyntheticCard` subscribes to the store it was *built* with, while
@@ -3517,22 +3848,11 @@ export class Session {
       }),
     }
 
-    const picker: MapPicker = {
-      available: () => this.current?.panel !== undefined,
-      /**
-       * The session's own map **and every map in the deck**.
-       *
-       * A mark is a coordinate and a companion is a map, so a deck of five
-       * pictures is five places a reader may reasonably point at — and the marks
-       * already appeared on all of them, because they live in one store every
-       * panel draws from. Only the *gesture* was the lead's, which made the
-       * feature look broken in exactly the layout it is most useful in: a domain
-       * boundary drawn across four replicates is the thing a deck is for.
-       * `armAll` is what makes the five into one mode.
-       */
-      start: (handlers, onEnd) => armAll([this.current?.panel, this.deck], handlers, onEnd),
-    }
-    this.manualCard = new ManualCard({ store: manual, picker, fileLabel: fileLabel(uri) })
+    this.manualCard = new ManualCard({
+      store: manual,
+      picker: this.markPicker(),
+      fileLabel: fileLabel(uri),
+    })
     this.bookmarksCard = new BookmarksCard({
       store: new BookmarkStore(scope),
       go: (mark) => this.goToBookmark(mark),
@@ -3678,6 +3998,17 @@ export class Session {
   private carriedAnalysis: readonly CarriedResult[] | null = null
 
   /**
+   * The reader's own marks, held across the same gap for the same reason.
+   *
+   * Apart from {@link carried} because they arrive by a different road: a track
+   * goes back in through the `AnnotationLoader`, which re-reads it from the
+   * handle it still holds, and a mark has no handle to re-read from — it is a
+   * contig and a base pair, so what is written is what comes back. See
+   * {@link adoptCarriedMarks} for why they have to travel at all.
+   */
+  private carriedMarks: readonly ManualMark[] | null = null
+
+  /**
    * Remember the loaded tracks, if the file about to open is a different one.
    *
    * Only the rows that are actually readable: a detached row is a name and a
@@ -3700,6 +4031,8 @@ export class Session {
     this.carriedLanes = lanes === undefined || lanes.length === 0 ? null : [...lanes]
     const computed = this.reopeningSameFile(next) ? (this.analysis?.carry() ?? []) : []
     this.carriedAnalysis = computed.length === 0 ? null : computed
+    const marks = this.annotations?.manual.marks
+    this.carriedMarks = marks === undefined || marks.length === 0 ? null : [...marks]
   }
 
   /**
@@ -3716,11 +4049,50 @@ export class Session {
   }
 
   private adoptCarried(loader: AnnotationLoader): void {
+    // The marks first, and unconditionally: they travel by a road of their own
+    // and a session with no readable tracks still has them to hand over.
+    this.adoptCarriedMarks()
     const rows = this.carried
     this.carried = null
     if (rows === null) return
     for (const row of rows) loader.carry(row)
     this.adoptCarriedLanes()
+  }
+
+  /**
+   * Put the hand-drawn marks into the store the incoming file just built.
+   *
+   * The tracks' problem, one layer down. Memory is keyed on the *file*
+   * ({@link memoryKey}), which is right — two files are two workspaces — and it
+   * means a mark placed against one URI is invisible to a store opened on
+   * another. Between a map and its own 1D browser that costs nothing, because
+   * `hideMap` keeps the file and therefore the key; but a browser opened on a
+   * bigWig scopes to the bigWig, and the cooler dropped on it afterwards scopes
+   * to the cooler. Same genome, same coordinates, same reader, different key —
+   * so four domains boxed while reading the tracks vanished the moment the map
+   * they were drawn for arrived. Which is precisely the gesture this feature is
+   * for.
+   *
+   * Carried live, exactly as the tracks are and across the same gap: the two
+   * stores never exist at the same moment, so there is nowhere else to hold
+   * them. A mark needs nothing re-read — it is a contig and a base pair, with no
+   * bytes behind it — so, unlike a track, it comes back whole.
+   *
+   * **By id, and only what is missing.** A reopen at another resolution hangs
+   * its workspace on the same key, so the new store has already read these marks
+   * out of storage; adding them again would double every mark on every change of
+   * bin size. Ids are minted once per tab and stored with the mark, so "already
+   * there" is a question with an answer.
+   */
+  private adoptCarriedMarks(): void {
+    const marks = this.carriedMarks
+    this.carriedMarks = null
+    const store = this.annotations?.manual
+    if (marks === null || store === undefined) return
+    const known = new Set(store.marks.map((mark) => mark.id))
+    for (const mark of marks) {
+      if (!known.has(mark.id)) store.add(mark)
+    }
   }
 
   /**
@@ -4298,14 +4670,22 @@ export class Session {
    * gesture that builds the first deck is on screen from the first map.
    */
   private framed(node: HTMLElement): HTMLElement {
-    // Released on both of the paths that leave the edges off screen, because
-    // they hold the last view they framed until told otherwise — a *destroyed*
-    // view, whose canvas is still a full-resolution backing store. Re-parenting
-    // into the deck empties them for free (a node has one parent); a bare mount
-    // does not, so a reader who opens a genomes table pins the map they left.
+    // Released on both of the paths that leave a frame off screen, because
+    // every one of them holds the last view it framed until told otherwise — a
+    // *destroyed* view, whose canvas is still a full-resolution backing store.
+    // Re-parenting into a frame empties the other for free (a node has one
+    // parent); a bare mount does not, so a reader who opens the chromosomes
+    // table pins the map they left.
+    //
+    // Both frames, and that used to be one: the deck was left out, so the whole
+    // argument above applied to it and nothing acted on it. A deck holds its
+    // lead in `leadCell` and the lead's own heading up in its bar, so the
+    // retention was two nodes rather than one — see `PanelDeck.release`, which
+    // is why this is a call rather than an inlined `replaceChildren` here.
     const deck = this.deck
     if (!this.deckIsPossible) {
       this.deckEdges.release()
+      deck?.release()
       return node
     }
     if (deck !== null) {
@@ -4999,6 +5379,11 @@ export class Session {
       this.manualCard = null
       this.metadataCard = null
       this.bookmarksCard = null
+      // Destroyed rather than dropped: it holds a `ResizeObserver` and a
+      // text-scale subscription, and `setGeneral([])` below replaces the column
+      // without telling anything in it that it is going.
+      this.minimap?.destroy()
+      this.minimap = null
       // The second file too, and for the same reason: it is a second map *of a
       // file that is no longer open*, and with no state there is no `uri2` left
       // to reconcile against — so nothing downstream would ever reach it again,
@@ -5309,6 +5694,11 @@ export class Session {
     // …and for the same reason, since the ticks are read against that table: a
     // link straight to a region arrives before anything has opened one.
     this.syncSequenceTicks(state)
+    // Here rather than beside the mount, because a *pan* mounts nothing: the
+    // browser reports its window into the store (`onLocusChange`), which comes
+    // back through this same path, so this is the one place a jump and a drag
+    // are both visible.
+    this.syncMinimap(state)
     this.host.activity(this)
   }
 
@@ -6537,15 +6927,27 @@ export class Session {
     // does not compare two of them.
     //
     // The map tasks are not hidden either: they are `waiting`, with a line
-    // saying to open a contact map. `hasMap` is what tells them apart, and the
-    // zeros below never reach a runner because a waiting task cannot be run.
+    // saying to open a contact map. `hasMap` is what tells them apart, and it
+    // stays false here because `nBins` is zero however real the bin size is.
+    //
+    // The **bin size is not zero**, and it used to be. The zero was safe for as
+    // long as the assumption under it held — that nothing producing a per-bin
+    // result could be run without a matrix, so no runner would ever see it — and
+    // the motif search broke that assumption by answering from the *sequence*,
+    // which is present with or without a map. A zero bin size gives every contig
+    // zero bins, and a profile registered against that grid is a lane that is
+    // permanently empty rather than one that is visibly wrong, which is the
+    // failure nothing reports. So a mapless session is given a browsing grid
+    // chosen from the assembly's own length ({@link browsingBinsize}); it is a
+    // resolution to *draw* at and never a claim that anything was measured at
+    // it, which is exactly what `hasMap` remains false to say.
     if (file === null) {
       const assembly = this.assembly
       if (assembly === null) return null
       return buildAnalysisContext({
         uri: assembly.uri,
         layout: 'cool',
-        binsize: 0,
+        binsize: browsingBinsize(assembly.total),
         nBins: 0,
         hasGenomes: false,
         hasWeights: false,
@@ -6958,8 +7360,13 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
  * It costs a request, the worker is where requests are made and counted, and
  * putting it here would mean two places that know where HiC-Pro writes its bin
  * files.
+ *
+ * Exported for the test: the signing below is invisible from anywhere the
+ * session can be driven — the credential is on a message this function's caller
+ * hands to a worker — and it is the half of a private pair that was silently
+ * being read unsigned.
  */
-function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
+export function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
   const { address, bins } = splitBinsFragment(uri)
   if (!isHicProMatrix(splitUri(address).path)) return source
   if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
@@ -6971,7 +7378,31 @@ function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSp
   // fragment, because that is what makes the pair one shareable string (§11).
   const at: SourceSpec =
     source.kind === 'remote' ? { ...source, url: splitUri(address).path } : source
-  return { ...at, bins: { kind: 'remote', url: bins } }
+  // Signed here, against the bin file's **own** URL.
+  //
+  // Everywhere else a credential is stamped at the worker boundary
+  // (`s3/attach.ts`), and that stamper knows only `message.source` — it has
+  // never looked at the second half hanging off it. So a pair under a private
+  // prefix went out with a signed matrix and an unsigned bin file, and S3
+  // answered 403 to the half that carries the coordinates: the open failed on
+  // exactly the arrangement `#bins=` exists for. The conventional road does not
+  // have this hole — `probeBins` passes the matrix's credential to the bed it
+  // guesses (`worker/open.ts`) — so the guessed bin file worked and the named
+  // one did not.
+  //
+  // Its own URL rather than the matrix's, because `#bins=` is the escape hatch
+  // for a bucket that publishes the two halves under unrelated keys: the bed
+  // may sit outside every scope the matrix is in, and a public request that
+  // gets signed anyway is the failure this repo guards hardest against
+  // (`s3/credentials.ts`). Unscoped stays unsigned, as it was.
+  const credential = credentialFor(bins)
+  return {
+    ...at,
+    bins:
+      credential === null
+        ? { kind: 'remote', url: bins }
+        : { kind: 'remote', url: bins, credential },
+  }
 }
 
 function scaleOf(state: ViewState, fallback: { transform?: Transform } = {}): ScaleState {

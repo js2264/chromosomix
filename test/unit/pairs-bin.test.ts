@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { binPairs } from '@/pairs/bin'
+import { binPairs, mergeDuplicates, type BinnedPixels } from '@/pairs/bin'
 import { readPairsHeader } from '@/pairs/format'
 import {
   BytesSource,
@@ -45,6 +45,49 @@ function randomRecords(n: number, seed = 7): Record[] {
     })
   }
   return out
+}
+
+/**
+ * Flip records into the upper triangle, which is what a real `.pairs` holds.
+ *
+ * `randomRecords` draws both ends independently, so half its records name the
+ * chromosomes the wrong way round — a shape no `pairtools`-produced file has.
+ * The sortedness assertions below are about what a *canonical* file looks like,
+ * so they have to start from canonical records: `chrom1` before `chrom2` in
+ * header order, and `pos1 <= pos2` when the two ends are on one sequence.
+ */
+function flipped(contigs: readonly Contig[], records: readonly Record[]): Record[] {
+  const rank = new Map(contigs.map((contig, i) => [contig.name, i]))
+  return records.map((record) => {
+    const a = rank.get(record.chrom1) ?? -1
+    const b = rank.get(record.chrom2) ?? -1
+    const swap = a > b || (a === b && record.pos1 > record.pos2)
+    if (!swap) return record
+    return {
+      chrom1: record.chrom2,
+      pos1: record.pos2,
+      chrom2: record.chrom1,
+      pos2: record.pos1,
+    }
+  })
+}
+
+/** A canonical 4DN file: upper-triangular records in `chr1-chr2-pos1-pos2` order. */
+function canonical(records: readonly Record[]): Record[] {
+  return sortRecords(CONTIGS, flipped(CONTIGS, records))
+}
+
+/** Run the importer over a whole `.pairs` text, reading its own header. */
+async function bin(text: string, binSize = BIN): Promise<BinnedPixels> {
+  const source = new BytesSource(bgzipped(text))
+  const header = await readPairsHeader(source)
+  const pixels = await binPairs(source, {
+    binSize,
+    contigs: header.contigs,
+    columns: header.columns,
+  })
+  expect(pixels).not.toBeNull()
+  return pixels!
 }
 
 /** Compare a `BinnedPixels` against the reference map, cell for cell. */
@@ -307,6 +350,142 @@ describe('binPairs', () => {
       cancelled: () => ++seen > 2,
     })
     expect(pixels).toBeNull()
+  })
+
+  it('calls a canonically sorted multi-chromosome file sorted', async () => {
+    // The regression this exists for. `chr1-chr2-pos1-pos2` turns `chrom2`
+    // over faster than `chrom1`, so `pos1` — and with it `bin1` — restarts at
+    // the top of chrI when the (chrI, chrII) block begins. Reading that as
+    // "the file is not sorted" fired on every real multi-chromosome import,
+    // put `pairs-required-merge` on the info panel and `required-merge-pass`
+    // into the written `.mcool`, and said nothing true about the file.
+    const records = canonical(randomRecords(4_000, 17))
+    const pixels = await bin(pairsText({ contigs: CONTIGS, records }))
+    expect(pixels.wasUnsorted, 'a pairtools-sorted file is not unsorted').toBe(false)
+    // And the table is still in cooler's order: the reorder has to keep
+    // running, only the accusation stops.
+    await expectMatches(bgzipped(pairsText({ contigs: CONTIGS, records })), CONTIGS, records)
+  })
+
+  it('calls a sorted single-chromosome file sorted', async () => {
+    // The one shape the old check already got right — kept so a future fix
+    // cannot buy the case above by breaking this one.
+    const solo: Contig[] = [CONTIGS[0]]
+    const records = flipped(
+      CONTIGS,
+      randomRecords(500, 19).filter(
+        (record) => record.chrom1 === 'chrI' && record.chrom2 === 'chrI',
+      ),
+    ).sort((a, b) => a.pos1 - b.pos1 || a.pos2 - b.pos2)
+    expect(records.length).toBeGreaterThan(20)
+    const pixels = await bin(pairsText({ contigs: solo, records }))
+    expect(pixels.wasUnsorted).toBe(false)
+  })
+
+  it('calls a file shuffled inside one chromosome pair unsorted', async () => {
+    // One block, so no `chrom2` turnover can excuse anything: `bin1` going
+    // backwards here is the file's own disorder and has to be reported. The
+    // false positive above must not be traded for a false negative.
+    const records = [...randomRecords(600, 23)].filter(
+      (record) => record.chrom1 === 'chrI' && record.chrom2 === 'chrI',
+    )
+    const pixels = await bin(pairsText({ contigs: [CONTIGS[0]], records }))
+    expect(pixels.wasUnsorted, 'shuffled within a block is genuinely unsorted').toBe(true)
+  })
+
+  it('calls a file concatenated from two sorted halves unsorted', async () => {
+    // Each half is canonically sorted, so no block is ever out of order from
+    // the inside — the only evidence is that (chrI, chrI) comes back after it
+    // was closed. `cat a.pairs b.pairs` is how this file gets made, and the
+    // reader has to be told, because the table is not the one either half
+    // describes.
+    const records = [...canonical(randomRecords(1_500, 41)), ...canonical(randomRecords(1_500, 43))]
+    const pixels = await bin(pairsText({ contigs: CONTIGS, records }))
+    expect(pixels.wasUnsorted, 'a block reappearing is disorder no sort explains').toBe(true)
+    await expectMatches(bgzipped(pairsText({ contigs: CONTIGS, records })), CONTIGS, records)
+  })
+
+  it('reads the same table whatever trails the coordinate columns', async () => {
+    // The record scan stops at the last coordinate column, so a pairtools file
+    // carrying `pair_type`, the mapqs and two `sam` fields — hundreds of bytes
+    // a record — must produce exactly the table the bare layout does. An
+    // early exit that stopped one column short would lose `pos2` and count
+    // every record as a bad position instead.
+    const records = canonical(randomRecords(1_200, 47))
+    const bare = await bin(pairsText({ contigs: CONTIGS, records }))
+
+    const lines: string[] = [
+      '## pairs format v1.0',
+      ...CONTIGS.map((contig) => `#chromsize: ${contig.name} ${contig.length}`),
+      '#columns: chrom1 chrom2 pos1 pos2 readID strand1 strand2 pair_type mapq1 mapq2 sam1 sam2',
+    ]
+    for (const record of records) {
+      lines.push(
+        `${record.chrom1}\t${record.chrom2}\t${record.pos1}\t${record.pos2}\tSRR.x\t+\t-\tUU\t60\t60\t` +
+          `${'M'.repeat(120)}\t${'M'.repeat(120)}`,
+      )
+    }
+    const loaded = await bin(`${lines.join('\n')}\n`)
+
+    expect(loaded.sum).toBe(bare.sum)
+    expect(loaded.nnz).toBe(bare.nnz)
+    expect(loaded.skippedBadPosition).toBe(0)
+    expect(loaded.skippedUnknownContig).toBe(0)
+    expect([...loaded.bin1]).toEqual([...bare.bin1])
+    expect([...loaded.bin2]).toEqual([...bare.bin2])
+    expect([...loaded.count]).toEqual([...bare.count])
+  })
+
+  it('skips a record that stops before its last coordinate column', async () => {
+    // The scan can only stop early on a record that *has* the columns. A short
+    // one runs to end of line, leaves the missing coordinate at -1, and is
+    // counted rather than binned as garbage.
+    const lines = [
+      '## pairs format v1.0',
+      ...CONTIGS.map((contig) => `#chromsize: ${contig.name} ${contig.length}`),
+      '#columns: readID chr1 pos1 chr2 pos2',
+      'a\tchrI\t10\tchrI\t20',
+      'b\tchrI\t10',
+      'c\tchrI\t10\tchrI',
+    ]
+    const pixels = await bin(`${lines.join('\n')}\n`)
+    expect(pixels.sum).toBe(1)
+    // `b` never reaches `chr2`, `c` never reaches `pos2` — and the two land in
+    // different counters, which is the distinction the importer keeps.
+    expect(pixels.skippedUnknownContig).toBe(1)
+    expect(pixels.skippedBadPosition).toBe(1)
+  })
+})
+
+describe('mergeDuplicates', () => {
+  it('orders and merges a row whether or not it arrived in order', () => {
+    // Both row shapes in one table, because the pass now asks each row whether
+    // it needs sorting instead of sorting every one. Row 0 arrives ascending
+    // with a repeat — the shape a correctly sorted file produces, where the
+    // sort would be pure cost — and row 1 arrives out of order with a repeat
+    // of its own. Both have to come out ascending, deduplicated, and summed.
+    const table: BinnedPixels = {
+      binSize: 100,
+      contigs: [{ name: 'chrI', length: 400 }],
+      chromOffset: Float64Array.from([0, 4]),
+      nBins: 4,
+      bin1: Int32Array.from([1, 1, 1, 1, 0, 0, 0]),
+      bin2: Int32Array.from([3, 1, 3, 2, 0, 2, 2]),
+      count: Int32Array.from([5, 1, 2, 4, 7, 3, 6]),
+      nnz: 7,
+      sum: 28,
+      skippedUnknownContig: 0,
+      skippedBadPosition: 0,
+      clampedPosition: 0,
+      wasUnsorted: true,
+      truncated: false,
+      contigsWithoutCisContacts: [],
+    }
+    const merged = mergeDuplicates(table)
+    expect([...merged.bin1]).toEqual([0, 0, 1, 1, 1])
+    expect([...merged.bin2]).toEqual([0, 2, 1, 2, 3])
+    expect([...merged.count]).toEqual([7, 9, 1, 4, 7])
+    expect(merged.nnz).toBe(5)
   })
 })
 
