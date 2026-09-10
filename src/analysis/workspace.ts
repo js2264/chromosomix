@@ -42,12 +42,14 @@ import { defaultStyle, emptyPlacement } from '../annotations/types'
 import type { Placement } from '../annotations/types'
 import type { AnnotationEntry, ComputedSource } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
+import type { GroupSettings } from '../annotations/groups'
 import { el } from '../ui/dom'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import {
   SyntheticCard,
+  groupNameOn,
   syntheticEntry,
   syntheticId,
   type SyntheticFormat,
@@ -137,6 +139,17 @@ export interface AnalysisWorkspaceHost {
    * `Session.carry` for when it is filled.
    */
   carried?(): readonly CarriedResult[]
+  /**
+   * The group decisions for this file, where a surface is holding any.
+   *
+   * Only one thing here needs them: a task that emits a *set* of profiles can
+   * say how the set reads (§18.11), and "these four overlay" is a fact about the
+   * group rather than about any one of its lanes. Optional because a
+   * `.metacool`'s drawer has no group memory to write to, and because a headless
+   * caller has no picture at all — a missing hook loses the suggestion and
+   * nothing else.
+   */
+  groups?(): GroupSettings | null
   /** A panel's availability changed, or a row needs repainting. */
   changed(): void
 }
@@ -476,6 +489,14 @@ export class AnalysisWorkspace {
         framing: result.provenance.framing.label,
       }
       const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
+      // How the set reads, for a set that has an opinion (§18.11) — and only for
+      // a group nobody has decided about, so a reader who stacked it and ran the
+      // task again gets it back stacked.
+      if (output.group !== undefined && output.groupMode !== undefined) {
+        const groups = this.host.groups?.() ?? null
+        const name = groupNameOn(output.group, on)
+        if (groups !== null && !groups.knowsMode(name)) groups.setMode(name, output.groupMode)
+      }
       // `begin` is the one door every row goes through, and it opens them
       // `loading`; the vector is already in hand, so this one is ready the
       // moment the worker has been told about it.

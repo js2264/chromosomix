@@ -29,6 +29,7 @@ import type { MetaCooler } from '../../metacooler/MetaCooler'
 import { DEFAULT_WEIGHT_COLUMN } from '../../metacooler/matrix'
 import type { JobContext } from '../job'
 import type { BlockInput } from '../worker/protocol'
+import { diagonalTiles, tileRows } from '../tiles'
 
 /** A half-open run of absolute bins. */
 export interface Span {
@@ -131,33 +132,6 @@ export async function squareFor(
 // ---------------------------------------------------------------------------
 // Reading a diagonal, without the square around it
 // ---------------------------------------------------------------------------
-
-/**
- * The largest tile either reader below will ask the file for, in cells.
- *
- * 16 million cells is 64 MB as `Float32`, which is small enough to be nothing on
- * any machine that opened the file and large enough that a chromosome is a few
- * dozen reads rather than a few thousand. It is a *tile* bound and not a budget:
- * the point of both readers is that what they hold does not grow with the
- * sequence, so there is no machine-dependent number to consult.
- */
-const TILE_CELLS = 16_000_000
-
-/**
- * Rows per tile, for a reader that needs `halo` bins of margin around each one.
- *
- * The read is `(tile + halo)` wide however tall it is, so the cells a whole
- * sequence costs are `n × (tile + halo)` — smallest when the tile is about the
- * halo, and only twice the band itself there. A floor keeps a narrow band from
- * turning a chromosome into thousands of tiny queries, and the cell cap keeps a
- * wide one from asking for a tile it cannot hold.
- */
-function tileRows(halo: number, extra: number): number {
-  const wanted = Math.max(256, Math.min(halo, 4096))
-  let tile = wanted
-  while (tile > 1 && tile * (tile + extra) > TILE_CELLS) tile = Math.floor(tile / 2)
-  return Math.max(1, tile)
-}
 
 /**
  * A run of diagonals of one sequence, read without the square around it.
@@ -309,8 +283,10 @@ export async function forEachDiagonalTile(
 ): Promise<void> {
   const n = span.to - span.from
   const halo = Math.max(0, options.halo)
+  // Through `diagonalTiles`, so the panel's estimate counts the reads this
+  // loop actually makes (§18.6).
   const body = tileRows(halo * 2, halo * 2)
-  const tiles = Math.max(1, Math.ceil(n / body))
+  const tiles = diagonalTiles(n, halo)
 
   for (let t = 0; t < tiles; t++) {
     const ownFrom = t * body

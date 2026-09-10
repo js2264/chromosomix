@@ -33,6 +33,7 @@
  * it is kept because "the annotation" and "a peak set" are not the same thing on
  * screen even when the file format is.
  */
+import { DEFAULT_DIVERGING_COLORMAP } from '../render/colormaps'
 import type { TrackOp } from './derived'
 
 /**
@@ -571,7 +572,21 @@ export function normalisePlacement(placement: Partial<Placement> | undefined): P
 }
 
 /** How a value track is resolved into ink. */
-export type TrackMode = 'line' | 'area' | 'bar'
+/**
+ * How a value profile is resolved into ink.
+ *
+ * The first three draw the value as a *position* across the lane and are the
+ * three a genome browser has always had. `heatmap` draws it as a **colour**
+ * instead, filling the lane's whole thickness, which trades the precision of a
+ * position for the one thing a position cannot do: it costs no height. A track
+ * that is unreadable at 20 pixels as a line is perfectly readable at 20 pixels
+ * as a strip of colour, so a stack of them fits on a screen — which is what
+ * multi-scale insulation needs and what `laneBands` divides a lane for.
+ */
+export type TrackMode = 'line' | 'area' | 'bar' | 'heatmap'
+
+/** Every mode, in the order the picker offers them. */
+export const TRACK_MODES: readonly TrackMode[] = ['area', 'line', 'bar', 'heatmap']
 
 /** A clip on the value axis. `auto` recomputes from what is in view. */
 export interface Limits {
@@ -591,11 +606,59 @@ export type OverlayShape = 'border' | 'element'
  * stays a plain serialisable object, and adding a control to one kind does not
  * mean widening a union that three other call sites switch on.
  */
+/**
+ * What a one-signed heatmap lane draws with when nobody has chosen.
+ *
+ * `viridis` rather than the map's own `afmhot_r`: a lane is a thin strip beside
+ * a picture that is already `afmhot_r`, and two different quantities in one
+ * palette read as one. It is also the one this repository already names as
+ * colour-vision-safe.
+ */
+export const DEFAULT_HEATMAP_LANE_COLORMAP = 'viridis'
+
 /** The axis a track's values are drawn on. See {@link AnnotationStyle.scale}. */
 export type TrackScale = 'linear' | 'log2'
 
 /** Every scale, in the order the picker offers them. */
 export const TRACK_SCALES: readonly TrackScale[] = ['linear', 'log2']
+
+/**
+ * The colormap a heatmap lane draws with: the reader's, or the data's own.
+ *
+ * Diverging when the values straddle zero, sequential when they do not. See
+ * {@link AnnotationStyle.colormap}.
+ */
+export function colormapOf(
+  style: { colormap?: string },
+  limits: { min: number; max: number },
+): string {
+  if (typeof style.colormap === 'string' && style.colormap !== '') return style.colormap
+  return limits.min < 0 && limits.max > 0 ? DEFAULT_DIVERGING_COLORMAP : DEFAULT_HEATMAP_LANE_COLORMAP
+}
+
+/**
+ * Whether the tracks sharing a lane stack inside it instead of overlaying.
+ *
+ * **Heatmaps stack, they do not overlay.** Two translucent lines in one lane are
+ * legible because ink adds and a reader can follow either; two translucent
+ * colour maps are a third colour that means neither. So a lane whose members all
+ * draw as heatmaps divides its own thickness between them — the height the
+ * reader set stays the height of the *group*, which is what makes a four-scale
+ * insulation set cost one lane and not four — and every other mode goes on
+ * sharing the lane as it always did.
+ *
+ * All of them, not most: one line among three heatmaps has nowhere to be drawn
+ * except across the whole lane, over the colours, and dividing the lane under it
+ * would leave the line a fraction of the height its axis is labelled for. A
+ * mixed lane overlays, and the reader who wanted the stack sets the odd one out.
+ *
+ * Here rather than in either painter because both draw it, and a rule about what
+ * a lane *is* that lives in one renderer is a rule the other one drifts from —
+ * which is exactly what the group modes did before `annotations/groups.ts`.
+ */
+export function stacksAsHeatmaps(members: ReadonlyArray<{ style: { mode: TrackMode } }>): boolean {
+  return members.length > 1 && members.every((member) => member.style.mode === 'heatmap')
+}
 
 /** This lane's scale, or the linear one every lane starts on. */
 export function scaleOf(style: { scale?: TrackScale }): TrackScale {
@@ -662,6 +725,21 @@ export interface AnnotationStyle {
    * an older build restores unchanged — {@link scaleOf} is the one reader.
    */
   scale?: TrackScale
+  /**
+   * The colormap a `heatmap` lane is drawn with.
+   *
+   * Absent means *chosen from the data*, which is the right answer far more
+   * often than a picker is: a track whose values cross zero is a departure from
+   * something and wants a diverging map with its middle on the zero, and a
+   * one-signed one wants a ramp. That is the same reading `resolveLimits`
+   * already makes about the axis, so a lane's colours and its limits agree
+   * without either being told about the other.
+   *
+   * Read only by a heatmap lane, and the control that sets it appears only when
+   * the style is one — a colormap on a line track is a setting that does
+   * nothing, which is worse than an absent one.
+   */
+  colormap?: string
   /**
    * Draw the value axis upside down, floor at the top.
    *

@@ -94,6 +94,20 @@ export class GroupSettings {
     return this.modes[group] ?? 'stacked'
   }
 
+  /**
+   * `true` where a mode was actually chosen for this group.
+   *
+   * {@link modeOf} answers `stacked` for a group nobody has touched and for one
+   * a reader deliberately stacked, which is the right answer to *how do I draw
+   * this* and the wrong one to *may I suggest something*. A task that emits a
+   * set with an opinion about how it reads (§18.11) asks this first, so its
+   * suggestion applies to a fresh group and never overrules a reader who pulled
+   * one apart and ran it again.
+   */
+  knowsMode(group: string): boolean {
+    return group in this.modes
+  }
+
   setMode(group: string, mode: GroupMode): void {
     this.modes = { ...this.modes, [group]: mode }
     remember(this.key, MODE_SCOPE, this.modes)

@@ -26,8 +26,10 @@ import { describe, expect, it } from 'vitest'
 
 import { diamondSums, insulationScore } from '@/analysis/insulation'
 import { runInsulation } from '@/analysis/run/insulation'
+import { INSULATION_TASK } from '@/analysis/tasks/insulation'
+import { diagonalTiles } from '@/analysis/tiles'
 import type { JobContext } from '@/analysis/job'
-import type { AnalysisFraming, Params, ProfileOutput } from '@/analysis/types'
+import type { AnalysisContext, AnalysisFraming, Params, ProfileOutput } from '@/analysis/types'
 
 const BINSIZE = 1000
 /** Comfortably more than one tile, so the seams are real. */
@@ -196,5 +198,49 @@ describe('insulation read in tiles', () => {
       // Square tiles, because `diamondSums` takes a square and is goldened.
       expect(read.cols[1] - read.cols[0]).toBe(side)
     }
+  })
+})
+
+/**
+ * The estimate has to count the reads the runner makes.
+ *
+ * It priced one dense square per sequence, which is what the runner did before
+ * the read was tiled — four range requests for a chromosome that is now read as
+ * a run of squares along its diagonal. On mouse chr1 at 5 kb that is a number
+ * two orders of magnitude under the truth, on the one screen a reader consults
+ * before starting something expensive, and it is also what the scan gate (§18.6)
+ * is derived from. So the two share the arithmetic rather than each carrying
+ * their own copy of it.
+ */
+describe('what a tiled read is priced at', () => {
+  function context(binsize: number, bp: number): AnalysisContext {
+    return {
+      hasMap: true,
+      hasGenomes: false,
+      blockLoaded: false,
+      binsize,
+      contigs: [{ name: 'I', bins: Math.ceil(bp / binsize) }],
+      entries: [],
+      framing: null,
+    } as unknown as AnalysisContext
+  }
+
+  it('counts one read per tile, not one per sequence', async () => {
+    const reads: Read[] = []
+    await runInsulation(job(SETTINGS, reads))
+    // Unbalanced, so `squareFor` is four requests a tile: the bins, the sizes,
+    // the pixel index and the pixels themselves.
+    const estimate = INSULATION_TASK.estimate(context(BINSIZE, BINS * BINSIZE), SETTINGS)
+    expect(estimate.requests).toBe(reads.length * 4)
+    expect(estimate.note).toMatch(/along their diagonals/)
+  })
+
+  it('grows with the sequence, which is the whole point of having noticed', () => {
+    // Mouse chr1 at 5 kb, scored with a 10-bin diamond: 39,095 bins in tiles of
+    // 256, which is 153 reads and not one.
+    const mouse = context(5000, 195_471_971)
+    const priced = INSULATION_TASK.estimate(mouse, SETTINGS)
+    expect(diagonalTiles(39_095, 10)).toBeGreaterThan(100)
+    expect(priced.requests).toBe(diagonalTiles(39_095, 10) * 4)
   })
 })

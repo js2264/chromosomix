@@ -29,7 +29,12 @@ import { AnnotationLoader } from '../../src/annotations/loader'
 import { AnnotationStore, mintAnnotationId } from '../../src/annotations/store'
 import { defaultStyle, emptyPlacement } from '../../src/annotations/types'
 import type { AnnotationPayload, ComputedSource } from '../../src/annotations/types'
-import { SYNTHETIC_PREFIX, syntheticEntry, syntheticId } from '../../src/ui/SyntheticCard'
+import {
+  SYNTHETIC_PREFIX,
+  groupNameOn,
+  syntheticEntry,
+  syntheticId,
+} from '../../src/ui/SyntheticCard'
 
 /** The shape `mintAnnotationId` produces, and the one nothing else may take. */
 const MINTED = /^a\d+$/
@@ -352,5 +357,56 @@ describe('a computed interval set, as an overlay', () => {
     const store = overlayRow(`overlay-twice-${Math.random()}.cool`)
     expect(store.entries).toHaveLength(1)
     expect(store.entries[0].id).not.toMatch(MINTED)
+  })
+})
+
+/**
+ * The display hints a task may send with a profile (§18.11).
+ *
+ * A task that emits a *set* — insulation at four windows — knows something about
+ * how the set reads that no default can work out from one row: they belong
+ * together, and they are a matrix rather than four curves. So it may name a
+ * group and a drawing style, and they are written into the row's style **once**,
+ * on the way in.
+ *
+ * Once, and into the style, is the whole design. From that moment they are the
+ * reader's: renaming the group, breaking it up, or switching a row back to a
+ * line are ordinary edits to an ordinary track, and nothing re-asserts the
+ * suggestion behind them on the next repaint.
+ */
+describe('the hints a task sends with a profile', () => {
+  function hinted(over: Partial<ProfileOutput>): ProfileOutput {
+    return { ...profile('insulation-w20'), ...over }
+  }
+
+  it('become the row’s own group and style', () => {
+    const entry = syntheticEntry(
+      hinted({ group: 'Insulation', mode: 'heatmap' }),
+      source(),
+      '#0072b2',
+    )
+    expect(entry.style.group).toBe('Insulation')
+    expect(entry.style.mode).toBe('heatmap')
+  })
+
+  it('leave a row that carries none exactly as it was', () => {
+    const entry = syntheticEntry(profile('coverage'), source(), '#0072b2')
+    expect(entry.style.group).toBe('')
+    expect(entry.style.mode).toBe(defaultStyle('track', '#0072b2').mode)
+  })
+
+  /**
+   * A batch runs the task once per map, and one group name across all of them
+   * would stack five replicates' rows into one lane — five heatmaps of the same
+   * window from five different files, reading as one scale ladder. The label is
+   * made specific to the map for the same reason, so the two agree.
+   */
+  it('name a group per map, as the label is named per map', () => {
+    const output = hinted({ group: 'Insulation', mode: 'heatmap' })
+    const lead = syntheticEntry(output, source(), '#0072b2', { map: 'lead', label: 'first' })
+    const other = syntheticEntry(output, source(), '#0072b2', { map: 'p2', label: 'replicate 2' })
+    expect(lead.style.group).toBe('Insulation')
+    expect(other.style.group).toBe('Insulation · replicate 2')
+    expect(groupNameOn('Insulation')).toBe('Insulation')
   })
 })

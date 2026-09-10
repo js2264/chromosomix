@@ -368,3 +368,31 @@ describe('a long name in a narrow column', () => {
     expect(boxes.names[0].along).toBe(long.length * CHAR)
   })
 })
+
+/**
+ * A thin lane writes the range **beside** the name, and needs the gap that goes
+ * with it.
+ *
+ * The block puts the range under the names where the lane has the height for a
+ * second line and on the same line where it has not — a clipped lane loses the
+ * layout rather than the fact. What it used to lose as well was the space: the
+ * range started exactly where the name ended, so `80 kb` and `-1.46` were read
+ * as one mangled word. Rare while every lane was 90 pixels tall; the ordinary
+ * case once a stack of heatmaps divides one lane between four tracks (§18.11).
+ */
+describe('the range beside a name', () => {
+  it('starts clear of the name it follows', () => {
+    // 20 across: `nameTop + detailDrop + 6` is 25, so there is no second line.
+    const thin = label(frameOf('bottom', 20))
+    const name = thin.names[0].box
+    expect(thin.limits).toHaveLength(2)
+    // On the same line, which is what makes the gap matter.
+    expect(thin.limits[0].box[1]).toBe(name[1])
+    expect(thin.limits[0].box[0]).toBeGreaterThan(name[0] + name[2])
+  })
+
+  it('still tucks it under the name where the lane has the room', () => {
+    const tall = label(frameOf('bottom', 60))
+    expect(tall.limits[0].box[1]).toBeGreaterThan(tall.names[0].box[1])
+  })
+})

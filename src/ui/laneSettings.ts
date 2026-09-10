@@ -19,6 +19,7 @@ import type { AnnotationStore } from '../annotations/store'
 import {
   COLOUR_BY,
   PAIR_LAYOUTS,
+  TRACK_MODES,
   TRACK_SCALES,
   readsOf,
   scaleOf,
@@ -26,9 +27,11 @@ import {
   type ColourBy,
   type PairLayout,
   type ReadStyle,
+  type TrackMode,
   type TrackScale,
 } from '../annotations/types'
 import { groupsFor } from '../annotations/bam/reads'
+import { COLORMAP_NAMES } from '../render/colormaps'
 import { readPalette } from '../render/alignments'
 import { button, el, trimNumber } from './dom'
 import { iconButton } from './icons'
@@ -97,22 +100,85 @@ export function heightField(store: AnnotationStore, entry: AnnotationEntry): HTM
   )
 }
 
-/** Line, area or bars — how a value profile is resolved into ink. */
-export function modeField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+/**
+ * Line, area, bars or a heatmap — how a value profile is resolved into ink.
+ *
+ * The first three draw the value as a position across the lane; `heatmap` draws
+ * it as a colour, which costs no height and is the only one of the four that
+ * several tracks can be stacked in without a screen's worth of lane each.
+ */
+export function modeField(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  onPick?: (mode: TrackMode) => void,
+): HTMLElement {
   const select = el('select', { class: 'select' })
-  for (const mode of ['area', 'line', 'bar'] as const) {
+  for (const mode of TRACK_MODES) {
     select.appendChild(el('option', { value: mode, text: mode }))
   }
   select.value = entry.style.mode
-  select.addEventListener('change', () =>
-    store.restyle(entry.id, { mode: select.value as 'area' | 'line' | 'bar' }),
-  )
+  select.addEventListener('change', () => {
+    const mode = select.value as TrackMode
+    store.restyle(entry.id, { mode })
+    onPick?.(mode)
+  })
   return el(
     'label',
     { class: 'field ann-field ann-field-tight' },
     el('span', { class: 'field-label', text: 'style' }),
     select,
   )
+}
+
+/**
+ * Which colormap a heatmap lane fills with.
+ *
+ * **Shown only when the style is a heatmap**, because on a line track it is a
+ * setting that does nothing, and a control that silently does nothing is worse
+ * than an absent one — the rule `ui/AnnotationCard.ts` already applies to the
+ * edge picker on a pile of reads.
+ *
+ * The first entry is *auto*, and it is the default rather than a convenience:
+ * a track whose values cross zero is a departure from something and wants a
+ * diverging map with its middle on the zero, while a one-signed one wants a
+ * ramp — the same reading `resolveLimits` makes about the axis. A reader who
+ * disagrees picks; a reader who does not is right far more often than a fixed
+ * choice would be.
+ */
+export function colormapField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const select = el('select', { class: 'select' })
+  select.appendChild(el('option', { value: '', text: 'auto' }))
+  for (const name of COLORMAP_NAMES) {
+    select.appendChild(el('option', { value: name, text: name }))
+  }
+  select.value = typeof entry.style.colormap === 'string' ? entry.style.colormap : ''
+  select.title =
+    'Auto reads the data: diverging about zero where the values cross it, a ramp where they do not.'
+  select.addEventListener('change', () => store.restyle(entry.id, { colormap: select.value }))
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'colours' }),
+    select,
+  )
+}
+
+/**
+ * The style and, under a heatmap, the colours — as a pair.
+ *
+ * They are built together because one decides whether the other is there, and
+ * the card cannot do it: a `<select>` keeps focus after a pick, and every card
+ * defers its rebuild while a control holds a value the reader may still be
+ * giving. Wiring the picker to the style directly means the colours appear on
+ * the pick that asked for them rather than on the next click somewhere else.
+ */
+export function styleFields(store: AnnotationStore, entry: AnnotationEntry): HTMLElement[] {
+  const colours = colormapField(store, entry)
+  const show = (mode: TrackMode): void => {
+    colours.classList.toggle('hidden', mode !== 'heatmap')
+  }
+  show(entry.style.mode)
+  return [modeField(store, entry, show), colours]
 }
 
 /**

@@ -5941,11 +5941,19 @@ canvas.is-frozen {
 }
 
 /* Two controls on one row, because neither fills one: a settings body of six
-   half-empty rows is a body that has to be scrolled to reach the limits. */
+   half-empty rows is a body that has to be scrolled to reach the limits.
+
+   It wraps, and only ever needs to for one row: a track lane carries a height,
+   a style, a scale and a flip, and a *fourth* control appears beside them when
+   the style is a heatmap (§18.11). Four in a 250-pixel column on one line is
+   three truncated words and a select two characters wide. Wrapping costs the
+   rows that fit nothing at all — a line that fits does not wrap — and gives the
+   one that does not a second line instead of illegible controls. */
 .ann-inline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem 0.5rem;
   min-width: 0;
 }
 

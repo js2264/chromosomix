@@ -52,6 +52,7 @@ import {
   limitsField,
   mapqField,
   modeField,
+  styleFields,
   opacityField,
   duplicatesToggle,
   splitsToggle,
@@ -1068,8 +1069,15 @@ export class AnnotationCard {
       'div',
       { class: 'ann-inline' },
       heightField(this.props.store, entry),
+      // The colours picker rides with the style and shows itself only under a
+      // heatmap: on a line the colour is the chip on the head, and a second
+      // colour control there would be two answers to one question.
       ...(hasTrackControls(entry.kind)
-        ? [this.mode(entry), scaleField(this.props.store, entry), this.flip(entry)]
+        ? [
+            ...styleFields(this.props.store, entry),
+            scaleField(this.props.store, entry),
+            this.flip(entry),
+          ]
         : []),
       ...(entry.kind === 'sequence' ? [this.mode(entry)] : []),
     )

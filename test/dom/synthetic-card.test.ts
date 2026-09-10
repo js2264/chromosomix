@@ -253,3 +253,85 @@ describe('a derived track’s row', () => {
     expect(asked).toEqual([[entry.id, 'bigwig']])
   })
 })
+
+/**
+ * The style picker, and the colours picker that comes with it (§18.11).
+ *
+ * This card is the **only** one that lists a computed row — the Tracks card
+ * leaves it out on purpose, so that a result is not in the panel twice under two
+ * rows that rename independently — which makes it the only place a computed lane
+ * can be given a style at all. A heatmap mode offered only on the Tracks card
+ * would be a mode the four insulation scales could never be drawn in, which is
+ * the one set it was added for.
+ *
+ * The colours picker is **conditional**, and deliberately not a fifth control
+ * sitting inert beside the others: on a line the colour is the chip on the row's
+ * head, so a second colour control there is two answers to one question. It has
+ * to appear on the pick that asks for it, which is why the two are built as a
+ * pair — a `<select>` keeps focus after a pick and this card, like every other,
+ * defers its rebuild while a control holds a value the reader may still be
+ * giving.
+ */
+describe('a computed track’s drawing style', () => {
+  function selects(card: SyntheticCard): HTMLSelectElement[] {
+    return all<HTMLSelectElement>(card.el, 'select')
+  }
+
+  function fieldOf(select: HTMLSelectElement): HTMLElement {
+    const field = select.closest('.ann-field')
+    if (field === null) throw new Error('no field around the select')
+    return field as HTMLElement
+  }
+
+  /** The style select, by the modes it offers rather than by its position. */
+  function styleSelect(card: SyntheticCard): HTMLSelectElement {
+    const found = selects(card).find((node) =>
+      all<HTMLOptionElement>(node, 'option').some((option) => option.value === 'heatmap'),
+    )
+    if (found === undefined) throw new Error('no style select on the row')
+    return found
+  }
+
+  /** The colours select — the one whose first option is *auto*. */
+  function coloursSelect(card: SyntheticCard): HTMLSelectElement {
+    const found = selects(card).find(
+      (node) => all<HTMLOptionElement>(node, 'option')[0]?.textContent === 'auto',
+    )
+    if (found === undefined) throw new Error('no colours select on the row')
+    return found
+  }
+
+  it('offers the heatmap, on the one card a computed row is listed on', () => {
+    const made = make()
+    expect(all<HTMLOptionElement>(styleSelect(made.card), 'option').map((one) => one.value)).toContain(
+      'heatmap',
+    )
+  })
+
+  it('keeps the colours picker out of the way until there are colours to pick', () => {
+    const made = make()
+    expect(fieldOf(coloursSelect(made.card)).classList.contains('hidden')).toBe(true)
+  })
+
+  it('shows it on the pick that asks for it, without waiting for a rebuild', () => {
+    const made = make()
+    const style = styleSelect(made.card)
+    style.value = 'heatmap'
+    style.dispatchEvent(new Event('change'))
+    expect(made.store.entries[0].style.mode).toBe('heatmap')
+    // The card has *not* rebuilt — the select still holds focus as far as it is
+    // concerned — so this is the picker that was already there, revealed.
+    expect(fieldOf(coloursSelect(made.card)).classList.contains('hidden')).toBe(false)
+  })
+
+  it('writes the reader’s colours onto the row, and their empty choice as none', () => {
+    const made = make()
+    const colours = coloursSelect(made.card)
+    colours.value = 'magma'
+    colours.dispatchEvent(new Event('change'))
+    expect(made.store.entries[0].style.colormap).toBe('magma')
+    colours.value = ''
+    colours.dispatchEvent(new Event('change'))
+    expect(made.store.entries[0].style.colormap).toBe('')
+  })
+})

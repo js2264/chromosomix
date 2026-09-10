@@ -4306,6 +4306,63 @@ and like every other it is *named* in the manifest when it is skipped. One test 
 comparison at all: it drives the kernel with the mirror fold switched off and records what that
 produces, because what it produces still looks like a P(s).
 
+### 18.11 A set of scales is one picture
+
+Some tasks produce a *set* of profiles that are one reading at several settings, and diamond
+insulation at several windows is the case that forced this: the same score computed over diamonds of
+10, 20, 40 and 80 bins. Adopted as four ordinary tracks that is four lanes, four autoscaled axes and
+four curves crossing each other — and a reader comparing scales holds four pictures against each other
+by eye. **A value per bin per window is a matrix**, and one line per window is what a matrix looks like
+drawn as a bundle of curves.
+
+So a lane gets a fourth drawing style, `heatmap`, where the value is a **colour** rather than a
+position. It costs no height, which is the whole point: several of them fit where one track fitted.
+Everything else about the lane is unchanged and deliberately so — the same limits, the same autoscale
+group, the same ceiling drag, the same flip (which reverses the ramp, because that is what flipping an
+axis means), the same `NaN`-is-a-gap rule, the same export. It is a mode of `drawTrack`, not a second
+renderer.
+
+**Heatmaps stack; everything else overlays.** Two translucent lines in one lane are legible because ink
+adds and a reader can follow either. Two translucent colour maps are a third colour that means
+neither — so a lane whose members *all* draw as heatmaps divides its own thickness between them
+instead, and the height the reader set stays the height of the group. All of them and not most: a line
+among three heatmaps has nowhere to be drawn but across the whole lane, over the colours, and dividing
+the lane under it would leave it a fraction of the height its axis is labelled for. A mixed lane
+overlays, and the reader who wanted the stack sets the odd one out. The rule is one function in
+`annotations/types.ts` because both lane renderers ask it, and a rule about what a lane *is* that lives
+in one renderer is one the other drifts from.
+
+**The colours are chosen by the data unless the reader chooses.** *Auto* is a reading and not a
+fallback: values that straddle zero are a departure from something and get a diverging map with its
+middle on the zero, values that do not are an amount and get a ramp — the same reading the value axis
+already makes when it decides where to put its baseline. Insulation is the first kind, and a log2 ratio
+drawn on `viridis` puts "no change" at an arbitrary green. The per-lane picker sits beside the style
+and **appears only under a heatmap**, because on a line the colour is the chip on the row's head and a
+second colour control there is two answers to one question. It is built together with the style
+control rather than by the card, so it appears on the pick that asks for it: a `<select>` keeps focus
+after a pick, and every card defers its rebuild while a control holds a value the reader may still be
+giving.
+
+**A task may say how its set reads, once.** A `ProfileOutput` can carry a group, a drawing style and a
+mode for that group, and multi-scale insulation carries all three: one group, in overlay, drawn as
+heatmaps. They are written into the row's style on the way in and are the reader's from that moment —
+renaming the group, breaking it up or switching a row back to a line are ordinary edits to an ordinary
+track (§18.5), and nothing re-asserts the suggestion on the next repaint. The group's *mode* is the one
+that is not the row's own, so it goes through `knowsMode`: a suggestion applies to a group nobody has
+decided about, and a reader who pulled the stack apart and ran the task again gets it back the way they
+left it. The group name is made specific to the map for the same reason the label is (§18.2) — a batch
+over a deck would otherwise stack five replicates' rows into one lane.
+
+The scales are emitted **widest first**, because lanes are laid out in the order they are adopted and
+every published version of this figure sharpens downwards: the widest window on top, so a boundary that
+survives every scale reads as a column through the whole stack. A single-scale run is untouched — an
+ordinary ungrouped line — because there is no set for it to be part of, and a heatmap of one row is a
+worse picture of one track than the track.
+
+The Synthetic card carries the style control, and that is not an accident of layout: it is the **only**
+card that lists a computed row, since the Tracks card leaves them out on purpose (§18.5), so a style
+offered only there would be one a computed lane could never be given.
+
 ---
 
 ## 19. Standalone target: one HTML file

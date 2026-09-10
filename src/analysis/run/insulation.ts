@@ -89,6 +89,15 @@ function planUnits(job: JobContext, region: string): Unit[] {
   return out
 }
 
+/**
+ * What the scales of one run are grouped under.
+ *
+ * A name rather than an id, because it is shown to the reader and they can
+ * change it: from the moment the rows exist it is an ordinary group, and the
+ * only thing this constant decides is what it is called before anyone asks.
+ */
+const INSULATION_GROUP = 'Insulation'
+
 export const runInsulation: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
@@ -223,9 +232,17 @@ export const runInsulation: TaskRunner = async (job) => {
   }
   job.progress(units.length, units.length, 'Done')
 
-  const outputs: TaskOutput[] = windows.map((window, index) =>
-    profileFor(job, scores[index], window),
-  )
+  // **Widest first, because the stack reads top-down.** A multi-scale run is one
+  // picture — the same score at doubling smoothings — and the lanes are laid out
+  // in the order they are adopted, so emitting them narrowest-first would put
+  // the finest detail at the top and the smoothest at the bottom. Every published
+  // version of this figure runs the other way (fanc's `-p scores`, cooltools'
+  // multi-window insulation): the widest window on top, sharpening downwards, so
+  // a boundary that survives every scale reads as a column through the whole
+  // stack.
+  const outputs: TaskOutput[] = windows
+    .map((window, index) => profileFor(job, scores[index], window, windows.length > 1))
+    .reverse()
 
   if (call) {
     const total = calls.reduce((sum, entry) => sum + entry.boundaries.length, 0)
@@ -259,7 +276,28 @@ export const runInsulation: TaskRunner = async (job) => {
   return outputs
 }
 
-function profileFor(job: JobContext, values: Float32Array, window: number): ProfileOutput {
+/**
+ * One scale, as a lane.
+ *
+ * `stack` is true when the run produced more than one, and it is the whole of
+ * what this task asks the Annotations panel for (§18.11): one group, drawn as
+ * stacked heatmaps. The reasoning is that a score per bin *per window* is a
+ * matrix, and one line per window is what a matrix looks like when it is drawn
+ * as a bundle of curves — four of them crossing each other, autoscaled to four
+ * different axes, in four lanes' worth of height. As colour it is what it is: a
+ * boundary is a vertical stripe through every row it survives, and the height
+ * cost of the fourth scale is a few pixels rather than another lane.
+ *
+ * A single-scale run is left exactly as it was — an ordinary ungrouped line —
+ * because there is no set for it to be part of and a heatmap of one row is a
+ * worse picture of one track than the track.
+ */
+function profileFor(
+  job: JobContext,
+  values: Float32Array,
+  window: number,
+  stack: boolean,
+): ProfileOutput {
   const bp = window * job.mc.binsize
   return {
     kind: 'profile',
@@ -272,6 +310,9 @@ function profileFor(job: JobContext, values: Float32Array, window: number): Prof
     // sign is the whole reading. Named rather than left blank, because a lane
     // whose axis runs −2 to 2 with no unit invites being read as a count.
     unit: 'log2 ratio',
+    ...(stack
+      ? { group: INSULATION_GROUP, mode: 'heatmap' as const, groupMode: 'overlay' as const }
+      : {}),
   }
 }
 

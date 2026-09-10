@@ -6773,6 +6773,10 @@ export class Session {
         return this.current?.panel?.analysisBlock() ?? null
       },
       store: () => this.annotations?.store ?? null,
+      // The same object both surfaces draw groups from, so a suggestion a task
+      // makes about its own set (§18.11) means the same thing beside the map and
+      // in the 1D browser.
+      groups: () => this.annotations?.groups ?? null,
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
       // The same list the Tracks card is given, and deliberately not

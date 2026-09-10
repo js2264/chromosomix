@@ -40,7 +40,7 @@ import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
-import { scaleField } from './laneSettings'
+import { scaleField, styleFields } from './laneSettings'
 
 /** The three formats a per-bin result can leave the app as (§18.7). */
 export type SyntheticFormat = 'bigwig' | 'bedgraph' | 'bed' | 'tsv'
@@ -172,14 +172,28 @@ export class SyntheticCard {
     // the picture in front of the reader and the second is about what leaves the
     // app. The same control the Tracks card carries, from the same module, so a
     // computed lane and a loaded one are moved by one gesture and not two.
-    // The axis, for the rows that have one. The card is otherwise deliberately
-    // spare — §18.5's point is that a computed track is a track, so its colour,
-    // its height and its limits are the lane's own controls and not a second set
-    // here — but the scale is the one setting a reader reaches for on *this*
-    // card in particular, because the row this card exists for is a ratio and a
-    // ratio on a linear axis is the picture the log was invented for.
+    // The style and the axis, for the rows that have one. The card is otherwise
+    // deliberately spare — §18.5's point is that a computed track is a track, so
+    // its colour, its height and its limits are the lane's own controls and not
+    // a second set here — but these two are settings a reader reaches for on
+    // *this* card in particular, and this card is the only one that lists a
+    // computed row at all: the Tracks card leaves it out on purpose, so a style
+    // offered only there is a style a computed lane could never be given.
+    //
+    // The scale, because the row this card exists for is a ratio and a ratio on
+    // a linear axis is the picture the log was invented for. The style, because
+    // the row this card exists for *second* is one of a set of insulation
+    // profiles at different windows, and reading those as stacked heatmaps
+    // rather than as a bundle of crossing lines is the whole point of §18.11.
     if (entry.kind === 'track') {
-      row.appendChild(el('div', { class: 'ann-inline' }, scaleField(this.options.store, entry)))
+      row.appendChild(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          ...styleFields(this.options.store, entry),
+          scaleField(this.options.store, entry),
+        ),
+      )
     }
     row.appendChild(placementField(this.options.store, entry, mapsOrLead(this.options.maps)))
     row.appendChild(entry.status === 'detached' ? this.recompute(entry) : this.exports(entry))
@@ -440,12 +454,32 @@ export function syntheticEntry(
     status: 'ready',
     visible: true,
     placement: placementOn(SYNTHETIC_EDGE),
-    style: defaultStyle('track', colour),
+    style: {
+      ...defaultStyle('track', colour),
+      // The task's display hints, where it gave any (§18.11). Written into the
+      // style rather than kept beside it, because from here on they are the
+      // reader's: a group they can rename and a style they can change, and not
+      // a property of the result that would come back on the next repaint.
+      ...(output.group === undefined ? {} : { group: groupNameOn(output.group, on) }),
+      ...(output.mode === undefined ? {} : { mode: output.mode }),
+    },
     // The same seed a bigWig's header gives a loaded row: it is what the limits
     // boxes start at when the reader leaves autoscale, and without it an
     // insulation track running −2 to 2 would offer them 0 and 1.
     ...(extent === null ? {} : { fileExtent: extent }),
   }
+}
+
+/**
+ * A suggested group name, made specific to the map it was measured from.
+ *
+ * The same reason the label is (see above): a batch over a deck runs the task
+ * once per map, and one group name across all of them would overlay five
+ * replicates' worth of lanes into one stack of heatmaps whose rows come from
+ * different files.
+ */
+export function groupNameOn(group: string, on?: { map: MapId; label: string }): string {
+  return on === undefined || on.map === LEAD_MAP ? group : `${group} · ${on.label}`
 }
 
 /**

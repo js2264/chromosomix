@@ -14,6 +14,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A lane can draw its values as colour, and multi-scale insulation does.**
+  `heatmap` joins line, area and bars in the **style** picker: the value becomes
+  a colour across the whole lane instead of a position in it, so it costs no
+  height. A lane whose tracks *all* draw that way divides its own thickness
+  between them and stacks them, keeping the height the reader set — two
+  translucent lines in one lane are legible because ink adds, but two
+  translucent colour maps are a third colour that means neither.
+
+  Diamond insulation at several windows now arrives as exactly that: one group,
+  overlaid, **widest window at the top**, sharpening downwards, so a boundary
+  that survives every scale reads as a column through the stack. It used to
+  arrive as four lanes of crossing curves on four autoscaled axes. A run with a
+  single window is unchanged.
+
+  The colours are read from the data unless you choose: values that straddle
+  zero get a diverging map centred on the zero, values that do not get a ramp.
+  The per-lane picker sits beside the style and appears only when the style is a
+  heatmap.
+
+  Two smaller things came with it. A stacked lane writes **a name per row**, in
+  the row it names, rather than one line of four names across whichever row it
+  lands on; and the **Synthetic tracks** card carries the style picker, which it
+  had to — it is the only card that lists a computed row, so a style offered
+  only on the Tracks card was one an insulation lane could never be given.
+
 - **A comparison of two tracks is a synthetic track.** Combining two loaded
   bigWigs used to open a row on the **Tracks** card, among the files it was
   computed from — the one card with no exports on it, so there was no way to get
@@ -86,6 +111,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   takes.
 
 ### Fixed
+
+- **Diamond insulation's estimate counts the reads it makes.** It still said one
+  dense square per sequence, which is what it read before the diagonal was
+  tiled: four range requests for a chromosome that is now read as a run of
+  squares along its diagonal — on mouse chr1 at 5 kb, a number two orders of
+  magnitude under the truth, on the one screen a reader consults before starting
+  something expensive. The estimate and the runner now share the arithmetic
+  instead of each carrying a copy.
+
+- **A lane too thin for two lines no longer runs its range into its name.** The
+  range goes under the name where there is room for it and beside it where there
+  is not, and beside it, it started exactly where the name ended: `80 kb` and
+  `-1.46` read as one word. Rare while every lane was 90 pixels tall, ordinary
+  once four heatmaps share one lane.
 
 - **Both scans on the map read a diagonal instead of a square, and the fine
   resolutions they used to refuse now work.** Neither the insulation diamond nor

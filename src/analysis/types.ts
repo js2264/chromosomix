@@ -24,7 +24,8 @@
  * that does not exist.
  */
 
-import type { AnnotationEntry, AnnotationPayload } from '../annotations/types'
+import type { GroupMode } from '../annotations/groups'
+import type { AnnotationEntry, AnnotationPayload, TrackMode } from '../annotations/types'
 import type { Extent, LayoutKind } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -540,6 +541,33 @@ export interface ProfileOutput {
   unit: string
   /** Suggested lane colour. The reader may change it, and then it is theirs. */
   colour?: string
+  /**
+   * The group this profile joins, where a task emits a *set* that is one
+   * reading rather than several.
+   *
+   * Insulation at four windows is the case: they are the same measurement at
+   * four smoothings, and four ungrouped lanes with four autoscaled axes is four
+   * pictures a reader has to reconcile by eye. Named by the task, and from then
+   * on an ordinary group — the reader can rename it, break it up, or set it to
+   * scale each member separately, exactly as they can one they made themselves.
+   */
+  group?: string
+  /**
+   * How the lane draws, where the task has a better answer than the default.
+   *
+   * `heatmap` for the multi-scale insulation set, because that is the picture
+   * (§18.11): a value per bin per window is a matrix, and crossing lines is what
+   * a matrix looks like when it is drawn as one line per row.
+   */
+  mode?: TrackMode
+  /**
+   * How {@link group} shares the picture, where the task has an opinion.
+   *
+   * A suggestion for a group *nobody has decided about yet*: the workspace does
+   * not overwrite a mode the reader set, so a set re-run after being pulled
+   * apart comes back the way they left it.
+   */
+  groupMode?: GroupMode
 }
 
 /** One line of a {@link CurveOutput}, with an optional band around it. */
