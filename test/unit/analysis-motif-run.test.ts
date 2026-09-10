@@ -4,7 +4,7 @@
  *
  * `motif.test.ts` owns the matcher and `motif-worker.test.ts` drives the whole
  * thing through the worker's front door. What is asserted here is the part in
- * between: the four decisions the runner makes on its own, each of which would
+ * between: the five decisions the runner makes on its own, each of which would
  * be invisible if it were wrong.
  *
  * - **A refusal is a note, not a throw.** `compileMotif` answers a pattern it
@@ -294,11 +294,12 @@ describe('a reference that is not there', () => {
 })
 
 /**
- * One sequence with one site per base, one longer than a run may report.
+ * One sequence of nothing but `A`, a base longer than a search for `A` may
+ * report — so the ceiling, and not the reference, is what ends the scan.
  *
- * Generated from {@link MOTIF_SITE_LIMIT} rather than from a literal, so a
- * change to the ceiling moves the reference with it instead of turning this into
- * a case that no longer reaches the cap.
+ * Sized from {@link MOTIF_SITE_LIMIT} rather than from a literal, so raising the
+ * ceiling moves the reference with it instead of quietly turning this into a
+ * case that never reaches the cap at all.
  */
 function crowded(): SequenceReader {
   const bases = new Uint8Array(MOTIF_SITE_LIMIT + 1).fill('A'.charCodeAt(0))
@@ -324,8 +325,8 @@ describe('the site ceiling', () => {
     const asked = MOTIF_SITE_LIMIT * 4
     const { notes } = await run(
       { pattern: 'A', limit: asked },
-      // No bin grid: the density lane is another half-million values that this
-      // case has no assertion about.
+      // No bin grid, so no density lane: this case is about the sentence, and
+      // the second output is covered above.
       { binsize: 0, reference: crowded() },
     )
     const note = notes.find((text) => text.includes('stopped at the limit')) ?? ''

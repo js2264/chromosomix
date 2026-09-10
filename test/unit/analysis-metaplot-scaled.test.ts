@@ -147,10 +147,10 @@ describe('the metaplot runner, over scaled regions', () => {
   it('stacks features of wildly different lengths in the same columns', async () => {
     // A 5 kb gene and a 50 kb one, averaged. Mapping each window uniformly put
     // the short one's body in columns 40 to 140 and the long one's in 7 to 173,
-    // so the mean of a perfect step function came back as a ramp starting a
-    // third of the way along the plot and reading about a half at column 40 —
-    // an averaged curve belonging to neither feature, which is the failure the
-    // whole mode exists to prevent.
+    // so the mean of a perfect step function came back a staircase: a half from
+    // column 7 to 40 and again from 140 to 173, the long gene's body spilling a
+    // third of the way through each flank. A curve belonging to neither
+    // feature, which is the failure the whole mode exists to prevent.
     const notes: string[] = []
     const curve = curveOf(
       await runMetaplot(job([[100_000, 105_000], [300_000, 350_000]], PARAMS(['t1']), notes)),
