@@ -1,11 +1,18 @@
 {
-  "latest": "b85e986",
+  "latest": "5e97e36",
   "versions": [
     {
       "commit": "b85e986",
       "version": "0.12.0",
       "date": "2026-09-11T00:34:21+02:00",
       "subject": "Add CLI command export and card folding UI features (#43)",
+      "tag": ""
+    },
+    {
+      "commit": "5e97e36",
+      "version": "0.12.0",
+      "date": "2026-09-10T23:06:20Z",
+      "subject": "Write a compared track at the resolution of the tracks, not of the map",
       "tag": ""
     },
     {
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-13T17:56:49+02:00",
       "subject": "Save writes the whole window, as a workspace file (#29)",
-      "tag": ""
-    },
-    {
-      "commit": "792a8a7",
-      "version": "0.10.0",
-      "date": "2026-08-13T17:09:23+02:00",
-      "subject": "Add file picker button to header for adding files to current tab (#28)",
       "tag": ""
     },
     {
