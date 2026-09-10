@@ -48,6 +48,8 @@ function installStorage(): Map<string, string> {
 
 const PUBLIC = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_ATAC.bw'
 const PRIVATE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/hum53/map.mcool'
+/** The other half of a HiC-Pro pair, under the same private scope. */
+const BINS = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/hum53/map_abs.bed'
 
 function scope(overrides: Partial<BucketScope> = {}): BucketScope {
   return {
@@ -293,6 +295,71 @@ describe('stamping a worker message', () => {
     expect((message.source as { credential: { accessKeyId: string } }).credential.accessKeyId).toBe(
       'MINE',
     )
+  })
+
+  /**
+   * A HiC-Pro pair is one source carrying another, and both have to be asked.
+   *
+   * This used to stamp `message.source` and stop, so the matrix went out signed
+   * and the bin file went out bare: a 403 on the half carrying every
+   * coordinate, while the half carrying the counts arrived. From the outside
+   * that is a private matrix that opens and then fails to be a matrix, naming
+   * neither file.
+   */
+  it('signs the bin file beside the matrix it belongs to', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PRIVATE,
+      source: {
+        kind: 'remote',
+        url: PRIVATE,
+        bins: { kind: 'remote', url: BINS },
+      },
+    })
+    const source = message.source as { credential?: unknown; bins: { credential?: unknown } }
+    expect(source.credential, 'the matrix').toBeDefined()
+    expect(source.bins.credential, 'the bin file').toBeDefined()
+  })
+
+  /**
+   * `#bins=` exists so the two halves can live under unrelated keys, so each is
+   * looked up on its own URL. Signing the bin file with the matrix's key would
+   * scope a request to a bucket it is not for.
+   */
+  it('signs the bin file even when the matrix is public', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PUBLIC,
+      source: { kind: 'remote', url: PUBLIC, bins: { kind: 'remote', url: BINS } },
+    })
+    const source = message.source as { credential?: unknown; bins: { credential?: unknown } }
+    expect(source.credential, 'the public matrix').toBeUndefined()
+    expect(source.bins.credential, 'the private bin file').toBeDefined()
+  })
+
+  it('leaves a bin file the caller already signed', () => {
+    writeScopes([scope()])
+    const message = withCredential({
+      kind: 'open',
+      uri: PRIVATE,
+      source: {
+        kind: 'remote',
+        url: PRIVATE,
+        bins: { kind: 'remote', url: BINS, credential: { accessKeyId: 'MINE' } },
+      },
+    })
+    const bins = (message.source as { bins: { credential: { accessKeyId: string } } }).bins
+    expect(bins.credential.accessKeyId).toBe('MINE')
+  })
+
+  it('allocates nothing when neither half needs a key', () => {
+    writeScopes([scope()])
+    const source = { kind: 'remote', url: PUBLIC, bins: { kind: 'remote', url: PUBLIC } }
+    const message = { kind: 'open', uri: PUBLIC, source }
+    // The same object, not a copy — the guard that keeps the common path free.
+    expect(withCredential(message)).toBe(message)
   })
 })
 

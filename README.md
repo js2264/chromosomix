@@ -358,7 +358,7 @@ src/
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
                  the 1D browser, its vector-PDF page, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
-  analysis/      the fifteen tasks (§18): descriptors, pure kernels, a worker of its
+  analysis/      the sixteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
                  and a bigWig writer with no dependency behind it
   app/           App (the window, the tabs, the address bar) and Session (one file)
@@ -481,7 +481,7 @@ matrix, while its `iced/` matrix is the already-normalised one. Offering the fir
 would let somebody normalise twice and get a plausible-looking map. Open the `iced/` matrix to see
 normalised counts; that is what it is for.
 
-**Analysis tasks run on the map, not on the cell set.** The fifteen tasks operate on whatever is
+**Analysis tasks run on the map, not on the cell set.** The sixteen tasks operate on whatever is
 drawn, so they run on a single cell and on a small sum of them. They are not *aware* of cells: there
 is no per-cell batch mode, and no task that reports a distribution across a library. That is a real
 gap rather than a decision against it — it is simply not built.

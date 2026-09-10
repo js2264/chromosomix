@@ -460,10 +460,26 @@ export class BlockLadder {
   destroy(): void {
     this.disposed = true
     this.pending = null
+    // The freeze belongs to the read, so it has to be given back with it.
+    // `abort` already does this and this did not, which left the panel frozen —
+    // gestures held, spinner turning — for a read that had been cancelled and
+    // would never report. It matters only when the panel outlives the ladder,
+    // because a panel torn down in the same breath clears its own freeze in
+    // `detach`; but that is exactly the case a caller reaching for `destroy`
+    // rather than for the view's own teardown is in.
+    //
+    // Conditional on there having *been* a read, mirroring `abort`, so the
+    // number of `onBusy(false)` calls matches the number of `onBusy(true)`
+    // calls and a listener counting them is not driven negative. Safe in either
+    // teardown order: `HeatmapView.setFrozen` returns immediately when the flag
+    // already holds the value asked for, so a panel that has already detached
+    // is not woken to repaint.
+    const wasReading = this.inflight !== null
     this.inflight?.cancel()
     this.inflight = null
     this.held = []
     this.current = null
+    if (wasReading) this.options.onBusy?.(false)
   }
 }
 

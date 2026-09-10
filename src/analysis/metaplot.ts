@@ -65,6 +65,31 @@ export interface Window {
    */
   slotFrom: number
   slotTo: number
+  /**
+   * The feature's own extent, and the columns it owns — a scaled-region window
+   * only.
+   *
+   * This is what makes *flank, body, flank* mean what it says. Without it
+   * {@link windowRow} spreads a window's base pairs evenly over its slots,
+   * which is exactly right for a reference-point window — its span is the same
+   * length for every feature, so every column is `step` base pairs — and wrong
+   * for a scaled one, whose columns are base pairs at the ends and a
+   * *proportion* in the middle. Spread evenly, each feature's body would begin
+   * wherever its own length happened to put it: column 15 for a 20 kb gene,
+   * column 4 for a 100 kb one, against a {@link Layout} that promises column 40
+   * for both.
+   *
+   * Left `undefined` by {@link referenceWindows}, which is what keeps that
+   * mapping the single linear one it should be.
+   */
+  body?: {
+    /** The feature itself, clamped into the window. */
+    start: number
+    end: number
+    /** The slots the body fills, in reading order, clamped into the window's. */
+    slotFrom: number
+    slotTo: number
+  }
 }
 
 /** The column layout a run produces, and what each column means. */
@@ -180,7 +205,24 @@ export function scaledWindows(
       dropped++
       continue
     }
-    windows.push({ contig: feature.contig, start, end, strand: feature.strand, slotFrom, slotTo })
+    // The body's own columns, which is what lets {@link windowRow} resample it
+    // rather than smearing the whole window across the row uniformly. Clipping
+    // normally costs flank columns only, as above — but a feature that runs off
+    // the end of its own sequence loses body columns too, so both the extent
+    // and the columns are clamped into what this window actually reaches.
+    const bodyStart = Math.min(Math.max(feature.start, start), end)
+    const bodyEnd = Math.min(Math.max(feature.end, bodyStart), end)
+    const bodySlotFrom = Math.min(Math.max(layout.bodyFrom, slotFrom), slotTo)
+    const bodySlotTo = Math.min(Math.max(layout.bodyTo, bodySlotFrom), slotTo)
+    windows.push({
+      contig: feature.contig,
+      start,
+      end,
+      strand: feature.strand,
+      slotFrom,
+      slotTo,
+      body: { start: bodyStart, end: bodyEnd, slotFrom: bodySlotFrom, slotTo: bodySlotTo },
+    })
   }
   return { windows, layout, dropped }
 }
@@ -196,6 +238,10 @@ export function scaledWindows(
  *
  * A slot no interval reached is `NaN`, so the aggregation below skips it rather
  * than averaging in a zero nothing measured.
+ *
+ * *Which* slot an interval reaches is {@link positionOf}, which is also where
+ * strand is turned round — so everything here reads in the row's own order and
+ * a minus-strand feature needs no second thought below.
  */
 export function windowRow(
   samples: TrackSamples,
@@ -217,13 +263,13 @@ export function windowRow(
     const from = Math.max(window.start, samples.starts[i])
     const to = Math.min(window.end, samples.ends[i])
     if (!(to > from)) continue
-    // Position within the window, in [0, 1), then into the slots this window
-    // actually covers — and reversed for a minus-strand feature, which is the
-    // whole of strand handling.
-    const lo = (from - window.start) / span
-    const hi = (to - window.start) / span
-    const a = window.strand < 0 ? 1 - hi : lo
-    const b = window.strand < 0 ? 1 - lo : hi
+    // Where the interval falls, as a fraction of the slots this window covers.
+    // Already in reading order, so `a` is the low end of the row's span and `b`
+    // the high one whichever way the feature points.
+    const one = positionOf(window, from)
+    const two = positionOf(window, to)
+    const a = window.strand < 0 ? two : one
+    const b = window.strand < 0 ? one : two
     const first = Math.max(0, Math.floor(a * covered))
     const last = Math.min(covered - 1, Math.ceil(b * covered) - 1)
     for (let slot = first; slot <= last; slot++) {
@@ -240,6 +286,66 @@ export function windowRow(
     if (weights[slot] > 0) row[window.slotFrom + slot] = totals[slot] / weights[slot]
   }
   return row
+}
+
+/**
+ * Where one base pair falls, as a fraction of the slots a window covers, in
+ * reading order.
+ *
+ * A reference-point window is **one** linear map, and has to be: its span is
+ * the same length for every feature, so spreading it evenly over the row is
+ * what puts every feature's anchor in the same column.
+ *
+ * A scaled-region window is **three** maps joined end to end — upstream flank,
+ * body, downstream flank — because that is the only way the body can be
+ * *resampled* to a fixed number of columns while the flanks stay in base pairs.
+ * One linear map over the whole of such a window (which is what this was before
+ * {@link Window.body} existed) hands each feature a share of the row set by its
+ * own length instead: with the shipped defaults a 20 kb gene's body occupied
+ * columns 15 to 165 and a 100 kb gene's columns 4 to 176, against a layout
+ * promising 40 to 140 for both. Nothing was resampled to a fixed width and no
+ * two features were aligned, so the average was the middle of a short gene
+ * against the start of a long one — the very failure the mode exists to
+ * prevent, and the companion heatmap carried it too.
+ *
+ * **Reading order, not coordinate order.** A minus-strand feature is read from
+ * its high coordinate down, so the base-pair knots reverse. The slot knots do
+ * not: `slotFrom`/`slotTo` and `body.slotFrom`/`body.slotTo` are already in
+ * reading order.
+ */
+function positionOf(window: Window, bp: number): number {
+  const body = window.body
+  if (body === undefined) {
+    const through = (bp - window.start) / (window.end - window.start)
+    return window.strand < 0 ? 1 - through : through
+  }
+  const back = window.strand < 0
+  const opens = back ? window.end : window.start
+  const bodyOpens = back ? body.end : body.start
+  const bodyCloses = back ? body.start : body.end
+  const closes = back ? window.start : window.end
+  // Segment by segment rather than by a search for the one `bp` is in, which
+  // is what lets an empty segment fall out rather than being special-cased.
+  const slot =
+    window.slotFrom +
+    progress(bp, opens, bodyOpens) * (body.slotFrom - window.slotFrom) +
+    progress(bp, bodyOpens, bodyCloses) * (body.slotTo - body.slotFrom) +
+    progress(bp, bodyCloses, closes) * (window.slotTo - body.slotTo)
+  return (slot - window.slotFrom) / (window.slotTo - window.slotFrom)
+}
+
+/**
+ * How far `bp` is through one segment, in `[0, 1]`, whichever way it runs.
+ *
+ * A segment of no base pairs reads as entirely behind `bp`, so the segments
+ * after it still receive the whole coordinate. That is safe because a segment
+ * with no base pairs has no columns either — a run with no flank at all, or a
+ * flank clipped away down to nothing — so it awards a range of width zero.
+ */
+function progress(bp: number, from: number, to: number): number {
+  if (from === to) return 1
+  const through = (bp - from) / (to - from)
+  return through < 0 ? 0 : through > 1 ? 1 : through
 }
 
 /** A line and the band around it, over a matrix of one row per feature. */
