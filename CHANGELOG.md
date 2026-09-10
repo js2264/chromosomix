@@ -886,6 +886,115 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A deep scan of the source, and the thirty-one defects it confirmed.** Ten
+  review passes over `src/` — the binary readers, the text parsers, rendering,
+  the analysis tasks, session state, the network path, the UI, the deck, the
+  workers, and documented-versus-actual behaviour — with every finding handed
+  to a second reader whose brief was to *refute* it. Six claims died there.
+  What survived is below, grouped by what it cost rather than by where it
+  lived. Every one carries a test that fails without its fix.
+
+  **Wrong answers, silently.** A version-9 `.hic` was walked with version 8's
+  footer layout: v9 narrowed each per-chromosome scale factor from float64 to
+  float32, and the walk still advanced twelve bytes per chromosome per vector
+  instead of eight, overshooting the normalisation index. Depending on what the
+  misplaced cursor met, the file either failed to open with a raw
+  `RangeError` or opened with its balancing weights silently missing. The
+  reason it shipped is the more interesting half: the fixture writer emitted an
+  *empty* expected-value section, so no test ever executed the loop, and the
+  `hic-straw` oracle reads v9 through a header pointer rather than by walking —
+  so it agreed with us no matter what we did. The fixtures now write those
+  sections populated, at each version's widths, and the oracle fixture zeroes
+  that pointer to force both readers down the same path.
+
+  A tabix-indexed `.gtf.gz` or `.vcf.gz` was refused outright. Byte spans from
+  the index start at BGZF *block* boundaries, which are not line boundaries, so
+  the first and last lines of every fetched span were record fragments handed
+  straight to the parsers — twenty-two lines, none of them parseable, and a
+  message blaming the file. The seams are trimmed now, with the two edge cases
+  that make the obvious rule wrong handled explicitly: a span starting at byte
+  0 begins on a real record, and a file whose last read reached EOF may
+  legitimately end without a newline.
+
+  A `drain()` sized its buffer by `Content-Length` while reading a body the
+  host had gzipped in transit — so the declared length was the *compressed*
+  size and the file was cut to a fraction of itself and returned as complete.
+  A body arriving *shorter* than promised was likewise accepted in silence. Of
+  everything here this is the one that most deserved finding: silent truncation
+  of scientific data that nothing downstream can detect.
+
+  A scaled-region metaplot mapped each window's base pairs uniformly across all
+  of its columns, which is only correct when a feature happens to be exactly
+  `body × step` long. Every other feature had its flanks compressed and its
+  body stretched by a different amount, so an average over features that are
+  genuinely aligned came out smeared. The mapping is piecewise now — flank,
+  body, flank — and reference-point mode was verified bit-identical across four
+  hundred randomised windows before and after.
+
+  A BED domain vanished the moment you zoomed inside it: an `element` overlay
+  was culled by its bottom-right corner rather than tested for overlap, so any
+  feature larger than the view drew nowhere. A `border` mark was stroked
+  *along* the diagonal, over the pixels it exists to point at. A gappedPeak's
+  signal statistics were read from columns 7-9, which in BED12+3 are
+  thickStart, thickEnd and itemRgb. A headed annotation table with twelve or
+  more columns had two unrelated columns decoded as BED12 blocks — now settled
+  by checking that the blocks actually *tile* the feature rather than by
+  counting columns, which also catches the headerless case a header could not
+  have saved. And a per-bin profile carried across a resolution change was
+  exported against the grid the session is on *now* rather than the one its
+  values were computed on.
+
+  **Privacy.** "Forget everything" cleared the stores and then let the very next
+  state change write the durable record straight back. And a share link, which
+  carefully strips private local filenames from two of the three places they
+  appear, carried the third: a lane's companion URI rode through untouched, so
+  a link still spelled the sender's filename into the fragment.
+
+  **Things that stopped working, or never did.** Closing the share dialog left
+  `App.modal` pointing at it forever, and every command guarded by "no dialog is
+  open" — the palette, the shortcut sheet, About — was dead for the rest of the
+  tab. Clearing a number box set it to the minimum, because the guard tested
+  `Number.isFinite(Number(''))` and `Number('')` is `0` — the comment beside it
+  said exactly that and the code did it anyway; the same dead guard was in four
+  places, including a mapping-quality floor where the wrong answer was quieter
+  still, since `0` legally means "keep everything". A modal set
+  `aria-modal="true"` and never trapped Tab, so a keyboard user walked out onto
+  controls the backdrop was covering. Two notes shared one fixed corner, so a
+  progress note covered the truncation warning that is specified to stay until
+  dismissed — both are placed by a column now, which is also why the warning
+  can outlive the job. Importing a workspace into a full window imported
+  nothing and still overwrote the reader's overlay preferences and column
+  layout. In a deck at chromosome level the lock compared spans in bin sizes
+  rather than in sequence lengths, so two panels showing the identical
+  chromosome list were told they could not be locked and the deck blamed the
+  files; a companion still opening was reported as having one resolution, and
+  the false line never cleared; and the deck's own map list ignored the names
+  the reader had given. Every ordinary multi-chromosome `.pairs` import was
+  labelled unsorted, because the sortedness test assumed a global ordering the
+  declared `chr1-chr2-pos1-pos2` sort does not have — the repair pass it
+  triggered was harmless but the label was not, and it is now raised only for
+  disorder that ordering cannot explain. A `metacooler-run` that listed sixteen
+  tasks could run twelve; `overlap` and `motif` now genuinely run, and
+  `metaplot` and `trackcorr` are refused before a file is opened, because they
+  need a bigWig reader the repo's own layering confines to the annotations
+  worker.
+
+  **Retention and lifecycle.** A `HeatmapView` destroyed while frozen kept
+  re-scheduling `requestAnimationFrame` on a detached canvas for the life of the
+  tab; the ladder that took the freeze never gave it back on teardown, leaving a
+  panel frozen for a read that would never report; and a deck navigating to a
+  table went on parenting the previous, already-destroyed map — a canvas with a
+  full-resolution backing store behind it. The bin file of a private HiC-Pro
+  pair was never signed, so the half carrying every coordinate came back 403
+  while the half carrying the counts arrived. A Stop pressed while a task was
+  in flight was read only *before* the step, so a run cancelled mid-step still
+  finished, cached and adopted its result.
+
+  Two smaller ones for completeness: an S3 bucket scope whose prefix contained
+  an escaped character listed nothing, because the prefix was handed to S3
+  still percent-encoded; and a dropped-feature count was reported once per
+  ticked track rather than once.
+
 - **Every published demo failed to open.** The picker offered three sessions and
   each one answered a click with *not a workspace*: `App.openWorkspaceFile` reads
   `kind: "metacooler.workspace"` and refuses anything else, and the copies on the

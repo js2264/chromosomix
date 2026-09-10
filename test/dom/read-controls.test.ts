@@ -29,6 +29,7 @@ import {
   colourLegend,
   fillLegend,
   duplicatesToggle,
+  heightField,
   mapqField,
   splitsToggle,
 } from '@/ui/laneSettings'
@@ -229,6 +230,42 @@ describe('the switches', () => {
     splits.click()
     expect(readsOf(now(made).style).splits).toBe(true)
     expect(splits.title).toContain('never counted in the depth')
+  })
+
+  /**
+   * An emptied box is a reader who has not finished typing, not a zero.
+   *
+   * The guard here read `Number(box.value)`, and `Number('')` is `0`, which is
+   * finite — so it never fired once. On the quality floor that is the quietest
+   * wrong answer available: `0` is a *legal* value meaning "keep everything",
+   * so clearing the box silently switched the filter off and the lane came back
+   * with more reads in it than before, from a gesture that said nothing.
+   */
+  it('puts the mapping quality back when the box is cleared', () => {
+    const made = make()
+    const field = mapqField(made.store, made.entry)
+    const box = all<HTMLInputElement>(field, 'input[type="number"]')[0]
+
+    box.value = '30'
+    box.dispatchEvent(new Event('change'))
+    expect(readsOf(now(made).style).minMapq).toBe(30)
+
+    box.value = ''
+    box.dispatchEvent(new Event('change'))
+    expect(readsOf(now(made).style).minMapq, 'the floor the reader set').toBe(30)
+    expect(box.value, 'and the box says so again').toBe('30')
+  })
+
+  it('puts the lane height back when the box is cleared', () => {
+    const made = make()
+    const field = heightField(made.store, made.entry)
+    const box = all<HTMLInputElement>(field, 'input[type="number"]')[0]
+    const was = Math.round(made.entry.style.size)
+
+    box.value = ''
+    box.dispatchEvent(new Event('change'))
+    expect(Math.round(now(made).style.size), 'not the minimum').toBe(was)
+    expect(box.value).toBe(String(was))
   })
 })
 

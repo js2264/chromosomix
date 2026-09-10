@@ -3939,11 +3939,32 @@ canvas.is-frozen {
    theme and menu corner and a note that covers a control is worse than one that
    covers nothing. */
 
-.toast {
+/* The column every note is placed in, newest nearest the corner.
+
+   `.toast` used to anchor itself to the corner, which is the whole of why two
+   of them were drawn on top of each other: a progress note raised while a
+   warning was up covered the warning, and the warning is the one specified to
+   stay until it is dismissed. Anchoring the *column* instead is what lets two
+   notes coexist without either of them knowing about the other.
+
+   The column is as wide as its widest note, so pointer events are off on it
+   and on again per note: a strip of empty space beside a short note must not
+   swallow a click meant for the map behind it. */
+.toast-stack {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
   z-index: 90;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  position: static;
+  pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;

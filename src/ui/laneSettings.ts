@@ -68,7 +68,13 @@ export function heightField(store: AnnotationStore, entry: AnnotationEntry): HTM
   size.max = String(MAX_SIZE)
   size.step = '1'
   size.addEventListener('change', () => {
-    const typed = Math.round(Number(size.value))
+    // On the *string*: `Number('')` is 0, which is finite, so this guard never
+    // fired and clearing the box committed the floor — every lane in the stack
+    // collapsing to its minimum thickness, from a gesture that said nothing.
+    // A `type="number"` box reports an empty string for a cleared box and for
+    // anything it could not parse alike. `ui/ClipRange.ts` states the rule.
+    const raw = size.value.trim()
+    const typed = raw === '' ? Number.NaN : Math.round(Number(raw))
     if (!Number.isFinite(typed)) {
       size.value = String(Math.round(entry.style.size))
       return
@@ -427,7 +433,12 @@ export function mapqField(store: AnnotationStore, entry: AnnotationEntry): HTMLE
   box.max = '255'
   box.step = '1'
   box.addEventListener('change', () => {
-    const typed = Math.round(Number(box.value))
+    // On the *string*, for the reason `heightField` above gives: `Number('')`
+    // is 0. Here the wrong answer is quieter and worse — 0 is a *legal* mapping
+    // quality meaning "keep everything", so an emptied box silently turned the
+    // filter off and the reader saw more reads rather than an unchanged lane.
+    const raw = box.value.trim()
+    const typed = raw === '' ? Number.NaN : Math.round(Number(raw))
     if (!Number.isFinite(typed)) {
       box.value = String(liveReads(store, entry).minMapq)
       return

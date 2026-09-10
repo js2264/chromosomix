@@ -922,7 +922,15 @@ export class ParamForm {
       showBins(value)
     }
     const commitBox = (): void => {
-      const typed = Number(box.value)
+      // On the *string*, not on `Number(box.value)`: `Number('')` is 0 and 0 is
+      // finite, so this guard never fired and an emptied box committed
+      // `clamp(0)` — the parameter's minimum — as though the reader had typed
+      // it. A `type="number"` box reports an empty string for a cleared box and
+      // for everything it could not parse alike (`1e`, `--`, a pasted word), so
+      // both now put the held value back. Same form as `ui/ClipRange.ts` and
+      // `ui/trackControls.ts`, which learnt it the same way.
+      const raw = box.value.trim()
+      const typed = raw === '' ? Number.NaN : Number(raw)
       if (!Number.isFinite(typed)) {
         show(held())
         return
@@ -940,7 +948,12 @@ export class ParamForm {
     // feedback about what is being typed, while a commit re-prices the run and
     // must wait for the reader to have finished.
     box.addEventListener('input', () => {
-      const typed = Number(box.value)
+      // Same string test, for the same reason one level down: an emptied box
+      // read as 0 repainted the caption as "0 bins", which is a statement about
+      // a run nobody has described yet. Leaving the last caption up is the
+      // honest answer while the box is empty.
+      const raw = box.value.trim()
+      const typed = raw === '' ? Number.NaN : Number(raw)
       if (Number.isFinite(typed)) showBins(typed)
     })
     if (slider !== null) {

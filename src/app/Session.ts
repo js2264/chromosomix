@@ -4670,14 +4670,22 @@ export class Session {
    * gesture that builds the first deck is on screen from the first map.
    */
   private framed(node: HTMLElement): HTMLElement {
-    // Released on both of the paths that leave the edges off screen, because
-    // they hold the last view they framed until told otherwise — a *destroyed*
-    // view, whose canvas is still a full-resolution backing store. Re-parenting
-    // into the deck empties them for free (a node has one parent); a bare mount
-    // does not, so a reader who opens a genomes table pins the map they left.
+    // Released on both of the paths that leave a frame off screen, because
+    // every one of them holds the last view it framed until told otherwise — a
+    // *destroyed* view, whose canvas is still a full-resolution backing store.
+    // Re-parenting into a frame empties the other for free (a node has one
+    // parent); a bare mount does not, so a reader who opens the chromosomes
+    // table pins the map they left.
+    //
+    // Both frames, and that used to be one: the deck was left out, so the whole
+    // argument above applied to it and nothing acted on it. A deck holds its
+    // lead in `leadCell` and the lead's own heading up in its bar, so the
+    // retention was two nodes rather than one — see `PanelDeck.release`, which
+    // is why this is a call rather than an inlined `replaceChildren` here.
     const deck = this.deck
     if (!this.deckIsPossible) {
       this.deckEdges.release()
+      deck?.release()
       return node
     }
     if (deck !== null) {

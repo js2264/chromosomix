@@ -600,6 +600,35 @@ export class PanelDeck {
   }
 
   /**
+   * Let go of the lead, for a view this deck is not framing.
+   *
+   * {@link DeckFrame.release}'s counterpart, and it exists for exactly the same
+   * reason one line up: {@link frame} *re-parents* the mounted view rather than
+   * rebuilding it, so the cell goes on holding whatever it was last given. A
+   * session navigating to a table takes the bare node instead of a framed one
+   * (`Session.framed`) — and nothing then tells the deck, so `leadCell` kept
+   * parenting the **previous, already destroyed** view. A heatmap's subtree is
+   * a canvas with a full-resolution backing store behind it, so what is
+   * retained is not a stale node but tens of megabytes of it, for as long as
+   * the deck lives.
+   *
+   * `lowerHead` first, and that order is the whole of why this cannot be done
+   * from the call site by emptying the cell: {@link hoistHead} moves the view's
+   * own `.view-head` out of it and into the deck's bar, and parks the pair in
+   * `hoisted`. Clearing the cell alone would leave that heading mounted in the
+   * bar and `hoisted` pointing at the subtree — the same retention, one element
+   * further away, plus a heading over a map that is no longer there.
+   *
+   * Idempotent, because the states that reach it are not mutually exclusive: a
+   * session can navigate from one table to another, and `lowerHead` already
+   * returns on a null `hoisted`.
+   */
+  release(): void {
+    this.lowerHead()
+    this.leadCell.replaceChildren(this.leadHead)
+  }
+
+  /**
    * Take the view's own heading out of cell 0 and put it above the grid.
    *
    * Moved rather than rebuilt, so the region box keeps its caret, the stepper
@@ -1340,6 +1369,10 @@ export class PanelDeck {
    * the name says, and a lock between them would draw one file's coordinate
    * under another's. Everything else — a different bin size above all — is
    * fine, and being fine is the whole point of panels over a blend.
+   *
+   * The currency the panel joins in is {@link lockUnit}'s, which above bin
+   * level is the cell index rather than base pairs: a cell there is a whole
+   * sequence and has no width to convert through.
    */
   private settle(slot: Slot): void {
     if (this.destroyed) return

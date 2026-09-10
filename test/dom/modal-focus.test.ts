@@ -49,8 +49,10 @@ function dialog(): { modal: Modal; stops: HTMLElement[] } {
     body: () => el('div', {}, el('input', { type: 'text' }), el('button', { text: 'Run' })),
   })
   open.push(modal)
-  const panel = document.querySelector('.modal-panel') as HTMLElement
-  return { modal, stops: all<HTMLElement>(panel, 'input, button') }
+  // The last panel, not the first: two dialogs can be up at once and the one
+  // just built is the one on top.
+  const panels = all<HTMLElement>(document.body, '.modal-panel')
+  return { modal, stops: all<HTMLElement>(panels[panels.length - 1], 'input, button') }
 }
 
 /** Press Tab, and say whether the browser's own move was refused. */
@@ -86,6 +88,19 @@ describe('the caret while a dialog is up', () => {
     expect(document.activeElement).toBe(behind)
     expect(tab()).toBe(true)
     expect(document.activeElement).toBe(stops[0])
+  })
+
+  it('is answered by the dialog on top when two are up', () => {
+    dialog()
+    const inner = dialog()
+    inner.stops[0].focus()
+    // Mid-panel, so the press belongs to the browser. Every open dialog is
+    // listening on the window: if the outer one answered too it would see a
+    // caret outside *its* panel, take the press, and pull it away — and the
+    // caret would sit on the inner dialog's first stop for ever, however many
+    // times Tab was pressed.
+    expect(tab()).toBe(false)
+    expect(document.activeElement).toBe(inner.stops[0])
   })
 
   it('moves on through the panel without interfering in the middle', () => {

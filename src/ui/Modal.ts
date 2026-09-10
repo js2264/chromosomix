@@ -86,6 +86,13 @@ export class Modal {
         return
       }
       if (event.key !== 'Tab') return
+      // Only the dialog on top answers for the caret. Two can be up at once — a
+      // load gate raised over the palette, a bucket browser over Connect — and
+      // every one of them is listening on the window, so without this each
+      // would pull the caret into its own panel on the same keystroke and none
+      // of them would move. The last backdrop in the body is the one on top.
+      const dialogs = document.querySelectorAll('.modal-backdrop')
+      if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== this.root) return
       // The caret cycles inside the panel: off the last stop it wraps to the
       // first, off the first it wraps back to the last, and anything focused
       // outside — a background control the reader reached before this dialog

@@ -65,17 +65,6 @@ function stack(): HTMLElement {
     // as wide as its widest note, so `pointer-events` is off on it and on again
     // for each note: a strip of nothing beside a short note must not swallow a
     // click meant for the map behind it.
-    style: {
-      position: 'fixed',
-      right: '1rem',
-      bottom: '1rem',
-      zIndex: '90',
-      display: 'flex',
-      flexDirection: 'column-reverse',
-      alignItems: 'flex-end',
-      gap: '0.5rem',
-      pointerEvents: 'none',
-    },
   })
   document.body.appendChild(node)
   return node
@@ -106,10 +95,9 @@ function toastShell(
     'div',
     {
       class: 'toast',
-      // Placed by the column rather than by itself; see {@link stack}. The
-      // stylesheet anchors every `.toast` to the same corner, which is the
-      // whole of why two of them used to be drawn on top of each other.
-      style: { position: 'static', pointerEvents: 'auto' },
+      // Placed by the column rather than by itself; see {@link stack} and the
+      // `.toast-stack` rule in the stylesheet, which is where the geometry of
+      // both now lives.
       attrs: { role: 'status', 'aria-live': 'polite' },
     },
     el('div', { class: 'toast-text' }, label, ...rows),

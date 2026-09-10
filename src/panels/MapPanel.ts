@@ -1053,13 +1053,22 @@ export class MapPanel {
       // The ladder is known now, so a press this panel was too early to answer
       // can be answered honestly: either this *is* the rung it asked for and
       // there was never anything to say, or it is one this file has — in which
-      // case `useBinsize` has fired `openEntry`, which clears `opening` and
-      // `read` and re-enters here, and carrying on would fetch the same block
-      // twice — or it is one this file has not, and the note it writes now has
-      // a real bin size in it. See {@link wantedBinsize}.
+      // case `openEntry` has moved this panel's address — or it is one this
+      // file has not, and the note it writes now has a real bin size in it.
+      // See {@link wantedBinsize}.
       const wanted = this.wantedBinsize
       this.wantedBinsize = undefined
-      if (wanted !== undefined && wanted !== info.binsize && this.useBinsize(wanted)) return
+      if (wanted !== undefined && wanted !== info.binsize) {
+        // **Abandoned on a descent, and only on one.** `openEntry` clears
+        // `opening` and `read` and re-enters `load` at the new rung; carrying
+        // on here would then key *this* read against the old address, overwrite
+        // the key the new one is waiting on, and leave the panel drawing the
+        // rung the reader has just moved off. The address is what says a
+        // descent happened, and a refusal — or the rung it is already on —
+        // leaves it alone and draws the block this read was for.
+        const was = this.uri
+        if (this.useBinsize(wanted) && this.uri !== was) return
+      }
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
       this.read = key

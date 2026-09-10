@@ -159,11 +159,17 @@ describe('two notes at once', () => {
       'toast toast-failed',
       'toast',
     ])
-    // Each is placed by the column: `.toast` anchors itself to the corner in
-    // the stylesheet, and two notes doing that is the whole of the bug.
+    // Each is placed *by the column* and nowhere else, which is the property
+    // that fixes the bug: two notes each anchoring themselves to the same
+    // corner is how one came to cover the other. Asserted structurally rather
+    // than on a computed position, because jsdom loads no stylesheet — so what
+    // is checkable here is that every note hangs off the one column and none
+    // carries geometry of its own.
     for (const node of Array.from(document.querySelectorAll<HTMLElement>('.toast'))) {
-      expect(node.style.position).toBe('static')
+      expect(node.parentElement, 'a note placed outside the column').toBe(column)
+      expect(node.style.position, 'a note anchoring itself again').toBe('')
     }
+    expect(document.querySelectorAll('.toast-stack')).toHaveLength(1)
   })
 
   it('keeps a × of its own on each', () => {
