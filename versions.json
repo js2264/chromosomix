@@ -1,6 +1,13 @@
 {
-  "latest": "d9530e4",
+  "latest": "bd70292",
   "versions": [
+    {
+      "commit": "bd70292",
+      "version": "0.11.0",
+      "date": "2026-09-10T10:39:32+02:00",
+      "subject": "Add motif search feature and genome minimap card (#41)",
+      "tag": ""
+    },
     {
       "commit": "d9530e4",
       "version": "0.11.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-13T13:35:57+02:00",
       "subject": "Add metadata lanes for file's own annotation columns (#25)",
-      "tag": ""
-    },
-    {
-      "commit": "17ffa85",
-      "version": "0.10.0",
-      "date": "2026-08-12T23:42:09+02:00",
-      "subject": "fix(deck): the six things a deck of turned maps got wrong (#24)",
       "tag": ""
     },
     {
