@@ -168,6 +168,60 @@ describe('running a task', () => {
     expect(text).toMatch(/^# framing: chrI:0-50000 at 1000 bp/m)
   })
 
+  it('binds --sequences as a list, not as a string the runners ignore', async () => {
+    reset()
+    // The runners read this key with `Array.isArray` and fall back to *every
+    // sequence* when it is anything else. It arrived as a plain string, so
+    // `--sequences chrII` scanned both and reported a number from the wrong
+    // one — a silent widening, which a batch script cannot see. The fixture has
+    // two sequences and only one of them is asked for.
+    expect(
+      await main(['chromosight', sample, '--out', out, '--quiet', '--sequences', 'chrII']),
+    ).toBe(0)
+    // One sequence scanned, not two. The fixture has chrI and chrII, and the
+    // note counts what the run actually looked at.
+    expect(complained()).toMatch(/on 1 sequence\b/)
+    expect(complained()).not.toMatch(/on 2 sequences/)
+  })
+
+  it('writes a called interval set as BED beside its TSV', async () => {
+    reset()
+    // The drawer has carried a BED button beside every called interval set
+    // since there were any; the shell wrote only the TSV, so a boundary set
+    // called in a batch came out as a table with a provenance header — readable,
+    // and not what bedtools takes.
+    expect(
+      await main(['insulation', sample, '--out', out, '--quiet', '--prominence', '0']),
+    ).toBe(0)
+    const bed = await readFile(join(out, 'sample.insulation.insulation-boundaries.bed'), 'utf8')
+    const rows = bed.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      const [contig, start, end] = row.split('\t')
+      expect(contig).toMatch(/^chr/)
+      expect(Number(end)).toBeGreaterThan(Number(start))
+    }
+  })
+
+  it('takes the `::` resolution its own refusal tells a reader to write', async () => {
+    reset()
+    // `detect.ts` refuses a multi-resolution container at its root with a
+    // sentence naming the resolutions and an example ending in
+    // `::/resolutions/1000`. The whole string went to `stat`, so following that
+    // advice got *cannot stat …::/resolutions/1000: No such file or directory*
+    // — the shell refusing its own instruction, and the only way into an
+    // `.mcool` from a command line.
+    expect(
+      await main(['expected', `${sample}::/resolutions/1000`, '--out', out, '--quiet']),
+    ).toBe(0)
+    // Named `sample_1000`, not `1000`: the `::` half is a group inside the
+    // container, so the output is named after the file and the resolution
+    // rather than after `basename` of a group path — which is a number, and
+    // made every output of every `.mcool` a file called `1000.*`.
+    const text = await readFile(join(out, 'sample_1000.expected.ps.tsv'), 'utf8')
+    expect(text).toMatch(/^# framing: whole file at 1000 bp/m)
+  })
+
   it('carries on past a file it cannot read, and reports it', async () => {
     reset()
     const broken = join(directory, 'broken.cool')
@@ -482,5 +536,10 @@ describe('the small pieces', () => {
     expect(stemOf('/data/runs/Yeast_microC_G2M_1kb.cool')).toBe('Yeast_microC_G2M_1kb')
     expect(stemOf('Hum53.mmetacool')).toBe('Hum53')
     expect(stemOf('noextension')).toBe('noextension')
+    // A group inside the container is not part of the file's name, and two
+    // resolutions of one file are two sets of results rather than one written
+    // twice.
+    expect(stemOf('/data/sample.mcool::/resolutions/1000')).toBe('sample_1000')
+    expect(stemOf('/data/sample.mcool::')).toBe('sample')
   })
 })

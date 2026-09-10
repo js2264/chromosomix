@@ -42,12 +42,14 @@ import { defaultStyle, emptyPlacement } from '../annotations/types'
 import type { Placement } from '../annotations/types'
 import type { AnnotationEntry, ComputedSource } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
+import type { GroupSettings } from '../annotations/groups'
 import { el } from '../ui/dom'
 import { downloadBlob, exportBaseName, fileStamp } from '../ui/export'
 import { AnalysisDrawer } from '../ui/AnalysisDrawer'
 import { AnalysisPanelCard } from '../ui/AnalysisPanelCard'
 import {
   SyntheticCard,
+  groupNameOn,
   syntheticEntry,
   syntheticId,
   type SyntheticFormat,
@@ -70,6 +72,8 @@ import { profileToBedGraph, type BedGraphContig } from './write/bedgraph'
 import { writeBigWig } from './write/bigwig'
 import { outputToTsv, tsvName } from './write/tsv'
 import { formatIntervals } from '../annotations/export'
+import { VERSION } from '../version'
+import { TRACK_OP_LABELS, combineVectors, type TrackOp } from '../annotations/derived'
 
 /** What the workspace needs from the session around it. */
 export interface AnalysisWorkspaceHost {
@@ -135,6 +139,17 @@ export interface AnalysisWorkspaceHost {
    * `Session.carry` for when it is filled.
    */
   carried?(): readonly CarriedResult[]
+  /**
+   * The group decisions for this file, where a surface is holding any.
+   *
+   * Only one thing here needs them: a task that emits a *set* of profiles can
+   * say how the set reads (§18.11), and "these four overlay" is a fact about the
+   * group rather than about any one of its lanes. Optional because a
+   * `.metacool`'s drawer has no group memory to write to, and because a headless
+   * caller has no picture at all — a missing hook loses the suggestion and
+   * nothing else.
+   */
+  groups?(): GroupSettings | null
   /** A panel's availability changed, or a row needs repainting. */
   changed(): void
 }
@@ -474,6 +489,14 @@ export class AnalysisWorkspace {
         framing: result.provenance.framing.label,
       }
       const entry = syntheticEntry(output, source, output.colour ?? store.nextColour(), on)
+      // How the set reads, for a set that has an opinion (§18.11) — and only for
+      // a group nobody has decided about, so a reader who stacked it and ran the
+      // task again gets it back stacked.
+      if (output.group !== undefined && output.groupMode !== undefined) {
+        const groups = this.host.groups?.() ?? null
+        const name = groupNameOn(output.group, on)
+        if (groups !== null && !groups.knowsMode(name)) groups.setMode(name, output.groupMode)
+      }
       // `begin` is the one door every row goes through, and it opens them
       // `loading`; the vector is already in hand, so this one is ready the
       // moment the worker has been told about it.
@@ -868,6 +891,16 @@ export class AnalysisWorkspace {
       return
     }
 
+    // A comparison of two loaded tracks holds no numbers of its own: it is
+    // recomputed from its operands every time it is drawn, which is what keeps
+    // it exact at every zoom. A *file* has to be on some grid, so this is where
+    // the grid is chosen — and it is the map's own, the same one every other
+    // synthetic track is written on.
+    if (entry.source.kind === 'derived') {
+      await this.exportDerived(entry, format, base, stamp)
+      return
+    }
+
     const held = this.profiles.get(entry.id)
     if (held === undefined) return
 
@@ -913,6 +946,57 @@ export class AnalysisWorkspace {
    * is laid out over, and so a contig set that genuinely changed would take the
    * bigWig with it instead of being silently absorbed.
    */
+  /**
+   * A derived lane as a file: both operands on the map's bin grid, combined.
+   *
+   * **What leaves is not quite what is drawn, and it says so.** The lane cuts at
+   * every boundary of either operand, so the step function it draws is exact at
+   * any zoom (`annotations/derived.ts`); a bigWig is values on a grid, so a file
+   * has to pick one. The map's own bins are that grid — the same one every other
+   * synthetic track is written on, and the same reduction {@link binVector} does
+   * for a task that reads a track — and the framing line in the header names it,
+   * because a reader who compares this file against the lane it came from should
+   * be told which of the two they are holding.
+   *
+   * Nothing is cached. An export is a gesture, not a state, and holding a
+   * genome's worth of two sampled tracks against the chance of a second one is
+   * megabytes kept for a button nobody may press again.
+   */
+  private async exportDerived(
+    entry: AnnotationEntry,
+    format: SyntheticFormat,
+    base: string,
+    stamp: string,
+  ): Promise<void> {
+    const recipe = entry.derivedFrom
+    const context = this.host.context()
+    if (recipe === undefined || context === null || format === 'bed') return
+    const [a, b] = await Promise.all([this.binVector(recipe.a), this.binVector(recipe.b)])
+    // An operand that has been dropped, or a row that never loaded. Silent
+    // rather than a dialog: the row itself goes when its operand does
+    // (`annotations/store.ts`), so this is the moment between the two.
+    if (a === undefined || b === undefined) return
+
+    const output: ProfileOutput = {
+      kind: 'profile',
+      id: entry.id,
+      label: entry.label,
+      values: combineVectors(a, b, recipe.op),
+      extent: [0, context.nBins],
+      binsize: context.binsize,
+      unit: TRACK_OP_LABELS[recipe.op],
+    }
+    const provenance = derivedProvenance(entry, recipe.op, context)
+    if (format === 'tsv') {
+      downloadBlob(
+        new Blob([outputToTsv(output, provenance)], { type: 'text/tab-separated-values' }),
+        tsvName(base, output, stamp),
+      )
+      return
+    }
+    await this.writeProfile(output, provenance, format, this.host.contigs(), base)
+  }
+
   private async writeProfile(
     output: ProfileOutput,
     provenance: Provenance,
@@ -941,6 +1025,41 @@ export class AnalysisWorkspace {
     downloadBlob(blob, `${name}-${stamp}.bw`)
   }
 
+}
+
+/**
+ * The header a derived export carries.
+ *
+ * There is no task behind it, and inventing one would be worse than saying so:
+ * what made these numbers is two rows the reader picked and an operation they
+ * chose, which is exactly what goes in `task` and `params`. The framing line is
+ * the one that earns its place — it names the grid the file is on, which is the
+ * single way this file differs from the lane it came from.
+ */
+function derivedProvenance(
+  entry: AnnotationEntry,
+  op: TrackOp,
+  context: AnalysisContext,
+): Provenance {
+  return {
+    task: `track ${TRACK_OP_LABELS[op]}`,
+    taskVersion: 1,
+    params: { operation: op, of: entry.label },
+    framing: {
+      uri: context.uri,
+      label: `two loaded tracks, read onto this file’s ${context.binsize.toLocaleString()} bp bins`,
+      binsize: context.binsize,
+      binsPerCell: 1,
+      rows: [0, context.nBins],
+      cols: [0, context.nBins],
+      balance: false,
+      value: '',
+      normalise: null,
+      level: 'bin',
+    },
+    app: VERSION,
+    createdAt: new Date().toISOString(),
+  }
 }
 
 /**

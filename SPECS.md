@@ -3910,6 +3910,30 @@ is on screen must not change what an O/E is taken against. *Coverage and margina
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
+**Both scans on the map read a diagonal rather than a square**, and that is what decides how fine a
+resolution either can be run at. A diamond reaches `window` bins each side of the bin it scores and
+chromosight correlates inside a band `max_dist` wide; neither has ever needed the `n²` square around
+those cells, and reading one put a ceiling on each that belonged to the reader rather than to the
+arithmetic — a single `Float32Array` is refused past 23,170 bins on any machine (§5.2), which is
+116 Mb at 5 kb, and loop calling stopped at a hard-coded 8,192 bins, which is 41. Insulation now walks
+the sequence as overlapping squares with a `window`-bin halo, filling in the *sums* — which are local
+to a bin — and takes the score, which is a ratio against the mean over the whole sequence, once at the
+end; `diamondSums` is unchanged and still goldened against cooltools, and the answer is identical cell
+for cell rather than merely close. Loop calling reads the band it was always going to scan, which is
+what `analysis/chromosight.ts` had already banded every one of its own objects to. Its gate is
+therefore a bound on the **band** — the scan distance times the sequence — and no longer on the
+chromosome: the whole mouse genome scans at 5 kb, and what is still refused is a deep scan on a fine
+grid, named as the two settings that fix it. **A sequence a gate does skip is named**, which the old
+one promised and did not do.
+**It calls the domains between those boundaries too, and by default**: the span from each call to the
+next, as a second overlay beside the points. That is not a second algorithm — it is the eight lines of
+pairing that every reader was writing by hand — and it is on by default because a boundary set is half
+an answer: everything downstream of insulation takes an *interval* rather than a point, and the scaled
+pileup over those intervals is the domain APA. Consecutive domains **tile**, so the lane reads as a
+segmentation the way the A/B track does, and each carries the **weaker** of its two edges as its score,
+because a domain is only as well defined as its worse-supported side. Two boundaries make a domain and
+one makes nothing: the two ends of a sequence are left out rather than run to the telomere, which would
+assert an edge the data never placed.
 *4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
 as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
 **over expected**, where "expected" means the anchor's own sequence's decay in cis and the mean of what
@@ -3962,10 +3986,13 @@ rather than where the pattern did; and a table of the strongest calls. This is t
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
 against loop calling is answered in that section rather than here, and why its golden is the
 package's own output rather than a re-derivation (§18.10).
-*CID*, which is insulation plus boundary calls plus a pileup over those calls — **withheld from the
-panel for now**, since everything it does is reachable through insulation's own boundary calls and an
-APA over them, and a composite whose two halves disagree about their units is worth holding back rather
-than shipping with a caveat.
+*CID* — insulation plus boundary calls plus a pileup over those calls — is **gone**, and its going is
+the argument that withheld it carried to its end. Everything it did is reachable and now in one place:
+insulation calls the boundaries, calls the domains between them, and an APA over those domains is the
+pileup. What it added over that was a composite whose three settings never reached the step they named
+— `AnalysisRunner.plan` walks a required task at *that task's* defaults — so its window, its region and
+its prominence were controls that changed nothing, and its estimate read a window labelled base pairs
+as a count of bins. A task nobody could run, whose settings did not work, duplicating two that do.
 
 **Which settings are settings.** A parameter is a question the reader is *entitled to a different
 answer to*; anything with one right answer per file belongs to the file. **Balancing** is the case that
@@ -3988,7 +4015,29 @@ mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis
 resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
 normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
-the app. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
+the app.
+
+**The scaled mode on a feature set is the domain pileup**, and it is the picture that sits beside a
+loop APA in every paper: TADs — insulation boundaries called, then the span from one to the next —
+piled up with the body of every domain resampled onto the same columns and a flank each side. Four
+things make it that picture rather than a plausible smear, and each was got wrong before it was got
+right. The window is `[start − fL, end + fL]` **on both axes**, so the domain is the square in the
+middle; it used to be laid out from the feature's *midpoint*, which is the same width and half a
+domain to the right of where it belongs, and produced a figure with the body against one corner and
+the whole flank on the far side. The body's two ends are pinned to their **own grid lines** for every
+domain whatever its length, rather than the whole window being stretched evenly — otherwise a 20 kb
+domain's boundary lands on one column and a 200 kb domain's on another and averaging them softens
+both. The distance-matched control is shifted by a **multiple of the window** rather than a length in
+base pairs, because a control 100 kb from a megabase-wide window is mostly the window and the ratio
+comes out at 1 everywhere. And the statistic under it is the **domain's own corner against the same
+block across its boundary** rather than P2LL, whose lower-left quadrant here is the domain's two
+neighbours and reads well above 1 on a set with no boundaries in it.
+
+**Observed/expected is refused in the scaled mode, in the form rather than at Run.** One cell of a
+scaled pileup is fed by windows at a dozen different separations — that is what scaling *is* — so it
+has no one diagonal offset for a P(s) to be looked up at, and dividing by one anyway was a plausible
+picture of nothing. The distance-matched control is the answer there and is drawn at the same
+separations by construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
 and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
 a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
 the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator
@@ -4035,10 +4084,8 @@ the reasons are worth recording where the descriptions are:
   three normalisations. `requires` is resolved before every run, so declaring it would compute a
   whole-file P(s) on every pileup while observed/expected is not the default — and the expected a
   pileup needs is narrower than the task that produces one: the diagonal offsets its own windows
-  span, which it accumulates from squares it is already reading. **CID and the inter-MAG network
-  are** genuine composites, and for the mirror-image reason: their upstream is the whole input,
-  unconditionally. (CID is not currently offered; the argument is about its shape, not its
-  availability.)
+  span, which it accumulates from squares it is already reading. **The inter-MAG network is** a
+  genuine composite, for the mirror-image reason: its upstream is the whole input, unconditionally.
 - **Multi-scale insulation is a doubling ladder from a settable base**, not a list of widths. A list
   needs a free-text control the parameter model does not have, and a parser with failure modes of its
   own, to express what a base and a count express exactly. A genuinely irregular set of widths is two
@@ -4258,6 +4305,63 @@ rather than an importable module, which is what the `bin:` prefix in the generat
 and like every other it is *named* in the manifest when it is skipped. One test in the suite is not a
 comparison at all: it drives the kernel with the mirror fold switched off and records what that
 produces, because what it produces still looks like a P(s).
+
+### 18.11 A set of scales is one picture
+
+Some tasks produce a *set* of profiles that are one reading at several settings, and diamond
+insulation at several windows is the case that forced this: the same score computed over diamonds of
+10, 20, 40 and 80 bins. Adopted as four ordinary tracks that is four lanes, four autoscaled axes and
+four curves crossing each other — and a reader comparing scales holds four pictures against each other
+by eye. **A value per bin per window is a matrix**, and one line per window is what a matrix looks like
+drawn as a bundle of curves.
+
+So a lane gets a fourth drawing style, `heatmap`, where the value is a **colour** rather than a
+position. It costs no height, which is the whole point: several of them fit where one track fitted.
+Everything else about the lane is unchanged and deliberately so — the same limits, the same autoscale
+group, the same ceiling drag, the same flip (which reverses the ramp, because that is what flipping an
+axis means), the same `NaN`-is-a-gap rule, the same export. It is a mode of `drawTrack`, not a second
+renderer.
+
+**Heatmaps stack; everything else overlays.** Two translucent lines in one lane are legible because ink
+adds and a reader can follow either. Two translucent colour maps are a third colour that means
+neither — so a lane whose members *all* draw as heatmaps divides its own thickness between them
+instead, and the height the reader set stays the height of the group. All of them and not most: a line
+among three heatmaps has nowhere to be drawn but across the whole lane, over the colours, and dividing
+the lane under it would leave it a fraction of the height its axis is labelled for. A mixed lane
+overlays, and the reader who wanted the stack sets the odd one out. The rule is one function in
+`annotations/types.ts` because both lane renderers ask it, and a rule about what a lane *is* that lives
+in one renderer is one the other drifts from.
+
+**The colours are chosen by the data unless the reader chooses.** *Auto* is a reading and not a
+fallback: values that straddle zero are a departure from something and get a diverging map with its
+middle on the zero, values that do not are an amount and get a ramp — the same reading the value axis
+already makes when it decides where to put its baseline. Insulation is the first kind, and a log2 ratio
+drawn on `viridis` puts "no change" at an arbitrary green. The per-lane picker sits beside the style
+and **appears only under a heatmap**, because on a line the colour is the chip on the row's head and a
+second colour control there is two answers to one question. It is built together with the style
+control rather than by the card, so it appears on the pick that asks for it: a `<select>` keeps focus
+after a pick, and every card defers its rebuild while a control holds a value the reader may still be
+giving.
+
+**A task may say how its set reads, once.** A `ProfileOutput` can carry a group, a drawing style and a
+mode for that group, and multi-scale insulation carries all three: one group, in overlay, drawn as
+heatmaps. They are written into the row's style on the way in and are the reader's from that moment —
+renaming the group, breaking it up or switching a row back to a line are ordinary edits to an ordinary
+track (§18.5), and nothing re-asserts the suggestion on the next repaint. The group's *mode* is the one
+that is not the row's own, so it goes through `knowsMode`: a suggestion applies to a group nobody has
+decided about, and a reader who pulled the stack apart and ran the task again gets it back the way they
+left it. The group name is made specific to the map for the same reason the label is (§18.2) — a batch
+over a deck would otherwise stack five replicates' rows into one lane.
+
+The scales are emitted **widest first**, because lanes are laid out in the order they are adopted and
+every published version of this figure sharpens downwards: the widest window on top, so a boundary that
+survives every scale reads as a column through the whole stack. A single-scale run is untouched — an
+ordinary ungrouped line — because there is no set for it to be part of, and a heatmap of one row is a
+worse picture of one track than the track.
+
+The Synthetic card carries the style control, and that is not an accident of layout: it is the **only**
+card that lists a computed row, since the Tracks card leaves them out on purpose (§18.5), so a style
+offered only there would be one a computed lane could never be given.
 
 ---
 

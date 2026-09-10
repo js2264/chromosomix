@@ -23,6 +23,7 @@ import {
   callBoundaries,
   diamondCells,
   diamondSums,
+  domainsBetween,
   insulationScore,
   type Boundary,
 } from '../insulation'
@@ -35,11 +36,11 @@ import {
   type TaskRunner,
 } from '../job'
 import { windowLadder } from '../tasks/insulation'
-import type { ProfileOutput, TaskOutput } from '../types'
+import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 import {
   displayableContigs,
+  forEachDiagonalTile,
   spanOfContig,
-  squareFor,
   usableBlock,
   type Span,
 } from './blocks'
@@ -87,6 +88,15 @@ function planUnits(job: JobContext, region: string): Unit[] {
   }
   return out
 }
+
+/**
+ * What the scales of one run are grouped under.
+ *
+ * A name rather than an id, because it is shown to the reader and they can
+ * change it: from the moment the rows exist it is an ordinary group, and the
+ * only thing this constant decides is what it is called before anyone asks.
+ */
+const INSULATION_GROUP = 'Insulation'
 
 export const runInsulation: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
@@ -163,20 +173,51 @@ export const runInsulation: TaskRunner = async (job) => {
   const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
   for (let u = 0; u < units.length; u++) {
-    // Once per sequence: the diamonds below are a double loop over one square
-    // and yield nothing, so this is the only place a cancel can be heard.
-    await job.breathe()
-    job.progress(u, units.length, units[u].name)
     const unit = units[u]
-    const square = await squareFor(job, unit.span, { block, balance, value })
     const size = unit.span.to - unit.span.from
 
+    // **The sums are accumulated over tiles and the score is taken once.** The
+    // diamond at a bin reaches `window` bins each side of it and no further, so
+    // a sequence is a band and never a square — and reading it as a square put a
+    // ceiling on this task that had nothing to do with its arithmetic: one
+    // `Float32Array` of `n²` is refused past 23,170 bins whatever the machine
+    // has (`MAX_DENSE_ARRAY_BYTES`), which is 116 Mb at 5 kb. Mouse chr9 is 125.
+    //
+    // The split is between the *sums*, which are per bin and local, and the
+    // *score*, which is a log2 ratio against the mean over the whole sequence.
+    // So each tile fills in the sums for the bins whose whole diamond it holds,
+    // and `insulationScore` runs once at the end over the assembled vector —
+    // which makes the answer identical to the whole-square one cell for cell,
+    // rather than merely close. `diamondSums` is unchanged and still goldened
+    // against cooltools; it simply sees a smaller square.
+    const sums = windows.map(() => new Float64Array(size).fill(Number.NaN))
+    await forEachDiagonalTile(
+      job,
+      unit.span,
+      { halo: widest, block, balance, value },
+      async (tile) => {
+        // Once per tile: the diamonds below are a double loop that yields
+        // nothing, so this is the only place a cancel can be heard.
+        await job.breathe()
+        job.progress(
+          u,
+          units.length,
+          tile.total === 1 ? unit.name : `${unit.name} · part ${tile.index + 1} of ${tile.total}`,
+        )
+        for (let w = 0; w < windows.length; w++) {
+          const tileSums = diamondSums(
+            { size: tile.size, values: tile.values },
+            { window: windows[w], minValid, ignoreDiags },
+          )
+          for (let local = tile.ownFrom; local < tile.ownTo; local++) {
+            sums[w][local] = tileSums[local - tile.from]
+          }
+        }
+      },
+    )
+
     for (let w = 0; w < windows.length; w++) {
-      const sums = diamondSums(
-        { size, values: square.values },
-        { window: windows[w], minValid, ignoreDiags },
-      )
-      const score = insulationScore(sums)
+      const score = insulationScore(sums[w])
       for (let local = 0; local < size; local++) {
         scores[w][unit.span.from + local] = score[local]
       }
@@ -191,9 +232,17 @@ export const runInsulation: TaskRunner = async (job) => {
   }
   job.progress(units.length, units.length, 'Done')
 
-  const outputs: TaskOutput[] = windows.map((window, index) =>
-    profileFor(job, scores[index], window),
-  )
+  // **Widest first, because the stack reads top-down.** A multi-scale run is one
+  // picture — the same score at doubling smoothings — and the lanes are laid out
+  // in the order they are adopted, so emitting them narrowest-first would put
+  // the finest detail at the top and the smoothest at the bottom. Every published
+  // version of this figure runs the other way (fanc's `-p scores`, cooltools'
+  // multi-window insulation): the widest window on top, sharpening downwards, so
+  // a boundary that survives every scale reads as a column through the whole
+  // stack.
+  const outputs: TaskOutput[] = windows
+    .map((window, index) => profileFor(job, scores[index], window, windows.length > 1))
+    .reverse()
 
   if (call) {
     const total = calls.reduce((sum, entry) => sum + entry.boundaries.length, 0)
@@ -205,12 +254,50 @@ export const runInsulation: TaskRunner = async (job) => {
     } else {
       outputs.push(boundaryOutput(job, calls))
       job.note(`${total.toLocaleString()} boundaries called across ${calls.length} sequences.`)
+      if (boolParam(job.params, 'domains', true)) {
+        const domains = domainOutput(job, calls)
+        if (domains === null) {
+          // Every sequence had one call or none, so there is no interior with
+          // both its edges. Said out loud rather than left as a missing lane:
+          // the tickbox is on, so a reader who sees no domains row is owed the
+          // reason.
+          job.note(
+            'No sequence had two calls, so no domain has both of its edges and none was made.',
+          )
+        } else {
+          outputs.push(domains.output)
+          job.note(
+            `${domains.count.toLocaleString()} domains between them, from each call to the next.`,
+          )
+        }
+      }
     }
   }
   return outputs
 }
 
-function profileFor(job: JobContext, values: Float32Array, window: number): ProfileOutput {
+/**
+ * One scale, as a lane.
+ *
+ * `stack` is true when the run produced more than one, and it is the whole of
+ * what this task asks the Annotations panel for (§18.11): one group, drawn as
+ * stacked heatmaps. The reasoning is that a score per bin *per window* is a
+ * matrix, and one line per window is what a matrix looks like when it is drawn
+ * as a bundle of curves — four of them crossing each other, autoscaled to four
+ * different axes, in four lanes' worth of height. As colour it is what it is: a
+ * boundary is a vertical stripe through every row it survives, and the height
+ * cost of the fourth scale is a few pixels rather than another lane.
+ *
+ * A single-scale run is left exactly as it was — an ordinary ungrouped line —
+ * because there is no set for it to be part of and a heatmap of one row is a
+ * worse picture of one track than the track.
+ */
+function profileFor(
+  job: JobContext,
+  values: Float32Array,
+  window: number,
+  stack: boolean,
+): ProfileOutput {
   const bp = window * job.mc.binsize
   return {
     kind: 'profile',
@@ -223,6 +310,9 @@ function profileFor(job: JobContext, values: Float32Array, window: number): Prof
     // sign is the whole reading. Named rather than left blank, because a lane
     // whose axis runs −2 to 2 with no unit invites being read as a count.
     unit: 'log2 ratio',
+    ...(stack
+      ? { group: INSULATION_GROUP, mode: 'heatmap' as const, groupMode: 'overlay' as const }
+      : {}),
   }
 }
 
@@ -255,6 +345,60 @@ function boundaryOutput(
     id: 'insulation-boundaries',
     label: 'Insulation boundaries',
     payload: { kind: 'features', data: builder.finish() },
+  }
+}
+
+/**
+ * The spans between the calls, as a second `FeatureSet` — the domains.
+ *
+ * Consecutive calls on **one sequence**, which is why this walks the same
+ * per-unit list the boundaries came from rather than a flat set: "consecutive"
+ * is a property of a sequence, and the last call on `chr1` and the first on
+ * `chr2` are adjacent in any sorted list and are not two ends of anything.
+ *
+ * Each domain runs from the bin one call was made at to the bin the next was
+ * made at, so consecutive domains tile and the lane reads as a segmentation —
+ * the picture the compartment track makes, which is what a reader already knows
+ * how to read. Clamped to the sequence for the same reason the boundaries are:
+ * it leaves as a BED, and a BED past the end of a chromosome is one every tool
+ * downstream complains about, or worse, does not.
+ *
+ * `null` where there is nothing to report, so the caller can say why rather than
+ * adopting an empty overlay onto the Annotations panel.
+ */
+function domainOutput(
+  job: JobContext,
+  calls: ReadonlyArray<{ unit: Unit; boundaries: Boundary[]; window: number }>,
+): { output: IntervalsOutput; count: number } | null {
+  const builder = new FeatureBuilder()
+  let count = 0
+  for (const { unit, boundaries } of calls) {
+    for (const domain of domainsBetween(boundaries)) {
+      const start = domain.from * job.mc.binsize
+      const end = Math.min(unit.length, domain.to * job.mc.binsize)
+      if (end <= start) continue
+      count++
+      builder.add(unit.name, start, end, {
+        // The weaker edge, so the overlay can be filtered on it and a reader
+        // ranking the set in APA is ranking on how well *both* sides are held.
+        score: domain.strength,
+        // No name, because a domain has none. Compartments write `A` or `B`
+        // into the box because there are two kinds; here every box is the same
+        // kind and a label per domain would be ink saying nothing.
+        name: '',
+        detail: `${domain.to - domain.from} bins · weaker boundary prominence ${domain.strength.toFixed(3)}`,
+      })
+    }
+  }
+  if (count === 0) return null
+  return {
+    count,
+    output: {
+      kind: 'intervals',
+      id: 'insulation-domains',
+      label: 'Insulation domains',
+      payload: { kind: 'features', data: builder.finish() },
+    },
   }
 }
 

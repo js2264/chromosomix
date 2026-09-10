@@ -10,6 +10,251 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **A lane can draw its values as colour, and multi-scale insulation does.**
+  `heatmap` joins line, area and bars in the **style** picker: the value becomes
+  a colour across the whole lane instead of a position in it, so it costs no
+  height. A lane whose tracks *all* draw that way divides its own thickness
+  between them and stacks them, keeping the height the reader set — two
+  translucent lines in one lane are legible because ink adds, but two
+  translucent colour maps are a third colour that means neither.
+
+  Diamond insulation at several windows now arrives as exactly that: one group,
+  overlaid, **widest window at the top**, sharpening downwards, so a boundary
+  that survives every scale reads as a column through the stack. It used to
+  arrive as four lanes of crossing curves on four autoscaled axes. A run with a
+  single window is unchanged.
+
+  The colours are read from the data unless you choose: values that straddle
+  zero get a diverging map centred on the zero, values that do not get a ramp.
+  The per-lane picker sits beside the style and appears only when the style is a
+  heatmap.
+
+  Two smaller things came with it. A stacked lane writes **a name per row**, in
+  the row it names, rather than one line of four names across whichever row it
+  lands on; and the **Synthetic tracks** card carries the style picker, which it
+  had to — it is the only card that lists a computed row, so a style offered
+  only on the Tracks card was one an insulation lane could never be given.
+
+- **A comparison of two tracks is a synthetic track.** Combining two loaded
+  bigWigs used to open a row on the **Tracks** card, among the files it was
+  computed from — the one card with no exports on it, so there was no way to get
+  a ratio out of the app at all. It lands on **Synthetic tracks** now, beside
+  what the analysis panel computed, with the provenance line and the three
+  exports every computed track carries: **bigWig**, bedGraph and TSV.
+
+  The lane itself is unchanged and still lazy: it cuts at every boundary of
+  either operand, so the step function it draws is exact at any zoom. A *file*
+  has to be on some grid, so the export evaluates both operands onto the map's
+  own bins — the same grid every other synthetic track is written on — and says
+  so in its header, because a reader comparing the file against the lane should
+  be told which of the two they are holding. Where a lane brings `x / 0` back
+  onto its axis, the file writes no value: an infinity cannot go in a bigWig.
+
+- **Each track's lane has a scale: linear or log₂.** Beside the drawing style,
+  on the Tracks card and on Synthetic tracks. It is a display scale and nothing
+  else — the numbers behind the lane, and every number that leaves it as a file,
+  are untouched — and the logarithm is taken of the *pixel*, not of every
+  interval under it, because a log axis draws `log(mean)` and not the geometric
+  mean. A value at or below zero has no logarithm and is drawn as a gap, so log₂
+  suits a ratio and not a difference.
+
+### Removed
+
+- **The `log₂ ratio` combine operation.** It was a scale wearing an operation's
+  clothes: it put the same finding in two rows and left only one of them
+  exportable as the quantity it measured — a bigWig of log₂ ratios is a file of
+  a *picture*, and anything downstream that wanted the ratio had to undo it. The
+  reason it existed is real and is answered above, on the lane's own axis. Two
+  operations remain, a ratio and a difference, and either can be *drawn* as a
+  logarithm.
+
+- **The `Domains (CIDs)` task**, which was withheld from the panel on every file
+  and is now redundant. Everything it did is reachable and in one place:
+  insulation calls the boundaries, calls the domains between them, and an APA
+  over those domains is the pileup. What it added over that was a composite
+  whose three settings never reached the step they named — `AnalysisRunner.plan`
+  walks a required task at *that task's* defaults — so its window, its region
+  and its prominence changed nothing, and its estimate read a window labelled
+  base pairs as a count of bins. A task nobody could run, whose settings did not
+  work, duplicating two that do.
+
+- **Diamond insulation calls the domains between its boundaries, and does it by
+  default.** A second overlay beside the calls: the span from each boundary to
+  the next, drawn as a segmentation the way the A/B compartment track is, and
+  exportable as BED like any other called interval set. A boundary set is half
+  an answer — everything downstream of insulation takes an *interval* rather
+  than a point, and the scaled pileup over these is the domain APA — so what
+  every reader was doing by hand (sort per sequence, pair the neighbours) is now
+  a tickbox, and it is ticked.
+
+  Three decisions in it. Consecutive domains **tile**: one ends where the next
+  begins, so the lane reads as a segmentation rather than as boxes with gaps,
+  and a domain's two corners sit on the bins the calls were actually made at,
+  which is what a scaled pileup lines up on. Each carries the **weaker** of its
+  two edges as its score, because a domain is only as well defined as its
+  worse-supported side and reporting the stronger would let one good boundary
+  vouch for a run of bad ones. And **two boundaries make a domain, one makes
+  nothing**: the two ends of every sequence are left out rather than run to the
+  telomere, which would assert an edge the data never placed.
+
+  On the yeast demo: 710 boundaries across 16 sequences, and 694 domains — one
+  fewer per sequence, which is what the arithmetic says it should be.
+
+- `metacooler-run` writes a called interval set as **BED** beside its TSV, the
+  way it already wrote bedGraph and bigWig beside a profile's. The drawer has
+  carried a BED button since there were called intervals at all; a batch run got
+  a TSV with a provenance header, which is readable and is not what bedtools
+  takes.
+
+### Fixed
+
+- **Diamond insulation's estimate counts the reads it makes.** It still said one
+  dense square per sequence, which is what it read before the diagonal was
+  tiled: four range requests for a chromosome that is now read as a run of
+  squares along its diagonal — on mouse chr1 at 5 kb, a number two orders of
+  magnitude under the truth, on the one screen a reader consults before starting
+  something expensive. The estimate and the runner now share the arithmetic
+  instead of each carrying a copy.
+
+- **A lane too thin for two lines no longer runs its range into its name.** The
+  range goes under the name where there is room for it and beside it where there
+  is not, and beside it, it started exactly where the name ended: `80 kb` and
+  `-1.46` read as one word. Rare while every lane was 90 pixels tall, ordinary
+  once four heatmaps share one lane.
+
+- **Both scans on the map read a diagonal instead of a square, and the fine
+  resolutions they used to refuse now work.** Neither the insulation diamond nor
+  the chromosight correlation has ever looked at a cell far from the diagonal —
+  a diamond reaches `window` bins each side of the bin it scores, and a
+  correlation runs inside a band `max_dist` wide — but both read the whole `n²`
+  square to get at the band, and the ceiling that fell out of that had nothing
+  to do with either computation:
+
+  - **insulation** hit the 2 GiB limit on a single `Float32Array`, which is a
+    limit of the tab and not of the machine. That is 23,170 bins: 116 Mb at
+    5 kb, so mouse chr9 was refused and chr1 could not be run below 10 kb.
+  - **loop calling** never reached the allocator. A hard-coded 8,192-bin cap
+    skipped any longer sequence, which is 82 Mb at 10 kb and 41 Mb at 5 — so
+    mouse chr18 was dropped at 10 kb and every mouse chromosome at 5 kb.
+
+  Insulation now walks each sequence as overlapping squares with a halo the
+  width of the widest diamond. The split that makes this a substitution rather
+  than an approximation is between the **sums**, which are local to a bin, and
+  the **score**, which is a log2 ratio against the mean over the whole sequence:
+  each tile files the sums for the bins whose whole diamond it holds, and the
+  score is taken once at the end. `diamondSums` is untouched and still goldened
+  against cooltools; the answer is identical cell for cell, not close. Mouse
+  chr1 at 1 kb — 195,471 bins, which is 153 GB as a square — now runs in 19
+  seconds inside a 4 GB heap.
+
+  Loop calling reads the band it was always going to scan. `chromosight.ts` had
+  already banded every one of its own objects, saying so in as many words; the
+  square read was the last `n²` thing in the module and the gate was the fence
+  built around it. The gate is now a bound on the **band** — the scan distance
+  times the sequence — so it scales with the setting that actually costs: the
+  whole mouse genome scans at 5 kb, and what is still refused is a deep scan on
+  a fine grid, refused by name with the two settings that fix it. Mouse chr1 at
+  5 kb, a 6.1 GB square, takes 68 seconds.
+
+  One thing genuinely needed the square and now comes from the pixel table
+  instead: the detectability cut counts non-zero pixels per bin over a whole
+  row, at every separation. It is counted once per run and only where the file
+  carries no balancing weights — with them nothing is read for it at all.
+
+- **A sequence a scan skips is named.** The cap's own documentation has always
+  said a sequence past it is "skipped and named"; only the first half was true,
+  so a run over a mammalian genome scanned whichever chromosomes happened to fit
+  and reported a clean number for the rest. Worse, the message when *nothing*
+  fitted said the sequences were not long enough, when the truth was the
+  opposite.
+
+- **`metacooler-run --sequences` binds.** The runners read that parameter with
+  `Array.isArray` and fall back to *every sequence* for anything else; the shell
+  passed a plain string, so `--sequences chr18` silently scanned all of them and
+  reported a number from the wrong one. Affected loop calling and compartments.
+
+- **The domain pileup — APA over a set of TADs, scaled — was laid out from the
+  wrong end of the feature.** The scaled mode on a feature set is how you draw
+  the picture that sits beside a loop APA in every Hi-C paper: call insulation
+  boundaries, take the span from one to the next as a domain, and pile every
+  domain up stretched to the same width with padding either side. It read the
+  window as `[midpoint − flank, midpoint + length + flank]` — the right width,
+  and half a domain to the right of where it belongs — so the body sat against
+  the top-left corner of the picture with the whole flank on the far side. The
+  window is now `[start − flank, end + flank]` on both axes, which puts the
+  domain in the middle and its two boundaries on the cross through it.
+
+  Nothing in the old figure said it was wrong, which is what makes this worth a
+  paragraph rather than a line: a shifted domain pileup is still a square with
+  bright and dark blocks in it, and the only way to catch it was to know where
+  the corner peak should have been.
+
+- **Every domain's boundary now lands on the same grid line.** A scaled window
+  used to be stretched evenly onto the grid, so a 20 kb domain's edge fell on
+  one column and a 200 kb domain's on another — averaging them softened both
+  boundaries into a couple of columns of gradient, which in an aggregate looks
+  exactly like a real boundary that is soft. The grid is now explicitly *flank,
+  body, flank*: the body's two ends are pinned to their own columns for every
+  domain whatever its length, and the flank each side is a fraction of that
+  domain rather than a rounded number of bins.
+
+- **A distance-matched control is shifted by a multiple of the window when the
+  window is a scaled one.** Asked for in base pairs — the old control, and its
+  100 kb floor — a control for a megabase-wide domain window was ninety per cent
+  the same cells as the thing it was the denominator of, so the ratio came out
+  at 1 everywhere and the domain washed out of the picture with nothing on
+  screen to say why. The fixed mode still asks in base pairs, which is the right
+  unit for a window a couple of dozen bins wide.
+
+- A scaled window off the diagonal — a loop pileup whose window scales with the
+  separation — is now symmetric about its anchor bin rather than a bin short on
+  one side of it.
+
+- **`metacooler-run` takes the `::/resolutions/<n>` address its own refusal
+  tells you to write.** An `.mcool` is a collection of coolers, and opening one
+  at its root is refused with a sentence naming the resolutions and an example
+  ending in `::/resolutions/25000` — advice the shell could not then take,
+  because the whole string went to `stat` and there is no such file. So there
+  was no way into an `.mcool` from a command line at all. The `::` half is now
+  split off for the filesystem and kept for the container, which is where the
+  group is read from. Outputs are named `sample_25000.…` rather than `1000.…`,
+  which is what `basename` of a group path had been giving them.
+
+- The tick labels on a matrix output that are *positions* on a continuous axis
+  rather than one-per-cell names no longer land over the first few columns of
+  the exported TSV. They go in a `#` line saying what they are, and the columns
+  keep their indices.
+
+### Changed
+
+- **The number under a domain pileup is no longer P2LL.** Peak-to-lower-left
+  measures a dot against the corner furthest from it, and the lower-left corner
+  of a *domain* window is the upstream neighbour against the downstream one —
+  two regions further apart than anything inside the domain — so the ratio is
+  mostly the distance decay and reads well above 1 on a set with no boundaries
+  in it at all. What is reported instead is **in / out**: the domain's own
+  corner against the same block just across its boundary, which sits at very
+  nearly the same separation, so what is left when you divide is whether contact
+  stops at the edge. Above 1 is a domain. The per-feature table carries the same
+  number per domain, and the loop pileups are unchanged — they still report
+  P2LL, which is the right statistic for a dot.
+
+- **Observed / expected is refused in the scaled mode, in the form rather than
+  at Run.** One cell of a scaled pileup is fed by windows at a dozen different
+  separations — that is what scaling *is* — so it has no one diagonal offset for
+  a P(s) to be looked up at, and dividing by one anyway produced a plausible
+  picture of nothing. The refusal names the alternative: the distance-matched
+  control, which is drawn at the same separations by construction and is what
+  the task defaults to.
+
+- The scaled pileup's axes are labelled in units of the feature — `0` at its
+  start and `1` at its end — with the flank the run used named beside them,
+  instead of an unlabelled *Scaled position*.
+
 ## [0.12.0] - 2026-09-10
 
 ### Added

@@ -79,6 +79,7 @@ import {
   parseBedpe,
   sniffFormat,
 } from '../annotations/parse'
+import { formatIntervals } from '../annotations/export'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { contigIndexOf } from '../genome/naming'
@@ -96,6 +97,7 @@ import type {
 import type { TaskInputs } from '../analysis/worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
 import { ViewerError } from '../errors'
+import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
 import { VERSION } from '../version'
 
@@ -243,7 +245,19 @@ const RESERVED = new Set([
 
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
   const kind = (param as { kind?: string }).kind
-  if (kind === 'multi' || Array.isArray((param as { default?: unknown }).default)) {
+  // `sequences` by name as well as `multi`, and it is not a tidy-up: the runners
+  // read that key with `Array.isArray` and fall back to *every sequence* when it
+  // is anything else. A plain string is anything else, so `--sequences chr18`
+  // typed at a shell scanned all twenty-one of them and reported a number from
+  // the wrong one — a silent widening, which is the failure mode a batch script
+  // cannot see. It has no `default`, so the array rule below never caught it.
+  const multiple = (param as { multiple?: boolean }).multiple === true
+  if (
+    kind === 'multi' ||
+    kind === 'sequences' ||
+    multiple ||
+    Array.isArray((param as { default?: unknown }).default)
+  ) {
     // A list may arrive as repeated flags or as one comma-separated value; both
     // are things a shell user will write and neither is wrong.
     return values.flatMap((value) => value.split(',')).filter((value) => value !== '')
@@ -307,9 +321,10 @@ interface PairsBinning {
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
  */
-async function openForTask(path: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+  const path = parseUri(uri).path
   try {
-    return await MetaCooler.open(path, source)
+    return await MetaCooler.open(uri, source)
   } catch (error) {
     if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
     const binning = options.binning
@@ -381,14 +396,22 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * a number computed by clicking come out of the same implementation.
  */
 async function openLocal(
-  path: string,
+  uri: string,
   options: RunOptions,
 ): Promise<{ mc: MetaCooler; source: ByteSource }> {
+  // **The `::` is addressed to the container, not to the filesystem.** An
+  // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
+  // with a sentence naming the resolutions and telling the reader to write
+  // `file.mcool::/resolutions/25000` — advice this shell then could not take,
+  // because the whole string went to `stat` and there is no such file. So the
+  // path is split off for the filesystem and the *uri* is what the container is
+  // opened with, which is where `parseUri` reads the group from.
+  const path = parseUri(uri).path
   const name = basename(path)
   if (!isHicProMatrix(name)) {
     // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
     const source = await LocalFileSource.fromPath(path)
-    return { mc: await openForTask(path, source, options), source }
+    return { mc: await openForTask(uri, source, options), source }
   }
   const beside = hicProBinsNames(name)
     .map((n) => join(dirname(path), n))
@@ -682,6 +705,21 @@ async function writeOutputs(
   for (const output of result.outputs) {
     const stem = `${base}.${result.provenance.task}.${output.id}`
     await put(`${stem}.tsv`, outputToTsv(output, result.provenance))
+    // The same rule as the drawer's, which has carried a BED button beside every
+    // called interval set since there were any: a profile leaves as bedGraph and
+    // bigWig, a set of intervals leaves as BED. Only the first half was here, so
+    // a boundary set called in a shell came out as a TSV with a provenance
+    // header — readable, and not what bedtools takes.
+    if (output.kind === 'intervals') {
+      await put(
+        `${stem}.${output.payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
+        formatIntervals(output.payload, {
+          label: output.label,
+          file: result.provenance.framing.label,
+          created: result.provenance.createdAt,
+        }),
+      )
+    }
     if (output.kind === 'profile') {
       await put(`${stem}.bedGraph`, profileToBedGraph(output, contigs, result.provenance))
       // The same three arguments the drawer's own bigWig button passes, so the
@@ -1074,9 +1112,19 @@ export function recordedTasks(config: {
 
 /** `demo/yeast/Yeast_microC.cool` → `Yeast_microC`. */
 export function stemOf(path: string): string {
-  const name = basename(path)
+  // The `::` half is the *group inside the container*, so a file addressed as
+  // `sample.mcool::/resolutions/1000` is still `sample` — it was `1000`, which
+  // is `basename` of a group path and named every output after a number. The
+  // group's last segment is kept as a suffix so two resolutions of one file
+  // written to one `--out` are two sets of results rather than one overwritten
+  // twice.
+  const { path: file, group } = parseUri(path)
+  const name = basename(file)
   const dot = name.indexOf('.')
-  return dot > 0 ? name.slice(0, dot) : (name || 'output')
+  const stem = dot > 0 ? name.slice(0, dot) : (name || 'output')
+  if (group === '/') return stem
+  const last = group.split('/').filter((part) => part !== '').pop()
+  return last === undefined ? stem : `${stem}_${last}`
 }
 
 export async function main(argv: readonly string[]): Promise<number> {

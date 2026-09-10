@@ -61,6 +61,7 @@ import {
   laneY,
   withinGrip,
   type LaneFrame,
+  laneBands,
 } from '../render/lane'
 import {
   drawLaneLabel,
@@ -88,6 +89,9 @@ import type { ManualPoint, ManualStore } from '../annotations/manual'
 import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
+  colormapOf,
+  stacksAsHeatmaps,
+  scaleOf,
   LANE_EDGES,
   drawnFromSamples,
   drawsAProfile,
@@ -1047,7 +1051,12 @@ export class AnnotationLanes {
         if (axis === null || !drawnFromSamples(member.kind)) continue
         profiles.push({
           entry: member,
-          profile: profileOf(frame, axis, this.samplesFor(member, edge, axis, frame)),
+          profile: profileOf(
+            frame,
+            axis,
+            this.samplesFor(member, edge, axis, frame),
+            scaleOf(member.style),
+          ),
         })
       }
       return {
@@ -1150,12 +1159,26 @@ export class AnnotationLanes {
         detail: LaneLabelSpec['detail']
         at: 'near' | 'far'
       } | null = null
+      // The bands a stack of heatmaps was divided into, kept for the label: a
+      // name per row rather than four names in a line across the third of them.
+      let labelBands: LaneFrame[] | null = null
       clipLane(ctx, frame)
       if (profiles.length > 0) {
         // While a ceiling is being dragged this lane is drawn twice: once as it
         // stood, faded and still, and once as the hand is asking for it.
         const dragged = geometry.scaling?.id === entry.id ? geometry.scaling.factor : null
-        for (const { entry: member, profile } of profiles) {
+        // **Heatmaps stack, they do not overlay** — the rule itself is
+        // `annotations/types.ts`'s, because the browser draws the same lane and
+        // has to divide it the same way.
+        const bands = stacksAsHeatmaps(profiles.map(({ entry: member }) => member))
+          ? laneBands(
+              frame,
+              profiles.map(() => ({ fill: true as const })),
+            )
+          : null
+        labelBands = bands
+        for (const [at, { entry: member, profile }] of profiles.entries()) {
+          const laneFrame = bands?.[at] ?? frame
           const limits = resolveLimits(
             member.style.limits,
             extentFor(member, profile.extent, groups),
@@ -1170,17 +1193,22 @@ export class AnnotationLanes {
             // Overlaid tracks are translucent by necessity: two opaque areas in
             // one lane means the second hides the first, which is the opposite
             // of what overlaying them was for.
+            // Stacked heatmaps do not overlap, so they are not dimmed: the
+            // dimming is what makes two *overlaid* tracks both visible.
             opacity:
-              profiles.length > 1 ? member.style.opacity * OVERLAY_DIM : member.style.opacity,
+              profiles.length > 1 && bands === null
+                ? member.style.opacity * OVERLAY_DIM
+                : member.style.opacity,
+            colormap: colormapOf(member.style, limits),
             fills,
             outline,
             baseline,
             flip: member.style.flip,
           }
           if (dragged === null || !hasAMovableAxis(member.kind)) {
-            drawTrack(ctx, frame, profile, paint)
+            drawTrack(ctx, laneFrame, profile, paint)
           } else {
-            drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
+            drawTrackScaling(ctx, laneFrame, profile, paint, scaledTo(limits, dragged))
           }
         }
         const first = profiles[0]
@@ -1313,7 +1341,7 @@ export class AnnotationLanes {
         }
       }
       ctx.restore()
-      if (label !== null) this.labelLane(ctx, lane, geometry, label, state)
+      if (label !== null) this.labelLane(ctx, lane, geometry, label, state, labelBands)
 
       // The handle, outside the clip because it hangs outside the lane: in the
       // plot's own margin, just before the column of the map this track is drawn
@@ -1494,9 +1522,25 @@ export class AnnotationLanes {
     geometry: LaneGeometry,
     label: { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' },
     state: EdgeState,
+    /**
+     * The bands a stacked lane was divided into (§18.11), one per name.
+     *
+     * A name per band rather than one block for the lane, because on a stack of
+     * heatmaps the block is a line of four names written across whichever row it
+     * lands on — and the one thing a reader needs from a scale ladder is which
+     * row is which. Each name goes inside the row it names, which is where every
+     * published version of this figure puts it. The range stays on the first,
+     * once: it is the *lane's* axis and every row shares it.
+     */
+    bands: LaneFrame[] | null = null,
   ): void {
-    const boxes = drawLaneLabel(ctx, lane.frame, {
-      names: label.entries.map((entry) => ({
+    const stacked = bands !== null && bands.length === label.entries.length
+    const frames = stacked && bands !== null ? bands : [lane.frame]
+    const runs = stacked
+      ? label.entries.map((entry) => [entry])
+      : [label.entries]
+    const boxes = drawLaneLabel(ctx, frames[0], {
+      names: runs[0].map((entry) => ({
         id: entry.id,
         text: entry.label,
         colour: entry.style.colour,
@@ -1507,6 +1551,23 @@ export class AnnotationLanes {
       style: laneLabelStyle(),
       palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
     })
+    for (let at = 1; at < frames.length; at++) {
+      const more = drawLaneLabel(ctx, frames[at], {
+        names: runs[at].map((entry) => ({
+          id: entry.id,
+          text: entry.label,
+          colour: entry.style.colour,
+        })),
+        // The range is the lane's and is written once, on the first band.
+        detail: null,
+        labelAt: label.at,
+        column: null,
+        style: laneLabelStyle(),
+        palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
+      })
+      boxes.names.push(...more.names)
+      boxes.swatches.push(...more.swatches)
+    }
     state.gripRows.set(lane.entry.id, boxes.nameAcross)
     // Chrome, not picture: the export asks for no handles, and it must get no
     // hit boxes either — a saved figure has nothing to be pointed at.

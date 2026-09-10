@@ -205,6 +205,7 @@ metacooler-run tasks
 ##       --call (default true)  Call boundaries from the minima
 ##       --prominence (default 0.2)  Minimum prominence
 ##       --spacing (default 0)  Minimum spacing
+##       --domains (default true)  Also the domains between them
 ## 
 ## compartments
 ##     Compartments (eigenvectors)
@@ -217,17 +218,6 @@ metacooler-run tasks
 ##       --minR (default 0.1)  Least convincing correlation
 ##       --saddle (default true)  Also draw the saddle
 ##       --quantiles (default 50)  Quantile groups
-##       --balance (default false)  Use balancing weights
-## 
-## cid
-##     Domains (CIDs)
-##       --window (default 10000)  Window
-##       --region  Sequence
-##       --prominence (default 0.2)  Minimum prominence
-##       --minSize (default 20000)  Smallest domain
-##       --aggregate (default true)  Aggregate the boundaries that were called
-##       --apaWindow (default 20)  Pileup half-width
-##       --strata (default 2)  Strength groups
 ##       --balance (default false)  Use balancing weights
 ## 
 ## chromosight
@@ -271,6 +261,8 @@ metacooler-run tasks
 ##       --controls (default 5)  Controls per pair
 ##       --minShift (default 100000)  Smallest shift
 ##       --maxShift (default 1000000)  Largest shift
+##       --minShiftScale (default 1)  Smallest shift
+##       --maxShiftScale (default 3)  Largest shift
 ##       --seed (default 1)  Seed
 ##       --rankBy  Rank by
 ##       --subset (default "all")  Then
@@ -318,6 +310,13 @@ Every task takes as many files as you like, and writes its results where `--out`
 metacooler-run insulation *.mcool --window chrII --out results/
 metacooler-run chromosight sample.cool --pattern borders --balance --out results/
 metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
+
+# The domain pileup: a set of TADs — the span from one insulation boundary to
+# the next — every one of them stretched to the same width, with half a domain
+# of padding each side. The distance-matched control is shifted by a multiple of
+# the window, so it never overlaps the domain it is the denominator of.
+metacooler-run apa sample.cool --features domains.bed --anchors features \
+  --mode scaled --grid 48 --flankFraction 0.5 --balance --out results/
 
 # Two of the tasks that run beside the tracks rather than on the map. A motif
 # search reads the reference `--sequence` names and writes both halves: the

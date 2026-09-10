@@ -17,6 +17,7 @@
  */
 
 import { contigNamed, framingCovers } from '../context'
+import { diagonalTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
@@ -172,6 +173,31 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.call === true,
     section: 'Boundaries',
   },
+  /**
+   * The domains between the calls, as a second overlay.
+   *
+   * **On by default, because a boundary set is half an answer.** What a reader
+   * wants from insulation is nearly always the *domains* — the spans a boundary
+   * set implies — and everything downstream takes an interval rather than a
+   * point: a scaled pileup over them is the domain APA, an overlap counts how
+   * many genes sit inside one, and a BED of them is what leaves for another
+   * tool. Producing only the calls left every one of those a script away, and
+   * the script is the same eight lines every time: sort per sequence, pair the
+   * neighbours.
+   *
+   * It costs nothing — the calls are already in hand, and this is arithmetic
+   * over a few thousand of them — so it is a tickbox rather than a second run,
+   * and it is ticked. A reader who wants only the points unticks it.
+   */
+  {
+    kind: 'toggle',
+    key: 'domains',
+    label: 'Also the domains between them',
+    hint: 'A second overlay: the span from each call to the next, as a BED.',
+    default: true,
+    when: (params) => params.call === true,
+    section: 'Boundaries',
+  },
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
@@ -217,27 +243,40 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
+  // **Per tile, not per sequence.** The diamond reaches `widest` bins each side
+  // of the bin it scores, so a sequence is read as a run of squares along its
+  // diagonal rather than as the whole square — which is what lets a mammalian
+  // chromosome be scored at 5 kb at all. The estimate has to count the same
+  // reads: one square over a chromosome was four requests and the truth is four
+  // per tile, which on mouse chr1 is off by two orders of magnitude.
+  const each = balance ? 5 : 4
   if (contig !== undefined) {
-    const requests = balance ? 5 : 4
+    const tiles = diagonalTiles(contig.bins, widest)
+    const requests = tiles * each
     return {
       class: 'bounded',
       requests,
       bytes: null,
-      note: `About ${requests} range requests: one dense square over ${contig.name}.`,
+      note:
+        `About ${requests.toLocaleString()} range requests: ${contig.name} is read as ` +
+        `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along its diagonal, ` +
+        'never as the whole square.',
     }
   }
 
-  // Every sequence, one square at a time. Bounded per contig and unbounded in
-  // the count of them, which on a metagenome is the expensive shape — so it is
-  // priced as a scan and gated like one, with the count named.
-  const n = context.contigs.filter((entry) => entry.bins > widest * 2).length
+  // Every sequence, tile by tile. Bounded per contig and unbounded in the count
+  // of them, which on a metagenome is the expensive shape — so it is priced as a
+  // scan and gated like one, with the count named.
+  const long = context.contigs.filter((entry) => entry.bins > widest * 2)
+  const tiles = long.reduce((sum, entry) => sum + diagonalTiles(entry.bins, widest), 0)
   return {
     class: 'scan',
-    requests: n * (balance ? 5 : 4),
+    requests: tiles * each,
     bytes: null,
     note:
-      `${n.toLocaleString()} sequences are long enough for this window, read one dense square ` +
-      'at a time. Progress is reported per sequence and it can be cancelled at any point.',
+      `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals. ` +
+      'Progress is reported per sequence and it can be cancelled at any point.',
   }
 }
 

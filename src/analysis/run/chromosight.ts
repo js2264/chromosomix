@@ -29,10 +29,11 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { CHROMOSIGHT_SPECTRUM } from '../chromosightSpectrum'
 import {
   detectOnSquare,
-  detectableFromCounts,
+  detectableFromMarginal,
   detectableFromWeights,
   emptyCorrelation,
   correlateInto,
+  keepDistanceFor,
   pileupOf,
   prepareSquare,
   symmetrise,
@@ -42,10 +43,18 @@ import {
   type Square,
 } from '../chromosight'
 import { boolParam, numParam, type JobContext, type TaskRunner } from '../job'
-import { MAX_SCAN_BINS, presetFor, threshold } from '../tasks/chromosight'
+import { MAX_SCAN_CELLS, presetFor, scanCellsFor, threshold } from '../tasks/chromosight'
 import type { ChromosightPreset } from '../chromosightPresets'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
-import { displayableContigs, spanOfContig, squareFor, usableBlock, validBins, type Span } from './blocks'
+import {
+  bandFor,
+  cisMarginal,
+  displayableContigs,
+  spanOfContig,
+  usableBlock,
+  validBins,
+  type Span,
+} from './blocks'
 
 /** How many rows of a correlation are computed between two chances to cancel. */
 const ROWS_PER_BREATH = 64
@@ -101,9 +110,27 @@ export const runChromosight: TaskRunner = async (job) => {
   const kernels = templatesOf(preset)
   const largestKernel = kernels.reduce((most, kernel) => Math.max(most, kernel.size), 0)
 
-  const units = planUnits(job)
+  const { units, skipped } = planUnits(job, settings.maxDist, largestKernel)
+  // **Named, not dropped.** The gate's own doc has always said a sequence past
+  // the limit is "skipped and named"; only the first half was true, so a run
+  // over a mammalian genome scanned whichever chromosomes happened to fit and
+  // reported a clean number for the rest. Worse, the empty case said *not long
+  // enough* when the truth is the opposite.
+  if (skipped.length > 0) {
+    job.note(
+      `${skipped.length} sequence${skipped.length === 1 ? '' : 's'} would need a band bigger ` +
+        `than a scan can hold, and ${skipped.length === 1 ? 'was' : 'were'} skipped: ` +
+        `${namesOf(skipped)}. The band is the scan distance times the sequence — bring ` +
+        '“furthest from the diagonal” down, or open the file at a coarser resolution.',
+    )
+  }
   if (units.length === 0) {
-    job.note('No sequence in this file is long enough for this template.')
+    job.note(
+      skipped.length === 0
+        ? 'No sequence in this file is long enough for this template.'
+        : 'Every sequence in this file would need a band bigger than a scan can hold. Bring ' +
+          '“furthest from the diagonal” down, or open the file at a coarser resolution.',
+    )
     return []
   }
 
@@ -123,17 +150,43 @@ export const runChromosight: TaskRunner = async (job) => {
   const total = units.length * kernels.length * iterations
   let done = 0
 
+  // **How a bin is judged detectable, decided once for the whole run.** With
+  // weights it is a column and no matrix at all; without them it is a count of
+  // non-zero pixels over a whole *row* — the one quantity a band cannot answer
+  // for itself — so it is counted from the pixel table instead of falling out of
+  // a square that is no longer read. Bound here rather than per sequence so the
+  // scan happens once.
+  let detectableFor: (from: number, to: number) => Uint8Array
+  if (weights !== null) {
+    detectableFor = (from, to) => detectableFromWeights(weights, from, to)
+  } else {
+    const nMads = numParam(job.params, 'nMads', 5)
+    const marginal = await cisMarginal(job)
+    detectableFor = (from, to) => detectableFromMarginal(marginal.subarray(from, to), nMads)
+  }
+
   for (const unit of units) {
     await job.breathe()
     const size = unit.span.to - unit.span.from
-    const dense = await squareFor(job, unit.span, { block, balance, value })
+    // **The band, not the square.** Everything below this line was already
+    // banded — the detrended map keeps `0 … keepDistance`, the correlation map
+    // `0 … maxDist` — and the square was read only to build them from. Reading
+    // the band instead is what took the cap off the sequence length.
+    const keep = keepDistanceFor(size, settings.maxDist, largestKernel)
+    const contacts = await bandFor(job, unit.span, {
+      hi: keep,
+      block,
+      balance,
+      value,
+      onTile: async (at, of) => {
+        await job.breathe()
+        job.progress(done, total, of === 1 ? `${unit.name} · reading` : `${unit.name} · reading ${at + 1} of ${of}`)
+      },
+    })
     const square: Square = {
-      values: dense.values,
+      contacts,
       n: size,
-      detectable:
-        weights === null
-          ? detectableFromCounts(dense.values, size, numParam(job.params, 'nMads', 5))
-          : detectableFromWeights(weights, unit.span.from, unit.span.to),
+      detectable: detectableFor(unit.span.from, unit.span.to),
     }
     const matrix = prepareSquare(square, { maxDist: settings.maxDist, largestKernel })
 
@@ -247,27 +300,45 @@ export const runChromosight: TaskRunner = async (job) => {
  * gate are left out here and counted by the estimate, which is the one place
  * that can say so before the run starts.
  */
-function planUnits(job: JobContext): Unit[] {
+function planUnits(
+  job: JobContext,
+  maxDistBins: number,
+  largestKernel: number,
+): { units: Unit[]; skipped: string[] } {
   const mc = job.mc
   const lengths = mc.chromsizes
   const value = job.params.sequences
   const ticked = Array.isArray(value)
     ? new Set(value.filter((name): name is string => typeof name === 'string'))
     : null
-  const out: Unit[] = []
+  const units: Unit[] = []
+  const skipped: string[] = []
   for (const cid of displayableContigs(mc)) {
     const name = mc.chromnames[cid]
     if (ticked !== null && !ticked.has(name)) continue
     const span = spanOfContig(mc, cid)
-    if (span === null || span.to - span.from > MAX_SCAN_BINS) continue
-    out.push({
+    if (span === null) continue
+    // Kept apart from the empty-span case above, because they are two different
+    // answers: a sequence with no bins is not in this file, and one past the cap
+    // is one the reader asked for and did not get.
+    if (scanCellsFor(span.to - span.from, maxDistBins, largestKernel) > MAX_SCAN_CELLS) {
+      skipped.push(name)
+      continue
+    }
+    units.push({
       name,
       cid,
       span,
       length: lengths.get(name) ?? (span.to - span.from) * mc.binsize,
     })
   }
-  return out
+  return { units, skipped }
+}
+
+/** A handful of names, then how many more — a note is a sentence, not a list. */
+function namesOf(names: readonly string[]): string {
+  const shown = names.slice(0, 6).join(', ')
+  return names.length > 6 ? `${shown} and ${names.length - 6} more` : shown
 }
 
 // ---------------------------------------------------------------------------

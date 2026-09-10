@@ -18,6 +18,19 @@
  * there is a `slice()` — which is why the estimate prices the un-coalesced upper
  * bound and lets the run come in under it, rather than promising a saving that
  * depends on how the anchors happen to be distributed.
+ *
+ * **The domain pileup is the third window shape and the one with a body.** A set
+ * of TADs — intervals between two called boundaries — piled up in the scaled
+ * mode gives the picture everybody draws next to a loop APA: the domain as the
+ * square in the middle, its two boundaries as the cross through it, and the
+ * neighbouring domains in the corners. Three things make it that picture rather
+ * than a plausible smear, and each is written where it happens: the window is
+ * `[start − fL, end + fL]` on **both axes** so the body is centred
+ * ({@link planFor}); the body's two ends are pinned to their **own grid lines**
+ * for every domain whatever its length ({@link cut}); and a distance-matched
+ * control is shifted by a **multiple of the window** rather than by a length in
+ * base pairs, because a control 100 kb from a megabase-wide window is mostly the
+ * window.
  */
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
@@ -27,11 +40,16 @@ import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import {
   PileupAccumulator,
+  domainScore,
   p2ll,
   ratioOf,
   resampleWindow,
+  resampleWindowTo,
+  scaledEdges,
+  scaledLayout,
   shiftedControls,
   type AnchorPair,
+  type ScaledLayout,
 } from '../apa'
 import { ExpectedAccumulator, expectedAt } from '../expected'
 import {
@@ -46,7 +64,14 @@ import {
   type TaskRunner,
 } from '../job'
 import { makeRandom } from '../random'
-import { isChromosight, isScaled, onDiagonal, windowBins } from '../tasks/apa'
+import {
+  flankFractionOf,
+  isChromosight,
+  isDomainPileup,
+  isScaled,
+  onDiagonal,
+  windowBins,
+} from '../tasks/apa'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
 import { chromosightPileup } from './apaChromosight'
 import { usableBlock, type Span } from './blocks'
@@ -59,6 +84,21 @@ interface Rect {
   colTo: number
 }
 
+/**
+ * Where a scaled window's body sits, in absolute bins.
+ *
+ * Carried on the plan rather than recomputed at cut time because the *control*
+ * windows have a body too — the same length as the anchor they were drawn from,
+ * shifted with it — and a control resampled on a different layout from the real
+ * window it is the denominator of would divide two different pictures.
+ */
+interface Body {
+  from: number
+  to: number
+  /** Flank each side, in bins. Fractional, so every body lands on one grid line. */
+  pad: number
+}
+
 /** One window to pile up, and what it came from. */
 interface Plan {
   rect: Rect
@@ -67,6 +107,8 @@ interface Plan {
   separation: number
   control: boolean
   group: number
+  /** The scaled on-diagonal layout this window is resampled on; absent otherwise. */
+  body?: Body
 }
 
 /**
@@ -141,27 +183,48 @@ export const runApa: TaskRunner = async (job) => {
   // saying how many were left out — which nobody compares across two runs.
   const kept = groupAnchors(job, anchors, usingPairs ? null : (features as FeatureSet))
 
+  // The grid's own division into flank, body, flank — one layout for the whole
+  // run, which is what puts every domain's two boundaries on the same two grid
+  // lines however long the domain is. Unused off the diagonal and in the fixed
+  // mode, where a window has no body.
+  const layout = scaledLayout(side, flankFractionOf(job.params))
+  const scaledWindows = isScaled(job.params)
+  const scaledDomains = isDomainPileup(job.params)
+
   const plans: Plan[] = []
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
   const controlsPer = norm === 'matched' ? Math.max(1, Math.round(numParam(job.params, 'controls', 5))) : 0
   const minShift = job.toBins(numParam(job.params, 'minShift', 100_000))
   const maxShift = Math.max(minShift, job.toBins(numParam(job.params, 'maxShift', 1_000_000)))
+  const minShiftScale = Math.max(0, numParam(job.params, 'minShiftScale', 1))
+  const maxShiftScale = Math.max(minShiftScale, numParam(job.params, 'maxShiftScale', 3))
 
   for (let g = 0; g < kept.length; g++) {
     for (const anchor of kept[g]) {
-      const rect = rectFor(job, anchor, side)
-      if (rect === null) continue
-      plans.push({ rect, label: anchor.label, separation: anchor.pair.separation, control: false, group: g })
+      const plan = planFor(job, anchor, side, layout)
+      if (plan === null) continue
+      plans.push({ ...plan, label: anchor.label, separation: anchor.pair.separation, control: false, group: g })
       if (controlsPer === 0) continue
+      // **The shift is a multiple of the window in the scaled mode and a length
+      // in base pairs in the fixed one**, and the difference is not a
+      // convenience. A domain pileup's window is as wide as the domain plus its
+      // flanks — often a megabase — so a control drawn 100 kb away is ninety per
+      // cent the same cells as the thing it is the denominator of, and the ratio
+      // it produces is 1 everywhere with the domain washed out of it. A fixed
+      // window is a couple of dozen bins and a shift in base pairs is exactly
+      // the right way to ask.
+      const width = scaledWindows ? Math.max(1, widthOf(plan.rect)) : 0
+      const from = scaledWindows ? Math.round(width * minShiftScale) : minShift
+      const to = scaledWindows ? Math.max(from, Math.round(width * maxShiftScale)) : maxShift
       for (const control of shiftedControls(anchor.pair, anchor.bounds, {
         perPair: controlsPer,
-        minShift,
-        maxShift,
+        minShift: from,
+        maxShift: to,
         rng,
       })) {
-        const controlRect = rectFor(job, { ...anchor, pair: control }, side)
-        if (controlRect !== null) {
-          plans.push({ rect: controlRect, separation: control.separation, control: true, group: g })
+        const controlPlan = planFor(job, shiftAnchor(anchor, control), side, layout)
+        if (controlPlan !== null) {
+          plans.push({ ...controlPlan, separation: control.separation, control: true, group: g })
         }
       }
     }
@@ -169,6 +232,23 @@ export const runApa: TaskRunner = async (job) => {
   if (plans.length === 0) {
     job.note('Every window ran off the end of its sequence. Use a narrower window.')
     return []
+  }
+
+  // **Observed/expected has no meaning on a scaled grid**, and the estimate
+  // refuses the combination before Run rather than here. This is the stored
+  // session that names it anyway: one cell of a scaled pileup is fed by windows
+  // at a dozen different separations — that is what scaling *is* — so there is
+  // no single diagonal offset to divide it by, and dividing it by one anyway
+  // produced a plausible picture of nothing. Said out loud and the raw pileup
+  // shown, which is the honest half of what was asked for.
+  const oeOnAScaledGrid = norm === 'oe' && isScaled(job.params)
+  if (oeOnAScaledGrid) {
+    job.note(
+      'Observed / expected is not available in the scaled mode: every window contributes cells ' +
+        'at a different separation to the same cell of the picture, so a pileup cell has no one ' +
+        'diagonal offset to divide by. The raw pileup is shown — use the distance-matched ' +
+        'control, which is drawn at the same separations by construction.',
+    )
   }
 
   const real = kept.map(() => new PileupAccumulator(side, side))
@@ -191,7 +271,7 @@ export const runApa: TaskRunner = async (job) => {
     // windows, and feeding it in per window would count every one of its cells
     // as many times as the batch is large — which would leave the mean intact
     // and the counts, and therefore nothing visible, wrong.
-    if (norm === 'oe') accumulateExpected(expected, dense, batch.rect)
+    if (norm === 'oe' && !oeOnAScaledGrid) accumulateExpected(expected, dense, batch.rect)
     for (const plan of batch.plans) {
       done++
       // Every window that could be cut is summed, however little of it carries
@@ -200,7 +280,7 @@ export const runApa: TaskRunner = async (job) => {
       // pileup is weak because of, so removing them made every pileup look
       // better than the data. `PileupAccumulator` counts per cell, so a
       // half-empty window contributes what it has and nothing more.
-      const window = cut(dense, batch.rect, plan.rect, side)
+      const window = cut(dense, batch.rect, plan, side, layout)
       if (window === null) continue
       if (plan.control) {
         controls[plan.group].add(window)
@@ -211,7 +291,7 @@ export const runApa: TaskRunner = async (job) => {
         perAnchor.push({
           label: plan.label,
           separation: plan.separation * job.mc.binsize,
-          score: p2ll(window, side, side),
+          score: scaledDomains ? domainScore(window, layout) : p2ll(window, side, side),
         })
       }
     }
@@ -220,7 +300,7 @@ export const runApa: TaskRunner = async (job) => {
   job.throwIfCancelled()
 
   const outputs: TaskOutput[] = []
-  const curve = norm === 'oe' ? expected.finish() : null
+  const curve = norm === 'oe' && !oeOnAScaledGrid ? expected.finish() : null
 
   for (let g = 0; g < kept.length; g++) {
     const observed = real[g].finish()
@@ -245,6 +325,13 @@ export const runApa: TaskRunner = async (job) => {
       label = `${name} · observed / expected`
     }
 
+    const axis = isScaled(job.params)
+      ? scaledDomains
+        ? `Position along the feature (0 → 1), flanked by ${flankFractionOf(job.params)}×`
+        : 'Scaled position'
+      : 'Bins from the centre'
+    const ticks = scaledDomains ? scaledTickLabels(layout, flankFractionOf(job.params)) : []
+
     outputs.push({
       kind: 'matrix',
       id: `apa-${g}`,
@@ -252,20 +339,29 @@ export const runApa: TaskRunner = async (job) => {
       nrows: side,
       ncols: side,
       values,
-      xLabel: isScaled(job.params) ? 'Scaled position' : 'Bins from the centre',
-      yLabel: isScaled(job.params) ? 'Scaled position' : 'Bins from the centre',
-      xTicks: [],
-      yTicks: [],
+      xLabel: axis,
+      yLabel: axis,
+      xTicks: ticks,
+      yTicks: ticks,
       colormap: centre === undefined ? 'default' : DEFAULT_DIVERGING_COLORMAP,
       ...(centre === undefined ? {} : { centre }),
       stats: [
         { label: 'windows', value: observed.n, digits: 0, hint: 'Anchors that contributed.' },
-        {
-          label: 'P2LL',
-          value: p2ll(values, side, side),
-          digits: 2,
-          hint: 'Centre against the lower-left corner. Above 1 is enrichment.',
-        },
+        scaledDomains
+          ? {
+              label: 'in / out',
+              value: domainScore(values, layout),
+              digits: 2,
+              hint:
+                'The domain’s own corner against the same block across its boundary. ' +
+                'Above 1 means contact stops at the edge.',
+            }
+          : {
+              label: 'P2LL',
+              value: p2ll(values, side, side),
+              digits: 2,
+              hint: 'Centre against the lower-left corner. Above 1 is enrichment.',
+            },
       ],
     } satisfies MatrixOutput)
   }
@@ -279,7 +375,7 @@ export const runApa: TaskRunner = async (job) => {
       columns: [
         { key: 'anchor', label: 'Anchor', kind: 'text' },
         { key: 'separation', label: 'Separation (bp)', kind: 'number', digits: 0 },
-        { key: 'score', label: 'P2LL', kind: 'number', digits: 3 },
+        { key: 'score', label: scaledDomains ? 'In / out' : 'P2LL', kind: 'number', digits: 3 },
       ],
       rows: perAnchor.map((row) => ({
         anchor: row.label,
@@ -302,6 +398,16 @@ interface Anchor {
   rank: number
   /** Bins the feature spans, for the scaled mode. */
   span: number
+  /**
+   * The rows and columns a *scaled* window's body covers, half-open, in bins.
+   *
+   * The feature's own bins on both axes for an on-diagonal anchor — which is
+   * what makes the domain land in the middle of the picture rather than in the
+   * corner of it — and the single anchor bin on each axis for a pair, whose
+   * scaled window is a square about the loop and has no body to resample.
+   */
+  rows: Span
+  cols: Span
 }
 
 function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
@@ -325,6 +431,8 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
       label: set.name[i] === '' ? `${set.contigs[set.contig1[i]]}:${set.start1[i]}` : set.name[i],
       rank: set.score[i],
       span: col - row,
+      rows: { from: row, to: row + 1 },
+      cols: { from: col, to: col + 1 },
     })
   }
   return out
@@ -336,13 +444,19 @@ function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
   for (let i = 0; i < set.length; i++) {
     const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from)
     if (at === null) continue
-    const span = Math.max(1, job.toBins(set.end[i] - set.start[i]))
     out.push({
       pair: { row: at.bin, col: at.bin, separation: 0 },
       bounds: at.bounds,
       label: set.name[i] === '' ? `${set.contigs[set.contig[i]]}:${set.start[i]}` : set.name[i],
       rank: set.score[i],
-      span,
+      // The feature's **own bins**, not `round(length / binsize)`. The two differ
+      // by one wherever an interval straddles a bin edge, and the difference is
+      // not academic here: the body is what the scaled window is centred on and
+      // resampled against, so a span taken from the length and a centre taken
+      // from the midpoint disagree about where the feature is by up to a bin.
+      span: at.body.to - at.body.from,
+      rows: at.body,
+      cols: at.body,
     })
   }
   return out
@@ -364,13 +478,27 @@ function binOf(
   start: number,
   end: number,
   named?: NameContext,
-): { bin: number; bounds: Span; contig: string } | null {
+): { bin: number; body: Span; bounds: Span; contig: string } | null {
   const cid = contigIdFor(job.mc, contig, named)
   if (cid < 0) return null
   const [from, to] = job.mc.contigExtent(cid)
   const bin = job.mc.coords.binIndex(cid, Math.round((start + end) / 2))
   if (bin < from || bin >= to) return null
-  return { bin, bounds: { from, to }, contig: job.mc.chromnames[cid] }
+  // The bins the interval itself covers, clamped to the sequence and never
+  // empty: a feature narrower than one bin is one bin, since that is the finest
+  // thing this file can say about where it is.
+  const first = clamp(job.mc.coords.binIndex(cid, Math.max(0, Math.min(start, end))), from, to - 1)
+  const last = clamp(job.mc.coords.binIndex(cid, Math.max(0, Math.max(start, end) - 1)), first, to - 1)
+  return {
+    bin,
+    body: { from: first, to: last + 1 },
+    bounds: { from, to },
+    contig: job.mc.chromnames[cid],
+  }
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, value))
 }
 
 /** The anchor groups a run draws, after ranking and subsetting. */
@@ -416,17 +544,61 @@ function withDetailRank(anchors: Anchor[], set: FeatureSet, column: string): Anc
 // Windows and reads
 // ---------------------------------------------------------------------------
 
-/** The rectangle one anchor's window covers, clamped to its sequence. */
-function rectFor(job: JobContext, anchor: Anchor, side: number): Rect | null {
+/**
+ * The window one anchor gets: the rectangle to read, and where its body sits.
+ *
+ * Three shapes, and the middle one is the whole of this change.
+ *
+ * **Fixed** is the centre bin plus or minus a half-width, on both axes.
+ *
+ * **Scaled, on the diagonal** — a *domain* pileup — is the feature's own bins
+ * with a flank each side, on both axes: `[start − fL, end + fL]²`, so the domain
+ * is the square in the middle of the picture and its two boundaries are the
+ * cross through it. It used to be `[centre − fL, centre + L + fL]`, which is the
+ * same width and half a domain to the right of where it belongs: the body sat
+ * against the top-left corner with the whole flank on the far side, and a set of
+ * real TADs piled up into a picture with the domain in the wrong place and no
+ * way to tell from the figure.
+ *
+ * **Scaled, off the diagonal** is a square about each anchor whose side is a
+ * fraction of the separation — the rectangle between two anchors, which is what
+ * the reader asked for when they said the window should scale with the loop.
+ *
+ * The pad is deliberately **fractional**: the read is whole bins, but the grid
+ * lines the body is resampled onto are `start` and `end` exactly, so a 17-bin
+ * domain and a 431-bin one put their boundaries on the same two columns instead
+ * of within half a bin of them.
+ */
+function planFor(
+  job: JobContext,
+  anchor: Anchor,
+  side: number,
+  layout: ScaledLayout,
+): { rect: Rect; body?: Body } | null {
   const { from, to } = anchor.bounds
   if (isScaled(job.params)) {
-    const flank = Math.round(anchor.span * numParam(job.params, 'flankFraction', 0.5))
-    const rowFrom = anchor.pair.row - flank
-    const rowTo = anchor.pair.row + (anchor.pair.separation === 0 ? anchor.span : 0) + flank
-    const colFrom = anchor.pair.col - flank
-    const colTo = anchor.pair.col + (anchor.pair.separation === 0 ? anchor.span : 0) + flank
-    if (rowFrom < from || colTo > to || rowTo <= rowFrom || colTo <= colFrom) return null
-    return { rowFrom, rowTo, colFrom, colTo }
+    // Nothing to scale *by*: a pair whose two anchors land in the same bin has
+    // no separation for the window to be a fraction of, and a window of one bin
+    // stretched over the grid is a flat square averaged in as though it were
+    // evidence. Dropped, as it was before there was a body.
+    if (anchor.span <= 0) return null
+    // No flank cells on the grid means no flank read: a reader who asked for
+    // none gets the body, not a band of bins that is read and then dropped.
+    const pad = layout.flank === 0 ? 0 : anchor.span * flankFractionOf(job.params)
+    const rect = {
+      rowFrom: Math.floor(anchor.rows.from - pad),
+      rowTo: Math.ceil(anchor.rows.to + pad),
+      colFrom: Math.floor(anchor.cols.from - pad),
+      colTo: Math.ceil(anchor.cols.to + pad),
+    }
+    if (rect.rowFrom < from || rect.colTo > to) return null
+    if (rect.rowTo <= rect.rowFrom || rect.colTo <= rect.colFrom) return null
+    // Only the on-diagonal window has a body to resample against, and it is the
+    // *mode* that says so rather than the separation: a pair's two anchors can
+    // fall in one bin, and reading that as "on the diagonal" would resample a
+    // loop window against a body one bin wide.
+    if (!isDomainPileup(job.params)) return { rect }
+    return { rect, body: { from: anchor.rows.from, to: anchor.rows.to, pad } }
   }
   const half = (side - 1) / 2
   const rect = {
@@ -439,7 +611,52 @@ function rectFor(job: JobContext, anchor: Anchor, side: number): Rect | null {
   // identically shaped things, and half a window averaged into the middle of the
   // picture is signal in the wrong cells.
   if (rect.rowFrom < from || rect.colTo > to) return null
-  return rect
+  return { rect }
+}
+
+/** One anchor moved to where a control landed, body and all. */
+function shiftAnchor(anchor: Anchor, control: AnchorPair): Anchor {
+  const delta = control.row - anchor.pair.row
+  return {
+    ...anchor,
+    pair: control,
+    rows: { from: anchor.rows.from + delta, to: anchor.rows.to + delta },
+    cols: { from: anchor.cols.from + delta, to: anchor.cols.to + delta },
+  }
+}
+
+/** The widest side of a rectangle, in bins. */
+function widthOf(rect: Rect): number {
+  return Math.max(rect.rowTo - rect.rowFrom, rect.colTo - rect.colFrom)
+}
+
+/**
+ * The axis labels for a scaled on-diagonal grid, in units of the feature.
+ *
+ * Five of them, evenly spaced, because that is what a matrix output's ticks are
+ * — one label per fraction `i / 4` of the axis.
+ *
+ * **The axis is piecewise, not linear, and reading it as linear is wrong by a
+ * cell.** The grid gives the flank a whole number of cells and the body what is
+ * left, and those two counts are not in the ratio the flank fraction is — a
+ * 41-cell grid at half a body each side is 10, 21, 10 — so a cell of flank and a
+ * cell of body are different lengths of feature. The map is therefore three
+ * straight lines meeting at the two boundaries, which is exactly how the window
+ * was resampled ({@link scaledEdges}); the ends come out at `−f` and `1 + f`
+ * because that is where they are.
+ */
+function scaledTickLabels(layout: ScaledLayout, flankFraction: number): string[] {
+  if (layout.flank === 0) return ['0', '0.25', '0.5', '0.75', '1']
+  const bodyStart = layout.flank / layout.side
+  const bodyEnd = (layout.flank + layout.body) / layout.side
+  const at = (fraction: number): number => {
+    if (fraction <= bodyStart) return -flankFraction * (1 - fraction / bodyStart)
+    if (fraction >= bodyEnd) return 1 + (flankFraction * (fraction - bodyEnd)) / (1 - bodyEnd)
+    return (fraction - bodyStart) / (bodyEnd - bodyStart)
+  }
+  // `Number(...)` rather than the fixed string, so `1.00` reads as `1` and a
+  // rounded `-0.00` reads as `0` rather than as a minus sign nobody can explain.
+  return [0, 0.25, 0.5, 0.75, 1].map((fraction) => String(Number(at(fraction).toFixed(2))))
 }
 
 function spanOf(plan: Plan): Span {
@@ -501,8 +718,25 @@ async function readRect(
   return { values: dense.values, nrows: dense.nrows, ncols: dense.ncols }
 }
 
-/** One window out of a coalesced read, resampled to the pileup's shape. */
-function cut(dense: Dense, read: Rect, want: Rect, side: number): Float64Array | null {
+/**
+ * One window out of a coalesced read, resampled to the pileup's shape.
+ *
+ * Two resamplings, and which one runs is decided by whether the plan has a
+ * **body**. Without one the window is stretched evenly onto the grid, which is
+ * right for a fixed window (it is already the right size) and for a scaled pair
+ * (a square about the loop, with nothing inside it that has to land anywhere in
+ * particular). With one — a domain — the grid is flank, body, flank and the
+ * body's two ends are pinned to their own grid lines, so every domain in the set
+ * contributes its boundary to the same column.
+ */
+function cut(
+  dense: Dense,
+  read: Rect,
+  plan: Plan,
+  side: number,
+  layout: ScaledLayout,
+): Float64Array | null {
+  const want = plan.rect
   const rows = want.rowTo - want.rowFrom
   const cols = want.colTo - want.colFrom
   if (rows <= 0 || cols <= 0) return null
@@ -516,7 +750,16 @@ function cut(dense: Dense, read: Rect, want: Rect, side: number): Float64Array |
     const at = (rowSkip + r) * dense.ncols + colSkip
     cutOut.set(dense.values.subarray(at, at + cols), r * cols)
   }
-  return resampleWindow(cutOut, rows, cols, side, side)
+  if (plan.body === undefined) return resampleWindow(cutOut, rows, cols, side, side)
+  // In cells of this window rather than absolute bins, which is what the edges
+  // are measured in.
+  const edges = scaledEdges(
+    layout,
+    plan.body.from - want.rowFrom,
+    plan.body.to - want.rowFrom,
+    plan.body.pad,
+  )
+  return resampleWindowTo(cutOut, rows, cols, edges, edges)
 }
 
 // ---------------------------------------------------------------------------

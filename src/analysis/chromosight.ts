@@ -169,6 +169,37 @@ export class DiagonalBand {
  * produce gaps for (`metacooler/matrix.ts`, `applyWeights`), which is why the
  * two agree without a second convention.
  */
+/**
+ * Where one sequence's raw contacts come from.
+ *
+ * Two shapes satisfy it and the arithmetic below cannot tell them apart: a dense
+ * `n × n` square ({@link denseContacts}), which is what a test and a golden hand
+ * over, and a **band** of the diagonals a scan can actually reach, which is what
+ * a runner reads from a file.
+ *
+ * The interface exists because the second one is the only one that scales. Every
+ * cell {@link distanceLaw} and {@link detrend} ever look at has
+ * `0 ≤ col − row ≤ keepDistance`; the square around those cells was read, held
+ * and thrown away, and on a mammalian chromosome at 5 kb it is six gigabytes
+ * that a browser will not allocate at any price. Reading the band instead is not
+ * an optimisation of this module — nothing here changes — it is the removal of
+ * a ceiling that was never this module's to impose.
+ */
+export interface ContactSource {
+  /** `(row, col)`; `0` for a cell the source does not hold. */
+  at(row: number, col: number): number
+}
+
+/** A dense, mirrored `n × n` square as a {@link ContactSource}. */
+export function denseContacts(values: ArrayLike<number>, n: number): ContactSource {
+  return {
+    at(row: number, col: number): number {
+      if (row < 0 || row >= n || col < 0 || col >= n) return 0
+      return values[row * n + col]
+    },
+  }
+}
+
 export function detectableFromWeights(weights: ArrayLike<number>, from: number, to: number): Uint8Array {
   const out = new Uint8Array(to - from)
   for (let i = from; i < to; i++) out[i - from] = Number.isFinite(weights[i]) ? 1 : 0
@@ -197,6 +228,21 @@ export function detectableFromCounts(values: ArrayLike<number>, n: number, nMads
     }
     sums[r] = total
   }
+  return detectableFromMarginal(sums, nMads)
+}
+
+/**
+ * The same cut, from a marginal somebody else counted.
+ *
+ * The marginal is the one quantity in this module that is genuinely a property
+ * of a whole *row* rather than of the band — it counts non-zero pixels at every
+ * separation — so a runner that reads only the band cannot produce it from what
+ * it holds and counts it from the pixel table instead. What the cut is applied
+ * to is the same vector either way, which is why the arithmetic is here and the
+ * counting is not.
+ */
+export function detectableFromMarginal(sums: ArrayLike<number>, nMads: number): Uint8Array {
+  const n = sums.length
   const median = medianOf(sums)
   const deviations = new Float64Array(n)
   for (let i = 0; i < n; i++) deviations[i] = Math.abs(sums[i] - median)
@@ -233,7 +279,7 @@ function medianOf(values: ArrayLike<number>): number {
  * chromosome and for a bacterial genome — most of what this app opens.
  */
 export function distanceLaw(
-  values: ArrayLike<number>,
+  contacts: ContactSource,
   n: number,
   detectable: Uint8Array,
   maxDist: number,
@@ -245,7 +291,7 @@ export function distanceLaw(
     let count = 0
     for (let r = 0; r + d < n; r++) {
       if (detectable[r] === 0 || detectable[r + d] === 0) continue
-      const value = values[r * n + (r + d)]
+      const value = contacts.at(r, r + d)
       // `> 0` and not `!== 0`: the comparison upstream is `detect_diag > 0`,
       // which drops NaN as well as zero, and a balanced cooler's gaps are NaN.
       if (!(value > 0)) continue
@@ -272,20 +318,20 @@ export function distanceLaw(
  * contacts leaves no `NaN` behind.
  */
 export function detrend(
-  values: ArrayLike<number>,
+  contacts: ContactSource,
   n: number,
   detectable: Uint8Array,
   keepDistance: number,
   maxVal = 10,
 ): DiagonalBand {
   const hi = Math.min(keepDistance, Math.max(0, n - 1))
-  const law = distanceLaw(values, n, detectable, keepDistance)
+  const law = distanceLaw(contacts, n, detectable, keepDistance)
   const band = new DiagonalBand(n, 0, hi)
   for (let d = 0; d <= hi; d++) {
     const expected = Number.isFinite(law[d]) ? law[d] : 0
     const base = (d - band.lo) * n
     for (let r = 0; r + d < n; r++) {
-      const value = values[r * n + (r + d)]
+      const value = contacts.at(r, r + d)
       // The sparse original divides `.data`, so only stored pixels are touched.
       // A `NaN` from a dropped bin is not a stored pixel there — `create_mat`
       // has already turned it into an implicit zero — so it is one here either.
@@ -883,10 +929,15 @@ export function symmetrise(values: Float64Array, size: number): Float64Array {
 // One square, end to end
 // ---------------------------------------------------------------------------
 
-/** A contig's dense square and what is known about its bins. */
+/** A contig's contacts and what is known about its bins. */
 export interface Square {
-  /** Row-major `n × n`, mirrored, as `mc.matrix` returns it. */
-  values: ArrayLike<number>
+  /**
+   * The raw contacts — a band from a file, or a dense square from a test.
+   *
+   * Read by {@link prepareSquare} and by nothing else in this module: once the
+   * detrended band exists, every later step works from that.
+   */
+  contacts: ContactSource
   n: number
   detectable: Uint8Array
 }
@@ -912,8 +963,25 @@ export function prepareSquare(
   square: Square,
   options: { maxDist: number; largestKernel: number },
 ): DiagonalBand {
-  const keep = Math.min(options.maxDist, square.n) + options.largestKernel
-  return detrend(square.values, square.n, square.detectable, keep)
+  return detrend(
+    square.contacts,
+    square.n,
+    square.detectable,
+    keepDistanceFor(square.n, options.maxDist, options.largestKernel),
+  )
+}
+
+/**
+ * The widest diagonal a scan touches, and therefore the whole of what has to be
+ * read.
+ *
+ * Exported because the *reader* needs it before the square exists: it decides
+ * how wide a band comes off the file, and a band narrower than this would leave
+ * {@link detrend} dividing by a distance law fitted to fewer diagonals than it
+ * scans. One expression, used by both, so the two cannot drift apart.
+ */
+export function keepDistanceFor(n: number, maxDist: number, largestKernel: number): number {
+  return Math.min(maxDist, n) + largestKernel
 }
 
 /**

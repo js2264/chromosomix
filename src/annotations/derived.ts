@@ -1,5 +1,5 @@
 /**
- * One track made out of two: a ratio, a log ratio, or a difference.
+ * One track made out of two: a ratio or a difference.
  *
  * The map got the same thing at the same time (`render/compare.ts`) and for the
  * same reason, which is worth saying once here rather than twice: two coverage
@@ -32,18 +32,21 @@ import type { TrackSampleSet, TrackSamples } from './types'
 /**
  * What two tracks are reduced to.
  *
- * `log2ratio` leads because it is the one that is usually right: a lane is drawn
- * on a linear axis between two limits, so a plain ratio puts "half" in the
- * bottom half-unit of the lane and "double" a whole unit above the middle — the
- * same finding, drawn at two very different sizes, with depletion squashed into
- * a sliver against the floor. The logarithm is what makes the two symmetric, and
- * a lane of it has a natural zero line that the plot's own baseline draws for
- * free.
+ * **There were three, and the third was a scale wearing an operation's clothes.**
+ * `log2ratio` computed the ratio and then took its logarithm, which put the same
+ * finding in two rows and left only one of them exportable as the quantity it
+ * measured: a bigWig of log₂ ratios is a file of a *picture*, and anything
+ * downstream that wanted the ratio had to undo it. The reason it existed is
+ * real — a ratio on a linear axis puts "half" in the bottom half-unit and
+ * "double" a whole unit above the middle, the same finding at two very different
+ * sizes, with depletion squashed into a sliver against the floor — and it is now
+ * answered where it belongs, on the lane's own axis (`AnnotationStyle.scale`).
+ * One row, one quantity, and log₂ a dropdown beside the drawing style.
  */
-export type TrackOp = 'log2ratio' | 'ratio' | 'difference'
+export type TrackOp = 'ratio' | 'difference'
 
 /** Every operation, in the order the picker offers them. */
-export const TRACK_OPS: readonly TrackOp[] = ['log2ratio', 'ratio', 'difference']
+export const TRACK_OPS: readonly TrackOp[] = ['ratio', 'difference']
 
 export function isTrackOp(value: string): value is TrackOp {
   return (TRACK_OPS as readonly string[]).includes(value)
@@ -51,15 +54,13 @@ export function isTrackOp(value: string): value is TrackOp {
 
 /** What each is called on screen, and in the label of the lane it makes. */
 export const TRACK_OP_LABELS: Record<TrackOp, string> = {
-  log2ratio: 'log₂ ratio',
   ratio: 'ratio',
   difference: 'difference',
 }
 
 /** How a derived lane names itself, before the reader renames it. */
 export function derivedTrackLabel(a: string, b: string, op: TrackOp): string {
-  if (op === 'difference') return `${a} − ${b}`
-  return op === 'log2ratio' ? `log₂(${a} / ${b})` : `${a} / ${b}`
+  return op === 'difference' ? `${a} − ${b}` : `${a} / ${b}`
 }
 
 /** Which value the lane sits around — the line a reader reads departures from. */
@@ -237,9 +238,28 @@ function boundaries(left: TrackSamples, right: TrackSamples): Int32Array {
  * knowing what the lane's numbers look like.
  */
 function apply(left: number, right: number, op: TrackOp): number {
-  if (op === 'difference') return left - right
-  const ratio = left / right
-  if (op === 'ratio') return ratio
-  if (Number.isNaN(ratio)) return Number.NaN
-  return Math.log2(ratio)
+  return op === 'difference' ? left - right : left / right
+}
+
+/**
+ * The same arithmetic over two per-bin vectors, for a file rather than a lane.
+ *
+ * One difference, and it is the difference between drawing and writing. A lane
+ * brings an infinity back onto its own axis ({@link clampInfinities}) because a
+ * pixel has to go somewhere; a file says **no value**, because an infinity
+ * cannot be written to a bigWig, would take the range of whatever read it back,
+ * and is not a measurement — `x / 0` says the denominator had nothing there,
+ * which is exactly what a gap says.
+ */
+export function combineVectors(
+  a: ArrayLike<number>,
+  b: ArrayLike<number>,
+  op: TrackOp,
+): Float32Array {
+  const out = new Float32Array(Math.min(a.length, b.length))
+  for (let i = 0; i < out.length; i++) {
+    const value = apply(a[i], b[i], op)
+    out[i] = Number.isFinite(value) ? value : Number.NaN
+  }
+  return out
 }

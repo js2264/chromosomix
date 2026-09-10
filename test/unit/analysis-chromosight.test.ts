@@ -34,6 +34,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   correlate,
+  denseContacts,
   detectOnSquare,
   detectableFromWeights,
   pileupOf,
@@ -169,7 +170,10 @@ class Demo {
     const dense = await this.square(chrom)
     return {
       square: {
-        values: dense.values,
+        // The golden hands over a whole dense square; a runner hands over a
+        // band off the file. Both are a `ContactSource`, and `prepareSquare`
+        // reads the same cells from either.
+        contacts: denseContacts(dense.values, to - from),
         n: to - from,
         detectable: detectableFromWeights(await this.weights(), from, to),
       },

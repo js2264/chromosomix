@@ -19,7 +19,14 @@
 
 import { valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
 import type { LocusAxis } from './locus'
-import type { Limits, TrackSampleSet } from '../annotations/types'
+import {
+  onScale,
+  type Limits,
+  type TrackMode,
+  type TrackScale,
+  type TrackSampleSet,
+} from '../annotations/types'
+import { DEFAULT_COLORMAP, colormapCss } from './colormaps'
 
 /**
  * One value per canvas pixel along the genomic axis.
@@ -87,6 +94,7 @@ export function profileOf(
   frame: LaneFrame,
   axis: LocusAxis,
   samples: TrackSampleSet | null,
+  scale: TrackScale = 'linear',
 ): PixelProfile {
   const from = Math.floor(frame.alongFrom)
   const slots = Math.max(1, Math.ceil(frame.alongTo) - from)
@@ -164,10 +172,21 @@ export function profileOf(
   let drawn = 0
   for (let slot = 0; slot < slots; slot++) {
     if (weight[slot] <= 0) continue
-    const value = sum[slot] / weight[slot]
+    // **The scale is applied to the pixel, not to the interval.** A log axis
+    // draws `log(mean)`; transforming each interval first and then averaging
+    // draws the mean of the logs, which is the geometric mean — a different
+    // number, and one nobody asked for by picking an axis. The band's two ends
+    // go through the same transform for the same reason, so a readout that says
+    // what a pixel hid says it in the units the pixel is drawn in.
+    const value = onScale(sum[slot] / weight[slot], scale)
     mean[slot] = value
     if (Number.isNaN(low[slot])) low[slot] = value
+    else low[slot] = onScale(low[slot], scale)
     if (Number.isNaN(high[slot])) high[slot] = value
+    else high[slot] = onScale(high[slot], scale)
+    // A value the scale has no answer for — zero or below, under a logarithm —
+    // is a gap, and a gap decides nothing about the axis and draws no ink.
+    if (!Number.isFinite(value)) continue
     // The means, and the means at *both* ends: `low[slot]` used to be folded
     // into the floor with no `high[slot]` twin, so a single hidden sub-zero
     // base inside a summary window decided the axis. An all-positive
@@ -369,7 +388,15 @@ export function normaliser(limits: { min: number; max: number }): (value: number
 
 export interface TrackPaint {
   colour: string
-  mode: 'line' | 'area' | 'bar'
+  mode: TrackMode
+  /**
+   * The colormap a `heatmap` lane fills with. Ignored by every other mode.
+   *
+   * Resolved by the caller ({@link colormapOf}) rather than here, because the
+   * choice depends on the lane's *limits* — diverging where they straddle zero —
+   * and the caller is the one that has resolved those.
+   */
+  colormap?: string
   limits: { min: number; max: number }
   /** Grid and axis-label colour; the page's, so it follows the theme. */
   guideColour: string
@@ -444,6 +471,31 @@ export function drawTrack(
 
   ctx.save()
   ctx.globalAlpha = paint.opacity
+
+  // **A colour rather than a position.** The lane's whole thickness is filled
+  // per pixel, so the value costs no height at all — which is the point of the
+  // mode and the reason a stack of them fits on a screen. There is no baseline,
+  // no zero line and no floor rule: all three describe where a *position* would
+  // be read from, and there is no position here.
+  //
+  // `norm` is the same normaliser every other mode uses, so a heatmap lane
+  // answers to the same limits, the same group axis, the same ceiling drag and
+  // the same flip — a flipped heatmap reverses its colours, which is what
+  // flipping an axis means when the axis is a ramp.
+  if (paint.mode === 'heatmap') {
+    const map = paint.colormap ?? DEFAULT_COLORMAP
+    for (let slot = 0; slot < slots; slot++) {
+      const value = profile.mean[slot]
+      if (!Number.isFinite(value)) continue
+      const along = profile.from + slot
+      ctx.fillStyle = colormapCss(map, norm(value))
+      const [x, y, width, height] = laneRect(frame, along, along + 1, 0, frame.thickness)
+      ctx.fillRect(x, y, width, height)
+    }
+    drawVariants(ctx, frame, profile, norm, baseAcross, paint)
+    ctx.restore()
+    return
+  }
 
   if (paint.mode === 'bar') {
     ctx.fillStyle = paint.colour

@@ -49,6 +49,25 @@ export function isChromosight(params: Params): boolean {
   return params.norm === 'chromosight'
 }
 
+/** The flank a scaled window carries each side, as a fraction of its body. */
+export function flankFractionOf(params: Params): number {
+  const value = typeof params.flankFraction === 'number' ? params.flankFraction : 0.5
+  return Math.max(0, Math.min(4, value))
+}
+
+/**
+ * Whether this run is a **domain** pileup: intervals, scaled, on the diagonal.
+ *
+ * The three settings together, because none of them means it alone. It is what
+ * decides the shape of the window, the statistic under the picture, the axis
+ * labels, and how far a control has to be shifted to be a control — so it is
+ * worth one name that the descriptor and the runner both use rather than the
+ * same conjunction spelled out five times.
+ */
+export function isDomainPileup(params: Params): boolean {
+  return isScaled(params) && onDiagonal(params)
+}
+
 /** Whether the anchors are pairs (off-diagonal) or single features. */
 export function onDiagonal(params: Params): boolean {
   return params.anchors !== 'pairs'
@@ -94,7 +113,13 @@ const PARAMS: readonly ParamSpec[] = [
     default: 'fixed',
     options: [
       { value: 'fixed', label: 'Fixed window', hint: 'Centre plus or minus a number of bins.' },
-      { value: 'scaled', label: 'Scaled', hint: 'The feature or the span between anchors, resampled.' },
+      {
+        value: 'scaled',
+        label: 'Scaled',
+        hint:
+          'Flank, the feature, flank — every window on one grid. Over a set of domains this is ' +
+          'the domain pileup: the TAD in the middle and its two boundaries as the cross through it.',
+      },
     ],
     // The chromosight pileup's window is its template's size. See {@link isScaled}.
     when: (params) => params.norm !== 'chromosight',
@@ -114,7 +139,9 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'grid',
     label: 'Grid',
-    hint: 'Every window resampled to this many cells a side.',
+    hint:
+      'Every window resampled to this many cells a side. A multiple of four puts the feature’s ' +
+      'two ends exactly on axis ticks at the default flank.',
     default: 51,
     min: 11,
     max: 201,
@@ -125,7 +152,9 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'flankFraction',
     label: 'Flank',
-    hint: 'As a fraction of the feature’s own length, each side.',
+    hint:
+      'As a fraction of the feature’s own length, each side. At 0.5 the feature is the middle ' +
+      'half of the picture; at 1 it is the middle third.',
     default: 0.5,
     min: 0,
     max: 2,
@@ -182,6 +211,15 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
+  // **The shift is asked for in two units, and which one is offered follows the
+  // mode.** A fixed window is a couple of dozen bins wide, so *how far away*
+  // is a length in base pairs and 100 kb is a long way. A scaled window is as
+  // wide as whatever it is piling up — a megabase-long TAD with its flanks is
+  // two megabases of window — and a control 100 kb from it is ninety per cent
+  // the same cells as the thing it is supposed to be the denominator of. The
+  // ratio that comes out is 1 everywhere, the domain washes out of the picture,
+  // and nothing on screen says why. So the scaled mode asks in **multiples of
+  // the window**, where 1 is the first shift that cannot overlap at all.
   {
     kind: 'number',
     key: 'minShift',
@@ -189,7 +227,7 @@ const PARAMS: readonly ParamSpec[] = [
     default: 100_000,
     min: 0,
     unit: 'bp',
-    when: (params) => params.norm === 'matched',
+    when: (params) => params.norm === 'matched' && !isScaled(params),
     section: 'Control',
   },
   {
@@ -199,7 +237,31 @@ const PARAMS: readonly ParamSpec[] = [
     default: 1_000_000,
     min: 1,
     unit: 'bp',
-    when: (params) => params.norm === 'matched',
+    when: (params) => params.norm === 'matched' && !isScaled(params),
+    section: 'Control',
+  },
+  {
+    kind: 'number',
+    key: 'minShiftScale',
+    label: 'Smallest shift',
+    hint: 'As a multiple of the window’s own width. Below 1 a control overlaps the feature.',
+    default: 1,
+    min: 0,
+    max: 20,
+    step: 0.5,
+    when: (params) => params.norm === 'matched' && isScaled(params),
+    section: 'Control',
+  },
+  {
+    kind: 'number',
+    key: 'maxShiftScale',
+    label: 'Largest shift',
+    hint: 'As a multiple of the window’s own width.',
+    default: 3,
+    min: 0.5,
+    max: 50,
+    step: 0.5,
+    when: (params) => params.norm === 'matched' && isScaled(params),
     section: 'Control',
   },
   {
@@ -295,6 +357,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const entry = context.entries.find((row) => row.id === chosen)
   const anchors = anchorCount(entry?.summary)
 
+  // **Refused in the form rather than at Run.** One cell of a scaled pileup is
+  // fed by windows at a dozen different separations — that is what scaling is —
+  // so it has no one diagonal offset for a P(s) to be looked up at, and
+  // dividing by one anyway is a plausible picture of nothing. The other three
+  // normalisations all apply; the distance-matched one is drawn at the same
+  // separations by construction and is the right answer here.
+  if (isScaled(params) && params.norm === 'oe') {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal:
+        'Observed / expected needs one diagonal offset per cell, and a scaled window has a ' +
+        'different one in every feature. Use the distance-matched control, or turn the scaled ' +
+        'mode off.',
+    }
+  }
+
   // The chromosight normalisation is priced differently because it *reads*
   // differently: the distance law it detrends by is a property of a whole
   // sequence, so it takes one square per sequence the anchors sit on rather than
@@ -318,6 +399,16 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const side = windowSide(params)
   const cells = side * side
   const controls = params.norm === 'matched' ? Math.round(Number(params.controls ?? 5)) : 0
+  // The grid is what comes *out* of a scaled window, never what goes into it:
+  // the read is the feature's own bins plus its flanks, which on a domain set is
+  // as many bins as the domain is long. Priced as the grid it would understate a
+  // megabase-long TAD by two orders of magnitude, so the note says so in words —
+  // the number cannot be known here, since the estimate deliberately carries the
+  // entries and not their megabytes.
+  const scaledNote = isScaled(params)
+    ? ' Each window is read at the feature’s own size, flanks included, and resampled onto the ' +
+      'grid afterwards — so a long feature is a large read whatever the grid says.'
+    : ''
   // Every anchor, since there is no cap any more: the estimate has to price the
   // run that will happen rather than the one a removed setting used to bound.
   const windows = anchors === null ? null : anchors * (1 + controls)
@@ -344,11 +435,11 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests,
     bytes: windows === null ? null : windows * cells * 4,
     note:
-      windows === null
+      (windows === null
         ? 'One small block per anchor, at the file’s own resolution.'
-        : `${windows.toLocaleString()} windows of ${side}×${side} bins, one small block each at ` +
+        : `${windows.toLocaleString()} windows of ${side}×${side} cells, one small block each at ` +
           `the file’s own resolution — at most ${(windows * 2).toLocaleString()} range requests ` +
-          'before nearby anchors are read together. Cancellable at any point.',
+          'before nearby anchors are read together. Cancellable at any point.') + scaledNote,
   }
 }
 

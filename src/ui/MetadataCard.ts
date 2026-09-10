@@ -46,7 +46,7 @@ import { CATEGORY_PALETTE, categoryColour } from '../render/meta'
 import { button, el } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { mapsOrLead, placementField } from './lanePlacement'
-import { flipButton, heightField, limitsField, modeField } from './laneSettings'
+import { flipButton, heightField, limitsField, styleFields } from './laneSettings'
 
 /** What each table's columns are called in the drop-down's headings. */
 const TABLE_LABELS: Record<MetaTable, string> = {
@@ -316,7 +316,7 @@ export class MetadataCard {
     row.appendChild(
       el('div', { class: 'ann-inline' }, heightField(this.options.store, entry), ...
         (entry.kind === 'metadata'
-          ? [modeField(this.options.store, entry), flipButton(this.options.store, entry)]
+          ? [...styleFields(this.options.store, entry), flipButton(this.options.store, entry)]
           : [])),
     )
     if (entry.kind === 'metadata') row.appendChild(limitsField(this.options.store, entry))

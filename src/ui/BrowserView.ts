@@ -32,7 +32,14 @@ import {
 import { SampleCache } from '../annotations/samples'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
-import { drawnFromSamples, hasTrackControls, readsOf } from '../annotations/types'
+import {
+  colormapOf,
+  stacksAsHeatmaps,
+  drawnFromSamples,
+  hasTrackControls,
+  readsOf,
+  scaleOf,
+} from '../annotations/types'
 import { ReadCache } from '../annotations/reads'
 import {
   packPile,
@@ -103,6 +110,7 @@ import {
   rowsThatFit,
 } from '../render/features'
 import {
+  laneBands,
   GRIP_ROOM,
   GROUP_BAR,
   GROUP_FONT,
@@ -118,6 +126,7 @@ import {
 } from '../render/lane'
 import {
   drawLaneLabel,
+  type LaneLabelBoxes,
   labelEndFor,
   type LaneLabelSpec,
   type LaneLabelStyle,
@@ -1894,6 +1903,9 @@ export class BrowserView {
       detail: LaneLabelSpec['detail']
       at: 'near' | 'far'
     } | null = null
+    // The bands a stack of heatmaps was divided into, kept for the label: one
+    // name per row, in the row it names (§18.11).
+    let labelBands: LaneFrame[] | null = null
     clipLane(ctx, frame)
     if (lane.reads.length > 0) {
       label = this.paintPile(ctx, lane, palette)
@@ -1915,7 +1927,18 @@ export class BrowserView {
       // While a ceiling is being dragged this lane is drawn twice: once as it
       // stood, faded and still, and once as the hand is asking for it.
       const dragged = this.scaling?.id === lane.entry.id ? this.scaling.factor : null
-      for (const { entry: member, profile } of lane.profiles) {
+      // **Heatmaps stack, they do not overlay** — one rule, in
+      // `annotations/types.ts`, so this lane and the one beside the map divide
+      // themselves the same way.
+      const bands = stacksAsHeatmaps(lane.profiles.map(({ entry: member }) => member))
+        ? laneBands(
+            frame,
+            lane.profiles.map(() => ({ fill: true as const })),
+          )
+        : null
+      labelBands = bands
+      for (const [at, { entry: member, profile }] of lane.profiles.entries()) {
+        const laneFrame = bands?.[at] ?? frame
         const extent = extentFor(member, profile.extent, groups)
         const limits = resolveLimits(member.style.limits, extent)
         const paint = {
@@ -1929,18 +1952,20 @@ export class BrowserView {
           outline: this.outline,
           baseline: this.baseline,
           flip: member.style.flip,
+          colormap: colormapOf(member.style, limits),
           // Overlaid tracks are translucent by necessity: two opaque areas in
           // one lane means the second hides the first, which is the opposite of
-          // what overlaying them was for.
+          // what overlaying them was for. Stacked heatmaps do not overlap, so
+          // they keep the opacity the reader set.
           opacity:
-            lane.profiles.length > 1
+            lane.profiles.length > 1 && bands === null
               ? member.style.opacity * OVERLAY_DIM
               : member.style.opacity,
         }
         if (dragged === null || !hasTrackControls(member.kind)) {
-          drawTrack(ctx, frame, profile, paint)
+          drawTrack(ctx, laneFrame, profile, paint)
         }
-        else drawTrackScaling(ctx, frame, profile, paint, scaledTo(limits, dragged))
+        else drawTrackScaling(ctx, laneFrame, profile, paint, scaledTo(limits, dragged))
       }
       const first = lane.profiles[0]
       const resolved = resolveLimits(
@@ -2042,7 +2067,9 @@ export class BrowserView {
       }
     }
     ctx.restore()
-    if (label !== null) this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at)
+    if (label !== null) {
+      this.labelLane(ctx, lane, palette, label.entries, label.detail, label.at, labelBands)
+    }
   }
 
   /**
@@ -2069,21 +2096,24 @@ export class BrowserView {
     entries: AnnotationEntry[],
     detail: LaneLabelSpec['detail'],
     at: 'near' | 'far',
+    /**
+     * The bands a stacked lane was divided into (§18.11), one per entry.
+     *
+     * A name per band rather than one block for the lane. Over the data the
+     * block is otherwise a line of four names written across whichever row it
+     * lands on; in the column it is four lines centred on the lane, which is
+     * close but still leaves the reader matching names to rows by counting. Each
+     * name goes level with the row it names. The range stays on the first band,
+     * once: it is the *lane's* axis and every row shares it.
+     */
+    bands: LaneFrame[] | null = null,
   ): void {
-    const column = this.nameColumn > 0
-    const boxes = drawLaneLabel(ctx, lane.frame, {
-      names: entries.map((entry) => ({
-        id: entry.id,
-        text: entry.label,
-        colour: entry.style.colour,
-      })),
-      detail,
-      labelAt: at,
-      // Where a right-aligned label block ends: clear of the data, and clear of
-      // the handle hanging in front of it. Without the handle's room the name ran
-      // straight into the dots, which is exactly what a label and a control must
-      // not do — the eye reads them as one mark.
-      column: column
+    // Where a right-aligned label block ends: clear of the data, and clear of
+    // the handle hanging in front of it. Without the handle's room the name ran
+    // straight into the dots, which is exactly what a label and a control must
+    // not do — the eye reads them as one mark.
+    const column =
+      this.nameColumn > 0
         ? {
             start: GRIP_MARGIN,
             end: this.gutter - GUTTER_PAD - GRIP_ROOM,
@@ -2093,10 +2123,31 @@ export class BrowserView {
             // written across the track it names.
             nameLines: 2,
           }
-        : null,
-      style: browserLabelStyle(),
-      palette: { text: palette.labelColor, halo: palette.labelHaloColor },
-    })
+        : null
+    const stacked = bands !== null && bands.length === entries.length
+    const frames = stacked && bands !== null ? bands : [lane.frame]
+    const runs = stacked ? entries.map((entry) => [entry]) : [entries]
+    const blockOf = (index: number): LaneLabelBoxes =>
+      drawLaneLabel(ctx, frames[index], {
+        names: runs[index].map((entry) => ({
+          id: entry.id,
+          text: entry.label,
+          colour: entry.style.colour,
+        })),
+        // The range is the lane's and is written once, on the first band.
+        detail: index === 0 ? detail : null,
+        labelAt: at,
+        column,
+        style: browserLabelStyle(),
+        palette: { text: palette.labelColor, halo: palette.labelHaloColor },
+      })
+    const boxes = blockOf(0)
+    for (let index = 1; index < frames.length; index++) {
+      const more = blockOf(index)
+      boxes.names.push(...more.names)
+      boxes.swatches.push(...more.swatches)
+      this.wanted(more.wanted)
+    }
     this.wanted(boxes.wanted)
     // The handle goes on the first name's line, whatever that line turned out to
     // be: in the column it is centred on the lane, over the data it is at the
@@ -2308,7 +2359,10 @@ export class BrowserView {
           ? { reads: readsOf(member.style), reference: this.referenceKey() }
           : {}),
       })
-      lane.profiles.push({ entry: member, profile: profileOf(lane.frame, this.axis, samples) })
+      lane.profiles.push({
+        entry: member,
+        profile: profileOf(lane.frame, this.axis, samples, scaleOf(member.style)),
+      })
     }
   }
 

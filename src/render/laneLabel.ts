@@ -521,8 +521,11 @@ export function drawLaneLabel(
   ctx.textAlign = 'left'
   const across = stacked ? nameTop + block + style.detailDrop : nameTop + block
   // The same slot the names gave up, so the range stays under the name it
-  // belongs to rather than starting a handle's width to the side of it.
-  const along = stacked ? (column === null ? near : column.start) : lastEnd
+  // belongs to rather than starting a handle's width to the side of it — and a
+  // gap after the name when it goes *beside* one instead, which a thin lane
+  // makes the ordinary case (§18.11): flush against it, `80 kb` and `-1.46` are
+  // read as one mangled word.
+  const along = stacked ? (column === null ? near : column.start) : lastEnd + dir * NAME_GAP
 
   if (spec.detail.kind === 'text') {
     const text = spec.detail.text

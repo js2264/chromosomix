@@ -251,6 +251,17 @@ function curveToTsv(output: CurveOutput): string[] {
  * every calculation over it. Where an axis has no ticks the index is written
  * instead: a bare grid of numbers with no way to say which row is which is a
  * picture, not a table.
+ *
+ * **There are two kinds of tick and only one of them is a column heading.** A
+ * `MatrixOutput` whose tick list is as long as its axis is naming its cells —
+ * a genome per column on a MAG network, a track per column on a correlation —
+ * and each label belongs over its own column. A shorter list is a *position*
+ * along a continuous axis, drawn evenly spaced across the picture: the scaled
+ * pileup's units of the feature, where five labels describe forty-one columns.
+ * Written into the header those five would sit over the first five columns and
+ * the rest would be indices, which is a table stating something untrue about
+ * where the axis is. So a positional list goes into a `#` line saying what it
+ * is, and the columns keep their indices.
  */
 function matrixToTsv(output: MatrixOutput): string[] {
   const lines = [
@@ -261,15 +272,25 @@ function matrixToTsv(output: MatrixOutput): string[] {
     lines.push(`# ${cell(stat.label)}: ${fixed(stat.value, stat.digits ?? 4)}`)
   }
 
-  const label = (ticks: readonly string[], index: number): string =>
-    index < ticks.length ? cell(ticks[index]) : String(index)
+  const perCell = (ticks: readonly string[], count: number): boolean =>
+    ticks.length === count && count > 0
+  for (const [axis, ticks, count] of [
+    ['x', output.xTicks, output.ncols],
+    ['y', output.yTicks, output.nrows],
+  ] as const) {
+    if (ticks.length === 0 || perCell(ticks, count)) continue
+    lines.push(`# ${axis} ticks, evenly spaced across the axis: ${ticks.map(cell).join(', ')}`)
+  }
+
+  const label = (ticks: readonly string[], index: number, count: number): string =>
+    perCell(ticks, count) ? cell(ticks[index]) : String(index)
 
   const header = [cell(output.yLabel)]
-  for (let col = 0; col < output.ncols; col++) header.push(label(output.xTicks, col))
+  for (let col = 0; col < output.ncols; col++) header.push(label(output.xTicks, col, output.ncols))
   lines.push(row(header))
 
   for (let r = 0; r < output.nrows; r++) {
-    const cells = [label(output.yTicks, r)]
+    const cells = [label(output.yTicks, r, output.nrows)]
     for (let c = 0; c < output.ncols; c++)
       cells.push(tsvNumber(output.values[r * output.ncols + c]))
     lines.push(row(cells))

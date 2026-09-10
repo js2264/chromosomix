@@ -169,6 +169,27 @@ describe('outputToTsv, matrix', () => {
     const bare: MatrixOutput = { ...matrix, xTicks: [], yTicks: [] }
     expect(body(outputToTsv(bare, PROVENANCE))[0]).toEqual(['offset', '0', '1', '2'])
   })
+
+  it('does not put a positional tick list over the first few columns', () => {
+    // A scaled pileup's ticks are *positions* on a continuous axis, drawn evenly
+    // spaced across the picture — five of them describing forty-one columns.
+    // Written into the header they would sit over the first five columns with
+    // indices after them, which is a table saying something untrue about where
+    // the axis is. They go in a `#` line and the columns keep their indices.
+    const scaled: MatrixOutput = {
+      ...matrix,
+      xTicks: ['-0.5', '1.5'],
+      yTicks: ['-0.5', '0.5', '1.5'],
+    }
+    const text = outputToTsv(scaled, PROVENANCE)
+    expect(text).toContain('# x ticks, evenly spaced across the axis: -0.5, 1.5')
+    expect(text).toContain('# y ticks, evenly spaced across the axis: -0.5, 0.5, 1.5')
+    expect(body(text)).toEqual([
+      ['offset', '0', '1', '2'],
+      ['0', '1', '2', '3'],
+      ['1', '4', '', '6'],
+    ])
+  })
 })
 
 describe('tsvName', () => {

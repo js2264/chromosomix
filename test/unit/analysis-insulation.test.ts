@@ -18,7 +18,9 @@ import {
   callBoundaries,
   diamondCells,
   diamondSums,
+  domainsBetween,
   insulationScore,
+  type Boundary,
   type ContigSquare,
 } from '@/analysis/insulation'
 
@@ -246,5 +248,50 @@ describe('callBoundaries', () => {
     const score = Float64Array.from([Number.NaN, Number.NaN, 0, -2, 0, Number.NaN])
     const calls = callBoundaries(score, { prominence: 0.5, spacing: 1 })
     expect(calls.map((call) => call.bin)).toEqual([3])
+  })
+})
+
+describe('domainsBetween', () => {
+  const call = (bin: number, prominence: number): Boundary => ({ bin, score: -1, prominence })
+
+  it('is the gaps between the calls, and they tile', () => {
+    const domains = domainsBetween([call(10, 1), call(25, 2), call(40, 3)])
+    expect(domains.map((domain) => [domain.from, domain.to])).toEqual([
+      [10, 25],
+      [25, 40],
+    ])
+    // One ends where the next begins, which is what makes a lane of them read
+    // as a segmentation rather than as boxes with gaps between them.
+    expect(domains[0].to).toBe(domains[1].from)
+  })
+
+  it('leaves the two ends of the sequence out', () => {
+    // Three calls make two domains, never four: a domain running back to the
+    // telomere would assert an edge the data never placed.
+    expect(domainsBetween([call(10, 1), call(25, 2), call(40, 3)])).toHaveLength(2)
+    expect(domainsBetween([call(10, 1)])).toHaveLength(0)
+    expect(domainsBetween([])).toHaveLength(0)
+  })
+
+  it('takes the weaker of the two edges, never the stronger', () => {
+    // A domain is only as well defined as its worse-supported side; reporting
+    // the stronger would let one good boundary vouch for a run of bad ones.
+    const domains = domainsBetween([call(0, 3), call(10, 0.4), call(20, 2)])
+    expect(domains.map((domain) => domain.strength)).toEqual([0.4, 0.4])
+  })
+
+  it('pairs neighbours whatever order the calls arrive in', () => {
+    // `callBoundaries` answers in bin order, but a caller that had sorted by
+    // prominence — the other order a boundary list comes in — would otherwise
+    // get domains between calls that are not neighbours.
+    const byProminence = [call(25, 3), call(10, 1), call(40, 2)]
+    expect(domainsBetween(byProminence).map((domain) => [domain.from, domain.to])).toEqual([
+      [10, 25],
+      [25, 40],
+    ])
+  })
+
+  it('makes nothing of two calls at the same bin', () => {
+    expect(domainsBetween([call(10, 1), call(10, 2)])).toHaveLength(0)
   })
 })

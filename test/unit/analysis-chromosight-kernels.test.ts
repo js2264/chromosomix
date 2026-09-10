@@ -18,6 +18,7 @@ import {
   DiagonalBand,
   correlateAt,
   corrToPvalue,
+  denseContacts,
   detectableFromCounts,
   detectableFromWeights,
   detrend,
@@ -71,7 +72,7 @@ describe('distanceLaw', () => {
     put(0, 1, 4)
     put(1, 2, 0)
     put(2, 3, 8)
-    const law = distanceLaw(values, n, allDetectable(n), 3)
+    const law = distanceLaw(denseContacts(values, n), n, allDetectable(n), 3)
     expect(law[1]).toBe(6)
   })
 
@@ -84,7 +85,7 @@ describe('distanceLaw', () => {
     values[2 * n + 1] = 2
     const detectable = Uint8Array.from([1, 0, 1])
     // Every first-offset pair touches bin 1, so the diagonal has nothing left.
-    expect(distanceLaw(values, n, detectable, 2)[1]).toBeNaN()
+    expect(distanceLaw(denseContacts(values, n), n, detectable, 2)[1]).toBeNaN()
   })
 })
 
@@ -92,7 +93,7 @@ describe('detrend', () => {
   it('divides by the diagonal mean and keeps the upper band only', () => {
     const n = 3
     const values = new Float64Array([1, 2, 3, 2, 1, 4, 3, 4, 1])
-    const band = detrend(values, n, allDetectable(n), 2)
+    const band = detrend(denseContacts(values, n), n, allDetectable(n), 2)
     // Offset 1 holds 2 and 4, so its mean is 3.
     expect(band.at(0, 1)).toBeCloseTo(2 / 3, 12)
     expect(band.at(1, 2)).toBeCloseTo(4 / 3, 12)
@@ -105,19 +106,19 @@ describe('detrend', () => {
     // between an all-zero diagonal and an infinity in the scanned map.
     const n = 2
     const values = new Float64Array([0, 5, 5, 0])
-    const band = detrend(values, n, allDetectable(n), 1, 2)
+    const band = detrend(denseContacts(values, n), n, allDetectable(n), 1, 2)
     // 5 / 5 = 1, below the clamp.
     expect(band.at(0, 1)).toBe(1)
 
     const spiky = new Float64Array([0, 1, 1, 0])
-    const first = detrend(spiky, 2, allDetectable(2), 1, 0.5)
+    const first = detrend(denseContacts(spiky, 2), 2, allDetectable(2), 1, 0.5)
     expect(first.at(0, 1)).toBe(1)
   })
 
   it('leaves a zero pixel at zero rather than dividing it', () => {
     const n = 3
     const values = new Float64Array([0, 0, 6, 0, 0, 0, 6, 0, 0])
-    const band = detrend(values, n, allDetectable(n), 2)
+    const band = detrend(denseContacts(values, n), n, allDetectable(n), 2)
     expect(band.at(0, 1)).toBe(0)
     expect(band.at(0, 2)).toBe(1)
   })
