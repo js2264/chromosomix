@@ -1,6 +1,13 @@
 {
-  "latest": "fe7debc",
+  "latest": "19a568c",
   "versions": [
+    {
+      "commit": "19a568c",
+      "version": "0.12.0",
+      "date": "2026-09-10T18:36:29+02:00",
+      "subject": "Domain pileup APA and multi-scale insulation with heatmap rendering (#42)",
+      "tag": ""
+    },
     {
       "commit": "fe7debc",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-13T15:21:43+02:00",
       "subject": "Add durable workspace recovery across browser restarts (#27)",
-      "tag": ""
-    },
-    {
-      "commit": "8fc7f1e",
-      "version": "0.10.0",
-      "date": "2026-08-13T13:57:01+02:00",
-      "subject": "Add hand-drawn rectangles and diagonal recentring to contact maps (#26)",
       "tag": ""
     },
     {
