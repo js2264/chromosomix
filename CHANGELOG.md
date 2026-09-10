@@ -51,6 +51,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   separation — is now symmetric about its anchor bin rather than a bin short on
   one side of it.
 
+- **`metacooler-run` takes the `::/resolutions/<n>` address its own refusal
+  tells you to write.** An `.mcool` is a collection of coolers, and opening one
+  at its root is refused with a sentence naming the resolutions and an example
+  ending in `::/resolutions/25000` — advice the shell could not then take,
+  because the whole string went to `stat` and there is no such file. So there
+  was no way into an `.mcool` from a command line at all. The `::` half is now
+  split off for the filesystem and kept for the container, which is where the
+  group is read from. Outputs are named `sample_25000.…` rather than `1000.…`,
+  which is what `basename` of a group path had been giving them.
+
 - The tick labels on a matrix output that are *positions* on a continuous axis
   rather than one-per-cell names no longer land over the first few columns of
   the exported TSV. They go in a `#` line saying what they are, and the columns

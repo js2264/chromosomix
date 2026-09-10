@@ -96,6 +96,7 @@ import type {
 import type { TaskInputs } from '../analysis/worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
 import { ViewerError } from '../errors'
+import { parseUri } from '../uri'
 import type { ByteSource } from '../types'
 import { VERSION } from '../version'
 
@@ -307,9 +308,10 @@ interface PairsBinning {
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
  */
-async function openForTask(path: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+  const path = parseUri(uri).path
   try {
-    return await MetaCooler.open(path, source)
+    return await MetaCooler.open(uri, source)
   } catch (error) {
     if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
     const binning = options.binning
@@ -381,14 +383,22 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * a number computed by clicking come out of the same implementation.
  */
 async function openLocal(
-  path: string,
+  uri: string,
   options: RunOptions,
 ): Promise<{ mc: MetaCooler; source: ByteSource }> {
+  // **The `::` is addressed to the container, not to the filesystem.** An
+  // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
+  // with a sentence naming the resolutions and telling the reader to write
+  // `file.mcool::/resolutions/25000` — advice this shell then could not take,
+  // because the whole string went to `stat` and there is no such file. So the
+  // path is split off for the filesystem and the *uri* is what the container is
+  // opened with, which is where `parseUri` reads the group from.
+  const path = parseUri(uri).path
   const name = basename(path)
   if (!isHicProMatrix(name)) {
     // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
     const source = await LocalFileSource.fromPath(path)
-    return { mc: await openForTask(path, source, options), source }
+    return { mc: await openForTask(uri, source, options), source }
   }
   const beside = hicProBinsNames(name)
     .map((n) => join(dirname(path), n))
@@ -1074,9 +1084,19 @@ export function recordedTasks(config: {
 
 /** `demo/yeast/Yeast_microC.cool` → `Yeast_microC`. */
 export function stemOf(path: string): string {
-  const name = basename(path)
+  // The `::` half is the *group inside the container*, so a file addressed as
+  // `sample.mcool::/resolutions/1000` is still `sample` — it was `1000`, which
+  // is `basename` of a group path and named every output after a number. The
+  // group's last segment is kept as a suffix so two resolutions of one file
+  // written to one `--out` are two sets of results rather than one overwritten
+  // twice.
+  const { path: file, group } = parseUri(path)
+  const name = basename(file)
   const dot = name.indexOf('.')
-  return dot > 0 ? name.slice(0, dot) : (name || 'output')
+  const stem = dot > 0 ? name.slice(0, dot) : (name || 'output')
+  if (group === '/') return stem
+  const last = group.split('/').filter((part) => part !== '').pop()
+  return last === undefined ? stem : `${stem}_${last}`
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
