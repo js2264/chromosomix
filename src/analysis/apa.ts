@@ -28,6 +28,14 @@
  * looks like something. P2LL — the centre against the lower-left corner — is the
  * number that says whether it looks like a dot, and a pileup published without
  * one is a picture doing the work a statistic should.
+ *
+ * **A domain pileup is a different picture and takes a different corner.** The
+ * scaled mode piles up *intervals* — TADs between two called boundaries, say —
+ * with a flank each side and every body resampled onto the same columns
+ * ({@link scaledLayout}, {@link scaledEdges}), so what comes out is a square with
+ * the domain in the middle of it rather than a dot in the middle of a window.
+ * P2LL on that measures the distance decay and nothing else, which is why
+ * {@link domainScore} exists and why it is the number reported there.
  */
 
 /** A running mean over many equally-shaped windows. */
@@ -127,6 +135,177 @@ export function resampleWindow(
     out[i] = weights[i] > 0 ? out[i] / weights[i] : Number.NaN
   }
   return out
+}
+
+/**
+ * One window resampled onto a grid whose **cell edges are given**, rather than
+ * spread evenly across it.
+ *
+ * The difference matters for exactly one picture, and it is the one this exists
+ * for: a *domain* pileup, where every window is a flank, a body and a flank and
+ * the bodies are all different lengths. Resampled evenly — the whole window
+ * stretched onto the grid — a 20 kb domain's left boundary lands on one column
+ * and a 200 kb domain's lands on another, because `round(L * flank)` is not the
+ * same fraction of `L(1 + 2f)` for the two of them. Averaging those together
+ * smears both boundaries over a few columns, and a smeared boundary in an
+ * aggregate looks exactly like a real one that is soft.
+ *
+ * Edges are in **source cells** and may be fractional, so `scaledEdges` can put
+ * the body's two ends on the same two grid lines for every window whatever its
+ * length. Area-weighted, `NaN`-skipping and gap-preserving, like
+ * {@link resampleWindow}, whose uniform case this generalises.
+ */
+export function resampleWindowTo(
+  source: ArrayLike<number>,
+  sourceRows: number,
+  sourceCols: number,
+  rowEdges: ArrayLike<number>,
+  colEdges: ArrayLike<number>,
+): Float64Array {
+  const outRows = rowEdges.length - 1
+  const outCols = colEdges.length - 1
+  const out = new Float64Array(outRows * outCols)
+  for (let orow = 0; orow < outRows; orow++) {
+    const rLo = rowEdges[orow]
+    const rHi = rowEdges[orow + 1]
+    const rFrom = Math.max(0, Math.floor(rLo))
+    const rTo = Math.min(sourceRows, Math.ceil(rHi))
+    for (let ocol = 0; ocol < outCols; ocol++) {
+      const cLo = colEdges[ocol]
+      const cHi = colEdges[ocol + 1]
+      const cFrom = Math.max(0, Math.floor(cLo))
+      const cTo = Math.min(sourceCols, Math.ceil(cHi))
+      let total = 0
+      let weight = 0
+      for (let r = rFrom; r < rTo; r++) {
+        const rOverlap = Math.min(rHi, r + 1) - Math.max(rLo, r)
+        if (!(rOverlap > 0)) continue
+        const at = r * sourceCols
+        for (let c = cFrom; c < cTo; c++) {
+          const value = source[at + c]
+          if (!Number.isFinite(value)) continue
+          const cOverlap = Math.min(cHi, c + 1) - Math.max(cLo, c)
+          if (!(cOverlap > 0)) continue
+          const share = rOverlap * cOverlap
+          total += value * share
+          weight += share
+        }
+      }
+      out[orow * outCols + ocol] = weight > 0 ? total / weight : Number.NaN
+    }
+  }
+  return out
+}
+
+/**
+ * How a scaled window's grid divides into **flank, body, flank**.
+ *
+ * One layout for the whole run, so every window lands its body on the same
+ * columns. `body` is what is left after the two flanks, which is why the flank
+ * is rounded first: a reader asks for a flank as a fraction of the feature and
+ * the body takes the remainder, rather than the other way about, so a run with
+ * no flank is a grid that is all body and never a grid with one cell missing.
+ */
+export interface ScaledLayout {
+  /** Cells a side; `2 * flank + body`. */
+  side: number
+  /** Cells each flank occupies. `0` where no flank was asked for. */
+  flank: number
+  /** Cells the body occupies — the grid rows and columns `[flank, flank + body)`. */
+  body: number
+}
+
+/** The grid's division, for a flank given as a fraction of the body. */
+export function scaledLayout(side: number, flankFraction: number): ScaledLayout {
+  const grid = Math.max(3, Math.round(side))
+  const fraction = Math.max(0, flankFraction)
+  // The body keeps at least one cell however wide the flank was asked for, so a
+  // flank of 20x is a thin body rather than a picture with no domain in it.
+  const room = Math.floor((grid - 1) / 2)
+  const flank = Math.min(room, Math.round((grid * fraction) / (1 + 2 * fraction)))
+  return { side: grid, flank, body: grid - 2 * flank }
+}
+
+/**
+ * One window's cell edges, in source cells, for {@link resampleWindowTo}.
+ *
+ * `bodyFrom`/`bodyTo` and `pad` are relative to the window's own first cell.
+ * The body's two ends land exactly on grid lines `flank` and `flank + body`,
+ * by construction and for every window — which is the whole point of taking
+ * edges rather than a shape.
+ */
+export function scaledEdges(
+  layout: ScaledLayout,
+  bodyFrom: number,
+  bodyTo: number,
+  pad: number,
+): Float64Array {
+  const edges = new Float64Array(layout.side + 1)
+  for (let i = 0; i < layout.flank; i++) {
+    edges[i] = bodyFrom - pad + (pad * i) / layout.flank
+  }
+  for (let j = 0; j <= layout.body; j++) {
+    edges[layout.flank + j] = bodyFrom + ((bodyTo - bodyFrom) * j) / layout.body
+  }
+  for (let k = 1; k <= layout.flank; k++) {
+    edges[layout.flank + layout.body + k] = bodyTo + (pad * k) / layout.flank
+  }
+  return edges
+}
+
+/**
+ * A domain pileup's enrichment: the domain's own corner against the same block
+ * across its boundary.
+ *
+ * P2LL is the wrong statistic here and wrong in a way that flatters: the
+ * lower-left corner of a *domain* window is the upstream flank against the
+ * downstream flank — two neighbours of the domain, further apart than anything
+ * inside it — so a ratio against it is mostly the distance decay and reads well
+ * above 1 for a set with no domains in it at all.
+ *
+ * The corner is the block just inside the domain at its widest separation —
+ * rows at the domain's start, columns at its end — and the denominator is the
+ * two blocks immediately outside it: the same columns one boundary up, and the
+ * same rows one boundary down. Those sit at very nearly the same separation as
+ * the numerator by construction, so what is left when you divide is whether
+ * contact **stops at the boundary**. Above 1 is a domain; 1 is a set of
+ * intervals with no boundaries at their edges.
+ *
+ * `NaN` where there is no flank to compare against, which is a run that asked
+ * for no padding: there is then no outside in the picture, and a ratio against
+ * a block that was never read is not a large number, it is no number.
+ */
+export function domainScore(values: ArrayLike<number>, layout: ScaledLayout): number {
+  const { side, flank, body } = layout
+  if (flank === 0 || body === 0) return Number.NaN
+  const q = Math.max(1, Math.round(body / 4))
+  const p = Math.min(flank, q)
+
+  const mean = (r0: number, r1: number, c0: number, c1: number): number => {
+    let total = 0
+    let seen = 0
+    for (let r = Math.max(0, r0); r < Math.min(side, r1); r++) {
+      for (let c = Math.max(0, c0); c < Math.min(side, c1); c++) {
+        const value = values[r * side + c]
+        if (!Number.isFinite(value)) continue
+        total += value
+        seen++
+      }
+    }
+    return seen === 0 ? Number.NaN : total / seen
+  }
+
+  const inside = mean(flank, flank + q, flank + body - q, flank + body)
+  const outside: number[] = []
+  // Across the upstream boundary: the same columns, rows just above the domain.
+  const above = mean(flank - p, flank, flank + body - q, flank + body)
+  if (Number.isFinite(above)) outside.push(above)
+  // Across the downstream boundary: the same rows, columns just past the domain.
+  const beyond = mean(flank, flank + q, flank + body, flank + body + p)
+  if (Number.isFinite(beyond)) outside.push(beyond)
+  if (!Number.isFinite(inside) || outside.length === 0) return Number.NaN
+  const background = outside.reduce((sum, value) => sum + value, 0) / outside.length
+  return background === 0 ? Number.NaN : inside / background
 }
 
 /**

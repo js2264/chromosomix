@@ -3988,7 +3988,29 @@ mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis
 resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
 normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
-the app. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
+the app.
+
+**The scaled mode on a feature set is the domain pileup**, and it is the picture that sits beside a
+loop APA in every paper: TADs — insulation boundaries called, then the span from one to the next —
+piled up with the body of every domain resampled onto the same columns and a flank each side. Four
+things make it that picture rather than a plausible smear, and each was got wrong before it was got
+right. The window is `[start − fL, end + fL]` **on both axes**, so the domain is the square in the
+middle; it used to be laid out from the feature's *midpoint*, which is the same width and half a
+domain to the right of where it belongs, and produced a figure with the body against one corner and
+the whole flank on the far side. The body's two ends are pinned to their **own grid lines** for every
+domain whatever its length, rather than the whole window being stretched evenly — otherwise a 20 kb
+domain's boundary lands on one column and a 200 kb domain's on another and averaging them softens
+both. The distance-matched control is shifted by a **multiple of the window** rather than a length in
+base pairs, because a control 100 kb from a megabase-wide window is mostly the window and the ratio
+comes out at 1 everywhere. And the statistic under it is the **domain's own corner against the same
+block across its boundary** rather than P2LL, whose lower-left quadrant here is the domain's two
+neighbours and reads well above 1 on a set with no boundaries in it.
+
+**Observed/expected is refused in the scaled mode, in the form rather than at Run.** One cell of a
+scaled pileup is fed by windows at a dozen different separations — that is what scaling *is* — so it
+has no one diagonal offset for a P(s) to be looked up at, and dividing by one anyway was a plausible
+picture of nothing. The distance-matched control is the answer there and is drawn at the same
+separations by construction. **Every anchor is piled up and every window is summed**: there is no cap on the anchors read
 and no minimum coverage a window must reach. Both existed and both were quietly a change of subject —
 a cap makes the figure a pileup of whichever anchors sorted first, and a coverage floor drops exactly
 the windows in sparse regions, which are the ones a weak pileup is weak because of. The accumulator

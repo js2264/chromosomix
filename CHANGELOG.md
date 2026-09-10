@@ -10,6 +10,78 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Fixed
+
+- **The domain pileup — APA over a set of TADs, scaled — was laid out from the
+  wrong end of the feature.** The scaled mode on a feature set is how you draw
+  the picture that sits beside a loop APA in every Hi-C paper: call insulation
+  boundaries, take the span from one to the next as a domain, and pile every
+  domain up stretched to the same width with padding either side. It read the
+  window as `[midpoint − flank, midpoint + length + flank]` — the right width,
+  and half a domain to the right of where it belongs — so the body sat against
+  the top-left corner of the picture with the whole flank on the far side. The
+  window is now `[start − flank, end + flank]` on both axes, which puts the
+  domain in the middle and its two boundaries on the cross through it.
+
+  Nothing in the old figure said it was wrong, which is what makes this worth a
+  paragraph rather than a line: a shifted domain pileup is still a square with
+  bright and dark blocks in it, and the only way to catch it was to know where
+  the corner peak should have been.
+
+- **Every domain's boundary now lands on the same grid line.** A scaled window
+  used to be stretched evenly onto the grid, so a 20 kb domain's edge fell on
+  one column and a 200 kb domain's on another — averaging them softened both
+  boundaries into a couple of columns of gradient, which in an aggregate looks
+  exactly like a real boundary that is soft. The grid is now explicitly *flank,
+  body, flank*: the body's two ends are pinned to their own columns for every
+  domain whatever its length, and the flank each side is a fraction of that
+  domain rather than a rounded number of bins.
+
+- **A distance-matched control is shifted by a multiple of the window when the
+  window is a scaled one.** Asked for in base pairs — the old control, and its
+  100 kb floor — a control for a megabase-wide domain window was ninety per cent
+  the same cells as the thing it was the denominator of, so the ratio came out
+  at 1 everywhere and the domain washed out of the picture with nothing on
+  screen to say why. The fixed mode still asks in base pairs, which is the right
+  unit for a window a couple of dozen bins wide.
+
+- A scaled window off the diagonal — a loop pileup whose window scales with the
+  separation — is now symmetric about its anchor bin rather than a bin short on
+  one side of it.
+
+- The tick labels on a matrix output that are *positions* on a continuous axis
+  rather than one-per-cell names no longer land over the first few columns of
+  the exported TSV. They go in a `#` line saying what they are, and the columns
+  keep their indices.
+
+### Changed
+
+- **The number under a domain pileup is no longer P2LL.** Peak-to-lower-left
+  measures a dot against the corner furthest from it, and the lower-left corner
+  of a *domain* window is the upstream neighbour against the downstream one —
+  two regions further apart than anything inside the domain — so the ratio is
+  mostly the distance decay and reads well above 1 on a set with no boundaries
+  in it at all. What is reported instead is **in / out**: the domain's own
+  corner against the same block just across its boundary, which sits at very
+  nearly the same separation, so what is left when you divide is whether contact
+  stops at the edge. Above 1 is a domain. The per-feature table carries the same
+  number per domain, and the loop pileups are unchanged — they still report
+  P2LL, which is the right statistic for a dot.
+
+- **Observed / expected is refused in the scaled mode, in the form rather than
+  at Run.** One cell of a scaled pileup is fed by windows at a dozen different
+  separations — that is what scaling *is* — so it has no one diagonal offset for
+  a P(s) to be looked up at, and dividing by one anyway produced a plausible
+  picture of nothing. The refusal names the alternative: the distance-matched
+  control, which is drawn at the same separations by construction and is what
+  the task defaults to.
+
+- The scaled pileup's axes are labelled in units of the feature — `0` at its
+  start and `1` at its end — with the flank the run used named beside them,
+  instead of an unlabelled *Scaled position*.
+
 ## [0.12.0] - 2026-09-10
 
 ### Added
