@@ -67,6 +67,10 @@ import { yieldToEventLoop } from '../async'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
+// The same predicate the drawer's `copy CLI command` button consults, so the
+// rule that decides whether this command will start is the rule that decides
+// whether the app offers a command line for it (`analysis/cliCommand.ts`).
+import { cliCannotRun } from '../analysis/cliCommand'
 import { abortError } from '../analysis/job'
 import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
 import { outputToTsv } from '../analysis/write/tsv'
@@ -646,32 +650,6 @@ function readerFor(
   }
 }
 
-/**
- * Why this task cannot be run from a shell, or `null` when it can.
- *
- * Read off the **descriptor** rather than from a list of ids, because what
- * decides it is an input kind. `EntryParam` names four — a feature set, a pair
- * set, a reference and a track — and `--features`, `--pairs` and `--sequence`
- * supply three of them. The fourth is an open bigWig, and `@gmod/bbi` is
- * imported by the annotations worker and by nothing else (README, the layering
- * rules), so a task that declares a `track` parameter is one this venue cannot
- * feed whatever it happens to be called. A fifth kind added tomorrow makes this
- * say so on its own rather than silently letting a new task through.
- *
- * The alternative was to refuse the whole `annotations` venue, which would have
- * been a sentence that is not true: `overlap` compares two BED files and
- * `motif` reads a FASTA, and both of those are things a shell has. Refusing
- * them to keep one rule simple would have thrown away working arithmetic to
- * describe a limit that is really about one dependency.
- */
-function cliCannotRun(task: AnalysisTask): string | null {
-  const tracks = task.params.filter((param) => param.kind === 'track')
-  if (tracks.length === 0) return null
-  return (
-    `${task.id} reads a track (${tracks.map((param) => `--${param.key}`).join(', ')}); ` +
-    'the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.'
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Writing what came back
