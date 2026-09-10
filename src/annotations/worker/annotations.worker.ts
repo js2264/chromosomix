@@ -455,7 +455,14 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'load':
       return load(request.entry, request.source, request.mapContigs)
     case 'sample':
-      return sample(request.entry, request.regions, request.basesPerPixel, request.reads, request.id)
+      return sample(
+        request.entry,
+        request.regions,
+        request.basesPerPixel,
+        request.reads,
+        request.id,
+        request.exact === true,
+      )
     case 'register':
       vectors.set(request.entry, request.vector)
       return null
@@ -1566,6 +1573,8 @@ async function sample(
   basesPerPixel: number,
   style: ReadStyle | undefined,
   id: number,
+  /** Answer at the data's own resolution; see {@link AnnotationRequest}. */
+  exact = false,
 ): Promise<TrackSampleSet> {
   // Asked first, because it is the only probe that can decline and the only one
   // that can be called off — and because an alignment entry is in no other
@@ -1589,7 +1598,7 @@ async function sample(
   // looked up here, in the one function every lane's values come out of, which
   // is precisely what stops a synthetic track needing a renderer of its own.
   const vector = vectors.get(entry)
-  if (vector !== undefined) return binVectorSamples(vector, regions, basesPerPixel)
+  if (vector !== undefined) return binVectorSamples(vector, regions, basesPerPixel, exact)
 
   const track = tracks.get(entry)
   if (track === undefined) {

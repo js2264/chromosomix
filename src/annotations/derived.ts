@@ -85,6 +85,17 @@ export function combineSamples(
   a: TrackSampleSet | null,
   b: TrackSampleSet | null,
   op: TrackOp,
+  /**
+   * What becomes of a reading that ran off the end — see {@link clampInfinities}.
+   *
+   * `clamp` is the lane, and the default, because a pixel has to go somewhere.
+   * `drop` is a **file**, and it is the same answer {@link combineVectors} has
+   * always given for the same reason: `x / 0` says the denominator had nothing
+   * there, which is exactly what a gap says, and BBI cannot carry an infinity
+   * without taking the total summary and every zoom record over it with it
+   * (`write/bigwig.ts`). Two roads to a file, one rule about infinities.
+   */
+  infinities: 'clamp' | 'drop' = 'clamp',
 ): TrackSampleSet | null {
   if (a === null || b === null) return null
   const regions: TrackSamples[] = []
@@ -112,6 +123,14 @@ export function combineSamples(
   // `render/scale.ts` uses for a constant block, and for the same reason: the
   // picture is "all of it, in one direction", and that needs an axis to be drawn
   // against even though the data chose none.
+  if (infinities === 'drop') {
+    // No axis to pin anything to, and none wanted: what a file says about an
+    // interval it cannot express is nothing at all, and every writer downstream
+    // already omits a value that is not finite.
+    for (const merged of regions) dropInfinities(merged.values)
+    return { basesPerPixel: a.basesPerPixel, regions, extent: min <= max ? { min, max } : null }
+  }
+
   const measured = min <= max
   const extent = measured
     ? { min, max }
@@ -120,6 +139,19 @@ export function combineSamples(
       : null
   if (extent !== null) for (const merged of regions) clampInfinities(merged.values, extent)
   return { basesPerPixel: a.basesPerPixel, regions, extent }
+}
+
+/**
+ * `±Infinity` becomes *no reading*, which is what a file says about one.
+ *
+ * A `NaN` is already that everywhere in this viewer, so this is one substitution
+ * and no second state for the writers to learn: they omit a value that is not
+ * finite, and after this there are none.
+ */
+function dropInfinities(values: Float32Array): void {
+  for (let i = 0; i < values.length; i++) {
+    if (!Number.isFinite(values[i])) values[i] = Number.NaN
+  }
 }
 
 /** Whether any reading ran off the end in either direction. */

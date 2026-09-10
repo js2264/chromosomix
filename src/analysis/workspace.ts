@@ -41,6 +41,7 @@ import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { defaultStyle, emptyPlacement } from '../annotations/types'
 import type { Placement } from '../annotations/types'
 import type { AnnotationEntry, ComputedSource } from '../annotations/types'
+import type { TrackSampleSet } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
 import type { GroupSettings } from '../annotations/groups'
 import { el, fmt } from '../ui/dom'
@@ -68,12 +69,12 @@ import type {
   TaskResult,
 } from './types'
 import type { BlockInput } from './worker/protocol'
-import { profileToBedGraph, type BedGraphContig } from './write/bedgraph'
+import { profileToBedGraph, spansToBedGraph, type BedGraphContig } from './write/bedgraph'
 import { writeBigWig } from './write/bigwig'
-import { outputToTsv, tsvName } from './write/tsv'
+import { outputToTsv, spansToTsv, tsvName } from './write/tsv'
 import { formatIntervals } from '../annotations/export'
 import { VERSION } from '../version'
-import { TRACK_OP_LABELS, combineVectors, type TrackOp } from '../annotations/derived'
+import { TRACK_OP_LABELS, combineSamples, type TrackOp } from '../annotations/derived'
 
 /** What the workspace needs from the session around it. */
 export interface AnalysisWorkspaceHost {
@@ -726,10 +727,19 @@ export class AnalysisWorkspace {
    * vector in a browser session **empty**, which is a file rather than an error:
    * a comparison of two bigWigs drew perfectly (the lane combines the operands'
    * own samples and never asks this) and then exported as a bigWig with a legal
-   * header, no data blocks, and no complaint — and as a bedGraph and a TSV with
-   * their provenance comments and not one row under them. The grid is the thing
-   * both writers actually lay a vector out over, so the grid is what says how
-   * long the vector is.
+   * header, no data blocks, and no complaint. The grid is the thing the writers
+   * actually lay a vector out over, so the grid is what says how long the vector
+   * is.
+   *
+   * The export that exposed it no longer comes through here — a comparison is
+   * written at its operands' own resolution now ({@link exportDerived}), which
+   * asks the worker for intervals rather than for a vector. What is left is the
+   * *other* caller, the analysis runner's `vector` hook, where a task in the
+   * analysis venue reads a loaded track or a sequence. That venue needs a map,
+   * and a map's `nBins` is its grid's total by construction (§3.3) — so this is
+   * the belt to that braces rather than the thing holding the trousers up. It
+   * stays because the two numbers being equal is a property of one kind of
+   * session and the grid is the right question in every kind.
    *
    * `startBin + bins` maxed over the list rather than read off the last entry,
    * so a caller handing the contigs in some other order still gets the total
@@ -985,16 +995,30 @@ export class AnalysisWorkspace {
    * bigWig with it instead of being silently absorbed.
    */
   /**
-   * A derived lane as a file: both operands on the map's bin grid, combined.
+   * A derived lane as a file: **what the lane draws, at the resolution it draws
+   * it**, and no grid imposed on the way out.
    *
-   * **What leaves is not quite what is drawn, and it says so.** The lane cuts at
-   * every boundary of either operand, so the step function it draws is exact at
-   * any zoom (`annotations/derived.ts`); a bigWig is values on a grid, so a file
-   * has to pick one. The map's own bins are that grid — the same one every other
-   * synthetic track is written on, and the same reduction {@link binVector} does
-   * for a task that reads a track — and the framing line in the header names it,
-   * because a reader who compares this file against the lane it came from should
-   * be told which of the two they are holding.
+   * This used to read both operands onto the contact map's bins and write the
+   * result as a bin vector, on the argument that a bigWig is values on a grid so
+   * a file has to pick one. The premise was simply false — a bedGraph section
+   * holds arbitrary intervals, which is decision 1 of `write/bigwig.ts` and has
+   * been since it was written — and the consequence was that a ratio of two
+   * 10 bp tracks looked at on a 20 kb map came out as a 20 kb file. Every
+   * boundary in the data was gone, the numbers were means of means, and nothing
+   * in the file or on the row said so: the lane on screen was exact and the
+   * download was not, which is the worst version of this failure because the
+   * picture the reader is checking against agrees with them.
+   *
+   * So the operands are sampled `exact`ly — the bigWig's own intervals, the
+   * whole of a computed vector's bins — and combined by the **same
+   * `combineSamples` the lane draws with**, over the common refinement of both.
+   * The file is then that step function, written interval for interval. A ratio
+   * of two 10 bp tracks is a 10 bp file; a ratio of two 20 kb tracks is a 20 kb
+   * file; and neither is a decision this method makes, which is the point.
+   *
+   * `'drop'` rather than the lane's clamping, for the reason `combineVectors`
+   * gave when it was the only road to a file: a pixel has to go somewhere and an
+   * interval does not, so `x / 0` is written as no reading at all.
    *
    * Nothing is cached. An export is a gesture, not a state, and holding a
    * genome's worth of two sampled tracks against the chance of a second one is
@@ -1009,35 +1033,81 @@ export class AnalysisWorkspace {
     const recipe = entry.derivedFrom
     const context = this.host.context()
     if (recipe === undefined || context === null || format === 'bed') return
-    const [a, b] = await Promise.all([this.binVector(recipe.a), this.binVector(recipe.b)])
+    const [a, b] = await Promise.all([
+      this.exactSamples(recipe.a),
+      this.exactSamples(recipe.b),
+    ])
     // An operand that has been dropped, or a row that never loaded. Silent
     // rather than a dialog: the row itself goes when its operand does
     // (`annotations/store.ts`), so this is the moment between the two.
-    if (a === undefined || b === undefined) return
+    const combined = combineSamples(a, b, recipe.op, 'drop')
+    if (combined === null) return
 
-    // The combined vector's own length, not a bin count read off somewhere
-    // else: `combineVectors` takes the shorter of its two operands, so any
-    // other number here is a claim about rows that are not in the array —
-    // which `write/bedgraph.ts` walks `extent` to find.
-    const values = combineVectors(a, b, recipe.op)
-    const output: ProfileOutput = {
-      kind: 'profile',
-      id: entry.id,
-      label: entry.label,
-      values,
-      extent: [0, values.length],
-      binsize: context.binsize,
-      unit: TRACK_OP_LABELS[recipe.op],
-    }
+    const spans = combined.regions.map((region) => ({
+      contig: region.contig,
+      starts: region.starts,
+      ends: region.ends,
+      values: region.values,
+    }))
     const provenance = derivedProvenance(entry, recipe.op, context)
+    const grid = this.host.contigs()
+
     if (format === 'tsv') {
       downloadBlob(
-        new Blob([outputToTsv(output, provenance)], { type: 'text/tab-separated-values' }),
-        tsvName(base, output, stamp),
+        new Blob([spansToTsv(entry.label, TRACK_OP_LABELS[recipe.op], spans, grid, provenance)], {
+          type: 'text/tab-separated-values',
+        }),
+        `${base}-${stamp}.tsv`,
       )
       return
     }
-    await this.writeProfile(output, provenance, format, this.host.contigs(), base)
+    if (format === 'bedgraph') {
+      downloadBlob(
+        new Blob([spansToBedGraph(spans, grid, provenance)], { type: 'text/plain' }),
+        `${base}-${stamp}.bedGraph`,
+      )
+      return
+    }
+    const blob = await writeBigWig({
+      contigs: grid.map((contig) => ({ name: contig.name, length: contig.length })),
+      spans,
+    })
+    downloadBlob(blob, `${base}-${stamp}.bw`)
+  }
+
+  /**
+   * One operand, at its own resolution, over the whole assembly.
+   *
+   * The difference from {@link binVector} is the whole of this change and it is
+   * two arguments: `basesPerPixel: 1` asks a bigWig for its own intervals rather
+   * than for whichever zoom level suits a span, and `exact` tells a computed
+   * vector to answer bin for bin rather than folding into the few thousand
+   * buckets a frame can draw. Neither is a resolution *chosen* here — both say
+   * "whatever the data is", which is what an export wants and what a frame never
+   * does.
+   *
+   * Sized by the operands rather than by the genome, which is why one request
+   * for the whole assembly is still the right shape: a bigWig holds intervals
+   * and not bases, so what comes back is about what the file itself holds — the
+   * same order of magnitude as the file the reader already has on disk.
+   */
+  private async exactSamples(entryId: string): Promise<TrackSampleSet | null> {
+    const client = this.host.annotations()
+    if (client === null) return null
+    const contigs = this.host.contigs().filter((contig) => contig.length > 0)
+    if (contigs.length === 0) return null
+    try {
+      return await client.request<'sample'>({
+        kind: 'sample',
+        entry: entryId,
+        regions: contigs.map((contig) => ({ contig: contig.name, start: 0, end: contig.length })),
+        basesPerPixel: 1,
+        exact: true,
+      })
+    } catch {
+      // A row dropped between the button being pressed and the worker answering.
+      return null
+    }
   }
 
   private async writeProfile(

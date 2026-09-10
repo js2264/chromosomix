@@ -19,11 +19,20 @@
  *
  * Hence the shape of this file. The browser-session cases are the regression;
  * the map-session case beside each is the guard that the fix is a fix and not a
- * second grid, since there the two numbers agree and nothing may change. Both
- * halves go out through `writeBigWig` and come back in through `@gmod/bbi` —
- * the same parser that draws a loaded track — because a writer nobody reads back
- * is a writer that is wrong (§18.7), and because "not empty" is precisely the
- * claim under test.
+ * second grid. Both halves go out through `writeBigWig` and come back in through
+ * `@gmod/bbi` — the same parser that draws a loaded track — because a writer
+ * nobody reads back is a writer that is wrong (§18.7), and because "not empty"
+ * is precisely the claim under test.
+ *
+ * **The mechanism underneath has since moved, and these assertions have not.**
+ * A comparison is no longer read onto any grid to be written: it goes out at its
+ * operands' own resolution, which is `derived-resolution.test.ts`'s subject and
+ * a second reason the files here are not empty. So what this file now pins is
+ * the *outcome* — a derived row in a session with no contact map writes a real
+ * file, in all three formats, with the values and the framing line it should
+ * have — which was the reader-visible failure and is worth holding whichever way
+ * the export is plumbed. The sizing rule that caused it is documented at
+ * `AnalysisWorkspace.gridBins`, which now guards the one caller left.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'

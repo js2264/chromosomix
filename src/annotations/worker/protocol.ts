@@ -176,6 +176,22 @@ export type AnnotationRequest =
        * defaults, which is what every non-alignment lane sends.
        */
       reads?: ReadStyle
+      /**
+       * Answer at the data's own resolution, however many intervals that is.
+       *
+       * A `sample` is normally answering a **frame**: a few hundred pixels wide,
+       * so a computed vector folds its bins into at most a few thousand buckets
+       * (`binVector.ts`) and a bigWig is read from whichever zoom level suits
+       * the span. Both are right for drawing and both are a *reduction*.
+       *
+       * An **export** is not a frame. A comparison of two loaded tracks written
+       * to a file has to carry what the operands actually say — the reader who
+       * divided two 10 bp tracks wants a 10 bp file back — and a bucketed answer
+       * is a re-binning nothing on the way out could undo or even detect. So the
+       * one caller that is writing a file asks for the data instead of a picture
+       * of it, and no lane ever sets this.
+       */
+      exact?: true
     }
   // The residues themselves, which only a FASTA can answer and only a view
   // zoomed in far enough to draw them ever asks for. Separate from `sample`

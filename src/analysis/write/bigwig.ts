@@ -75,8 +75,44 @@ export interface BigWigContig {
   length: number
 }
 
-/** Everything the writer needs, and nothing it does not. */
-export interface BigWigInput {
+/**
+ * One sequence's data as the intervals it actually is, for data on no grid.
+ *
+ * Ascending and non-overlapping, in the sequence's own coordinates. Values that
+ * are not finite are dropped, exactly as a `NaN` bin is on the other road — see
+ * {@link intervalsFor}.
+ */
+export interface BigWigSpans {
+  contig: string
+  starts: ArrayLike<number>
+  ends: ArrayLike<number>
+  values: ArrayLike<number>
+}
+
+/**
+ * Everything the writer needs, and nothing it does not — in one of two shapes.
+ *
+ * **A bin vector** is what a task produces: one value per bin over the whole
+ * assembly, on a grid the caller states. Every analysis output is this, because
+ * every analysis output is a measurement *per bin*.
+ *
+ * **Spans** are what a comparison of two loaded tracks is, and they are here
+ * because forcing that onto a grid was silently destroying data. A ratio of two
+ * base-resolution bigWigs is exact at every base — the lane draws it that way,
+ * cut at every boundary of either operand — and the export read both operands
+ * onto the contact map's bins first, so a reader who divided two 10 bp tracks
+ * on a 20 kb map got a 20 kb bigWig back and nothing said so. Nothing about the
+ * file format required it: a bedGraph section holds arbitrary intervals, which
+ * is decision 1 above, and the grid was an assumption in the *caller*.
+ *
+ * Everything past {@link intervalsFor} is identical for the two: sections, both
+ * trees, the summary and the zoom ladder all work on intervals and never learn
+ * which road produced them.
+ */
+export type BigWigInput = BigWigBins | BigWigIntervals
+
+/** Values on a grid the caller states — every analysis output. */
+export interface BigWigBins {
   /** Sequences of the assembly, in the order the file lists them. */
   contigs: readonly BigWigContig[]
   /** One value per bin over the WHOLE assembly, NaN where there is none. */
@@ -84,6 +120,16 @@ export interface BigWigInput {
   /** Absolute bin index values[0] corresponds to. */
   firstBin: number
   binsize: number
+  spans?: undefined
+}
+
+/** Values on no grid at all — a comparison of two loaded tracks. */
+export interface BigWigIntervals {
+  /** Sequences of the assembly, in the order the file lists them. */
+  contigs: readonly BigWigContig[]
+  /** The data, per sequence. A sequence with none may be left out. */
+  spans: readonly BigWigSpans[]
+  values?: undefined
 }
 
 const BIGWIG_MAGIC = 0x888ffc26
@@ -219,7 +265,12 @@ interface Summary {
  * spending a paragraph to avoid.
  */
 function planContigs(input: BigWigInput): PlannedContig[] {
-  const { contigs, binsize } = input
+  const { contigs } = input
+  // A bin size only where there are bins. The grid checks below are about a
+  // *vector* — how long it is, and where its first element sits — and there is
+  // no vector on the spans road; the contig checks are about the assembly and
+  // apply to both.
+  const binsize = input.values === undefined ? 1 : input.binsize
   if (!Number.isInteger(binsize) || binsize < 1) {
     throw new Error(`A bigWig needs a whole bin size of at least one base; got ${binsize}.`)
   }
@@ -235,23 +286,38 @@ function planContigs(input: BigWigInput): PlannedContig[] {
     if (!Number.isInteger(contig.length) || contig.length < 1) {
       throw new Error(`${contig.name} has length ${contig.length}, which is not a sequence.`)
     }
-    const binCount = Math.ceil(contig.length / binsize)
+    const binCount = input.values === undefined ? 0 : Math.ceil(contig.length / binsize)
     planned.push({ name: contig.name, length: contig.length, id: 0, binOffset, binCount })
     binOffset += binCount
   }
 
-  const { firstBin, values } = input
-  if (!Number.isInteger(firstBin) || firstBin < 0) {
-    throw new Error(`firstBin must be a whole, non-negative bin index; got ${firstBin}.`)
-  }
-  // A vector that runs past the last bin of the assembly means the caller's grid
-  // and this one disagree, and every value would then be attributed to the wrong
-  // place quietly. Cheaper to refuse than to explain later.
-  if (firstBin + values.length > binOffset) {
-    throw new Error(
-      `The value vector covers bins ${firstBin}–${firstBin + values.length} but the assembly ` +
-        `only has ${binOffset} bins at this bin size.`,
-    )
+  if (input.values !== undefined) {
+    const { firstBin, values } = input
+    if (!Number.isInteger(firstBin) || firstBin < 0) {
+      throw new Error(`firstBin must be a whole, non-negative bin index; got ${firstBin}.`)
+    }
+    // A vector that runs past the last bin of the assembly means the caller's
+    // grid and this one disagree, and every value would then be attributed to
+    // the wrong place quietly. Cheaper to refuse than to explain later.
+    if (firstBin + values.length > binOffset) {
+      throw new Error(
+        `The value vector covers bins ${firstBin}–${firstBin + values.length} but the assembly ` +
+          `only has ${binOffset} bins at this bin size.`,
+      )
+    }
+  } else {
+    // The same class of disagreement on the other road: a span naming a sequence
+    // the assembly does not list has nowhere to go, and dropping it silently
+    // would write a file missing data the caller believes is in it.
+    const known = new Set(contigs.map((contig) => contig.name))
+    for (const span of input.spans) {
+      if (!known.has(span.contig)) {
+        throw new Error(`There are spans on ${span.contig}, which is not in the assembly.`)
+      }
+      if (span.starts.length !== span.ends.length || span.starts.length !== span.values.length) {
+        throw new Error(`${span.contig}'s starts, ends and values are of different lengths.`)
+      }
+    }
   }
 
   // Collated by UTF-8 bytes rather than by JavaScript's UTF-16 comparison,
@@ -298,7 +364,17 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
  * the bug out of the file.
  */
 function intervalsFor(contig: PlannedContig, input: BigWigInput): Interval[] {
-  const { values, firstBin, binsize } = input
+  return input.values === undefined
+    ? spansOf(contig, input.spans)
+    : binsOf(contig, input.values, input.firstBin, input.binsize)
+}
+
+function binsOf(
+  contig: PlannedContig,
+  values: Float32Array,
+  firstBin: number,
+  binsize: number,
+): Interval[] {
   const out: Interval[] = []
   for (let bin = 0; bin < contig.binCount; bin += 1) {
     const index = contig.binOffset + bin - firstBin
@@ -308,6 +384,37 @@ function intervalsFor(contig: PlannedContig, input: BigWigInput): Interval[] {
     const start = bin * binsize
     out.push({ start, end: Math.min(start + binsize, contig.length), value })
   }
+  return out
+}
+
+/**
+ * The same, for data that was never on a grid.
+ *
+ * Both halves of the rule above hold unchanged and for the same reasons: a value
+ * that is not finite produces no interval, and an end past the sequence is
+ * clamped to it. What is gone is the arithmetic — the caller's intervals are
+ * written as the caller's intervals, which is the whole point of this road.
+ *
+ * Sorted, and empty spans dropped. The R-tree is built over these in order and a
+ * bedGraph section header carries the first and last coordinate of its items, so
+ * an out-of-order interval is a file that opens and indexes wrongly. The caller
+ * that produced these has them in order already (a common refinement is a walk
+ * up the axis), which makes this a cheap check rather than a real sort.
+ */
+function spansOf(contig: PlannedContig, spans: readonly BigWigSpans[]): Interval[] {
+  const out: Interval[] = []
+  for (const span of spans) {
+    if (span.contig !== contig.name) continue
+    for (let at = 0; at < span.starts.length; at += 1) {
+      const value = span.values[at]
+      if (!Number.isFinite(value)) continue
+      const start = Math.max(0, span.starts[at])
+      const end = Math.min(contig.length, span.ends[at])
+      if (!(end > start)) continue
+      out.push({ start, end, value })
+    }
+  }
+  out.sort((one, two) => one.start - two.start)
   return out
 }
 
@@ -415,6 +522,32 @@ function buildSections(
  * that has wrapped past 2^32. Refusing a level that is no smaller than the one
  * below it deletes both problems with one comparison.
  */
+/**
+ * The span the ladder's first rung is ten times, which on a grid is the bin.
+ *
+ * Off the grid there is no one span, so it is the **mean** of what was actually
+ * written — the same figure `bedGraphToBigWig` reduces from, and the right one:
+ * the ladder exists so that a reader zoomed out fetches a summary instead of a
+ * million items, and how far out that starts mattering is decided by how big the
+ * items are on average rather than by the smallest or the largest of them.
+ *
+ * Never below one. A file of single-base intervals has a mean span of exactly
+ * one, and a reduction of zero would make the first rung the same resolution as
+ * the data and every rung after it identical.
+ */
+function baseSpanOf(input: BigWigInput, perContig: Interval[][]): number {
+  if (input.values !== undefined) return input.binsize
+  let bases = 0
+  let items = 0
+  for (const intervals of perContig) {
+    for (const item of intervals) {
+      bases += item.end - item.start
+      items += 1
+    }
+  }
+  return items === 0 ? 1 : Math.max(1, Math.round(bases / items))
+}
+
 function zoomLadder(
   contigs: PlannedContig[],
   perContig: Interval[][],
@@ -736,7 +869,7 @@ export async function writeBigWig(input: BigWigInput): Promise<Blob> {
   const summary = summarise(perContig)
   const sections = buildSections(contigs, perContig)
 
-  const zooms = zoomLadder(contigs, perContig, input.binsize).map((level) => ({
+  const zooms = zoomLadder(contigs, perContig, baseSpanOf(input, perContig)).map((level) => ({
     reduction: level.reduction,
     ...buildZoomBlocks(level.records),
   }))
@@ -879,12 +1012,22 @@ function u64(value: number): Uint8Array {
 export function bigWigBytesEstimate(input: BigWigInput): number {
   const contigs = planContigs(input)
 
+  // Counted the way the writer counts, on whichever road the caller took, so an
+  // estimate and a file can never disagree about how many items there are.
   let items = 0
-  for (const contig of contigs) {
-    for (let bin = 0; bin < contig.binCount; bin += 1) {
-      const index = contig.binOffset + bin - input.firstBin
-      if (index < 0 || index >= input.values.length) continue
-      if (!Number.isNaN(input.values[index])) items += 1
+  if (input.values === undefined) {
+    for (const span of input.spans) {
+      for (let at = 0; at < span.values.length; at += 1) {
+        if (Number.isFinite(span.values[at])) items += 1
+      }
+    }
+  } else {
+    for (const contig of contigs) {
+      for (let bin = 0; bin < contig.binCount; bin += 1) {
+        const index = contig.binOffset + bin - input.firstBin
+        if (index < 0 || index >= input.values.length) continue
+        if (!Number.isNaN(input.values[index])) items += 1
+      }
     }
   }
   if (items === 0) return HEADER_BYTES + TOTAL_SUMMARY_BYTES + BPT_HEADER_BYTES + RTREE_HEADER_BYTES

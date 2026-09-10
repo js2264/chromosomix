@@ -30,6 +30,20 @@
 import type { ProfileOutput, Provenance } from '../types'
 import { provenanceLines } from './tsv'
 
+/**
+ * One sequence's intervals, for a track that is on no grid.
+ *
+ * The same shape `BigWigSpans` takes, and deliberately so: one caller produces
+ * one set of intervals and hands it to both writers, which is the only way
+ * "agrees cell for cell" survives contact with a second road.
+ */
+export interface BedGraphSpans {
+  contig: string
+  starts: ArrayLike<number>
+  ends: ArrayLike<number>
+  values: ArrayLike<number>
+}
+
 /** One sequence of the assembly a profile is laid out over. */
 export interface BedGraphContig {
   name: string
@@ -94,6 +108,66 @@ export function profileToBedGraph(
       const start = local * binsize
       const end = Math.min(contig.length, start + binsize)
       if (!(end > start)) continue
+      rows.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
+    }
+  }
+
+  rows.push('')
+  return rows.join('\n')
+}
+
+/**
+ * The same file, for a track that was never on a grid.
+ *
+ * A comparison of two loaded tracks is exact at every base — cut at each
+ * boundary of either operand, which is what `annotations/derived.ts` builds —
+ * and reducing that onto the map's bins to write it was throwing the exactness
+ * away in the one place it is most easily checked. The rows are the intervals
+ * themselves.
+ *
+ * Everything the header of this module claims still holds, and holds for the
+ * same reasons: an absent value is an absent row rather than a `NaN` or a zero,
+ * an end past the sequence is clamped to it, and a `±Infinity` is left out
+ * because BBI cannot carry one and the two files must agree. What is gone is
+ * only the arithmetic that turned a bin index into a coordinate.
+ *
+ * `contigs` is still the assembly and still in the file's own order, because
+ * that order is what makes the rows come out sorted the way `bedGraphToBigWig`
+ * requires — and because a span naming a sequence the assembly does not list is
+ * a span with nowhere to go, which is left out here exactly as the bigWig writer
+ * refuses it.
+ */
+export function spansToBedGraph(
+  spans: readonly BedGraphSpans[],
+  contigs: readonly BedGraphContig[],
+  provenance: Provenance,
+): string {
+  const rows: string[] = provenanceLines(provenance)
+  const byContig = new Map<string, BedGraphSpans[]>()
+  for (const span of spans) {
+    const held = byContig.get(span.contig)
+    if (held === undefined) byContig.set(span.contig, [span])
+    else held.push(span)
+  }
+
+  for (const contig of contigs) {
+    const here = byContig.get(contig.name)
+    if (here === undefined) continue
+    const items: Array<[number, number, number]> = []
+    for (const span of here) {
+      for (let at = 0; at < span.starts.length; at += 1) {
+        const value = span.values[at]
+        if (!present(value)) continue
+        const start = Math.max(0, span.starts[at])
+        const end = Math.min(contig.length, span.ends[at])
+        if (!(end > start)) continue
+        items.push([start, end, value])
+      }
+    }
+    // Ascending, as the bigWig writer sorts its own: the caller has them in
+    // order already, so this is the guard rather than the work.
+    items.sort((one, two) => one[0] - two[0])
+    for (const [start, end, value] of items) {
       rows.push(`${contig.name}\t${start}\t${end}\t${format(value)}`)
     }
   }

@@ -166,6 +166,46 @@ describe('binVectorSamples', () => {
     expect(set.extent?.max).toBeLessThanOrEqual(bins - 1)
   })
 
+  /**
+   * …and does not, when the caller is writing a file rather than drawing.
+   *
+   * The cap is a *frame* budget: a lane a few hundred pixels wide gains nothing
+   * from ten thousand intervals and a whole-genome pan would stutter under them.
+   * An export is not a frame, and a bucketed answer written to a bigWig is a
+   * re-binning the file cannot record and the reader cannot undo — which is
+   * exactly what a comparison of two tracks was doing to its operands, one of
+   * which may be a computed vector like this one.
+   */
+  it('answers bin for bin when the caller asks exactly', () => {
+    const bins = 10_000
+    const values = new Float32Array(bins)
+    for (let i = 0; i < bins; i++) values[i] = i
+    const wide: BinVector = {
+      binsize: 1000,
+      firstBin: 0,
+      values,
+      contigs: [{ name: 'big', startBin: 0, bins, length: bins * 1000 }],
+    }
+    const window = [{ contig: 'big', start: 0, end: bins * 1000 }]
+
+    const drawn = binVectorSamples(wide, window, 5000)
+    expect(drawn.regions[0].summary).toBe(true)
+    expect(drawn.regions[0].values.length).toBeLessThanOrEqual(4096)
+
+    const exact = binVectorSamples(wide, window, 1, true)
+    const region = exact.regions[0]
+    expect(region.summary).toBe(false)
+    expect(region.values.length).toBe(bins)
+    // Every bin, in its own place, at its own value — not a mean over a bucket.
+    expect(region.starts[0]).toBe(0)
+    expect(region.ends[0]).toBe(1000)
+    expect(region.values[0]).toBe(0)
+    expect(region.values[bins - 1]).toBe(bins - 1)
+    // …and no band, because a bin is not a summary of anything.
+    expect(region.min).toBeNull()
+    expect(region.max).toBeNull()
+  })
+
   it('drops a region on a contig the vector does not carry', () => {
     const set = binVectorSamples(vector([1, 2, 3, 4, 5, 6, 7]), [
       { contig: 'nowhere', start: 0, end: 1000 },

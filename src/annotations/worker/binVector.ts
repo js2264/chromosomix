@@ -95,7 +95,7 @@ function contigOf(vector: BinVector, name: string): BinVectorContig | undefined 
  * and omitted entirely at bin resolution, so a gap stays a gap rather than
  * becoming a zero or dragging a bucket's mean down.
  */
-function samplesFor(vector: BinVector, region: Region): TrackSamples | null {
+function samplesFor(vector: BinVector, region: Region, exact: boolean): TrackSamples | null {
   const contig = contigOf(vector, region.contig)
   if (contig === undefined || contig.bins === 0) return null
 
@@ -108,7 +108,11 @@ function samplesFor(vector: BinVector, region: Region): TrackSamples | null {
   const lastLocal = Math.min(contig.bins - 1, Math.floor((end - 1) / vector.binsize))
   if (lastLocal < firstLocal) return null
   const covered = lastLocal - firstLocal + 1
-  const stride = Math.max(1, Math.ceil(covered / MAX_INTERVALS))
+  // The cap is a *frame* budget — see {@link MAX_INTERVALS} — and an export is
+  // not a frame. Asked for exactly, every bin is its own interval however many
+  // that is, because a bucketed answer written to a file is a re-binning the
+  // file cannot record and the reader cannot undo.
+  const stride = exact ? 1 : Math.max(1, Math.ceil(covered / MAX_INTERVALS))
   const slots = Math.ceil(covered / stride)
 
   const starts = new Int32Array(slots)
@@ -172,12 +176,14 @@ export function binVectorSamples(
   vector: BinVector,
   regions: Region[],
   basesPerPixel: number,
+  /** One interval per bin, whatever the cap; see {@link samplesFor}. */
+  exact = false,
 ): TrackSampleSet {
   const out: TrackSamples[] = []
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const region of regions) {
-    const samples = samplesFor(vector, region)
+    const samples = samplesFor(vector, region, exact)
     if (samples === null) continue
     for (const value of samples.values) {
       if (!Number.isFinite(value)) continue

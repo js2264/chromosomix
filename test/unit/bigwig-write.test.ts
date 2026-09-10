@@ -18,7 +18,7 @@ import { BigWig } from '@gmod/bbi'
 import { BlobFile } from 'generic-filehandle2'
 
 import { bigWigBytesEstimate, writeBigWig } from '@/analysis/write/bigwig'
-import type { BigWigContig, BigWigInput } from '@/analysis/write/bigwig'
+import type { BigWigBins, BigWigContig } from '@/analysis/write/bigwig'
 import { planTree } from '@/analysis/write/tree'
 
 /**
@@ -74,7 +74,7 @@ function buildValues(): Float32Array {
   return values
 }
 
-const INPUT: BigWigInput = {
+const INPUT: BigWigBins = {
   contigs: CONTIGS,
   values: buildValues(),
   firstBin: 0,
@@ -88,7 +88,7 @@ interface Expected {
   value: number
 }
 
-function expectedFor(input: BigWigInput, name: string): Expected[] {
+function expectedFor(input: BigWigBins, name: string): Expected[] {
   const index = input.contigs.findIndex((contig) => contig.name === name)
   const contig = input.contigs[index]
   const offset = input.contigs
@@ -386,7 +386,7 @@ describe('writeBigWig', () => {
     // The same chrM values, handed over as a window of the genome-wide grid
     // rather than the whole of it.
     const firstBin = BIN_OFFSETS[1]
-    const window: BigWigInput = {
+    const window: BigWigBins = {
       contigs: CONTIGS,
       values: INPUT.values.slice(firstBin, firstBin + BIN_COUNTS[1]),
       firstBin,
@@ -518,6 +518,132 @@ describe('writeBigWig', () => {
     const b = await bytesOf(second)
     expect(a.length).toBe(b.length)
     expect(a).toEqual(b)
+  })
+})
+
+/**
+ * The second road in: intervals, on no grid.
+ *
+ * Every analysis output is a measurement per bin and takes the road above. A
+ * *comparison of two loaded tracks* is not: it is exact at every base, cut at
+ * each boundary of either operand, and forcing it onto the contact map's grid to
+ * write it was throwing that away — a ratio of two 10 bp tracks looked at on a
+ * 20 kb map came back as a 20 kb file. Nothing about BBI required it; decision 1
+ * at the top of `write/bigwig.ts` is precisely that a section holds arbitrary
+ * intervals, and the grid was an assumption in the caller.
+ *
+ * So what is checked here is that the two roads meet: the same sections, the
+ * same trees, the same summary, the same clamping at the end of a sequence, the
+ * same silence about a value that is not finite — and the intervals written
+ * exactly as they were handed over.
+ */
+describe('writeBigWig over spans', () => {
+  const SPAN_CONTIGS: BigWigContig[] = [
+    { name: 'chrB', length: 1_000 },
+    { name: 'chrA', length: 250 },
+  ]
+
+  /** Irregular on purpose: nothing here is a multiple of anything. */
+  const SPANS = [
+    {
+      contig: 'chrA',
+      starts: Int32Array.from([0, 37, 90]),
+      ends: Int32Array.from([37, 90, 300]),
+      values: Float32Array.from([1.5, -2.25, 4]),
+    },
+    {
+      contig: 'chrB',
+      starts: Int32Array.from([10, 11, 500]),
+      ends: Int32Array.from([11, 12, 1_000]),
+      values: Float32Array.from([9, Number.NaN, 0.5]),
+    },
+  ]
+
+  async function readBack(name: string, length: number): Promise<Array<[number, number, number]>> {
+    const file = open(await writeBigWig({ contigs: SPAN_CONTIGS, spans: SPANS }))
+    await file.getHeader()
+    const features = await file.getFeatures(name, 0, length, { scale: 1 })
+    return features
+      .map((feature): [number, number, number] => [
+        feature.start,
+        feature.end,
+        feature.score ?? NaN,
+      ])
+      .sort((one, two) => one[0] - two[0])
+  }
+
+  it('writes the intervals it was given, at their own boundaries', async () => {
+    expect(await readBack('chrA', 250)).toEqual([
+      [0, 37, 1.5],
+      [37, 90, -2.25],
+      // …and the last one clamped to the sequence, exactly as a short final bin
+      // is on the other road: 90–300 was asked for and chrA is 250 long.
+      [90, 250, 4],
+    ])
+  })
+
+  it('omits a value that is not finite, as the bin road does', async () => {
+    expect(await readBack('chrB', 1_000)).toEqual([
+      [10, 11, 9],
+      [500, 1_000, 0.5],
+    ])
+  })
+
+  it('numbers contigs by name, whatever order the caller listed them in', async () => {
+    // `chrB` is given first and sorts second, which is the one thing that puts
+    // every value on the wrong sequence in a file that still opens cleanly.
+    const file = open(await writeBigWig({ contigs: SPAN_CONTIGS, spans: SPANS }))
+    const header = await file.getHeader()
+    expect(header.refsByName['chrA']).toBe(0)
+    expect(header.refsByName['chrB']).toBe(1)
+  })
+
+  it('summarises over the spans, weighted by what each one covers', async () => {
+    const file = open(await writeBigWig({ contigs: SPAN_CONTIGS, spans: SPANS }))
+    const header = await file.getHeader()
+    const summary = header.totalSummary
+    // 37 + 53 + 160 bases on chrA, 1 + 500 on chrB. The `NaN` interval covers
+    // nothing, because it was never written.
+    expect(summary.basesCovered).toBe(37 + 53 + 160 + 1 + 500)
+    expect(summary.scoreMin).toBe(-2.25)
+    expect(summary.scoreMax).toBe(9)
+  })
+
+  it('refuses a span on a sequence the assembly does not list', async () => {
+    await expect(
+      writeBigWig({
+        contigs: SPAN_CONTIGS,
+        spans: [{ contig: 'chrZ', starts: [0], ends: [10], values: [1] }],
+      }),
+    ).rejects.toThrow(/chrZ/)
+  })
+
+  it('refuses columns of different lengths', async () => {
+    await expect(
+      writeBigWig({
+        contigs: SPAN_CONTIGS,
+        spans: [{ contig: 'chrA', starts: [0, 10], ends: [10], values: [1, 2] }],
+      }),
+    ).rejects.toThrow(/different lengths/)
+  })
+
+  it('writes a legal file for an assembly no span mentions', async () => {
+    // Every contig empty is a legitimate input on the bin road (a `.metacool`
+    // contig nothing mapped to) and is one here too: a header, no data blocks,
+    // and zeros in the summary rather than infinities.
+    const file = open(await writeBigWig({ contigs: SPAN_CONTIGS, spans: [] }))
+    const header = await file.getHeader()
+    expect(header.totalSummary.basesCovered).toBe(0)
+    expect(header.totalSummary.scoreMin).toBe(0)
+    expect(await file.getFeatures('chrA', 0, 250, { scale: 1 })).toEqual([])
+  })
+
+  it('is byte-identical across two writes of the same spans', async () => {
+    const [first, second] = await Promise.all([
+      writeBigWig({ contigs: SPAN_CONTIGS, spans: SPANS }),
+      writeBigWig({ contigs: SPAN_CONTIGS, spans: SPANS }),
+    ])
+    expect(await bytesOf(first)).toEqual(await bytesOf(second))
   })
 })
 

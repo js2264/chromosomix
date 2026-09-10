@@ -66,6 +66,20 @@ const MAX_DECIMALS = 100
  * {@link SIGNIFICANT_DIGITS} and printed fixed-point, so the column sorts as a
  * number in every tool that opens it.
  */
+/**
+ * One sequence's intervals — the shape `BigWigSpans` and `BedGraphSpans` take.
+ *
+ * Structural rather than imported, so this module goes on depending on nothing
+ * but its own types: the three writers are handed one object by one caller, and
+ * what makes them agree is that caller rather than a shared declaration.
+ */
+export interface TsvSpans {
+  contig: string
+  starts: ArrayLike<number>
+  ends: ArrayLike<number>
+  values: ArrayLike<number>
+}
+
 export function tsvNumber(value: number): string {
   if (!Number.isFinite(value)) return ''
   // `String` reaches for the exponent at 1e21 even for whole numbers, so the
@@ -384,6 +398,64 @@ function intervalsToTsv(output: IntervalsOutput): string[] {
     )
   }
   return lines
+}
+
+/**
+ * `chrom  start  end  value` — a track that is on no grid, as a table.
+ *
+ * Its own function rather than a `ProfileOutput` with a made-up bin size,
+ * because the two are different things and pretending otherwise is what the
+ * export of a derived track used to do. {@link profileToTsv} writes `bin`
+ * first, which is meaningful only where there is a grid and every row sits on
+ * it; these rows sit where the data does.
+ *
+ * The empty rows {@link profileToTsv} keeps are not kept here, and that is the
+ * same decision rather than a different one. A profile has a value *per bin*, so
+ * a missing bin is a hole in a sequence a reader can see the shape of; a
+ * comparison of two tracks is defined only where both operands say something,
+ * so there is no row to leave blank — the intervals between are not empty
+ * readings, they are places the question was not asked.
+ *
+ * `contigs` orders the file, exactly as it orders the other two writers, so the
+ * three agree line for line and a reader can diff them.
+ */
+export function spansToTsv(
+  label: string,
+  unit: string,
+  spans: readonly TsvSpans[],
+  contigs: ReadonlyArray<{ name: string; length: number }>,
+  provenance: Provenance,
+): string {
+  const lines = [
+    ...provenanceLines(provenance),
+    `# output: ${cell(label)}${unit === '' ? '' : ` (${cell(unit)})`}`,
+    row(['chrom', 'start', 'end', 'value']),
+  ]
+  const byContig = new Map<string, TsvSpans[]>()
+  for (const span of spans) {
+    const held = byContig.get(span.contig)
+    if (held === undefined) byContig.set(span.contig, [span])
+    else held.push(span)
+  }
+  for (const contig of contigs) {
+    const here = byContig.get(contig.name)
+    if (here === undefined) continue
+    const items: Array<[number, number, number]> = []
+    for (const span of here) {
+      for (let at = 0; at < span.starts.length; at += 1) {
+        const value = span.values[at]
+        if (!Number.isFinite(value)) continue
+        const start = Math.max(0, span.starts[at])
+        const end = Math.min(contig.length, span.ends[at])
+        if (end > start) items.push([start, end, value])
+      }
+    }
+    items.sort((one, two) => one[0] - two[0])
+    for (const [start, end, value] of items) {
+      lines.push(row([cell(contig.name), String(start), String(end), tsvNumber(value)]))
+    }
+  }
+  return document(lines)
 }
 
 /** One output, with its provenance above it, as the text of a `.tsv`. */
