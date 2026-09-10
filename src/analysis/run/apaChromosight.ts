@@ -32,10 +32,11 @@
 
 import { p2ll } from '../apa'
 import {
-  detectableFromCounts,
+  detectableFromMarginal,
   detectableFromWeights,
   fdrCorrection,
   pileupOf,
+  keepDistanceFor,
   prepareSquare,
   quantifyOnSquare,
   symmetrise,
@@ -48,7 +49,7 @@ import { CHROMOSIGHT_SPECTRUM } from '../chromosightSpectrum'
 import { boolParam, strParam, type JobContext } from '../job'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
-import { squareFor, usableBlock, validBins, type Span } from './blocks'
+import { bandFor, cisMarginal, usableBlock, validBins, type Span } from './blocks'
 
 /** What the APA runner hands over: an anchor pair in whole-file bins. */
 export interface ChromosightAnchor {
@@ -104,6 +105,15 @@ export async function chromosightPileup(
   }
 
   const weights = validBins(job.mc, balance)
+  // The one quantity a band cannot answer for itself, counted once and only
+  // where there are no weights. See `run/chromosight.ts`.
+  let detectableFor: (from: number, to: number) => Uint8Array
+  if (weights !== null) {
+    detectableFor = (from, to) => detectableFromWeights(weights, from, to)
+  } else {
+    const marginal = await cisMarginal(job)
+    detectableFor = (from, to) => detectableFromMarginal(marginal.subarray(from, to), 5)
+  }
   const spans = [...bySequence.values()].map((group) => group[0].bounds)
   const block = usableBlock(job, spans, balance)
   const rows: Array<{ anchor: ChromosightAnchor; score: number; pvalue: number; qvalue: number }> = []
@@ -119,14 +129,23 @@ export async function chromosightPileup(
       done += group.length
       continue
     }
-    const dense = await squareFor(job, span, { block, balance, value })
+    // The band the scan reaches, not the square around it — the same change
+    // `run/chromosight.ts` makes and for the same reason: `prepareSquare` reads
+    // `0 … keepDistance` and nothing else, and the square was a ceiling on the
+    // sequence length rather than a requirement of the arithmetic.
+    const contacts = await bandFor(job, span, {
+      hi: keepDistanceFor(n, maxDist, kernel.size),
+      block,
+      balance,
+      value,
+      onTile: async () => {
+        await job.breathe()
+      },
+    })
     const square: Square = {
-      values: dense.values,
+      contacts,
       n,
-      detectable:
-        weights === null
-          ? detectableFromCounts(dense.values, n, 5)
-          : detectableFromWeights(weights, span.from, span.to),
+      detectable: detectableFor(span.from, span.to),
     }
     const matrix = prepareSquare(square, { maxDist, largestKernel: kernel.size })
     const scored = quantifyOnSquare(

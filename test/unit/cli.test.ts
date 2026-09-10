@@ -168,6 +168,22 @@ describe('running a task', () => {
     expect(text).toMatch(/^# framing: chrI:0-50000 at 1000 bp/m)
   })
 
+  it('binds --sequences as a list, not as a string the runners ignore', async () => {
+    reset()
+    // The runners read this key with `Array.isArray` and fall back to *every
+    // sequence* when it is anything else. It arrived as a plain string, so
+    // `--sequences chrII` scanned both and reported a number from the wrong
+    // one — a silent widening, which a batch script cannot see. The fixture has
+    // two sequences and only one of them is asked for.
+    expect(
+      await main(['chromosight', sample, '--out', out, '--quiet', '--sequences', 'chrII']),
+    ).toBe(0)
+    // One sequence scanned, not two. The fixture has chrI and chrII, and the
+    // note counts what the run actually looked at.
+    expect(complained()).toMatch(/on 1 sequence\b/)
+    expect(complained()).not.toMatch(/on 2 sequences/)
+  })
+
   it('writes a called interval set as BED beside its TSV', async () => {
     reset()
     // The drawer has carried a BED button beside every called interval set

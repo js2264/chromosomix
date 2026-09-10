@@ -44,6 +44,57 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Both scans on the map read a diagonal instead of a square, and the fine
+  resolutions they used to refuse now work.** Neither the insulation diamond nor
+  the chromosight correlation has ever looked at a cell far from the diagonal —
+  a diamond reaches `window` bins each side of the bin it scores, and a
+  correlation runs inside a band `max_dist` wide — but both read the whole `n²`
+  square to get at the band, and the ceiling that fell out of that had nothing
+  to do with either computation:
+
+  - **insulation** hit the 2 GiB limit on a single `Float32Array`, which is a
+    limit of the tab and not of the machine. That is 23,170 bins: 116 Mb at
+    5 kb, so mouse chr9 was refused and chr1 could not be run below 10 kb.
+  - **loop calling** never reached the allocator. A hard-coded 8,192-bin cap
+    skipped any longer sequence, which is 82 Mb at 10 kb and 41 Mb at 5 — so
+    mouse chr18 was dropped at 10 kb and every mouse chromosome at 5 kb.
+
+  Insulation now walks each sequence as overlapping squares with a halo the
+  width of the widest diamond. The split that makes this a substitution rather
+  than an approximation is between the **sums**, which are local to a bin, and
+  the **score**, which is a log2 ratio against the mean over the whole sequence:
+  each tile files the sums for the bins whose whole diamond it holds, and the
+  score is taken once at the end. `diamondSums` is untouched and still goldened
+  against cooltools; the answer is identical cell for cell, not close. Mouse
+  chr1 at 1 kb — 195,471 bins, which is 153 GB as a square — now runs in 19
+  seconds inside a 4 GB heap.
+
+  Loop calling reads the band it was always going to scan. `chromosight.ts` had
+  already banded every one of its own objects, saying so in as many words; the
+  square read was the last `n²` thing in the module and the gate was the fence
+  built around it. The gate is now a bound on the **band** — the scan distance
+  times the sequence — so it scales with the setting that actually costs: the
+  whole mouse genome scans at 5 kb, and what is still refused is a deep scan on
+  a fine grid, refused by name with the two settings that fix it. Mouse chr1 at
+  5 kb, a 6.1 GB square, takes 68 seconds.
+
+  One thing genuinely needed the square and now comes from the pixel table
+  instead: the detectability cut counts non-zero pixels per bin over a whole
+  row, at every separation. It is counted once per run and only where the file
+  carries no balancing weights — with them nothing is read for it at all.
+
+- **A sequence a scan skips is named.** The cap's own documentation has always
+  said a sequence past it is "skipped and named"; only the first half was true,
+  so a run over a mammalian genome scanned whichever chromosomes happened to fit
+  and reported a clean number for the rest. Worse, the message when *nothing*
+  fitted said the sequences were not long enough, when the truth was the
+  opposite.
+
+- **`metacooler-run --sequences` binds.** The runners read that parameter with
+  `Array.isArray` and fall back to *every sequence* for anything else; the shell
+  passed a plain string, so `--sequences chr18` silently scanned all of them and
+  reported a number from the wrong one. Affected loop calling and compartments.
+
 - **The domain pileup — APA over a set of TADs, scaled — was laid out from the
   wrong end of the feature.** The scaled mode on a feature set is how you draw
   the picture that sits beside a loop APA in every Hi-C paper: call insulation

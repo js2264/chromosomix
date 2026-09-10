@@ -245,7 +245,19 @@ const RESERVED = new Set([
 
 function coerce(param: AnalysisTask['params'][number], values: string[]): Params[string] {
   const kind = (param as { kind?: string }).kind
-  if (kind === 'multi' || Array.isArray((param as { default?: unknown }).default)) {
+  // `sequences` by name as well as `multi`, and it is not a tidy-up: the runners
+  // read that key with `Array.isArray` and fall back to *every sequence* when it
+  // is anything else. A plain string is anything else, so `--sequences chr18`
+  // typed at a shell scanned all twenty-one of them and reported a number from
+  // the wrong one — a silent widening, which is the failure mode a batch script
+  // cannot see. It has no `default`, so the array rule below never caught it.
+  const multiple = (param as { multiple?: boolean }).multiple === true
+  if (
+    kind === 'multi' ||
+    kind === 'sequences' ||
+    multiple ||
+    Array.isArray((param as { default?: unknown }).default)
+  ) {
     // A list may arrive as repeated flags or as one comma-separated value; both
     // are things a shell user will write and neither is wrong.
     return values.flatMap((value) => value.split(',')).filter((value) => value !== '')

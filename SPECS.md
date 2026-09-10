@@ -3910,6 +3910,21 @@ is on screen must not change what an O/E is taken against. *Coverage and margina
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
+**Both scans on the map read a diagonal rather than a square**, and that is what decides how fine a
+resolution either can be run at. A diamond reaches `window` bins each side of the bin it scores and
+chromosight correlates inside a band `max_dist` wide; neither has ever needed the `n²` square around
+those cells, and reading one put a ceiling on each that belonged to the reader rather than to the
+arithmetic — a single `Float32Array` is refused past 23,170 bins on any machine (§5.2), which is
+116 Mb at 5 kb, and loop calling stopped at a hard-coded 8,192 bins, which is 41. Insulation now walks
+the sequence as overlapping squares with a `window`-bin halo, filling in the *sums* — which are local
+to a bin — and takes the score, which is a ratio against the mean over the whole sequence, once at the
+end; `diamondSums` is unchanged and still goldened against cooltools, and the answer is identical cell
+for cell rather than merely close. Loop calling reads the band it was always going to scan, which is
+what `analysis/chromosight.ts` had already banded every one of its own objects to. Its gate is
+therefore a bound on the **band** — the scan distance times the sequence — and no longer on the
+chromosome: the whole mouse genome scans at 5 kb, and what is still refused is a deep scan on a fine
+grid, named as the two settings that fix it. **A sequence a gate does skip is named**, which the old
+one promised and did not do.
 **It calls the domains between those boundaries too, and by default**: the span from each call to the
 next, as a second overlay beside the points. That is not a second algorithm — it is the eight lines of
 pairing that every reader was writing by hand — and it is on by default because a boundary set is half

@@ -39,8 +39,8 @@ import { windowLadder } from '../tasks/insulation'
 import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 import {
   displayableContigs,
+  forEachDiagonalTile,
   spanOfContig,
-  squareFor,
   usableBlock,
   type Span,
 } from './blocks'
@@ -164,20 +164,51 @@ export const runInsulation: TaskRunner = async (job) => {
   const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
   for (let u = 0; u < units.length; u++) {
-    // Once per sequence: the diamonds below are a double loop over one square
-    // and yield nothing, so this is the only place a cancel can be heard.
-    await job.breathe()
-    job.progress(u, units.length, units[u].name)
     const unit = units[u]
-    const square = await squareFor(job, unit.span, { block, balance, value })
     const size = unit.span.to - unit.span.from
 
+    // **The sums are accumulated over tiles and the score is taken once.** The
+    // diamond at a bin reaches `window` bins each side of it and no further, so
+    // a sequence is a band and never a square — and reading it as a square put a
+    // ceiling on this task that had nothing to do with its arithmetic: one
+    // `Float32Array` of `n²` is refused past 23,170 bins whatever the machine
+    // has (`MAX_DENSE_ARRAY_BYTES`), which is 116 Mb at 5 kb. Mouse chr9 is 125.
+    //
+    // The split is between the *sums*, which are per bin and local, and the
+    // *score*, which is a log2 ratio against the mean over the whole sequence.
+    // So each tile fills in the sums for the bins whose whole diamond it holds,
+    // and `insulationScore` runs once at the end over the assembled vector —
+    // which makes the answer identical to the whole-square one cell for cell,
+    // rather than merely close. `diamondSums` is unchanged and still goldened
+    // against cooltools; it simply sees a smaller square.
+    const sums = windows.map(() => new Float64Array(size).fill(Number.NaN))
+    await forEachDiagonalTile(
+      job,
+      unit.span,
+      { halo: widest, block, balance, value },
+      async (tile) => {
+        // Once per tile: the diamonds below are a double loop that yields
+        // nothing, so this is the only place a cancel can be heard.
+        await job.breathe()
+        job.progress(
+          u,
+          units.length,
+          tile.total === 1 ? unit.name : `${unit.name} · part ${tile.index + 1} of ${tile.total}`,
+        )
+        for (let w = 0; w < windows.length; w++) {
+          const tileSums = diamondSums(
+            { size: tile.size, values: tile.values },
+            { window: windows[w], minValid, ignoreDiags },
+          )
+          for (let local = tile.ownFrom; local < tile.ownTo; local++) {
+            sums[w][local] = tileSums[local - tile.from]
+          }
+        }
+      },
+    )
+
     for (let w = 0; w < windows.length; w++) {
-      const sums = diamondSums(
-        { size, values: square.values },
-        { window: windows[w], minValid, ignoreDiags },
-      )
-      const score = insulationScore(sums)
+      const score = insulationScore(sums[w])
       for (let local = 0; local < size; local++) {
         scores[w][unit.span.from + local] = score[local]
       }

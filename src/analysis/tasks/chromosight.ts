@@ -39,15 +39,37 @@ import { CHROMOSIGHT_PRESETS, type ChromosightPreset } from '../chromosightPrese
 import { BALANCE_PARAM } from './shared'
 
 /**
- * The largest square this will scan, in bins.
+ * The largest **band** this will hold, in cells.
  *
- * The same gate `analysis/tasks/compartments.ts` argues for, at the same figure
- * and for a different reason: there it is an `m²` correlation matrix, here it is
- * an `m²` dense read plus a band of diagonals over it. Yeast chrIV at 1 kb is
- * 1,531 bins; human chr1 at 100 kb is 2,490. A sequence past the limit is
- * skipped and named rather than scanned at a resolution nobody chose.
+ * It was a cap on the sequence — 8,192 bins — and that was a cap on the wrong
+ * thing. What the scan holds is three arrays of `(keepDistance + 1) × n` cells:
+ * the raw contacts, the detrended map and the correlation map. None of them is
+ * `n²`, and none ever was: `analysis/chromosight.ts` has banded every one of its
+ * objects from the start. Only the *read* was square, so the limit that fell out
+ * of it scaled with the chromosome rather than with the scan distance — and
+ * refused mouse chr18 at 10 kb, which the arithmetic could do a hundred times
+ * over, while a short sequence with a 20 Mb scan distance sailed through.
+ *
+ * 96 million cells is about 1.9 GB across the three, each comfortably inside the
+ * 2 GiB one-array ceiling (`constants.ts`). What it buys: mouse chr1 at 5 kb
+ * with the default 2 Mb scan distance is 16 million, and the whole mouse genome
+ * fits at every resolution this file carries. What it still refuses is a *deep*
+ * scan on a *fine* grid — chr1 at 1 kb reaching 2 Mb is 394 million — and the
+ * refusal names the two ways out, because both are real choices rather than a
+ * machine to buy.
  */
-export const MAX_SCAN_BINS = 8192
+export const MAX_SCAN_CELLS = 96_000_000
+
+/**
+ * Cells the scan will hold for a sequence of `n` bins.
+ *
+ * The band's own shape, so the estimate, the planner and the refusal all count
+ * the same thing. `largestKernel` is a template's size and never more than a few
+ * dozen; the scan distance is what moves this number.
+ */
+export function scanCellsFor(n: number, maxDistBins: number, largestKernel: number): number {
+  return (Math.min(maxDistBins, n) + largestKernel + 1) * n
+}
 
 /** The preset a parameter set names, falling back to loops. */
 export function presetFor(params: Params): ChromosightPreset {
@@ -222,17 +244,37 @@ const PARAMS: readonly ParamSpec[] = [
   BALANCE_PARAM,
 ]
 
+/**
+ * The scan distance in bins, and the widest template, as the gate counts them.
+ *
+ * The two numbers that decide how wide the band is — and therefore, now that the
+ * square is gone, the only two settings that decide whether a sequence can be
+ * scanned at all.
+ */
+export function bandShapeOf(
+  params: Params,
+  binsize: number,
+): { maxDistBins: number; largestKernel: number } {
+  const preset = presetFor(params)
+  const size = binsize > 0 ? binsize : 1
+  return {
+    maxDistBins: Math.max(1, Math.floor(threshold(params, 'maxDist', preset.maxDist) / size) || 1),
+    largestKernel: preset.sizes.reduce((most, kernel) => Math.max(most, kernel), 0),
+  }
+}
+
 /** The sequences a run will scan, after the ticks and the size gate. */
 function chosen(context: AnalysisContext, params: Params): { scanned: number; bins: number; skipped: number } {
   const ticked = Array.isArray(params.sequences)
     ? new Set(params.sequences.filter((name): name is string => typeof name === 'string'))
     : null
+  const { maxDistBins, largestKernel } = bandShapeOf(params, context.binsize)
   let scanned = 0
   let widest = 0
   let skipped = 0
   for (const contig of context.contigs) {
     if (ticked !== null && !ticked.has(contig.name)) continue
-    if (contig.bins > MAX_SCAN_BINS) {
+    if (scanCellsFor(contig.bins, maxDistBins, largestKernel) > MAX_SCAN_CELLS) {
       skipped++
       continue
     }
@@ -253,8 +295,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       note: 'Nothing to read.',
       refusal:
         skipped > 0
-          ? `Every chosen sequence is past the ${MAX_SCAN_BINS.toLocaleString()}-bin limit on a ` +
-            'scan. Open the file at a coarser resolution, or choose a shorter sequence.'
+          ? 'Every chosen sequence would need a band bigger than a scan can hold. The band is ' +
+            'the scan distance times the sequence, so there are two ways in: bring *Furthest ' +
+            'from the diagonal* down, or open the file at a coarser resolution.'
           : 'Tick at least one sequence.',
     }
   }

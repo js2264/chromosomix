@@ -128,6 +128,262 @@ export async function squareFor(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reading a diagonal, without the square around it
+// ---------------------------------------------------------------------------
+
+/**
+ * The largest tile either reader below will ask the file for, in cells.
+ *
+ * 16 million cells is 64 MB as `Float32`, which is small enough to be nothing on
+ * any machine that opened the file and large enough that a chromosome is a few
+ * dozen reads rather than a few thousand. It is a *tile* bound and not a budget:
+ * the point of both readers is that what they hold does not grow with the
+ * sequence, so there is no machine-dependent number to consult.
+ */
+const TILE_CELLS = 16_000_000
+
+/**
+ * Rows per tile, for a reader that needs `halo` bins of margin around each one.
+ *
+ * The read is `(tile + halo)` wide however tall it is, so the cells a whole
+ * sequence costs are `n × (tile + halo)` — smallest when the tile is about the
+ * halo, and only twice the band itself there. A floor keeps a narrow band from
+ * turning a chromosome into thousands of tiny queries, and the cell cap keeps a
+ * wide one from asking for a tile it cannot hold.
+ */
+function tileRows(halo: number, extra: number): number {
+  const wanted = Math.max(256, Math.min(halo, 4096))
+  let tile = wanted
+  while (tile > 1 && tile * (tile + extra) > TILE_CELLS) tile = Math.floor(tile / 2)
+  return Math.max(1, tile)
+}
+
+/**
+ * A run of diagonals of one sequence, read without the square around it.
+ *
+ * **The reason this exists is that everything downstream of it was already
+ * banded and the read was not.** `analysis/chromosight.ts` keeps its detrended
+ * map and its correlation map as {@link DiagonalBand}s precisely because holding
+ * them as `n²` costs gigabytes on a mammalian chromosome — and then the runner
+ * handed them an `n²` dense square to build from, which put a cap on the
+ * sequence length that had nothing to do with the arithmetic.
+ *
+ * Read row-band by row-band: the cells with `0 ≤ col − row ≤ hi` for rows
+ * `[a, b)` all lie in columns `[a, b + hi)`, so one rectangle per tile covers
+ * them with no overlap between tiles. What is held is `(hi + 1) × n` cells
+ * whatever the sequence is, and what is read at a time is one tile.
+ *
+ * `Float32` rather than `Float64`, matching what `mc.matrix` returns: this is
+ * the file's own numbers, not a derived quantity, and doubling them would double
+ * the one array that does scale with the sequence.
+ */
+export class ContigBand {
+  readonly values: Float32Array
+
+  constructor(
+    readonly n: number,
+    /** Highest offset `col - row` stored, inclusive. */
+    readonly hi: number,
+  ) {
+    this.values = new Float32Array((hi + 1) * n)
+  }
+
+  /** `(row, col)` where the cell is stored; `0` outside the band. */
+  at(row: number, col: number): number {
+    const offset = col - row
+    if (offset < 0 || offset > this.hi || row < 0 || row >= this.n) return 0
+    return this.values[offset * this.n + row]
+  }
+}
+
+/**
+ * One sequence's band, from the block on screen or from the file.
+ *
+ * The block path is the same three conditions {@link usableBlock} already
+ * decided, so a reader who pressed Run while looking at the sequence pays
+ * nothing; the read path is tiled and bounded. Either way what comes back is the
+ * same object, so nothing downstream knows which it got.
+ */
+export async function bandFor(
+  job: JobContext,
+  span: Span,
+  options: {
+    /** Widest diagonal to keep, in bins. */
+    hi: number
+    block: BlockInput | null
+    balance: boolean
+    value: string
+    /** Called between tiles, so a chromosome-long read can be stopped. */
+    onTile?: (done: number, total: number) => Promise<void> | void
+  },
+): Promise<ContigBand> {
+  const n = span.to - span.from
+  const hi = Math.max(0, Math.min(options.hi, Math.max(0, n - 1)))
+  const band = new ContigBand(n, hi)
+
+  const fill = (
+    values: ArrayLike<number>,
+    ncols: number,
+    rowFrom: number,
+    rowTo: number,
+    colFrom: number,
+  ): void => {
+    for (let r = rowFrom; r < rowTo; r++) {
+      const base = (r - rowFrom) * ncols - colFrom
+      const last = Math.min(n - 1, r + hi)
+      for (let c = r; c <= last; c++) {
+        band.values[(c - r) * n + r] = values[base + c]
+      }
+    }
+  }
+
+  if (options.block !== null) {
+    const block = options.block
+    const rowSkip = span.from - block.rowExtent[0]
+    const colSkip = span.from - block.colExtent[0]
+    for (let r = 0; r < n; r++) {
+      const at = (rowSkip + r) * block.ncols + colSkip
+      const last = Math.min(n - 1, r + hi)
+      for (let c = r; c <= last; c++) band.values[(c - r) * n + r] = block.values[at + c]
+    }
+    return band
+  }
+
+  const tile = tileRows(hi, hi)
+  const tiles = Math.max(1, Math.ceil(n / tile))
+  for (let t = 0; t < tiles; t++) {
+    await options.onTile?.(t, tiles)
+    const rowFrom = t * tile
+    const rowTo = Math.min(n, rowFrom + tile)
+    if (rowTo <= rowFrom) break
+    const colTo = Math.min(n, rowTo + hi)
+    const dense = await job.mc.matrix({
+      rows: [span.from + rowFrom, span.from + rowTo],
+      cols: [span.from + rowFrom, span.from + colTo],
+      balance: options.balance,
+      value: options.value,
+    })
+    fill(dense.values, dense.ncols, rowFrom, rowTo, rowFrom)
+  }
+  await options.onTile?.(tiles, tiles)
+  return band
+}
+
+/**
+ * One sequence walked as overlapping squares along its diagonal.
+ *
+ * For a kernel that wants a *square* — the insulation diamond does, and it is
+ * goldened against cooltools cell for cell, so it is not being rewritten to take
+ * a band. Each tile is a square of `body + 2 × halo` bins and the caller is told
+ * which of its bins are fully inside it: those are the ones whose whole window
+ * the tile holds, and the ones at its seams belong to the neighbouring tile.
+ *
+ * At the two ends of the sequence the halo is clipped rather than padded, which
+ * is what keeps the first and last `halo` bins answering exactly as they do from
+ * a whole square — with no score at all, because their window runs off the
+ * sequence and not because a tile boundary fell there.
+ */
+export async function forEachDiagonalTile(
+  job: JobContext,
+  span: Span,
+  options: {
+    /** Bins of margin each side; the kernel's own reach. */
+    halo: number
+    block: BlockInput | null
+    balance: boolean
+    value: string
+  },
+  onTile: (tile: {
+    /** The square, `size × size`, in the sequence's own bins. */
+    values: Float32Array
+    size: number
+    /** Where the square starts, local to the sequence. */
+    from: number
+    /** Local bins whose scores this tile owns, half-open. */
+    ownFrom: number
+    ownTo: number
+    index: number
+    total: number
+  }) => Promise<void> | void,
+): Promise<void> {
+  const n = span.to - span.from
+  const halo = Math.max(0, options.halo)
+  const body = tileRows(halo * 2, halo * 2)
+  const tiles = Math.max(1, Math.ceil(n / body))
+
+  for (let t = 0; t < tiles; t++) {
+    const ownFrom = t * body
+    const ownTo = Math.min(n, ownFrom + body)
+    if (ownTo <= ownFrom) break
+    const from = Math.max(0, ownFrom - halo)
+    const to = Math.min(n, ownTo + halo)
+    const square = await squareFor(
+      job,
+      { from: span.from + from, to: span.from + to },
+      { block: options.block, balance: options.balance, value: options.value },
+    )
+    await onTile({
+      values: square.values,
+      size: to - from,
+      from,
+      ownFrom,
+      ownTo,
+      index: t,
+      total: tiles,
+    })
+  }
+}
+
+/**
+ * Non-zero **cis** pixels per bin, over the whole file, in one pass.
+ *
+ * The detectability cut needs a count over a whole *row* — every separation, not
+ * just the scanned band — which is the one quantity in this task that a banded
+ * read genuinely cannot produce. It used to fall out of the dense square for
+ * free, and now that the square is gone it has to be counted from the pixel
+ * table instead.
+ *
+ * The count is exactly what the mirrored square gave: a stored pixel `(i, j)`
+ * adds one to both ends and a diagonal pixel adds one, so an upper-triangular
+ * sparse table and a mirrored dense block agree per bin — the identity
+ * `detectableFromCounts` already relied on. **Cis only**, because the square it
+ * replaces was one contig's: a trans pixel was never in it.
+ *
+ * Once per run rather than once per sequence, and only where the file carries no
+ * weights — with them `detectableFromWeights` reads a column and no matrix at
+ * all, which is every balanced cooler and so the common case.
+ */
+export async function cisMarginal(job: JobContext): Promise<Float64Array> {
+  const mc = job.mc
+  // Bin → contig, so a pixel spanning two sequences can be left out without a
+  // binary search per pixel. One `Int32Array` of `nBins` against a pass over
+  // every pixel in the file is the same trade `run/coverage.ts` makes.
+  const contigOf = new Int32Array(mc.nBins).fill(-1)
+  for (let cid = 0; cid < mc.nContigs; cid++) {
+    const [from, to] = mc.contigExtent(cid)
+    for (let bin = from; bin < to; bin++) contigOf[bin] = cid
+  }
+  const sums = new Float64Array(mc.nBins)
+  job.progress(0, 1, 'Counting coverage')
+  await mc.scanPixels({
+    onChunk: (chunk) => {
+      job.throwIfCancelled()
+      for (let i = 0; i < chunk.length; i++) {
+        const bin1 = chunk.bin1[i]
+        const bin2 = chunk.bin2[i]
+        if (contigOf[bin1] !== contigOf[bin2]) continue
+        const count = chunk.count[i]
+        if (!Number.isFinite(count) || count === 0) continue
+        sums[bin1] += 1
+        if (bin2 !== bin1) sums[bin2] += 1
+      }
+    },
+    onProgress: (at, of) => job.progress(at, of, 'Counting coverage'),
+  })
+  return sums
+}
+
 /**
  * The contigs a result may be produced for.
  *
