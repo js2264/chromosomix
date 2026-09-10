@@ -149,14 +149,12 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   }
 
   // Balancing, once, because `--balance` sets both the framing and a `balance`
-  // parameter where the task declares one. Where it declares one, that value is
-  // what the arithmetic actually read, so that is the one written — and where
-  // the two disagree the command cannot say so, which is what the note is for.
-  // A declared `balance` is what the arithmetic read, so it wins — but only
-  // when the record actually carries one. A provenance written without it (an
-  // older session, a task that gained the parameter since) would otherwise be
-  // read as *unbalanced*, turning a missing field into a positive claim about
-  // the numbers; the framing is the better answer there and is never absent.
+  // parameter where the task declares one. A declared one is what the
+  // arithmetic actually read, so it wins — but only when the record carries it.
+  // A provenance written without it (an older session, a task that gained the
+  // parameter since) would otherwise be read as *unbalanced*, turning a missing
+  // field into a positive claim about the numbers; the framing is the better
+  // answer there and is never absent.
   const declared = input.task.params.find((param) => param.key === 'balance')
   const balance =
     declared === undefined || typeof params.balance !== 'boolean'
