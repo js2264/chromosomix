@@ -172,6 +172,31 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.call === true,
     section: 'Boundaries',
   },
+  /**
+   * The domains between the calls, as a second overlay.
+   *
+   * **On by default, because a boundary set is half an answer.** What a reader
+   * wants from insulation is nearly always the *domains* — the spans a boundary
+   * set implies — and everything downstream takes an interval rather than a
+   * point: a scaled pileup over them is the domain APA, an overlap counts how
+   * many genes sit inside one, and a BED of them is what leaves for another
+   * tool. Producing only the calls left every one of those a script away, and
+   * the script is the same eight lines every time: sort per sequence, pair the
+   * neighbours.
+   *
+   * It costs nothing — the calls are already in hand, and this is arithmetic
+   * over a few thousand of them — so it is a tickbox rather than a second run,
+   * and it is ticked. A reader who wants only the points unticks it.
+   */
+  {
+    kind: 'toggle',
+    key: 'domains',
+    label: 'Also the domains between them',
+    hint: 'A second overlay: the span from each call to the next, as a BED.',
+    default: true,
+    when: (params) => params.call === true,
+    section: 'Boundaries',
+  },
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {

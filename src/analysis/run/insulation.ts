@@ -23,6 +23,7 @@ import {
   callBoundaries,
   diamondCells,
   diamondSums,
+  domainsBetween,
   insulationScore,
   type Boundary,
 } from '../insulation'
@@ -35,7 +36,7 @@ import {
   type TaskRunner,
 } from '../job'
 import { windowLadder } from '../tasks/insulation'
-import type { ProfileOutput, TaskOutput } from '../types'
+import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 import {
   displayableContigs,
   spanOfContig,
@@ -205,6 +206,23 @@ export const runInsulation: TaskRunner = async (job) => {
     } else {
       outputs.push(boundaryOutput(job, calls))
       job.note(`${total.toLocaleString()} boundaries called across ${calls.length} sequences.`)
+      if (boolParam(job.params, 'domains', true)) {
+        const domains = domainOutput(job, calls)
+        if (domains === null) {
+          // Every sequence had one call or none, so there is no interior with
+          // both its edges. Said out loud rather than left as a missing lane:
+          // the tickbox is on, so a reader who sees no domains row is owed the
+          // reason.
+          job.note(
+            'No sequence had two calls, so no domain has both of its edges and none was made.',
+          )
+        } else {
+          outputs.push(domains.output)
+          job.note(
+            `${domains.count.toLocaleString()} domains between them, from each call to the next.`,
+          )
+        }
+      }
     }
   }
   return outputs
@@ -255,6 +273,60 @@ function boundaryOutput(
     id: 'insulation-boundaries',
     label: 'Insulation boundaries',
     payload: { kind: 'features', data: builder.finish() },
+  }
+}
+
+/**
+ * The spans between the calls, as a second `FeatureSet` — the domains.
+ *
+ * Consecutive calls on **one sequence**, which is why this walks the same
+ * per-unit list the boundaries came from rather than a flat set: "consecutive"
+ * is a property of a sequence, and the last call on `chr1` and the first on
+ * `chr2` are adjacent in any sorted list and are not two ends of anything.
+ *
+ * Each domain runs from the bin one call was made at to the bin the next was
+ * made at, so consecutive domains tile and the lane reads as a segmentation —
+ * the picture the compartment track makes, which is what a reader already knows
+ * how to read. Clamped to the sequence for the same reason the boundaries are:
+ * it leaves as a BED, and a BED past the end of a chromosome is one every tool
+ * downstream complains about, or worse, does not.
+ *
+ * `null` where there is nothing to report, so the caller can say why rather than
+ * adopting an empty overlay onto the Annotations panel.
+ */
+function domainOutput(
+  job: JobContext,
+  calls: ReadonlyArray<{ unit: Unit; boundaries: Boundary[]; window: number }>,
+): { output: IntervalsOutput; count: number } | null {
+  const builder = new FeatureBuilder()
+  let count = 0
+  for (const { unit, boundaries } of calls) {
+    for (const domain of domainsBetween(boundaries)) {
+      const start = domain.from * job.mc.binsize
+      const end = Math.min(unit.length, domain.to * job.mc.binsize)
+      if (end <= start) continue
+      count++
+      builder.add(unit.name, start, end, {
+        // The weaker edge, so the overlay can be filtered on it and a reader
+        // ranking the set in APA is ranking on how well *both* sides are held.
+        score: domain.strength,
+        // No name, because a domain has none. Compartments write `A` or `B`
+        // into the box because there are two kinds; here every box is the same
+        // kind and a label per domain would be ink saying nothing.
+        name: '',
+        detail: `${domain.to - domain.from} bins · weaker boundary prominence ${domain.strength.toFixed(3)}`,
+      })
+    }
+  }
+  if (count === 0) return null
+  return {
+    count,
+    output: {
+      kind: 'intervals',
+      id: 'insulation-domains',
+      label: 'Insulation domains',
+      payload: { kind: 'features', data: builder.finish() },
+    },
   }
 }
 

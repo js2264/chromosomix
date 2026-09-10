@@ -79,6 +79,7 @@ import {
   parseBedpe,
   sniffFormat,
 } from '../annotations/parse'
+import { formatIntervals } from '../annotations/export'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { contigIndexOf } from '../genome/naming'
@@ -692,6 +693,21 @@ async function writeOutputs(
   for (const output of result.outputs) {
     const stem = `${base}.${result.provenance.task}.${output.id}`
     await put(`${stem}.tsv`, outputToTsv(output, result.provenance))
+    // The same rule as the drawer's, which has carried a BED button beside every
+    // called interval set since there were any: a profile leaves as bedGraph and
+    // bigWig, a set of intervals leaves as BED. Only the first half was here, so
+    // a boundary set called in a shell came out as a TSV with a provenance
+    // header — readable, and not what bedtools takes.
+    if (output.kind === 'intervals') {
+      await put(
+        `${stem}.${output.payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
+        formatIntervals(output.payload, {
+          label: output.label,
+          file: result.provenance.framing.label,
+          created: result.provenance.createdAt,
+        }),
+      )
+    }
     if (output.kind === 'profile') {
       await put(`${stem}.bedGraph`, profileToBedGraph(output, contigs, result.provenance))
       // The same three arguments the drawer's own bigWig button passes, so the

@@ -244,6 +244,60 @@ export function callBoundaries(
   return kept
 }
 
+/**
+ * One domain: the span between two consecutive boundaries, in bins local to its
+ * contig, half-open.
+ *
+ * `from` is the bin the upstream boundary was called at and `to` is the bin the
+ * downstream one was called at, so consecutive domains **tile**: one ends where
+ * the next begins, and the boundary bin belongs to the domain below it. That is
+ * what makes a lane of them read as a segmentation rather than as a row of
+ * boxes with gaps, and it is what puts a domain's two corners on the two bins
+ * the calls were actually made at — which is what a scaled pileup lines up on.
+ */
+export interface Domain {
+  from: number
+  to: number
+  /** The weaker of the two boundaries that bound it. */
+  strength: number
+}
+
+/**
+ * The domains between a sequence's boundary calls.
+ *
+ * **Two boundaries make a domain; one makes nothing, and the ends of the
+ * sequence are not domains.** A chromosome with a single call has no interior
+ * to report, and running the first domain back to the telomere — or the last one
+ * on to it — would assert an edge the data never placed. So what comes back is
+ * the gaps *between* calls and nothing else, which on a sequence with `n` calls
+ * is `n - 1` domains.
+ *
+ * The strength is the **weaker** of the two edges, because a domain is only as
+ * well defined as its worse-supported side: reporting the stronger would let one
+ * good boundary vouch for a run of bad ones, and the score is what a reader
+ * ranks and filters the set on.
+ *
+ * Sorted here rather than assumed. {@link callBoundaries} already answers in bin
+ * order, but *consecutive* is the whole of what this computes, and a caller that
+ * had sorted by prominence — which is the other order a boundary list comes in —
+ * would otherwise get domains between calls that are not neighbours.
+ */
+export function domainsBetween(boundaries: readonly Boundary[]): Domain[] {
+  const order = [...boundaries].sort((a, b) => a.bin - b.bin)
+  const out: Domain[] = []
+  for (let i = 1; i < order.length; i++) {
+    const from = order[i - 1]
+    const to = order[i]
+    if (to.bin <= from.bin) continue
+    out.push({
+      from: from.bin,
+      to: to.bin,
+      strength: Math.min(from.prominence, to.prominence),
+    })
+  }
+  return out
+}
+
 /** How far the track climbs from `at` before falling below it again. */
 function climb(score: Float64Array, at: number, step: -1 | 1): number {
   const floor = score[at]

@@ -168,6 +168,25 @@ describe('running a task', () => {
     expect(text).toMatch(/^# framing: chrI:0-50000 at 1000 bp/m)
   })
 
+  it('writes a called interval set as BED beside its TSV', async () => {
+    reset()
+    // The drawer has carried a BED button beside every called interval set
+    // since there were any; the shell wrote only the TSV, so a boundary set
+    // called in a batch came out as a table with a provenance header — readable,
+    // and not what bedtools takes.
+    expect(
+      await main(['insulation', sample, '--out', out, '--quiet', '--prominence', '0']),
+    ).toBe(0)
+    const bed = await readFile(join(out, 'sample.insulation.insulation-boundaries.bed'), 'utf8')
+    const rows = bed.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      const [contig, start, end] = row.split('\t')
+      expect(contig).toMatch(/^chr/)
+      expect(Number(end)).toBeGreaterThan(Number(start))
+    }
+  })
+
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {
     reset()
     // `detect.ts` refuses a multi-resolution container at its root with a

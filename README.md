@@ -205,6 +205,7 @@ metacooler-run tasks
 ##       --call (default true)  Call boundaries from the minima
 ##       --prominence (default 0.2)  Minimum prominence
 ##       --spacing (default 0)  Minimum spacing
+##       --domains (default true)  Also the domains between them
 ## 
 ## compartments
 ##     Compartments (eigenvectors)

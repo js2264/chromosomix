@@ -12,6 +12,36 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **Diamond insulation calls the domains between its boundaries, and does it by
+  default.** A second overlay beside the calls: the span from each boundary to
+  the next, drawn as a segmentation the way the A/B compartment track is, and
+  exportable as BED like any other called interval set. A boundary set is half
+  an answer — everything downstream of insulation takes an *interval* rather
+  than a point, and the scaled pileup over these is the domain APA — so what
+  every reader was doing by hand (sort per sequence, pair the neighbours) is now
+  a tickbox, and it is ticked.
+
+  Three decisions in it. Consecutive domains **tile**: one ends where the next
+  begins, so the lane reads as a segmentation rather than as boxes with gaps,
+  and a domain's two corners sit on the bins the calls were actually made at,
+  which is what a scaled pileup lines up on. Each carries the **weaker** of its
+  two edges as its score, because a domain is only as well defined as its
+  worse-supported side and reporting the stronger would let one good boundary
+  vouch for a run of bad ones. And **two boundaries make a domain, one makes
+  nothing**: the two ends of every sequence are left out rather than run to the
+  telomere, which would assert an edge the data never placed.
+
+  On the yeast demo: 710 boundaries across 16 sequences, and 694 domains — one
+  fewer per sequence, which is what the arithmetic says it should be.
+
+- `metacooler-run` writes a called interval set as **BED** beside its TSV, the
+  way it already wrote bedGraph and bigWig beside a profile's. The drawer has
+  carried a BED button since there were called intervals at all; a batch run got
+  a TSV with a provenance header, which is readable and is not what bedtools
+  takes.
+
 ### Fixed
 
 - **The domain pileup — APA over a set of TADs, scaled — was laid out from the

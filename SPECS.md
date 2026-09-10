@@ -3910,6 +3910,15 @@ is on screen must not change what an O/E is taken against. *Coverage and margina
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
 artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
+**It calls the domains between those boundaries too, and by default**: the span from each call to the
+next, as a second overlay beside the points. That is not a second algorithm — it is the eight lines of
+pairing that every reader was writing by hand — and it is on by default because a boundary set is half
+an answer: everything downstream of insulation takes an *interval* rather than a point, and the scaled
+pileup over those intervals is the domain APA. Consecutive domains **tile**, so the lane reads as a
+segmentation the way the A/B track does, and each carries the **weaker** of its two edges as its score,
+because a domain is only as well defined as its worse-supported side. Two boundaries make a domain and
+one makes nothing: the two ends of a sequence are left out rather than run to the telomere, which would
+assert an edge the data never placed.
 *4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
 as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
 **over expected**, where "expected" means the anchor's own sequence's decay in cis and the mean of what
