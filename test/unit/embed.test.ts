@@ -1,5 +1,5 @@
 /**
- * The two strings an embed is configured with, and the one it is driven by.
+ * The three strings an embed is configured with, and the one it is driven by.
  *
  * `readMounting` reads a query string and `mergeState` reads a message from
  * another origin, and both are the same kind of code: a value from outside
@@ -21,8 +21,8 @@ const AT = 'https://viewer.example/app/'
 
 describe('reading a mount', () => {
   it('is a plain window when nothing is asked for', () => {
-    expect(readMounting('', AT)).toEqual({ embed: false, config: null })
-    expect(readMounting('?other=1', AT)).toEqual({ embed: false, config: null })
+    expect(readMounting('', AT)).toEqual({ embed: false, config: null, hub: null })
+    expect(readMounting('?other=1', AT)).toEqual({ embed: false, config: null, hub: null })
   })
 
   it('takes the key being present as the answer', () => {
@@ -65,11 +65,41 @@ describe('reading a mount', () => {
     )
   })
 
-  it('reads both keys off one query string', () => {
-    expect(readMounting('?embed=1&config=s.json&edges=e.tsv', AT)).toEqual({
+  it('reads every key off one query string', () => {
+    expect(readMounting('?embed=1&config=s.json&hub=h.json&edges=e.tsv', AT)).toEqual({
       embed: true,
       config: 'https://viewer.example/app/s.json',
+      hub: 'https://viewer.example/app/h.json',
     })
+  })
+
+  /**
+   * `?hub=` is the third mounting parameter (§24.2), and it is read with the
+   * same two rules `config` is: resolved against the page, and kept only when
+   * it comes out as something this app can fetch. The rules are shared code
+   * rather than written twice, and these assertions are what says so.
+   */
+  it('resolves a hub against the page it was named on', () => {
+    expect(readMounting('?hub=shelf.json', AT).hub).toBe('https://viewer.example/app/shelf.json')
+    const url = 'https://raw.githubusercontent.com/js2264/metacooler.js/hubs/4dn.json'
+    expect(readMounting(`?hub=${encodeURIComponent(url)}`, AT).hub).toBe(url)
+  })
+
+  it('reads a gs:// or s3:// hub as the https URL it stands for (§24.5)', () => {
+    expect(readMounting('?hub=gs%3A%2F%2Fbucket%2Fshelf.json', AT).hub).toBe(
+      'https://storage.googleapis.com/storage/v1/b/bucket/o/shelf.json?alt=media',
+    )
+    expect(readMounting('?config=s3%3A%2F%2Fbucket%2Fsession.json', AT).config).toBe(
+      'https://bucket.s3.amazonaws.com/session.json',
+    )
+  })
+
+  it('refuses a hub that is not something to fetch', () => {
+    for (const named of ['javascript:alert(1)', 'data:application/json,{}', 'file:///etc/passwd']) {
+      expect(readMounting(`?hub=${encodeURIComponent(named)}`, AT).hub).toBeNull()
+    }
+    expect(readMounting('?hub=', AT).hub).toBeNull()
+    expect(readMounting('?hub=http%3A%2F%2F', AT).hub).toBeNull()
   })
 })
 

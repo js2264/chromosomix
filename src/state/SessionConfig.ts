@@ -39,6 +39,7 @@ import type { Bookmark } from '../annotations/bookmarks'
 import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
+import { canonicalUrl } from '../sources/rewrite'
 import type { ViewState } from '../types'
 import {
   MAP_NAMES_SCOPE,
@@ -519,6 +520,18 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
 export type ConfigRefusal =
   | { reason: 'not-json' }
   | { reason: 'not-a-workspace' }
+  /**
+   * A JSON file that is not a **hub** (§24.1, `state/hub.ts`).
+   *
+   * Its own reason rather than a second use of `not-a-workspace`, on the
+   * argument the docstring above makes about the other two: the two formats
+   * arrive through different doors and are written by different things — a
+   * workspace by the save button, a hub by `scripts/make_hub.py` or by hand —
+   * so a reader who pasted a workspace URL into the hub box has to be told
+   * which of the two they are holding. One sentence saying "not a workspace"
+   * about a file that *is* one sends them to inspect the wrong thing.
+   */
+  | { reason: 'not-a-hub' }
   | { reason: 'newer'; version: number; producer?: string }
 
 /**
@@ -551,6 +564,17 @@ export function refusalMessage(refusal: ConfigRefusal, label: string): string {
       `${label} was saved by a newer version of the viewer${from}, in workspace format ` +
       `${refusal.version}. This build reads format ${CONFIG_VERSION}. Update the viewer, or ` +
       'ask for the session to be saved again from this one.'
+    )
+  }
+  if (refusal.reason === 'not-a-hub') {
+    // Names the shape rather than only the failure, because a hub is the one of
+    // these formats a reader may well be about to write by hand — it is four
+    // keys over a list — and "not a hub" with nothing after it is a message
+    // they can do nothing with.
+    return (
+      `${label} is a JSON file but not a hub — it does not name itself as one. ` +
+      'A hub declares {"kind": "metacooler.hub", "version": 1, "entries": [...]}, and ' +
+      'scripts/make_hub.py writes one.'
     )
   }
   return (
@@ -785,8 +809,14 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
       // already refused an empty `state.uri`, so this is a track naming nothing.
       return uri
     }
-    if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return uri
-    return formatUri(new URL(parsed.path, base).href, parsed.group)
+    // Canonicalised either way, because both roads end in a URI this session
+    // will open and write into its own links (SPECS §24.5). A published
+    // workspace may name `gs://` or a Drive share link absolutely, and one
+    // resolved against a config's own URL cannot become either — but running the
+    // table over both is one call and keeps the rule *every URI is canonical*
+    // true without a caller having to know which branch it took.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return canonicalUrl(uri)
+    return canonicalUrl(formatUri(new URL(parsed.path, base).href, parsed.group))
   }
 
   // Through the deck's own pair, never a second `|` splitter written here. The

@@ -24,6 +24,7 @@ import { button, el, fmt } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { bucketBrowseButton } from './browseButton'
 import type { OpenResult } from '../worker/protocol'
+import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from './labels'
 
 /** What the card is showing right now. */
@@ -142,7 +143,10 @@ export class CompareCard {
   })
 
   private openUrl(): void {
-    const url = this.urlInput.value.trim()
+    // The same rewrite the picker's box applies, for the same reason: what is
+    // typed here becomes a URI in the session and in every link written out of
+    // it, so it has to be the form that opens (SPECS §24.5).
+    const url = canonicalUrl(this.urlInput.value.trim())
     if (url !== '') this.props.onOpen({ kind: 'remote', url })
   }
 

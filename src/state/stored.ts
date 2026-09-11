@@ -29,10 +29,14 @@
  * the callers in front of them.
  */
 
+import { readClientId } from '../auth/google'
 import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
+import { readHubRows } from './hubs'
+import { storedLines as driveStoredLines } from './drives'
+import { storedLines as dropboxStoredLines } from '../auth/dropbox'
 import { actions, dayOf, forgetActions } from './actions'
 
 /** The one prefix every key this app writes begins with. */
@@ -75,11 +79,12 @@ function count(n: number, one: string, many: string): string {
 /**
  * What is being kept, as lines a dialog can print.
  *
- * Counts rather than contents, with one deliberate exception: bucket keys are
- * named outright. Every other line describes something whose loss costs a
- * reader a preference; that one describes a secret, and a reader deciding
- * whether to press "forget everything" on a borrowed machine needs to know it is
- * there without having to press it to find out.
+ * Counts rather than contents, with three deliberate exceptions: granted files,
+ * connected folders and connected hubs are named, and bucket keys are called
+ * what they are. Every other line describes something whose loss costs a reader
+ * a preference; those describe what this browser knows about the reader's work,
+ * and somebody deciding whether to press "forget everything" on a borrowed
+ * machine needs to know it is there without having to press it to find out.
  */
 export async function storedItems(): Promise<StoredItem[]> {
   const items: StoredItem[] = []
@@ -152,25 +157,91 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
+  // Named rather than counted, on the rule the folders line follows: a hub is
+  // somewhere the reader *connected to*, and the labels are the only part of it
+  // worth reading back — a count would say a thing has been kept without saying
+  // what. Nothing secret is in a row (a label and a URL), so the whole of it can
+  // be shown; what it discloses is which lab's shelf this browser has been at,
+  // which is exactly the fact a reader on a borrowed machine came here for.
+  const hubs = readHubRows()
+  if (hubs.length > 0) {
+    items.push({
+      label: 'Hubs you connected',
+      detail: `${hubs.map((row) => row.label).join(', ')} — catalogue URLs, fetched only when ` +
+        'you open one',
+    })
+  }
+
+  // Remembered Drive folders (§24.9): named by label, the way folders are.
+  items.push(...driveStoredLines())
+  // The Dropbox app key (§24.9): a credential, named the way the bucket keys are.
+  items.push(...dropboxStoredLines())
+
   const local = localKeys()
-  const buckets = local.filter((key) => key === `${PREFIX}buckets`)
-  // The console's own key is counted on its own line above, so counting it here
-  // as well would be one record described twice. Its three *preferences* — the
-  // height, the fold and the output toggle — belong in this count and stay in
-  // it: they are settings like any other.
-  const listed = local.filter((key) => key === `${PREFIX}actions`)
-  const preferences = local.length - buckets.length - listed.length
+  // The keys that have a line of their own above or below, so none is also
+  // counted as a *preference*: a reader told "3 settings — theme, column
+  // widths, overlays" when one of the three is their bucket secret has been
+  // told something false. The console's key (§23) is among them for the same
+  // reason — its own line above counts it — while its three *preferences*, the
+  // height, the fold and the output toggle, are settings like any other and
+  // stay in this count.
+  const named = local.filter(
+    (key) =>
+      key === `${PREFIX}buckets` ||
+      key === `${PREFIX}access` ||
+      key === `${PREFIX}hubs` ||
+      key === `${PREFIX}google` ||
+      key === `${PREFIX}drives` ||
+      key === `${PREFIX}dropbox` ||
+      key === `${PREFIX}actions`,
+  )
+  const access = local.filter((key) => key === `${PREFIX}access`)
+  const preferences = local.length - named.length
   if (preferences > 0) {
     items.push({
       label: 'Preferences',
       detail: `${count(preferences, 'setting', 'settings')} — theme, column widths, overlays`,
     })
   }
-  if (buckets.length > 0) {
+  if (named.includes(`${PREFIX}buckets`)) {
     items.push({
       label: 'Bucket keys',
       // Named, not counted. See the docstring above.
       detail: 'Access keys for private buckets, stored in this browser in plain text',
+    })
+  }
+  if (access.length > 0) {
+    items.push({
+      label: 'Google API key',
+      // The second secret, and named for the first one's reason: it is a
+      // credential to the reader's own Google project, it is readable by any
+      // script on this origin, and a reader on a borrowed machine should not
+      // have to press "forget everything" to find out it is there. Its own line
+      // rather than a second sentence under Bucket keys, because a reader who
+      // set one and not the other is owed a screen that says which.
+      //
+      // The bearer token a signed-in account produces is deliberately *not*
+      // here: it is held in memory and never written, so there is nothing on
+      // this machine for this screen to account for (SPECS §24.7).
+      detail: 'Google API key, stored in this browser in plain text',
+    })
+  }
+
+  // The client id, and it is the one row on this screen that is **printed in
+  // full**. Every other named line withholds its value because the value is a
+  // secret; a client id is the opposite — it is published in the page of every
+  // site that uses Google sign-in, it authorises nothing on its own, and the
+  // only question a reader has about it is *which project has this browser been
+  // told to sign in to*, which a count cannot answer. Listed even so, because
+  // "forget everything" removes it and a screen that claims to list what is kept
+  // must not quietly leave one out.
+  const clientId = readClientId()
+  if (clientId !== null) {
+    items.push({
+      label: 'Google client id',
+      detail:
+        `${clientId} — your lab’s OAuth client, not a secret. The token signing in with it ` +
+        'produces is held in memory only and is never stored.',
     })
   }
 

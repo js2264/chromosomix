@@ -1,0 +1,9 @@
+{
+  "@type": ["HTTPNotFound", "Error"],
+  "code": 404,
+  "description": "The resource could not be found.",
+  "detail": "/search/?type=ExperimentSetReplicate&format=json&limit=all",
+  "name": "Search",
+  "status": "error",
+  "title": "Not Found"
+}

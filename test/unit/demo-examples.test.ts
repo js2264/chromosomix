@@ -16,8 +16,9 @@
  * can be made without the network, and makes a missing file a red CI run rather
  * than a broken landing page.
  *
- * The catalogue is now a list of **published sessions** rather than of data
- * files, which puts one more link in the chain and one more way to break it: a
+ * The catalogue is now a **hub** whose rows are published sessions rather than
+ * a list of data files, which puts one more link in the chain and one more way
+ * to break it: a
  * session names a file *and every track around it*, by relative name, and a
  * renamed bigWig is a session that opens to a map with six error rows beside
  * it. So each config is parsed with the reader's own parser, resolved as the
@@ -30,16 +31,20 @@
  * entries had gone missing would pass a file-exists check and fail here.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 
 import {
   DEMO_ANNOTATION_FILES,
   DEMO_BUCKET,
   DEMO_FILES,
+  builtinHubs,
+  clearShelves,
   demoAnnotationsFor,
   demoAnnotationsToOffer,
+  registerShelf,
 } from '../../src/ui/examples'
+import { HUB_KIND, HUB_VERSION, type Hub } from '../../src/state/hub'
 import {
   isRefusal,
   refusalMessage,
@@ -332,5 +337,171 @@ describe('the annotations published beside a demo map', () => {
       expect(demoAnnotationsToOffer(other, { restoring: false })).toEqual([])
       expect(demoAnnotationsToOffer(other, { restoring: true })).toEqual([])
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The same catalogue, as the hub the picker actually offers
+// ---------------------------------------------------------------------------
+
+/**
+ * The Demos hub is the fourth thing that can drift from `demo/`, and the one
+ * nothing else here watches.
+ *
+ * `DEMO_FILES` is checked file by file above, and the hub is built from the
+ * same list — but it is built into *URIs*, with a base concatenated on the
+ * front, and that is a second place for a name to be wrong in a way no `.json`
+ * on disk would show. So every workspace row is taken back apart and required
+ * to name a file that exists, which is exactly the assertion the rest of this
+ * file makes about the list it came from.
+ */
+describe('the Demos hub', () => {
+  /** The inline hub, which needs no window and no network to build. */
+  function demos(): Hub {
+    const ref = builtinHubs().find((held) => held.id === 'demos')
+    expect(ref, 'the built-in list no longer offers the demos').toBeDefined()
+    expect(ref?.hub, 'the demos hub must be inline: it is the one that costs no request').toBeDefined()
+    return ref?.hub as Hub
+  }
+
+  it('is a hub of this format, named, with its columns declared', () => {
+    const hub = demos()
+    expect(hub.kind).toBe(HUB_KIND)
+    expect(hub.version).toBe(HUB_VERSION)
+    expect(hub.name).not.toBe('')
+    expect(hub.columns.map((column) => column.key)).toEqual([
+      'assembly',
+      'biosource',
+      'assay',
+      'lab',
+    ])
+  })
+
+  it('offers every published workspace, and nothing that is not one', () => {
+    const workspaces = demos().entries.filter((entry) => entry.kind === 'workspace')
+    expect(workspaces).toHaveLength(DEMO_FILES.length)
+    for (const entry of workspaces) {
+      expect(entry.uri, `${entry.label} is a workspace row that does not name a .json`).toMatch(
+        /\.metacooler\.json$/,
+      )
+    }
+  })
+
+  /**
+   * The assertion this whole block exists for: a row names a file that is here.
+   *
+   * A renamed demo is a landing page whose first table 404s on click, and the
+   * bucket is somewhere no test can reach — so "the file is on disk" is the
+   * strongest true statement available, and it is the same one
+   * `scripts/publish-demo.sh` makes true of the bucket.
+   */
+  it('names a file that is in demo/ for every workspace row', () => {
+    for (const entry of demos().entries) {
+      if (entry.kind !== 'workspace') continue
+      const under = entry.uri.split('/demo/').pop() ?? entry.uri
+      expect(
+        DEMO_FILES.includes(under),
+        `the Demos hub offers ${entry.uri}, which is not one of the published workspaces`,
+      ).toBe(true)
+      expect(existsSync(`${DIR}${under}`), `${under} is offered by the hub but not in demo/`).toBe(
+        true,
+      )
+    }
+  })
+
+  it('gives every row an absolute URI under the published prefix', () => {
+    for (const entry of demos().entries) {
+      // An inline hub has no URL of its own to be relative to, so its entries
+      // must already be absolute — `resolveHub` has nothing to fix here.
+      expect(entry.uri, `${entry.label} is not absolute`).toMatch(/^https?:\/\//)
+    }
+    for (const entry of demos().entries) {
+      if (entry.kind !== 'workspace') continue
+      expect(entry.uri.startsWith(DEMO_BUCKET)).toBe(true)
+    }
+  })
+
+  it('fills the assembly column on every row it ships, and a note', () => {
+    for (const entry of demos().entries) {
+      expect(entry.fields?.['assembly'], `${entry.label} says nothing about its assembly`).toBeTruthy()
+      expect(entry.note, `${entry.label} has no provenance`).toBeTruthy()
+    }
+  })
+
+  /**
+   * Two rows that are not on the lab's bucket, which is what they are for.
+   *
+   * A demo folder this project controls end to end cannot show that a reader's
+   * *next* file needs nobody's permission. These two can, and a size on each is
+   * what lets the table say what the 2.2 GB row costs before it is clicked.
+   */
+  it('offers two 4DN open-data maps beside the lab’s own', () => {
+    const foreign = demos().entries.filter((entry) => !entry.uri.startsWith(DEMO_BUCKET))
+    expect(foreign).toHaveLength(2)
+    for (const entry of foreign) {
+      expect(entry.kind).toBe('map')
+      expect(entry.uri).toContain('4dn-open-data-public')
+      expect(entry.size).toBeGreaterThan(0)
+      expect(entry.fields?.['assembly']).toBe('GRCh38')
+    }
+  })
+
+  it('points the two generated hubs at the branch the workflow publishes', () => {
+    for (const id of ['4dn', 'encode']) {
+      const ref = builtinHubs().find((held) => held.id === id)
+      expect(ref?.builtin).toBe(true)
+      // A URL and no inline hub: nothing is fetched until a reader chooses one.
+      expect(ref?.hub).toBeUndefined()
+      expect(ref?.url, `the ${id} hub must be read from the hubs branch`).toMatch(
+        /^https:\/\/raw\.githubusercontent\.com\/.+\/hubs\/.+\.json$/,
+      )
+    }
+  })
+})
+
+/**
+ * A shelf a hub row brought with it, answered through the same question.
+ *
+ * `registerShelf` exists so that `Session` needs no idea a hub exists: the
+ * Tracks card asks one question — what is published beside this map — and a
+ * hub's `tracks` and the demo folder's ten files are two answers to it.
+ */
+describe('a shelf registered by a hub row', () => {
+  const map = 'https://4dn.example/maps/a.mcool'
+
+  afterEach(() => {
+    clearShelves()
+  })
+
+  it('is offered for the file it was registered against', () => {
+    registerShelf(map, [{ label: 'CTCF', url: 'https://4dn.example/maps/ctcf.bw' }])
+    expect(demoAnnotationsFor(map)).toEqual([
+      { file: 'ctcf.bw', label: 'CTCF', url: 'https://4dn.example/maps/ctcf.bw' },
+    ])
+    // And through the same gate the demo shelf goes through, so a restored
+    // session bringing its own tracks back is not offered these either.
+    expect(demoAnnotationsToOffer(map, { restoring: true })).toEqual([])
+    expect(demoAnnotationsToOffer(map, { restoring: false })).toHaveLength(1)
+  })
+
+  it('answers for the same file opened at one of its entries', () => {
+    // A collection opened at its root lands on an entry, so the URI the session
+    // ends up on is not the one the hub row carried.
+    registerShelf(map, [{ label: 'CTCF', url: 'https://4dn.example/maps/ctcf.bw' }])
+    expect(demoAnnotationsFor(`${map}::resolutions/5000`)).toHaveLength(1)
+  })
+
+  it('wins over the file-name table rather than adding to it', () => {
+    // A specific answer beats a general one: the publisher named these beside
+    // *this* URI, where the table below matches on a file name.
+    const demo = 'https://example.org/demo/Yeast_microC_G2M_1kb.cool'
+    expect(demoAnnotationsFor(demo).length).toBeGreaterThan(1)
+    registerShelf(demo, [{ label: 'only this', url: 'https://example.org/demo/one.bw' }])
+    expect(demoAnnotationsFor(demo).map((link) => link.label)).toEqual(['only this'])
+  })
+
+  it('leaves every other file alone', () => {
+    registerShelf(map, [{ label: 'CTCF', url: 'https://4dn.example/maps/ctcf.bw' }])
+    expect(demoAnnotationsFor('https://4dn.example/maps/b.mcool')).toEqual([])
   })
 })

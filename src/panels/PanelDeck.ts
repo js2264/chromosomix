@@ -103,6 +103,7 @@ import { ViewportLock, spansAgree, type LockUnit } from './lock'
 import type { PickHandlers } from '../ui/mapPick'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import { LANE_EDGES } from '../annotations/types'
+import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from '../ui/labels'
 
 /** The id the lock knows the session's own map by. */
@@ -1819,7 +1820,10 @@ export class PanelDeck {
   }
 
   private addUrl(): void {
-    const url = this.urlInput.value.trim()
+    // Canonicalised here, where the text becomes a URI: a deck member is written
+    // into `?maps=` and travels in every link this session writes, so what is
+    // stored has to be the address that opens (SPECS §24.5).
+    const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     this.urlInput.value = ''
     this.add({ kind: 'remote', uri: url })

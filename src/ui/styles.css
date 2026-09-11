@@ -4864,8 +4864,176 @@ canvas.is-frozen {
   margin-top: 1.5rem;
 }
 
-.select-examples {
-  min-width: min(22rem, 100%);
+/* --- the hubs section (§24.2) -------------------------------------------
+   A table, not the dropdown this replaced: six hundred rows are chosen by
+   filtering on assembly and biosource, which a list of labels cannot be
+   narrowed by. Built out of the folder view's parts wherever they fit — the
+   same bordered, scrolling well, the same one-line count underneath, the same
+   dimmed monospace size — because the two answer the same question from two
+   different kinds of place and a reader should not have to learn both. */
+
+.hub-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.hub-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hub-select {
+  min-width: min(16rem, 100%);
+}
+
+.hub-url {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+/* The status line and whatever is offered beside it — today, "remember this
+   hub". One row so the offer sits with the sentence that earned it rather than
+   below the table it is about. */
+.hub-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.hub-status {
+  margin: 0;
+}
+
+.hub-status:empty {
+  display: none;
+}
+
+.hub-error {
+  color: var(--danger);
+}
+
+/* One box for the name, then one per column the hub declares. They wrap rather
+   than shrink: four two-character boxes are not a filter row, they are a
+   puzzle. */
+.hub-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hub-filter {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+/* Bounded and scrolling, exactly as a folder listing is, and for the same
+   reason: a hub may hold six hundred rows and the picker must not become a
+   page. Sideways too, because a hub with six columns is wider than a phone and
+   the alternative is a table with the note column crushed to one word a line. */
+.hub-rows {
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.hub-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+}
+
+/* Sticky, because the columns are what the rows are being read *by*: scrolling
+   past the header in a six-column table leaves five cells of free text with
+   nothing to say which is the assay. */
+.hub-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hub-th-on {
+  color: var(--accent);
+}
+
+.hub-sort {
+  font: inherit;
+  font-weight: inherit;
+}
+
+.hub-row {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.hub-row:last-child {
+  border-bottom: none;
+}
+
+.hub-row:hover {
+  background: var(--accent-soft);
+}
+
+.hub-cell {
+  padding: 0.3rem 0.5rem;
+  vertical-align: top;
+}
+
+.hub-cell-name {
+  /* The name is the column that should get the width, so everything else is
+     told not to take any it does not need. */
+  min-width: 14rem;
+}
+
+.hub-name {
+  text-align: left;
+}
+
+.hub-cell-size {
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.hub-cell-note {
+  color: var(--text-dim);
+  max-width: 28rem;
+}
+
+/* What opening the row produces, in one word. A badge rather than a column of
+   the same three strings because it is a *kind* and not a value: it changes
+   which application the reader is about to be in — a map, a browser, or a whole
+   saved session — and that is worth a mark the eye can sort on without reading. */
+.hub-badge {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.hub-badge-map {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hub-badge-workspace {
+  border-color: var(--ok);
+  color: var(--ok);
 }
 
 /* Last on the page now, so the space belongs above it rather than below. */

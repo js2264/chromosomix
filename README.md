@@ -18,7 +18,8 @@ server-side processing or data upload.
 - Tabbed sessions: Several genomes opened at once, as tabs. 
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
-- Cloud-based file access: Open files directly from local files, S3 buckets or any HTTP(S) server that supports range requests.
+- Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
+- Hubs: The picker offers shelves of named datasets — the demos, **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals — and any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
 - Console: A bottom panel recording every run, file opened and file written, each run written as the `metacooler-run` command that repeats it — one line per map, so a run over a deck is a line each. Copy or save a day of work as a shell script.
 
@@ -615,6 +616,14 @@ assert the correspondence has not degraded rather than pretend to an equality th
   what a reader of both documents needs.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
+- `docs/hubs.md` — publishing a hub: the file, the generator (`scripts/make_hub.py`, for a lab's
+  bucket or the 4DN and ENCODE portals), and the weekly workflow that keeps the two shipped hubs
+  fresh on the `hubs` branch.
+- `docs/remote-sources.md` — a design note on remote sources beyond S3: what juicebox.js does
+  for Dropbox, Google Drive, GCS, ENCODE, 4DN and the Aiden Lab server, measured against what this
+  viewer does today (the 4DN and ENCODE buckets already open unmodified), what each further
+  provider would cost, and the ways to arrive **pre-connected** to a public server with sessions
+  ready to open — a hub file and a generator script first.
 - `docs/deploy.md` — how the site is built and published, how it works offline, how past builds
   stay reachable, and how a release is cut.
 - `CHANGELOG.md` — what changed between versions. The running build names itself in

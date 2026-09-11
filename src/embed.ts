@@ -12,8 +12,8 @@
  *
  * So an embed says so, and this module is the one place that reads it:
  * `?embed=1` for the chrome-less mount, `?config=<url>` for the session to open
- * on arrival. Everything downstream asks {@link mounting} rather than parsing
- * the URL a second time.
+ * on arrival, `?hub=<url>` for the catalogue to land on (§24.2). Everything
+ * downstream asks {@link mounting} rather than parsing the URL a second time.
  *
  * ## Why the query string and not the hash
  *
@@ -23,7 +23,7 @@
  * living there would be erased the first time the reader clicked a genome, and
  * the second paint would be the full window inside a 600-pixel box. The
  * fragment says *what is being looked at* and is replaced as that changes; these
- * two say *how this page was mounted*, which no navigation can change. That is
+ * three say *how this page was mounted*, which no navigation can change. That is
  * the same distinction `Session.edgeListUrl` draws for `?edges=`, which is a
  * fact about where a file is published rather than about the picture of it.
  *
@@ -58,6 +58,8 @@
  * pass `embed=1`.
  */
 
+import { canonicalUrl } from './sources/rewrite'
+
 /** What the query string asks of this mount. */
 export interface Mounting {
   /** Chrome-less: one view, and none of the window around it. */
@@ -74,10 +76,26 @@ export interface Mounting {
    * self-contained enough to be copied to another bucket with its data.
    */
   readonly config: string | null
+  /**
+   * A hub to land on, absolute, or `null` (§24.2).
+   *
+   * The third parameter beside the two above, and the one that names a *shelf*
+   * rather than a picture: `?config=` says "open this figure", `?hub=` says
+   * "here is our catalogue, choose". A lab sends one link and colleagues land
+   * on its own list of maps, with the offer to keep it.
+   *
+   * It is read here, beside the other two, for the reason this module exists:
+   * how a page was mounted is a fact no navigation can change, so it lives in
+   * the query string where `App.writeHash` cannot erase it.
+   *
+   * Resolved and scheme-checked exactly as `config` is, and for exactly the
+   * same reason: this value is about to be handed to `fetch`.
+   */
+  readonly hub: string | null
 }
 
 /** The mount of a page that was not asked for anything in particular. */
-const PLAIN: Mounting = { embed: false, config: null }
+const PLAIN: Mounting = { embed: false, config: null, hub: null }
 
 /**
  * Read a query string as a mount.
@@ -91,12 +109,12 @@ const PLAIN: Mounting = { embed: false, config: null }
  * `?embed=true` — and off for the three spellings of "no", because a hand-edited
  * `embed=0` should mean what it says rather than being a truthy string.
  *
- * `config` is resolved against `base` so a self-hosted deployment can write
- * `?config=session.json` beside its own files, and is kept only when it comes
- * out `http:` or `https:`. That check is not ceremony: the value is a URL from
- * outside that this app is about to `fetch`, and the schemes that are not those
- * two are the ones with no server on the other end and a document of their own
- * to hand back.
+ * `config` and `hub` are resolved against `base` so a self-hosted deployment
+ * can write `?config=session.json` or `?hub=hub.json` beside its own files, and
+ * both are kept only when they come out `http:` or `https:`. That check is not
+ * ceremony: the value is a URL from outside that this app is about to `fetch`,
+ * and the schemes that are not those two are the ones with no server on the
+ * other end and a document of their own to hand back.
  */
 export function readMounting(search: string, base: string): Mounting {
   let params: URLSearchParams
@@ -108,17 +126,32 @@ export function readMounting(search: string, base: string): Mounting {
   const flag = params.get('embed')
   const embed = flag !== null && flag !== '0' && flag !== 'false' && flag !== 'off'
 
-  const named = params.get('config')
-  let config: string | null = null
-  if (named !== null && named !== '') {
-    try {
-      const url = new URL(named, base)
-      if (url.protocol === 'http:' || url.protocol === 'https:') config = url.href
-    } catch {
-      /* not a URL this page can resolve; the picker is the honest answer */
-    }
+  return {
+    embed,
+    config: fetchable(params.get('config'), base),
+    hub: fetchable(params.get('hub'), base),
   }
-  return { embed, config }
+}
+
+/**
+ * A query parameter naming something this page may fetch, or `null`.
+ *
+ * One function for `config` and `hub` rather than the check written twice: they
+ * are the same kind of value — an outside URL about to be handed to `fetch` —
+ * and the schemes that are not `http(s)` are the ones with no server on the
+ * other end and a document of their own to hand back.
+ */
+function fetchable(named: string | null, base: string): string | null {
+  if (named === null || named === '') return null
+  try {
+    // Canonicalised first (§24.5), so `?hub=gs://…` and `?config=s3://…` are
+    // the https URLs they stand for by the time the scheme is judged.
+    const url = new URL(canonicalUrl(named), base)
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.href
+  } catch {
+    /* not a URL this page can resolve; the picker is the honest answer */
+  }
+  return null
 }
 
 /** Memoised: the address does not change under a running page. */

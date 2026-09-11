@@ -129,6 +129,7 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
+import type { HubRef } from '../state/hub'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
@@ -147,7 +148,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { demoAnnotationsToOffer, demoExamples } from '../ui/examples'
+import { builtinHubs, demoAnnotationsToOffer } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
@@ -159,8 +160,9 @@ import {
   type MapNames,
 } from '../ui/mapNames'
 import { rungsOf } from '../ui/refine'
-import { credentialFor } from '../s3/credentials'
-import { signS3Request } from '../s3/sigv4'
+import { accessHeaders } from '../sources/access'
+import { canonicalUrl } from '../sources/rewrite'
+import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { rememberHandle } from '../state/handles'
 import { grantFor } from '../ui/chooseFiles'
@@ -809,7 +811,7 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files),
-      examples: demoExamples(),
+      hubs: builtinHubs(),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)
@@ -1102,6 +1104,10 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    // The picker outlives every file this session opens and is torn down with
+    // the tab, so its one subscription is released here rather than on each
+    // navigation back to it.
+    this.picker.destroy()
     this.minimap?.destroy()
     this.minimap = null
     this.analysis?.destroy()
@@ -1819,7 +1825,13 @@ export class Session {
    * after this line, which is the property worth having and the reason there is
    * no second door.
    */
-  async openConfigUrl(url: string): Promise<void> {
+  async openConfigUrl(rawUrl: string): Promise<void> {
+    // `?config=` is the other road a URL arrives on — a link, not a box — so the
+    // rewrite table runs here the way it runs in `inferSource` for `#uri=`
+    // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
+    // from the address that serves it, and the names inside it are then resolved
+    // against that address by `resolveConfig`, which canonicalises them too.
+    const url = canonicalUrl(rawUrl)
     this.showContent(loading(`Reading ${fileLabel(url)}`))
     this.host.sessionChanged(this)
     try {
@@ -1828,11 +1840,18 @@ export class Session {
       // figure — it names the files beside it, and every one of those is read
       // through the workers, which sign their own requests — so this fetch
       // being the one unsigned link would make the whole arrangement fail at
-      // its first step.
+      // its first step. The static headers ride along by the same argument: a
+      // workspace published on a Google host needs the API key its data needs
+      // (SPECS §24.7), and a bare link here fails exactly as an unsigned one
+      // would.
       const credential = credentialFor(url)
       const response = await fetch(url, {
-        headers:
-          credential === null ? {} : signS3Request({ method: 'GET', url, credential }),
+        headers: accessHeaders({
+          url,
+          method: 'GET',
+          headers: accessHeadersFor(url),
+          ...(credential === null ? {} : { credential }),
+        }),
       })
       if (!response.ok) {
         throw new Error(
@@ -1857,10 +1876,22 @@ export class Session {
    * The landing page and the Open-a-file dialog hand back the same two things,
    * so they go through the same door: a URL naming a *session* is fetched and
    * applied, anything else is a file. Routing one of them past this was how the
-   * dialog came to answer an example from the list with "this is not a cooler".
+   * dialog came to answer a row of the demos hub with "this is not a cooler".
    */
   async openPicked(uri: string, source: SourceSpec): Promise<void> {
     await this.openWithConfig(uri, source)
+  }
+
+  /**
+   * Land this tab's picker on a hub — what a `?hub=` link asks for (§24.2).
+   *
+   * Reached only from `App.restore`, and only for a window with nothing else to
+   * show, so the picker is the element that is about to be mounted. The load is
+   * the table's; this exists so `App` does not have to reach through a session
+   * into a view it does not own.
+   */
+  showHub(ref: HubRef): void {
+    this.picker.loadHub(ref)
   }
 
   /**
@@ -1872,8 +1903,8 @@ export class Session {
    */
   private async openWithConfig(uri: string, source: SourceSpec): Promise<void> {
     // A `.json` on a URL is a session, not a file to open: it is the one thing
-    // the picker's box and its example list can be handed that names a whole
-    // tab rather than a byte source. Checked before the pending config is
+    // the picker's box and its hub table can be handed that names a whole tab
+    // rather than a byte source. Checked before the pending config is
     // consumed, since this *produces* one — and only when there is none, so a
     // session that somehow named another session is refused as a file rather
     // than followed with the first one's workspace silently dropped.
@@ -3003,6 +3034,12 @@ export class Session {
       return
     }
     await this.addRemote(picked.uri, picked.source, placement, map)
+    // A backend that addresses files by id rather than by name says what the
+    // file is called (§24.9), and the map is named with it the way a reader
+    // would name it by hand (§16.10). Tracks keep the label their URL gives.
+    if (picked.name !== undefined && picked.name !== '' && routeOf(picked.uri) === 'map') {
+      this.renameMap(picked.uri, picked.name)
+    }
   }
 
   /**
@@ -6668,6 +6705,15 @@ export class Session {
         entries.length > 0 && uri !== undefined && source !== undefined
           ? (entry) => void this.open(`${splitUri(uri).path}::entries/${entry}`, source)
           : undefined,
+      // The open, run again, after a Google sign-in offered by the view itself
+      // (§24.7). Given whenever this failure was about a *file* — the view is
+      // what decides whether a sign-in is on offer at all, and it only is for a
+      // `401`/`403` from a Google host, so handing it the retry unconditionally
+      // adds no button anywhere else.
+      onSignedIn:
+        uri !== undefined && source !== undefined
+          ? () => void this.open(uri, source)
+          : undefined,
     })
     this.showContent(view.el)
   }
@@ -7413,10 +7459,16 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
  * being read unsigned.
  */
 export function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
-  const { address, bins } = splitBinsFragment(uri)
+  const { address, bins: named } = splitBinsFragment(uri)
   if (!isHicProMatrix(splitUri(address).path)) return source
   if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
-  if (bins === undefined) return source
+  if (named === undefined) return source
+  // The named half goes through the rewrite table on its own (SPECS §24.5): it
+  // is a URL somebody typed after a `#bins=`, and nothing else canonicalises it
+  // — `canonicalUrl` treats a fragment as opaque text, which is what makes it
+  // safe to carry one across a rewrite of the other half and is why the inner
+  // URL has to be asked separately.
+  const bins = canonicalUrl(named)
   // The fragment is stripped from the *source*, not from the URI. A `#` is
   // never sent to a server, so the fetch would have worked either way — but the
   // name is read off this URL to decide the file is a matrix at all, and

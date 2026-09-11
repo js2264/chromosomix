@@ -1,0 +1,183 @@
+name: Hubs
+
+# The two portal catalogues the picker's Hubs section offers (SPECS §24.3).
+# `scripts/make_hub.py` asks 4DN and ENCODE for every released contact map they
+# have, joins each file to the cell line, assay, assembly and lab that name it,
+# and writes one static JSON per portal. This workflow runs that once a week and
+# publishes the result.
+#
+# **Where the viewer reads it.** `src/ui/examples.ts` points the two built-in
+# hubs at
+#   https://raw.githubusercontent.com/<owner>/<repo>/hubs/4dn.json
+#   https://raw.githubusercontent.com/<owner>/<repo>/hubs/encode.json
+# which `raw.githubusercontent.com` serves with `Access-Control-Allow-Origin: *`
+# — so a browser on any origin can fetch them, and there is no backend, no
+# bucket and no secret anywhere in the arrangement (SPECS C1). A fork gets the
+# whole thing by running this workflow once: the URLs follow `github.repository`.
+#
+# **Why a branch and not the Pages site.** The site is built from `main` by
+# .github/workflows/deploy.yml on every push, so publishing a hub into it would
+# either mean a commit to `main` every week or a hub as stale as the last push.
+# A hub is data about somebody else's data and changes on their cadence, not
+# ours. An orphan branch is the cheapest mutable, CORS-enabled, publicly
+# readable place this repository already owns — the same reasoning, and the same
+# technique, as `pages-archive` in deploy.yml.
+#
+# **The first run has to be by hand.** Until it has happened the two URLs answer
+# 404, and the picker says so in those words ("not generated yet; the Hubs
+# workflow publishes it") rather than showing an error. To do it: Actions →
+# Hubs → Run workflow, on `main`. Nothing else needs setting up — no
+# secret, no branch to create, no Pages setting to change.
+#
+# What lands on the `hubs` branch:
+#   4dn.json, encode.json      the current pair, which is what the viewer reads
+#   index.json                 what is there, how many rows each has, and when
+#   archive/<name>-<date>.json every past run, so a figure can cite the shelf
+#                              it was chosen from
+
+on:
+  schedule:
+    # Mondays at 04:17 UTC. Off the hour on purpose: GitHub queues every cron
+    # that fires at :00, and a catalogue nobody is waiting for should not be in
+    # that queue.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+# One writer. Two runs — a Monday schedule and somebody pressing the button —
+# would each clone the branch, each commit on top of what they cloned, and the
+# second push would be rejected or would drop the first run's archive entry.
+# Never cancelled in flight: a half-published pair is worse than a stale one.
+concurrency:
+  group: hubs
+  cancel-in-progress: false
+
+env:
+  HUB_BRANCH: hubs
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to a minor, not '3.x'. The generator needs 3.9 or newer and
+      # nothing else — no pip install, by design, so that the week this breaks
+      # is never the week a dependency resolver changed its mind.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Date this run
+        id: stamp
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      # Both portals are asked even when the first one fails, so that one run
+      # reports the state of both rather than of whichever is listed first.
+      # Either failure then fails the job and nothing below runs — which is the
+      # whole point of exit 2: the generator answers 2 when a query came back
+      # empty, and an empty catalogue must never be published over a good one.
+      # `--check` re-reads what was written and validates it against the hub
+      # contract before this step is allowed to succeed, because a hub that is
+      # valid JSON and wrong parses, publishes, and draws an empty table.
+      #
+      # `out/` is gitignored, so running these two commands locally to inspect
+      # the result leaves nothing for a stray `git add -A` to pick up.
+      - name: Generate both hubs
+        run: |
+          set -uo pipefail
+          failed=0
+          for front in 4dn encode; do
+            echo "::group::$front"
+            python3 scripts/make_hub.py "$front" --out "out/$front.json" --timestamp --check \
+              || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
+
+      # Read back from the files rather than counted as they were written: the
+      # index has to describe what is about to be published, and the only thing
+      # that knows that for certain is the published bytes.
+      - name: Write the index
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import json
+          import pathlib
+
+          out = pathlib.Path("out")
+          hubs = []
+          for hub_id in ("4dn", "encode"):
+              hub = json.loads((out / f"{hub_id}.json").read_text(encoding="utf-8"))
+              hubs.append({
+                  "id": hub_id,
+                  "file": f"{hub_id}.json",
+                  "entries": len(hub["entries"]),
+                  "generatedAt": hub["generatedAt"],
+              })
+          now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+          index = {"generatedAt": now.isoformat().replace("+00:00", "Z"), "hubs": hubs}
+          (out / "index.json").write_text(
+              json.dumps(index, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(index, indent=2))
+          PY
+
+      # Ninety days of runs, independent of the branch. The branch is what the
+      # viewer reads and can be force-pushed or rewritten; this is the copy that
+      # can be downloaded from a run page when somebody asks what the shelf
+      # looked like on a particular Monday.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hubs-${{ steps.stamp.outputs.day }}
+          path: out/
+          retention-days: 90
+
+      # Shallow, because only the tip of the branch is of interest and a full
+      # clone of a repository carrying 250 MB of demo data in its history is not
+      # a thing to do weekly. Pushing from a shallow checkout is fine: its parent
+      # is the tip the remote already has. When the branch does not exist yet the
+      # directory is initialised as an orphan — no history, no `main` in it, and
+      # the first push creates the branch.
+      - name: Fetch the hubs branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$HUB_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$HUB_BRANCH" "$remote" published
+          else
+            echo "No $HUB_BRANCH branch yet — starting one."
+            mkdir published
+            git -C published init --quiet --initial-branch "$HUB_BRANCH"
+            git -C published remote add origin "$remote"
+          fi
+
+      # The dated copies are globbed rather than named from the stamp above: a
+      # run that starts at 04:17 and crosses midnight would have the generator
+      # write one date and this step look for another.
+      - name: Publish to the hubs branch
+        run: |
+          set -euo pipefail
+          mkdir -p published/archive
+          cp out/4dn.json out/encode.json out/index.json published/
+          cp out/4dn-*.json out/encode-*.json published/archive/
+          cd published
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          # `git diff --cached` needs a HEAD to compare against, and on the very
+          # first run there is not one yet — the orphan above has no commit. So
+          # the "nothing changed" shortcut is only taken when there *is* a
+          # previous commit; otherwise this is the branch's first, and it is
+          # always worth making.
+          if git rev-parse --verify --quiet HEAD >/dev/null && git diff --quiet --cached; then
+            echo "Nothing changed."
+          else
+            git commit --quiet -m 'hubs ${{ steps.stamp.outputs.day }}'
+            git push --quiet origin "HEAD:refs/heads/$HUB_BRANCH"
+          fi

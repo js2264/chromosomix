@@ -1,5 +1,6 @@
 /**
- * The one place a credential is attached to an outbound worker message.
+ * The one place a credential — of either kind — is attached to an outbound
+ * worker message.
  *
  * Remote sources are constructed all over the main thread — the URL box, the
  * compare card, a session config being resolved, a track row being restored
@@ -19,9 +20,23 @@
  * this: the field is called `source`, it is a discriminated union, and the
  * remote arm has a `url`. That is all this needs to know, which is why one
  * function serves both.
+ *
+ * ## Two credentials, stamped independently
+ *
+ * A bucket key **signs** and everything else on this road is **a header**
+ * (SPECS §24.7): a Google API key for the Drive and GCS JSON APIs, a bearer
+ * token for a signed-in account, a token from an institutional portal. They come
+ * from different stores, they are matched to a URL by different rules, and a URL
+ * can want one, both or neither — a `gs://` object under no bucket scope takes a
+ * header and no signature, and a private prefix on S3 takes the reverse. So they
+ * are looked up separately and stamped separately, and neither one being present
+ * is a reason to skip the other. That is the bug this shape exists to make
+ * impossible: an earlier draft returned as soon as it found a credential, which
+ * would have sent the API key on the files that did not need it and left it off
+ * the ones that did.
  */
 
-import { credentialFor } from './credentials'
+import { accessHeadersFor, credentialFor } from './credentials'
 import type { S3Credential } from './sigv4'
 
 /** The shape both protocols' remote arm shares. */
@@ -29,6 +44,8 @@ interface Remoteish {
   kind: string
   url?: unknown
   credential?: S3Credential
+  /** Static headers for this URL: an API key, a bearer token. */
+  headers?: Record<string, string>
   /**
    * The sidecar half of a two-file format, when the source has one.
    *
@@ -41,26 +58,35 @@ interface Remoteish {
 }
 
 /**
- * That source with a credential on it, or the same object when none applies.
+ * That source with whatever its URL needs on it, or the same object when it
+ * needs nothing.
  *
- * Split out of {@link withCredential} because a source can carry a second
- * source, and both have to be asked separately rather than the outer one
- * standing for the pair.
+ * Split out of {@link withAccess} because a source can carry a second source,
+ * and both have to be asked separately rather than the outer one standing for
+ * the pair.
  *
- * A source that already carries a credential is left exactly as it is: a caller
- * that knows its own — the bucket browser opening a file it just listed — must
- * not have it replaced by a lookup that could, in principle, resolve
- * differently.
+ * A source that already carries a field is left holding it: a caller that knows
+ * its own — the bucket browser opening a file it just listed — must not have it
+ * replaced by a lookup that could, in principle, resolve differently. Asked per
+ * field, so a source built with a credential still picks up the headers its host
+ * wants.
  */
-function signed(source: Remoteish): Remoteish {
+function stamped(source: Remoteish): Remoteish {
   if (source.kind !== 'remote' || typeof source.url !== 'string') return source
-  if (source.credential !== undefined) return source
-  const credential = credentialFor(source.url)
-  return credential === null ? source : { ...source, credential }
+  const credential = source.credential === undefined ? credentialFor(source.url) : null
+  const found = source.headers === undefined ? accessHeadersFor(source.url) : {}
+  const headers = Object.keys(found).length === 0 ? null : found
+  if (credential === null && headers === null) return source
+  return {
+    ...source,
+    ...(credential === null ? {} : { credential }),
+    ...(headers === null ? {} : { headers }),
+  }
 }
 
 /**
- * `message`, with a credential on its source — and on that source's sidecar.
+ * `message`, with a credential and a header bag on its source — and on that
+ * source's sidecar.
  *
  * Returns the message untouched — the same object, not a copy — when there is
  * nothing to add, which is every request in a session that has configured no
@@ -86,21 +112,20 @@ function signed(source: Remoteish): Remoteish {
  * `app/Session.ts` also stamps the bins as it builds them, which is not
  * redundant: this is the last moment the answer can be right, so a key added
  * *after* a pair was opened is picked up here on the next request. The two
- * compose safely — {@link signed} declines to touch a source that already
- * carries a credential, so whichever runs first wins and neither overwrites the
- * other.
+ * compose safely — {@link stamped} declines to replace a field a source already
+ * carries, so whichever runs first wins and neither overwrites the other.
  */
-export function withCredential<T>(message: T): T {
+export function withAccess<T>(message: T): T {
   if (typeof message !== 'object' || message === null) return message
   const source = (message as { source?: unknown }).source
   if (typeof source !== 'object' || source === null) return message
   const remote = source as Remoteish
 
-  const outer = signed(remote)
+  const outer = stamped(remote)
   const sidecar =
-    typeof remote.bins === 'object' && remote.bins !== null ? signed(remote.bins) : undefined
+    typeof remote.bins === 'object' && remote.bins !== null ? stamped(remote.bins) : undefined
 
-  // Identity, not deep equality: `signed` returns its argument unchanged when
+  // Identity, not deep equality: `stamped` returns its argument unchanged when
   // it has nothing to add, so an untouched pair is two reference comparisons
   // and no allocation at all.
   const outerSame = outer === remote
@@ -112,3 +137,13 @@ export function withCredential<T>(message: T): T {
     source: sidecarSame ? outer : { ...outer, bins: sidecar },
   }
 }
+
+/**
+ * The name this had when a bucket key was the only credential there was.
+ *
+ * Kept because it reads correctly at the call sites that predate the header bag
+ * and in the tests written against them, and because renaming a function is not
+ * a reason to touch a file. New code says {@link withAccess}, which is what it
+ * does.
+ */
+export const withCredential = withAccess

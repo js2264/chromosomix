@@ -1,0 +1,320 @@
+{
+  "@context": "/search/",
+  "@id": "/search/?type=ExperimentSetReplicate&field=award.project&field=processed_files&field=dataset_label&field=lab.display_title&field=experiments_in_set.experiment_type.display_title&field=experiments_in_set.biosample.biosource.organism.name&field=publications_of_set.display_title&format=json&limit=all",
+  "@type": ["Search"],
+  "clear_filters": "/search/?type=ExperimentSetReplicate",
+  "notification": "Success",
+  "title": "Search",
+  "total": 6,
+  "@graph": [
+    {
+      "@id": "/experiment-set-replicates/4DNESD117NVX/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "1f3b5a7c-9d2e-4f60-8a1b-0c4d6e8f2a35",
+      "display_title": "4DNESD117NVX",
+      "award": { "project": "External" },
+      "lab": { "display_title": "Erez Lieberman Aiden, BCM" },
+      "dataset_label": "Hi-C on RAD21-AID tagged HCT-116",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "in situ Hi-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "human" } }] }
+        }
+      ],
+      "publications_of_set": [{ "display_title": "Rao SSP et al. (2017) PMID:28985562" }],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFIM7ZVQOQ/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "000789fe-9a22-4280-a71c-7ad228fd4cac",
+          "accession": "4DNFIM7ZVQOQ",
+          "display_title": "4DNFIM7ZVQOQ.hic",
+          "file_format": { "display_title": "hic", "file_format": "hic" },
+          "file_type": "contact matrix",
+          "file_size": 839405381,
+          "genome_assembly": "GRCh38",
+          "higlass_uid": "Qd6oMfHtRcyR3mKcOYGDzQ",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/000789fe-9a22-4280-a71c-7ad228fd4cac/4DNFIM7ZVQOQ.hic",
+          "track_and_facet_info": {
+            "assay_info": "MboI",
+            "biosource_name": "HCT116 with Crispr generated mClover and AID-tagged RAD21",
+            "condition": "RAD21 not depleted",
+            "dataset": "Hi-C on RAD21-AID tagged HCT-116",
+            "experiment_bucket": "processed file",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "Erez Lieberman Aiden, BCM",
+            "lab_name": "4DN DCIC, HMS",
+            "replicate_info": "merged replicates",
+            "track_title": "contact matrix for HCT116 with Crispr generated mClover and AID-tagged RAD21 in situ Hi-C MboI"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNESNMAAN97/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "2c8d4e6f-1a3b-4c5d-9e7f-8a0b1c2d3e4f",
+      "accession": "4DNESNMAAN97",
+      "display_title": "4DNESNMAAN97",
+      "award": { "project": "4DN" },
+      "lab": { "display_title": "Job Dekker, UMMS" },
+      "dataset_label": "Hi-C on HFF cells - protocol variations",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "in situ Hi-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "human" } }] }
+        },
+        {
+          "experiment_type": { "display_title": "in situ Hi-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "human" } }] }
+        }
+      ],
+      "publications_of_set": [
+        { "display_title": "Akgol Oksuz B et al. (2021) PMID:34480151" },
+        { "display_title": "Calandrelli R et al. (2023) PMID:37845234" }
+      ],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFIMROE6N4/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "8f064770-6008-4f74-bfca-268d4a22d745",
+          "accession": "4DNFIMROE6N4",
+          "display_title": "4DNFIMROE6N4.hic",
+          "file_format": { "display_title": "hic", "file_format": "hic" },
+          "file_type": "contact matrix",
+          "file_size": 9989854388,
+          "genome_assembly": "GRCh38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/8f064770-6008-4f74-bfca-268d4a22d745/4DNFIMROE6N4.hic",
+          "track_and_facet_info": {
+            "assay_info": "DpnII",
+            "biosource_name": "HFFc6 (Tier 1)",
+            "dataset": "Hi-C on HFF cells - protocol variations",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "Job Dekker, UMMS",
+            "lab_name": "4DN DCIC, HMS",
+            "replicate_info": "merged replicates"
+          }
+        },
+        {
+          "@id": "/files-processed/4DNFIQ9FG7RR/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "00328169-edbc-4464-b48d-aa50cbe0f0cf",
+          "accession": "4DNFIQ9FG7RR",
+          "display_title": "4DNFIQ9FG7RR.mcool",
+          "file_format": { "display_title": "mcool", "file_format": "mcool" },
+          "file_type": "contact matrix",
+          "file_size": 530231938,
+          "genome_assembly": "GRCh38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/00328169-edbc-4464-b48d-aa50cbe0f0cf/4DNFIQ9FG7RR.mcool",
+          "track_and_facet_info": {
+            "assay_info": "DpnII",
+            "biosource_name": "HFFc6 (Tier 1)",
+            "dataset": "Hi-C on HFF cells - protocol variations",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "Job Dekker, UMMS",
+            "lab_name": "4DN DCIC, HMS",
+            "replicate_info": "merged replicates"
+          }
+        },
+        {
+          "@id": "/files-processed/4DNFIK9NBYGJ/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "000d68d9-0677-457d-bc11-afe233b517f9",
+          "accession": "4DNFIK9NBYGJ",
+          "display_title": "4DNFIK9NBYGJ.bw",
+          "file_format": { "display_title": "bw", "file_format": "bw" },
+          "file_type": "insulation score-diamond",
+          "file_size": 1014554,
+          "genome_assembly": "GRCh38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/000d68d9-0677-457d-bc11-afe233b517f9/4DNFIK9NBYGJ.bw",
+          "track_and_facet_info": {
+            "assay_info": "DpnII",
+            "biosource_name": "HFFc6 (Tier 1)",
+            "dataset": "Hi-C on HFF cells - protocol variations",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "Job Dekker, UMMS"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNESJ4CCZAB/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "3d9e5f70-2b4c-4d6e-8f90-1a2b3c4d5e6f",
+      "display_title": "4DNESJ4CCZAB",
+      "award": { "project": "4DN" },
+      "lab": { "display_title": "Job Dekker, UMMS" },
+      "dataset_label": "Micro-C on HFF cells",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "Micro-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "human" } }] }
+        }
+      ],
+      "publications_of_set": [{ "display_title": "Krietenstein N et al. (2020) PMID:32213324" }],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFIO2TD17P/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "011f38b8-aaf0-4ef7-96f5-6c6cba6cc2e1",
+          "accession": "4DNFIO2TD17P",
+          "display_title": "4DNFIO2TD17P.mcool",
+          "file_format": { "display_title": "mcool", "file_format": "mcool" },
+          "file_type": "contact matrix",
+          "genome_assembly": "GRCh38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/011f38b8-aaf0-4ef7-96f5-6c6cba6cc2e1/4DNFIO2TD17P.mcool"
+        }
+      ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNESFOADERB/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "4e0f6a81-3c5d-4e7f-9a0b-2c3d4e5f6a7b",
+      "display_title": "4DNESFOADERB",
+      "award": { "project": "4DN" },
+      "lab": { "display_title": "John Lis, CORNELL" },
+      "dataset_label": "HiC on S2 cells +/- Heat Shock",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "in situ Hi-C" },
+          "biosample": { "biosource": { "organism": { "name": "fruit fly" } } }
+        }
+      ],
+      "publications_of_set": [{ "display_title": "Ray J et al. (2019) PMID:31506350" }],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFIOTPSS3L/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "7386f953-8da9-47b0-acb2-931cba810544",
+          "accession": "4DNFIOTPSS3L",
+          "display_title": "4DNFIOTPSS3L.hic",
+          "file_format": { "display_title": "hic", "file_format": "hic" },
+          "file_type": "contact matrix",
+          "file_size": 260156130,
+          "genome_assembly": "dm6",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/7386f953-8da9-47b0-acb2-931cba810544/4DNFIOTPSS3L.hic",
+          "track_and_facet_info": {
+            "assay_info": "MboI",
+            "biosource_name": "S2",
+            "condition": "no heat shock",
+            "dataset": "HiC on S2 cells +/- Heat Shock",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "John Lis, CORNELL",
+            "replicate_info": "merged replicates"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNESLLTENG9/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "5f1a7b92-4d6e-4f80-ab1c-3d4e5f6a7b8c",
+      "display_title": "4DNESLLTENG9",
+      "award": { "project": "External" },
+      "lab": { "display_title": "Bing Ren, UCSD" },
+      "dataset_label": "Hi-C on GM12878 cells - protocol variations",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "Dilution Hi-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "human" } }] }
+        }
+      ],
+      "publications_of_set": [{ "display_title": "Selvaraj S et al. (2013) PMID:24185094" }],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFI7J8BQ4P/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "31811e40-e3ca-4456-8ba6-2ee66d6c7104",
+          "accession": "4DNFI7J8BQ4P",
+          "display_title": "4DNFI7J8BQ4P.hic",
+          "file_format": { "display_title": "hic", "file_format": "hic" },
+          "file_type": "contact matrix",
+          "file_size": 7328015360,
+          "genome_assembly": "GRCh38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/31811e40-e3ca-4456-8ba6-2ee66d6c7104/4DNFI7J8BQ4P.hic",
+          "track_and_facet_info": {
+            "assay_info": "HindIII",
+            "biosource_name": "GM12878",
+            "dataset": "Hi-C on GM12878 cells - protocol variations",
+            "experiment_type": "Dilution Hi-C",
+            "experimental_lab": "Bing Ren, UCSD",
+            "replicate_info": "merged replicates"
+          }
+        }
+      ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNES4TZF88L/",
+      "@type": ["ExperimentSetReplicate", "ExperimentSet", "Item"],
+      "uuid": "6a2b8c03-5e7f-4a91-bc2d-4e5f6a7b8c9d",
+      "display_title": "4DNES4TZF88L",
+      "award": { "project": "4DN" },
+      "lab": { "display_title": "Tomoko Yamada, NW" },
+      "dataset_label": "Hi-C on mouse cerebellar granule neurons",
+      "experiments_in_set": [
+        {
+          "experiment_type": { "display_title": "in situ Hi-C" },
+          "biosample": { "biosource": [{ "organism": { "name": "mouse" } }] }
+        }
+      ],
+      "processed_files": [
+        {
+          "@id": "/files-processed/4DNFI111EI3K/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "fe25da0b-0e94-426f-9e5c-25ea7ac560dc",
+          "accession": "4DNFI111EI3K",
+          "display_title": "4DNFI111EI3K.hic",
+          "file_format": { "display_title": "hic", "file_format": "hic" },
+          "file_type": "contact matrix",
+          "file_size": 1174405120,
+          "genome_assembly": "GRCm38",
+          "status": "released to project",
+          "track_and_facet_info": {
+            "assay_info": "MboI",
+            "biosource_name": "cerebellar granule neuron - 14 days old",
+            "dataset": "Hi-C on mouse cerebellar granule neurons",
+            "experiment_type": "in situ Hi-C",
+            "experimental_lab": "Tomoko Yamada, NW"
+          }
+        },
+        {
+          "@id": "/files-processed/4DNFIRZ9WSAO/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "b6f2c0a1-7d3e-4b85-9c1f-2e4a6b8d0f13",
+          "accession": "4DNFIRZ9WSAO",
+          "display_title": "4DNFIRZ9WSAO.pairs.gz",
+          "file_format": { "display_title": "pairs", "file_format": "pairs" },
+          "file_type": "contact list-replicate",
+          "file_size": 24831905126,
+          "genome_assembly": "GRCm38",
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b6f2c0a1-7d3e-4b85-9c1f-2e4a6b8d0f13/4DNFIRZ9WSAO.pairs.gz",
+          "track_and_facet_info": {
+            "assay_info": "MboI",
+            "biosource_name": "cerebellar granule neuron - 14 days old",
+            "experiment_type": "in situ Hi-C"
+          }
+        },
+        {
+          "@id": "/files-processed/4DNFIH8XQ2KM/",
+          "@type": ["FileProcessed", "File", "Item"],
+          "uuid": "c7a3d1b2-8e4f-4c96-ad20-3f5b7c9e1a24",
+          "accession": "4DNFIH8XQ2KM",
+          "display_title": "4DNFIH8XQ2KM.mcool",
+          "file_format": { "display_title": "mcool", "file_format": "mcool" },
+          "file_type": "contact matrix",
+          "file_size": 812004864,
+          "status": "released",
+          "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/c7a3d1b2-8e4f-4c96-ad20-3f5b7c9e1a24/4DNFIH8XQ2KM.mcool"
+        }
+      ]
+    }
+  ]
+}

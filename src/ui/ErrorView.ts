@@ -12,10 +12,22 @@
  * deliberately *not* the unknown-label error, so a user who types
  * `__unbinned__` learns that unassigned contigs are not a genome rather than
  * doubting a name they read in the file.
+ *
+ * ## One refusal has an answer that is not in the table
+ *
+ * A `401` or a `403` from `www.googleapis.com` or `storage.googleapis.com` is a
+ * `bad-uri` or a `remote-no-ranges` like any other, and the advice above it —
+ * host a public object, check the bucket key — is the wrong advice for it: the
+ * object is fine, the reader simply is not signed in, or the token this page
+ * held has run out (SPECS §24.7). So that pair of codes, and only from that pair
+ * of hosts, carries an extra line and the sign-in that resolves it. Everything
+ * else keeps the wording it had, which is why the test for this asserts the
+ * other host's refusal is *unchanged*.
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
 import { button, el } from './dom'
+import { GOOGLE_HOSTS, GOOGLE_SIGN_IN_AVAILABLE, googleState, signIn } from '../auth/google'
 
 export interface ErrorViewProps {
   error: unknown
@@ -25,6 +37,16 @@ export interface ErrorViewProps {
   onOpenEntry?(entry: string): void
   /** Offered when the failed action can simply be retried. */
   onRetry?(): void
+  /**
+   * The open to run again once a Google sign-in offered here has succeeded.
+   *
+   * Separate from {@link onRetry}, which is a *button* a caller offers when an
+   * action is repeatable and which most refusals deliberately do not get. This
+   * is not a button: it is what happens after the sign-in, because a reader who
+   * has just granted this page access to the file should not then have to find
+   * their way back to it.
+   */
+  onSignedIn?(): void
 }
 
 interface Guidance {
@@ -234,6 +256,35 @@ export class ErrorView {
         el('div', { class: 'entry-list' }, ...entries.map((entry) => button(entry, () => open(entry)))),
       )
     }
+    const google = googleRefusal(viewerError)
+    // Built whether or not it is used, and put in the tree only where a sign-in
+    // is actually offered: an empty `.inline-error` is a coloured pill with
+    // nothing in it, and `hidden` alone would leave one in every other refusal's
+    // markup for a stylesheet to get wrong later.
+    const signInError = el('p', { class: 'inline-error' })
+    signInError.hidden = true
+    // Pushed before `try again`, on purpose: repeating an unauthorised request
+    // is precisely what does not work, and a reader offered both reaches for
+    // whichever reads like the smaller step.
+    if (google !== null && google.offer !== null) {
+      const offer = google.offer
+      const signInButton = button(
+        offer === 'again' ? 'sign in again' : 'sign in',
+        () => {
+          signInError.hidden = true
+          signInButton.disabled = true
+          void signIn()
+            .then(() => props.onSignedIn?.())
+            .catch((cause: unknown) => {
+              signInError.textContent = cause instanceof Error ? cause.message : String(cause)
+              signInError.hidden = false
+              signInButton.disabled = false
+            })
+        },
+        { class: 'btn btn-primary' },
+      )
+      actions.push(signInButton)
+    }
     if (props.onRetry) actions.push(button('try again', props.onRetry))
     actions.push(button('open another file', props.onOpenFilePicker, { class: 'btn btn-quiet' }))
 
@@ -242,10 +293,117 @@ export class ErrorView {
       { class: 'view view-error' },
       el('h2', { class: 'error-title', text: guidance.title }),
       el('p', { class: 'error-message', text: error instanceof Error ? error.message : String(error) }),
-      el('ul', { class: 'advice' }, ...guidance.advice.map((line) => el('li', { text: line }))),
+      el(
+        'ul',
+        { class: 'advice' },
+        ...[...guidance.advice, ...(google === null ? [] : google.advice)].map((line) =>
+          el('li', { text: line }),
+        ),
+      ),
       detailBlock(viewerError),
       el('div', { class: 'error-actions' }, ...actions),
+      google !== null && google.offer !== null ? signInError : null,
     )
+  }
+}
+
+/**
+ * Whether this refusal is a Google host saying *not you*, and what to offer.
+ *
+ * Two things have to be true, and both are read off the detail the reader
+ * attached rather than off the prose: a status of `401` or `403`, and a host
+ * that is one of the two a sign-in produces a token for (SPECS §24.7). The host
+ * is taken from `detail.host` where the refusal carried one and parsed out of
+ * `detail.url` where it did not — the ranged-read refusals carry the URL and not
+ * the host, and a token that expires *mid-file* surfaces there rather than at
+ * the `HEAD`.
+ *
+ * `offer` is `null` where there is a story to tell and no button to press:
+ * nothing is stored to sign in *with*, the build cannot sign in at all, or this
+ * page is already signed in — in which case the token is not the problem and
+ * pressing the button again would get the same `403` from the same account.
+ */
+function googleRefusal(
+  error: ViewerError | null,
+): { advice: string[]; offer: 'in' | 'again' | null } | null {
+  if (error === null) return null
+  // The two codes a Google host's refusal can arrive under: `bad-uri` from the
+  // `HEAD` probe, which is where a file that was never authorised fails, and
+  // `remote-no-ranges` from a ranged read, which is where a token that ran out
+  // *mid-file* fails. `remote-cors` is not among them and cannot be: it is the
+  // refusal for a failure that carried no status at all.
+  if (error.code !== 'bad-uri' && error.code !== 'remote-no-ranges') return null
+  const status = error.detail['status']
+  if (status !== 401 && status !== 403) return null
+  // A request that carried a bucket key and was refused is a key problem, and
+  // both refusals above already say so in those words. GCS's XML host would take
+  // a bearer token as readily as a signature, so this is not about what the host
+  // accepts — it is about not answering "your key is wrong" with "sign in".
+  if (error.detail['signed'] === true) return null
+  const host = hostOfDetail(error.detail)
+  if (host === null || !(GOOGLE_HOSTS as readonly string[]).includes(host)) return null
+
+  const what = host === 'www.googleapis.com' ? 'Drive' : 'Cloud Storage'
+  if (!GOOGLE_SIGN_IN_AVAILABLE) {
+    return {
+      advice: [
+        `A ${status} from ${host} on a private ${what} file means the request was not ` +
+          'authorised, and this build cannot sign in to Google — an OAuth client is registered ' +
+          'against an http(s) origin, which neither the single-file build nor the desktop ' +
+          'build has. Open the file in the web build, or download it and drop it here.',
+      ],
+      offer: null,
+    }
+  }
+  const state = googleState()
+  if (!state.configured) {
+    return {
+      advice: [
+        `A ${status} from ${host} means this page was not authorised to read that ${what} ` +
+          'file. If it is private, signing in is what authorises it — and signing in needs the ' +
+          'client id your lab registered for this site, under Connect → A Google account.',
+      ],
+      offer: null,
+    }
+  }
+  if (state.signedIn) {
+    return {
+      advice: [
+        `This page is signed in to Google and ${host} still answered ${status}, so the token is ` +
+          'not what is missing: the account you signed in as cannot read that file — it has not ' +
+          'been shared with it — or the project’s Drive quota is spent for the day.',
+      ],
+      offer: null,
+    }
+  }
+  return state.expiresAt === null
+    ? {
+        advice: [
+          `A ${status} from ${host} on a private ${what} file is this page not being signed in. ` +
+            'Signing in grants it read access to your Drive and Cloud Storage for about an hour; ' +
+            'the token is held in memory and never stored.',
+        ],
+        offer: 'in',
+      }
+    : {
+        advice: [
+          `The Google token this page held expired, and ${host} answered ${status}. Signing in ` +
+            'again picks the file up where it was; nothing else about the session is lost.',
+        ],
+        offer: 'again',
+      }
+}
+
+/** The host a refusal names, directly or through the URL it carried. */
+function hostOfDetail(detail: Record<string, unknown>): string | null {
+  const host = detail['host']
+  if (typeof host === 'string' && host !== '') return host.toLowerCase()
+  const url = detail['url']
+  if (typeof url !== 'string') return null
+  try {
+    return new URL(url).host.toLowerCase()
+  } catch {
+    return null
   }
 }
 

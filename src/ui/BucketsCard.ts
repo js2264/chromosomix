@@ -95,7 +95,7 @@ class BucketsBody {
       // whatever a second resolution happens to pick.
       //
       // A public scope has none, and then the field is left off entirely rather
-      // than set to `null`: `withCredential` treats an absent one as "look it
+      // than set to `null`: `withAccess` treats an absent one as "look it
       // up", which resolves to the same nothing, and the wire shape stays what
       // every other unsigned open sends.
       const credential = credentialOf(scope)

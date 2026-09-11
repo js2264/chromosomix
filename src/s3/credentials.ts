@@ -291,6 +291,256 @@ export function credentialFor(
 }
 
 // ---------------------------------------------------------------------------
+// The other kind of credential: a header, not a signature
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the non-signing credentials live.
+ *
+ * A second key beside the bucket one, and not a second field on a scope, because
+ * these are not scoped to a prefix and never could be: a Google API key is an
+ * attribute of the *project* it was made in, and it is presented to two hosts
+ * this browser did not name — `www.googleapis.com` for Drive, the GCS JSON API
+ * for `gs://` — that no reader will ever have typed into a bucket dialog. Making
+ * it a scope would mean a scope with no bucket, which `addressOf` refuses and
+ * `s3/list.ts` would try to list.
+ */
+const ACCESS = 'metacooler-viewer:access'
+
+/**
+ * One stored access credential.
+ *
+ * A union of one member today, and written as one so it can take a second:
+ * `kind` is what tells a Google key apart from whatever an institutional portal
+ * turns out to need, and a row whose `kind` this build does not know is dropped
+ * by {@link readAccessRows} rather than guessed at.
+ *
+ * There is **exactly one `google-api-key` row at a time**. A key is a property of
+ * a project, a reader has one project, and a list would raise a question — which
+ * key for which host? — that has no answer the dialog could ask for.
+ */
+export interface AccessRow {
+  id: string
+  kind: 'google-api-key'
+  key: string
+}
+
+/**
+ * The stored access rows, validated the way {@link readScopes} validates scopes.
+ *
+ * Same doctrine, same reasons: this is untrusted input that outlives the build
+ * that wrote it, and a row missing its key is dropped rather than repaired —
+ * an empty `x-goog-api-key` header is a 403 from Google that names the header
+ * and looks exactly like a wrong key.
+ */
+export function readAccessRows(): AccessRow[] {
+  let raw: string | null
+  try {
+    raw = window.localStorage.getItem(ACCESS)
+  } catch {
+    return []
+  }
+  if (raw === null) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  const out: AccessRow[] = []
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const row = entry as Record<string, unknown>
+    if (row['kind'] !== 'google-api-key') continue
+    const id = typeof row['id'] === 'string' ? row['id'] : ''
+    const key = typeof row['key'] === 'string' ? row['key'].trim() : ''
+    if (id === '' || key === '') continue
+    out.push({ id, kind: 'google-api-key', key })
+  }
+  return out
+}
+
+/** Replace the stored rows. */
+function writeAccessRows(rows: readonly AccessRow[]): void {
+  try {
+    window.localStorage.setItem(ACCESS, JSON.stringify(rows))
+  } catch {
+    /* a browser refusing storage still runs; the key just does not persist */
+  }
+}
+
+/** The Google API key this browser holds, or `null`. */
+export function readApiKey(): string | null {
+  const row = readAccessRows().find((held) => held.kind === 'google-api-key')
+  return row === undefined ? null : row.key
+}
+
+/**
+ * Keep `key` as *the* Google API key, replacing whatever was there.
+ *
+ * An empty value forgets instead of storing an unusable row, so the dialog's
+ * save button on an empty box does what it plainly looks like it does.
+ */
+export function writeApiKey(key: string): void {
+  const text = key.trim()
+  if (text === '') {
+    clearApiKey()
+    return
+  }
+  const kept = readAccessRows().filter((row) => row.kind !== 'google-api-key')
+  writeAccessRows([...kept, { id: 'google-api-key', kind: 'google-api-key', key: text }])
+}
+
+/** Forget the Google API key. */
+export function clearApiKey(): void {
+  const kept = readAccessRows().filter((row) => row.kind !== 'google-api-key')
+  if (kept.length === 0) {
+    try {
+      window.localStorage.removeItem(ACCESS)
+    } catch {
+      /* nothing stored is nothing to remove */
+    }
+    return
+  }
+  writeAccessRows(kept)
+}
+
+// ---------------------------------------------------------------------------
+// Bearer tokens, which are never stored
+// ---------------------------------------------------------------------------
+
+/**
+ * The bearer tokens this page holds, by host pattern.
+ *
+ * **In memory, deliberately, and this is the one credential that is never
+ * written down** (SPECS §24.7). A bucket key is a long-lived secret whose whole
+ * bargain is that the reader chose to park it here and can see it listed and
+ * delete it; an OAuth token is a short-lived one that expires inside the session
+ * that obtained it. Storing it would buy nothing — it is dead within the hour —
+ * and would cost the one thing the stored-data screen cannot offer for it: a
+ * reader who pressed *forget everything* after the tab was closed would have been
+ * told a secret was gone that had already been useless for a day.
+ *
+ * A module-level `Map` rather than a field on something, because the thing that
+ * would hold it is a session and a token is about a *host*: two tabs of the same
+ * origin are two pages and get their own, which is correct, and two sessions in
+ * one page share it, which is also correct.
+ */
+const bearers = new Map<string, { token: string; expiresAt: number }>()
+
+/**
+ * Hold `token` for every host matching `hostPattern` until `expiresAt`.
+ *
+ * The pattern is a wildcard glob over the host — `*.googleapis.com`, which is the
+ * spelling igv-utils uses for the same job — because one sign-in produces one
+ * token that is good for several hosts: Drive is `www.googleapis.com` and GCS is
+ * `storage.googleapis.com`, and registering them one at a time would be two
+ * places to forget the second.
+ *
+ * `expiresAt` is epoch milliseconds, and it is required rather than optional
+ * because every token that reaches here has one: an OAuth response carries
+ * `expires_in`, and a caller with nothing to put here is holding something that
+ * is not a bearer token.
+ */
+export function setBearer(hostPattern: string, token: string, expiresAt: number): void {
+  const pattern = hostPattern.trim().toLowerCase()
+  if (pattern === '' || token === '') return
+  bearers.set(pattern, { token, expiresAt })
+}
+
+/** Drop the token held for exactly this pattern. */
+export function clearBearer(hostPattern: string): void {
+  bearers.delete(hostPattern.trim().toLowerCase())
+}
+
+/**
+ * The unexpired token for this URL's host, or `null`.
+ *
+ * Expiry is checked on the way *out* rather than swept on a timer: a timer would
+ * be a thing to cancel when the page goes away, and the only moment the answer
+ * matters is the moment it is asked for. An expired entry is deleted as it is
+ * found, so a host whose token has died does not keep one row of this map alive
+ * for the life of the page.
+ */
+export function bearerFor(url: string): string | null {
+  if (bearers.size === 0) return null
+  let host: string
+  try {
+    host = new URL(url).host.toLowerCase()
+  } catch {
+    return null
+  }
+  const now = Date.now()
+  for (const [pattern, held] of bearers) {
+    if (!hostMatches(pattern, host)) continue
+    if (held.expiresAt <= now) {
+      bearers.delete(pattern)
+      continue
+    }
+    return held.token
+  }
+  return null
+}
+
+/**
+ * Whether a wildcard host pattern covers a host.
+ *
+ * `*` stands for any run of characters, anchored at both ends, so
+ * `*.googleapis.com` covers `storage.googleapis.com` and `www.googleapis.com`
+ * and does **not** cover `googleapis.com.example.org` — which is the attack the
+ * anchoring is there for, and the reason this is a converted regex rather than an
+ * `endsWith`.
+ *
+ * `*.example.org` does not match the bare `example.org`, which is what the glob
+ * plainly says: a pattern for both is `*example.org`, or two calls.
+ */
+function hostMatches(pattern: string, host: string): boolean {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').split('*').join('.*')
+  return new RegExp(`^${escaped}$`).test(host)
+}
+
+/**
+ * The static headers this URL needs, from everything stored and held.
+ *
+ * Two hosts take the API key and no others, and the narrowness is the point: a
+ * key is a credential, and sending one to a host that did not ask for it
+ * publishes it to that host. Google's own two endpoints for reading a byte are
+ * `www.googleapis.com` (Drive, which refuses without a key even for a public
+ * file) and the GCS **JSON API** under `storage.googleapis.com/storage/v1`
+ * (which needs none for a public object, and needs one for a private one). The
+ * plain `storage.googleapis.com/<bucket>/<object>` XML host is deliberately not
+ * included: it is a bucket scope's base, signed with SigV4 when it is private
+ * (§20.3), and a Google key means nothing to it.
+ *
+ * A header and not the `key=` query parameter that igv-utils uses. Both reach
+ * the same API; the header keeps the credential out of the URL, which in this
+ * application is the string that goes into the hash, into `#session=` and into a
+ * link a reader sends a colleague (§11). A key pasted into a share link is a key
+ * published, and no amount of care at the other end takes it back.
+ */
+export function accessHeadersFor(url: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return out
+  }
+  const host = parsed.host.toLowerCase()
+  const googleApi =
+    host === 'www.googleapis.com' ||
+    (host === 'storage.googleapis.com' && parsed.pathname.startsWith('/storage/v1'))
+  if (googleApi) {
+    const key = readApiKey()
+    if (key !== null) out['x-goog-api-key'] = key
+  }
+  const bearer = bearerFor(url)
+  if (bearer !== null) out['Authorization'] = `Bearer ${bearer}`
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Taking a bucket URL apart, for the listing API
 // ---------------------------------------------------------------------------
 

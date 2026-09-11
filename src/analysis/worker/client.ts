@@ -26,7 +26,7 @@
  */
 
 import { registerThread } from '../../perf/threads'
-import { withCredential } from '../../s3/attach'
+import { withAccess } from '../../s3/attach'
 import type { Cancellable } from '../../worker/client'
 import { reviveError } from '../../worker/protocol'
 import { spawnAnalysisWorker } from '../../worker/spawn'
@@ -110,7 +110,7 @@ export class AnalysisClient {
     // the same way. Through `unknown` because only one member of the request
     // union carries a `source`, so the spread is not assignable to the union
     // without it; `payload.kind` is the discriminant and is already pinned.
-    const message = withCredential({ ...payload, id }) as unknown as AnalysisRequest
+    const message = withAccess({ ...payload, id }) as unknown as AnalysisRequest
     return new Promise<AnalysisResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)

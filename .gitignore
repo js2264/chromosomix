@@ -1,4 +1,8 @@
 node_modules/
+# The same name without the slash, because a worktree links `node_modules` to
+# the main checkout's rather than installing a second copy, and a symlink is
+# not a directory as far as the pattern above is concerned.
+node_modules
 dist/
 .vite/
 # The archived copy of one commit (`npm run build:pinned`). Built in CI, copied

@@ -37,7 +37,7 @@ import {
 import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
 
-import { signS3Request } from '../../s3/sigv4'
+import { applyAccess } from '../../sources/access'
 
 import { transfersFor } from '../../worker/protocol'
 import { yieldToEventLoop } from '../../async'
@@ -837,33 +837,42 @@ export function contigsOf(ends: Map<string, number>): Contig[] {
 // ---------------------------------------------------------------------------
 
 /**
- * A read handle over a track file, signed when the bucket wants it signed.
+ * A read handle over a track file, authorised however its host wants.
  *
  * `generic-filehandle2` takes a `fetch` override, which is the whole hook: it
  * builds its own `Range` headers and calls through, so wrapping the fetcher
- * signs every read it makes — the first four magic bytes, a bigWig's header and
- * R-tree, and every zoom block afterwards — without this file knowing how many
- * requests that is.
+ * authorises every read it makes — the first four magic bytes, a bigWig's header
+ * and R-tree, and every zoom block afterwards — without this file knowing how
+ * many requests that is.
  *
- * The signature is computed per call rather than once per handle, because
- * `x-amz-date` is signed and S3 refuses a stamp older than fifteen minutes. A
- * bigWig handle outlives that easily: it is kept for as long as the track is on
- * screen and re-read on every pan.
+ * Two things go on, and they compose in one order: the static headers a URL
+ * needs (a Google API key, a bearer token — SPECS §24.7) and then the SigV4
+ * signature over them. The signature is computed per call rather than once per
+ * handle, because `x-amz-date` is signed and S3 refuses a stamp older than
+ * fifteen minutes; a bigWig handle outlives that easily, since it is kept for as
+ * long as the track is on screen and re-read on every pan. `sources/access.ts`
+ * owns both, and is the same module the reader worker's range source uses — so a
+ * private bigWig and a private cooler are authorised identically rather than by
+ * two copies of the same three lines.
+ *
+ * A source with neither gets the library's own `fetch` and no wrapper at all,
+ * which is every public track.
  */
 function handleFor(source: WireSource): BlobFile | RemoteFile {
   if (source.kind === 'local') return new BlobFile(source.file)
-  const { credential } = source
-  if (credential === undefined) return new RemoteFile(source.url)
+  const { credential, headers } = source
+  if (credential === undefined && headers === undefined) return new RemoteFile(source.url)
   return new RemoteFile(source.url, {
     fetch: (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
-      return fetch(input, {
-        ...init,
-        headers: {
-          ...(init?.headers as Record<string, string> | undefined),
-          ...signS3Request({ method: init?.method ?? 'GET', url, credential }),
-        },
-      })
+      return fetch(
+        input,
+        applyAccess(init, {
+          url,
+          ...(headers === undefined ? {} : { headers }),
+          ...(credential === undefined ? {} : { credential }),
+        }),
+      )
     },
   })
 }
@@ -1045,7 +1054,11 @@ function indexSourceFor(source: WireSource): WireSource | null {
     kind: 'remote',
     url: source.index,
     name: source.index,
+    // Both halves of the file's access, on its sidecar: a `.tbi` beside a
+    // `.gz` and a `.bai` beside a `.bam` sit under the same prefix on the same
+    // host, so whatever authorises the one authorises the other.
     ...(source.credential === undefined ? {} : { credential: source.credential }),
+    ...(source.headers === undefined ? {} : { headers: source.headers }),
   }
 }
 

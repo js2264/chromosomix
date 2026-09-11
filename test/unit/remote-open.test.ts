@@ -39,7 +39,11 @@ class FakeXHR {
 
   open(_method: string, _url: string, _async: boolean): void {}
 
+  /** Every header the last ranged read set, in the order it set them. */
+  static lastHeaders: Array<[string, string]> = []
+
   setRequestHeader(header: string, value: string): void {
+    FakeXHR.lastHeaders.push([header, value])
     if (header.toLowerCase() !== 'range') return
     const match = /bytes=(\d+)-(\d+)/.exec(value)
     if (match) this.range = [Number(match[1]), Number(match[2])]
@@ -143,5 +147,137 @@ describe('opening a file over ranged HTTP', () => {
     } finally {
       FakeXHR.ignoreRanges = false
     }
+  })
+})
+
+/**
+ * A recording `fetch`, for the two questions the probe path answers.
+ *
+ * It keeps every call's method and headers, and it answers a `HEAD` the way a
+ * bucket that exposes nothing does — no `Accept-Ranges`, no `Content-Length` —
+ * so the probe falls through to the one-byte `GET` and both requests are on
+ * record. That is not a contrivance: it is what `4dn-open-data-public` does to a
+ * browser, which is why the probe path exists at all.
+ */
+function recordingFetch(): {
+  calls: Array<{ method: string; headers: Record<string, string> }>
+  impl: typeof fetch
+} {
+  const calls: Array<{ method: string; headers: Record<string, string> }> = []
+  const impl = (async (_url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const sent = { ...(init?.headers as Record<string, string>) }
+    calls.push({ method, headers: sent })
+    if (method === 'HEAD') {
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => null },
+      } as unknown as Response
+    }
+    const body = new Map<string, string>([
+      ['content-range', 'bytes 0-0/' + String(size)],
+      ['content-length', '1'],
+    ])
+    return {
+      ok: true,
+      status: sent['Range'] === undefined ? 200 : 206,
+      statusText: 'Partial Content',
+      headers: { get: (key: string) => body.get(key.toLowerCase()) ?? null },
+    } as unknown as Response
+  }) as unknown as typeof fetch
+  return { calls, impl }
+}
+
+describe('a URL that carries its own signature', () => {
+  /**
+   * SPECS §24.6, and the whole of what it asks for: a presigned URL is signed
+   * for one method, so the `HEAD` it used to be probed with came back 403 and
+   * the open failed before it started — on a link whose `GET` would have been
+   * served. The probe used instead is the one the source already had for a host
+   * that says nothing about ranges; what changed is that this URL takes it first.
+   */
+  const PRESIGNED =
+    URL_FOR(FILE) +
+    '?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600' +
+    '&X-Amz-SignedHeaders=host&X-Amz-Signature=deadbeefdeadbeef'
+
+  it('is opened without a HEAD, straight to the one-byte range probe', async () => {
+    const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
+    const { calls, impl } = recordingFetch()
+
+    const source = await RemoteRangeSource.open(PRESIGNED, { fetchImpl: impl })
+
+    expect(calls.map((call) => call.method)).toEqual(['GET'])
+    expect(calls[0].headers['Range']).toBe('bytes=0-0')
+    // …and the size comes from the probe's `Content-Range`, which is the only
+    // place it can come from once the `HEAD` is gone.
+    expect(source.size).toBe(size)
+    source.close()
+  })
+
+  it('still probes a URL whose query is not a signature', async () => {
+    // The negative half: the rule is about a signature in the query, not about
+    // there being a query. A versioned object URL carries one and is not signed.
+    const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
+    const { calls, impl } = recordingFetch()
+
+    const source = await RemoteRangeSource.open(URL_FOR(FILE) + '?versionId=abc', {
+      fetchImpl: impl,
+    })
+
+    expect(calls.map((call) => call.method)).toEqual(['HEAD', 'GET'])
+    source.close()
+  })
+})
+
+describe('the static header bag', () => {
+  /**
+   * SPECS §24.7: a Google API key and a bearer token are headers rather than
+   * signatures, and they go on **every** request for the URL. Every request is
+   * the point — a bag applied to the probe and not to the reads opens a file
+   * that then fails on its first block, which reads as the file being corrupt.
+   */
+  const HEADERS = { 'x-goog-api-key': 'AIzaKEY', Authorization: 'Bearer ya29.TOKEN' }
+  const GOOGLE = 'https://storage.googleapis.com/storage/v1/b/lab/o/mock.metacool?alt=media'
+
+  it('is on the HEAD, on the probe and on every ranged read', async () => {
+    const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
+    const { calls, impl } = recordingFetch()
+    FakeXHR.lastHeaders = []
+
+    const source = await RemoteRangeSource.open(GOOGLE, { fetchImpl: impl, headers: HEADERS })
+
+    expect(calls.map((call) => call.method)).toEqual(['HEAD', 'GET'])
+    for (const call of calls) {
+      expect(call.headers['x-goog-api-key']).toBe('AIzaKEY')
+      expect(call.headers['Authorization']).toBe('Bearer ya29.TOKEN')
+    }
+
+    // And on the read itself, which goes through `XMLHttpRequest` rather than
+    // `fetch` because Emscripten's stream `read` op is synchronous.
+    source.readBytes(0, 16)
+    const names = FakeXHR.lastHeaders.map(([name]) => name)
+    expect(names).toContain('x-goog-api-key')
+    expect(names).toContain('Authorization')
+    // `Range` is set last, after everything that is signed over — the order
+    // `fetchRange` has always kept, now with the static bag in front of it.
+    expect(names[names.length - 1]).toBe('Range')
+    source.close()
+  })
+
+  it('adds nothing when there is nothing to add, which is every public file', async () => {
+    // A range read with no headers is a *simple* cross-origin request; a bag
+    // put on unconditionally would cost a preflight per read of every demo.
+    const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
+    const { calls, impl } = recordingFetch()
+    FakeXHR.lastHeaders = []
+
+    const source = await RemoteRangeSource.open(URL_FOR(FILE), { fetchImpl: impl })
+    expect(calls[0].headers).toEqual({})
+    source.readBytes(0, 16)
+    expect(FakeXHR.lastHeaders.map(([name]) => name)).toEqual(['Range'])
+    source.close()
   })
 })

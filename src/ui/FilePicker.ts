@@ -22,7 +22,12 @@ import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { bucketBrowseButton } from './browseButton'
 import { credentialOf, type BucketScope } from '../s3/credentials'
 import { appMark } from './mark'
+import { canonicalUrl } from '../sources/rewrite'
 import { splitUri } from './labels'
+import { HubTable } from './HubTable'
+import { registerShelf } from './examples'
+import { addHubRow } from '../state/hubs'
+import type { HubEntry, HubRef } from '../state/hub'
 import type { SourceSpec } from '../worker/protocol'
 import { ViewerError } from '../errors'
 
@@ -61,8 +66,19 @@ export interface FilePickerProps {
    * and which are its tracks.
    */
   onOpenFiles(files: readonly File[]): void
-  /** Optional example files, e.g. from a published catalog (§11). */
-  examples?: Array<{ label: string; url: string; note?: string }>
+  /**
+   * The hubs to offer, or none for a picker that should not offer any (§24.2).
+   *
+   * This is the *built-in* list — `ui/examples.ts` owns what is in it. Hubs the
+   * reader has connected are read from storage by the table itself, because
+   * they change while it is mounted.
+   *
+   * Optional for the reason the examples list was: the header's "add a file"
+   * dialog adds to the tab you are in, and every hub row is a whole session or
+   * a whole file — offering one there would offer to throw the reader's tab
+   * away from the one control whose promise is that it will not.
+   */
+  hubs?: readonly HubRef[]
 }
 
 export class FilePicker {
@@ -70,6 +86,8 @@ export class FilePicker {
   private readonly drop: HTMLElement
   private readonly urlInput: HTMLInputElement
   private readonly entryBox: HTMLElement
+  /** `null` in the standalone build and wherever no hubs were offered. */
+  private readonly hubs: HubTable | null
 
   constructor(private readonly props: FilePickerProps) {
     this.drop = el(
@@ -143,42 +161,39 @@ export class FilePicker {
 
     this.entryBox = el('div', { class: 'entry-box hidden' })
 
-    // A dropdown rather than a row of buttons: the list is a *catalogue*, and a
-    // catalogue grows. Buttons put every entry on screen at equal weight and
-    // push the drop target down as the list gets longer; a select stays one
-    // line at any length. Choosing opens immediately — a second "go" button
-    // beside a handful of files would be ceremony.
-    const exampleSelect = el('select', { class: 'select select-examples' })
-    const exampleNote = el('p', { class: 'hint' })
-    if (props.examples && props.examples.length > 0) {
-      exampleSelect.appendChild(el('option', { value: '', text: 'choose an example…' }))
-      for (const example of props.examples) {
-        const option = el('option', { value: example.url, text: example.label })
-        option.title = example.note ?? example.url
-        exampleSelect.appendChild(option)
-      }
-      exampleSelect.addEventListener('change', () => {
-        const chosen = props.examples?.find((example) => example.url === exampleSelect.value)
-        // Snap back to the placeholder before opening, and keep the note of
-        // what was chosen. The picker is one long-lived DOM node — going back
-        // to it (the brand link, `o`, the palette) re-shows this same element
-        // — so a select left holding its last value fires no `change` when
-        // that value is picked again, and the most likely second click on the
-        // list is the entry you just looked at. Resetting makes every choice a
-        // change; the note below is what still says which one it was.
-        exampleSelect.value = ''
-        exampleNote.textContent = chosen?.note ?? ''
-        if (chosen === undefined) return
-        this.urlInput.value = chosen.url
-        this.openRemote()
-      })
-    }
-    const examples =
-      !IS_STANDALONE && props.examples && props.examples.length > 0
-        ? el(
+    // A *table*, and not the `<select>` this used to be. Four published demos
+    // fit in a dropdown; a hub is six hundred rows chosen by assembly and
+    // biosource, which no list of labels can be narrowed by (§24.1). The table
+    // owns its own selector, because which hub and which row of it are one
+    // question asked twice and splitting them across two components would mean
+    // the picker knowing what "loading" looks like.
+    //
+    // Absent in the standalone build for the reason the URL box is: a
+    // single-file page has an opaque origin and every remote read fails before
+    // a byte moves, so a control that cannot keep its promise is not shown
+    // (§8.5, §19).
+    this.hubs =
+      IS_STANDALONE || props.hubs === undefined || props.hubs.length === 0
+        ? null
+        : new HubTable({
+            hubs: props.hubs,
+            onPick: (entry) => this.openHubEntry(entry),
+            // Written straight to storage here rather than handed up to the
+            // app: remembering a hub is a fact about this browser, exactly as a
+            // bucket scope is, and there is nothing for a session to decide
+            // about it. The table hears the change back through
+            // `subscribeHubs` and puts the new row in its own menu.
+            onRemember: (ref) => {
+              if (ref.url !== undefined) addHubRow({ label: ref.label, url: ref.url })
+            },
+          })
+    const hubs =
+      this.hubs === null
+        ? null
+        : el(
             'div',
-            { class: 'examples' },
-            el('h3', { text: 'Public examples' }),
+            { class: 'examples hubs-box' },
+            el('h3', { text: 'Hubs' }),
             el('p', {
               class: 'hint',
               // The same rewording as the privacy claim below, and the same
@@ -188,12 +203,13 @@ export class FilePicker {
               // network. What is true of both is the part that mattered anyway:
               // they take the reader's remote path, so they exercise what a
               // file on your own bucket exercises.
-              text: 'Read over the network, exactly as a file on your own bucket would be.',
+              text:
+                'A catalogue of maps, genomes and saved sessions on somebody’s bucket, read ' +
+                'over the network exactly as a file on your own would be. Nothing is fetched ' +
+                'until you choose one.',
             }),
-            exampleSelect,
-            exampleNote,
+            this.hubs.el,
           )
-        : null
 
     // The privacy note comes *last*. It is reassurance about what the controls
     // above do, and reassurance reads better after the thing it is about than
@@ -236,7 +252,7 @@ export class FilePicker {
               text:
                 'It is one HTML file with no server behind it, so the browser gives it no origin ' +
                 'and refuses every network read. Nothing it opens can leave this machine, which ' +
-                'is the point. For remote files, published datasets and the examples, use the ' +
+                'is the point. For remote files, published datasets and the hubs, use the ' +
                 'hosted viewer.',
             }),
           )
@@ -272,10 +288,57 @@ export class FilePicker {
           }),
         ),
       ),
-      examples,
+      hubs,
       this.entryBox,
       this.privacyNote(),
     )
+  }
+
+  /**
+   * Let go of what this picker is listening to.
+   *
+   * One subscription — the hub table's, on the remembered list — and it would
+   * otherwise outlive the element: every *Open a file* dialog builds its own
+   * picker and throws it away on close, so a table left subscribed would repaint
+   * a `<select>` in a document fragment nobody can see, once per dialog ever
+   * opened, for the life of the page.
+   */
+  destroy(): void {
+    this.hubs?.destroy()
+  }
+
+  /**
+   * Land on a hub, from a `?hub=` link or from anywhere else that has one.
+   *
+   * A link *is* a gesture (§24.2), which is what licenses the fetch: nothing
+   * happens on load, and what happens here happened because somebody clicked a
+   * URL that named this shelf. Silently nothing in the standalone build and in
+   * a picker that was offered no hubs, because there is no table to land in.
+   */
+  loadHub(ref: HubRef): void {
+    void this.hubs?.load(ref)
+  }
+
+  /**
+   * Open what a hub row names — which is the same door the URL box uses.
+   *
+   * A map or a genome file opens as one; a `.json` row is a *workspace*, and
+   * `Session.openWithConfig` already routes a remote `.json` to
+   * `openConfigUrl`, so there is one road to a published session and this is
+   * not a second one. The entry's `kind` is deliberately not consulted for the
+   * routing: it says what the publisher meant the row to be, and the app routes
+   * by name everywhere else (`browse/route.ts`) — two routers that could
+   * disagree about one URL is the failure this whole codebase avoids.
+   */
+  private openHubEntry(entry: HubEntry): void {
+    // The shelf the row brought with it, if any, answered later through the
+    // same question the demo map's annotations are answered through
+    // (`ui/examples.ts`). Registered before the open, because the Tracks card
+    // is built while the file is opening.
+    if (entry.tracks !== undefined && entry.tracks.length > 0) {
+      registerShelf(splitUri(entry.uri).path, entry.tracks)
+    }
+    this.props.onOpen(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
   }
 
   /**
@@ -373,7 +436,11 @@ export class FilePicker {
   }
 
   private openRemote(): void {
-    const url = this.urlInput.value.trim()
+    // Canonicalised at the door, so the hash, the share link and the workspace
+    // file all carry the address that works rather than the page a reader copied
+    // out of Dropbox (SPECS §24.5). A URL the table does not recognise — which
+    // is nearly all of them — comes back exactly as it was typed.
+    const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     const { path } = splitUri(url)
     // No credential attached here on purpose. The lookup happens once, at the

@@ -59,13 +59,78 @@ describe('inferSource — the hash contract', () => {
   it('answers null for everything else, a granted local file included', async () => {
     expect(inferSource('yeast.cool')).toBeNull()
     expect(inferSource('/home/js/yeast.cool')).toBeNull()
-    expect(inferSource('s3://bucket/a.cool')).toBeNull()
     expect(inferSource('file:///home/js/a.cool')).toBeNull()
 
     // The load-bearing case. This browser can reopen the file; no other browser
     // can, so the answer to "is this fit to travel" is still no.
     await rememberHandle('yeast.cool', stubHandle('yeast.cool'), new File(['b'], 'yeast.cool'))
     expect(inferSource('yeast.cool')).toBeNull()
+  })
+})
+
+/**
+ * The rewrite table, through the gate it runs in front of (SPECS §24.5).
+ *
+ * `inferSource` canonicalises before it decides, so this is the same
+ * shareability question asked of the four addresses that used to fail it — and
+ * two of them, `s3://` and `gs://`, `state/shareLink.ts` already treated as fit
+ * to travel. The block above still holds: what a *local* name answers is
+ * unchanged, and that is the property both blocks exist to pin.
+ */
+describe('inferSource — the addresses the rewrite table reaches', () => {
+  it('opens a Dropbox share link from the host that serves bytes', () => {
+    expect(inferSource('https://www.dropbox.com/s/abc/Hum53.metacool?dl=0')).toEqual({
+      kind: 'remote',
+      url: 'https://dl.dropboxusercontent.com/s/abc/Hum53.metacool?dl=0',
+    })
+  })
+
+  it('opens a Drive share link through the API form', () => {
+    expect(inferSource('https://drive.google.com/file/d/1AbC/view?usp=sharing')).toEqual({
+      kind: 'remote',
+      url: 'https://www.googleapis.com/drive/v3/files/1AbC?alt=media&supportsAllDrives=true',
+    })
+  })
+
+  it('opens gs:// through the GCS JSON API, and keeps the group', () => {
+    expect(inferSource('gs://lab-data/hic/rep1.mcool::resolutions/1000')).toEqual({
+      kind: 'remote',
+      url: 'https://storage.googleapis.com/storage/v1/b/lab-data/o/hic%2Frep1.mcool?alt=media',
+    })
+  })
+
+  it('opens s3:// at AWS when no bucket entry names the bucket', () => {
+    expect(inferSource('s3://4dn-open-data-public/x/4DNFIM7ZVQOQ.hic')).toEqual({
+      kind: 'remote',
+      url: 'https://4dn-open-data-public.s3.amazonaws.com/x/4DNFIM7ZVQOQ.hic',
+    })
+  })
+
+  it('opens s3:// at the endpoint a bucket entry names, when one does', () => {
+    // The reason the scopes are consulted: `s3://` says nothing about which
+    // region — or which service — the bucket is on, and a stored entry is this
+    // browser's only statement of it.
+    window.localStorage.setItem(
+      'metacooler-viewer:buckets',
+      JSON.stringify([
+        { id: 'b0', label: 'lab', base: 'https://lab-data.s3.eu-west-3.amazonaws.com/collections/' },
+      ]),
+    )
+    try {
+      expect(inferSource('s3://lab-data/collections/rep1.cool')).toEqual({
+        kind: 'remote',
+        url: 'https://lab-data.s3.eu-west-3.amazonaws.com/collections/rep1.cool',
+      })
+    } finally {
+      window.localStorage.clear()
+    }
+  })
+
+  it('leaves an ordinary https URL exactly as it was, which is nearly every file', () => {
+    expect(inferSource('https://bucket.example.org/a.cool')).toEqual({
+      kind: 'remote',
+      url: 'https://bucket.example.org/a.cool',
+    })
   })
 })
 

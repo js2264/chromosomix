@@ -130,15 +130,22 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  * Whether a recipient could address this URI at all.
  *
  * The one question every redaction in this file turns on, named once rather
- * than spelled as a regex at each site: a `https:`, `http:` or `s3:` address
- * means the same thing in anybody's browser, and everything else is a bare
- * filename off the sender's own disk. `ui/mapNames.ts`'s `sharedMapNames` asks
- * it of a map's key; {@link forSharing} asks it of a lane's; {@link shortenable}
- * asks it of the session's own file. Three copies of one predicate is three
- * places for it to drift, and drift here is a private name leaving the machine.
+ * than spelled as a regex at each site: a `https:`, `http:`, `s3:` or `gs:`
+ * address means the same thing in anybody's browser, and everything else is a
+ * bare filename off the sender's own disk. `ui/mapNames.ts`'s `sharedMapNames`
+ * asks it of a map's key; {@link forSharing} asks it of a lane's;
+ * {@link shortenable} asks it of the session's own file. Three copies of one
+ * predicate is three places for it to drift, and drift here is a private name
+ * leaving the machine.
+ *
+ * `gs:` joins the list because `sources/rewrite.ts` gave it a destination
+ * (SPECS §24.5): a Google Cloud Storage object now resolves to a URL that opens
+ * in any browser, so a link carrying one is a link the recipient can follow. It
+ * is listed here rather than left to the rewrite because a URI reaches this file
+ * as text, and the question is about the text.
  */
 function openableElsewhere(uri: string): boolean {
-  return /^(https?|s3):\/\//i.test(uri)
+  return /^(https?|s3|gs):\/\//i.test(uri)
 }
 
 /**
