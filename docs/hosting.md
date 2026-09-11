@@ -561,6 +561,7 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 | Google Cloud Storage, `storage.googleapis.com/<bucket>/<object>` | only with a bucket CORS policy | a CORS policy, as on S3 |
 | Azure Blob, public container or a SAS URL | yes | CORS on the storage account |
 | Google Drive share link | with a Google API key (public file) or a signed-in account (private) | a Google project of the lab's own — see [above](#reading-from-google-drive-and-gcs-with-an-account) |
+| Google Drive folder, browsed in the Files panel | with a signed-in account | the same client id; shared drives included — see [above](#reading-from-google-drive-and-gcs-with-an-account) |
 | Dropbox share link | yes | nothing; the link is rewritten to the content host |
 | Dropbox folder, browsed in the Files panel | with a signed-in account | a Dropbox app of the lab's own — see [above](#reading-from-dropbox) |
 | Presigned S3 or signed GCS URL, Azure SAS | yes, until it expires | nothing |
