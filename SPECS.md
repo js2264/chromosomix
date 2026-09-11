@@ -4761,3 +4761,210 @@ other artifact in this repository, **a published version cannot be corrected**: 
 rebuilt over on the next push and a deployment is redeployed, while a tarball is on the registry for
 ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
 week. The pack is the last moment any of it is cheap to notice.
+
+---
+
+## 23. Hubs, and remote sources beyond a bucket
+
+The byte layer reaches any host that serves HTTPS, byte ranges and CORS without transfer
+compression (§11), and that turned out to include the two portals a Hi-C reader is most likely to
+want: the unmodified viewer opens 4DN's and ENCODE's released files straight off their public
+buckets (`docs/remote-sources.md` §2 has the measurements). What it could not do was *name* them.
+The only catalogue was the four demos; a connected 4DN bucket is forty thousand UUID-named folders
+under one prefix, capped at 1,000 by §20.1. So the gap juicebox.js had on this app was never
+access. It was a shelf in front of the files — and juicebox's shelf is three static files a script
+regenerates, not a live connection to anything. This section is that shelf, and the four smaller
+things around it: URLs that are not yet the file, links that expire, credentials that are not a
+bucket key, and a search box over a portal for the reader who has none of the above.
+
+Nothing here relaxes §1. Every hub is a static document on somebody's bucket (C1, C5); a map with
+no hub opens exactly as before (C3); a hub is fetched on a gesture and never on load (§11); the
+one thing on this road that would need a server — a CORS proxy for a portal that refuses browsers
+— is refused, and such a portal gets a generated hub instead.
+
+### 23.1 What a hub is
+
+A **hub** is a JSON file, `kind: "metacooler.hub"`, on any CORS-enabled host: a catalogue of maps,
+genome files and workspaces with enough metadata to choose one **without opening any of them**,
+which is what §11 promised under the name "catalog" and GAPS G10 recorded as unbuilt.
+`state/hub.ts` owns the shape, the parser and the resolver.
+
+```json
+{
+  "kind": "metacooler.hub", "version": 1,
+  "name": "4DN open data", "generatedAt": "…", "source": "…",
+  "base": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/",
+  "columns": [{ "key": "assembly", "label": "Assembly" }, { "key": "biosource", "label": "Biosource" }],
+  "entries": [{
+    "label": "Hi-C, HCT116 RAD21-AID (Rao 2017)",
+    "uri": "000789fe-…/4DNFIM7ZVQOQ.hic", "kind": "map", "size": 839405381,
+    "fields": { "assembly": "GRCh38", "biosource": "HCT116 …" },
+    "note": "4DNFIM7ZVQOQ · PMID:28985562",
+    "tracks": [{ "label": "CTCF", "url": "…/4DNFIK9NBYGJ.bw" }]
+  }]
+}
+```
+
+Four rules carry most of the design:
+
+- **A hub is a table, not a tree.** Six hundred rows are chosen by *filtering* — assembly,
+  biosource, assay, lab — and then sorting, and a folder row has only a name. So a hub declares its
+  `columns` and each entry carries `fields`, and the viewer draws it as a filterable, sortable table
+  rather than pushing it through `ConnectedFolder.list()` (§20), which would draw the flat folder of
+  opaque accessions juicebox deliberately does not show. The two meet only at the exit: a picked row
+  is a URI and a source, the same thing a folder row or the URL box hands over.
+- **A row may be a workspace.** `kind: "workspace"` names a `.metacooler.json`, opened through the
+  road `?config=` already takes (§21.1, `Session.openConfigUrl`), so a hub can offer a *composed
+  figure* — tracks placed, a group, a colour scale, the window the paper used — and not only a bare
+  file. This is the difference between matching juicebox and passing it, and it costs the format one
+  string.
+- **Names inside a hub are relative to `base`**, or to the hub's own URL directory when `base` is
+  absent, resolved with the same `::group`- and `#index=`-preserving treatment `resolveConfig`
+  gives a workspace (§21.1). A hub with relative names beside its data is therefore a self-contained
+  folder that can be copied to another bucket, as a demo dataset already is.
+- **A row carries its size** when the generator knew it, so the load gate can ask its question
+  before the first request instead of after the `HEAD`, and the table can say what a five-gigabyte
+  row costs before it is clicked. `tracks` on a row are a shelf: once the row is open, the Tracks
+  card offers them the way it offers the demo annotations (§8.5).
+
+The parser refuses what it must and tolerates the rest: a JSON that is not a hub, or a hub of a
+newer major version, is a `ConfigRefusal` with a message naming which; an entry with no `label` or
+no `uri` is dropped rather than fatal; a missing `kind` is read off the file name (`.json` is a
+workspace, else §20.5's routing); unknown keys are ignored, which is what lets a generator add a
+column before a viewer knows it.
+
+### 23.2 Where hubs are offered, and what is never fetched
+
+The picker's **Hubs** section replaces the examples list. It offers three built-in hubs — **Demos**
+(the four demo workspaces, inline, plus two 4DN open-data maps so a first-time reader meets a file
+that was never on the lab's bucket), **4DN open data** and **ENCODE Hi-C** (by URL, §23.3) — then
+every hub the reader has **connected by pasting a URL**, kept in `localStorage` under
+`metacooler-viewer:hubs`, named in the stored-data screen and swept by *forget everything*, exactly
+as a bucket scope is. `?hub=<url>` is the third mounting parameter beside `?embed=` and `?config=`
+(§21.1): a link that lands on a lab's shelf, with the offer to remember it. Only `http:` and
+`https:` are kept, for the reason `?config=` gives.
+
+**Nothing is fetched on load.** The demos are inline; the other hubs are read when the reader
+selects one, or when a `?hub=` link names one — a link is a gesture. A reader who never opens the
+shelf makes no third-party request at all, and that sentence is the whole of what §11 has to say
+about a hub: a fetch reveals that somebody opened the viewer, which the demos already did.
+
+A built-in hub that answers `404` is not an error but a state — *not generated yet* — because the
+two portal hubs are written by a workflow (§23.3) and a fresh fork has not run it. The table says
+so, and says what runs it. The standalone build (§19) has no hubs section at all, for the reason
+it has no bucket half.
+
+### 23.3 Where the built-in hubs come from
+
+`scripts/make_hub.py` is the generator, with three front ends and no dependency beyond the standard
+library: `4dn`, which asks the 4DN portal's search API for every experiment set's processed files
+and keeps the `.hic`, `.mcool` and `.cool` that have an `open_data_url` — **without** an
+experiment-type filter, so Micro-C and whatever comes next are kept, and with the biosource, assay,
+dataset, lab and condition the portal's `track_and_facet_info` carries; `encode`, which asks the
+ENCODE portal for released experiments with a `.hic` and names each file by its
+`cloud_metadata.url` — the unsigned object on the `encode-public` bucket — rather than the
+`@@download` path, which answers with a link presigned for `GET` alone; and `bucket`, which walks
+a prefix with `ListObjectsV2` and emits one row per openable object with its size, which is the
+`make_catalog.py` §11 and GAPS G10 always promised, aimed at a lab's own bucket.
+
+Two facts the generator has to know are recorded here so they are not rediscovered: a 4DN search
+with no hits answers **HTTP 404 with a JSON body**, which is zero results and not a failure; and a
+bucket listing's objects carry a `<ChecksumAlgorithm>` element between `ETag` and `Size`, so the
+XML is parsed as XML — a regex that assumes the four-element order silently drops a quarter of the
+bucket, which is how the first census of 4DN came out short. A run that finds nothing exits
+non-zero so that a workflow never overwrites a good hub with an empty one.
+
+`.github/workflows/hubs.yml` runs both portal front ends weekly and on demand, uploads the pair as
+a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes them to the
+`hubs` branch: `4dn.json`, `encode.json`, an `index.json` naming what is there, and dated copies
+under `archive/`. The viewer reads
+`https://raw.githubusercontent.com/<owner>/<repo>/hubs/<name>.json`, which serves
+`Access-Control-Allow-Origin: *` and needs no build. A branch rather than the site because the
+site is built from `main` on every push and a hub is fresher than that; a branch rather than a
+bucket because a fork gets the whole arrangement with no secret to add. Every generated hub
+carries `generatedAt` and `source` — the query it came from — because a shelf with no provenance
+is a screenshot.
+
+The catalogues juicebox.js reads (`igvteam/igv-data`, MIT) were read while designing this and are
+a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-links another
+project's file inherits that project's cadence and schema, and the point of the format is that
+this viewer owns what it offers.
+
+### 23.4 Live search over a portal
+
+`state/portal.ts` asks a portal's own search API — ENCODE's, whose CORS is a documented line of its
+Apache configuration; 4DN's, whose CORS was not verifiable when this was written — for released
+Hi-C files matching a free-text query, and turns one page of hits into **a hub**, drawn by the
+same table (§23.1: a hit has a biosource; a folder row has a name). `ui/PortalSearch.ts` is the
+form: a portal, a query, a button, nothing on load. A portal that will not let this page read its
+results is reported in those words, with the generated hub named as the alternative that lists the
+same files, and is **never proxied** — a proxy is the server C1 forbids, and §23.3 is the answer
+that needs none.
+
+### 23.5 URLs that are not yet the file
+
+`sources/rewrite.ts`'s `canonicalUrl` is applied wherever a URL becomes a URI — the picker's box,
+the Tracks and Contact maps cards, the deck's add row, a hub row, `#uri=` and `?config=` on
+arrival — so the address bar carries the form that works and a shared link already is one. Pure,
+idempotent, never throwing, and a table rather than a policy:
+
+| pasted | opened as | why |
+|---|---|---|
+| `https://www.dropbox.com/<path>` | `https://dl.dropboxusercontent.com/<path>` | the share link is a page; the content host serves ranges with CORS `*`. Host swap only, which is all igv-utils does. |
+| `https://drive.google.com/file/d/<id>/…`, `/open?id=`, `/uc?id=` | `https://www.googleapis.com/drive/v3/files/<id>?alt=media&supportsAllDrives=true` | the API is the only ranged, CORS-answering form; it refuses without a key (§23.7) |
+| `gs://<b>/<o>`, `https://storage.cloud.google.com/<b>/<o>` | `https://storage.googleapis.com/storage/v1/b/<b>/o/<o>?alt=media` | the JSON-API endpoint answers CORS for any origin; the XML host does so only with a bucket policy |
+| `s3://<bucket>/<key>` | the URL form of a bucket scope naming that bucket, else `https://<bucket>.s3.amazonaws.com/<key>` | a scheme that could not travel in a link before |
+
+`https://storage.googleapis.com/<bucket>/<object>` is deliberately **not** rewritten: it is the
+form a bucket scope's base, the signer and the lister (§20.3) understand, and a bucket with a CORS
+policy serves it as it stands. `inferSource` (§5.5's shareability test) canonicalises before it
+decides, so `gs://` and `s3://` are shareable and a Dropbox page never is written into a hash.
+
+### 23.6 Links that expire
+
+A presigned S3 URL, a signed GCS URL and an Azure SAS are one URL each, and §11 refused the first
+because the `HEAD` probe is not the method it was signed for. The probe now recognises a signature
+in the query — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — and goes straight to
+the one-byte `Range` `GET` it already had for hosts that say nothing about ranges. Nothing else
+changes: the link works until it expires, and expiry looks like the `403` it is, named as such. A
+SAS is not method-scoped and always worked; it is listed so the rule reads as one rule.
+
+### 23.7 Credentials that are not a bucket key
+
+A bucket key signs (§20.3, `docs/hosting.md`); everything else on this road is **a header**. The
+remote arm of a source therefore carries `headers?` beside `credential?`, applied on every request
+for that URL — the `HEAD`, the probe, every ranged read, the whole-object fallback, the sidecar
+guesses, and the annotation worker's own fetch — and `s3/attach.ts`'s `withAccess` stamps both at
+the two `postMessage` boundaries, independently for a source and its `bins` sidecar, exactly as
+`withCredential` stamped one. Two kinds of row feed it, and they are kept differently on purpose:
+
+- **A Google API key** (`metacooler-viewer:access`, one row, named in the stored-data screen the
+  way a bucket key is) — sent as `x-goog-api-key` to the Drive and GCS JSON APIs. A *public* Drive
+  file needs it and nothing else; a public GCS object needs nothing. The key is the lab's, made in
+  the lab's own Google project, under the bargain `docs/hosting.md` states for a bucket key: it
+  lives in the browser, and what bounds it is what it was granted.
+- **A bearer token**, held in memory only and never written to storage, matched to a host pattern
+  and dropped at its expiry. It is what a signed-in Google account produces: the lab supplies a
+  **client id** registered for the app's origin, the reader signs in through Google Identity
+  Services, and the token rides every request to Drive (`drive.readonly`) and GCS
+  (`devstorage.read_only`) until it expires, after which a `401` from a Google host is answered by
+  the offer to sign in again rather than by the CORS explanation. Absent in the standalone build,
+  which has no origin to register.
+
+The dialog says one thing plainly that a consent screen would bury: `drive.readonly` is read access
+to **all** of the reader's Drive, where a bucket scope is one prefix. And `docs/hosting.md` says the
+other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
+for the dozen requests an open costs and something for the thousands a fine-resolution pan costs, so
+Drive is a host this viewer *reads*, not one it recommends. The same mechanism, with no Google in
+it, is what a token from an institutional portal or a Terra-shaped signed endpoint needs — one
+header on every request — which is why it is a header bag and not a Google integration.
+
+### 23.8 Refused, and why
+
+A **CORS proxy** (C1). **Fetching a hub on load** (§11). **Storing a bearer token** — it expires
+inside a session, and a secret that outlives its use is the one kind the stored-data screen cannot
+make safe. **Hot-linking another project's catalogue** (§23.3). **Rewriting the GCS XML host**
+(§23.5). And one host fact, stated so nobody spends a week on it: the Aiden Lab bucket
+`hicfiles.s3.amazonaws.com` answers `403` to every browser user agent and `206` to one that
+begins with `IGV`, which no browser can send; juicebox.js needs a proxy for its own public server,
+and this viewer will not have one.

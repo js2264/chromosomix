@@ -321,3 +321,28 @@ credential simply expires.
 HDF5 asking for bytes and the request going out, and every `crypto.subtle` method returns a promise.
 Presigned URLs were the alternative and are worse here: they are scoped to one method, so the `HEAD`
 probe needs its own, and they expire while a tab is open.
+
+## What already works, host by host
+
+"Supports S3" undersells it: what the reader supports is *object storage*, and the only two things
+that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs/remote-sources.md`
+§2 has the headers):
+
+| Host | Opens as pasted? | What the owner has to set |
+|---|---|---|
+| Amazon S3, virtual-hosted or path-style | yes | the CORS policy above |
+| Cloudflare R2, MinIO, Ceph RGW, Wasabi, Backblaze B2 | yes | a CORS policy — same rule, their own dialect |
+| 4DN open data (`4dn-open-data-public`) | yes, today | nothing; the bucket already answers `*` and allows `Range` |
+| ENCODE (`encode-public`) | yes, today | nothing; use the file's `cloud_metadata.url`, not `@@download` |
+| Google Cloud Storage, `gs://…` or `storage.googleapis.com/storage/v1/b/…/o/…?alt=media` | yes, for a public object | nothing — the JSON-API endpoint answers CORS for any origin |
+| Google Cloud Storage, `storage.googleapis.com/<bucket>/<object>` | only with a bucket CORS policy | a CORS policy, as on S3 |
+| Azure Blob, public container or a SAS URL | yes | CORS on the storage account |
+| Google Drive share link | with a Google API key (public file) or a signed-in account (private) | a Google project of the lab's own — see SPECS §23.7 |
+| Dropbox share link | yes | nothing; the link is rewritten to the content host |
+| Presigned S3 or signed GCS URL, Azure SAS | yes, until it expires | nothing |
+| GitHub Pages, GEO, SRA | no | cannot be fixed by the owner (compression; no ranges; no CORS) |
+| Aiden Lab `hicfiles.s3.amazonaws.com` | no browser can | the bucket refuses every browser user agent |
+
+Publishing a **hub** — a JSON that names the files on a bucket with columns to filter on, so a
+reader can choose without opening any — is `scripts/make_hub.py bucket <prefix>`; SPECS §23 is the
+format and the picker's side of it.

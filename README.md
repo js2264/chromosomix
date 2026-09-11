@@ -18,7 +18,8 @@ server-side processing or data upload.
 - Tabbed sessions: Several genomes opened at once, as tabs. 
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
-- Cloud-based file access: Open files directly from local files, S3 buckets or any HTTP(S) server that supports range requests.
+- Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works.
+- Hubs: The picker offers shelves of named datasets — the demos, **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals — and any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
 
 ## Philosophy

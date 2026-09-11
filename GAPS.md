@@ -311,7 +311,15 @@ the MAGs that separate spectrally. Turning those two into a proposed binning **d
 current bin, proposed bin, score, evidence — is authoring an output, not editing an input, and it is
 the natural end of a session spent finding that a binning is wrong.
 
-### G10. A catalogue of published files
+### G10. A catalogue of published files — **built** (SPECS §23)
+
+> **Since:** built as a *hub* — a static JSON of maps, genomes and workspaces with columns to filter
+> on, drawn as a table in the picker, connectable by URL and addressable as `?hub=`. The generator is
+> `scripts/make_hub.py`, with a `bucket` front end that is the `make_catalog.py` below, and two
+> portal front ends (4DN, ENCODE) that a weekly workflow runs and publishes to the `hubs` branch.
+> What this entry asked for that is *not* in a hub row is the per-file `ngenomes`/`nnz`/edge-list
+> metadata, which needs the metacooler CLI over each file; the format has room for it (`fields`),
+> and the `bucket` front end is where it would be computed.
 
 `IMPLEMENTATION.md` M8 specifies `scripts/make_catalog.py` and the README records it as not built.
 `ui/BucketsCard.ts` browses an S3 prefix, which is the folder and not a description of it: a reader
