@@ -129,6 +129,7 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
+import type { HubRef } from '../state/hub'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
@@ -147,7 +148,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { demoAnnotationsToOffer, demoExamples } from '../ui/examples'
+import { builtinHubs, demoAnnotationsToOffer } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import {
   MAP_NAMES_SCOPE,
@@ -809,7 +810,7 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files),
-      examples: demoExamples(),
+      hubs: builtinHubs(),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)
@@ -1102,6 +1103,10 @@ export class Session {
 
   destroy(): void {
     this.destroyed = true
+    // The picker outlives every file this session opens and is torn down with
+    // the tab, so its one subscription is released here rather than on each
+    // navigation back to it.
+    this.picker.destroy()
     this.minimap?.destroy()
     this.minimap = null
     this.analysis?.destroy()
@@ -1870,10 +1875,22 @@ export class Session {
    * The landing page and the Open-a-file dialog hand back the same two things,
    * so they go through the same door: a URL naming a *session* is fetched and
    * applied, anything else is a file. Routing one of them past this was how the
-   * dialog came to answer an example from the list with "this is not a cooler".
+   * dialog came to answer a row of the demos hub with "this is not a cooler".
    */
   async openPicked(uri: string, source: SourceSpec): Promise<void> {
     await this.openWithConfig(uri, source)
+  }
+
+  /**
+   * Land this tab's picker on a hub — what a `?hub=` link asks for (§23.2).
+   *
+   * Reached only from `App.restore`, and only for a window with nothing else to
+   * show, so the picker is the element that is about to be mounted. The load is
+   * the table's; this exists so `App` does not have to reach through a session
+   * into a view it does not own.
+   */
+  showHub(ref: HubRef): void {
+    this.picker.loadHub(ref)
   }
 
   /**
@@ -1885,8 +1902,8 @@ export class Session {
    */
   private async openWithConfig(uri: string, source: SourceSpec): Promise<void> {
     // A `.json` on a URL is a session, not a file to open: it is the one thing
-    // the picker's box and its example list can be handed that names a whole
-    // tab rather than a byte source. Checked before the pending config is
+    // the picker's box and its hub table can be handed that names a whole tab
+    // rather than a byte source. Checked before the pending config is
     // consumed, since this *produces* one — and only when there is none, so a
     // session that somehow named another session is refused as a file rather
     // than followed with the first one's workspace silently dropped.

@@ -111,6 +111,33 @@ describe('storedItems', () => {
     expect(items.find((item) => item.label === 'Google API key')?.detail).not.toContain('AIzaX')
   })
 
+  /**
+   * A hub is somewhere the reader connected to, so it is named rather than
+   * counted — the rule the granted files and the connected folders follow, and
+   * for the same reason: the labels are the part worth reading back before
+   * deciding what to do on a borrowed machine.
+   */
+  it('names the hubs that have been connected, and does not count them twice', async () => {
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    window.localStorage.setItem(
+      `${PREFIX}hubs`,
+      JSON.stringify([{ id: 'hub:1', label: 'Lab shelf', url: 'https://lab.example/hub.json' }]),
+    )
+    const items = await storedItems()
+    const hubs = items.find((item) => item.label === 'Hubs you connected')
+    expect(hubs?.detail).toContain('Lab shelf')
+    // Counted as a hub or as a preference, never as both: a reader told "2
+    // settings — theme, column widths, overlays" when one of the two is a
+    // catalogue URL has been told something false.
+    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
+  })
+
+  it('says nothing about hubs when none have been connected', async () => {
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    const labels = (await storedItems()).map((item) => item.label)
+    expect(labels).not.toContain('Hubs you connected')
+  })
+
   it('ignores keys that are not this app’s', async () => {
     window.localStorage.setItem('some-other-app', 'x')
     window.sessionStorage.setItem('unrelated', 'y')
@@ -129,6 +156,13 @@ describe('forgetEverything', () => {
   it('clears both web storages and the durable stores, and leaves other apps alone', async () => {
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     window.localStorage.setItem(`${PREFIX}buckets`, '[{"secretAccessKey":"shh"}]')
+    // The hubs key is swept by the prefix rule rather than by being named here,
+    // which is the promise this module makes; it is in the fixture so that a
+    // sweep which stopped covering it would fail rather than pass quietly.
+    window.localStorage.setItem(
+      `${PREFIX}hubs`,
+      '[{"id":"hub:1","label":"Lab shelf","url":"https://lab.example/hub.json"}]',
+    )
     window.sessionStorage.setItem(`${PREFIX}sessions`, '{}')
     window.sessionStorage.setItem(`${PREFIX}ui:s1|a.cool:annotations`, '[]')
     window.localStorage.setItem('some-other-app', 'keep me')
@@ -145,6 +179,7 @@ describe('forgetEverything', () => {
 
     expect(await storedItems()).toEqual([])
     expect(window.localStorage.getItem(`${PREFIX}buckets`)).toBeNull()
+    expect(window.localStorage.getItem(`${PREFIX}hubs`)).toBeNull()
     expect(window.sessionStorage.getItem(`${PREFIX}sessions`)).toBeNull()
     expect(await store(STORES.workspace).get('current')).toBeNull()
     // The other half of the durable side. A sweep that cleared the workspace

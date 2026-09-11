@@ -33,6 +33,7 @@ import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
+import { readHubRows } from './hubs'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -74,11 +75,12 @@ function count(n: number, one: string, many: string): string {
 /**
  * What is being kept, as lines a dialog can print.
  *
- * Counts rather than contents, with one deliberate exception: bucket keys are
- * named outright. Every other line describes something whose loss costs a
- * reader a preference; that one describes a secret, and a reader deciding
- * whether to press "forget everything" on a borrowed machine needs to know it is
- * there without having to press it to find out.
+ * Counts rather than contents, with three deliberate exceptions: granted files,
+ * connected folders and connected hubs are named, and bucket keys are called
+ * what they are. Every other line describes something whose loss costs a reader
+ * a preference; those describe what this browser knows about the reader's work,
+ * and somebody deciding whether to press "forget everything" on a borrowed
+ * machine needs to know it is there without having to press it to find out.
  */
 export async function storedItems(): Promise<StoredItem[]> {
   const items: StoredItem[] = []
@@ -127,17 +129,38 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
+  // Named rather than counted, on the rule the folders line follows: a hub is
+  // somewhere the reader *connected to*, and the labels are the only part of it
+  // worth reading back — a count would say a thing has been kept without saying
+  // what. Nothing secret is in a row (a label and a URL), so the whole of it can
+  // be shown; what it discloses is which lab's shelf this browser has been at,
+  // which is exactly the fact a reader on a borrowed machine came here for.
+  const hubs = readHubRows()
+  if (hubs.length > 0) {
+    items.push({
+      label: 'Hubs you connected',
+      detail: `${hubs.map((row) => row.label).join(', ')} — catalogue URLs, fetched only when ` +
+        'you open one',
+    })
+  }
+
   const local = localKeys()
-  const buckets = local.filter((key) => key === `${PREFIX}buckets`)
+  // The keys that have a line of their own above or below, so none is also
+  // counted as a *preference*: a reader told "3 settings — theme, column
+  // widths, overlays" when one of the three is their bucket secret has been
+  // told something false.
+  const named = local.filter(
+    (key) => key === `${PREFIX}buckets` || key === `${PREFIX}access` || key === `${PREFIX}hubs`,
+  )
   const access = local.filter((key) => key === `${PREFIX}access`)
-  const preferences = local.length - buckets.length - access.length
+  const preferences = local.length - named.length
   if (preferences > 0) {
     items.push({
       label: 'Preferences',
       detail: `${count(preferences, 'setting', 'settings')} — theme, column widths, overlays`,
     })
   }
-  if (buckets.length > 0) {
+  if (named.includes(`${PREFIX}buckets`)) {
     items.push({
       label: 'Bucket keys',
       // Named, not counted. See the docstring above.

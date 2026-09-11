@@ -55,7 +55,9 @@ import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
-import { demoExamples } from '../ui/examples'
+import { builtinHubs } from '../ui/examples'
+import { hubLabelFor } from '../ui/HubTable'
+import type { HubRef } from '../state/hub'
 import { downloadBlob, fileStamp } from '../ui/export'
 import {
   applyConfig,
@@ -797,17 +799,25 @@ export class App implements SessionHost {
     this.active = target >= 0 ? target : 0
     this.paintTabs()
     this.mountActive()
-    // The three seeds, in the order they override one another, and each one is
+    // The four seeds, in the order they override one another, and each one is
     // only reached because the ones above it said nothing. A **payload** in the
     // fragment is the most specific thing anybody can hand this window; a *view
     // state* in it is what a navigation leaves behind, so it has to beat the
     // `src=` the page was mounted with or a reload would undo the reader's last
-    // click; and `?config=` is the seed the page itself named, which is exactly
-    // what a window with nothing else to go on should open.
+    // click; `?config=` is the seed the page itself named, which is exactly
+    // what a window with nothing else to go on should open; and `?hub=` is the
+    // weakest of the four, because it names a **shelf** rather than a picture
+    // (§23.2). It opens the picker *on* somebody's catalogue and lets the
+    // reader choose, so a page that named both a config and a hub meant the
+    // config — a hub loaded underneath a session nobody can see is a request
+    // made for nothing. A link is a gesture, which is what licenses that fetch
+    // at all: nothing here runs unless somebody clicked a URL naming this hub.
     if (shared) void this.openSharedHash()
     else if (linked === null && this.sessions.every((session) => session.state === null)) {
       const seed = mounting().config
+      const shelf = mounting().hub
       if (seed !== null) void this.current?.openConfigUrl(seed)
+      else if (shelf !== null) this.openHubLink(shelf)
     }
     this.current?.activate()
     // Only when session storage had nothing, which is exactly "the browser was
@@ -824,6 +834,21 @@ export class App implements SessionHost {
     // and writes none, so both halves are answered before the question.
     if (this.embed || stored.sessions.length > 0) this.durableSettled = true
     else void this.offerWorkspace()
+  }
+
+  /**
+   * Land the picker on the hub a `?hub=` link named.
+   *
+   * The reference is built here rather than stored, and `builtin: false` is the
+   * load-bearing field: a hub reached by link is nobody's shipped catalogue, so
+   * a 404 on it is an honest 404 and the table offers to remember it. The id is
+   * a constant because there is at most one of these per page — the address bar
+   * holds one `?hub=` — and `state/hubs.ts` mints the `hub:<n>` that outlives
+   * the page if the reader presses remember.
+   */
+  private openHubLink(url: string): void {
+    const ref: HubRef = { id: 'hub:link', label: hubLabelFor(url), url, builtin: false }
+    this.current?.showHub(ref)
   }
 
   /**
@@ -1311,14 +1336,14 @@ export class App implements SessionHost {
   openFileDialog(session: Session): void {
     this.pickerDialog({
       title: 'Open a file',
-      // The published catalogue belongs to *this* door and not to the header's.
-      // Every entry on it is a whole session, so choosing one is the deliberate
-      // replacement this dialog is for, and offering it beside "and this too"
-      // would be offering to throw the reader's tab away from the one control
-      // whose promise is that it will not.
-      examples: demoExamples(),
-      // The landing picker's own door, not `open`: the example list is the same
-      // list, and every entry on it is a published *session*.
+      // The hubs belong to *this* door and not to the header's. Every row on
+      // one is a whole file or a whole session, so choosing one is the
+      // deliberate replacement this dialog is for, and offering it beside
+      // "and this too" would be offering to throw the reader's tab away from
+      // the one control whose promise is that it will not.
+      hubs: builtinHubs(),
+      // The landing picker's own door, not `open`: it is the same hub list, and
+      // a row on one may be a published *session* rather than a file.
       onOpen: (uri, source) => void session.openPicked(uri, source),
       onOpenFiles: (files) => void session.openFiles(files),
     })
@@ -1364,16 +1389,21 @@ export class App implements SessionHost {
    */
   private pickerDialog(props: {
     title: string
-    examples?: Array<{ label: string; url: string; note?: string }>
+    hubs?: readonly HubRef[]
     onOpen(uri: string, source: SourceSpec): void
     onOpenFiles(files: readonly File[]): void
   }): void {
     if (this.modal !== null) return
+    // Held, rather than built inline into `body`, because it has something to
+    // release: the hub table subscribes to the remembered list, and a dialog
+    // picker that is thrown away without saying so leaves one live listener per
+    // dialog ever opened.
+    let picker: FilePicker | null = null
     const modal: Modal = new Modal({
       title: props.title,
       variant: 'modal-wide',
-      body: () =>
-        new FilePicker({
+      body: () => {
+        picker = new FilePicker({
           onOpen: (uri, source) => {
             modal.close()
             props.onOpen(uri, source)
@@ -1382,9 +1412,13 @@ export class App implements SessionHost {
             modal.close()
             props.onOpenFiles(files)
           },
-          examples: props.examples,
-        }).el,
+          hubs: props.hubs,
+        })
+        return picker.el
+      },
       onClose: () => {
+        picker?.destroy()
+        picker = null
         this.modal = null
       },
     })
