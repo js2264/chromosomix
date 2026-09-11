@@ -73,7 +73,7 @@ import { googleState } from '../auth/google'
 import { ViewerError } from '../errors'
 import { bearerFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
-import { readDriveRows, type DriveRow } from '../state/drives'
+import { readDriveRows, type DriveRow, removeDriveRow } from '../state/drives'
 import { registerFolderSource } from './connected'
 import {
   LISTING_CAP,
@@ -393,4 +393,7 @@ registerFolderSource({
   kind: 'drive',
   folders: () => readDriveRows().map(driveFolder),
   usable: async () => googleState().signedIn,
+  // The panel's × forgets the row and nothing else: the account it was listed
+  // with is the reader's, and signing out is a different button.
+  disconnect: (id) => removeDriveRow(id),
 })

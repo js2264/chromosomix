@@ -52,7 +52,7 @@
 import { ViewerError } from '../errors'
 import { accessHeadersFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
-import { DROPBOX_PERMISSIONS, dropboxState, readAppKey } from '../auth/dropbox'
+import { DROPBOX_PERMISSIONS, dropboxState, readAppKey, clearAppKey, signOut } from '../auth/dropbox'
 import { registerFolderSource } from './connected'
 import {
   LISTING_CAP,
@@ -334,4 +334,11 @@ registerFolderSource({
   kind: 'dropbox',
   folders: () => (readAppKey() === null ? [] : [dropboxFolder()]),
   usable: async () => dropboxState().signedIn,
+  // There is one Dropbox and it exists because an app key is saved, so the
+  // panel's × is sign-out plus forgetting the key — after which nothing of
+  // Dropbox is left in this browser, which is what × should mean (§20.6).
+  disconnect: () => {
+    signOut()
+    clearAppKey()
+  },
 })

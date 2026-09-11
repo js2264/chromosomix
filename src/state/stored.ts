@@ -36,6 +36,7 @@ import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readHubRows } from './hubs'
 import { storedLines as driveStoredLines } from './drives'
+import { storedLines as dropboxStoredLines } from '../auth/dropbox'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -148,6 +149,8 @@ export async function storedItems(): Promise<StoredItem[]> {
 
   // Remembered Drive folders (§23.9): named by label, the way folders are.
   items.push(...driveStoredLines())
+  // The Dropbox app key (§23.9): a credential, named the way the bucket keys are.
+  items.push(...dropboxStoredLines())
 
   const local = localKeys()
   // The keys that have a line of their own above or below, so none is also
@@ -160,7 +163,8 @@ export async function storedItems(): Promise<StoredItem[]> {
       key === `${PREFIX}access` ||
       key === `${PREFIX}hubs` ||
       key === `${PREFIX}google` ||
-      key === `${PREFIX}drives`,
+      key === `${PREFIX}drives` ||
+      key === `${PREFIX}dropbox`,
   )
   const access = local.filter((key) => key === `${PREFIX}access`)
   const preferences = local.length - named.length

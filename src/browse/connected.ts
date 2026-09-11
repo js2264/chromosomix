@@ -31,7 +31,6 @@ import {
   hydrateDirectories,
 } from '../state/directories'
 import { bucketFolder } from './bucket'
-import { removeDriveRow } from '../state/drives'
 import { handleFolder, snapshotFolder } from './local'
 import type { ConnectedFolder } from './folder'
 
@@ -77,6 +76,11 @@ export interface FolderSource {
    * needs a signed-in account, and a reload signs nobody in. Default: yes.
    */
   usable?(folder: ConnectedFolder, options: { prompt?: boolean }): Promise<boolean>
+  /**
+   * Forget one folder of this kind — the panel's ×. A Drive row is one entry in
+   * its own store; a Dropbox is its app key and the sign-in. Default: nothing.
+   */
+  disconnect?(id: string): void | Promise<void>
 }
 
 const sources: FolderSource[] = []
@@ -142,10 +146,11 @@ export async function disconnectFolder(id: string): Promise<void> {
     announce()
     return
   }
-  if (id.startsWith('drive:')) {
-    // A remembered Drive folder is one row in its own store (§23.9); the
-    // account it is listed with is not touched — that is sign-out, elsewhere.
-    removeDriveRow(id)
+  // A registered kind forgets its own (§23.9): the source that lists a folder
+  // is the one that knows what forgetting it means.
+  const owner = sources.find((source) => source.folders().some((folder) => folder.id === id))
+  if (owner !== undefined) {
+    await owner.disconnect?.(id)
     announce()
     return
   }

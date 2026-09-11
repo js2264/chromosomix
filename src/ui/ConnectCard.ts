@@ -67,6 +67,7 @@ import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from 
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
+import { dropboxSection } from './DropboxSection'
 
 export interface ConnectProps {
   /**
@@ -119,6 +120,9 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
     // sign-in is (§23.9), and says "sign in first" when it is offered but the
     // reader has not.
     IS_STANDALONE ? null : driveFolderSection(done),
+    // The one provider with an account and no key (§23.9); the section decides
+    // for itself where it can be offered.
+    IS_STANDALONE ? null : dropboxSection(done),
     privacyNote(),
   )
 }

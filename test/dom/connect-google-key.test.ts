@@ -70,6 +70,7 @@ describe('the Google API key section', () => {
       'A Google API key',
       'A Google account',
       'A Google Drive folder',
+      'Dropbox',
     ])
   })
 

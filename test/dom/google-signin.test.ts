@@ -109,6 +109,7 @@ describe('the Google account section', () => {
       'A Google API key',
       'A Google account',
       'A Google Drive folder',
+      'Dropbox',
     ])
   })
 
@@ -297,10 +298,13 @@ describe('where a sign-in cannot work at all', () => {
 
     const body = await connectBody()
 
+    // Dropbox stays: its sign-in is a code pasted from a page Dropbox shows,
+    // not a registration against an origin, so `app://viewer` can do it (§23.9).
     expect(textsOf(body, '.connect-section h3')).toEqual([
       'A folder on this machine',
       'A bucket',
       'A Google API key',
+      'Dropbox',
     ])
   })
 })

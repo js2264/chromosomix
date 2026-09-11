@@ -42,7 +42,7 @@ import {
   writeClientId,
   type TokenResponse,
 } from '../../src/auth/google'
-import { connectedFolders, folderUsable } from '../../src/browse/connected'
+import { connectedFolders, disconnectFolder, folderUsable } from '../../src/browse/connected'
 import { crumbsOf, ordered, type FolderEntry } from '../../src/browse/folder'
 // Imported for its side effect as well as for the type: the module registers
 // itself at load, which is the whole of how a third backend is wired in.
@@ -505,5 +505,34 @@ describe('a folder backend that registers itself', () => {
 
     dropboxSignOut()
     expect(await folderUsable(folder!)).toBe(false)
+  })
+})
+
+/**
+ * The panel's × reaches the backend that owns the folder (§23.9): a Drive row
+ * is one entry in its own store, a Dropbox is its app key and the sign-in, and
+ * `browse/connected.ts` knows neither — it asks the source that listed the id.
+ */
+describe('disconnecting a registered folder', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('forgets a Drive row and nothing else', async () => {
+    const row = addDriveRow({ label: 'Lab Drive', folderId: 'root' })
+    expect(connectedFolders().some((folder) => folder.id === row.id)).toBe(true)
+    await disconnectFolder(row.id)
+    expect(connectedFolders().some((folder) => folder.id === row.id)).toBe(false)
+  })
+
+  it('forgets the Dropbox app key, so the folder is gone from the list', async () => {
+    writeAppKey('a1b2c3d4e5f6g7h')
+    expect(connectedFolders().some((folder) => folder.kind === 'dropbox')).toBe(true)
+    await disconnectFolder(DROPBOX_FOLDER_ID)
+    expect(connectedFolders().some((folder) => folder.kind === 'dropbox')).toBe(false)
   })
 })
