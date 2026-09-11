@@ -108,6 +108,7 @@ describe('the Google account section', () => {
       'A bucket',
       'A Google API key',
       'A Google account',
+      'A Google Drive folder',
     ])
   })
 

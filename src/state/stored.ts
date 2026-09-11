@@ -35,6 +35,7 @@ import { forgetAllDirectories, directoryRows, hydrateDirectories } from './direc
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readHubRows } from './hubs'
+import { storedLines as driveStoredLines } from './drives'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -145,6 +146,9 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
+  // Remembered Drive folders (§23.9): named by label, the way folders are.
+  items.push(...driveStoredLines())
+
   const local = localKeys()
   // The keys that have a line of their own above or below, so none is also
   // counted as a *preference*: a reader told "3 settings — theme, column
@@ -155,7 +159,8 @@ export async function storedItems(): Promise<StoredItem[]> {
       key === `${PREFIX}buckets` ||
       key === `${PREFIX}access` ||
       key === `${PREFIX}hubs` ||
-      key === `${PREFIX}google`,
+      key === `${PREFIX}google` ||
+      key === `${PREFIX}drives`,
   )
   const access = local.filter((key) => key === `${PREFIX}access`)
   const preferences = local.length - named.length

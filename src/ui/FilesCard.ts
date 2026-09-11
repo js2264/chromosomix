@@ -198,6 +198,27 @@ export class FilesCard {
   private showLapsed(folder: ConnectedFolder): void {
     this.view.clear()
     this.lapsedEl.classList.remove('hidden')
+    // A Drive folder or a Dropbox is not lapsed the way a directory grant is:
+    // it lists with an account, and a reload signs nobody in (§23.9). The fix
+    // is the same one click, under a different name, in the Connect dialog.
+    const account =
+      folder.kind === 'drive'
+        ? 'A Google account'
+        : folder.kind === 'dropbox'
+          ? 'Dropbox'
+          : null
+    if (account !== null) {
+      this.lapsedEl.replaceChildren(
+        el('p', {
+          class: 'hint',
+          text:
+            `${folder.label} is listed with an account this tab is not signed in to. Sign in ` +
+            `under Connect → ${account} and it lists again; nothing about the folder has changed.`,
+        }),
+        button('retry', () => void this.show(folder), { class: 'btn' }),
+      )
+      return
+    }
     this.lapsedEl.replaceChildren(
       el('p', {
         class: 'hint',

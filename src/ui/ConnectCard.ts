@@ -66,6 +66,7 @@ import { bucketFolderId } from '../browse/bucket'
 import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from '../browse/local'
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
+import { driveFolderSection } from './DriveFolderSection'
 
 export interface ConnectProps {
   /**
@@ -114,6 +115,10 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
     // accept. `googleAccountSection` decides that for itself — see
     // `auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`.
     IS_STANDALONE ? null : googleAccountSection(),
+    // A Drive folder needs the account above; the section is null wherever the
+    // sign-in is (§23.9), and says "sign in first" when it is offered but the
+    // reader has not.
+    IS_STANDALONE ? null : driveFolderSection(done),
     privacyNote(),
   )
 }

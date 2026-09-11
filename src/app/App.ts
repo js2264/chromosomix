@@ -38,6 +38,7 @@ import {
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { hydrateFolders } from '../browse/connected'
+import '../browse/backends'
 import { StatusBar } from '../ui/StatusBar'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { desktop } from '../desktop'

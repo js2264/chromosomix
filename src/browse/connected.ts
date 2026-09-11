@@ -31,6 +31,7 @@ import {
   hydrateDirectories,
 } from '../state/directories'
 import { bucketFolder } from './bucket'
+import { removeDriveRow } from '../state/drives'
 import { handleFolder, snapshotFolder } from './local'
 import type { ConnectedFolder } from './folder'
 
@@ -138,6 +139,13 @@ export async function disconnectFolder(id: string): Promise<void> {
   if (id.startsWith('bucket:')) {
     const scopeId = id.slice('bucket:'.length)
     writeScopes(readScopes().filter((scope) => scope.id !== scopeId))
+    announce()
+    return
+  }
+  if (id.startsWith('drive:')) {
+    // A remembered Drive folder is one row in its own store (§23.9); the
+    // account it is listed with is not touched — that is sign-out, elsewhere.
+    removeDriveRow(id)
     announce()
     return
   }
