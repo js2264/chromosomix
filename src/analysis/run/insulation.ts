@@ -44,6 +44,7 @@ import {
   usableBlock,
   type Span,
 } from './blocks'
+import { formatBp } from './labels'
 
 /** One sequence this run will score. */
 interface Unit {
@@ -404,13 +405,3 @@ function domainOutput(
   }
 }
 
-/** `10 kb`, for a lane label. Small enough not to be worth `format.ts`. */
-function formatBp(bp: number): string {
-  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
-  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
-  return `${Math.round(bp)} bp`
-}
-
-function trim(value: number): string {
-  return String(Number(value.toFixed(2)))
-}

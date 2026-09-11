@@ -29,6 +29,7 @@ import type { MetaCooler } from '../../metacooler/MetaCooler'
 import { DEFAULT_WEIGHT_COLUMN } from '../../metacooler/matrix'
 import type { JobContext } from '../job'
 import type { BlockInput } from '../worker/protocol'
+import type { SeparationBand } from '../band'
 import { diagonalTiles, tileRows } from '../tiles'
 
 /** A half-open run of absolute bins. */
@@ -152,22 +153,53 @@ export async function squareFor(
  * the file's own numbers, not a derived quantity, and doubling them would double
  * the one array that does scale with the sequence.
  */
-export class ContigBand {
+export class ContigBand implements SeparationBand {
   readonly values: Float32Array
 
   constructor(
     readonly n: number,
     /** Highest offset `col - row` stored, inclusive. */
     readonly hi: number,
+    /**
+     * Whether the sequence joins its own end to its own beginning (§8.16).
+     *
+     * What it changes is only what {@link forward} answers past either end — the
+     * storage is identical, because a circular band's wrapped cells live at the
+     * same `(offset, row)` as any other: the cell `offset` along from row `r` is
+     * at `(r + offset) mod n`, and {@link bandFor} reads the corner of the
+     * square that holds those and fills them in.
+     */
+    readonly circular: boolean = false,
   ) {
-    this.values = new Float32Array((hi + 1) * n)
+    this.values = new Float32Array((hi + 1) * n).fill(Number.NaN)
   }
 
   /** `(row, col)` where the cell is stored; `0` outside the band. */
   at(row: number, col: number): number {
     const offset = col - row
     if (offset < 0 || offset > this.hi || row < 0 || row >= this.n) return 0
-    return this.values[offset * this.n + row]
+    const value = this.values[offset * this.n + row]
+    // `0` rather than `NaN` for a cell that was never read, which is what this
+    // accessor has always answered and what `analysis/chromosight.ts` is written
+    // against. {@link forward} is the one that tells *nothing here* apart from
+    // *nothing read*, because the kernels that use it need to.
+    return Number.isNaN(value) ? 0 : value
+  }
+
+  /**
+   * The cell `offset` along the diagonal from `row` — the accessor the banded
+   * kernels are written against. See `analysis/band.ts`.
+   */
+  forward(row: number, offset: number): number {
+    if (offset < 0) return this.forward(row + offset, -offset)
+    if (offset > this.hi) return Number.NaN
+    let r = row
+    if (this.circular) {
+      r = ((row % this.n) + this.n) % this.n
+    } else if (r < 0 || r + offset >= this.n) {
+      return Number.NaN
+    }
+    return this.values[offset * this.n + r]
   }
 }
 
@@ -178,6 +210,19 @@ export class ContigBand {
  * decided, so a reader who pressed Run while looking at the sequence pays
  * nothing; the read path is tiled and bounded. Either way what comes back is the
  * same object, so nothing downstream knows which it got.
+ *
+ * ## The one extra read a circular sequence costs
+ *
+ * On a circular sequence the cell `d` bins after the last bin is a cell `d`
+ * bins into the *first*, and in the contig's own square that cell is not near
+ * the diagonal at all — it is in the **top-right corner**, rows `[0, hi)` against
+ * columns `[n − hi, n)`. A tiled band walk never goes near it, which is exactly
+ * why a band read that simply kept the same tiles and changed the accessor would
+ * answer `NaN` for every bin within `hi` of the junction: a circular chromosome
+ * with a linear-looking seam at the one place the flag was set to fix.
+ *
+ * So a circular band reads one more rectangle. It is `hi × hi` cells whatever
+ * the sequence is, it is one request, and it is the whole of the difference.
  */
 export async function bandFor(
   job: JobContext,
@@ -188,13 +233,25 @@ export async function bandFor(
     block: BlockInput | null
     balance: boolean
     value: string
+    /**
+     * Read the sequence as a circle: the band wraps past the last bin (§8.16).
+     *
+     * `hi` is then capped at half the sequence rather than at its length, since
+     * past half the circle the short way round is the other way and a band wider
+     * than that would hold every cell twice.
+     */
+    circular?: boolean
     /** Called between tiles, so a chromosome-long read can be stopped. */
     onTile?: (done: number, total: number) => Promise<void> | void
   },
 ): Promise<ContigBand> {
   const n = span.to - span.from
-  const hi = Math.max(0, Math.min(options.hi, Math.max(0, n - 1)))
-  const band = new ContigBand(n, hi)
+  const circular = options.circular === true
+  const hi = Math.max(
+    0,
+    Math.min(options.hi, circular ? Math.floor(n / 2) : Math.max(0, n - 1)),
+  )
+  const band = new ContigBand(n, hi, circular)
 
   const fill = (
     values: ArrayLike<number>,
@@ -212,6 +269,26 @@ export async function bandFor(
     }
   }
 
+  /**
+   * The wrapped cells, from the corner of the contig's own square.
+   *
+   * `corner` is rows `[0, hi)` by columns `[n − hi, n)` of that square, row-major
+   * and `hi` wide. The cell it holds at `(c, r)` — a *low* row against a *high*
+   * column — is the contact between bin `r` near the end and bin `c` near the
+   * start, which is the cell `c + n − r` bins along the circle from `r`. Only
+   * the separations at or below `hi` belong in the band; the rest of the corner
+   * is the long way round and is already stored at its short-way offset.
+   */
+  const fillWrap = (corner: ArrayLike<number>, ncols: number): void => {
+    for (let c = 0; c < hi; c++) {
+      for (let r = n - hi; r < n; r++) {
+        const offset = c + n - r
+        if (offset < 1 || offset > hi) continue
+        band.values[offset * n + r] = corner[c * ncols + (r - (n - hi))]
+      }
+    }
+  }
+
   if (options.block !== null) {
     const block = options.block
     const rowSkip = span.from - block.rowExtent[0]
@@ -220,6 +297,19 @@ export async function bandFor(
       const at = (rowSkip + r) * block.ncols + colSkip
       const last = Math.min(n - 1, r + hi)
       for (let c = r; c <= last; c++) band.values[(c - r) * n + r] = block.values[at + c]
+    }
+    if (circular && hi > 0) {
+      // The corner is inside a block that covers the whole sequence, so there is
+      // nothing to read — only to index. Same arithmetic as {@link fillWrap},
+      // against the block's own stride.
+      for (let c = 0; c < hi; c++) {
+        const at = (rowSkip + c) * block.ncols + colSkip
+        for (let r = n - hi; r < n; r++) {
+          const offset = c + n - r
+          if (offset < 1 || offset > hi) continue
+          band.values[offset * n + r] = block.values[at + r]
+        }
+      }
     }
     return band
   }
@@ -239,6 +329,15 @@ export async function bandFor(
       value: options.value,
     })
     fill(dense.values, dense.ncols, rowFrom, rowTo, rowFrom)
+  }
+  if (circular && hi > 0) {
+    const corner = await job.mc.matrix({
+      rows: [span.from, span.from + hi],
+      cols: [span.to - hi, span.to],
+      balance: options.balance,
+      value: options.value,
+    })
+    fillWrap(corner.values, corner.ncols)
   }
   await options.onTile?.(tiles, tiles)
   return band

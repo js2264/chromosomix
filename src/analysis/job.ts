@@ -257,6 +257,37 @@ export function contigIdsFor(
 }
 
 // ---------------------------------------------------------------------------
+// Circular sequences (§8.16)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether this run should read `name` as a circle rather than as a line.
+ *
+ * The flag is the reader's, set on the Map aesthetics card and carried in
+ * `AnalysisFraming.circular`, and it is **automatic**: there is no per-task
+ * tickbox and deliberately so. A plasmid is circular or it is not; that is a
+ * fact about the molecule rather than a setting of the directionality index, and
+ * a catalogue in which eleven tasks each carry their own copy of it is a
+ * catalogue in which a reader can get ten circular answers and one linear one
+ * out of the same file without being told.
+ *
+ * Matched through {@link contigIdFor}'s rule rather than by string equality, for
+ * §5.9's reason and for a case that is entirely ordinary here: the flag is set
+ * against the *session's* map, a batch then asks every panel of a deck for it,
+ * and the `.hic` beside the `.cool` spells the same plasmid another way. A name
+ * this file has not got matches nothing and answers `false`, which is right —
+ * the sequence the reader flagged is not in this file.
+ */
+export function readsAsCircular(job: JobContext, name: string): boolean {
+  const flagged = job.framing.circular
+  if (flagged === undefined || flagged.length === 0) return false
+  if (flagged.includes(name)) return true
+  const cid = job.mc.hasContig(name) ? job.mc.contigId(name) : -1
+  if (cid < 0) return false
+  return flagged.some((entry) => contigIdFor(job.mc, entry) === cid)
+}
+
+// ---------------------------------------------------------------------------
 // Cancellation
 // ---------------------------------------------------------------------------
 
