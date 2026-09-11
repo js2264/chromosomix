@@ -30,7 +30,12 @@
  */
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
-import type { SerialisedError, SourceSpec } from '../../worker/protocol'
+import type {
+  OrientationSummary,
+  PairsBinning,
+  SerialisedError,
+  SourceSpec,
+} from '../../worker/protocol'
 import type { CorrelationField } from '../compartments'
 import type { SmoothedField } from '../../render/derive'
 import type { Smoothing } from '../../render/smooth'
@@ -80,6 +85,21 @@ export const BLOCK_COPY_LIMIT_BYTES = 64 << 20
  * serialiser. Keyed by the parameter key that chose them, so a task that takes
  * two feature sets gets two, told apart by which control they came from.
  */
+/**
+ * Another map on screen, as a task that compares two files needs it.
+ *
+ * Everything the mount needs and the reader's own name for the panel, which is
+ * what the figure is labelled with. Assembled on the main thread, because that
+ * is the only side that knows what a deck is.
+ */
+export interface PeerMap {
+  label: string
+  uri: string
+  source: SourceSpec
+  cells?: readonly string[]
+  binning?: PairsBinning
+}
+
 export interface TaskInputs {
   features?: Record<string, FeatureSet>
   pairs?: Record<string, PairSet>
@@ -111,6 +131,28 @@ export interface TaskInputs {
    * inventing a way to find out.
    */
   contigLengths?: Record<string, number>
+  /**
+   * The four orientation-resolved decay curves of an imported `.pairs` (§3.7).
+   *
+   * Handed in rather than read, because they cannot be read here: the records
+   * they were counted from are gone by the time any task runs, and what the
+   * worker has mounted is the pixel table they were binned into. This is the one
+   * input in this list that is a *measurement* rather than a thing to measure,
+   * and it is here for the reason the rest are — it lives on the main thread and
+   * the task that draws it runs on this one.
+   */
+  orientation?: OrientationSummary
+  /**
+   * The other maps of a deck, for the one task whose unit is a pair of files.
+   *
+   * Empty or absent everywhere else. This worker mounts **one** file (§18.3) and
+   * that is the right shape for every other task in the catalogue: an analysis
+   * is a measurement of a picture. A reproducibility coefficient is a
+   * measurement of two, and rather than giving the worker a second permanent
+   * mount it is handed the addresses and opens each in turn, for one sequence at
+   * a time, closing as it goes.
+   */
+  peers?: PeerMap[]
   /** The view's own block, when it was small enough to be worth copying. */
   block?: BlockInput
   /**
@@ -157,6 +199,14 @@ export type AnalysisRequest =
        * run over two selected cells would silently measure the pseudo-bulk.
        */
       cells?: readonly string[]
+      /**
+       * How to bin a `.pairs`, where this map was imported from one (§3.7).
+       *
+       * The reader has already chosen it; this mount is the *second* one and
+       * must not ask again. Without it every task on an imported map failed at
+       * the mount with a refusal the reader had already answered.
+       */
+      binning?: PairsBinning
     }
   | {
       id: number

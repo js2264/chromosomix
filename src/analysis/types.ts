@@ -587,6 +587,17 @@ export interface CurveSeries {
   colour?: string
   /** Feature or observation count behind this line, for the legend. */
   n?: number
+  /**
+   * How the series is drawn; a line unless it says otherwise.
+   *
+   * `points` is for a series whose x is not an ordering. Every other curve in
+   * the catalogue is a function of a separation, a position or a rank, so
+   * joining consecutive samples says something true about what is between them.
+   * A cell-cycle scatter is not: its two axes are two fractions measured on the
+   * same cell, the cells have no order along x, and a line through them would
+   * draw a path nothing travelled.
+   */
+  mark?: 'line' | 'points'
 }
 
 export interface CurveOutput {
@@ -880,6 +891,27 @@ export interface AnalysisContext {
   blockLoaded: boolean
   /** Bytes of that block, so the runner can decide whether copying it is free. */
   blockBytes: number
+  /**
+   * Cells in a single-cell container, and `0` for every other file (§3.8).
+   *
+   * Carried so that a task whose unit is a cell can be **absent** rather than
+   * waiting on a file that has none, which is §8.5's rule — and so that its
+   * estimate can be in cells, which is the only honest denominator for a read
+   * whose cost is linear in them.
+   */
+  cells?: number
+  /** How many of those the reader has ticked; equal to {@link cells} when none is. */
+  activeCells?: number
+  /**
+   * The other maps of a deck, for the one task whose unit is a pair of files.
+   *
+   * Absent in a session with one map, which is what makes that task *waiting*
+   * rather than ready. The bin size is here because it is the one thing §16's
+   * navigation lock deliberately does **not** make equal — the lock's currency
+   * is base pairs, so a deck can hold a 1 kb map beside a 5 kb one — and a
+   * stratified correlation is meaningless across two grids.
+   */
+  peers?: Array<{ label: string; uri: string; binsize: number }>
 }
 
 // ---------------------------------------------------------------------------
@@ -918,6 +950,16 @@ export interface AnalysisTask {
    * plausible one.
    */
   version: number
+  /**
+   * Whether this task reads **another map** beside the one that is mounted.
+   *
+   * Declared on the descriptor rather than inferred, for the reason
+   * `cliCannotRun` gives about tracks: the shell has one file and one mount, so
+   * a task whose question is about two must be refused before a file is opened
+   * rather than failing inside a runner afterwards. It is one task (§16, §18.8)
+   * and it is a property of what the task *is*.
+   */
+  needsPeers?: boolean
   /**
    * Whether this task can run on what is open, and if not, why not.
    *

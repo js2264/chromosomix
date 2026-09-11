@@ -32,8 +32,32 @@ const CORE_ORDER = ['name', 'nnz', 'sum']
 /** Above this many ticked cells, the button says the read is a big one. */
 const MANY_CELLS = 64
 
+/**
+ * Numbers a run measured per cell, to be shown beside the ones the file records.
+ *
+ * The reason the per-cell QC task exists (`analysis/tasks/cellqc.ts`) is that
+ * this table could only rank cells by `nnz` and `sum` — what the *writer* put in
+ * the attributes, which is a statement about the sequencing. A measurement of
+ * the contacts belongs in the same table, sortable and filterable by the same
+ * machinery, because the gesture it is for is the one this table already has:
+ * sort, tick a run of rows, sum them.
+ *
+ * Keyed by cell name rather than by row, so a result computed over the file
+ * still lines up after a filter, a re-sort, or a re-open — and a cell the run
+ * did not cover is simply blank.
+ */
+export interface MeasuredCells {
+  columns: Array<{ key: string; label: string; hint?: string }>
+  /** Cell name to that cell's measured values. */
+  values: Map<string, Record<string, number>>
+  /** What produced them, for the column tooltips. */
+  from: string
+}
+
 export interface CellsTableOptions {
   data: CellsResult
+  /** Per-cell numbers from an analysis run, appended as columns. */
+  measured?: MeasuredCells
   /** Total cells in the file, which is `data.table.length` — passed for clarity. */
   persistence?: VirtualTableOptions['persistence']
   /**
@@ -58,7 +82,7 @@ export class CellsTable {
     this.names = data.table.data['name'] as string[]
     const total = data.table.length
 
-    const columns = buildColumns(data)
+    const columns = buildColumns(data, options.measured)
     const show = button('sum selected →', () => {
       const rows = this.table.selection
       if (rows.length > 0) options.onShowCells(rows.map((row) => this.names[row]))
@@ -178,7 +202,7 @@ export class CellsTable {
  * in its own column; anything constant was dropped upstream, where it is a fact
  * about the file rather than about a cell (`MetaCooler.cellTable`).
  */
-function buildColumns(data: CellsResult): ColumnDef[] {
+function buildColumns(data: CellsResult, measured?: MeasuredCells): ColumnDef[] {
   const payload = data.table
   const present = new Set(payload.columns)
   const ordered = [
@@ -186,7 +210,7 @@ function buildColumns(data: CellsResult): ColumnDef[] {
     ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
   ]
 
-  return ordered.map((name) => {
+  const base: ColumnDef[] = ordered.map((name) => {
     const column = payload.data[name]
     if (payloadColumnIsText(column)) {
       return {
@@ -216,4 +240,27 @@ function buildColumns(data: CellsResult): ColumnDef[] {
       format: (value) => (typeof value === 'number' ? fmt.num(value) : ''),
     }
   })
+
+  if (measured === undefined) return base
+
+  const names = data.table.data['name'] as string[]
+  return [
+    ...base,
+    ...measured.columns.map((column): ColumnDef => ({
+      key: `measured:${column.key}`,
+      label: column.label,
+      kind: 'number',
+      align: 'right',
+      width: 'minmax(6rem, 0.7fr)',
+      title:
+        column.hint === undefined
+          ? `Measured by ${measured.from}.`
+          : `${column.hint} Measured by ${measured.from}.`,
+      value: (row) => measured.values.get(names[row])?.[column.key],
+      // Three decimals, because every one of these is a fraction. `fmt.num` is
+      // right for a depth and wrong for a share of one.
+      format: (value) =>
+        typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : '',
+    })),
+  ]
 }

@@ -237,6 +237,61 @@ export class ScoolStore implements PixelStore {
       options.onProgress?.(Math.min(done, total), total)
     }
   }
+
+  /**
+   * The same walk, with each chunk told which cell it came out of.
+   *
+   * {@link scanAll} exists to make a set of cells behave as one cooler, and this
+   * is the one question that needs it not to: *what is each cell on its own*.
+   * Nothing else in this application asks it, because nothing else in this
+   * application draws a cell — the Cells table ranks them by the attributes
+   * their writer recorded, which is a statement about the sequencing rather than
+   * about the contacts.
+   *
+   * **It costs exactly what a pseudo-bulk costs**, which is the whole argument
+   * for having it: the reads are the same reads in the same order, and the only
+   * difference is that the accumulator on the other end is one per cell instead
+   * of one shared. A reader who has already agreed to sum four thousand cells
+   * has already agreed to this.
+   */
+  async scanPerCell(options: PerCellScanOptions): Promise<void> {
+    const total = this.nnz
+    let done = 0
+    for (let index = 0; index < this.cells.length; index++) {
+      const cell = this.cells[index]
+      options.onCell?.(index, cell.name)
+      const before = done
+      let stopped = false
+      await cell.store.scanAll({
+        ...(options.chunkSize === undefined ? {} : { chunkSize: options.chunkSize }),
+        onChunk: (chunk) => {
+          const keepGoing = options.onChunk(index, chunk)
+          if (keepGoing === false) stopped = true
+          return keepGoing
+        },
+        onProgress: (cellDone) => {
+          done = before + cellDone
+          options.onProgress?.(done, total)
+        },
+      })
+      if (stopped) return
+      done = before + cell.store.nnz
+      options.onProgress?.(Math.min(done, total), total)
+      // Between cells, for `forEachWindow`'s reason: a cancel arrives as a
+      // message and a loop that never returns to the event loop never sees one.
+      await yieldToEventLoop()
+    }
+  }
+}
+
+/** How a caller watches a per-cell walk ({@link ScoolStore.scanPerCell}). */
+export interface PerCellScanOptions {
+  chunkSize?: number
+  /** Called before each cell's own pixels, with its index into the selection. */
+  onCell?(index: number, name: string): void
+  /** Returning `false` abandons the whole walk where it stands. */
+  onChunk(cell: number, chunk: PixelChunk): boolean | void
+  onProgress?(done: number, total: number): void
 }
 
 /**

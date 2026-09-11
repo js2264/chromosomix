@@ -216,7 +216,16 @@ describe('binPairs', () => {
     }
     const source = new BytesSource(bgzipped(`${lines.join('\n')}\n`))
     const header = await readPairsHeader(source)
-    expect(header.columns).toEqual({ chrom1: 0, chrom2: 1, pos1: 2, pos2: 3 })
+    // `-1` for the strands: this header declares five columns and none of them
+    // is one, which is a fact about the file rather than a fault (§3.7).
+    expect(header.columns).toEqual({
+      chrom1: 0,
+      chrom2: 1,
+      pos1: 2,
+      pos2: 3,
+      strand1: -1,
+      strand2: -1,
+    })
     const pixels = await binPairs(source, {
       binSize: BIN,
       contigs: header.contigs,
@@ -501,7 +510,14 @@ describe('readPairsHeader', () => {
     expect(header.contigs).toEqual(CONTIGS)
     expect(header.assembly).toBe('sacCer3')
     expect(header.sorted).toBe('chr1-chr2-pos1-pos2')
-    expect(header.columns).toEqual({ chrom1: 1, pos1: 2, chrom2: 3, pos2: 4 })
+    expect(header.columns).toEqual({
+      chrom1: 1,
+      pos1: 2,
+      chrom2: 3,
+      pos2: 4,
+      strand1: 5,
+      strand2: 6,
+    })
   })
 
   it('falls back to an embedded SAM header for sizes', async () => {
@@ -522,5 +538,173 @@ describe('readPairsHeader', () => {
     await expect(readPairsHeader(new BytesSource(bgzipped(text)))).rejects.toThrow(
       /declares no `#chromsize:` lines/,
     )
+  })
+})
+
+/**
+ * The four orientation curves, counted in the import's own pass (§3.7).
+ *
+ * The one thing this importer reads out of a record beyond its four
+ * coordinates, and it is read for a *curve beside* the matrix rather than for
+ * anything the matrix is built from — no strand reaches a bin, a pixel or a
+ * written `.mcool`. What is asserted here is exactly that: the pixels are
+ * unchanged by the strands being there, and the counts land in the right one of
+ * the four.
+ */
+describe('orientation counting', () => {
+  /** A pairs file whose records carry strands, in the 4DN default order. */
+  function stranded(records: Array<Record & { s1: string; s2: string }>): Uint8Array {
+    const lines = [
+      '## pairs format v1.0',
+      ...CONTIGS.map((c) => `#chromsize: ${c.name} ${c.length}`),
+      '#columns: readID chr1 pos1 chr2 pos2 strand1 strand2',
+    ]
+    for (const r of records) {
+      lines.push(`R\t${r.chrom1}\t${r.pos1}\t${r.chrom2}\t${r.pos2}\t${r.s1}\t${r.s2}`)
+    }
+    return bgzipped(`${lines.join('\n')}\n`)
+  }
+
+  /** Total counts in each of the four, from a binned result. */
+  function totals(pixels: BinnedPixels): number[] {
+    const counts = pixels.orientation?.counts
+    if (counts === undefined) return []
+    return counts.map((array) => array.reduce((sum, value) => sum + value, 0))
+  }
+
+  it('files each record under the pair of strands it carries', async () => {
+    const source = new BytesSource(
+      stranded([
+        { chrom1: 'chrI', pos1: 100, chrom2: 'chrI', pos2: 900, s1: '+', s2: '+' },
+        { chrom1: 'chrI', pos1: 200, chrom2: 'chrI', pos2: 950, s1: '+', s2: '-' },
+        { chrom1: 'chrI', pos1: 300, chrom2: 'chrI', pos2: 980, s1: '+', s2: '-' },
+        { chrom1: 'chrI', pos1: 400, chrom2: 'chrI', pos2: 990, s1: '-', s2: '+' },
+        { chrom1: 'chrI', pos1: 500, chrom2: 'chrI', pos2: 999, s1: '-', s2: '-' },
+      ]),
+    )
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(totals(pixels!)).toEqual([1, 2, 1, 1])
+    expect(pixels?.orientation?.total).toBe(5)
+  })
+
+  it('counts cis records only, since a trans pair has no separation', async () => {
+    const source = new BytesSource(
+      stranded([
+        { chrom1: 'chrI', pos1: 100, chrom2: 'chrII', pos2: 200, s1: '+', s2: '+' },
+        { chrom1: 'chrI', pos1: 100, chrom2: 'chrI', pos2: 200, s1: '+', s2: '+' },
+      ]),
+    )
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    // One of the two, and the trans record is still a pixel.
+    expect(pixels?.orientation?.total).toBe(1)
+    expect(pixels?.sum).toBe(2)
+  })
+
+  it('counts at the record’s own separation rather than at the grid’s', async () => {
+    // Both records land in one bin pair at this resolution, and their
+    // separations differ by an order of magnitude. A curve on the map's grid
+    // could not tell them apart, which is the whole reason this axis is counted
+    // from the records.
+    const source = new BytesSource(
+      stranded([
+        { chrom1: 'chrI', pos1: 10, chrom2: 'chrI', pos2: 20, s1: '+', s2: '+' },
+        { chrom1: 'chrI', pos1: 1, chrom2: 'chrI', pos2: 99, s1: '+', s2: '+' },
+      ]),
+    )
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    const counts = pixels!.orientation!.counts[0]
+    const filled = [...counts].filter((value) => value > 0)
+    expect(filled).toEqual([1, 1])
+  })
+
+  it('leaves the pixels exactly as they were without strands', async () => {
+    const records = sortRecords(CONTIGS, randomRecords(400, 19))
+    // `#columns:` without the strands, which is what a file trimmed by a
+    // pipeline looks like. The records still carry two trailing fields and the
+    // importer never reaches them, which is the point.
+    const plain = new BytesSource(
+      bgzipped(
+        pairsText({
+          contigs: CONTIGS,
+          records,
+          columns: ['readID', 'chr1', 'pos1', 'chr2', 'pos2'],
+        }),
+      ),
+    )
+    const plainHeader = await readPairsHeader(plain)
+    const withoutStrands = await binPairs(plain, {
+      binSize: BIN,
+      contigs: plainHeader.contigs,
+      columns: plainHeader.columns,
+    })
+
+    const decorated = new BytesSource(
+      stranded(records.map((r, i) => ({ ...r, s1: i % 2 === 0 ? '+' : '-', s2: '+' }))),
+    )
+    const strandedHeader = await readPairsHeader(decorated)
+    const withStrands = await binPairs(decorated, {
+      binSize: BIN,
+      contigs: strandedHeader.contigs,
+      columns: strandedHeader.columns,
+    })
+
+    expect([...withStrands!.bin1]).toEqual([...withoutStrands!.bin1])
+    expect([...withStrands!.bin2]).toEqual([...withoutStrands!.bin2])
+    expect([...withStrands!.count]).toEqual([...withoutStrands!.count])
+    expect(withoutStrands?.orientation ?? null).toBeNull()
+    expect(withStrands?.orientation).not.toBeNull()
+  })
+
+  it('has no curves at all for a file that declares no strand columns', async () => {
+    const records = sortRecords(CONTIGS, randomRecords(50, 23))
+    const source = new BytesSource(
+      bgzipped(
+        pairsText({
+          contigs: CONTIGS,
+          records,
+          columns: ['readID', 'chr1', 'pos1', 'chr2', 'pos2'],
+        }),
+      ),
+    )
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    expect(pixels?.orientation ?? null).toBeNull()
+  })
+
+  it('skips a record whose strand field is neither + nor −', async () => {
+    const source = new BytesSource(
+      stranded([
+        { chrom1: 'chrI', pos1: 100, chrom2: 'chrI', pos2: 900, s1: '.', s2: '+' },
+        { chrom1: 'chrI', pos1: 100, chrom2: 'chrI', pos2: 900, s1: '+', s2: '+' },
+      ]),
+    )
+    const header = await readPairsHeader(source)
+    const pixels = await binPairs(source, {
+      binSize: BIN,
+      contigs: header.contigs,
+      columns: header.columns,
+    })
+    // The record is binned — it is a contact — and it is simply not in a curve.
+    expect(pixels?.sum).toBe(2)
+    expect(pixels?.orientation?.total).toBe(1)
   })
 })

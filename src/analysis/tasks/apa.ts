@@ -68,10 +68,59 @@ export function isDomainPileup(params: Params): boolean {
   return isScaled(params) && onDiagonal(params)
 }
 
-/** Whether the anchors are pairs (off-diagonal) or single features. */
+/**
+ * Whether the windows sit **on** the diagonal.
+ *
+ * Three anchor modes and only one of them does. A loop set is two anchors and a
+ * feature set is one, which is the distinction this used to be — and *all pairs*
+ * is a third thing that reads like the second and behaves like the first: its
+ * input is one feature set and its windows are off the diagonal, between every
+ * two features of it. So the question the rest of the task asks has to be *is
+ * this on the diagonal* rather than *did the reader choose a feature set*, and
+ * the two stopped being the same answer when the third mode arrived.
+ */
 export function onDiagonal(params: Params): boolean {
-  return params.anchors !== 'pairs'
+  return params.anchors !== 'pairs' && params.anchors !== 'allpairs'
 }
+
+/** Whether the input is a loaded pair set, rather than a feature set. */
+export function usesPairSet(params: Params): boolean {
+  return params.anchors === 'pairs'
+}
+
+/**
+ * Whether the pairs are **made** from one feature set rather than loaded.
+ *
+ * The question behind it is the one a loop set cannot answer: *do these places
+ * contact each other more than places like them would?* A loaded BEDPE is
+ * somebody's claim about which pairs matter, so a pileup over one measures the
+ * claim. Every pair of a peak set inside a separation range is not a claim about
+ * anything, which is what makes it a test — and it is the shape of the figure
+ * behind a great many papers about a factor clustering in three dimensions.
+ */
+export function allPairs(params: Params): boolean {
+  return params.anchors === 'allpairs'
+}
+
+/** How many separation bins the run splits its pairs into; 1 is a single pileup. */
+export function distanceBins(params: Params): number {
+  if (onDiagonal(params)) return 1
+  const asked = typeof params.byDistance === 'number' ? Math.round(params.byDistance) : 0
+  return asked > 1 ? Math.min(MAX_DISTANCE_BINS, asked) : 1
+}
+
+/**
+ * The most separation bins worth drawing, and the most pairs worth generating.
+ *
+ * Six panels is already a figure that needs a caption; past that the pileups are
+ * thumbnails. The pair cap is the one that matters: every pair of a set inside a
+ * window is quadratic in how densely the set packs, so a 40,000-peak set at a
+ * 2 Mb reach is tens of millions of windows — which is not a long run, it is a
+ * run that never finishes. Past the cap the pairs are **sampled**, with the
+ * task's own seed, and the run says so.
+ */
+export const MAX_DISTANCE_BINS = 6
+export const MAX_GENERATED_PAIRS = 200_000
 
 const PARAMS: readonly ParamSpec[] = [
   {
@@ -91,6 +140,14 @@ const PARAMS: readonly ParamSpec[] = [
         label: 'Feature set',
         needsKinds: ['gtf', 'segments', 'variants'],
         hint: 'On the diagonal, at each feature.',
+      },
+      {
+        value: 'allpairs',
+        label: 'Every pair of a feature set',
+        needsKinds: ['gtf', 'segments', 'variants'],
+        hint:
+          'Off the diagonal, between every two features within a separation range — the test of ' +
+          'whether a set of places contacts itself.',
       },
     ],
   },
@@ -274,13 +331,55 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Control',
   },
   {
+    kind: 'number',
+    key: 'minSep',
+    label: 'Nearest two features may be',
+    unit: 'bp',
+    hint: 'Below this a pair is mostly the diagonal it sits on rather than a contact between two places.',
+    default: 20_000,
+    min: 0,
+    integer: true,
+    when: (params) => params.anchors === 'allpairs',
+    section: 'Separation',
+  },
+  {
+    kind: 'number',
+    key: 'maxSep',
+    label: 'Furthest two features may be',
+    unit: 'bp',
+    default: 2_000_000,
+    min: 1,
+    integer: true,
+    when: (params) => params.anchors === 'allpairs',
+    section: 'Separation',
+  },
+  {
+    kind: 'number',
+    key: 'byDistance',
+    label: 'Split by separation into',
+    hint:
+      'Log-spaced bins, each piled up on its own with its own control. 0 or 1 is one pileup over ' +
+      'the lot — which averages a 30 kb contact and a 2 Mb one into a picture of neither.',
+    default: 0,
+    min: 0,
+    max: MAX_DISTANCE_BINS,
+    integer: true,
+    slider: true,
+    when: (params) => params.anchors === 'pairs' || params.anchors === 'allpairs',
+    section: 'Separation',
+  },
+  {
     kind: 'column',
     key: 'rankBy',
     label: 'Rank by',
     from: 'features',
     optional: true,
     noneLabel: 'Do not rank',
-    when: (params) => params.anchors !== 'pairs',
+    // **Only the on-diagonal mode**, and the reason is that ranking is about
+    // *features* while the other two modes pile up *pairs*. A loop set's own
+    // score already ranks it; every pair of a feature set has two features and
+    // therefore two scores, and there is no one right way to combine them.
+    when: (params) => params.anchors === 'features',
     section: 'Ranking',
   },
   {
@@ -289,7 +388,7 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'Then',
     default: 'all',
     when: (params) =>
-      params.anchors !== 'pairs' && typeof params.rankBy === 'string' && params.rankBy !== '',
+      params.anchors === 'features' && typeof params.rankBy === 'string' && params.rankBy !== '',
     options: [
       { value: 'all', label: 'One pileup' },
       { value: 'top', label: 'Top N' },
@@ -340,7 +439,9 @@ function windowSide(params: Params): number {
 }
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
-  const usingPairs = !onDiagonal(params)
+  // Which **input**, which is no longer the same question as which side of the
+  // diagonal: *every pair* reads a feature set and draws off the diagonal.
+  const usingPairs = usesPairSet(params)
   const chosen = usingPairs ? params.pairs : params.features
   if (typeof chosen !== 'string' || chosen === '') {
     return {
@@ -350,12 +451,20 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       note: 'Nothing to read.',
       refusal: usingPairs
         ? 'Choose a loop set. A BEDPE dropped on the Annotations panel becomes one.'
-        : 'Choose a feature set to pile up on the diagonal.',
+        : allPairs(params)
+          ? 'Choose the feature set to pair with itself.'
+          : 'Choose a feature set to pile up on the diagonal.',
     }
   }
 
   const entry = context.entries.find((row) => row.id === chosen)
-  const anchors = anchorCount(entry?.summary)
+  const features = anchorCount(entry?.summary)
+  // **Pairs, not features**, once the pairs are made rather than loaded — and
+  // the count is genuinely unknown here, since it depends on how the set packs
+  // rather than on how big it is. What can be said before the run is the cap and
+  // the fact that it exists, which is the honest half of the estimate; the run
+  // itself reports the number it actually generated.
+  const anchors = allPairs(params) ? null : features
 
   // **Refused in the form rather than at Run.** One cell of a scaled pileup is
   // fed by windows at a dozen different separations — that is what scaling is —
@@ -430,16 +539,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // deliberately the un-coalesced upper bound so the run is never dearer than
   // the button said.
   const requests = windows === null ? null : windows * 2
+  const pairsNote = allPairs(params)
+    ? `Every pair of ${features === null ? 'the set' : `${features.toLocaleString()} features`} ` +
+      `within the separation range, up to ${MAX_GENERATED_PAIRS.toLocaleString()} of them and ` +
+      'sampled with the run’s own seed past that. How many that is depends on how the set packs ' +
+      'rather than on how large it is, so the run reports the number rather than the button. ' +
+      `One small block per pair of ${side}×${side} cells, at the file’s own resolution, coalesced ` +
+      'where the pairs cluster. Cancellable at any point.'
+    : null
   return {
     class: 'scan',
     requests,
     bytes: windows === null ? null : windows * cells * 4,
     note:
-      (windows === null
-        ? 'One small block per anchor, at the file’s own resolution.'
-        : `${windows.toLocaleString()} windows of ${side}×${side} cells, one small block each at ` +
-          `the file’s own resolution — at most ${(windows * 2).toLocaleString()} range requests ` +
-          'before nearby anchors are read together. Cancellable at any point.') + scaledNote,
+      (pairsNote ??
+        (windows === null
+          ? 'One small block per anchor, at the file’s own resolution.'
+          : `${windows.toLocaleString()} windows of ${side}×${side} cells, one small block each at ` +
+            `the file’s own resolution — at most ${(windows * 2).toLocaleString()} range requests ` +
+            'before nearby anchors are read together. Cancellable at any point.')) + scaledNote,
   }
 }
 
@@ -465,7 +583,7 @@ export const APA_TASK: AnalysisTask = {
   blurb: 'Pile up the matrix at a set of loops or features, against a control.',
   group: 'tracks',
   venue: 'analysis',
-  version: 1,
+  version: 2,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as
   // needing it. `requires` is static and the runner resolves it before every
   // run, so declaring it would compute a whole-file P(s) on every APA — while
@@ -486,7 +604,10 @@ export const APA_TASK: AnalysisTask = {
     )
     return anchors
       ? READY
-      : waitingFor('Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile up on it.')
+      : waitingFor(
+          'Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to ' +
+            'pile up on it — or to pair with itself.',
+        )
   },
   params: PARAMS,
   outputs: ['matrix', 'table', 'curve'],

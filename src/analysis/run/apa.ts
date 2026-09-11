@@ -70,6 +70,10 @@ import {
   isDomainPileup,
   isScaled,
   onDiagonal,
+  usesPairSet,
+  allPairs,
+  distanceBins,
+  MAX_GENERATED_PAIRS,
   windowBins,
 } from '../tasks/apa'
 import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
@@ -122,7 +126,10 @@ interface Plan {
 const MERGE_CAP_BINS = 512
 
 export const runApa: TaskRunner = async (job) => {
-  const usingPairs = !onDiagonal(job.params)
+  // Which **input** the run reads, which since the third anchor mode is no
+  // longer the same question as which side of the diagonal it draws on: *every
+  // pair* reads a feature set and its windows are off the diagonal.
+  const usingPairs = usesPairSet(job.params)
   // By the **parameter key** — `pairs` or `features`, whichever mode is in
   // force — and never by the entry id in `params`; see `chosenInput`.
   const heldPairs = chosenInput(job.inputs.pairs, job.params, 'pairs')
@@ -152,12 +159,27 @@ export const runApa: TaskRunner = async (job) => {
     : windowBins(job.params) * 2 + 1
   const norm = strParam(job.params, 'norm', 'matched')
 
+  const madePairs = allPairs(job.params)
   const anchors = usingPairs
     ? pairAnchors(job, pairs as PairSet)
-    : featureAnchors(job, features as FeatureSet)
+    : madePairs
+      ? generatedPairs(job, features as FeatureSet)
+      : featureAnchors(job, features as FeatureSet)
   if (anchors.length === 0) {
-    job.note('No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.')
+    job.note(
+      madePairs
+        ? 'No two features of this set are on one sequence within the separation range, so there ' +
+            'is no pair to pile up. Widen the range, or check that the set and the file spell ' +
+            'their sequences alike.'
+        : 'No anchor of this set lands inside a sequence this file has, so there is nothing to pile up.',
+    )
     return []
+  }
+  if (madePairs) {
+    job.note(
+      `${anchors.length.toLocaleString()} pairs made from ` +
+        `${(features as FeatureSet).length.toLocaleString()} features.`,
+    )
   }
 
   // The chromosight pileup is a different computation over the same anchors —
@@ -181,7 +203,17 @@ export const runApa: TaskRunner = async (job) => {
   // budget so much as a silent change of subject: a pileup of the first five
   // thousand anchors is a pileup of whichever ones sorted first, under a caption
   // saying how many were left out — which nobody compares across two runs.
-  const kept = groupAnchors(job, anchors, usingPairs ? null : (features as FeatureSet))
+  // Two ways of dividing the same anchors, and never both at once: N separation
+  // bins crossed with K rank groups is N×K panels nobody reads, and neither
+  // division means anything once it has been taken inside the other. Separation
+  // wins where it is asked for, and the form hides the ranking controls off the
+  // diagonal in any case.
+  const bins = distanceBins(job.params)
+  const kept =
+    bins > 1
+      ? bySeparation(anchors, bins)
+      : groupAnchors(job, anchors, onDiagonal(job.params) ? (features as FeatureSet) : null)
+  const groupNames = bins > 1 ? separationNames(kept, (span) => job.toBp(span)) : null
 
   // The grid's own division into flank, body, flank — one layout for the whole
   // run, which is what puts every domain's two boundaries on the same two grid
@@ -305,7 +337,12 @@ export const runApa: TaskRunner = async (job) => {
   for (let g = 0; g < kept.length; g++) {
     const observed = real[g].finish()
     if (observed.n === 0) continue
-    const name = kept.length === 1 ? 'APA' : `APA · group ${g + 1}`
+    const name =
+      groupNames !== null
+        ? `APA · ${groupNames[g]}`
+        : kept.length === 1
+          ? 'APA'
+          : `APA · group ${g + 1}`
 
     let values = observed.values
     let centre: number | undefined
@@ -810,4 +847,186 @@ function overExpected(
     }
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Pairs made rather than loaded
+// ---------------------------------------------------------------------------
+
+/**
+ * Every pair of a feature set on one sequence, inside the separation range.
+ *
+ * The sliding window is the whole of the implementation and the whole of what
+ * makes it affordable: the set is sorted by `(contig, start)` already (§8.4), so
+ * for each feature the partners are a contiguous run of the ones after it, and
+ * the run ends at the first one past `maxSep`. That makes the cost proportional
+ * to the number of pairs **produced** rather than to `n²` — which matters,
+ * because the two differ by four orders of magnitude on a genome-wide peak set
+ * with a 2 Mb reach.
+ *
+ * Past {@link MAX_GENERATED_PAIRS} the pairs are **sampled rather than
+ * truncated**, and the distinction is the one §18.8 draws about the cap this
+ * task used to have on its anchors: taking the first two hundred thousand is
+ * taking whichever sequences sort first, and a pileup of chromosome I under a
+ * caption saying *200,000 pairs* is a change of subject. Reservoir sampling with
+ * the run's own seed gives a uniform sample of the whole set, which is a smaller
+ * version of the same figure rather than a different one.
+ */
+function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
+  const minSep = Math.max(0, numParam(job.params, 'minSep', 20_000))
+  const maxSep = Math.max(minSep + 1, numParam(job.params, 'maxSep', 2_000_000))
+  const from = contextOf(set.contigs)
+  const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
+
+  // Resolved once per feature rather than once per pair: `contigIdFor` walks a
+  // naming context and a set of forty thousand features inside a 2 Mb window
+  // produces millions of pairs, so resolving inside the inner loop is the one
+  // decision here that would make the run minutes rather than seconds.
+  interface Placed {
+    contig: string
+    centre: number
+    bin: number
+    bounds: Span
+    body: Span
+    label: string
+  }
+  const placed: Placed[] = []
+  for (let i = 0; i < set.length; i++) {
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from)
+    if (at === null) continue
+    placed.push({
+      contig: at.contig,
+      centre: Math.round((set.start[i] + set.end[i]) / 2),
+      bin: at.bin,
+      bounds: at.bounds,
+      body: at.body,
+      label: set.name[i] === '' ? `${set.contigs[set.contig[i]]}:${set.start[i]}` : set.name[i],
+    })
+  }
+  // By this file's own sequence name and then by position, because the set's
+  // order is the *set's* and two of its names may resolve to one sequence here
+  // (§5.9). Sorting on what was resolved is what keeps the sliding window below
+  // correct in exactly that case.
+  placed.sort((a, b) => (a.contig === b.contig ? a.centre - b.centre : a.contig < b.contig ? -1 : 1))
+
+  const out: Anchor[] = []
+  let seen = 0
+  const offer = (anchor: Anchor): void => {
+    seen++
+    if (out.length < MAX_GENERATED_PAIRS) {
+      out.push(anchor)
+      return
+    }
+    // Reservoir: the `k`-th candidate replaces a held one with probability
+    // `cap / k`, which leaves every candidate equally likely to survive.
+    const at = Math.floor(rng() * seen)
+    if (at < MAX_GENERATED_PAIRS) out[at] = anchor
+  }
+
+  for (let i = 0; i < placed.length; i++) {
+    const a = placed[i]
+    for (let j = i + 1; j < placed.length; j++) {
+      const b = placed[j]
+      if (b.contig !== a.contig) break
+      const separation = b.centre - a.centre
+      if (separation > maxSep) break
+      if (separation < minSep) continue
+      const row = Math.min(a.bin, b.bin)
+      const col = Math.max(a.bin, b.bin)
+      // Two features far enough apart in base pairs can still land in one bin on
+      // a coarse map, and a pair on the diagonal is not an off-diagonal pileup —
+      // it is the diagonal, which is the largest thing in the matrix and would
+      // dominate every cell it contributed to.
+      if (row === col) continue
+      offer({
+        pair: { row, col, separation: col - row },
+        bounds: a.bounds,
+        label: `${a.label} × ${b.label}`,
+        rank: Number.NaN,
+        span: col - row,
+        // One bin each, like a loaded pair's anchors: what is being asked about
+        // is the contact between two places, and the scaled mode's rectangle
+        // between them is built from these two spans by the same code path.
+        rows: { from: row, to: row + 1 },
+        cols: { from: col, to: col + 1 },
+      })
+    }
+  }
+
+  if (seen > out.length) {
+    job.note(
+      `${seen.toLocaleString()} pairs are inside the separation range and ` +
+        `${out.length.toLocaleString()} were sampled, uniformly and with this run’s seed. ` +
+        'Narrow the range for all of them.',
+    )
+  }
+  return out
+}
+
+/**
+ * The anchors split into `bins` log-spaced separation bands.
+ *
+ * **Log-spaced, on the quantiles of nothing** — the edges come from the observed
+ * minimum and maximum separation rather than from equal counts — because the
+ * quantity being divided is a separation, and contact falls off with it as a
+ * power law. Equal-count bins over a set whose separations pile up at one end
+ * produce a first band spanning a decade and a last one spanning a factor of
+ * two, and the pileups are then not comparable with each other, which is the
+ * entire reason for splitting them.
+ *
+ * Empty bands are dropped rather than drawn empty, so a set with a gap in its
+ * separations produces fewer panels than asked for rather than a blank one.
+ */
+function bySeparation(anchors: Anchor[], bins: number): Anchor[][] {
+  let lo = Number.POSITIVE_INFINITY
+  let hi = 0
+  for (const anchor of anchors) {
+    const separation = anchor.pair.separation
+    if (separation <= 0) continue
+    if (separation < lo) lo = separation
+    if (separation > hi) hi = separation
+  }
+  if (!Number.isFinite(lo) || hi <= lo) return [anchors]
+
+  const logLo = Math.log(lo)
+  const step = (Math.log(hi) - logLo) / bins
+  const out: Anchor[][] = Array.from({ length: bins }, () => [])
+  for (const anchor of anchors) {
+    const separation = anchor.pair.separation
+    // A pair whose two anchors land in one bin has no separation to band by, and
+    // it goes in the nearest band rather than being dropped: §18.8's rule is
+    // that every anchor is piled up, and a run that quietly discarded the
+    // shortest-range pairs would be weakest exactly where the signal is
+    // strongest.
+    const at =
+      separation <= 0
+        ? 0
+        : Math.min(bins - 1, Math.floor((Math.log(separation) - logLo) / step))
+    out[at].push(anchor)
+  }
+  return out.filter((band) => band.length > 0)
+}
+
+/** What each band is called, in base pairs, from the separations it holds. */
+function separationNames(bands: Anchor[][], toBp: (bins: number) => number): string[] {
+  return bands.map((band) => {
+    let lo = Number.POSITIVE_INFINITY
+    let hi = 0
+    for (const anchor of band) {
+      const separation = anchor.pair.separation
+      if (separation < lo) lo = separation
+      if (separation > hi) hi = separation
+    }
+    // The band's **own** extremes rather than the edges it was cut at, so the
+    // label says what is in it rather than what could have been.
+    return `${shortBp(toBp(Math.max(0, lo)))}–${shortBp(toBp(hi))}`
+  })
+}
+
+/** `1.2 Mb`, `340 kb`, `900 bp` — the band label, short enough to be a title. */
+function shortBp(bp: number): string {
+  if (!Number.isFinite(bp)) return '?'
+  if (bp >= 1e6) return `${(bp / 1e6).toFixed(bp >= 1e7 ? 0 : 1)} Mb`
+  if (bp >= 1e3) return `${(bp / 1e3).toFixed(bp >= 1e4 ? 0 : 1)} kb`
+  return `${Math.round(bp)} bp`
 }

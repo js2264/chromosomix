@@ -66,6 +66,7 @@ import type {
   IntervalsOutput,
   ProfileOutput,
   Provenance,
+  TableOutput,
   TaskResult,
 } from './types'
 import type { BlockInput } from './worker/protocol'
@@ -107,6 +108,21 @@ export interface AnalysisWorkspaceHost {
    * with no deck — which is every session until one is opened.
    */
   targetMap?(): MapId
+  /**
+   * Per-cell numbers a run measured, on their way to the Cells table (§3.8).
+   *
+   * The one result in the catalogue whose natural home is not the drawer. Every
+   * other output is a figure or a lane; this one is a set of *columns about the
+   * rows of a table the reader already sorts and ticks*, and the gesture it is
+   * for — sort by a band, tick a run, sum them — is one this app has had since
+   * `.scool` opened at all. So the numbers go there rather than growing a second
+   * selection surface inside the drawer.
+   *
+   * Handed as the raw table so that this module stays free of UI types; the
+   * shell turns it into columns.
+   */
+  cellMeasurements?(uri: string, table: TableOutput): void
+
   /** Every map on screen, for a batch; see `AnalysisRunner.runAll`. */
   allTargets?(): readonly RunTarget[]
   /**
@@ -414,6 +430,18 @@ export class AnalysisWorkspace {
   private adopt(task: AnalysisTask, result: TaskResult, on: RunTarget): void {
     const map = on.map
     rememberParams(result.provenance.framing.uri, task.id, result.provenance.params)
+
+    // **Before the early return below**, because this task produces neither a
+    // profile nor an interval set: its output is a table, and its destination is
+    // a table the shell owns rather than anything in this workspace.
+    if (task.id === 'cellqc') {
+      const measured = result.outputs.find(
+        (output): output is TableOutput => output.kind === 'table' && output.id === 'cellqc',
+      )
+      if (measured !== undefined) {
+        this.host.cellMeasurements?.(result.provenance.framing.uri, measured)
+      }
+    }
 
     const store = this.host.store()
     const profiles = result.outputs.filter(

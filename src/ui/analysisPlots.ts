@@ -630,6 +630,28 @@ function drawSeriesLine(
   ctx.lineWidth = SERIES_WIDTH
   ctx.lineJoin = 'round'
 
+  // A series whose x is not an ordering draws as marks and nothing else. Taken
+  // first, because everything below is about which *runs* of points to join, and
+  // the answer here is none of them.
+  if (series.mark === 'points') {
+    const radius = SERIES_WIDTH * 1.4
+    for (let i = 0; i < n; i++) {
+      const fx = x.fraction(series.x[i])
+      const fy = y.fraction(series.y[i])
+      if (Number.isNaN(fx) || Number.isNaN(fy)) continue
+      ctx.beginPath()
+      ctx.arc(
+        plot.x + fx * plot.width,
+        plot.y + (1 - fy) * plot.height,
+        radius,
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+    }
+    return
+  }
+
   let start = -1
   const flush = (end: number): void => {
     if (start >= 0) {

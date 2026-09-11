@@ -29,7 +29,7 @@ import { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from '../analysis/worker/client'
 import type { CorrelationField } from '../analysis/compartments'
 import { buildAnalysisContext } from '../analysis/context'
-import type { AnalysisContext } from '../analysis/types'
+import type { AnalysisContext, TableOutput } from '../analysis/types'
 import type {
   AnalysisWorkspace,
   AnalysisWorkspaceHost,
@@ -82,6 +82,7 @@ import type {
   GenomesResult,
   McoolExport,
   OpenResult,
+  OrientationSummary,
   PairsBinning,
   PairsImportSummary,
   PairsProbeResult,
@@ -134,7 +135,7 @@ import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type ScaleState } from '../ui/GenomeView'
-import { CellsTable } from '../ui/CellsTable'
+import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
 import { InfoPanel } from '../ui/InfoPanel'
 import { MinimapCard, suitsMinimap, type MinimapRange } from '../ui/MinimapCard'
@@ -5939,6 +5940,51 @@ export class Session {
    * of the sum, and the set itself, which every view the reader moves to next
    * inherits until they come back here and change it.
    */
+  /**
+   * Take a per-cell QC result into the Cells table's columns (§3.8).
+   *
+   * Held by uri rather than by open file, so walking into a cell and back out —
+   * or opening another tab and returning — keeps the numbers. They are a
+   * measurement of the file, and the file has not changed.
+   *
+   * The table is rebuilt only when it is the view on screen; otherwise the
+   * columns are simply there the next time somebody navigates to it, which is
+   * the moment they are wanted.
+   */
+  private adoptCellMeasurements(uri: string, table: TableOutput): void {
+    // The fractions only. `contacts` and `nnz` are already columns of this table
+    // from the file's own attributes, and a second pair beside them differing in
+    // the third decimal — because one counts records and the other sums a
+    // balanced value — is two numbers for one thing and no way to tell which.
+    const fractions = table.columns.filter(
+      (column) => column.kind === 'number' && column.key !== 'contacts' && column.key !== 'nnz',
+    )
+    const values = new Map<string, Record<string, number>>()
+    for (const row of table.rows) {
+      const name = row['cell']
+      if (typeof name !== 'string') continue
+      const held: Record<string, number> = {}
+      for (const column of fractions) {
+        const value = row[column.key]
+        if (typeof value === 'number') held[column.key] = value
+      }
+      values.set(name, held)
+    }
+    if (values.size === 0) return
+    this.cellMeasured.set(uri, {
+      columns: fractions.map((column) => ({
+        key: column.key,
+        label: column.label,
+        ...(column.hint === undefined ? {} : { hint: column.hint }),
+      })),
+      values,
+      from: 'the per-cell contact QC task',
+    })
+    if (this.store.state?.view === 'cells' && this.store.state.uri === uri) {
+      void this.mountCells(this.store.state)
+    }
+  }
+
   private async mountCells(state: ViewState): Promise<void> {
     const file = this.file
     if (file === null) return
@@ -5952,14 +5998,25 @@ export class Session {
         ...cellsPatch(names, total),
       })
     }
+    const measured = this.cellMeasured.get(state.uri)
     const view = new CellsTable({
       data,
+      ...(measured === undefined ? {} : { measured }),
       persistence: this.tableMemory(state.uri, 'cells'),
       onShowCells: (names) => show(names),
       onShowAll: () => show(null),
     })
     this.showContent(view.el, view)
   }
+
+  /**
+   * Per-cell numbers a QC run measured, by uri (§3.8).
+   *
+   * Not on the open file, because it outlives one: a reader runs the task, walks
+   * into a cell to look at it, and comes back to the table expecting the columns
+   * that sent them there to still be on it.
+   */
+  private readonly cellMeasured = new Map<string, MeasuredCells>()
 
   /** The cells table payload, read once per open file. */
   private async cells(): Promise<CellsResult> {
@@ -6811,7 +6868,12 @@ export class Session {
       source: () => {
         const starred = this.starredFacts()
         if (starred !== null) {
-          return { uri: starred.uri, source: starred.source, ...cellsOfMap(starred.info) }
+          return {
+            uri: starred.uri,
+            source: starred.source,
+            ...cellsOfMap(starred.info),
+            ...binningOfMap(starred.info),
+          }
         }
         const file = this.file
         if (file !== null) {
@@ -6819,7 +6881,12 @@ export class Session {
           // than the pseudo-bulk of every cell in the file (§3.8). The analysis
           // worker mounts the file for itself and would otherwise have no way to
           // know a selection exists.
-          return { uri: file.uri, source: file.source, ...cellsOfMap(file.info) }
+          return {
+            uri: file.uri,
+            source: file.source,
+            ...cellsOfMap(file.info),
+            ...binningOfMap(file.info),
+          }
         }
         // **The genome, where there is no map.** Three tasks run entirely on
         // loaded tracks and a 1D browser session is exactly where a reader has
@@ -6865,6 +6932,8 @@ export class Session {
       // makes about its own set (§18.11) means the same thing beside the map and
       // in the 1D browser.
       groups: () => this.annotations?.groups ?? null,
+      // The one result that goes to a table rather than to the drawer (§3.8).
+      cellMeasurements: (uri, table) => this.adoptCellMeasurements(uri, table),
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.deck?.starredMap ?? LEAD_MAP,
       // The same list the Tracks card is given, and deliberately not
@@ -6989,6 +7058,7 @@ export class Session {
         uri: file.uri,
         source: file.source,
         ...cellsOfMap(file.info),
+        ...binningOfMap(file.info),
         label: fileLabel(file.uri),
       })
     }
@@ -7003,6 +7073,7 @@ export class Session {
         uri: facts.uri,
         source: facts.source,
         ...cellsOfMap(facts.info),
+        ...binningOfMap(facts.info),
         label: fileLabel(facts.uri),
       })
     }
@@ -7095,6 +7166,23 @@ export class Session {
       framing,
       blockLoaded: block !== null,
       blockBytes: block === null ? 0 : block.values.byteLength,
+      // The cells of the map the star is on, not of the session's first file: a
+      // deck can hold an `.scool` beside a `.cool`, and the per-cell task is
+      // offered for whichever one an analysis would be measured against.
+      cells: info.cells.length,
+      activeCells: info.activeCells.length,
+      // Every map on screen **except the one this context is about**, which is
+      // the star. A task that compares two files is offered the others, and a
+      // map cannot be a peer of itself.
+      peers: (this.deck?.analysable() ?? [])
+        .map(({ panel }) => panel.analysisFacts())
+        .filter((facts): facts is NonNullable<typeof facts> => facts !== null)
+        .filter((facts) => facts.uri !== uri)
+        .map((facts) => ({
+          label: fileLabel(facts.uri),
+          uri: facts.uri,
+          binsize: facts.info.binsize ?? 0,
+        })),
     })
   }
 
@@ -7379,6 +7467,26 @@ function describe(done: number, total: number, note?: string): string {
  */
 function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
   return info.cells.length === 0 ? {} : { cells: info.activeCells }
+}
+
+/**
+ * How this map was binned, where it was imported from a `.pairs` (§3.7).
+ *
+ * The second half of what a second mount needs, beside the cells. A contact list
+ * has no resolution of its own, so the analysis worker opening the same file is
+ * refused with the question the reader already answered in a dialog before the
+ * map existed — and every §18 task on an imported map failed there. The answer
+ * travels with the target instead.
+ */
+function binningOfMap(info: OpenResult): {
+  binning?: PairsBinning
+  orientation?: OrientationSummary
+} {
+  if (info.pairs === undefined) return {}
+  return {
+    binning: info.pairs.binning,
+    ...(info.pairs.orientation === null ? {} : { orientation: info.pairs.orientation }),
+  }
 }
 
 /**

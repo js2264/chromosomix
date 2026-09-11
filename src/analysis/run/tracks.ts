@@ -10,6 +10,7 @@
  */
 
 import type { TrackTaskRunner } from '../job'
+import { runFrip } from './frip'
 import { runMetaplot } from './metaplot'
 import { runMotif } from './motif'
 import { runOverlap } from './overlap'
@@ -19,5 +20,6 @@ export const TRACK_RUNNERS: Record<string, TrackTaskRunner> = {
   motif: runMotif,
   metaplot: runMetaplot,
   trackcorr: runTrackCorrelation,
+  frip: runFrip,
   overlap: runOverlap,
 }

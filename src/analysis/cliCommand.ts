@@ -88,6 +88,16 @@ export interface CliCommand {
  * this repository enforces rather than encourages.
  */
 export function cliCannotRun(task: AnalysisTask): string | null {
+  // A second map, which a shell has no concept of. The deck is what supplies one
+  // and the deck is a property of a window (§16) — there is no flag that could
+  // stand in for it, because what it carries is not a path but a *view*: which
+  // maps are on screen, at what resolution, navigated where.
+  if (task.needsPeers === true) {
+    return (
+      `${task.id} compares the maps open beside each other, and a shell has one file and one ` +
+      'mount. Run it in the app, with the maps side by side.'
+    )
+  }
   const tracks = task.params.filter((param) => param.kind === 'track')
   if (tracks.length === 0) return null
   return (

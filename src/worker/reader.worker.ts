@@ -49,6 +49,7 @@ import {
   type McoolExport,
   type OpenResult,
   type OverviewResult,
+  type PairsBinning,
   type PairsImportSummary,
   type PairsProbeResult,
   type SourceKind,
@@ -311,9 +312,18 @@ async function openPairs(
 }
 
 /** What the import did, for the info panel and the status line. */
-function summarise(pairs: PairsImport, download: boolean): PairsImportSummary {
+function summarise(pairs: PairsImport, download: boolean, binning: PairsBinning): PairsImportSummary {
   const base = pairs.tables.get(pairs.rungs[0])!
+  const orientation = base.orientation ?? null
   return {
+    binning,
+    // The **base rung's**, which is the file's: a coarser rung is derived from
+    // the base's pixels and never sees a record, so there is nothing there for
+    // an orientation to be a property of.
+    orientation:
+      orientation === null
+        ? null
+        : { edges: orientation.edges, counts: orientation.counts, total: orientation.total },
     base: pairs.rungs[0],
     rungs: pairs.rungs,
     records: base.sum,
@@ -459,7 +469,9 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   }
 
   return {
-    ...(pairs === null ? {} : { pairs: summarise(pairs, request.binning?.download === true) }),
+    ...(pairs === null || request.binning === undefined
+      ? {}
+      : { pairs: summarise(pairs, request.binning.download === true, request.binning) }),
     uri: mc.uri,
     layout: mc.layout,
     info: mc.info,

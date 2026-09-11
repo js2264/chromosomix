@@ -50,6 +50,20 @@ const COLUMN_ALIASES = {
 } as const
 
 /**
+ * The two strand columns, which are optional and are looked for separately.
+ *
+ * Separate from {@link COLUMN_ALIASES} because the four above are **required**
+ * and these two are not: a file trimmed to five columns is a perfectly good
+ * pairs file that this importer bins exactly as it bins any other, and only the
+ * orientation curves are absent from it. Folding them into the required set
+ * would turn an optional reading into a refusal.
+ */
+const STRAND_ALIASES = {
+  strand1: ['strand1', 'strand_1'],
+  strand2: ['strand2', 'strand_2'],
+} as const
+
+/**
  * How much of the file may be header before the reader gives up looking.
  *
  * Generous on purpose: a metagenomic assembly declares one `#chromsize:` line
@@ -77,6 +91,22 @@ export interface PairsColumns {
   pos1: number
   chrom2: number
   pos2: number
+  /**
+   * Where the two strands are, or `-1` where the file does not carry them.
+   *
+   * **The one thing §3.7 reads out of a record beyond its four coordinates**,
+   * and the clause it narrows is stated there rather than stepped around. The
+   * original rule — *nothing about strands, pair types or mapping quality is
+   * read or re-decided* — was about what a **matrix** is built from, and it
+   * still holds: no strand reaches a bin, a pixel or a written `.mcool`, and a
+   * reader who wants different records still runs `pairtools select`. What the
+   * strands are read for is a *curve beside* the matrix — the four
+   * orientation-resolved decays, which is the standard QC on a pairs file and
+   * the only place the minimum reliable separation of a library is visible.
+   * Nothing is decided from them; they are counted.
+   */
+  strand1: number
+  strand2: number
 }
 
 export interface PairsHeader {
@@ -285,8 +315,13 @@ export function resolveColumns(names: readonly string[], wasDeclared: boolean): 
     pos1: find(COLUMN_ALIASES.pos1),
     chrom2: find(COLUMN_ALIASES.chrom2),
     pos2: find(COLUMN_ALIASES.pos2),
+    strand1: find(STRAND_ALIASES.strand1),
+    strand2: find(STRAND_ALIASES.strand2),
   }
-  const missing = (Object.keys(columns) as Array<keyof PairsColumns>).filter(
+  // The strands are optional, so they are left out of the completeness check:
+  // `-1` there means *this file does not carry them*, which is a fact rather
+  // than a fault.
+  const missing = (['chrom1', 'pos1', 'chrom2', 'pos2'] as const).filter(
     (key) => columns[key] < 0,
   )
   if (missing.length > 0) {

@@ -29,8 +29,10 @@ import type { S3Credential } from '../s3/sigv4'
 import { accessHeaders } from '../sources/access'
 import { isSignedUrl } from '../sources/rewrite'
 import type { ByteSource } from '../types'
-import type { SourceSpec } from './protocol'
-import { createSource, readWhole } from './sources'
+import type { PairsBinning, SourceSpec } from './protocol'
+import { createDetachedSource, createSource, readWhole } from './sources'
+import { importPairs, probePairs } from '../pairs/import'
+import { openIndexSource } from './sources'
 
 /** A bin file, which is a source spec of the same shape as the matrix's. */
 type BinsSpec = NonNullable<SourceSpec['bins']>
@@ -47,6 +49,32 @@ export interface OpenHooks {
   report?(done: number, total: number, note: string): void
   /** Asked between chunks; `true` aborts the open with an `AbortError`. */
   cancelled?(): boolean
+  /**
+   * How to bin a `.pairs`, for a caller that already knows (§3.7).
+   *
+   * A contact list declares no resolution, so the first open of one is refused
+   * and the shell asks. **A second mount of the same file is not a first open**:
+   * the analysis worker opens the file the reader worker already opened (§18.3),
+   * and the reader has already answered this question. Without it every §18 task
+   * on an imported map failed at the mount with *choose a bin size* — a dialog
+   * the reader had already filled in, on a map that was on screen and working.
+   *
+   * The cost is honest and is the format's rather than this design's: a pairs
+   * file has no index, so a second mount is a second pass over the records. It
+   * is paid once per session, behind the same progress and the same cancel the
+   * first pass had, and every task afterwards reads the table in memory.
+   */
+  binning?: PairsBinning
+  /**
+   * Build the byte source outside the module's mount cache.
+   *
+   * For a **second** file opened beside the one this worker is already answering
+   * from. `worker/sources.ts` keeps one local and one remote mount alive, and
+   * its local road releases the held one when the `File` differs — which on a
+   * second open would close the mount the task is reading through. See
+   * `createDetachedSource`.
+   */
+  detached?: boolean
 }
 
 /**
@@ -76,12 +104,15 @@ async function openThroughSource(
   spec: SourceSpec,
   hooks: OpenHooks,
 ): Promise<{ mc: MetaCooler; source: ByteSource }> {
-  const source = await createSource(spec, {
-    ...(hooks.report === undefined
-      ? {}
-      : { onProgress: (received, total) => hooks.report?.(received, total, 'downloading') }),
-    ...(hooks.cancelled === undefined ? {} : { cancelled: hooks.cancelled }),
-  })
+  const source =
+    hooks.detached === true
+      ? await createDetachedSource(spec)
+      : await createSource(spec, {
+          ...(hooks.report === undefined
+            ? {}
+            : { onProgress: (received, total) => hooks.report?.(received, total, 'downloading') }),
+          ...(hooks.cancelled === undefined ? {} : { cancelled: hooks.cancelled }),
+        })
   // A `reading` on the spec *is* the reader's answer to the §12 gate — the
   // shell only ever sets one by re-issuing this open with what they chose.
   const agreed = spec.kind === 'remote' && spec.reading !== undefined
@@ -93,8 +124,74 @@ async function openThroughSource(
   // bar under the name of the phase, which is the difference between a reader
   // who knows a thousand reads are in flight and one watching a spinner.
   if (looksSingleCell(uri)) hooks.report?.(0, 0, 'listing cells')
-  const mc = await MetaCooler.open(uri, source, agreed ? { listingAgreed: true } : {})
-  return { mc, source }
+  try {
+    const mc = await MetaCooler.open(uri, source, agreed ? { listingAgreed: true } : {})
+    return { mc, source }
+  } catch (error) {
+    // The one refusal a caller can answer for itself. Caught on the *code*
+    // rather than by sniffing the container beforehand, so the classification
+    // stays where every other container's is — in `MetaCooler.open` — and this
+    // is the branch that acts on it rather than a second detector that could
+    // disagree with the first.
+    const binning = hooks.binning
+    if (
+      binning === undefined ||
+      !(error instanceof ViewerError) ||
+      error.code !== 'pairs-binning-needed'
+    ) {
+      throw error
+    }
+    const mc = await importAsMap(uri, spec, source, binning, hooks)
+    return { mc, source }
+  }
+}
+
+/**
+ * The pairs road: read the records, bin them, and hand up the map they make.
+ *
+ * A near-copy of the reader worker's own two phases, and deliberately: this
+ * module's docstring is about the knowledge of *how many roads there are into a
+ * map* living in one place, and a second caller that reached `importPairs`
+ * directly would be the HiC-Pro defect again under another name.
+ */
+async function importAsMap(
+  uri: string,
+  spec: SourceSpec,
+  source: ByteSource,
+  binning: PairsBinning,
+  hooks: OpenHooks,
+): Promise<MetaCooler> {
+  const probe = await probePairs(source, () => openIndexSource(spec))
+  const imported = await importPairs(source, probe, {
+    base: binning.base,
+    rungs: binning.rungs,
+    oneBased: binning.oneBased ?? true,
+    ...(hooks.report === undefined
+      ? {}
+      : {
+          onProgress: (done, total, note) =>
+            hooks.report?.(done, total, note ?? 'binning records'),
+        }),
+    ...(hooks.cancelled === undefined ? {} : { cancelled: hooks.cancelled }),
+  })
+  if (imported === null) throw abortOpen()
+  const table = imported.tables.get(imported.rungs[0])
+  if (table === undefined) throw new ViewerError('format', `${uri} imported no pixel table.`)
+  return MetaCooler.fromPairs({
+    uri,
+    header: imported.header,
+    pixels: table,
+    rungs: imported.rungs,
+    indexed: imported.indexed,
+    declaredRecords: imported.declaredRecords,
+  })
+}
+
+/** The rejection a cancelled open produces, named as every other cancel is. */
+function abortOpen(): Error {
+  const error = new Error('open cancelled')
+  error.name = 'AbortError'
+  return error
 }
 
 /**

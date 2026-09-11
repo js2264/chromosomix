@@ -11,8 +11,10 @@ server-side processing or data upload.
 - Support 1D genomic formats: bigWig, BED, bedGraph, GTF, FASTA, BAM, VCF, chrom.sizes, ...
 - Support 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., with resolution ladder and on-the-fly balancing.
 - Dedicated Analysis panel, with exportable results: 
-  - for common 1D analysis tasks: metaplots, track correlation, interval overlap, ...
-  - for common 2D analysis tasks: P(s), diamond insulation, coverage, virtual 4C, compartments annotation and saddle plot, loops and borders detection, APA, loop ranking, ...
+  - for common 1D analysis tasks: metaplots, track correlation, interval overlap with a shuffle null, FRiP over a feature set, ...
+  - for common 2D analysis tasks: P(s), diamond insulation, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, loops and borders detection, APA, loop ranking, ...
+  - for comparing what is on screen: HiCRep reproducibility across the maps in a deck, stratum by stratum and pooled.
+  - for single cells: per-cell contact QC over an `.scool`, with the cell-cycle phasing scatter feeding back into the Cells table.
 - Dedicated Annotations panel, supporting linear tracks, 1D and 2D manual annotations, bookmarks and synthetic annotations.
 - Dedicated Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
 - Tabbed sessions: Several genomes opened at once, as tabs. 
@@ -155,7 +157,7 @@ does next. `versions.json` lists what is published.
 
 ## Using the metacooler.js analysis CLI
 
-Fourteen of the sixteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. The two exceptions are `metaplot` and `trackcorr`, which read a bigWig: the reader for one lives in the annotations worker and nowhere else, which is a layering rule this repository enforces (see below). `tasks` says so on their rows, and running one is refused before any file is opened rather than after. 
+Fifteen of the nineteen analysis tasks can be executed programatically through the CLI, over as many files as you like, with the same parameters and producing the same results as the Analysis panel interactively. This can be used in a pipeline or a script. Three of the four exceptions — `metaplot`, `trackcorr` and `frip` — read a bigWig: the reader for one lives in the annotations worker and nowhere else, which is a layering rule this repository enforces (see below). The fourth is `hicrep`, which compares the maps open beside each other: a shell has one file and one mount, and what a deck carries is not a path but a view. `tasks` says so on their rows, and running one is refused before any file is opened rather than after. 
 
 To install the CLI, run the following commands in a terminal:
 
@@ -368,7 +370,7 @@ src/
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
                  the 1D browser, its vector-PDF page, the console, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
-  analysis/      the sixteen tasks (§18): descriptors, pure kernels, a worker of its
+  analysis/      the nineteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
                  and a bigWig writer with no dependency behind it
   app/           App (the window, the tabs, the address bar) and Session (one file)
@@ -492,10 +494,15 @@ matrix, while its `iced/` matrix is the already-normalised one. Offering the fir
 would let somebody normalise twice and get a plausible-looking map. Open the `iced/` matrix to see
 normalised counts; that is what it is for.
 
-**Analysis tasks run on the map, not on the cell set.** The sixteen tasks operate on whatever is
-drawn, so they run on a single cell and on a small sum of them. They are not *aware* of cells: there
-is no per-cell batch mode, and no task that reports a distribution across a library. That is a real
-gap rather than a decision against it — it is simply not built.
+**Analysis tasks run on the map, and one of them runs on the cells.** Eighteen of the nineteen
+operate on whatever is drawn, so they run on a single cell and on a small sum of them without
+knowing a cell exists. The nineteenth is **per-cell contact QC**, which is the one whose unit is a
+cell: it walks every cell's own pixels — the same reads a pseudo-bulk of them costs, in the same
+order — and reports contacts, cis fraction and four separation bands per cell, with the cell-cycle
+scatter those bands make. Its numbers land back in the Cells table as sortable columns, so the
+choice of which cells to sum can be made on what the contacts say rather than on the depth the
+writer recorded. What is still absent is a *batch* mode: no other task runs per cell, and running
+one over a thousand of them is a thousand runs rather than one.
 
 **Annotations are for one assembly at a time, and every container has one.** Gene models, tracks,
 peak sets, loop calls and hand-drawn marks are offered on a cooler, on a `.metacool`, and on a genome

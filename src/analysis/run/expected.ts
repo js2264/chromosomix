@@ -64,6 +64,9 @@ import {
   type Span,
 } from './blocks'
 import type { CurveSeries, TaskOutput } from '../types'
+import { binPairs } from '../../pairs/bin'
+import { readPairsHeader } from '../../pairs/format'
+import { orientationFigure, type OrientationCounts } from '../orientation'
 
 // ---------------------------------------------------------------------------
 // Spans and units
@@ -471,5 +474,153 @@ export const runExpected: TaskRunner = async (job) => {
       xDomain: WINDOW,
     })
   }
+
+  const stranded = await strandedCurves(job)
+  if (stranded !== null) outputs.push(stranded)
   return outputs
+}
+
+// ---------------------------------------------------------------------------
+// The four orientations, which are about records rather than about the matrix
+// ---------------------------------------------------------------------------
+
+/**
+ * The orientation-resolved decay, from the import or from a named `.pairs`.
+ *
+ * Two sources and one figure. The **import's** curves cost nothing at all: they
+ * were counted in the pass that built this map (§3.7), and they arrive on
+ * `TaskInputs` because the records they came from no longer exist by the time
+ * anything runs here. A **named** file is read on the spot, which is a pass over
+ * somebody else's records and is priced as one in the note.
+ *
+ * `null` — with a sentence — wherever the reader asked for this and it cannot be
+ * had. A curve silently missing from a figure the reader ticked a box for is the
+ * failure mode this whole subtree is written against.
+ */
+async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
+  if (!boolParam(job.params, 'stranded', false)) return null
+
+  const named = strParam(job.params, 'pairsUri', '').trim()
+  let counts: OrientationCounts | null = null
+
+  if (named === '') {
+    const held = job.inputs.orientation
+    if (held === undefined) {
+      job.note(
+        'The four orientations are counted from the records, and this map has none to count: it ' +
+          'was opened as a matrix rather than imported from a .pairs, or the file it was ' +
+          'imported from carried no strand1/strand2 columns. Name a .pairs above, or drop one on ' +
+          'the app.',
+      )
+      return null
+    }
+    counts = held
+  } else {
+    counts = await countNamed(job, named)
+    if (counts === null) return null
+  }
+
+  const figure = orientationFigure(counts, {
+    factor: Math.max(1.01, numParam(job.params, 'factor', 1.1)),
+    minSeparation: job.toBp(Math.max(0, numParam(job.params, 'minSeparation', 0))),
+  })
+  if (figure === null) {
+    job.note(
+      'Fewer than two orientations have any cis record in them, so there is nothing to compare. ' +
+        'A file whose strand columns are all `.` reads this way.',
+    )
+    return null
+  }
+
+  job.note(
+    figure.convergence === null
+      ? 'The four orientations never settle to within a tenth of each other, so no convergence ' +
+        'point is reported. On a library that is otherwise fine this usually means the axis does ' +
+        'not reach far enough — the sequences are short — rather than that the records are bad.'
+      : `The four orientations converge at about ${Math.round(figure.convergence).toLocaleString()} bp, ` +
+        'which is the shortest separation this library can be read at. Below it the counts are ' +
+        'self-circles, dangling ends and undigested fragments rather than contacts.',
+  )
+
+  return {
+    kind: 'curve',
+    id: 'ps-orientation',
+    label: 'P(s) by pair orientation',
+    series: figure.curves.map(
+      (curve): CurveSeries => ({ name: curve.name, x: curve.x, y: curve.y, n: curve.n }),
+    ),
+    xLabel: 'Genomic separation (bp)',
+    yLabel: 'Density, over the records in all four',
+    xScale: 'log',
+    yScale: 'log',
+  }
+}
+
+/**
+ * Count the four orientations in a `.pairs` this session did not import.
+ *
+ * **Through `binPairs` at the coarsest possible grid**, rather than through a
+ * second record loop written for this. One bin per sequence makes the binning
+ * itself free — a pixel table of a few hundred entries, discarded on the way out
+ * — and what the pass is actually for is the orientation accumulator it already
+ * carries. A second loop would be a second place for the column resolution, the
+ * clamping and the `#columns:` handling to be got right, and §3.7's record
+ * reader is not a thing this application should have two of.
+ */
+async function countNamed(job: JobContext, uri: string): Promise<OrientationCounts | null> {
+  if (!/^(https?|s3):\/\//i.test(uri)) {
+    job.note(
+      `“${uri}” is not an address this can fetch. A local file has none — drop it on the app, ` +
+        'which imports it and counts these curves in the same pass. Only http(s) and s3 URLs can ' +
+        'be named here, and a URL is fetched as it stands — a file behind a hub, a share link, ' +
+        'Google Drive or Dropbox is authorised by a token this box has no way to carry, so those ' +
+        'are opened the usual way and imported.',
+    )
+    return null
+  }
+
+  if (job.openBytes === undefined) {
+    job.note(
+      'Reading a named .pairs needs a venue that can open one, and this is not it. Run it in the app.',
+    )
+    return null
+  }
+  let source
+  try {
+    source = await job.openBytes(uri)
+  } catch (error) {
+    job.note(`Could not open ${uri}: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+
+  job.progress(0, 1, 'reading records')
+  const header = await readPairsHeader(source)
+  if (header.columns.strand1 < 0 || header.columns.strand2 < 0) {
+    job.note(
+      `${uri} declares no strand1/strand2 columns, so its records cannot say which orientation ` +
+        'a pair was in. `pairtools` writes them by default; a file trimmed of them cannot be ' +
+        'read this way.',
+    )
+    return null
+  }
+
+  let longest = 0
+  for (const contig of header.contigs) longest = Math.max(longest, contig.length)
+  const binned = await binPairs(source, {
+    // One bin per sequence, which is the cheapest grid that exists and is not a
+    // map: nothing reads the pixels this produces.
+    binSize: Math.max(1, longest),
+    contigs: header.contigs,
+    columns: header.columns,
+    onProgress: (done, total) => job.progress(done, total, 'reading records'),
+    cancelled: () => job.cancelled(),
+  })
+  job.throwIfCancelled()
+  if (binned === null) return null
+  const orientation = binned.orientation ?? null
+  if (orientation === null) {
+    job.note(`${uri} carried strand columns but no cis record with a readable pair of strands.`)
+    return null
+  }
+  return orientation
 }

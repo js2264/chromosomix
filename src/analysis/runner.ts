@@ -35,7 +35,7 @@
 
 import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/types'
 import { isCancellation, type Cancellable } from '../worker/client'
-import type { SourceSpec } from '../worker/protocol'
+import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
 import { abortError, idParam, listParam } from './job'
 import { taskById } from './registry'
 import {
@@ -55,7 +55,12 @@ import { AnalysisClient } from './worker/client'
 import { provisionalProvenance, runDraft } from './record'
 import { endAction, logAction, type ActionDraft, type ActionOutcome } from '../state/actions'
 import { fileLabel } from '../ui/labels'
-import { BLOCK_COPY_LIMIT_BYTES, type BlockInput, type TaskInputs } from './worker/protocol'
+import {
+  BLOCK_COPY_LIMIT_BYTES,
+  type BlockInput,
+  type PeerMap,
+  type TaskInputs,
+} from './worker/protocol'
 
 // ---------------------------------------------------------------------------
 // State
@@ -96,7 +101,13 @@ export type JobState =
  */
 export interface RunnerHost {
   context(): AnalysisContext | null
-  source(): { uri: string; source: SourceSpec; cells?: readonly string[] } | null
+  source(): {
+    uri: string
+    source: SourceSpec
+    cells?: readonly string[]
+    binning?: PairsBinning
+    orientation?: OrientationSummary
+  } | null
   /** Which map a plain Run files its results against — the star (§18.2). */
   targetMap?(): MapId
   /** Every map on screen, in reading order, for {@link AnalysisRunner.runAll}. */
@@ -262,8 +273,13 @@ export function resultKey(map: MapId, taskId: string): string {
  * different measurements, and a mount cached on the URI alone would give the
  * second the first one's answer with nothing on screen to say so.
  */
-function mountKey(uri: string, cells?: readonly string[]): string {
-  return cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
+function mountKey(uri: string, cells?: readonly string[], binning?: PairsBinning): string {
+  const base =
+    cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
+  // The base resolution and the rung count, because an imported map at 1 kb and
+  // the same file at 10 kb are two maps behind one uri (§3.7) — and a mount kept
+  // for the uri alone would answer a task about the second with the first.
+  return binning === undefined ? base : `${base}\u0000${binning.base}:${binning.rungs}`
 }
 
 /**
@@ -308,6 +324,22 @@ export interface RunTarget {
    * experiments, and a task measures the one on screen.
    */
   cells?: readonly string[]
+  /**
+   * How this map was binned, where it was imported from a `.pairs` (§3.7).
+   *
+   * On the target rather than folded into the source because it is a property of
+   * the *map* rather than of the bytes: the same file at two base resolutions is
+   * two maps, and a mount keyed on the uri alone would answer the second with
+   * the first. See {@link mountKey}.
+   */
+  binning?: PairsBinning
+  /**
+   * The orientation curves that map's import counted, where it had strands.
+   *
+   * Per target for the same reason `binning` is: a deck can hold two imported
+   * files, and a curve measured on one is not a fact about the other.
+   */
+  orientation?: OrientationSummary
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -937,7 +969,7 @@ export class AnalysisRunner {
     // Keyed on the cell set as well as the file: an scool re-ticked between two
     // runs is the same URI and a different map, and a mount kept for the name
     // alone would answer the second question with the first one's cells.
-    const key = mountKey(source.uri, source.cells)
+    const key = mountKey(source.uri, source.cells, source.binning)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -956,6 +988,7 @@ export class AnalysisRunner {
       uri: source.uri,
       source: source.source,
       ...(source.cells === undefined ? {} : { cells: source.cells }),
+      ...(source.binning === undefined ? {} : { binning: source.binning }),
     })
     this.mounted = key
   }
@@ -1183,6 +1216,28 @@ export class AnalysisRunner {
     }
     if (Object.keys(vectors).length > 0) inputs.vectors = vectors
     if (Object.keys(upstream).length > 0) inputs.upstream = { ...upstream }
+    // The job's **own target's**, never the host's answer now: a batch is five
+    // jobs against five files, and a curve counted on one import is not a fact
+    // about any of the others (`mount` makes the same argument about the source).
+    if (job.target.orientation !== undefined) inputs.orientation = job.target.orientation
+    // **Every other target, for the one task whose unit is a pair of files.**
+    // Taken from the host's list rather than from the job, because the job knows
+    // the map it is *about* and this is a question about the ones beside it —
+    // and filtered against the job's own target, since a map is not its own peer.
+    if (step.task.id === 'hicrep') {
+      const peers: PeerMap[] = []
+      for (const target of this.host.allTargets?.() ?? []) {
+        if (target.map === job.target.map || target.source === undefined) continue
+        peers.push({
+          label: target.label,
+          uri: target.uri,
+          source: target.source,
+          ...(target.cells === undefined ? {} : { cells: target.cells }),
+          ...(target.binning === undefined ? {} : { binning: target.binning }),
+        })
+      }
+      if (peers.length > 0) inputs.peers = peers
+    }
 
     // **Only to the job that is about the map the block came from.**
     //
