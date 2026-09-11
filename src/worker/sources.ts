@@ -131,14 +131,37 @@ function stripQuery(url: string): string {
  * write the same two ternaries, and a site that wrote only the first would send
  * a Google object's request without its key and report the 403 against the file.
  */
-function accessOf(spec: { credential?: S3Credential; headers?: Record<string, string> }): {
-  credential?: S3Credential
-  headers?: Record<string, string>
-} {
+function accessOf(spec: { credential?: S3Credential; headers?: Record<string, string> }): Access {
   return {
     ...(spec.credential === undefined ? {} : { credential: spec.credential }),
     ...(spec.headers === undefined ? {} : { headers: spec.headers }),
   }
+}
+
+/** What {@link accessOf} builds: the two things a request may need, or neither. */
+interface Access {
+  credential?: S3Credential
+  headers?: Record<string, string>
+}
+
+/**
+ * The access bag, or the bare credential that stood for it before there were
+ * headers.
+ *
+ * {@link wholeObjectOf} and {@link wholeObject} take the bag {@link accessOf}
+ * builds. A change landing beside this one adds a caller — a second file
+ * opened for the length of one computation, outside the cache above — written
+ * against the earlier shape, which passed the credential itself. Accepting
+ * both is what lets the two land in either order without that call going
+ * quietly unsigned in between: a parameter read only as `{ credential, headers }`
+ * finds neither on a credential, sends the request bare, and the 403 is
+ * reported against the file. A credential is told apart by `accessKeyId`,
+ * which every credential carries and no bag does. Once both are in, that
+ * caller moves to {@link accessOf} and this arm goes.
+ */
+export function asAccess(access: Access | S3Credential | undefined): Access {
+  if (access === undefined) return {}
+  return 'accessKeyId' in access ? { credential: access } : access
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +291,7 @@ const MAX_WHOLE_OBJECT_BYTES = 128 << 20
 async function wholeObject(
   url: string,
   cause: ViewerError,
-  access: { credential?: S3Credential; headers?: Record<string, string> } = {},
+  access: Access | S3Credential = {},
 ): Promise<ByteSource> {
   const encoded = cause.detail['encodedLength']
   const size = typeof encoded === 'number' ? encoded : null
@@ -287,7 +310,7 @@ async function wholeObject(
     // the whole thing rather than a range of it, which changes nothing about
     // what the host requires to answer it.
     const response = await fetch(url, {
-      headers: accessHeaders({ url, method: 'GET', ...access }),
+      headers: accessHeaders({ url, method: 'GET', ...asAccess(access) }),
     })
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}`)
@@ -341,13 +364,13 @@ const MAX_CHOSEN_WHOLE_BYTES = 2 * (1 << 30)
 /** The whole-object source a gated open asked for, downloaded and mounted. */
 async function wholeObjectOf(
   url: string,
-  access: { credential?: S3Credential; headers?: Record<string, string> } = {},
+  access: Access | S3Credential = {},
   watch?: ReadWatch,
 ): Promise<ByteSource> {
   let bytes: Uint8Array
   try {
     const response = await fetch(url, {
-      headers: accessHeaders({ url, method: 'GET', ...access }),
+      headers: accessHeaders({ url, method: 'GET', ...asAccess(access) }),
     })
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
     const declared = Number(response.headers.get('Content-Length') ?? Number.NaN)
