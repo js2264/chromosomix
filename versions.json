@@ -190,14 +190,5 @@
       "subject": "fix(versions): going to the newest build is not the same as going to the root",
       "tag": ""
     }
-  ],
-  "pulls": [
-    {
-      "number": 44,
-      "commit": "1d5ac0e",
-      "title": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox, and pull-request previews",
-      "branch": "claude/remote-file-providers-tu9b1q",
-      "date": "2026-09-11T19:06:15Z"
-    }
   ]
 }
