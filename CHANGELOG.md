@@ -14,6 +14,53 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Hubs: a shelf of named datasets in the picker, and any lab can publish one.** A hub is one
+  JSON file beside the data (`kind: "metacooler.hub"`, SPECS §23): maps, genome files and whole
+  workspaces with columns to filter on — assembly, biosource, assay, lab — so a reader chooses
+  without opening anything. The picker draws it as a sortable, filterable table and offers three
+  built-in hubs: the **Demos**, now with two 4DN open-data maps beside the four workspaces;
+  **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals by
+  `.github/workflows/hubs.yml` and read off the `hubs` branch. Paste a URL to connect a lab's hub,
+  or arrive on it with `?hub=<url>` beside `?config=` and `?embed=`. A row may be a workspace, which
+  is what a *pre-configured session* is; a row carries its size so the cost is on the table before
+  the click. Nothing is fetched on load: a hub is read when it is chosen.
+
+  `scripts/make_hub.py` writes one: `4dn` and `encode` from the portals' own search APIs (every
+  processed file with an open-data URL, no experiment-type filter, so Micro-C is in), and `bucket`
+  from a prefix on any S3-compatible store — the catalogue `docs/hosting.md` always promised. The
+  motivation, the measurements and the comparison with juicebox.js are in
+  `docs/remote-sources.md`: the unmodified viewer already opened a 2.2 GB 4DN `.mcool` in 7.8 s
+  over 13 requests; what was missing was a name for it.
+
+- **Search a portal from the picker.** ENCODE's and 4DN's search APIs, asked for released Hi-C
+  files matching a query, answered as a hub in the same table. A portal that will not let the page
+  read its results says so and points at the generated hub, which lists the same files; nothing is
+  proxied (C1).
+
+- **Links that were not yet the file now open as pasted.** A Dropbox share link is read from the
+  content host; a Google Drive share link becomes the Drive API's ranged form (a public file needs
+  the lab's API key, kept beside the bucket keys; a private one, the account below); `gs://` and
+  `storage.cloud.google.com` become the GCS JSON-API form, which answers CORS for any origin; and
+  `s3://bucket/key` resolves through a bucket scope that names the bucket, else to the
+  virtual-hosted URL. The rewrite runs wherever a URL becomes a URI, so a shared link already
+  carries the working form (`src/sources/rewrite.ts`).
+
+- **Presigned S3 URLs, signed GCS URLs and Azure SAS links open**, until they expire. The `HEAD`
+  probe that a single-method signature refused is skipped when the query carries a signature, and
+  the one-byte range probe the reader already had takes its place. `docs/hosting.md` no longer
+  says otherwise.
+
+- **Sign in to Google to read private Drive files and GCS objects.** The lab supplies a client id
+  registered for the app's origin, as it supplies a bucket key; the token lives in this tab's memory
+  and rides every request as a header; a `401` from a Google host offers sign-in instead of the CORS
+  explanation. The dialog says the one thing a consent screen buries: `drive.readonly` is all of the
+  reader's Drive, where a bucket scope is one prefix. Absent in the standalone build, which has no
+  origin to register.
+
+- **The README says what already works.** Object storage, not one vendor: R2, MinIO, Azure with a
+  SAS, GCS through its JSON-API URL and the 4DN and ENCODE buckets all opened before this release;
+  `docs/hosting.md` ends with the table, host by host.
+
 - **Every pull request gets a preview on the site.** A branch of this repository opened as a
   pull request is built as a pinned copy and published at `…/pr/<number>/` beside the archived
   pushes, replaced on every push and removed when the pull request closes; the About dialog lists
