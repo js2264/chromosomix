@@ -175,6 +175,33 @@ describe('the text it hands over', () => {
     expect(actionsText({ detail: true })).toContain('# task: insulation v1')
   })
 
+  it('puts a caveat above a command and a refusal below a line that is not one', () => {
+    // The same rule read twice. A caveat qualifies a line a reader is about to
+    // run, so it comes first; a refusal explains a line that is not a command at
+    // all, so it comes after the thing it is about. The other way round, a run
+    // the CLI cannot repeat opened with a paragraph about a command that was
+    // never there — which is how it read in the field.
+    logAction({
+      kind: 'run',
+      line: 'metacooler-run insulation a.cool',
+      shell: true,
+      notes: ['# This file is remote.'],
+    })
+    logAction({
+      kind: 'run',
+      line: 'ran Track correlation — Yeast_ATAC.bw · loaded tracks, no contact map',
+      shell: false,
+      notes: ['# trackcorr reads a track; run it in the app.'],
+    })
+    const lines = actionsText({ detail: false }).trimEnd().split('\n')
+    const caveat = lines.findIndex((line) => line.includes('This file is remote'))
+    const command = lines.findIndex((line) => line.startsWith('metacooler-run'))
+    expect(caveat).toBeLessThan(command)
+    const prose = lines.findIndex((line) => line.includes('ran Track correlation'))
+    const refusal = lines.findIndex((line) => line.includes('run it in the app'))
+    expect(prose).toBeLessThan(refusal)
+  })
+
   it('writes a failure as a comment under the command it belongs to', () => {
     const id = logAction({ kind: 'run', line: 'metacooler-run apa a.cool', shell: true })
     endAction(id, { status: 'failed', error: 'No loop set was chosen.' })

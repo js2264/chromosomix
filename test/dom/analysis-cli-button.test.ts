@@ -295,6 +295,34 @@ describe('a task the command cannot start', () => {
   })
 })
 
+describe('a run with no contact map behind it', () => {
+  /**
+   * The other half of the refusal, and the half the *descriptor* cannot see.
+   *
+   * A 1D browser session (§5.8) has the bigWigs and not the map, so a result
+   * there is framed against the assembly over a zero-wide extent. `overlap` is
+   * perfectly runnable in a shell — it reads two feature sets — but the command
+   * opens a contact map as its first argument and there is none here to name.
+   * Left to the descriptor alone, the button cheerfully handed over
+   * `metacooler-run overlap Yeast_ATAC.bw`, which reads well and dies at the
+   * open.
+   */
+  const overlap = taskById('overlap') as AnalysisTask
+
+  it('is disabled, in the command’s own words', () => {
+    const view = open(overlap, result('overlap', {}, { rows: [0, 0], cols: [0, 0] }))
+    expect(view.button.disabled).toBe(true)
+    expect(view.button.title).toContain('no contact map')
+    view.destroy()
+  })
+
+  it('is offered again for the same task over a map', () => {
+    const view = open(overlap, result('overlap', {}))
+    expect(view.button.disabled).toBe(false)
+    view.destroy()
+  })
+})
+
 describe('a task this build has never heard of', () => {
   /**
    * A result restored from a session a later build wrote. The flags are the

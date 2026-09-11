@@ -1083,6 +1083,32 @@ describe('the console record of a job', () => {
     runner.destroy()
   })
 
+  it('names the file rather than its address when there is no map to frame against', async () => {
+    // A track task in a 1D browser session (§5.8) is framed against the assembly
+    // rather than a block, and the file that declared that assembly is routinely
+    // a bucket URL a hundred characters long. The whole of one in the line
+    // pushes everything worth reading off the right of the row — and the address
+    // is in `# file:` already, which is where it is wanted.
+    const url = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_ATAC.bw'
+    const tracks = task('trackcorr', {
+      venue: 'annotations',
+      params: [{ kind: 'track', key: 'tracks', label: 'Tracks', multiple: true }],
+    } as Partial<AnalysisTask>)
+    const { runner } = harness(null, null, [], { block: null, map: 'lead' }, {
+      context: () => ({ ...context(null), uri: url }),
+    })
+    runner.run(tracks, {})
+    await settle()
+    expect(lines()).toHaveLength(1)
+    expect(lines()[0].line).toContain('Yeast_ATAC.bw · loaded tracks, no contact map')
+    expect(lines()[0].line).not.toContain('amazonaws.com')
+    // No command, because the reader for a bigWig is not in that shell — said in
+    // the refusal's own words under the line rather than left out.
+    expect(lines()[0].shell).toBe(false)
+    expect(lines()[0].notes.join(' ')).toContain('annotations worker')
+    runner.destroy()
+  })
+
   it('marks a stopped run as cancelled rather than as a failure', async () => {
     const { runner } = harness()
     runner.run(task('coverage'), {})

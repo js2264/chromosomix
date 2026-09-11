@@ -4799,9 +4799,20 @@ beside it, because two accounts of one run is how they come to disagree.
 
 The command itself is `cliCommandFor`, called with the same `Provenance` the drawer's button passes
 it. One function, two callers: a line in the console and a line on the clipboard cannot drift, and a
-task the CLI refuses (`cliCannotRun` — the three that read a bigWig) is recorded as a sentence with
-the refusal under it rather than dropped, because a record with holes in it exactly where the reader
-is least likely to look is worse than no record.
+run the CLI cannot repeat is recorded as a sentence with the refusal under it rather than dropped,
+because a record with holes in it exactly where the reader is least likely to look is worse than no
+record.
+
+**What "cannot repeat" means is a property of the run, not only of the task.** `cliCannotRun`
+answers about the descriptor — the three tasks that read a bigWig, whose reader lives in the
+annotations worker — and it is what `cli/main.ts` itself refuses on. It cannot see the other half,
+which is a session with **no contact map**: `metacooler-run` takes a file as its first argument and
+opens it as one, a 1D browser (§5.8) has none, and the framing there names the bigWig that declared
+the assembly. Left to the descriptor alone, a perfectly runnable task came out as `metacooler-run
+overlap Yeast_ATAC.bw` — a line that reads well and dies at the open, which is the one outcome
+`analysis/cliCommand.ts` exists to prevent. `cliCannotRepeat` is both halves, and it is what the
+drawer's button is greyed by as well as what the command refuses on: two copies of that rule is a
+button handing over a line the command rejects.
 
 ### 23.2 What else is on it, and what is not
 
@@ -4843,6 +4854,11 @@ The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'
 shell cannot be told — a remote file, a window across several sequences, a parameter naming a set
 with no file behind it — and a command that runs and answers a slightly different question is worse
 than one that says what it left out.
+
+They sit **above a command and below anything else**, which is one rule read twice: a caveat
+qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is
+not a command at all, so it comes after the thing it is about. Written the other way round, every
+run the CLI cannot repeat opened with a paragraph about a command that was never there.
 
 ### 23.4 The panel
 

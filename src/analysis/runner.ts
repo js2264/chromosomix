@@ -1338,6 +1338,10 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     value: 'count',
     normalise: null,
     level: 'bin',
-    label: `${context.uri} · loaded tracks, no contact map`,
+    // The file's name rather than its address: a browser session is routinely
+    // opened from a signed S3 URL, and the whole of one in a heading pushes the
+    // rest of the line off the drawer and off a console row. What the uri is
+    // wanted for is `# file:`, which every provenance block already carries.
+    label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
   }
 }

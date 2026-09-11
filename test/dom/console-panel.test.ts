@@ -240,6 +240,27 @@ describe('the rows', () => {
     expect(textOf(row, '.console-line')).toBe('metacooler-run apa a.cool')
   })
 
+  it('draws a refusal under the line it explains, and a caveat over it', () => {
+    logAction({
+      kind: 'run',
+      line: 'metacooler-run insulation a.cool',
+      shell: true,
+      notes: ['# This file is remote.'],
+    })
+    logAction({
+      kind: 'run',
+      line: 'ran Track correlation — Yeast_ATAC.bw · loaded tracks, no contact map',
+      shell: false,
+      notes: ['# trackcorr reads a track; run it in the app.'],
+    })
+    const panel = mount()
+    panel.toggle.click()
+    const classesOf = (row: HTMLElement): string[] =>
+      Array.from(row.querySelectorAll('.console-lines > *')).map((node) => node.className)
+    expect(classesOf(rows(panel)[0])).toEqual(['console-note', 'console-line is-shell'])
+    expect(classesOf(rows(panel)[1])).toEqual(['console-line', 'console-note'])
+  })
+
   it('separates the days, and says how many lines each holds', () => {
     run('a.cool')
     run('b.cool')

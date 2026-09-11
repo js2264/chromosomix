@@ -117,6 +117,12 @@ export interface LoggedAction {
    * `cliCommandFor`'s caveats, and nothing else: a command that runs and answers
    * a slightly different question is worse than one that says what it left out,
    * so these are not part of what the output toggle hides.
+   *
+   * They sit **above a command and below anything else**, which is the same rule
+   * read twice: a caveat qualifies a line a reader is about to run, so it comes
+   * first; a refusal explains a line that is not a command at all, so it comes
+   * after the thing it is about. Written the other way round, a run the CLI
+   * cannot repeat opened with a paragraph about a command that was never there.
    */
   readonly notes: readonly string[]
   /** The provenance block — what the output toggle shows and hides. */
@@ -483,6 +489,27 @@ export function timeOf(at: number): string {
   return parts.map((part) => String(part).padStart(2, '0')).join(':')
 }
 
+/**
+ * One entry, as the lines it is copied out as.
+ *
+ * Here rather than in the panel because there are two callers — a row's own copy
+ * button and the whole-log text below — and the order of these four pieces is a
+ * rule rather than a layout: the provenance, then a caveat *above* the command
+ * it qualifies or a refusal *below* the line it explains, then the failure. Two
+ * copies of that drifted the first time it changed.
+ */
+export function actionLines(entry: LoggedAction, options: { detail: boolean }): string[] {
+  const lines: string[] = []
+  if (options.detail) lines.push(...entry.detail)
+  if (entry.shell) {
+    lines.push(...entry.notes, entry.line)
+  } else {
+    lines.push(`# ${timeOf(entry.at)}  ${entry.line}`, ...entry.notes)
+  }
+  if (entry.error !== undefined) lines.push(`# failed: ${entry.error}`)
+  return lines
+}
+
 export interface ActionTextOptions {
   /** Include each entry's detail block — what the console's output toggle asks. */
   detail: boolean
@@ -511,10 +538,7 @@ export function actionsText(options: ActionTextOptions): string {
       lines.push(`# ${own}`)
       day = own
     }
-    if (options.detail) for (const line of entry.detail) lines.push(line)
-    for (const note of entry.notes) lines.push(note)
-    lines.push(entry.shell ? entry.line : `# ${timeOf(entry.at)}  ${entry.line}`)
-    if (entry.error !== undefined) lines.push(`# failed: ${entry.error}`)
+    lines.push(...actionLines(entry, { detail: options.detail }))
   }
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`
 }

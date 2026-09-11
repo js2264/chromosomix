@@ -47,6 +47,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   screen. The caveats a command carries about what a shell cannot be told are
   never hidden by it.
 
+  Three things the command writer had been getting wrong surfaced the moment a
+  whole afternoon of runs was on one screen, and all three are fixed where they
+  live — so **copy CLI command** in the drawer is fixed with them. A run in a
+  **1D browser session** has no contact map, and the command opens one as its
+  first argument: it used to name the bigWig that declared the assembly, which
+  reads perfectly well and dies at the open, and is now refused by name with the
+  button greyed to match. A parameter whose load *is* its own flag — `motif`
+  calls its reference `sequence` — wrote `--sequence ref.fa --sequence ref.fa`
+  and now writes it once. And a session framed against the assembly is named by
+  its **file** rather than by its whole address, so a bucket URL no longer fills
+  the drawer's heading and a console row.
+
   Kept in this browser for **seven days or five hundred lines**, whichever comes
   first, and nowhere else. A run the window walked out on comes back marked
   *interrupted* rather than as a failure nobody saw. **Forget everything** drops

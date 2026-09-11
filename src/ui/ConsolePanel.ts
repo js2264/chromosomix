@@ -57,6 +57,7 @@ import { resizeHandle } from './resizeHandle'
 import { messageToast } from './toast'
 import {
   actionCount,
+  actionLines,
   actions,
   actionsText,
   clearActions,
@@ -551,23 +552,25 @@ export class ConsolePanel {
 
   private row(entry: LoggedAction): HTMLElement {
     const lines = el('div', { class: 'console-lines' })
-    // Provenance first, then the caveats, then the line itself — the order the
-    // text is copied in, so what is on screen and what lands on the clipboard
-    // are the same document read two ways.
+    // The order the text is copied in, so what is on screen and what lands on
+    // the clipboard are the same document read two ways: the provenance first,
+    // then the caveats **above a command** — and below a line that is not one,
+    // where the note is the reason there is no command rather than a warning
+    // about running it (see `LoggedAction.notes`).
     if (this.output) {
       for (const line of entry.detail) {
         lines.appendChild(el('div', { class: 'console-detail', text: line }))
       }
     }
-    for (const note of entry.notes) {
-      lines.appendChild(el('div', { class: 'console-note', text: note }))
-    }
+    const note = (text: string): HTMLElement => el('div', { class: 'console-note', text })
+    if (entry.shell) for (const text of entry.notes) lines.appendChild(note(text))
     lines.appendChild(
       el('div', {
         class: entry.shell ? 'console-line is-shell' : 'console-line',
         text: entry.line,
       }),
     )
+    if (!entry.shell) for (const text of entry.notes) lines.appendChild(note(text))
     if (entry.error !== undefined) {
       lines.appendChild(el('div', { class: 'console-error', text: entry.error }))
     }
@@ -611,11 +614,9 @@ export class ConsolePanel {
   // -------------------------------------------------------------------------
 
   private copyOne(entry: LoggedAction): void {
-    const lines = [
-      ...(this.output ? entry.detail : []),
-      ...entry.notes,
-      entry.shell ? entry.line : `# ${timeOf(entry.at)}  ${entry.line}`,
-    ]
+    // The same builder the whole log is written with, so a row copied on its own
+    // and the same row inside a copied day are the same lines in the same order.
+    const lines = actionLines(entry, { detail: this.output })
     this.copy(lines.join('\n'), entry.shell ? 'Command copied.' : 'Line copied.')
   }
 
