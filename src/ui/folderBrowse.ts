@@ -267,7 +267,9 @@ export class FolderBrowseView {
       walked = `${walked}${part}/`
       const target = walked
       nodes.push(el('span', { class: 'folder-crumb-sep', text: '/' }))
-      nodes.push(button(part, () => void this.browse(folder, target), { class: 'btn-link' }))
+      // A backend whose paths are ids rather than names says what to print.
+      const label = folder.labelOf?.(target) ?? part
+      nodes.push(button(label, () => void this.browse(folder, target), { class: 'btn-link' }))
     }
     return nodes
   }

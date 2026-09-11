@@ -3004,6 +3004,12 @@ export class Session {
       return
     }
     await this.addRemote(picked.uri, picked.source, placement, map)
+    // A backend that addresses files by id rather than by name says what the
+    // file is called (§23.9), and the map is named with it the way a reader
+    // would name it by hand (§16.10). Tracks keep the label their URL gives.
+    if (picked.name !== undefined && picked.name !== '' && routeOf(picked.uri) === 'map') {
+      this.renameMap(picked.uri, picked.name)
+    }
   }
 
   /**

@@ -83,6 +83,16 @@ export interface PickedFile {
    * only: a bucket's sidecar is named by URL and guessed by the loader.
    */
   index?: File
+  /**
+   * What to call the file when its URI does not say.
+   *
+   * A Drive file is addressed by an id (`…/files/<id>?alt=media`) and a Dropbox
+   * file by a temporary link that may not end in its name, so a backend that
+   * knows the name hands it over here and the session names the map with it
+   * (§16.10). Absent for a local file and for a bucket key, whose last segment
+   * already is the name.
+   */
+  name?: string
 }
 
 /**
@@ -95,9 +105,18 @@ export interface ConnectedFolder {
   id: string
   /** What the reader calls it. Shown in the panel; never sent anywhere. */
   label: string
-  kind: 'local' | 'bucket'
+  kind: 'local' | 'bucket' | 'drive' | 'dropbox'
   /** Where a fresh browse starts. Not always `''` — a bucket scope has a prefix. */
   root: string
+  /**
+   * What to show for a path in the crumb trail, when the path is not a name.
+   *
+   * Absent for the disk and the bucket, whose paths *are* names. A Drive path is
+   * a chain of folder ids, which nobody can read; the backend that listed the
+   * folder knows what each id was called and answers here. `path` is one of the
+   * folder paths a previous listing handed back.
+   */
+  labelOf?(path: string): string
   /**
    * `false` for a folder that will be gone after a reload.
    *

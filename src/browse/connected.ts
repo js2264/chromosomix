@@ -54,7 +54,37 @@ const listeners = new Set<() => void>()
 export function connectedFolders(): ConnectedFolder[] {
   const local = directoryRows().map((row) => handleFolder(row.id, row.name, row.handle))
   const buckets = readScopes().map(bucketFolder)
-  return [...local, ...snapshots.values(), ...buckets]
+  const others = sources.flatMap((source) => source.folders())
+  return [...local, ...snapshots.values(), ...buckets, ...others]
+}
+
+/**
+ * A third kind of place, registered by the module that knows how to list it.
+ *
+ * The disk and the bucket are composed above by name because they were here
+ * first; a Drive folder or a Dropbox (§23.9) registers itself instead, so that
+ * this file — the one every panel subscribes to — imports nothing that reaches
+ * for a token, and a backend that is absent from a build (§19) simply never
+ * registers. Rebuilt on demand like the rest: `folders()` reads its own store.
+ */
+export interface FolderSource {
+  kind: ConnectedFolder['kind']
+  /** Every folder of this kind, from wherever this backend keeps its rows. */
+  folders(): ConnectedFolder[]
+  /**
+   * Whether a folder of this kind can be listed right now — a Drive folder
+   * needs a signed-in account, and a reload signs nobody in. Default: yes.
+   */
+  usable?(folder: ConnectedFolder, options: { prompt?: boolean }): Promise<boolean>
+}
+
+const sources: FolderSource[] = []
+
+/** Register once, at module load; a second registration of a kind replaces the first. */
+export function registerFolderSource(source: FolderSource): void {
+  const at = sources.findIndex((held) => held.kind === source.kind)
+  if (at < 0) sources.push(source)
+  else sources[at] = source
 }
 
 /** One folder by the id a drag payload or a stored choice carries, or `null`. */
@@ -127,6 +157,8 @@ export async function folderUsable(
   options: { prompt?: boolean } = {},
 ): Promise<boolean> {
   if (folder.kind === 'bucket' || snapshots.has(folder.id)) return true
+  const source = sources.find((held) => held.kind === folder.kind)
+  if (source !== undefined) return source.usable === undefined ? true : source.usable(folder, options)
   const row = directoryRows().find((entry) => entry.id === folder.id)
   if (row === undefined) return false
   return directoryUsable(row, options)
