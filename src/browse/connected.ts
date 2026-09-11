@@ -62,7 +62,7 @@ export function connectedFolders(): ConnectedFolder[] {
  * A third kind of place, registered by the module that knows how to list it.
  *
  * The disk and the bucket are composed above by name because they were here
- * first; a Drive folder or a Dropbox (§23.9) registers itself instead, so that
+ * first; a Drive folder or a Dropbox (§24.9) registers itself instead, so that
  * this file — the one every panel subscribes to — imports nothing that reaches
  * for a token, and a backend that is absent from a build (§19) simply never
  * registers. Rebuilt on demand like the rest: `folders()` reads its own store.
@@ -146,7 +146,7 @@ export async function disconnectFolder(id: string): Promise<void> {
     announce()
     return
   }
-  // A registered kind forgets its own (§23.9): the source that lists a folder
+  // A registered kind forgets its own (§24.9): the source that lists a folder
   // is the one that knows what forgetting it means.
   const owner = sources.find((source) => source.folders().some((folder) => folder.id === id))
   if (owner !== undefined) {

@@ -4,7 +4,7 @@
  * A Dropbox folder is the one remote place in this application that cannot be
  * read without a sign-in at all. A bucket has public objects, Drive has public
  * files behind an API key, and a share link on `dl.dropboxusercontent.com` is
- * one file somebody already decided to publish (§23.5). *Browsing* a Dropbox is
+ * one file somebody already decided to publish (§24.5). *Browsing* a Dropbox is
  * none of those: the listing API takes a bearer token and nothing else, so the
  * reader signs in to their own account, in their own browser, and this module is
  * how.
@@ -40,7 +40,7 @@
  * exactly the case PKCE was written for.
  *
  * `token_access_type=online`, so the exchange yields **no refresh token**.
- * A refresh token is a long-lived credential, §23.8 refuses to store one, and a
+ * A refresh token is a long-lived credential, §24.8 refuses to store one, and a
  * long-lived credential held in memory and lost at every reload is a thing that
  * costs a reader an extra sign-in per tab in exchange for nothing. Asking for
  * the short-lived token is asking for exactly what this application can honestly
@@ -51,7 +51,7 @@
  * The **app key**, in storage — the lab’s registration of a Dropbox app, which
  * is public by construction (it is in the authorize URL, which the reader can
  * read in their own address bar) and authorises nothing on its own. The
- * **token**, in memory only and never written (§23.8), held by
+ * **token**, in memory only and never written (§24.8), held by
  * `s3/credentials.ts`’s bearer registry for the two API hosts, which is a
  * module-level `Map` a reload empties.
  *

@@ -1,12 +1,12 @@
 /**
- * A Google Drive folder, as a folder (SPECS §20, §23.7).
+ * A Google Drive folder, as a folder (SPECS §20, §24.7).
  *
  * The third backend behind `browse/folder.ts`, and the first one that needs a
  * *credential the reader obtains for themselves*. A bucket prefix is opened with
  * a key the lab parked in this browser and a directory with a grant the browser
  * itself hands over; a Drive folder is listed with the reader's own Google
  * account, signed in through `auth/google.ts`, with a bearer token that lives in
- * memory for an hour and is never written down (§23.8). Everything odd about
+ * memory for an hour and is never written down (§24.8). Everything odd about
  * this module follows from that one fact.
  *
  * ## Registered rather than composed
@@ -63,7 +63,7 @@
  * one grant and one tab memory rather than two. No headers travel on the source
  * — the worker boundary stamps them from the bearer registry (`s3/attach.ts`'s
  * `withAccess`), which is the only place that knows what a URL needs at the
- * moment it is read rather than at the moment it was chosen. And §23.7's warning
+ * moment it is read rather than at the moment it was chosen. And §24.7's warning
  * applies from here as much as from the URL box: Drive meters ranged reads
  * against the project that owns the client id, so this is a host the viewer
  * reads, not one it recommends.
@@ -170,7 +170,7 @@ export function driveFolder(row: DriveRow): ConnectedFolder {
         uri: url,
         // No headers here, deliberately: what this URL needs is decided at the
         // worker boundary from the bearer registry, at the moment it is read
-        // (§23.7). A copy taken now would be a token pasted into a session.
+        // (§24.7). A copy taken now would be a token pasted into a session.
         source: { kind: 'remote', url },
         // The URL is an id, so nothing downstream could work the name out — and
         // the session names the map with it (§16.10).
@@ -262,7 +262,7 @@ async function listPage(
   let response: Response
   try {
     // Through `applyAccess` rather than a header literal, so this backend gets
-    // whatever else a URL comes to need (§23.7's header bag, a signature) from
+    // whatever else a URL comes to need (§24.7's header bag, a signature) from
     // the one module that decides the merge order.
     response = await fetch(url, applyAccess(undefined, { url, headers: bearerHeader(token) }))
   } catch (cause) {

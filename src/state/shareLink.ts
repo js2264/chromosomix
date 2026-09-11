@@ -139,7 +139,7 @@ export async function encodeShare(config: SessionConfig): Promise<string> {
  * leaving the machine.
  *
  * `gs:` joins the list because `sources/rewrite.ts` gave it a destination
- * (SPECS §23.5): a Google Cloud Storage object now resolves to a URL that opens
+ * (SPECS §24.5): a Google Cloud Storage object now resolves to a URL that opens
  * in any browser, so a link carrying one is a link the recipient can follow. It
  * is listed here rather than left to the rewrite because a URI reaches this file
  * as text, and the question is about the text.

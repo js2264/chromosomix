@@ -5,7 +5,7 @@
  *
  * A connected Drive folder is a row under the app's own `localStorage` prefix,
  * which is what makes the stored-data screen able to name it and *forget
- * everything* able to sweep it without knowing it exists (SPECS §23.2, §23.7).
+ * everything* able to sweep it without knowing it exists (SPECS §24.2, §24.7).
  * Everything below is about the ways that quietly stops being true: a row that
  * survives a reload as something other than what was written, an id that gets
  * reused, and a line on the stored-data screen that says less than what is
@@ -142,7 +142,7 @@ describe('what the stored-data screen is told', () => {
    * part worth reading back before deciding what to do on a borrowed machine
    * (the rule the folders and the hubs already follow). And the line says what
    * is *not* here: the token that lists these folders is held in memory and
-   * never written (§23.8), so a reader who reads this line has been told the
+   * never written (§24.8), so a reader who reads this line has been told the
    * whole of what is on the disk.
    */
   it('names the folders, and says no token is kept with them', () => {

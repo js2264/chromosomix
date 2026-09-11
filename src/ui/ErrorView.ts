@@ -19,7 +19,7 @@
  * `bad-uri` or a `remote-no-ranges` like any other, and the advice above it —
  * host a public object, check the bucket key — is the wrong advice for it: the
  * object is fine, the reader simply is not signed in, or the token this page
- * held has run out (SPECS §23.7). So that pair of codes, and only from that pair
+ * held has run out (SPECS §24.7). So that pair of codes, and only from that pair
  * of hosts, carries an extra line and the sign-in that resolves it. Everything
  * else keeps the wording it had, which is why the test for this asserts the
  * other host's refusal is *unchanged*.
@@ -312,7 +312,7 @@ export class ErrorView {
  *
  * Two things have to be true, and both are read off the detail the reader
  * attached rather than off the prose: a status of `401` or `403`, and a host
- * that is one of the two a sign-in produces a token for (SPECS §23.7). The host
+ * that is one of the two a sign-in produces a token for (SPECS §24.7). The host
  * is taken from `detail.host` where the refusal carried one and parsed out of
  * `detail.url` where it did not — the ranged-read refusals carry the URL and not
  * the host, and a token that expires *mid-file* surfaces there rather than at

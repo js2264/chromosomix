@@ -2526,7 +2526,7 @@ support. Such files are inputs to publication, never live sources.
 demo is the reference). The open probes with a `HEAD` before its `GET` to test range support, and
 that `HEAD` is skipped for a URL carrying its own signature — `X-Amz-Signature`, `X-Goog-Signature`,
 or `sig=` beside `sv=` — since such a URL is signed for a single method. A presigned link therefore
-opens and goes on working until it expires (§23.6); a public bucket URL is still what a citation
+opens and goes on working until it expires (§24.6); a public bucket URL is still what a citation
 should point at, because a signature has a date on it.
 
 **Private files:** local drag-and-drop only. Identical code path, different byte source. Nothing is
@@ -4767,7 +4767,7 @@ week. The pack is the last moment any of it is cheap to notice.
 
 ---
 
-## 23. Hubs, and remote sources beyond a bucket
+## 24. Hubs, and remote sources beyond a bucket
 
 The byte layer reaches any host that serves HTTPS, byte ranges and CORS without transfer
 compression (§11), and that turned out to include the two portals a Hi-C reader is most likely to
@@ -4785,7 +4785,7 @@ no hub opens exactly as before (C3); a hub is fetched on a gesture and never on 
 one thing on this road that would need a server — a CORS proxy for a portal that refuses browsers
 — is refused, and such a portal gets a generated hub instead.
 
-### 23.1 What a hub is
+### 24.1 What a hub is
 
 A **hub** is a JSON file, `kind: "metacooler.hub"`, on any CORS-enabled host: a catalogue of maps,
 genome files and workspaces with enough metadata to choose one **without opening any of them**,
@@ -4836,11 +4836,11 @@ no `uri` is dropped rather than fatal; a missing `kind` is read off the file nam
 workspace, else §20.5's routing); unknown keys are ignored, which is what lets a generator add a
 column before a viewer knows it.
 
-### 23.2 Where hubs are offered, and what is never fetched
+### 24.2 Where hubs are offered, and what is never fetched
 
 The picker's **Hubs** section replaces the examples list. It offers three built-in hubs — **Demos**
 (the four demo workspaces, inline, plus two 4DN open-data maps so a first-time reader meets a file
-that was never on the lab's bucket), **4DN open data** and **ENCODE Hi-C** (by URL, §23.3) — then
+that was never on the lab's bucket), **4DN open data** and **ENCODE Hi-C** (by URL, §24.3) — then
 every hub the reader has **connected by pasting a URL**, kept in `localStorage` under
 `metacooler-viewer:hubs`, named in the stored-data screen and swept by *forget everything*, exactly
 as a bucket scope is. `?hub=<url>` is the third mounting parameter beside `?embed=` and `?config=`
@@ -4853,11 +4853,11 @@ shelf makes no third-party request at all, and that sentence is the whole of wha
 about a hub: a fetch reveals that somebody opened the viewer, which the demos already did.
 
 A built-in hub that answers `404` is not an error but a state — *not generated yet* — because the
-two portal hubs are written by a workflow (§23.3) and a fresh fork has not run it. The table says
+two portal hubs are written by a workflow (§24.3) and a fresh fork has not run it. The table says
 so, and says what runs it. The standalone build (§19) has no hubs section at all, for the reason
 it has no bucket half.
 
-### 23.3 Where the built-in hubs come from
+### 24.3 Where the built-in hubs come from
 
 `scripts/make_hub.py` is the generator, with three front ends and no dependency beyond the standard
 library: `4dn`, which asks the 4DN portal's search API for every experiment set's processed files
@@ -4893,21 +4893,21 @@ a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-l
 project's file inherits that project's cadence and schema, and the point of the format is that
 this viewer owns what it offers.
 
-### 23.4 Live search over a portal (withdrawn)
+### 24.4 Live search over a portal (withdrawn)
 
 Built, and taken out again before release. A form (`ui/PortalSearch.ts`, over `state/portal.ts`)
 asked a portal's own search API from the browser for released Hi-C files matching a free-text
-query and drew one page of hits as a hub in the §23.1 table. ENCODE answered, its CORS being a
+query and drew one page of hits as a hub in the §24.1 table. ENCODE answered, its CORS being a
 documented line of its Apache configuration. 4DN's portal, whose CORS could not be verified when
 the form was written, was observed from the deployed preview on 2026-09-11 answering with no
 `Access-Control-Allow-Origin`: the browser discards such a response and hands script no detail,
 and nothing here may proxy (C1). A form that could only ever fail on the portal it was most wanted
 for, and whose hits on the other were files the generated hub already lists, did not earn its
-place on the picker. The generated hubs (§23.3) are the whole answer for both portals — served from a host
+place on the picker. The generated hubs (§24.3) are the whole answer for both portals — served from a host
 that answers browsers, searched by the table's own filter — and the form is in the history should
 a portal start answering cross-origin.
 
-### 23.5 URLs that are not yet the file
+### 24.5 URLs that are not yet the file
 
 `sources/rewrite.ts`'s `canonicalUrl` is applied wherever a URL becomes a URI — the picker's box,
 the Tracks and Contact maps cards, the deck's add row, a hub row, `#uri=` and `?config=` on
@@ -4917,7 +4917,7 @@ idempotent, never throwing, and a table rather than a policy:
 | pasted | opened as | why |
 |---|---|---|
 | `https://www.dropbox.com/<path>` | `https://dl.dropboxusercontent.com/<path>` | the share link is a page; the content host serves ranges with CORS `*`. Host swap only, which is all igv-utils does. |
-| `https://drive.google.com/file/d/<id>/…`, `/open?id=`, `/uc?id=` | `https://www.googleapis.com/drive/v3/files/<id>?alt=media&supportsAllDrives=true` | the API is the only ranged, CORS-answering form; it refuses without a key (§23.7) |
+| `https://drive.google.com/file/d/<id>/…`, `/open?id=`, `/uc?id=` | `https://www.googleapis.com/drive/v3/files/<id>?alt=media&supportsAllDrives=true` | the API is the only ranged, CORS-answering form; it refuses without a key (§24.7) |
 | `gs://<b>/<o>`, `https://storage.cloud.google.com/<b>/<o>` | `https://storage.googleapis.com/storage/v1/b/<b>/o/<o>?alt=media` | the JSON-API endpoint answers CORS for any origin; the XML host does so only with a bucket policy |
 | `s3://<bucket>/<key>` | the URL form of a bucket scope naming that bucket, else `https://<bucket>.s3.amazonaws.com/<key>` | a scheme that could not travel in a link before |
 
@@ -4926,7 +4926,7 @@ form a bucket scope's base, the signer and the lister (§20.3) understand, and a
 policy serves it as it stands. `inferSource` (§5.5's shareability test) canonicalises before it
 decides, so `gs://` and `s3://` are shareable and a Dropbox page never is written into a hash.
 
-### 23.6 Links that expire
+### 24.6 Links that expire
 
 A presigned S3 URL, a signed GCS URL and an Azure SAS are one URL each, and §11 refused the first
 because the `HEAD` probe is not the method it was signed for. The probe now recognises a signature
@@ -4935,7 +4935,7 @@ the one-byte `Range` `GET` it already had for hosts that say nothing about range
 changes: the link works until it expires, and expiry looks like the `403` it is, named as such. A
 SAS is not method-scoped and always worked; it is listed so the rule reads as one rule.
 
-### 23.7 Credentials that are not a bucket key
+### 24.7 Credentials that are not a bucket key
 
 A bucket key signs (§20.3, `docs/hosting.md`); everything else on this road is **a header**. The
 remote arm of a source therefore carries `headers?` beside `credential?`, applied on every request
@@ -4965,21 +4965,21 @@ Drive is a host this viewer *reads*, not one it recommends. The same mechanism, 
 it, is what a token from an institutional portal or a Terra-shaped signed endpoint needs — one
 header on every request — which is why it is a header bag and not a Google integration.
 
-### 23.8 Refused, and why
+### 24.8 Refused, and why
 
 A **CORS proxy** (C1). **Fetching a hub on load** (§11). **Storing a bearer token** — it expires
 inside a session, and a secret that outlives its use is the one kind the stored-data screen cannot
-make safe. **Hot-linking another project's catalogue** (§23.3). **Rewriting the GCS XML host**
-(§23.5). **A Dropbox refresh token** — the one credential in this section that would make a
+make safe. **Hot-linking another project's catalogue** (§24.3). **Rewriting the GCS XML host**
+(§24.5). **A Dropbox refresh token** — the one credential in this section that would make a
 sign-in survive a reload, and a long-lived secret in `localStorage` for the convenience of not
-pasting a code twice a day (§23.9). And one host fact, stated so nobody spends a week on it: the
+pasting a code twice a day (§24.9). And one host fact, stated so nobody spends a week on it: the
 Aiden Lab bucket `hicfiles.s3.amazonaws.com` answers `403` to every browser user agent and `206`
 to one that begins with `IGV`, which no browser can send; juicebox.js needs a proxy for its own
 public server, and this viewer will not have one.
 
-### 23.9 A Drive folder and a Dropbox, as connected folders
+### 24.9 A Drive folder and a Dropbox, as connected folders
 
-§23.5 and §23.7 open *one file* a reader has the address of. The way people work with a Drive or a
+§24.5 and §24.7 open *one file* a reader has the address of. The way people work with a Drive or a
 Dropbox is the way §20 describes for a disk and a bucket — open one, look, open the next — so both
 are **connected folders**, behind the same `ConnectedFolder` interface, in the same Files column,
 with the same one-level, thousand-entry, no-walk rules (§20.1). Two things the interface did not
@@ -4992,7 +4992,7 @@ being imported by it, so the file every panel subscribes to reaches for no token
 cannot offer a backend (§19) never loads it.
 
 **Google Drive** (`browse/gdrive.ts`) lists a folder — My Drive, or a folder the reader names by
-link or id, shared drives included — with the account §23.7 signed in, through the Drive API's
+link or id, shared drives included — with the account §24.7 signed in, through the Drive API's
 `files.list`, folders first, Google-native documents left out because they have no bytes, a
 thousand entries and then *truncated*. A folder is remembered by its id and label in
 `localStorage`, named in the stored-data screen; the listing needs the account, so a remembered
@@ -5007,7 +5007,7 @@ and the app key — public by design, no secret — is the one thing kept, besid
 sign-in is **PKCE with the code shown by Dropbox and pasted by the reader**, not a redirect: a
 static page on any origin can do it, the desktop build's `app://` origin included, and there is no
 callback route to add to a viewer that has none. The token lives in this tab's memory and dies
-with it; the refresh token Dropbox would also hand over is refused (§23.8). The folder is the whole
+with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague

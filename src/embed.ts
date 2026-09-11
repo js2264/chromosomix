@@ -12,7 +12,7 @@
  *
  * So an embed says so, and this module is the one place that reads it:
  * `?embed=1` for the chrome-less mount, `?config=<url>` for the session to open
- * on arrival, `?hub=<url>` for the catalogue to land on (§23.2). Everything
+ * on arrival, `?hub=<url>` for the catalogue to land on (§24.2). Everything
  * downstream asks {@link mounting} rather than parsing the URL a second time.
  *
  * ## Why the query string and not the hash
@@ -77,7 +77,7 @@ export interface Mounting {
    */
   readonly config: string | null
   /**
-   * A hub to land on, absolute, or `null` (§23.2).
+   * A hub to land on, absolute, or `null` (§24.2).
    *
    * The third parameter beside the two above, and the one that names a *shelf*
    * rather than a picture: `?config=` says "open this figure", `?hub=` says
@@ -144,7 +144,7 @@ export function readMounting(search: string, base: string): Mounting {
 function fetchable(named: string | null, base: string): string | null {
   if (named === null || named === '') return null
   try {
-    // Canonicalised first (§23.5), so `?hub=gs://…` and `?config=s3://…` are
+    // Canonicalised first (§24.5), so `?hub=gs://…` and `?config=s3://…` are
     // the https URLs they stand for by the time the scheme is judged.
     const url = new URL(canonicalUrl(named), base)
     if (url.protocol === 'http:' || url.protocol === 'https:') return url.href

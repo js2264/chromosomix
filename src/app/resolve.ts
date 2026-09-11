@@ -56,7 +56,7 @@ import type { SourceSpec } from '../worker/protocol'
  * ## Canonicalised first, and the test itself is untouched
  *
  * `sources/rewrite.ts` runs before the `https?:` test rather than after it, and
- * that ordering is the whole of what changed here (SPECS §23.5). The test still
+ * that ordering is the whole of what changed here (SPECS §24.5). The test still
  * asks *can anybody open this*, and still answers it about an `http(s)` URL
  * alone; what moved is that `gs://bucket/file.mcool` and `s3://bucket/file.cool`
  * now **are** such a URL by the time it is asked. Both were already admitted by

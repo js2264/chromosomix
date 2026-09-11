@@ -15,7 +15,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Added
 
 - **Hubs: a shelf of named datasets in the picker, and any lab can publish one.** A hub is one
-  JSON file beside the data (`kind: "metacooler.hub"`, SPECS §23): maps, genome files and whole
+  JSON file beside the data (`kind: "metacooler.hub"`, SPECS §24): maps, genome files and whole
   workspaces with columns to filter on — assembly, biosource, assay, lab — so a reader chooses
   without opening anything. The picker draws it as a sortable, filterable table and offers three
   built-in hubs: the **Demos**, now with two 4DN open-data maps beside the four workspaces;
@@ -57,7 +57,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   five-step check to run once, and it is the one item of this release still to be confirmed by hand.
 
 - **A Google Drive folder and a Dropbox, as connected folders.** Both join the Files column
-  behind the same `ConnectedFolder` interface as a disk and a bucket (SPECS §23.9): one level at a
+  behind the same `ConnectedFolder` interface as a disk and a bucket (SPECS §24.9): one level at a
   time, a thousand entries, then *truncated*. A Drive folder — My Drive, or a folder named by link
   or id, shared drives included — is listed with the signed-in account, folders first, Google-native
   documents left out; a picked file opens at the same API address a pasted share link does, and

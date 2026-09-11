@@ -1,5 +1,5 @@
 /**
- * The Google Drive folders this browser has been told to keep (SPECS §20, §23.7).
+ * The Google Drive folders this browser has been told to keep (SPECS §20, §24.7).
  *
  * A Drive folder is the same kind of thing as a remembered hub or a bucket
  * scope: a place the reader connected to by pasting an address, which they will
@@ -10,7 +10,7 @@
  * folder id, never a listing and never a token: the listing is a round trip made
  * with the reader's own account when they open the folder, and the token that
  * authorises it is held in memory by `s3/credentials.ts`'s bearer registry and
- * is never written down (§23.8).
+ * is never written down (§24.8).
  *
  * **Nothing here fetches anything, and nothing here knows what Drive is.** A
  * stored row becomes a `ConnectedFolder` in `browse/gdrive.ts`, which is the
@@ -169,7 +169,7 @@ export function subscribeDrives(listener: () => void): () => void {
  * folders and the hubs: a Drive folder is somewhere the reader connected to, and
  * the labels are the part worth reading back before deciding what to do on a
  * borrowed machine. What is *not* here is the credential, and the line says so —
- * the token that lists these folders is held in memory and never written (§23.8),
+ * the token that lists these folders is held in memory and never written (§24.8),
  * so a reader who sees this line has been told the whole of what is on the disk.
  */
 export function storedLines(): StoredItem[] {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Connecting a Google Drive folder from the Connect dialog (SPECS §20, §23.7).
+ * Connecting a Google Drive folder from the Connect dialog (SPECS §20, §24.7).
  *
  * The section is small and three things about it are not:
  *
@@ -94,7 +94,7 @@ describe('before anybody has signed in', () => {
   })
 
   /**
-   * The sentence §23.7 requires wherever this grant is used, because a consent
+   * The sentence §24.7 requires wherever this grant is used, because a consent
    * screen says neither half: whose account does the listing, and where the
    * token ends up.
    */

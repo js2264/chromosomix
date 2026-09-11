@@ -311,7 +311,7 @@ the MAGs that separate spectrally. Turning those two into a proposed binning **d
 current bin, proposed bin, score, evidence — is authoring an output, not editing an input, and it is
 the natural end of a session spent finding that a binning is wrong.
 
-### G10. A catalogue of published files — **built** (SPECS §23)
+### G10. A catalogue of published files — **built** (SPECS §24)
 
 > **Since:** built as a *hub* — a static JSON of maps, genomes and workspaces with columns to filter
 > on, drawn as a table in the picker, connectable by URL and addressable as `?hub=`. The generator is

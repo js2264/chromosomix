@@ -335,12 +335,12 @@ const DEMO_COLUMNS = [
  * They are here because of what they prove, which no file on the lab's bucket
  * can: that a reader's *next* file does not have to be published by us. Both
  * were opened in the unmodified viewer on 2026-09-11 straight off 4DN's public
- * bucket, by range, with no key and no proxy — which is the claim §23 makes and
+ * bucket, by range, with no key and no proxy — which is the claim §24 makes and
  * the one a first-time reader has no way to check from a demo folder this
  * project controls end to end.
  *
  * Sizes are recorded rather than guessed, because a size in a hub is what lets
- * the table say what a row costs before it is clicked (§23.1) — and these two
+ * the table say what a row costs before it is clicked (§24.1) — and these two
  * are exactly the rows worth saying it about.
  */
 const DEMO_4DN: HubEntry[] = [
@@ -381,7 +381,7 @@ const DEMO_4DN: HubEntry[] = [
  * The `hubs` branch of this repository rather than the deployed site, and raw
  * GitHub rather than a bucket: `raw.githubusercontent.com` serves
  * `Access-Control-Allow-Origin: *` and needs no build, so a fork gets the whole
- * arrangement with no secret to add (§23.3). The site is rebuilt from `main` on
+ * arrangement with no secret to add (§24.3). The site is rebuilt from `main` on
  * every push, and a weekly hub is fresher than that.
  *
  * **Both 404 until `.github/workflows/hubs.yml` has run once**, which is a state
@@ -428,7 +428,7 @@ function demosHub(): Hub {
  *
  * Demos first and inline, because it is the only one that costs no request and
  * the only one that is certainly there. The two generated ones follow as URLs:
- * nothing is fetched until a reader selects one (§23.2), which is what keeps
+ * nothing is fetched until a reader selects one (§24.2), which is what keeps
  * "open the viewer" from being a third-party request.
  */
 export function builtinHubs(): HubRef[] {
@@ -447,7 +447,7 @@ export function builtinHubs(): HubRef[] {
  * The tracks a hub row named, held until the file it belongs to is opened.
  *
  * A hub entry may carry `tracks` — the bigWigs the same experiment published
- * beside the map (§23.1) — and they are the same *offer* the demo map's ten
+ * beside the map (§24.1) — and they are the same *offer* the demo map's ten
  * annotations are: here is a set of tracks to look at, for a reader who has
  * none. So they are answered through the same question rather than a second
  * one, and `Session` needs no idea that a hub exists.

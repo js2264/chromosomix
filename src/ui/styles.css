@@ -4864,7 +4864,7 @@ canvas.is-frozen {
   margin-top: 1.5rem;
 }
 
-/* --- the hubs section (§23.2) -------------------------------------------
+/* --- the hubs section (§24.2) -------------------------------------------
    A table, not the dropdown this replaced: six hundred rows are chosen by
    filtering on assembly and biosource, which a list of labels cannot be
    narrowed by. Built out of the folder view's parts wherever they fit — the

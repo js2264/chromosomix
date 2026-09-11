@@ -12,7 +12,7 @@
  *
  * So a hub is that join, written down once by whoever publishes the data: a
  * JSON file on any CORS-enabled host, listing entries with enough about each one
- * to pick without opening it (§23.1). `scripts/make_hub.py` writes them from the 4DN and
+ * to pick without opening it (§24.1). `scripts/make_hub.py` writes them from the 4DN and
  * ENCODE APIs; a lab writes one by hand for its own bucket; `ui/examples.ts`
  * carries one inline for the demos. All three are the same file, and this module
  * is the only thing that reads it.
@@ -40,7 +40,7 @@
  *
  * ## What this module refuses
  *
- * Identity is strict and fields are forgiving (§23.1), which is `state/workspace.ts`'s
+ * Identity is strict and fields are forgiving (§24.1), which is `state/workspace.ts`'s
  * rule and is here for the same reason: a JSON that does not say it is a hub is
  * not one — a reader who points `?hub=` at a `package.json` should be told so,
  * not shown an empty table — while an entry missing a field is dropped rather
@@ -124,7 +124,7 @@ export interface Hub {
  * bundle costs no request at all, and every other one is a URL that is not
  * touched until a reader asks for it. Nothing in this app fetches a hub on load
  * (SPECS C1's neighbour: nothing leaves the machine that the reader did not
- * ask for; §23.2), so a reference is what the picker holds and `fetchHub` is
+ * ask for; §24.2), so a reference is what the picker holds and `fetchHub` is
  * what a gesture runs.
  *
  * It lives here rather than in `ui/examples.ts` because three modules name it —
@@ -400,7 +400,7 @@ function resolveAddress(path: string, base: string | null): string {
   const hash = path.indexOf('#')
   const address = hash < 0 ? path : path.slice(0, hash)
   const fragment = hash < 0 ? '' : path.slice(hash)
-  // Canonicalised once absolute (§23.5): a hub may name a Dropbox share link, a
+  // Canonicalised once absolute (§24.5): a hub may name a Dropbox share link, a
   // Drive file or a `gs://` object, and the row should carry the form that
   // opens — the same rewrite every URL box applies — so that what the picker
   // hands over, and what a shared link then carries, is already the working one.
@@ -476,7 +476,7 @@ export async function fetchHub(url: string, options: FetchHubOptions = {}): Prom
   let response: Response
   try {
     // Signed when a bucket scope covers the URL, and carrying whatever static
-    // headers the URL needs (§23.7) — a hub published on a Drive or GCS JSON-API
+    // headers the URL needs (§24.7) — a hub published on a Drive or GCS JSON-API
     // URL is read with the same key its rows will be.
     const credential = credentialFor(url)
     response = await run(

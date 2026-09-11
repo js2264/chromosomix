@@ -67,7 +67,7 @@ export interface FilePickerProps {
    */
   onOpenFiles(files: readonly File[]): void
   /**
-   * The hubs to offer, or none for a picker that should not offer any (§23.2).
+   * The hubs to offer, or none for a picker that should not offer any (§24.2).
    *
    * This is the *built-in* list — `ui/examples.ts` owns what is in it. Hubs the
    * reader has connected are read from storage by the table itself, because
@@ -163,7 +163,7 @@ export class FilePicker {
 
     // A *table*, and not the `<select>` this used to be. Four published demos
     // fit in a dropdown; a hub is six hundred rows chosen by assembly and
-    // biosource, which no list of labels can be narrowed by (§23.1). The table
+    // biosource, which no list of labels can be narrowed by (§24.1). The table
     // owns its own selector, because which hub and which row of it are one
     // question asked twice and splitting them across two components would mean
     // the picker knowing what "loading" looks like.
@@ -310,7 +310,7 @@ export class FilePicker {
   /**
    * Land on a hub, from a `?hub=` link or from anywhere else that has one.
    *
-   * A link *is* a gesture (§23.2), which is what licenses the fetch: nothing
+   * A link *is* a gesture (§24.2), which is what licenses the fetch: nothing
    * happens on load, and what happens here happened because somebody clicked a
    * URL that named this shelf. Silently nothing in the standalone build and in
    * a picker that was offered no hubs, because there is no table to land in.
@@ -438,7 +438,7 @@ export class FilePicker {
   private openRemote(): void {
     // Canonicalised at the door, so the hash, the share link and the workspace
     // file all carry the address that works rather than the page a reader copied
-    // out of Dropbox (SPECS §23.5). A URL the table does not recognise — which
+    // out of Dropbox (SPECS §24.5). A URL the table does not recognise — which
     // is nearly all of them — comes back exactly as it was typed.
     const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return

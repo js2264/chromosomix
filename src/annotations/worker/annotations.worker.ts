@@ -846,7 +846,7 @@ export function contigsOf(ends: Map<string, number>): Contig[] {
  * many requests that is.
  *
  * Two things go on, and they compose in one order: the static headers a URL
- * needs (a Google API key, a bearer token — SPECS §23.7) and then the SigV4
+ * needs (a Google API key, a bearer token — SPECS §24.7) and then the SigV4
  * signature over them. The signature is computed per call rather than once per
  * handle, because `x-amz-date` is signed and S3 refuses a stamp older than
  * fifteen minutes; a bigWig handle outlives that easily, since it is kept for as

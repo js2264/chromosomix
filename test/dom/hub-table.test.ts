@@ -4,8 +4,8 @@
  *
  * Everything here is about the two claims the section makes that a reader
  * cannot check for themselves. **Nothing is fetched until somebody asks**
- * (§23.2) — so the stub below counts requests, and a table that has merely been
- * built must have made none. And **filtering never refetches** (§23.1): the
+ * (§24.2) — so the stub below counts requests, and a table that has merely been
+ * built must have made none. And **filtering never refetches** (§24.1): the
  * catalogue is in hand, so narrowing it is arithmetic, and a filter that reached
  * the network would be a signed request per keystroke against an answer that
  * cannot change.

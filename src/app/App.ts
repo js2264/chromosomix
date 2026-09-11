@@ -808,7 +808,7 @@ export class App implements SessionHost {
     // click; `?config=` is the seed the page itself named, which is exactly
     // what a window with nothing else to go on should open; and `?hub=` is the
     // weakest of the four, because it names a **shelf** rather than a picture
-    // (§23.2). It opens the picker *on* somebody's catalogue and lets the
+    // (§24.2). It opens the picker *on* somebody's catalogue and lets the
     // reader choose, so a page that named both a config and a hub meant the
     // config — a hub loaded underneath a session nobody can see is a request
     // made for nothing. A link is a gesture, which is what licenses that fetch

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The Google API key section of the Connect dialog (SPECS §23.7).
+ * The Google API key section of the Connect dialog (SPECS §24.7).
  *
  * A key box is three lines of DOM and four ways to be wrong, and three of them
  * are invisible from a screenshot:

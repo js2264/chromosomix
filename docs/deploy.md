@@ -133,7 +133,7 @@ name these.
 
 ## The published workspaces
 
-The picker's **Demos** hub (`builtinHubs()` in `ui/examples.ts`, SPECS §23.2) lists **four
+The picker's **Demos** hub (`builtinHubs()` in `ui/examples.ts`, SPECS §24.2) lists **four
 workspace files**, plus two 4DN open-data maps that live on 4DN's bucket rather than the lab's:
 
 | file | opens |

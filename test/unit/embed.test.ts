@@ -74,7 +74,7 @@ describe('reading a mount', () => {
   })
 
   /**
-   * `?hub=` is the third mounting parameter (§23.2), and it is read with the
+   * `?hub=` is the third mounting parameter (§24.2), and it is read with the
    * same two rules `config` is: resolved against the page, and kept only when
    * it comes out as something this app can fetch. The rules are shared code
    * rather than written twice, and these assertions are what says so.
@@ -85,7 +85,7 @@ describe('reading a mount', () => {
     expect(readMounting(`?hub=${encodeURIComponent(url)}`, AT).hub).toBe(url)
   })
 
-  it('reads a gs:// or s3:// hub as the https URL it stands for (§23.5)', () => {
+  it('reads a gs:// or s3:// hub as the https URL it stands for (§24.5)', () => {
     expect(readMounting('?hub=gs%3A%2F%2Fbucket%2Fshelf.json', AT).hub).toBe(
       'https://storage.googleapis.com/storage/v1/b/bucket/o/shelf.json?alt=media',
     )

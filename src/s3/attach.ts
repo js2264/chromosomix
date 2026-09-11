@@ -24,7 +24,7 @@
  * ## Two credentials, stamped independently
  *
  * A bucket key **signs** and everything else on this road is **a header**
- * (SPECS §23.7): a Google API key for the Drive and GCS JSON APIs, a bearer
+ * (SPECS §24.7): a Google API key for the Drive and GCS JSON APIs, a bearer
  * token for a signed-in account, a token from an institutional portal. They come
  * from different stores, they are matched to a URL by different rules, and a URL
  * can want one, both or neither — a `gs://` object under no bucket scope takes a

@@ -147,9 +147,9 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
-  // Remembered Drive folders (§23.9): named by label, the way folders are.
+  // Remembered Drive folders (§24.9): named by label, the way folders are.
   items.push(...driveStoredLines())
-  // The Dropbox app key (§23.9): a credential, named the way the bucket keys are.
+  // The Dropbox app key (§24.9): a credential, named the way the bucket keys are.
   items.push(...dropboxStoredLines())
 
   const local = localKeys()
@@ -193,7 +193,7 @@ export async function storedItems(): Promise<StoredItem[]> {
       //
       // The bearer token a signed-in account produces is deliberately *not*
       // here: it is held in memory and never written, so there is nothing on
-      // this machine for this screen to account for (SPECS §23.7).
+      // this machine for this screen to account for (SPECS §24.7).
       detail: 'Google API key, stored in this browser in plain text',
     })
   }

@@ -92,7 +92,7 @@ describe('storedItems', () => {
   })
 
   it('names the Google API key on its own line, beside the bucket keys', async () => {
-    // The second secret this browser can be holding (SPECS §23.7), and it gets
+    // The second secret this browser can be holding (SPECS §24.7), and it gets
     // the bucket key's treatment for the bucket key's reason: it is a
     // credential, it is readable by any script on this origin, and a reader on a
     // borrowed machine must not have to press "forget everything" to find out it
@@ -116,7 +116,7 @@ describe('storedItems', () => {
     // id is published in the page of every site that uses Google sign-in, it
     // authorises nothing on its own, and the only question a reader has about it
     // is *which project has this browser been told to sign in to* — which a
-    // count cannot answer (SPECS §23.7).
+    // count cannot answer (SPECS §24.7).
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     window.localStorage.setItem(
       `${PREFIX}google`,

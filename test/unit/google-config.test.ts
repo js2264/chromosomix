@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The lab's Google configuration, and what this page can say about it
- * (SPECS §23.7).
+ * (SPECS §24.7).
  *
  * Two halves that are kept apart on purpose, and this file is where the
  * separation is pinned:

@@ -199,7 +199,7 @@ export class FilesCard {
     this.view.clear()
     this.lapsedEl.classList.remove('hidden')
     // A Drive folder or a Dropbox is not lapsed the way a directory grant is:
-    // it lists with an account, and a reload signs nobody in (§23.9). The fix
+    // it lists with an account, and a reload signs nobody in (§24.9). The fix
     // is the same one click, under a different name, in the Connect dialog.
     const account =
       folder.kind === 'drive'

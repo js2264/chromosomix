@@ -426,7 +426,7 @@ describe('what is offered to a shortener', () => {
       true,
     )
     // `gs:` joined `s3:` when `sources/rewrite.ts` gave it a destination (SPECS
-    // §23.5): a Google Cloud Storage object now resolves to a URL that opens in
+    // §24.5): a Google Cloud Storage object now resolves to a URL that opens in
     // any browser, so a link carrying one is a link a recipient can follow.
     expect(shortenable(configOf({ state: { uri: 'gs://bucket/x.mcool' } as SessionConfig['state'] }))).toBe(
       true,

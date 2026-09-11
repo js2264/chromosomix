@@ -11,7 +11,7 @@
  *
  * Declared **global and optional-shaped** because that is what it is at
  * runtime. The script is fetched on the reader's click and not before (SPECS
- * §23.7, §11), so for the whole life of a session that never signs in the name
+ * §24.7, §11), so for the whole life of a session that never signs in the name
  * `google` is simply not bound — which is legal to *ask about* with `typeof` and
  * a `ReferenceError` to read. `auth/google.ts` is the only file that touches it
  * and it asks first; this file exists so that asking is type-checked rather than

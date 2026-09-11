@@ -192,7 +192,7 @@ function recordingFetch(): {
 
 describe('a URL that carries its own signature', () => {
   /**
-   * SPECS §23.6, and the whole of what it asks for: a presigned URL is signed
+   * SPECS §24.6, and the whole of what it asks for: a presigned URL is signed
    * for one method, so the `HEAD` it used to be probed with came back 403 and
    * the open failed before it started — on a link whose `GET` would have been
    * served. The probe used instead is the one the source already had for a host
@@ -234,7 +234,7 @@ describe('a URL that carries its own signature', () => {
 
 describe('the static header bag', () => {
   /**
-   * SPECS §23.7: a Google API key and a bearer token are headers rather than
+   * SPECS §24.7: a Google API key and a bearer token are headers rather than
    * signatures, and they go on **every** request for the URL. Every request is
    * the point — a bag applied to the probe and not to the reads opens a file
    * that then fails on its first block, which reads as the file being corrupt.

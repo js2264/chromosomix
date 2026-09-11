@@ -59,7 +59,7 @@ export interface RemoteRangeOptions {
    */
   credential?: S3Credential
   /**
-   * Static headers for every request this source makes (SPECS §23.7).
+   * Static headers for every request this source makes (SPECS §24.7).
    *
    * An API key or a bearer token, decided on the main thread where the storage
    * is. Unlike the credential above they are not recomputed per request — there
@@ -121,7 +121,7 @@ export class RemoteRangeSource implements ByteSource {
    * A presigned S3 URL and a signed GCS one are signed for **one method**, so
    * the probe below is refused where the `GET` behind it would have been served
    * — which is what §11 recorded as "presigned URLs do not work" and what SPECS
-   * §23.6 now unwinds. There is nothing to add for it: the `bytes=0-0` probe is
+   * §24.6 now unwinds. There is nothing to add for it: the `bytes=0-0` probe is
    * already the road taken by every host that says nothing about ranges (4DN's
    * bucket is one), and it yields both answers the `HEAD` would have. So a
    * signed URL takes that road from the start, and a link that expires opens and

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a hub — the static catalogue the viewer's Hubs section reads (SPECS §23.3).
+"""Build a hub — the static catalogue the viewer's Hubs section reads (SPECS §24.3).
 
 Run with any Python 3.9 or newer.  **Standard library only**, deliberately::
 
@@ -23,7 +23,7 @@ happens here, once a week, and what the reader fetches is one static JSON on a
 host that already serves ``Access-Control-Allow-Origin: *``.  It is also what
 juicebox.js does — its ENCODE and 4DN menus are tables a script regenerated and
 somebody committed (``igvteam/igv-data``, MIT) — and the reason this viewer's
-version of that table is not simply *their* table is in SPECS §23.3: a hub that
+version of that table is not simply *their* table is in SPECS §24.3: a hub that
 hot-links another project's file inherits that project's cadence and schema.
 
 **No dependencies, for the same reason the viewer has no backend.**  A weekly
@@ -58,7 +58,7 @@ Three front ends, because there are three places a catalogue can come from:
     at a lab's own bucket — no portal, no metadata beyond the file name and the
     size, which is still enough to choose from.
 
-**Two facts worth not rediscovering**, both recorded in SPECS §23.3:
+**Two facts worth not rediscovering**, both recorded in SPECS §24.3:
 
 1. A 4DN search with no hits answers **HTTP 404 with a JSON body**.  That is
    zero results, not a failure, and a generator that crashes on it fails every
@@ -428,7 +428,7 @@ def child_text(element: ElementTree.Element, name: str) -> str:
     **By name, never by position.** Newer objects carry ``<ChecksumAlgorithm>``
     and ``<ChecksumType>`` between ``<ETag>`` and ``<Size>``; the 4DN census
     that read the block positionally lost a quarter of the bucket to exactly
-    that (SPECS §23.3).
+    that (SPECS §24.3).
     """
     for child in element:
         if local(child.tag) == name:
@@ -669,7 +669,7 @@ def entries_encode(graph: list, limit: Optional[int]) -> list[dict]:
             # exits 2 and blocks the week's publish.
             if status != "" and status.lower() != "released":
                 continue
-            # The unsigned object, never `@@download`: SPECS §23.3.
+            # The unsigned object, never `@@download`: SPECS §24.3.
             url = text(dig(item, "cloud_metadata", "url"))
             if url == "":
                 href = text(item.get("href"))

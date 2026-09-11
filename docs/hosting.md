@@ -345,7 +345,7 @@ probe needs its own, and they expire while a tab is open.
 A **public** Drive file needs an API key and nothing else — the Drive API refuses a request without
 one even for a file anyone can read — and a public GCS object needs neither. Both are one box in
 **Connect → A Google API key**. This section is the other case: a file that is *not* public, which
-needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §23.7
+needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §24.7
 is the specification; `src/auth/google.ts` is the implementation.
 
 There is no client id in this repository and there cannot be one. An OAuth client is registered
@@ -465,12 +465,12 @@ Two different things live behind that name, and only the second needs anything s
 
 A Dropbox **share link** pasted into the URL box opens today, with no account and nothing
 registered: the viewer swaps the host to `dl.dropboxusercontent.com`, which serves ranges and
-answers CORS for every origin (SPECS §23.5). Nothing below applies to it.
+answers CORS for every origin (SPECS §24.5). Nothing below applies to it.
 
 **Browsing** a Dropbox — the folder in the Files panel, one level at a time — is the other thing,
 and it needs the reader's own account: the listing API takes a bearer token and nothing else, so
 there is no public way to browse a Dropbox the way a public bucket can be browsed. That needs an
-**app key the lab registers**. SPECS §20 and §23.7 are the specification; `src/auth/dropbox.ts` and
+**app key the lab registers**. SPECS §20 and §24.7 are the specification; `src/auth/dropbox.ts` and
 `src/browse/dropbox.ts` are the implementation.
 
 There is no app key in this repository, for the reason there is no Google client id: it names the
@@ -502,7 +502,7 @@ access to everything in their Dropbox, or to the app's own folder inside it, dep
 and the token this produces is held **in this tab's memory only**, never written to storage, gone
 when the tab closes, and expiring on the `expires_in` Dropbox returns with it, which the dialog
 shows as a clock time. `token_access_type=online`, so no refresh token comes back: a refresh token
-is a long-lived credential, and storing one is the thing §23.8 refuses outright.
+is a long-lived credential, and storing one is the thing §24.8 refuses outright.
 
 **A picked file's link lasts four hours.** Clicking a file in a Dropbox folder calls
 `/2/files/get_temporary_link`, which answers a URL on `dl.dropboxusercontent.com` that carries its
@@ -569,5 +569,5 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 | Aiden Lab `hicfiles.s3.amazonaws.com` | no browser can | the bucket refuses every browser user agent |
 
 Publishing a **hub** — a JSON that names the files on a bucket with columns to filter on, so a
-reader can choose without opening any — is `scripts/make_hub.py bucket <prefix>`; SPECS §23 is the
+reader can choose without opening any — is `scripts/make_hub.py bucket <prefix>`; SPECS §24 is the
 format and the picker's side of it.

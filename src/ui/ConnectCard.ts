@@ -30,7 +30,7 @@
  *
  * ## And two more things, neither of which is a folder
  *
- * A Google API key (SPECS §23.7) is not a folder, so it connects nothing and
+ * A Google API key (SPECS §24.7) is not a folder, so it connects nothing and
  * appears in no panel — it is the one credential that has to exist before a
  * *link* works, because the Drive API refuses a public file without one. It is
  * here rather than in a dialog of its own for the reason the bucket half is
@@ -117,10 +117,10 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
     // `auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`.
     IS_STANDALONE ? null : googleAccountSection(),
     // A Drive folder needs the account above; the section is null wherever the
-    // sign-in is (§23.9), and says "sign in first" when it is offered but the
+    // sign-in is (§24.9), and says "sign in first" when it is offered but the
     // reader has not.
     IS_STANDALONE ? null : driveFolderSection(done),
-    // The one provider with an account and no key (§23.9); the section decides
+    // The one provider with an account and no key (§24.9); the section decides
     // for itself where it can be offered.
     IS_STANDALONE ? null : dropboxSection(done),
     privacyNote(),
@@ -379,7 +379,7 @@ function googleAccountSection(): HTMLElement | null {
         'The client id is your lab’s, registered in its own Google Cloud project against the ' +
         'exact address this page is served from — docs/hosting.md has the four steps.',
     }),
-    // The two sentences §23.7 requires this dialog to say, and it requires them
+    // The two sentences §24.7 requires this dialog to say, and it requires them
     // because a consent screen says neither: Google's names the product, and
     // nothing anywhere tells the reader where the token ends up.
     el('p', {
@@ -437,7 +437,7 @@ function googleAccountSection(): HTMLElement | null {
 function accountLine(state: { signedIn: boolean; expiresAt: number | null }): string {
   const when = (at: number): string => new Date(at).toLocaleTimeString()
   if (state.signedIn && state.expiresAt !== null) {
-    // No address, because no `userinfo` scope was asked for (§23.7). Saying
+    // No address, because no `userinfo` scope was asked for (§24.7). Saying
     // which account would cost a second grant for a label, so the line says
     // what it actually knows and says why it knows no more.
     return `Signed in. The token is good until ${when(state.expiresAt)}; no address was asked ` +

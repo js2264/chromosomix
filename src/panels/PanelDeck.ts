@@ -1822,7 +1822,7 @@ export class PanelDeck {
   private addUrl(): void {
     // Canonicalised here, where the text becomes a URI: a deck member is written
     // into `?maps=` and travels in every link this session writes, so what is
-    // stored has to be the address that opens (SPECS §23.5).
+    // stored has to be the address that opens (SPECS §24.5).
     const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     this.urlInput.value = ''

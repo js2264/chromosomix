@@ -5,7 +5,7 @@
  * place the reader connected to by pasting an address, which they will want
  * again next week and should not have to find twice. So it is kept the same way
  * — one `localStorage` key under the app's prefix, so the stored-data screen can
- * name it and *forget everything* sweeps it without knowing it exists (§23.2,
+ * name it and *forget everything* sweeps it without knowing it exists (§24.2,
  * `state/stored.ts`) — and it is kept *only* that way: a row is a label and a
  * URL, never a copy of the catalogue. A cached hub would be a second answer
  * about what a bucket holds, stale from the moment it was written, and the
@@ -13,7 +13,7 @@
  *
  * **Nothing here fetches anything.** A stored row becomes a `HubRef`, which is
  * a pointer; `ui/HubTable.ts` turns one into a request when a reader selects it
- * (§23.2: nothing on load). That separation is why this module is fifty lines
+ * (§24.2: nothing on load). That separation is why this module is fifty lines
  * and has no idea what a hub contains.
  *
  * The subscription exists because two pickers and a table can be looking at the
@@ -149,7 +149,7 @@ export function subscribeHubs(listener: () => void): () => void {
  * three of them and the `builtin: false` is the load-bearing field: it is what
  * makes the table offer *forget* on these rows and not on the shipped ones, and
  * what keeps a 404 on a reader's own hub from being reported as "the Hubs
- * workflow has not run" (§23.2).
+ * workflow has not run" (§24.2).
  */
 export function rememberedHubs(): HubRef[] {
   return readHubRows().map((row) => ({

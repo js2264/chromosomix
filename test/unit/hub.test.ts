@@ -7,7 +7,7 @@
  * gate that is wrong is wrong loudly.
  *
  * Resolution is quiet. A hub with relative names is the whole reason a dataset
- * folder can be copied to another bucket (§23.1), and every way of getting it
+ * folder can be copied to another bucket (§24.1), and every way of getting it
  * wrong produces a *plausible* URL: one directory up, the `::entries/rep1` half
  * swallowed into the path, a `#index=` left pointing at the page the viewer is
  * served from. None of those throws; all of them 404 on somebody else's machine
@@ -322,7 +322,7 @@ describe('resolving a hub', () => {
   })
 
   /**
-   * §23.5: a row carries the form that opens. The rewrite is the same one every
+   * §24.5: a row carries the form that opens. The rewrite is the same one every
    * URL box applies, so a hub may name a `gs://` object or a Dropbox share link
    * and the picker hands over — and a shared link then carries — the working
    * URL rather than the page it stands for.

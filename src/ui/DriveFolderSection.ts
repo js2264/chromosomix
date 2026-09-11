@@ -1,5 +1,5 @@
 /**
- * Connect a Google Drive folder (SPECS §20, §23.7).
+ * Connect a Google Drive folder (SPECS §20, §24.7).
  *
  * A section of the Connect dialog rather than a dialog of its own, because to a
  * reader a Drive folder is the same thing as a directory or a bucket — *the

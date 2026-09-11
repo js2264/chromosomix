@@ -1,5 +1,5 @@
 /**
- * The credentials that are not a bucket key (SPECS §23.7), and the one function
+ * The credentials that are not a bucket key (SPECS §24.7), and the one function
  * that puts them on a request.
  *
  * Three things are asserted here and each of them is a way the feature fails
@@ -183,7 +183,7 @@ describe('bearer tokens', () => {
     // The whole of why it is a registry and not a row: it expires inside the
     // session that obtained it, so storing it would buy nothing and would put a
     // secret on the disk that the stored-data screen cannot honestly account
-    // for (SPECS §23.7).
+    // for (SPECS §24.7).
     setToken('data.example.org', 'live', hour())
     expect(window.localStorage.length).toBe(0)
   })

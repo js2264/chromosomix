@@ -78,7 +78,7 @@ export type DetectedFormat =
  * `headers` is the other kind of credential — a Google API key, a bearer token —
  * and travels for the same reason again, with one difference worth naming: it is
  * *static*, so it goes on every request this worker makes for the URL rather
- * than being recomputed per request the way a signature is (SPECS §23.7). Both
+ * than being recomputed per request the way a signature is (SPECS §24.7). Both
  * are merged by `sources/access.ts`, which is also what the reader worker uses,
  * so a private bigWig and a private cooler are authorised identically.
  *

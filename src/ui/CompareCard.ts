@@ -145,7 +145,7 @@ export class CompareCard {
   private openUrl(): void {
     // The same rewrite the picker's box applies, for the same reason: what is
     // typed here becomes a URI in the session and in every link written out of
-    // it, so it has to be the form that opens (SPECS §23.5).
+    // it, so it has to be the form that opens (SPECS §24.5).
     const url = canonicalUrl(this.urlInput.value.trim())
     if (url !== '') this.props.onOpen({ kind: 'remote', url })
   }

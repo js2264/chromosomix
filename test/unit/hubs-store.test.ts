@@ -4,7 +4,7 @@
  *
  * A remembered hub is a row under the app's own `localStorage` prefix, which is
  * what makes the stored-data screen able to name it and *forget everything*
- * able to sweep it without knowing it exists (§23.2). Everything below is about
+ * able to sweep it without knowing it exists (§24.2). Everything below is about
  * the two ways that quietly stops being true: a row that survives a reload as
  * something other than what was written, and an id that gets reused.
  *

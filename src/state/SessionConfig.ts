@@ -521,7 +521,7 @@ export type ConfigRefusal =
   | { reason: 'not-json' }
   | { reason: 'not-a-workspace' }
   /**
-   * A JSON file that is not a **hub** (§23.1, `state/hub.ts`).
+   * A JSON file that is not a **hub** (§24.1, `state/hub.ts`).
    *
    * Its own reason rather than a second use of `not-a-workspace`, on the
    * argument the docstring above makes about the other two: the two formats
@@ -810,7 +810,7 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
       return uri
     }
     // Canonicalised either way, because both roads end in a URI this session
-    // will open and write into its own links (SPECS §23.5). A published
+    // will open and write into its own links (SPECS §24.5). A published
     // workspace may name `gs://` or a Drive share link absolutely, and one
     // resolved against a config's own URL cannot become either — but running the
     // table over both is one call and keeps the rule *every URI is canonical*

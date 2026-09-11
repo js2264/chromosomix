@@ -1,7 +1,7 @@
 /**
  * Everything a request for a remote byte needs on it, in one place.
  *
- * There are two of these things and they are not alike (SPECS §23.7). A bucket
+ * There are two of these things and they are not alike (SPECS §24.7). A bucket
  * key **signs**: the headers it produces are computed per request, over the
  * method and a timestamp S3 refuses more than fifteen minutes old, so they cannot
  * be worked out once and kept. An API key or a bearer token is **static**: the

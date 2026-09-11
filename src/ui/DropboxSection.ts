@@ -261,7 +261,7 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
 function accountLine(state: { signedIn: boolean; expiresAt: number | null }): string {
   const when = (at: number): string => new Date(at).toLocaleTimeString()
   if (state.signedIn && state.expiresAt !== null) {
-    // No address, because nothing here asks for `account_info.read` (§23.7).
+    // No address, because nothing here asks for `account_info.read` (§24.7).
     // Saying which account would cost a second permission for a label, which is
     // not a trade this app makes.
     return `Signed in. The token is good until ${when(state.expiresAt)}; no account information ` +

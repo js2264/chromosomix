@@ -205,7 +205,7 @@ export async function binsFor(spec: SourceSpec): Promise<BinsSpec | null> {
 /**
  * Try the conventional bin-file URLs beside a matrix; `null` if none answers.
  *
- * Not attempted at all for a URL carrying its own signature (SPECS §23.6): a
+ * Not attempted at all for a URL carrying its own signature (SPECS §24.6): a
  * presigned link authorises **one object**, so every candidate beside it is a
  * `403` whatever it is named, and three requests to establish that is three
  * requests spent to reach the same refusal. The refusal `binsFor` raises names
@@ -321,7 +321,7 @@ async function assertLoadAffordable(
  * The byte length of a source, without reading it.
  *
  * `null` for a URL that carries its own signature, without asking: the signature
- * covers one method and this is the other one (SPECS §23.6), so the request
+ * covers one method and this is the other one (SPECS §24.6), so the request
  * would cost a round trip to learn nothing. That is the same answer this already
  * gives for a host that will not answer a `HEAD`, and it means the same thing —
  * no number to quote, so the gate below does not fire and the file is read.

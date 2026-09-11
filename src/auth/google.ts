@@ -1,5 +1,5 @@
 /**
- * Signing in to Google, for the files a key cannot reach (SPECS §23.7).
+ * Signing in to Google, for the files a key cannot reach (SPECS §24.7).
  *
  * A Google API key opens a *public* Drive file and nothing more: the Drive API
  * refuses a request without one even for a file anyone can read, and it refuses
@@ -31,7 +31,7 @@
  * ## What is kept, and for how long
  *
  * The client id, in storage. The token, **in memory only and never written**
- * (§23.8) — it is held by `s3/credentials.ts`'s bearer registry, which is a
+ * (§24.8) — it is held by `s3/credentials.ts`'s bearer registry, which is a
  * module-level `Map` a reload empties, and it expires inside the hour anyway.
  * Storing it would buy a reader nothing and would cost the stored-data screen
  * the one thing it cannot offer for a short-lived secret: an honest answer.
@@ -72,7 +72,7 @@
 import { clearBearer, setBearer } from '../s3/credentials'
 import { TARGET } from '../version'
 
-/** Where the client id is kept. The API key stays in its own row (§23.7). */
+/** Where the client id is kept. The API key stays in its own row (§24.7). */
 const KEY = 'metacooler-viewer:google'
 
 /**
@@ -99,7 +99,7 @@ export const GOOGLE_SCOPE =
  *
  * Exact hosts, not the `*.googleapis.com` glob `setBearer` would accept. A
  * bearer token is a credential and every host it is sent to receives it; the two
- * below are the two endpoints §23.7 names as taking one, and `oauth2.googleapis.com`
+ * below are the two endpoints §24.7 names as taking one, and `oauth2.googleapis.com`
  * or any other future subdomain of the same parent has no business being handed
  * the reader's Drive token because a URL happened to be typed at it.
  */

@@ -85,7 +85,7 @@ type SourceLocation =
       url: string
       credential?: S3Credential
       /**
-       * Static headers put on **every** request for this URL (SPECS §23.7).
+       * Static headers put on **every** request for this URL (SPECS §24.7).
        *
        * The other kind of credential, and it travels for the same reason the
        * first one does: a Google API key and a bearer token are read from

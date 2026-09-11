@@ -51,7 +51,7 @@ function build(hubs?: readonly HubRef[]): Built {
   return { picker, el: picker.el, opened, files }
 }
 
-/** One hub, inline, so building the picker fetches nothing (§23.2). */
+/** One hub, inline, so building the picker fetches nothing (§24.2). */
 const DEMOS: HubRef = {
   id: 'demos',
   label: 'Demos',
@@ -147,7 +147,7 @@ describe('the file picker', () => {
    * What a `?hub=` link lands on.
    *
    * `App.restore` builds a reference and hands it here, and the table loads it
-   * without anybody touching the selector — a link is a gesture (§23.2). The
+   * without anybody touching the selector — a link is a gesture (§24.2). The
    * hub in this case is inline, so the assertion is about the wiring rather
    * than about a fetch.
    */
@@ -169,7 +169,7 @@ describe('the file picker', () => {
   it('opens a hub row as a remote file, by its absolute URI', () => {
     const built = build([DEMOS])
     // Chosen the way a reader chooses it, through the table's own selector.
-    // The Demos hub is inline, so nothing is fetched (§23.2).
+    // The Demos hub is inline, so nothing is fetched (§24.2).
     const select = built.el.querySelector('.hub-select') as HTMLSelectElement
     select.value = 'demos'
     select.dispatchEvent(new Event('change'))

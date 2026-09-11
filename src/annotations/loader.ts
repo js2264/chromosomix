@@ -202,7 +202,7 @@ export class AnnotationLoader {
    */
   addUrl(url: string, label?: string, placement?: Placement): void {
     // The rewrite table, at the one door a track's URL comes through (SPECS
-    // §23.5). A track is remembered in session storage and named in a shared
+    // §24.5). A track is remembered in session storage and named in a shared
     // link by this string, so a Dropbox page pasted here would be stored and
     // shared as a page. `#index=` survives it — `canonicalUrl` carries a
     // fragment across a rewrite for exactly this — and is split off below.

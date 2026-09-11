@@ -160,7 +160,7 @@ describe('the authorize URL', () => {
     expect(parsed.searchParams.get('client_id')).toBe(APP_KEY)
     expect(parsed.searchParams.get('response_type')).toBe('code')
     expect(parsed.searchParams.get('code_challenge_method')).toBe('S256')
-    // Online, so no refresh token comes back: §23.8 refuses to store one, and a
+    // Online, so no refresh token comes back: §24.8 refuses to store one, and a
     // long-lived credential held in memory is an extra sign-in per tab bought
     // for nothing.
     expect(parsed.searchParams.get('token_access_type')).toBe('online')

@@ -5,7 +5,7 @@
  * `<select>` is exactly right for four. It is nothing at all for six hundred: a
  * 4DN hub is rows chosen by *assembly and biosource and assay*, none of which a
  * dropdown of labels can be narrowed by, and scrolling a list of accessions is
- * the thing the hub format exists to replace (§23.1). So the section is a table,
+ * the thing the hub format exists to replace (§24.1). So the section is a table,
  * with a filter over the name and one over every column the hub declares, and
  * sortable headers.
  *
@@ -18,12 +18,12 @@
  * of how many are showing, which is what keeps "not in this hub" from reading as
  * "not anywhere" — and what makes it obvious that a second hub is a different
  * question, which this table does not try to answer. Asking the portals' own
- * search APIs from the browser was built and withdrawn (SPECS §23.4): the
+ * search APIs from the browser was built and withdrawn (SPECS §24.4): the
  * shelf *is* the search, and the generated hubs are what it searches.
  *
  * ## Nothing is fetched until somebody asks
  *
- * The selector lists hubs; it does not load them (§23.2). Choosing one is the
+ * The selector lists hubs; it does not load them (§24.2). Choosing one is the
  * gesture that runs the request, a `?hub=` link is the same gesture arriving
  * from outside, and the inline Demos hub costs no request at all. A reader who
  * never opens this section makes no third-party call.
@@ -293,7 +293,7 @@ export class HubTable {
   /** Read the typed URL and load it — the "add a hub by URL" gesture. */
   private async loadTyped(): Promise<void> {
     // Canonicalised so a `gs://` or `s3://` shelf is the https URL it stands
-    // for before the scheme is judged (§23.5).
+    // for before the scheme is judged (§24.5).
     const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     if (!/^https?:\/\//i.test(url)) {

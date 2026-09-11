@@ -509,7 +509,7 @@ describe('a folder backend that registers itself', () => {
 })
 
 /**
- * The panel's × reaches the backend that owns the folder (§23.9): a Drive row
+ * The panel's × reaches the backend that owns the folder (§24.9): a Drive row
  * is one entry in its own store, a Dropbox is its app key and the sign-in, and
  * `browse/connected.ts` knows neither — it asks the source that listed the id.
  */

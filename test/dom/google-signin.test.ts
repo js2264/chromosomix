@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Signing in to Google from the Connect dialog (SPECS §23.7).
+ * Signing in to Google from the Connect dialog (SPECS §24.7).
  *
  * The account section is the only place in this application where a reader hands
  * over a credential that is not theirs to shrug at — `drive.readonly` is read
@@ -114,7 +114,7 @@ describe('the Google account section', () => {
   })
 
   it('says what the grant actually is, and where the token goes', async () => {
-    // The two sentences §23.7 requires of this dialog, and it requires them
+    // The two sentences §24.7 requires of this dialog, and it requires them
     // because a consent screen says neither: Google's names the product, and
     // nothing anywhere tells the reader where the token ends up.
     const text = accountSection(await connectBody()).textContent ?? ''
@@ -299,7 +299,7 @@ describe('where a sign-in cannot work at all', () => {
     const body = await connectBody()
 
     // Dropbox stays: its sign-in is a code pasted from a page Dropbox shows,
-    // not a registration against an origin, so `app://viewer` can do it (§23.9).
+    // not a registration against an origin, so `app://viewer` can do it (§24.9).
     expect(textsOf(body, '.connect-section h3')).toEqual([
       'A folder on this machine',
       'A bucket',

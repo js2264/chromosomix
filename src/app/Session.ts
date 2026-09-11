@@ -1827,7 +1827,7 @@ export class Session {
   async openConfigUrl(rawUrl: string): Promise<void> {
     // `?config=` is the other road a URL arrives on — a link, not a box — so the
     // rewrite table runs here the way it runs in `inferSource` for `#uri=`
-    // (SPECS §23.5). A workspace published on Drive or named `gs://` is fetched
+    // (SPECS §24.5). A workspace published on Drive or named `gs://` is fetched
     // from the address that serves it, and the names inside it are then resolved
     // against that address by `resolveConfig`, which canonicalises them too.
     const url = canonicalUrl(rawUrl)
@@ -1841,7 +1841,7 @@ export class Session {
       // being the one unsigned link would make the whole arrangement fail at
       // its first step. The static headers ride along by the same argument: a
       // workspace published on a Google host needs the API key its data needs
-      // (SPECS §23.7), and a bare link here fails exactly as an unsigned one
+      // (SPECS §24.7), and a bare link here fails exactly as an unsigned one
       // would.
       const credential = credentialFor(url)
       const response = await fetch(url, {
@@ -1882,7 +1882,7 @@ export class Session {
   }
 
   /**
-   * Land this tab's picker on a hub — what a `?hub=` link asks for (§23.2).
+   * Land this tab's picker on a hub — what a `?hub=` link asks for (§24.2).
    *
    * Reached only from `App.restore`, and only for a window with nothing else to
    * show, so the picker is the element that is about to be mounted. The load is
@@ -3005,7 +3005,7 @@ export class Session {
     }
     await this.addRemote(picked.uri, picked.source, placement, map)
     // A backend that addresses files by id rather than by name says what the
-    // file is called (§23.9), and the map is named with it the way a reader
+    // file is called (§24.9), and the map is named with it the way a reader
     // would name it by hand (§16.10). Tracks keep the label their URL gives.
     if (picked.name !== undefined && picked.name !== '' && routeOf(picked.uri) === 'map') {
       this.renameMap(picked.uri, picked.name)
@@ -6676,7 +6676,7 @@ export class Session {
           ? (entry) => void this.open(`${splitUri(uri).path}::entries/${entry}`, source)
           : undefined,
       // The open, run again, after a Google sign-in offered by the view itself
-      // (§23.7). Given whenever this failure was about a *file* — the view is
+      // (§24.7). Given whenever this failure was about a *file* — the view is
       // what decides whether a sign-in is on offer at all, and it only is for a
       // `401`/`403` from a Google host, so handing it the retry unconditionally
       // adds no button anywhere else.
@@ -7433,7 +7433,7 @@ export function withHicProBins(uri: string, source: SourceSpec, index?: File): S
   if (!isHicProMatrix(splitUri(address).path)) return source
   if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
   if (named === undefined) return source
-  // The named half goes through the rewrite table on its own (SPECS §23.5): it
+  // The named half goes through the rewrite table on its own (SPECS §24.5): it
   // is a URL somebody typed after a `#bins=`, and nothing else canonicalises it
   // — `canonicalUrl` treats a fragment as opaque text, which is what makes it
   // safe to carry one across a rewrite of the other half and is why the inner

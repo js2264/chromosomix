@@ -4,7 +4,7 @@
  * One folder per account and no rows to keep: where a bucket scope is a URL and
  * possibly a key, and a Drive folder is an id somebody pasted, a Dropbox is
  * simply *whatever the app was granted* — the whole account, or the app’s own
- * folder inside it, depending on how the lab registered the app (§23.7,
+ * folder inside it, depending on how the lab registered the app (§24.7,
  * `docs/hosting.md`). There is nothing to choose and therefore nothing to store,
  * so the backend answers one folder whenever an app key exists and none when it
  * does not, and `auth/dropbox.ts` holds the only stored thing there is.
@@ -238,7 +238,7 @@ async function call(
       // Through `applyAccess` over `accessHeadersFor`, which is the pair every
       // main-thread request in this app uses (`state/hub.ts`, `app/Session.ts`):
       // the bearer is read from the registry at the moment of the request
-      // (SPECS §23.7) rather than captured when the folder was built, and the
+      // (SPECS §24.7) rather than captured when the folder was built, and the
       // `Content-Type` below rides under it rather than over it.
       applyAccess(
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },

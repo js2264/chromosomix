@@ -7,7 +7,7 @@
  * catch the failure that matters: a hub that is *valid JSON and wrong* — a
  * column renamed, a size that became a string, a relative name with no base to
  * resolve it against. The viewer's parser is deliberately forgiving (an entry
- * with no label is dropped, an unknown key ignored, SPECS §23.1), which is
+ * with no label is dropped, an unknown key ignored, SPECS §24.1), which is
  * right for a hub somebody else wrote and is exactly why the generator's own
  * output has to be pinned somewhere. This is that somewhere.
  *
@@ -49,7 +49,7 @@
  * `<ChecksumAlgorithm>`/`<ChecksumType>` pair that sits between `<ETag>` and
  * `<Size>` on anything written recently. A parser that reads the block
  * positionally drops those three and says nothing, which is how the first
- * census of the 4DN bucket came out a quarter short (SPECS §23.3).
+ * census of the 4DN bucket came out a quarter short (SPECS §24.3).
  */
 
 import { spawnSync } from 'node:child_process'
@@ -138,7 +138,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     expect(hub.version).toBe(1)
     expect(hub.name).toBe('4DN open data')
     expect(typeof hub.description).toBe('string')
-    // A shelf with no provenance is a screenshot (SPECS §23.3): the query it
+    // A shelf with no provenance is a screenshot (SPECS §24.3): the query it
     // came from and the instant it was written are both in the file.
     expect(hub.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
     expect(String(hub.source)).toContain('data.4dnucleome.org/search/')
@@ -300,7 +300,7 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
   })
 
   it('prefers the unsigned bucket object, and falls back to the portal path', () => {
-    // SPECS §23.3: `@@download` answers 307 to a URL presigned for GET alone,
+    // SPECS §24.3: `@@download` answers 307 to a URL presigned for GET alone,
     // which this viewer opens but a year-old catalogue should not depend on.
     expect(absolute(hub)[1]).toBe(
       'https://encode-public.s3.amazonaws.com/2020/09/03/' +
@@ -420,7 +420,7 @@ describe.skipIf(!havePython)('a run that found nothing', () => {
   it('exits 2 and writes no file, so a workflow can leave the good hub alone', () => {
     // The body 4DN answers a search with no hits: HTTP 404 with a JSON
     // `HTTPNotFound`, which the generator reads as zero results rather than as
-    // a failure (SPECS §23.3) — and then refuses to publish zero rows.
+    // a failure (SPECS §24.3) — and then refuses to publish zero rows.
     const target = join(out, 'never-written.json')
     const run = make('4dn', '--from-json', join(FIXTURES, '4dn-empty.json'), '--out', target)
     expect(run.status).toBe(2)

@@ -69,7 +69,7 @@ describe('inferSource — the hash contract', () => {
 })
 
 /**
- * The rewrite table, through the gate it runs in front of (SPECS §23.5).
+ * The rewrite table, through the gate it runs in front of (SPECS §24.5).
  *
  * `inferSource` canonicalises before it decides, so this is the same
  * shareability question asked of the four addresses that used to fail it — and

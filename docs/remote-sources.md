@@ -5,11 +5,11 @@ cost, and the ways a reader could arrive **pre-connected** to a public server su
 with sessions ready to open. Everything measured here was measured on 2026-09-11 against the live
 hosts; the commands are in the [appendix](#appendix-how-the-measurements-were-taken).
 
-This is the design note the build was made from. **Since: built.** SPECS §23 is the specification
+This is the design note the build was made from. **Since: built.** SPECS §24 is the specification
 that came out of it — hubs, the rewrite table, links that expire, credentials that are not a bucket
 key, live portal search (built, then withdrawn — see B below), Google sign-in, and past this
 note's own scope a Drive folder and a
-Dropbox as connected folders (§23.9) — and `docs/hubs.md` is the operator's page; the
+Dropbox as connected folders (§24.9) — and `docs/hubs.md` is the operator's page; the
 `[Unreleased]` section of `CHANGELOG.md` says what landed. The measurements below stand as they
 were made. It touches SPECS §11 (hosting), §20 (connected folders), §21 (`?config=`), GAPS G10 (a
 catalogue) and the constraints at §1.
@@ -410,7 +410,7 @@ from the browser, shows the hits as a table (cell line, assay, lab, assembly), a
   — the case above: the browser discards the response and reports nothing, and there is no proxy
   to reach for. ENCODE answered, and a form that worked for the one portal whose files the
   generated hub already lists did not earn its place on the picker. Shapes A and C are the whole
-  answer; SPECS §23.4 records the withdrawal.
+  answer; SPECS §24.4 records the withdrawal.
 
 ### C. Sessions generated from the portal, offline
 

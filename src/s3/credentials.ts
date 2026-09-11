@@ -414,7 +414,7 @@ export function clearApiKey(): void {
  * The bearer tokens this page holds, by host pattern.
  *
  * **In memory, deliberately, and this is the one credential that is never
- * written down** (SPECS §23.7). A bucket key is a long-lived secret whose whole
+ * written down** (SPECS §24.7). A bucket key is a long-lived secret whose whole
  * bargain is that the reader chose to park it here and can see it listed and
  * delete it; an OAuth token is a short-lived one that expires inside the session
  * that obtained it. Storing it would buy nothing — it is dead within the hour —

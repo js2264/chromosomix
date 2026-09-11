@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A Google Drive folder, listed (SPECS §20, §23.7).
+ * A Google Drive folder, listed (SPECS §20, §24.7).
  *
  * The third backend behind one folder interface, and the first one whose every
  * request carries a credential. Almost nothing about it can be checked by
@@ -323,7 +323,7 @@ describe('picking a file out of a Drive folder', () => {
       'https://www.googleapis.com/drive/v3/files/1map?alt=media&supportsAllDrives=true',
     )
     // No headers on the source: what this URL needs is stamped at the worker
-    // boundary from the bearer registry, at the moment it is read (§23.7).
+    // boundary from the bearer registry, at the moment it is read (§24.7).
     expect(picked.source).toEqual({ kind: 'remote', url: picked.uri })
     // The URL is an id, so nothing downstream could work the name out.
     expect(picked.name).toBe('rep1.mcool')

@@ -200,7 +200,7 @@ describe('a failure that is not one of the format refusals', () => {
 })
 
 /**
- * The one refusal whose answer is not in the table (SPECS §23.7).
+ * The one refusal whose answer is not in the table (SPECS §24.7).
  *
  * A `401` or `403` from a Google host on a private file is not a CORS problem
  * and not a missing bucket key, and the advice for those two is actively

@@ -147,7 +147,7 @@ describe('listing', () => {
       // so they are never listed — the API filters them rather than this code.
       include_non_downloadable_files: false,
     })
-    // Through `applyAccess`, so the token rides every request (§23.7).
+    // Through `applyAccess`, so the token rides every request (§24.7).
     expect(auth(calls[0])).toBe('Bearer sl.TOKEN')
     expect(listing.truncated).toBe(false)
     expect(listing.entries.map((entry) => entry.name)).toEqual(['Hi-C', 'notes.txt'])

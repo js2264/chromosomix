@@ -2,7 +2,7 @@
 
 A **hub** is one JSON file that names the maps, genome files and saved sessions on a bucket, with
 columns to filter on, so a reader can choose one without opening any. The picker draws it as a
-table; a lab connects one by pasting its URL or arrives on it with `?hub=<url>`. SPECS §23 is the
+table; a lab connects one by pasting its URL or arrives on it with `?hub=<url>`. SPECS §24 is the
 specification; this is the operator's page: how to write one, how to generate one, and how the two
 portal hubs the app ships are kept fresh.
 
