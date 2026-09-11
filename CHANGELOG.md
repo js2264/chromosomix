@@ -57,6 +57,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
+  (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the
+  question the diamond asks, with its window in base pairs and defaulting to the 2 Mb every published DI
+  track is computed at; the **HiC score**, the sum of every cell in a square window centred on each bin,
+  which is the reading Bignaud et al. use where the question is how tightly a stretch is folded rather
+  than where a domain ends; and the **scalogram** (Cournac et al. 2012, `HiContacts::scalogram()`), which
+  is P(s) with one summation left undone — at every bin, the separations at which its contacts reach each
+  of a set of quantiles. All three read a **band and never a square**, so a 2 Mb window on a mammalian
+  chromosome is a run rather than a refusal.
+
+  The 4C's *Normalisation* becomes one control with four answers — none, by coverage, by P(s), by both.
+  Coverage is the other bias and a different one: the decay is a property of separation, coverage is a
+  property of the target bin, and on a raw map a repeat-rich bin is a dip in every profile drawn against
+  it whatever the anchor. The divisor is each bin's own total contact centred on one, so a raw profile
+  stays in contacts and an O/E ratio stays centred on one. With trans it means the pixel walk can no
+  longer stop at the anchor, and the estimate says the pass is the whole file rather than half of it.
+
+- **Ribbons: a lane style for a set of quantiles (SPECS §18.12).** A `ribbon` fills the band between its
+  own curve and the curve of the member below it in the same lane, so the scalogram's five quantiles draw
+  as one nested shape rather than five lines and a legend. Four filled areas cannot express that — they
+  paint over each other in the order they were drawn. Ribbons tile rather than overlay, so they are not
+  dimmed; the lane's order is the nesting order; a band exists only where both its curves do; and only
+  the top edge of each is stroked, since the lower one is the neighbour's. A `ProfileOutput` may now also
+  suggest a **display scale**, which is what puts the scalogram on a log axis — its values are genomic
+  separations, and on a linear axis all five bands live in the bottom tenth of the lane.
+
 - **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
   already on.** The two shipped portal shelves listed contact maps and nothing else — 1,200 rows
   of 4DN and 200 of ENCODE — and the filter that did it was on the *experiment*, which needed
