@@ -1,6 +1,13 @@
 {
-  "latest": "1cdb529",
+  "latest": "fc95dee",
   "versions": [
+    {
+      "commit": "fc95dee",
+      "version": "0.12.0",
+      "date": "2026-09-12T00:11:33+02:00",
+      "subject": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox (#44)",
+      "tag": ""
+    },
     {
       "commit": "1cdb529",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.10.0",
       "date": "2026-08-13T20:17:56+02:00",
       "subject": "chores: update CHANGELOG",
-      "tag": ""
-    },
-    {
-      "commit": "9183f4c",
-      "version": "0.10.0",
-      "date": "2026-08-13T20:13:29+02:00",
-      "subject": "Add correlation map and despeckle smoothing to matrix view (#31)",
       "tag": ""
     },
     {
