@@ -166,7 +166,8 @@ behave identically, minus the overview — the app never requires a companion fi
 
 ## Private files
 
-Two ways, and they are for different situations.
+Several ways, and they are for different situations: a file on this machine, a prefix on a bucket
+the lab controls, and a file on somebody's Google Drive that was shared with the reader.
 
 ### Drag-and-drop
 
@@ -339,6 +340,87 @@ HDF5 asking for bytes and the request going out, and every `crypto.subtle` metho
 Presigned URLs were the alternative and are worse here: they are scoped to one method, so the `HEAD`
 probe needs its own, and they expire while a tab is open.
 
+### Reading from Google Drive and GCS with an account
+
+A **public** Drive file needs an API key and nothing else — the Drive API refuses a request without
+one even for a file anyone can read — and a public GCS object needs neither. Both are one box in
+**Connect → A Google API key**. This section is the other case: a file that is *not* public, which
+needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §23.7
+is the specification; `src/auth/google.ts` is the implementation.
+
+There is no client id in this repository and there cannot be one. An OAuth client is registered
+against **the origin the page is served from**, so a fork on another domain needs its own. Making
+one, in a Google Cloud project the lab owns:
+
+1. In the Google Cloud console, pick (or create) the project, then **APIs & Services → Credentials
+   → Create credentials → OAuth client ID**, application type **Web application**.
+2. Under **Authorized JavaScript origins**, add the exact origin the viewer is served from — scheme,
+   host and port, no path and no trailing slash. `https://js2264.github.io` for the published site,
+   and `http://localhost:5173` as well while developing, which Google's documentation allows for
+   `localhost` specifically.
+   **Authorized redirect URIs stay empty**: this is the implicit token flow through Google Identity
+   Services, which hands the token to the page and redirects nowhere.
+3. On the **OAuth consent screen**, add the two scopes the viewer asks for, and no others:
+
+   | Scope | What it grants |
+   |---|---|
+   | `https://www.googleapis.com/auth/drive.readonly` | Read access to **all** of the signed-in reader's Drive |
+   | `https://www.googleapis.com/auth/devstorage.read_only` | Read access to the Cloud Storage that account can see |
+
+4. Copy the client id — it ends in `.apps.googleusercontent.com` — and paste it into **Connect → A
+   Google account**. It is not a secret: it is served in the page of every site that uses this flow,
+   and it authorises nothing on its own. The client *secret* beside it in the console is for server
+   applications and is never used here; there is no server to keep it in (C1).
+
+**`drive.readonly` is a restricted scope** in Google's own classification, and that is the fact that
+decides everything about how this is offered. An app asking for it has to go through Google's
+verification — which for a restricted scope includes an independent security assessment — before it
+may be used by anyone outside the project. An **unverified** app, with its publishing status left at
+*Testing*, works immediately for **up to 100 test users**, each added by address on the consent
+screen. That is the realistic arrangement for a lab: a handful of named colleagues, no verification,
+no assessment. It is also exactly why the lab supplies its own client id rather than this project
+shipping one — a single shared client would be one hundred test users for everybody, or a
+verification submission on behalf of every fork.
+
+**What the reader is agreeing to**, which the dialog says in two sentences because Google's consent
+screen says neither: `drive.readonly` is read access to *all* of their Drive, where a bucket key is
+a grant over one prefix of one bucket; and the token this produces is held **in this tab's memory
+only** — never written to storage, gone when the tab closes, and expiring on the `expires_in` Google
+returns with it, which the dialog shows as a clock time. When it expires, a Drive or GCS read
+answers `401` and the error screen offers *sign in again* rather than the CORS explanation.
+
+**Drive is a host this viewer reads, not one it recommends.** Requests are metered against the
+project that owns the client id, and a fine-resolution pan over a contact map is thousands of ranged
+reads where opening one is a dozen. The current limits and the project's own usage are in the Cloud
+console under **APIs & Services → Quotas**; no number is quoted here because it is Google's to
+change. A bucket (§20.3, above) is the host to publish on; Drive is how a reader opens the file a
+collaborator already shared with them.
+
+**The manual check**, which is the only way to verify this end to end — the flow needs
+`accounts.google.com`, a real consent screen and a real private file, none of which a test
+environment has:
+
+1. Serve the viewer from an origin registered on the client (`npm run dev` on `http://localhost:5173`
+   is the quickest), and open it.
+2. **Connect → A Google account**: paste the client id, press *save*. The line under the box should
+   print the id back, and *sign in with Google* should stop being disabled.
+3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The section
+   should then say **signed in**, with the time the token is good until, and offer *sign out*.
+4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
+   one shared with the signed-in account only — and paste it into the URL box. The link
+   (`https://drive.google.com/file/d/<id>/view`) is rewritten to the API's media URL and the map
+   opens.
+5. Press *sign out*, then reload and open the same link again. It must fail — a `401` or `403` from
+   `www.googleapis.com`, with a *sign in* button on the error screen, not a map.
+
+Step 5 is the one worth doing twice: it is the assertion that the token is actually what opened the
+file, and that nothing was written down that keeps opening it afterwards.
+
+**Where it is absent.** The single-file build (§19) has an opaque origin, so there is no origin to
+register and no sign-in section in its dialog. The desktop build serves itself from `app://viewer`,
+and Google's console accepts only `http`/`https` JavaScript origins, so it has none to register
+either and the section is absent there too; a public Drive file still opens there with the API key.
+
 ## What already works, host by host
 
 "Supports S3" undersells it: what the reader supports is *object storage*, and the only two things
@@ -354,7 +436,7 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 | Google Cloud Storage, `gs://…` or `storage.googleapis.com/storage/v1/b/…/o/…?alt=media` | yes, for a public object | nothing — the JSON-API endpoint answers CORS for any origin |
 | Google Cloud Storage, `storage.googleapis.com/<bucket>/<object>` | only with a bucket CORS policy | a CORS policy, as on S3 |
 | Azure Blob, public container or a SAS URL | yes | CORS on the storage account |
-| Google Drive share link | with a Google API key (public file) or a signed-in account (private) | a Google project of the lab's own — see SPECS §23.7 |
+| Google Drive share link | with a Google API key (public file) or a signed-in account (private) | a Google project of the lab's own — see [above](#reading-from-google-drive-and-gcs-with-an-account) |
 | Dropbox share link | yes | nothing; the link is rewritten to the content host |
 | Presigned S3 or signed GCS URL, Azure SAS | yes, until it expires | nothing |
 | GitHub Pages, GEO, SRA | no | cannot be fixed by the owner (compression; no ranges; no CORS) |

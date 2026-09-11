@@ -26,7 +26,7 @@ name: Hubs
 # **The first run has to be by hand.** Until it has happened the two URLs answer
 # 404, and the picker says so in those words ("not generated yet; the Hubs
 # workflow publishes it") rather than showing an error. To do it: Actions →
-# Publish hubs → Run workflow, on `main`. Nothing else needs setting up — no
+# Hubs → Run workflow, on `main`. Nothing else needs setting up — no
 # secret, no branch to create, no Pages setting to change.
 #
 # What lands on the `hubs` branch:

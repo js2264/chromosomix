@@ -111,6 +111,33 @@ describe('storedItems', () => {
     expect(items.find((item) => item.label === 'Google API key')?.detail).not.toContain('AIzaX')
   })
 
+  it('prints the Google client id in full, because it is not a secret', async () => {
+    // The opposite treatment from the key above, and deliberately so: a client
+    // id is published in the page of every site that uses Google sign-in, it
+    // authorises nothing on its own, and the only question a reader has about it
+    // is *which project has this browser been told to sign in to* — which a
+    // count cannot answer (SPECS §23.7).
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    window.localStorage.setItem(
+      `${PREFIX}google`,
+      JSON.stringify({ clientId: '123-abc.apps.googleusercontent.com' }),
+    )
+    const items = await storedItems()
+    const line = items.find((item) => item.label === 'Google client id')
+    expect(line?.detail).toContain('123-abc.apps.googleusercontent.com')
+    // And it says what is *not* kept, which is the half a reader cannot check:
+    // the token a sign-in produces is held in memory and never written.
+    expect(line?.detail).toMatch(/never stored/i)
+    // Counted once, as a client id or as a preference, never as both.
+    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
+  })
+
+  it('says nothing about a client id when none is stored', async () => {
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    const labels = (await storedItems()).map((item) => item.label)
+    expect(labels).not.toContain('Google client id')
+  })
+
   /**
    * A hub is somewhere the reader connected to, so it is named rather than
    * counted — the rule the granted files and the connected folders follow, and
@@ -163,6 +190,13 @@ describe('forgetEverything', () => {
       `${PREFIX}hubs`,
       '[{"id":"hub:1","label":"Lab shelf","url":"https://lab.example/hub.json"}]',
     )
+    // The Google client id, in the fixture for the hubs key's reason: it is
+    // swept by the prefix rule rather than by being named, and a sweep that
+    // stopped covering it should fail here rather than pass quietly.
+    window.localStorage.setItem(
+      `${PREFIX}google`,
+      '{"clientId":"123-abc.apps.googleusercontent.com"}',
+    )
     window.sessionStorage.setItem(`${PREFIX}sessions`, '{}')
     window.sessionStorage.setItem(`${PREFIX}ui:s1|a.cool:annotations`, '[]')
     window.localStorage.setItem('some-other-app', 'keep me')
@@ -180,6 +214,7 @@ describe('forgetEverything', () => {
     expect(await storedItems()).toEqual([])
     expect(window.localStorage.getItem(`${PREFIX}buckets`)).toBeNull()
     expect(window.localStorage.getItem(`${PREFIX}hubs`)).toBeNull()
+    expect(window.localStorage.getItem(`${PREFIX}google`)).toBeNull()
     expect(window.sessionStorage.getItem(`${PREFIX}sessions`)).toBeNull()
     expect(await store(STORES.workspace).get('current')).toBeNull()
     // The other half of the durable side. A sweep that cleared the workspace

@@ -29,6 +29,7 @@
  * the callers in front of them.
  */
 
+import { readClientId } from '../auth/google'
 import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
@@ -150,7 +151,11 @@ export async function storedItems(): Promise<StoredItem[]> {
   // widths, overlays" when one of the three is their bucket secret has been
   // told something false.
   const named = local.filter(
-    (key) => key === `${PREFIX}buckets` || key === `${PREFIX}access` || key === `${PREFIX}hubs`,
+    (key) =>
+      key === `${PREFIX}buckets` ||
+      key === `${PREFIX}access` ||
+      key === `${PREFIX}hubs` ||
+      key === `${PREFIX}google`,
   )
   const access = local.filter((key) => key === `${PREFIX}access`)
   const preferences = local.length - named.length
@@ -181,6 +186,24 @@ export async function storedItems(): Promise<StoredItem[]> {
       // here: it is held in memory and never written, so there is nothing on
       // this machine for this screen to account for (SPECS §23.7).
       detail: 'Google API key, stored in this browser in plain text',
+    })
+  }
+
+  // The client id, and it is the one row on this screen that is **printed in
+  // full**. Every other named line withholds its value because the value is a
+  // secret; a client id is the opposite — it is published in the page of every
+  // site that uses Google sign-in, it authorises nothing on its own, and the
+  // only question a reader has about it is *which project has this browser been
+  // told to sign in to*, which a count cannot answer. Listed even so, because
+  // "forget everything" removes it and a screen that claims to list what is kept
+  // must not quietly leave one out.
+  const clientId = readClientId()
+  if (clientId !== null) {
+    items.push({
+      label: 'Google client id',
+      detail:
+        `${clientId} — your lab’s OAuth client, not a secret. The token signing in with it ` +
+        'produces is held in memory only and is never stored.',
     })
   }
 

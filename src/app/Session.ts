@@ -6669,6 +6669,15 @@ export class Session {
         entries.length > 0 && uri !== undefined && source !== undefined
           ? (entry) => void this.open(`${splitUri(uri).path}::entries/${entry}`, source)
           : undefined,
+      // The open, run again, after a Google sign-in offered by the view itself
+      // (§23.7). Given whenever this failure was about a *file* — the view is
+      // what decides whether a sign-in is on offer at all, and it only is for a
+      // `401`/`403` from a Google host, so handing it the retry unconditionally
+      // adds no button anywhere else.
+      onSignedIn:
+        uri !== undefined && source !== undefined
+          ? () => void this.open(uri, source)
+          : undefined,
     })
     this.showContent(view.el)
   }

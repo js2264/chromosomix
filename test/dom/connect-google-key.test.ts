@@ -58,19 +58,24 @@ function googleSection(body: HTMLElement): HTMLElement {
 }
 
 describe('the Google API key section', () => {
-  it('is offered beside the folder and the bucket', async () => {
+  it('is offered beside the folder and the bucket, and before the account', async () => {
+    // The key comes before the account because that is the order a reader meets
+    // the two in: a public Drive link fails without a key, and a private one
+    // fails afterwards with a key in place. `test/dom/google-signin.test.ts`
+    // owns the section below it.
     const body = await connectBody()
     expect(textsOf(body, '.connect-section h3')).toEqual([
       'A folder on this machine',
       'A bucket',
       'A Google API key',
+      'A Google account',
     ])
   })
 
   it('says what it is for, and what does not need it', async () => {
     // The one sentence that keeps a reader from pasting a key to open a `gs://`
-    // object that needs none, and from hunting for a setting that would open a
-    // *private* Drive file, which nothing here can do yet.
+    // object that needs none, and from expecting a key to open a *private* Drive
+    // file, which is the account section's job and not this one's.
     const text = googleSection(await connectBody()).textContent ?? ''
     expect(text).toMatch(/public Google Drive file/i)
     expect(text).toMatch(/Cloud Storage object needs none/i)
