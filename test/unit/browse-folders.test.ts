@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The two backends behind one folder, and the routing that decides what a row
  * in one is worth clicking.
@@ -23,13 +24,32 @@
  * - **The cap has to be reported.** A directory of forty thousand files draws a
  *   thousand rows, and a reader whose file is not among them must be told the
  *   list is not the folder.
+ *
+ * And one thing about the *list* of folders rather than about any one of them:
+ * a backend that registers itself (`browse/connected.ts`'s `FolderSource`) has
+ * to appear in `connectedFolders()` by doing nothing but being imported, and has
+ * to be able to say that it cannot be listed right now — which is why this file
+ * asks for a DOM it would otherwise not need, since a registered backend keeps
+ * its rows in `localStorage`.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import {
+  setTokenClientFactory,
+  signIn,
+  signOut,
+  writeClientId,
+  type TokenResponse,
+} from '../../src/auth/google'
+import { connectedFolders, folderUsable } from '../../src/browse/connected'
 import { crumbsOf, ordered, type FolderEntry } from '../../src/browse/folder'
+// Imported for its side effect as well as for the type: the module registers
+// itself at load, which is the whole of how a third backend is wired in.
+import '../../src/browse/gdrive'
 import { handleFolder, snapshotFolder } from '../../src/browse/local'
 import { routeOf, unroutableNote } from '../../src/browse/route'
+import { addDriveRow } from '../../src/state/drives'
 
 /** A `File` with the relative path a `webkitdirectory` input would give it. */
 function fileAt(path: string, size = 10): File {
@@ -332,5 +352,67 @@ describe('picking a file that comes in a pair', () => {
       'reads.bai',
       'reads.bai',
     ])
+  })
+})
+
+describe('a backend that registers itself', () => {
+  const CLIENT_ID = '123-abc.apps.googleusercontent.com'
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    setTokenClientFactory(null)
+    signOut()
+  })
+
+  afterEach(() => {
+    setTokenClientFactory(null)
+    signOut()
+    window.localStorage.clear()
+  })
+
+  /**
+   * The registration is a side effect of the import and nothing else.
+   *
+   * `browse/connected.ts` composes the disk and the bucket by name because they
+   * were there first; a third kind announces itself instead, so that the module
+   * every panel subscribes to imports nothing that reaches for a token — and so
+   * that a build which leaves the backend out simply has no folders of that
+   * kind rather than a broken row.
+   */
+  it('appears in the connected list, built from its own store', () => {
+    expect(connectedFolders()).toEqual([])
+
+    const row = addDriveRow({ label: 'Lab Drive', folderId: 'root' })
+    const folders = connectedFolders()
+
+    expect(folders.map((folder) => folder.kind)).toEqual(['drive'])
+    expect(folders[0].id).toBe(row.id)
+    expect(folders[0].label).toBe('Lab Drive')
+    // Rebuilt from the row on every call, so a folder renamed in the dialog
+    // reaches the panel without anything having to be told.
+    expect(connectedFolders()[0]).not.toBe(folders[0])
+  })
+
+  /**
+   * `usable` is what the seam grew a `usable` for.
+   *
+   * A reload signs nobody in, so a Drive folder that was perfectly good
+   * yesterday cannot be listed this morning — and the panel is owed that answer
+   * before the reader clicks into a refusal.
+   */
+  it('follows its own sign-in state rather than being usable by default', async () => {
+    addDriveRow({ label: 'Lab Drive', folderId: 'root' })
+    const folder = connectedFolders()[0]
+    expect(await folderUsable(folder)).toBe(false)
+
+    writeClientId(CLIENT_ID)
+    const response = { access_token: 'ya29.TOKEN', expires_in: 3599 } as TokenResponse
+    setTokenClientFactory((config) => ({ requestAccessToken: () => config.callback(response) }))
+    await signIn()
+
+    expect(await folderUsable(folder)).toBe(true)
+
+    signOut()
+    expect(await folderUsable(folder)).toBe(false)
   })
 })

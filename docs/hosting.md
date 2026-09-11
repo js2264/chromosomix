@@ -416,6 +416,44 @@ environment has:
 Step 5 is the one worth doing twice: it is the assertion that the token is actually what opened the
 file, and that nothing was written down that keeps opening it afterwards.
 
+**A whole Drive folder, browsed in the Files panel** (SPECS §20), needs nothing this section has not
+already set up: the same client id, the same sign-in, the same `drive.readonly` grant. It is not
+the API key — a key opens a public *file* and cannot list anything — so a folder is the one Drive
+feature that does not work at all without an account. **Connect → A Google Drive folder** takes the
+address bar of a folder open in Drive (`https://drive.google.com/drive/folders/<id>`, with or
+without the `/u/0` account segment) or the bare id; an empty box is all of My Drive. What this
+browser then keeps is the folder's name and its id, listed under **About → what is stored**; the
+token is not kept, so the folder survives a reload and the sign-in does not.
+
+The listing asks `drive/v3/files` for the files whose `parents` contains that id, one level at a
+time and a thousand entries at most (§20.1), and it sends `supportsAllDrives=true` and
+`includeItemsFromAllDrives=true` — so a folder on a **shared drive**, which is how most labs
+actually hold shared data, lists and opens exactly as one in My Drive does. Google's own document
+types (Docs, Sheets, Slides, shortcuts) are not listed: they have no bytes behind them, so there is
+no file to offer. Everything else is listed, including the formats this viewer cannot open, which
+the panel draws dimmed with the reason (§20.5). The quota paragraph above applies with more force
+here than to a pasted link, because browsing is itself requests against the same project.
+
+**The manual check for a folder**, on top of the five steps above and for the same reason — it needs
+a real Drive, a real consent screen and a real folder:
+
+1. Signed in as above, open **Connect → A Google Drive folder**. Before the sign-in the section
+   offers nothing to press and says which of the two things is missing; after it, it has a name box
+   and a link box.
+2. Paste the address bar of a Drive folder holding a `.mcool`, `.cool`, `.metacool` or `.hic`, name
+   it, and press *connect this folder*. The Files panel opens on it.
+3. The listing should show sub-folders first, then files with their sizes, and no Docs or Sheets.
+   Click into a sub-folder: it lists, and the crumb trail above names the folders rather than
+   printing their ids.
+4. Click a contact map. It opens in the tab that is open, and the address it opens under is
+   `https://www.googleapis.com/drive/v3/files/<id>?alt=media&supportsAllDrives=true` — the same URL
+   a pasted share link for that file is rewritten to, which is what keeps a file opened from the
+   folder and the same file opened from a link one file rather than two.
+5. Repeat step 2 with a folder on a **shared drive**. It must list; a folder that answers as though
+   it did not exist is `includeItemsFromAllDrives` missing from the request.
+6. Press *sign out* and reload. The folder is still in the list — it is a row in this browser, not a
+   token — and it does not list until you sign in again, which takes no reconnecting.
+
 **Where it is absent.** The single-file build (§19) has an opaque origin, so there is no origin to
 register and no sign-in section in its dialog. The desktop build serves itself from `app://viewer`,
 and Google's console accepts only `http`/`https` JavaScript origins, so it has none to register
