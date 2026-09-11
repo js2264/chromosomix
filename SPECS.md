@@ -4765,6 +4765,155 @@ rebuilt over on the next push and a deployment is redeployed, while a tarball is
 ever, mirrored by every CDN that has seen it and pinned in the lockfile of whoever installed it that
 week. The pack is the last moment any of it is cheap to notice.
 
+## 23. The console: what this window has done
+
+The Analysis drawer carries a **copy CLI command** button under a finished result
+(`analysis/cliCommand.ts`), and the argument that button makes is the one this section finishes. A
+reader spends twenty minutes moving a window and nudging four numbers until the picture is right;
+the moment they have two hundred files rather than one, clicking stops being the interface and the
+run has to become a line in a shell. Transcribing that line by eye is the one step in the loop where
+the numbers in the figure and the numbers in the table can quietly stop being the same numbers.
+
+The button closed that gap for **the result on screen, while it is on screen**, and that leaves two
+holes which are not small:
+
+- **A batch is one command out of six.** *Run on all maps* over a deck of six is six runs against
+  six files, and the drawer shows one result at a time. Five of those commands were never offered.
+- **A day is not a result.** Change a parameter and run again, and the command that produced the
+  figure from an hour ago no longer exists anywhere. So the reader who assembles a methods section
+  at five o'clock is reconstructing it from memory — which is transcription again, with the numbers
+  no longer in front of them.
+
+So the command is written **when the run happens** rather than when a result is looked at, into a
+log that outlives the result, the tab and the browser session. That log is the console.
+
+### 23.1 One line per job, not per press
+
+The record is written by `AnalysisRunner.execute`, which is the one place that knows a **job** from
+a button: `runAll` queues one job per map, so a batch over six maps is six lines, each naming its
+own file and each carrying its own command. Nothing else can produce that — the drawer holds one
+result, the panel row holds one state per task, and both are per session.
+
+It is also the only place that sees a run which produced nothing. A **failure** and a **Stop** leave
+no `TaskResult` and therefore no `Provenance`, and a failure is precisely when a reader wants the
+parameters back. So the line is opened when the job is dispatched, from a provenance composed out of
+the job (`analysis/record.ts`), and the result's own replaces it the moment there is one — never
+beside it, because two accounts of one run is how they come to disagree.
+
+The command itself is `cliCommandFor`, called with the same `Provenance` the drawer's button passes
+it. One function, two callers: a line in the console and a line on the clipboard cannot drift, and a
+run the CLI cannot repeat is recorded as a sentence with the refusal under it rather than dropped,
+because a record with holes in it exactly where the reader is least likely to look is worse than no
+record.
+
+**What "cannot repeat" means is a property of the run, not only of the task.** `cliCannotRun`
+answers about the descriptor — the three tasks that read a bigWig, whose reader lives in the
+annotations worker — and it is what `cli/main.ts` itself refuses on. It cannot see the other half,
+which is a session with **no contact map**: `metacooler-run` takes a file as its first argument and
+opens it as one, a 1D browser (§5.8) has none, and the framing there names the bigWig that declared
+the assembly. Left to the descriptor alone, a perfectly runnable task came out as `metacooler-run
+overlap Yeast_ATAC.bw` — a line that reads well and dies at the open, which is the one outcome
+`analysis/cliCommand.ts` exists to prevent. `cliCannotRepeat` is both halves, and it is what the
+drawer's button is greyed by as well as what the command refuses on: two copies of that rule is a
+button handing over a line the command rejects.
+
+### 23.2 What else is on it, and what is not
+
+A day is not only its runs, so three more things are recorded — each at the one place every road to
+it already converges, which is the arrangement `AnnotationLoader.onFilesAdded` already uses:
+
+- **A file opened**, in `Session.open` and `Session.openGenome`, *after* the read succeeds: a
+  `.pairs` and an `.mmetacool` both reach that door twice, and a line written on the way in would
+  name a URI the reader never got to look at.
+- **A track loaded**, in `AnnotationLoader.addFiles` and `addUrl` — the two doors a *reader* drives.
+  Not `restore`, `carry` or `reattach`, which are the app bringing back what it already had; a
+  console that opened with nine lines after every reload is a console nobody reads.
+- **A file written**, in `downloadBlob`, through which every export in the application passes. A
+  reader whose figure was recorded because they exported it from the drawer but not when they
+  exported the same figure from the map would be looking at a difference nobody can see the rule
+  behind.
+
+**Navigation is not recorded.** A pan is a reading of a file rather than an operation over one
+(§18's opening paragraph draws that line), a minute of it would write dozens of lines, and the view
+a result belongs to is already in that result's framing.
+
+### 23.3 A script, not a transcript
+
+What the panel hands over — one row, one day, or the lot — is **a shell script**: commands bare,
+everything else commented. The day headings are `#`, the opens and the exports are `#`, a failure is
+`# failed: …`, and a run the CLI cannot take is `#` too. So a day pasted into a file runs, in the
+order it ran the first time, with the afternoon around it left in as the context saying what the
+commands were for. The **save** button writes exactly that as `.sh`, and — being a file leaving the
+app — records itself.
+
+The **output** toggle is the choice between a script and an archive. Off, a row is its command and
+the caveats that qualify it; on, each row is preceded by the full provenance block — the build, the
+task and its version, the framing in words, every parameter one per line — which is the header every
+exported file already opens with (§18.4). It is off by default, because eleven `#` lines per row is
+a log nobody scans, and it governs the clipboard as well as the screen: a reader who turned it off
+to paste clean commands must not find the provenance on their clipboard anyway.
+
+The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'s notes about what a
+shell cannot be told — a remote file, a window across several sequences, a parameter naming a set
+with no file behind it — and a command that runs and answers a slightly different question is worse
+than one that says what it left out.
+
+They sit **above a command and below anything else**, which is one rule read twice: a caveat
+qualifies a line the reader is about to run, so it comes first; a refusal explains a line that is
+not a command at all, so it comes after the thing it is about. Written the other way round, every
+run the CLI cannot repeat opened with a paragraph about a command that was never there.
+
+### 23.4 The panel
+
+A drawer along the bottom of the body, and deliberately the **same** drawer §18.1 specifies: it
+floats over the content rather than joining the flex row, carries a shadow off the edge that faces
+the window, is dragged by that edge with its height remembered, and is dismissed by Escape.
+
+**It is not a modal**, on §18.1's terms exactly: no backdrop, no click-outside, no keyboard taken.
+Every shortcut keeps working behind it, so reading back this morning's commands while panning the
+map is an ordinary thing to do. Escape is a *dismissal* and not a cancel — closing the console stops
+nothing, because the log is not the panel — and it fires in the bubble phase and skips an event
+something else has already handled, so a marquee, a caret and an open dropdown all keep the Escape
+they answer first.
+
+**Along the bottom rather than beside the map**, because the log is wide and shallow: a command is
+one long line and there are a few dozen of them in a day. In a column each wraps four times and six
+of them fit; under the map it reads as what it is. It is also what lets the pair be up at once — the
+Analysis drawer down the right, the console along the bottom, the map in the corner between them.
+
+The **day is a separator across the list** rather than a column, carrying its own count and its own
+copy, because "what did I run on Tuesday" is the question this panel exists to answer and one press
+should be the whole of the answer.
+
+The button is in the header, immediately **before the theme toggle**: to its left are the two other
+things that take something out of this window — a link, and the workspace as a file — and everything
+to its right is about the window rather than the work in it. `` ` `` opens it, on the key every
+terminal in every editor is behind.
+
+### 23.5 Kept for a week, in this browser, and in the account
+
+`localStorage`, capped at **500 lines and seven days**, oldest dropped first. The point is to
+recover *yesterday's* commands, so `sessionStorage` — the train of thought inside one window (§8.6)
+— is the wrong store; and unbounded growth in a five-megabyte ceiling shared with the workspace
+record and the bucket keys is a store that eventually refuses the write that matters.
+
+A run that was on the worker when the window went away comes back **interrupted**, which is a status
+nothing sets: recording it as failed would be inventing a failure, and leaving it running would be a
+row that spins for the life of the tab.
+
+**An embed writes nothing** and has no console at all — not the panel, not the button, not the
+keydown listener (§21.2). What an embed would be logging is the page author's own afternoon, and the
+record is a thing about the reader's window.
+
+And it is **in the account** (§11). What this holds is a list of the files a reader opened and the
+loci they looked at, which is exactly what somebody on a borrowed machine is owed a straight answer
+about: `state/stored.ts` names it on its own line rather than counting it among the settings, and
+"forget everything" drops both the key and the copy this window is holding in memory — without the
+second, the next thing the reader did would write the whole list straight back out.
+
+Nothing is sent anywhere. C1 holds here as everywhere else: the log is written by the page, into the
+reader's own browser, and read by nobody else.
+
 ---
 
 ## 24. Hubs, and remote sources beyond a bucket

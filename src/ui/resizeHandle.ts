@@ -19,6 +19,13 @@
  * **The primary button only.** A right-press would arm a drag that the browser's
  * context menu then sits on top of, and the edge would follow the pointer
  * afterwards, with no press left to end it.
+ *
+ * The third owner is the **console** (§23), and it is the first that is not
+ * beside the map but under it — so what {@link ResizeHandleOptions.side} names
+ * is now an edge rather than a left or a right, and the axis follows from it.
+ * The plumbing does not change: a drag is a distance from where the press
+ * landed, and which coordinate that distance is measured along is the only
+ * thing an edge decides.
  */
 
 import { el } from './dom'
@@ -27,45 +34,53 @@ export interface ResizeHandleOptions {
   /**
    * Which side of the *owner* the handle sits on.
    *
-   * It decides the sign, and nothing else: a left panel's handle is on its right
-   * edge, so rightward is wider; a right panel's is on its left, so the sign
-   * flips. The drawer is a right-sider by this reckoning even though it is not a
-   * panel, because the question the sign answers is the same one.
+   * It decides the axis and the sign, and nothing else: a left panel's handle is
+   * on its right edge, so rightward is wider; a right panel's is on its left, so
+   * the sign flips. The drawer is a right-sider by this reckoning even though it
+   * is not a panel, because the question the sign answers is the same one — and
+   * the console is a `top`, being a panel along the bottom of the window whose
+   * handle is on the edge that faces the map, where upward is taller.
    */
-  side: 'left' | 'right'
+  side: 'left' | 'right' | 'top'
   /** Named in the handle's tooltip: "Drag to resize the Analysis drawer". */
   what: string
-  /** The width at the moment a drag starts. */
+  /** The width — or, for a `top`, the height — at the moment a drag starts. */
   width(): number
-  /** Called on every movement, with the width the pointer is asking for. */
+  /** Called on every movement, with the size the pointer is asking for. */
   resize(px: number): void
   /** Called once, when the drag ends, so the owner can persist what it chose. */
   commit(): void
   /** Double-click. Absent means a double-click does nothing. */
   reset?(): void
-  /** Extra class, so the two owners can style their own edge. */
+  /** Extra class, so each owner can style its own edge. */
   class?: string
 }
 
 /** Build the handle element. The caller decides where it goes. */
 export function resizeHandle(options: ResizeHandleOptions): HTMLElement {
   const reset = options.reset
+  // A separator's orientation is the line it *is*, not the axis it moves along,
+  // which is why a column's edge — dragged left and right — is the vertical one.
+  const vertical = options.side !== 'top'
   const node = el('div', {
     class: `panel-column-handle${options.class === undefined ? '' : ` ${options.class}`}`,
     title:
       `Drag to resize the ${options.what}` +
       (reset === undefined ? '' : '; double-click to reset it'),
-    attrs: { role: 'separator', 'aria-orientation': 'vertical' },
+    attrs: {
+      role: 'separator',
+      'aria-orientation': vertical ? 'vertical' : 'horizontal',
+    },
   })
 
-  let startX = 0
+  let start = 0
   let startWidth = 0
   let dragging = false
 
   node.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return
     dragging = true
-    startX = event.clientX
+    start = vertical ? event.clientX : event.clientY
     startWidth = options.width()
     node.setPointerCapture(event.pointerId)
     node.classList.add('is-dragging')
@@ -73,7 +88,11 @@ export function resizeHandle(options: ResizeHandleOptions): HTMLElement {
   })
   node.addEventListener('pointermove', (event) => {
     if (!dragging) return
-    const delta = options.side === 'left' ? event.clientX - startX : startX - event.clientX
+    // Away from the owner is bigger, whichever edge the handle is on: a left
+    // panel grows rightward, a right panel and the console grow back towards
+    // the pointer's origin.
+    const delta =
+      options.side === 'left' ? event.clientX - start : start - (vertical ? event.clientX : event.clientY)
     options.resize(startWidth + delta)
   })
   const end = (event: PointerEvent): void => {

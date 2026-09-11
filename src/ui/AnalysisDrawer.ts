@@ -81,7 +81,7 @@ import {
   type TaskResult,
 } from '../analysis/types'
 import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
-import { cliCannotRun, cliCommandFor } from '../analysis/cliCommand'
+import { cliCannotRepeat, cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
 import { profileCurve } from './analysisPlots'
@@ -1420,7 +1420,11 @@ export class AnalysisDrawer {
    */
   private paintCli(provenance: Provenance): void {
     const task = taskById(provenance.task)
-    const refusal = task === undefined ? null : cliCannotRun(task)
+    // The *run*, not the task: a session with no contact map has no file for the
+    // command's first argument, and the descriptor cannot see that. One
+    // predicate for the button and for the command, which is the arrangement
+    // `analysis/cliCommand.ts` argues for at length.
+    const refusal = task === undefined ? null : cliCannotRepeat(task, provenance)
     // A task this build has never heard of — a result restored from a session
     // written by a later one. There is nothing to write a command from, since
     // the flags are the descriptor's, so the button goes quiet rather than

@@ -45,6 +45,15 @@ export const KEYS = {
   nextSession: 'mod+]',
   prevSession: 'mod+[',
   theme: 't',
+  /**
+   * The console (§23), on the key every terminal in every editor is behind.
+   *
+   * A backtick rather than a letter, and not only because the single-letter
+   * space is spent (`ui/plotOptions.ts` explains giving up `f`): a reader who
+   * has ever pressed ctrl-` in an editor already knows what this opens, and a
+   * mark of punctuation cannot collide with the letters the views are driven by.
+   */
+  console: '`',
   shortcuts: 'mod+/',
   /**
    * The one box every view has, whatever it is called there.

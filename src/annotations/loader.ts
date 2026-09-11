@@ -47,6 +47,8 @@ export {
 }
 import { canonicalUrl } from '../sources/rewrite'
 import { grantFor } from '../ui/chooseFiles'
+import { logAction } from '../state/actions'
+import { fmt } from '../ui/dom'
 
 /**
  * What a file's *name* suggests it is.
@@ -171,6 +173,27 @@ export class AnnotationLoader {
     const paired = pairIndexes(files)
     this.onFilesAdded?.(paired.map((pair) => pair.file))
     for (const { file, index } of paired) {
+      // The console's line for a track (§23), on the two doors a *reader* drives
+      // — this one and {@link addUrl} — and not on the paths the app drives
+      // itself: `restore` brings back what a previous visit remembered and
+      // `carry` moves a row across a change of resolution. Neither is something
+      // somebody did this afternoon, and a console that opened with nine lines
+      // after every reload would be a console nobody reads.
+      //
+      // A drop that lands on a *detached* row is recorded like any other, even
+      // though it ends in `reattach` rather than in `begin`: the reader dropped
+      // a file, which is the thing being recorded, and what the store does with
+      // it afterwards is the store's business.
+      logAction({
+        kind: 'track',
+        line: `loaded ${file.name}`,
+        detail: [
+          `# file: ${file.name}`,
+          `# size: ${fmt.bytes(file.size)}`,
+          ...(index === undefined ? [] : [`# index: ${index.name}`]),
+        ],
+        where: file.name,
+      })
       // Every detached row of that name, not the first. A BAM comes back from a
       // reload as two of them (§8.13), and reattaching one would leave a reader
       // who dropped the file again looking at a depth lane with the pile still
@@ -210,6 +233,15 @@ export class AnnotationLoader {
     if (trimmed === '') return
     const { address, index } = splitIndexFragment(trimmed)
     const name = address.split('/').pop() ?? address
+    logAction({
+      kind: 'track',
+      line: `loaded ${label ?? name}`,
+      detail: [
+        `# url: ${address}`,
+        ...(index === undefined ? [] : [`# index: ${index}`]),
+      ],
+      where: label ?? name,
+    })
     this.begin(
       { kind: 'remote', url: address, name, ...(index === undefined ? {} : { index }) },
       label,

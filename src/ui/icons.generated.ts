@@ -595,6 +595,12 @@ export const GENERATED_ICONS = {
     ['path', {"d":"m12 5 7 7-7 7"}],
     ],
   },
+  'terminal': {
+    shapes: [
+    ['path', {"d":"M12 19h8"}],
+    ['path', {"d":"m4 17 6-6-6-6"}],
+    ],
+  },
   'bars-decreasing': {
     shapes: [
     ['path', {"d":"M3 6h18"}],

@@ -16,6 +16,8 @@
  */
 
 import { PRODUCER } from '../version'
+import { logAction } from '../state/actions'
+import { fmt } from './dom'
 
 /** CSS pixels are defined as 1/96 inch, which is what makes DPI meaningful. */
 export const CSS_DPI = 96
@@ -86,8 +88,28 @@ function pdfDate(now: Date): string {
   return `D:${fileStamp(now).replace('-', '')}`
 }
 
-/** Hand a blob to the browser as a download, then release the object URL. */
+/**
+ * Hand a blob to the browser as a download, then release the object URL.
+ *
+ * **Every file this app writes leaves through here**, and that is why the
+ * console's record of one is written here too rather than at each of the
+ * twenty-odd places that call it (§23). The same argument `AnnotationLoader`
+ * makes about the hook it raises on a dropped file: a reader whose figure was
+ * recorded because they exported it from the drawer, but not when they exported
+ * the same figure from the map, would be looking at a difference nobody can see
+ * the rule behind. One choke point, one line, no road around it.
+ *
+ * What is knowable here is the name and the size, which is exactly what the
+ * console's line says. The *provenance* of what is inside the file is the
+ * caller's, and it is already in the file's own header (§18.4).
+ */
 export function downloadBlob(blob: Blob, filename: string): void {
+  logAction({
+    kind: 'write',
+    line: `wrote ${filename}`,
+    detail: [`# file: ${filename}`, `# size: ${fmt.bytes(blob.size)}`],
+    where: filename,
+  })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { cliCannotRun, cliCommandFor, quote } from '@/analysis/cliCommand'
+import { cliCannotRepeat, cliCannotRun, cliCommandFor, quote } from '@/analysis/cliCommand'
 import { TASKS, taskById } from '@/analysis/registry'
 import type {
   AnalysisContext,
@@ -373,6 +373,95 @@ describe('a parameter that names something loaded', () => {
     expect(notesOf(built.text).join(' ')).toContain('no file behind it')
     expect(notesOf(built.text).join(' ')).toContain('Detected loops')
     expect(commandOf(built.text)).not.toContain(computed.id)
+  })
+})
+
+describe('a run with no contact map', () => {
+  /**
+   * The framing `AnalysisRunner.tracksFraming` writes: a 1D browser session
+   * (§5.8) has the bigWigs and not the map, and a result is still a record of
+   * something — so what it names there is the assembly, over a zero-wide extent.
+   */
+  const mapless: Partial<AnalysisFraming> = {
+    uri: 'https://example.org/data/Yeast_ATAC.bw',
+    rows: [0, 0],
+    cols: [0, 0],
+    label: 'Yeast_ATAC.bw · loaded tracks, no contact map',
+  }
+
+  it('is refused rather than written against the file that named the assembly', () => {
+    // `metacooler-run overlap Yeast_ATAC.bw` reads perfectly well and fails at
+    // the open: the command takes a contact map as its first argument, and a
+    // browser session has none. That is the one outcome this module exists to
+    // prevent, so it is a refusal and not a line.
+    const overlap = taskById('overlap') as AnalysisTask
+    const built = cliCommandFor({
+      task: overlap,
+      provenance: provenance('overlap', defaultsOf(overlap), mapless),
+      context: context(),
+    })
+    expect(built.text).toBe('')
+    expect(built.refusal).toContain('no contact map')
+    expect(built.refusal).toContain('first argument')
+  })
+
+  it('is the same predicate the button is greyed by', () => {
+    const overlap = taskById('overlap') as AnalysisTask
+    const record = provenance('overlap', defaultsOf(overlap), mapless)
+    // One rule for both, or the button hands over a line the command rejects.
+    expect(cliCannotRepeat(overlap, record)).toBe(
+      cliCommandFor({ task: overlap, provenance: record, context: context() }).refusal,
+    )
+    // And the descriptor alone cannot see it, which is why there are two.
+    expect(cliCannotRun(overlap)).toBeNull()
+  })
+
+  it('still writes the line for the same task over a map', () => {
+    const overlap = taskById('overlap') as AnalysisTask
+    const built = cliCommandFor({
+      task: overlap,
+      provenance: provenance('overlap', defaultsOf(overlap)),
+      context: context(),
+    })
+    expect(built.refusal).toBeNull()
+    expect(commandOf(built.text).startsWith('metacooler-run overlap yeast.mcool')).toBe(true)
+  })
+})
+
+describe('a parameter whose load is its own flag', () => {
+  it('writes --sequence once rather than twice', () => {
+    // `motif` calls its reference `sequence`, which is also the flag the CLI
+    // reads references from: `loadSequences` files one under the path it was
+    // given and `params.sequence` holds that same path, so one token pair does
+    // both jobs. Written twice, the line parsed the same FASTA twice to arrive
+    // at the same answer and read like a mistake.
+    const motif = taskById('motif') as AnalysisTask
+    const built = cliCommandFor({
+      task: motif,
+      provenance: provenance('motif', { ...defaultsOf(motif), sequence: 'a1' }),
+      context: context([entry('a1', 'S288c', 'S288c.fa.gz')]),
+    })
+    const command = commandOf(built.text)
+    expect(command.split('--sequence').length - 1).toBe(1)
+    expect(command).toContain('--sequence S288c.fa.gz')
+  })
+
+  it('leaves the pair alone where the two names differ', () => {
+    // `compartments` names its reference `phaseSequence`, so the load and the
+    // binding are two different flags and both are needed: one puts the file in
+    // the map, the other says which parameter chose it.
+    const compartments = taskById('compartments') as AnalysisTask
+    const built = cliCommandFor({
+      task: compartments,
+      provenance: provenance('compartments', {
+        ...defaultsOf(compartments),
+        phaseSequence: 'a1',
+      }),
+      context: context([entry('a1', 'S288c', 'S288c.fa.gz')]),
+    })
+    const command = commandOf(built.text)
+    expect(command).toContain('--sequence S288c.fa.gz')
+    expect(command).toContain('--phaseSequence S288c.fa.gz')
   })
 })
 

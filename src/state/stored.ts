@@ -37,6 +37,7 @@ import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readHubRows } from './hubs'
 import { storedLines as driveStoredLines } from './drives'
 import { storedLines as dropboxStoredLines } from '../auth/dropbox'
+import { actions, dayOf, forgetActions } from './actions'
 
 /** The one prefix every key this app writes begins with. */
 export const PREFIX = 'metacooler-viewer:'
@@ -94,6 +95,30 @@ export async function storedItems(): Promise<StoredItem[]> {
     items.push({
       label: 'Remembered workspace',
       detail: `${count(workspace.sessions.length, 'tab', 'tabs')}${when}`,
+    })
+  }
+
+  // The console (§23). Named as what it is rather than folded into the
+  // preference count below, on the rule the bucket keys are named by: every
+  // other line here costs a reader a setting, and this one is a list of the
+  // files they opened and the loci they looked at. A reader deciding whether to
+  // press "forget everything" on a borrowed machine should not have to press it
+  // to find out that it is there.
+  //
+  // Gated on the key rather than on the list, because the question this dialog
+  // answers is *what is being kept* and not what this page happens to be
+  // holding: an embed fills the list in memory and writes none of it
+  // (`state/actions.ts`), and reporting that as stored would be this module
+  // telling the one lie it exists to prevent.
+  const recorded = localKeys().includes(`${PREFIX}actions`) ? actions() : []
+  if (recorded.length > 0) {
+    const first = dayOf(recorded[0].at)
+    const last = dayOf(recorded[recorded.length - 1].at)
+    items.push({
+      label: 'Console',
+      detail:
+        `${count(recorded.length, 'line', 'lines')} — the commands, files and exports of this ` +
+        `browser's last week of work${first === last ? ` on ${first}` : `, ${first} to ${last}`}`,
     })
   }
 
@@ -156,7 +181,10 @@ export async function storedItems(): Promise<StoredItem[]> {
   // The keys that have a line of their own above or below, so none is also
   // counted as a *preference*: a reader told "3 settings — theme, column
   // widths, overlays" when one of the three is their bucket secret has been
-  // told something false.
+  // told something false. The console's key (§23) is among them for the same
+  // reason — its own line above counts it — while its three *preferences*, the
+  // height, the fold and the output toggle, are settings like any other and
+  // stay in this count.
   const named = local.filter(
     (key) =>
       key === `${PREFIX}buckets` ||
@@ -164,7 +192,8 @@ export async function storedItems(): Promise<StoredItem[]> {
       key === `${PREFIX}hubs` ||
       key === `${PREFIX}google` ||
       key === `${PREFIX}drives` ||
-      key === `${PREFIX}dropbox`,
+      key === `${PREFIX}dropbox` ||
+      key === `${PREFIX}actions`,
   )
   const access = local.filter((key) => key === `${PREFIX}access`)
   const preferences = local.length - named.length
@@ -260,6 +289,11 @@ export async function forgetEverything(): Promise<void> {
   // itself, which is the call its own docstring already claimed this one makes.
   suspendWorkspace()
   await forgetWorkspace()
+  // The prefix sweep above has already dropped the key; this drops the copy this
+  // window is holding in memory, without which the next thing the reader did
+  // would write the whole list straight back out. The same trap
+  // `forgetAllHandles` below exists to close.
+  forgetActions()
   // Both halves of the durable side. `clearDurableStores` empties the object
   // stores; these also drop the copies `handles.ts` and `directories.ts` hold in
   // memory, without which the sweep would report success while the current page

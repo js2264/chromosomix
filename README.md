@@ -21,6 +21,7 @@ server-side processing or data upload.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
 - Hubs: The picker offers shelves of named datasets — the demos, **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals — and any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
+- Console: A bottom panel recording every run, file opened and file written, each run written as the `metacooler-run` command that repeats it — one line per map, so a run over a deck is a line each. Copy or save a day of work as a shell script.
 
 ## Philosophy
 
@@ -333,6 +334,14 @@ metacooler-run coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 metacooler-run replay workspace.metacooler.json --over 'data/*.hic'
 ```
 
+### Recovering the commands you ran
+
+You do not have to write those lines from memory. The viewer keeps a **console** along the bottom of the window — the terminal mark in the header, or `` ` `` — and every analysis run lands in it as the `metacooler-run` command that repeats it, written the moment the run happens rather than when you look at the result. **Run on all maps** therefore records one line per map, which is the case a single result on screen cannot cover. Files opened, tracks loaded and files written are recorded beside them, as comments.
+
+`copy` and `save` hand the log over as a **shell script** — commands bare, everything else commented, days as headings — so a day pasted into a file runs, in the order you ran it. Each day heading copies its own lines. The **output** toggle prints each row's full provenance above it (the build, the task and its version, the framing and every parameter), which is the same header every exported file opens with.
+
+The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed in **Stored data** with everything else this app keeps, and **Forget everything** drops it.
+
 ---
 
 ## Repository layout
@@ -354,9 +363,10 @@ src/
   worker/        message protocol; the worker owns all I/O
   render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar, the
                  diagonal blend for two files, the 1D browser's ruler and arcs
-  state/         ViewState and its URL-hash serialisation
+  state/         ViewState and its URL-hash serialisation, the workspace record,
+                 and actions.ts — the log of what this window has done (§23)
   ui/            file picker, genomes/contigs tables, genome/pair/region views,
-                 the 1D browser, its vector-PDF page, errors
+                 the 1D browser, its vector-PDF page, the console, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
   analysis/      the sixteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
@@ -409,6 +419,7 @@ not the plan.
 | M8 | Catalog, deploy, benchmarks | **partly** — a GitHub Pages workflow builds and publishes the app (`docs/deploy.md`); no `scripts/make_catalog.py` and no benchmarks |
 | — | Sessions, comparison, 1D browser | **done** — tabs with a worker each (§5.6); a second cooler in the lower-left triangle, split on the matrix diagonal (§5.7); and a genome browser that needs no map at all, entered from a `chrom.sizes`, a bigWig, a bigBed, a FASTA, a BAM or a feature file (§5.8) |
 | — | Metadata annotations (§8.12) | **done** — the columns a file already carries about its own genomes, sequences and bins, discovered from its `/genomes`, `/contigs` and `/bins` tables and drawn as lanes beside the map: bars for a measurement, runs of colour for a set of labels. Indexed by the map's own cells rather than by base pairs, so a MAG's completeness draws on a genome × genome overview where no other lane can — and offered only where its own table is no finer than the axis. The one annotation that never needed the §8.5 gate lifted, since a column of a file's own tables *is* the map's axis and has nothing to be matched against |
+| — | The console (§23) | **done** — a drawer along the bottom holding what this window has done: every run as the `metacooler-run` command that repeats it, one line per map of a batch, beside the files opened, the tracks loaded and the files written. Copied or saved as a shell script; kept in this browser for a week, and dropped by **Forget everything** |
 | — | Analysis (§18) | **done** — every task in `TASKS_PLAN.md`'s catalogue, in a fourth worker so a whole-file scan never blocks the view; a resizable drawer; results that come back as synthetic tracks in the Annotations panel, indistinguishable from a loaded bigWig; and a bigWig writer of this repo's own. Goldened against cooltools, coolpuppy, pyBigWig and numpy on the demo micro-C map |
 
 Other gaps worth naming rather than discovering:

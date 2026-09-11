@@ -40,6 +40,7 @@ import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { hydrateFolders } from '../browse/connected'
 import '../browse/backends'
 import { StatusBar } from '../ui/StatusBar'
+import { ConsolePanel } from '../ui/ConsolePanel'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { desktop } from '../desktop'
 import {
@@ -225,6 +226,21 @@ export class App implements SessionHost {
    */
   private readonly analysisPanel: SidePanel
   private readonly tabs: TabStrip
+  /**
+   * The console (§23), or `null` in an embed.
+   *
+   * Window furniture in the strongest sense — it is a record of what *this
+   * window* has done, across every tab, and it outlives all of them. So it is
+   * built once here rather than by a session, on the same reasoning the Files
+   * column is: a place you connected is not a fact about a file, and neither is
+   * a command you ran an hour ago in a tab you have since closed.
+   *
+   * Not built at all in an embed, exactly as the status bar is not: what an
+   * embed would be logging is the page author's own afternoon, its bar has no
+   * room for the button, and a panel nobody can open is a keydown listener
+   * taking Escape inside somebody else's page (§21.2).
+   */
+  private readonly consolePanel: ConsolePanel | null
   private readonly theme: ThemeToggle
   /**
    * The footer, or `null` in an embed.
@@ -312,6 +328,14 @@ export class App implements SessionHost {
     this.status = this.embed
       ? null
       : new StatusBar({ client: () => this.current?.client ?? null })
+    this.consolePanel = this.embed
+      ? null
+      : new ConsolePanel({
+          // A third of the window's height is a change the mounted view has to
+          // be told about, for the reason the columns are: a plot sized by the
+          // window's height moves and no box a `ResizeObserver` watches does.
+          onLayout: relayout,
+        })
     this.theme = new ThemeToggle()
     this.tabs = new TabStrip({
       onSelect: (index) => this.activate(index),
@@ -422,6 +446,12 @@ export class App implements SessionHost {
           ),
           () => this.exportWorkspace(),
         ),
+        // Before the theme, and after the two that take something *out* of this
+        // window: a link and a file are what a reader hands to somebody else,
+        // and this is the third of them — the commands that repeat the day.
+        // Everything to its right is about the window rather than the work in
+        // it, which is the line this button sits on.
+        ...(this.consolePanel === null ? [] : [this.consolePanel.toggle]),
         this.theme.el,
         iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
           this.openShortcutsDialog(),
@@ -468,6 +498,11 @@ export class App implements SessionHost {
             this.analysisPanel.el,
           ]),
       this.drawerSlot,
+      // Under everything, across the whole body: the drawer is beside the map
+      // and this is below it, so the two can be up at once — the drawer stops at
+      // the console's roof rather than running under it (§23, and the
+      // `--console-height` rule in the stylesheet).
+      ...(this.consolePanel === null ? [] : [this.consolePanel.el]),
     )
 
     // **The one row an embed has**, and it is the breadcrumb row with three
@@ -1857,6 +1892,20 @@ export class App implements SessionHost {
         keys: ANALYSIS_PANEL.keys,
         enabled: file,
         run: () => this.analysisPanel.toggle.click(),
+      },
+      {
+        id: 'console',
+        group: 'View',
+        title: 'Open or close the console',
+        hint:
+          'Every run, open and export this window has made, as the commands that repeat them ' +
+          '(§23). Kept for a week, in this browser.',
+        keys: KEYS.console,
+        // Absent in an embed, where there is no panel to open — the command
+        // list is the shortcuts dialog and the palette, and both must describe
+        // what this window actually answers.
+        enabled: this.consolePanel !== null,
+        run: () => this.consolePanel?.toggle.click(),
       },
       {
         id: 'theme',

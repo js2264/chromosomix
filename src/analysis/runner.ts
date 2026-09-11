@@ -52,6 +52,9 @@ import {
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import type { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from './worker/client'
+import { provisionalProvenance, runDraft } from './record'
+import { endAction, logAction, type ActionDraft, type ActionOutcome } from '../state/actions'
+import { fileLabel } from '../ui/labels'
 import { BLOCK_COPY_LIMIT_BYTES, type BlockInput, type TaskInputs } from './worker/protocol'
 
 // ---------------------------------------------------------------------------
@@ -263,6 +266,24 @@ function mountKey(uri: string, cells?: readonly string[]): string {
   return cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
 }
 
+/**
+ * What a console line calls the map a job ran on.
+ *
+ * Through `fileLabel` whichever kind of label the target carries: a deck names
+ * its maps and a lone map is named by its own URI, and a column of full paths
+ * would push the command — the thing the panel is for — off the right of the
+ * row. A name that is not a path comes back unchanged, so the deck's own naming
+ * (§16.10) is what a reader sees there.
+ */
+function targetLabel(target: RunTarget): string {
+  return fileLabel(target.label)
+}
+
+/** The half of a draft that an outcome may replace. */
+function draftFields(draft: ActionDraft): Pick<ActionOutcome, 'line' | 'notes' | 'detail'> {
+  return { line: draft.line, notes: draft.notes ?? [], detail: draft.detail ?? [] }
+}
+
 export interface RunTarget {
   /** Which map, for filing what the run produces (`annotations/placement.ts`). */
   map: MapId
@@ -470,7 +491,7 @@ export class AnalysisRunner {
     if (this.destroyed) return
     const context = this.host.context()
     if (context === null) {
-      this.setState(task.id, { status: 'failed', message: 'nothing is open' })
+      this.refuse(task, batch, 'nothing is open')
       return
     }
     // A task in the other venue reads the loaded tracks and never touches the
@@ -481,10 +502,7 @@ export class AnalysisRunner {
     const framing =
       context.framing ?? (task.venue === 'annotations' ? tracksFraming(context) : null)
     if (framing === null) {
-      this.setState(task.id, {
-        status: 'failed',
-        message: 'this view has no contact map to run against',
-      })
+      this.refuse(task, batch, 'this view has no contact map to run against')
       return
     }
     const where = target ?? this.hostTarget(framing)
@@ -694,6 +712,14 @@ export class AnalysisRunner {
   private async execute(job: Job): Promise<void> {
     const startedAt = performance.now()
     let step: PlanStep | null = null
+    // **One console line per job**, written here and not where Run was pressed
+    // (§23). That is what makes *run on all maps* six lines rather than one: the
+    // button queues six jobs, and this is the place that knows a job from a
+    // press. It is also the only place that sees a run that never reached a
+    // result — a failure, or a Stop — which is exactly the run whose parameters
+    // a reader most wants back.
+    const recorded = this.recordStart(job)
+    let outcome: ActionOutcome | null = null
     this.setState(job.task.id, {
       status: 'running',
       done: 0,
@@ -760,6 +786,21 @@ export class AnalysisRunner {
             ms: performance.now() - startedAt,
           })
           this.host.finished(job.task, result, job.target)
+          // The result's own provenance replaces the one this job was recorded
+          // with: the worker wrote it beside the numbers, so it is the
+          // authoritative account of what produced them (see `record.ts`).
+          outcome = {
+            status: 'ok',
+            ms: performance.now() - startedAt,
+            ...draftFields(
+              runDraft({
+                task: job.task,
+                provenance: this.recordable(job, result.provenance),
+                context: this.host.context(),
+                where: targetLabel(job.target),
+              }),
+            ),
+          }
         } else {
           // A required result is cached and its row says so, but it is not
           // handed to `finished`: the reader asked for the saddle, and
@@ -779,9 +820,92 @@ export class AnalysisRunner {
       // the session would be a row nobody could clear.
       if (step !== null && step.task.id !== job.task.id) this.setState(step.task.id, state)
       this.setState(job.task.id, state)
+      outcome = cancelled
+        ? { status: 'cancelled' }
+        : { status: 'failed', error: err instanceof Error ? err.message : String(err) }
     } finally {
       job.running = null
+      // The fallback covers a chain that ended without reaching its own leaf,
+      // which nothing adopts and which is a cancel from where the reader sits.
+      // A line left saying `running` would spin for the life of the tab and come
+      // back `interrupted` after a reload, which would be this bookkeeping
+      // blaming the browser.
+      endAction(recorded, outcome ?? { status: 'cancelled' })
     }
+  }
+
+  /**
+   * A press of Run that never became a job.
+   *
+   * Both refusals above are about the **session** rather than about the target —
+   * there is nothing open, or the view has no map — so the console line says so
+   * once however many maps the batch was aimed at: five copies of one fact is
+   * five lines a reader has to read before finding out they are the same line.
+   *
+   * Recorded at all because the console's promise is that every press leaves a
+   * line (§23). There is no command on this one and there cannot be: a framing
+   * is what a command's `--window` is written from, and the absence of one is
+   * the refusal. So it is prose, with the reason on it, which is the answer to
+   * "why did nothing happen when I pressed run at two o'clock".
+   */
+  private refuse(task: AnalysisTask, batch: { at: number; of: number } | null, why: string): void {
+    this.setState(task.id, { status: 'failed', message: why })
+    if (batch !== null && batch.at > 0) return
+    logAction({
+      kind: 'run',
+      line: `ran ${task.title}`,
+      status: 'failed',
+      error: why,
+    })
+  }
+
+  /**
+   * Open the console's line for a job that is about to run.
+   *
+   * The provenance is composed rather than read, because there is no result yet
+   * — see `record.ts`. What it costs if the job then fails is a `created:` stamp
+   * naming the moment the work started instead of the moment it stopped, which
+   * is the more useful of the two on a run that produced nothing.
+   */
+  private recordStart(job: Job): string {
+    const draft = runDraft({
+      task: job.task,
+      provenance: this.recordable(job, provisionalProvenance(job.task, job.params, job.framing)),
+      context: this.host.context(),
+      where: targetLabel(job.target),
+    })
+    return logAction({ ...draft, status: 'running' })
+  }
+
+  /**
+   * The provenance a console line is written from: the job's, naming the file
+   * the job actually ran on.
+   *
+   * **A batch shares one framing across every target** — it is taken once, when
+   * Run is pressed, which is what makes a result a record of what the reader was
+   * looking at (§18.4) — and an `AnalysisFraming` carries a `uri`. So the second
+   * job of a five-map batch is dispatched against `rep2.cool` and carries a
+   * framing that says `rep1.cool`, and the worker echoes that framing into the
+   * result it returns.
+   *
+   * Invisible in the drawer, which prints `framing.label` and never the URI. Not
+   * invisible here: this is the one surface that turns a provenance into a
+   * **command**, and a command naming the wrong file is a reader running the
+   * wrong experiment in a shell. So the line is written from the target's file,
+   * and the *whole* line is — the `#` provenance block above the command as well
+   * as the command itself — because a row that quoted two files would be worse
+   * than either.
+   *
+   * Deliberately not written back into `job.framing` or into the result. That
+   * framing is compared by `sameRecipe` and by the drawer's staleness check,
+   * which is about *the view having moved* rather than about which file is on
+   * screen, and changing it would mark every companion's result stale whenever
+   * the star is elsewhere — a correction to §18.4's machinery, not to a console.
+   */
+  private recordable(job: Job, provenance: Provenance): Provenance {
+    const uri = job.target.uri
+    if (uri === '' || uri === provenance.framing.uri) return provenance
+    return { ...provenance, framing: { ...provenance.framing, uri } }
   }
 
   /**
@@ -1214,6 +1338,10 @@ function tracksFraming(context: AnalysisContext): AnalysisFraming {
     value: 'count',
     normalise: null,
     level: 'bin',
-    label: `${context.uri} · loaded tracks, no contact map`,
+    // The file's name rather than its address: a browser session is routinely
+    // opened from a signed S3 URL, and the whole of one in a heading pushes the
+    // rest of the line off the drawer and off a console row. What the uri is
+    // wanted for is `# file:`, which every provenance block already carries.
+    label: `${fileLabel(context.uri)} · loaded tracks, no contact map`,
   }
 }

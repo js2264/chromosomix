@@ -54,6 +54,7 @@
 
 import type {
   AnalysisContext,
+  AnalysisFraming,
   AnalysisTask,
   ContextContig,
   ParamSpec,
@@ -95,6 +96,52 @@ export function cliCannotRun(task: AnalysisTask): string | null {
   )
 }
 
+/**
+ * Whether a framing describes no matrix at all.
+ *
+ * `AnalysisRunner`'s `tracksFraming` is the only thing that makes one: the three
+ * track tasks (§18.3) run in a session that has no contact map — a 1D browser
+ * (§5.8) — and a result is still a record of *something*, so what it names there
+ * is the assembly. It writes a zero-wide extent on both axes, which no view of a
+ * real map can have: a window of no bins is not a window, and `run/blocks.ts`
+ * refuses one outright.
+ *
+ * Read rather than flagged because the flag would be a second way of saying the
+ * same thing, and the two would eventually disagree about a framing neither of
+ * them made.
+ */
+function coversNoMatrix(framing: AnalysisFraming): boolean {
+  return framing.rows[1] <= framing.rows[0] && framing.cols[1] <= framing.cols[0]
+}
+
+/**
+ * Why this **run** cannot be repeated in a shell, or `null` when it can.
+ *
+ * {@link cliCannotRun} is about the descriptor and answers before a run exists —
+ * it is what `cli/main.ts` refuses on, and it cannot see anything else. This is
+ * the whole question, and it is the one a *button* has to ask: one predicate
+ * decides both whether a command is written and whether the control that copies
+ * it is offered, because two copies of that rule is a button that hands over a
+ * line the command rejects.
+ *
+ * The second half is the session with **no contact map**. `metacooler-run` takes
+ * a file as its first argument and opens it as one; a 1D browser has none to
+ * name, and the framing there names the bigWig that declared the assembly. Left
+ * alone, the command came out as `metacooler-run overlap Yeast_ATAC.bw` — a line
+ * that reads perfectly well and fails at the open, which is the one outcome this
+ * whole module exists to prevent.
+ */
+export function cliCannotRepeat(task: AnalysisTask, provenance: Provenance): string | null {
+  const descriptor = cliCannotRun(task)
+  if (descriptor !== null) return descriptor
+  if (!coversNoMatrix(provenance.framing)) return null
+  return (
+    `${task.id} ran over the loaded tracks in a session with no contact map, and the command ` +
+    'opens one as its first argument — there is no file here for it to name. Open a contact ' +
+    'map and run it again, or run it in the app.'
+  )
+}
+
 /** Everything the command is built from; `context` supplies the names. */
 export interface CliCommandInput {
   task: AnalysisTask
@@ -122,7 +169,7 @@ const COMMAND = 'metacooler-run'
  * a button that sometimes copies nothing is a button a reader presses twice.
  */
 export function cliCommandFor(input: CliCommandInput): CliCommand {
-  const refusal = cliCannotRun(input.task)
+  const refusal = cliCannotRepeat(input.task, input.provenance)
   if (refusal !== null) return { text: '', refusal }
 
   const notes: string[] = []
@@ -180,6 +227,19 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   // with them, and `--features`/`--sequence` is how `cli/main.ts` reads them.
   const entries = input.context?.entries ?? []
   const loads: string[] = []
+  /**
+   * Parameters whose load *is* their binding, so the loop below leaves them be.
+   *
+   * A load is written under the flag the CLI reads files from — `--features`,
+   * `--pairs`, `--sequence` — and a task may declare a parameter under one of
+   * those very names: `motif` calls its reference `sequence`. There the two are
+   * one token pair, because `loadSequences` files a reference under the path it
+   * was given and `params.sequence` holds that same path. Written twice, the
+   * line said `--sequence ref.fa --sequence ref.fa`, which parses the file
+   * twice to arrive at the same answer and reads like a mistake in a command a
+   * reader is about to run over two hundred files.
+   */
+  const boundByLoad = new Set<string>()
   for (const spec of input.task.params) {
     if (!isEntryParam(spec)) continue
     for (const id of idsOf(params[spec.key])) {
@@ -192,6 +252,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
         continue
       }
       const flag = spec.kind === 'sequence' ? '--sequence' : spec.kind === 'pairSet' ? '--pairs' : '--features'
+      if (flag === `--${spec.key}`) boundByLoad.add(spec.key)
       const written = `${flag} ${quote(named)}`
       // One load per file, however many parameters chose it: two flags naming
       // one path is two parses of the same file, under one key in the end.
@@ -202,6 +263,11 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
 
   for (const spec of input.task.params) {
     if (spec.key === 'balance') continue
+    // The load already wrote this one, and wrote it the way the CLI reads a
+    // list: one flag per file. The parameter loop writes a *comma-joined* value,
+    // which `coerce` splits for a multiple parameter and `readFile` does not —
+    // so where the two collide, the load's spelling is the one that works.
+    if (boundByLoad.has(spec.key)) continue
     const written = flagFor(spec, params[spec.key], entries)
     if (written !== null) args.push(...written)
   }

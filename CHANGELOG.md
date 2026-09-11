@@ -73,6 +73,59 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   SAS, GCS through its JSON-API URL and the 4DN and ENCODE buckets all opened before this release;
   `docs/hosting.md` ends with the table, host by host.
 
+- **A console, along the bottom, holding the commands your day was made of.**
+  Every analysis run is now recorded the moment it runs, written as the
+  `metacooler-run …` command that repeats it — the same line the drawer's **copy
+  CLI command** button hands over, from the same provenance, so the two cannot
+  drift. Press the terminal mark in the header (or `` ` ``) and the log comes up
+  as a drawer over the bottom of the window: a shadow, a draggable top edge, and
+  Escape to put it down. Nothing about it is modal — every shortcut keeps
+  working behind it, and closing it stops nothing.
+
+  **Run on all maps writes one line per map.** A batch over a deck of six is six
+  runs against six files, and the drawer can only ever show you one of them, so
+  five of those commands used to exist nowhere. Each row names the file it
+  measured and how long it took, and a run that **failed** or was **stopped**
+  keeps its line with the reason on it — which is exactly the run whose
+  parameters you want back.
+
+  Beside the runs: the files you opened, the tracks you loaded and every file
+  the app wrote. Not navigation — a minute of panning would bury the rest.
+
+  What copy and save hand over is a **script**, not a transcript: commands bare,
+  everything else commented, days as headings. A day pasted into a file runs, in
+  the order you ran it, with the afternoon around it left in as context. Each
+  day heading carries its own copy button, because "the commands I ran on
+  Tuesday" is the question this is for. **save** writes the same text as a
+  `.sh`.
+
+  The **output** toggle is the choice between a script and an archive: off, a
+  row is its command; on, each row is preceded by the full provenance block —
+  build, task and version, framing, every parameter — which is the header every
+  exported file already opens with. It governs the clipboard as well as the
+  screen. The caveats a command carries about what a shell cannot be told are
+  never hidden by it.
+
+  Three things the command writer had been getting wrong surfaced the moment a
+  whole afternoon of runs was on one screen, and all three are fixed where they
+  live — so **copy CLI command** in the drawer is fixed with them. A run in a
+  **1D browser session** has no contact map, and the command opens one as its
+  first argument: it used to name the bigWig that declared the assembly, which
+  reads perfectly well and dies at the open, and is now refused by name with the
+  button greyed to match. A parameter whose load *is* its own flag — `motif`
+  calls its reference `sequence` — wrote `--sequence ref.fa --sequence ref.fa`
+  and now writes it once. And a session framed against the assembly is named by
+  its **file** rather than by its whole address, so a bucket URL no longer fills
+  the drawer's heading and a console row.
+
+  Kept in this browser for **seven days or five hundred lines**, whichever comes
+  first, and nowhere else. A run the window walked out on comes back marked
+  *interrupted* rather than as a failure nobody saw. **Forget everything** drops
+  it, and the storage dialog names it on its own line rather than counting it
+  among the settings — it is a list of the files you opened, and you should not
+  have to press the button to find out it is there. An embed has no console at
+  all.
+
 - **Every pull request gets a preview on the site.** A branch of this repository opened as a
   pull request is built as a pinned copy and published at `…/pr/<number>/` beside the archived
   pushes, replaced on every push and removed when the pull request closes; the About dialog lists
