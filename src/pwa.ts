@@ -17,7 +17,7 @@
 
 import { el } from './ui/dom'
 import { TARGET } from './version'
-import { ARCHIVE_SEGMENT, IS_PORTABLE, PINNED_COMMIT, SITE_BASE } from './versions'
+import { ARCHIVE_SEGMENT, IS_PINNED, IS_PORTABLE, PULL_SEGMENT, SITE_BASE } from './versions'
 
 /**
  * Register, and watch for a replacement.
@@ -45,8 +45,9 @@ export function registerServiceWorker(): void {
   // `sw.js`, so registering here would 404 at best — and at worst, if the file
   // ever were emitted, it would put a second worker under a nested scope,
   // caching a build somebody pinned in July for as long as the browser feels
-  // like keeping it. See `vite.pinned.config.ts`.
-  if (PINNED_COMMIT !== null) return
+  // like keeping it. See `vite.pinned.config.ts`. A pull-request preview is
+  // the same kind of copy at `pr/<number>/`, and the same rule.
+  if (IS_PINNED) return
   // Guard five, and the same argument as guard four seen from the other side.
   // An archived build knows it is not the site; a package build does not know
   // *what* it is under — it was made for a relative base precisely so that one
@@ -189,8 +190,14 @@ const RECOVERED = 'metacooler-viewer:unpinned'
  * mount an interface over a page that is about to be replaced.
  */
 export function recoverPinnedNavigation(): boolean {
-  if (TARGET !== 'web' || PINNED_COMMIT !== null) return false
-  if (!window.location.pathname.startsWith(`${SITE_BASE}${ARCHIVE_SEGMENT}/`)) return false
+  if (TARGET !== 'web' || IS_PINNED) return false
+  const path = window.location.pathname
+  if (
+    !path.startsWith(`${SITE_BASE}${ARCHIVE_SEGMENT}/`) &&
+    !path.startsWith(`${SITE_BASE}${PULL_SEGMENT}/`)
+  ) {
+    return false
+  }
   if (!('serviceWorker' in navigator) || navigator.serviceWorker.controller === null) return false
   try {
     if (window.sessionStorage.getItem(RECOVERED) !== null) return false

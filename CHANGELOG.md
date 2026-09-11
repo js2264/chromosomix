@@ -14,6 +14,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every pull request gets a preview on the site.** A branch of this repository opened as a
+  pull request is built as a pinned copy and published at `…/pr/<number>/` beside the archived
+  pushes, replaced on every push and removed when the pull request closes; the About dialog lists
+  the open previews in a group of their own, and the pull request carries one comment with the
+  address. The preview job writes the archive branch and asks the deploy to publish, so the site
+  keeps one publisher (`docs/deploy.md`, "Pull requests get a preview").
+
 - **A lane can draw its values as colour, and multi-scale insulation does.**
   `heatmap` joins line, area and bars in the **style** picker: the value becomes
   a colour across the whole lane instead of a position in it, so it costs no

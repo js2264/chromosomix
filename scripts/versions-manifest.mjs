@@ -67,8 +67,42 @@ const COMMIT = /^[0-9a-f]{7,40}$/
  */
 const TAG = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/
 
+/** The path segment pull-request previews are published under, beside `v/`. */
+export const PULL_SEGMENT = 'pr'
+
+/** A pull request number, as a directory name: no sign, no leading zero, no size. */
+const PULL_NUMBER = /^[1-9][0-9]{0,6}$/
+
 /** An empty manifest, which is what a first deploy starts from. */
-export const EMPTY = { latest: '', versions: [] }
+export const EMPTY = { latest: '', versions: [], pulls: [] }
+
+/**
+ * One pull-request preview, or `null` when the row could not name a directory.
+ *
+ * The number is the directory, so it is held to what a directory name can be;
+ * the title and the branch are arbitrary text somebody typed and are carried
+ * as text, bounded, because they end up in a menu and a tooltip and nowhere
+ * that interprets them (`src/ui/VersionPicker.ts`).
+ */
+function pullRow(entry) {
+  if (typeof entry !== 'object' || entry === null) return null
+  const number = Number(entry.number)
+  if (!Number.isInteger(number) || !PULL_NUMBER.test(String(number))) return null
+  const commit = entry.commit
+  if (typeof commit !== 'string' || !COMMIT.test(commit)) return null
+  return {
+    number,
+    commit,
+    title: string(entry.title).slice(0, 200),
+    branch: string(entry.branch).slice(0, 200),
+    date: string(entry.date),
+  }
+}
+
+/** Newest pull request first — the number is the order they were opened in. */
+function byNumberDesc(a, b) {
+  return b.number - a.number
+}
 
 /**
  * Is this a tag that may be published as a directory beside the commits?
@@ -97,6 +131,15 @@ export function parseManifest(text) {
     return { ...EMPTY }
   }
   if (typeof raw !== 'object' || raw === null || !Array.isArray(raw.versions)) return { ...EMPTY }
+  const pulls = []
+  const numbers = new Set()
+  for (const entry of Array.isArray(raw.pulls) ? raw.pulls : []) {
+    const row = pullRow(entry)
+    if (row === null || numbers.has(row.number)) continue
+    numbers.add(row.number)
+    pulls.push(row)
+  }
+  pulls.sort(byNumberDesc)
   const versions = []
   const seen = new Set()
   for (const entry of raw.versions) {
@@ -112,7 +155,7 @@ export function parseManifest(text) {
       tag: isPublishableTag(entry.tag) ? entry.tag : '',
     })
   }
-  return { latest: typeof raw.latest === 'string' ? raw.latest : '', versions }
+  return { latest: typeof raw.latest === 'string' ? raw.latest : '', versions, pulls }
 }
 
 function string(value) {
@@ -172,7 +215,40 @@ export function nextManifest(previous, build, keepRecent = KEEP_RECENT) {
     keep.add(entry.commit)
   }
 
-  return { latest: build.commit, versions: merged.filter((entry) => keep.has(entry.commit)) }
+  return {
+    latest: build.commit,
+    versions: merged.filter((entry) => keep.has(entry.commit)),
+    // Previews are somebody else's rows: a push to `main` neither adds one nor
+    // takes one away. They come and go with their pull requests, below.
+    pulls: previous.pulls ?? [],
+  }
+}
+
+/**
+ * The manifest with one pull request's preview in it — added, or replaced.
+ *
+ * Replaced rather than listed twice, because a pull request is pushed to many
+ * times and every push is a new preview under the same number: the directory
+ * is overwritten and this is the row that says which commit is in it now.
+ * Throws on a row that could not name a directory, for the reason
+ * {@link nextManifest} does: publishing a menu entry that 404s is the failure.
+ */
+export function withPull(previous, entry) {
+  const row = pullRow(entry)
+  if (row === null) throw new Error(`not a pull request preview: ${JSON.stringify(entry)}`)
+  const pulls = [row, ...(previous.pulls ?? []).filter((held) => held.number !== row.number)]
+  pulls.sort(byNumberDesc)
+  return { ...previous, pulls }
+}
+
+/** The manifest without one pull request's preview — what closing it does. */
+export function withoutPull(previous, number) {
+  return { ...previous, pulls: (previous.pulls ?? []).filter((held) => held.number !== number) }
+}
+
+/** The directory a preview is published in, relative to the site root. */
+export function pullDirectory(number) {
+  return `${PULL_SEGMENT}/${number}`
 }
 
 /**

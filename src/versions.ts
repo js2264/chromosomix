@@ -37,6 +37,17 @@ import { TARGET } from './version'
 /** The path segment archived builds are published under, below the site root. */
 export const ARCHIVE_SEGMENT = 'v'
 
+/**
+ * The path segment pull-request previews are published under, beside `v/`.
+ *
+ * A preview is an archived build of a branch (`.github/workflows/preview.yml`):
+ * the same copy, not installable and with no worker, at `pr/<number>/` — and
+ * unlike a push it is replaced on every push to the pull request and removed
+ * when the pull request closes, which is why it has a directory of its own and
+ * a group of its own in the menu rather than a row among the commits.
+ */
+export const PULL_SEGMENT = 'pr'
+
 /** The manifest's file name, at the site root. */
 export const MANIFEST_FILE = 'versions.json'
 
@@ -81,12 +92,28 @@ export interface VersionEntry {
   tag: string
 }
 
+/** One pull-request preview, published under `pr/<number>/`. */
+export interface PullEntry {
+  /** The pull request's number, and the directory the preview is under. */
+  number: number
+  /** The head commit the preview was built from, short. */
+  commit: string
+  /** The pull request's title, as typed, bounded. */
+  title: string
+  /** The branch it comes from, bounded. */
+  branch: string
+  /** The head commit's timestamp, ISO 8601, or `''`. */
+  date: string
+}
+
 /** The manifest, once it has survived being read. */
 export interface Versions {
   /** The commit the site root is serving. */
   latest: string
   /** Every published build, newest first. */
   entries: VersionEntry[]
+  /** Every open pull request with a preview, newest first. Often empty. */
+  pulls: PullEntry[]
 }
 
 /**
@@ -97,10 +124,22 @@ export interface Versions {
  * nothing. Exported for the test, because this is the one piece of arithmetic
  * here that has an off-by-one in it.
  */
-export function splitBase(base: string): { site: string; commit: string | null } {
-  const match = /^(.*\/)v\/([0-9a-f]{7,40})\/$/.exec(base)
-  if (match === null) return { site: base, commit: null }
-  return { site: match[1] as string, commit: match[2] as string }
+export function splitBase(base: string): {
+  site: string
+  commit: string | null
+  pull: number | null
+} {
+  const archived = /^(.*\/)v\/([0-9a-f]{7,40})\/$/.exec(base)
+  if (archived !== null) {
+    return { site: archived[1] as string, commit: archived[2] as string, pull: null }
+  }
+  // A preview: the same kind of copy, pinned to a pull request rather than to
+  // a commit — the commit it was built from is in the manifest, not the path.
+  const preview = /^(.*\/)pr\/([1-9][0-9]{0,6})\/$/.exec(base)
+  if (preview !== null) {
+    return { site: preview[1] as string, commit: null, pull: Number(preview[2]) }
+  }
+  return { site: base, commit: null, pull: null }
 }
 
 const HERE = splitBase(import.meta.env.BASE_URL)
@@ -116,6 +155,12 @@ export const SITE_BASE: string = HERE.site
 
 /** The commit this build is pinned to, or `null` when it is the site itself. */
 export const PINNED_COMMIT: string | null = HERE.commit
+
+/** The pull request this build previews, or `null` when it is not a preview. */
+export const PINNED_PULL: number | null = HERE.pull
+
+/** `true` for any copy served from a sub-path: an archived push or a preview. */
+export const IS_PINNED = PINNED_COMMIT !== null || PINNED_PULL !== null
 
 /**
  * `true` when this build does not know where it is served from.
@@ -172,6 +217,11 @@ export function versionPath(site: string, name: string | null): string {
   return name === null ? site : `${site}${ARCHIVE_SEGMENT}/${name}/`
 }
 
+/** Where a pull request's preview lives. */
+export function pullPath(site: string, number: number): string {
+  return `${site}${PULL_SEGMENT}/${number}/`
+}
+
 /**
  * Validate a manifest that arrived over the network.
  *
@@ -209,7 +259,43 @@ export function parseVersions(raw: unknown): Versions | null {
   // A manifest that lists nothing is the same as no manifest, and saying so
   // here means no caller has to check both.
   if (entries.length === 0) return null
-  return { latest, entries }
+
+  // Previews, on the same terms: a row that could not name a directory is
+  // dropped, and a manifest written before previews existed has none.
+  const pulls: PullEntry[] = []
+  const numbers = new Set<number>()
+  for (const item of Array.isArray(record['pulls']) ? record['pulls'] : []) {
+    if (typeof item !== 'object' || item === null) continue
+    const row = item as Record<string, unknown>
+    const number = row['number']
+    const commit = row['commit']
+    if (typeof number !== 'number' || !Number.isInteger(number) || number <= 0) continue
+    if (number > 9_999_999 || numbers.has(number)) continue
+    if (typeof commit !== 'string' || !COMMIT.test(commit)) continue
+    numbers.add(number)
+    pulls.push({
+      number,
+      commit,
+      title: text(row['title'], SUBJECT_LIMIT),
+      branch: text(row['branch'], 100),
+      date: text(row['date'], 32),
+    })
+  }
+  pulls.sort((a, b) => b.number - a.number)
+  return { latest, entries, pulls }
+}
+
+/**
+ * How one preview reads in a menu: `PR #12 · a1b2c3d — the title`.
+ *
+ * The number first, because it is the address (`pr/12/`) and the thing a
+ * reviewer has in the tab next door; the title after the dash, bounded the way
+ * a commit subject is, because it is the only part that says what the change
+ * is.
+ */
+export function pullLabel(entry: PullEntry): string {
+  const head = [`PR #${entry.number}`, entry.commit].join(' · ')
+  return entry.title === '' ? head : `${head} — ${entry.title}`
 }
 
 /** A string field, trimmed and bounded, or `''` if it was anything else. */

@@ -17,26 +17,49 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { isStaleShell, parseVersions, splitBase, versionLabel, versionPath } from '@/versions'
+import {
+  isStaleShell,
+  parseVersions,
+  pullLabel,
+  pullPath,
+  splitBase,
+  versionLabel,
+  versionPath,
+} from '@/versions'
 
 describe('splitBase', () => {
   it('reads the commit and the site out of an archived base', () => {
     expect(splitBase('/metacooler.js/v/a1b2c3d/')).toEqual({
       site: '/metacooler.js/',
       commit: 'a1b2c3d',
+      pull: null,
     })
     // A user or org site, served from the root.
-    expect(splitBase('/v/a1b2c3d/')).toEqual({ site: '/', commit: 'a1b2c3d' })
+    expect(splitBase('/v/a1b2c3d/')).toEqual({ site: '/', commit: 'a1b2c3d', pull: null })
     // A repository big enough that `--short` gives more than seven.
     expect(splitBase('/metacooler.js/v/a1b2c3d4e5/')).toEqual({
       site: '/metacooler.js/',
       commit: 'a1b2c3d4e5',
+      pull: null,
     })
+  })
+
+  it('reads the pull request out of a preview base, and the site with it', () => {
+    expect(splitBase('/metacooler.js/pr/12/')).toEqual({
+      site: '/metacooler.js/',
+      commit: null,
+      pull: 12,
+    })
+    expect(splitBase('/pr/7/')).toEqual({ site: '/', commit: null, pull: 7 })
+    // Not a directory a preview is ever published in.
+    for (const base of ['/metacooler.js/pr/0/', '/metacooler.js/pr/012/', '/metacooler.js/pr/x/', '/metacooler.js/pr/12']) {
+      expect(splitBase(base).pull).toBeNull()
+    }
   })
 
   it('says a plain base is pinned to nothing', () => {
     for (const base of ['/', '/metacooler.js/', './']) {
-      expect(splitBase(base)).toEqual({ site: base, commit: null })
+      expect(splitBase(base)).toEqual({ site: base, commit: null, pull: null })
     }
   })
 
@@ -55,6 +78,45 @@ describe('splitBase', () => {
   })
 })
 
+describe('pullPath', () => {
+  it('sends a preview to its own directory, and round-trips with splitBase', () => {
+    expect(pullPath('/metacooler.js/', 12)).toBe('/metacooler.js/pr/12/')
+    expect(splitBase(pullPath('/', 3))).toEqual({ site: '/', commit: null, pull: 3 })
+  })
+})
+
+describe('the previews in a manifest', () => {
+  const manifest = {
+    latest: 'a1b2c3d',
+    versions: [{ commit: 'a1b2c3d', version: '0.12.0', date: '2026-09-11T10:00:00Z', subject: 'x', tag: '' }],
+    pulls: [
+      { number: 12, commit: 'b2c3d4e', title: 'Remote sources', branch: 'claude/remote', date: '2026-09-11T11:00:00Z' },
+      { number: 40, commit: 'c3d4e5f', title: 'Later', branch: 'later', date: '2026-09-12T11:00:00Z' },
+      { number: 40, commit: 'ffffff1', title: 'dup', branch: 'dup', date: '' },
+      { number: 0, commit: 'd4e5f60', title: 'not a number', branch: '', date: '' },
+      { number: 13, commit: 'not-a-commit', title: 'no dir', branch: '', date: '' },
+    ],
+  }
+
+  it('reads them newest first, one per number, dropping what cannot name a directory', () => {
+    const read = parseVersions(manifest)
+    expect(read?.pulls.map((pull) => pull.number)).toEqual([40, 12])
+    expect(read?.pulls[0]?.commit).toBe('c3d4e5f')
+  })
+
+  it('reads a manifest written before previews existed as one with none', () => {
+    const { pulls: _pulls, ...older } = manifest
+    expect(parseVersions(older)?.pulls).toEqual([])
+  })
+
+  it('labels a preview by its number and commit, then its title', () => {
+    expect(pullLabel({ number: 12, commit: 'b2c3d4e', title: 'Remote sources', branch: 'x', date: '' })).toBe(
+      'PR #12 · b2c3d4e — Remote sources',
+    )
+    expect(pullLabel({ number: 12, commit: 'b2c3d4e', title: '', branch: 'x', date: '' })).toBe('PR #12 · b2c3d4e')
+  })
+})
+
 describe('versionPath', () => {
   it('sends the newest build to the site root, where the worker is', () => {
     expect(versionPath('/metacooler.js/', null)).toBe('/metacooler.js/')
@@ -66,7 +128,7 @@ describe('versionPath', () => {
 
   it('round-trips with splitBase, which is the property that matters', () => {
     const path = versionPath('/metacooler.js/', 'a1b2c3d')
-    expect(splitBase(path)).toEqual({ site: '/metacooler.js/', commit: 'a1b2c3d' })
+    expect(splitBase(path)).toEqual({ site: '/metacooler.js/', commit: 'a1b2c3d', pull: null })
   })
 })
 

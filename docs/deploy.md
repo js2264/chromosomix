@@ -413,6 +413,61 @@ code**, so a fix shipped afterwards is not code they are executing. Their way ou
 a real check), or a hard reload. There is no way to reach back into a shell that is already being
 served — which is the argument for the update bar existing at all.
 
+### Pull requests get a preview
+
+Every pull request from a branch of this repository is published the same way a push is, at
+
+```
+https://<owner>.github.io/<repo>/pr/<number>/
+```
+
+so a reviewer opens the change rather than reading it, and a figure made on a branch can be shown
+before it lands. `.github/workflows/preview.yml` runs on `opened`, `synchronize`, `reopened` and
+`closed`: it checks out the pull request's **head** (not the merge commit, so the build stamps
+itself with the hash the reviewer sees on the branch), typechecks, builds a pinned copy with
+`PINNED_BASE=<base>pr/<number>/` — `vite.pinned.config.ts` accepts that second shape, and the same
+`check-pinned-build.mjs` asserts it — and puts it on `pages-archive` beside the archived pushes,
+under `pr/<number>/`, with one row in `versions.json`'s `pulls` list (`scripts/archive-preview.mjs`,
+whose rules are in `versions-manifest.mjs` beside the retention rules and are held by the same
+test). Then it posts one comment on the pull request with the address, updated on every push rather
+than repeated.
+
+Three things differ from an archived push, and each is a decision:
+
+- **A preview is replaced, not accumulated.** A pull request is pushed to many times, and every
+  push is a new preview under the same number. The row says which commit is in it now, and the
+  About dialog on a preview says so too; the picker selects the preview's row only when the running
+  commit is the one the manifest names, so a page loaded before a push is offered the row unselected
+  rather than told it is something it is not.
+- **A preview is removed when the pull request closes**, merged or not. A review copy that
+  outlives its review is a stale build with a permanent address; a merged change is reachable at
+  `v/<commit>/` of the push that carried it, which is the address to cite. The `closed` run deletes
+  the directory and the row and republishes.
+- **The preview job does not deploy.** Pages replaces the whole site on every deployment, and the
+  site's root is `main`'s build, which a pull-request job does not have. So the job writes the
+  archive branch and dispatches `deploy.yml`, which builds `main`, copies `v/` *and* `pr/` back in,
+  and deploys — one publisher, one `pages` concurrency group, nothing to keep in step. The comment
+  on the pull request says the address appears a few minutes after it, which is that deploy. One
+  wrinkle of sharing the group: GitHub holds a single *pending* run per group and cancels it when
+  another joins the queue, so a job whose pull request has been pushed to again while it was
+  building leaves the dispatch to the run waiting behind it — otherwise its own dispatch would
+  cancel that run and publish a preview the branch had already moved past. A burst of pushes
+  therefore ends with the newest preview published, once.
+
+The About dialog lists previews under **Pull request previews**, after the builds and never among
+them: a preview is somebody's work in progress, and a reviewer should not have to tell it apart from
+a release by its label. The service worker passes navigations under `pr/` through exactly as it does
+under `v/`, and `recoverPinnedNavigation()` covers both prefixes, for the reason given above.
+
+**Whose code runs.** A pull request from a fork carries a read-only token and no secrets, and this
+job needs to write a branch. It is skipped for forks at the job's `if` rather than granted
+`pull_request_target`, which would run the fork's code with this repository's permissions. A
+maintainer who wants a preview of a fork's change pushes it to a branch here.
+
+**What it costs.** One pinned build per open pull request, ~5 MB, inside the same 1 GB budget the
+archive lives in, and gone when the pull request is. A pull request open for a month with fifty
+pushes still costs one directory.
+
 ## Why Pages works at all for this app
 
 Worth recording, because it is the usual reason a wasm app *cannot* be on Pages: GitHub Pages does

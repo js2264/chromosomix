@@ -1,0 +1,196 @@
+name: Preview pull requests
+
+# Every pull request from a branch of this repository is published beside the
+# archived pushes, at
+#
+#   https://<owner>.github.io/<repo>/pr/<number>/
+#
+# so a reviewer opens the change rather than reading it, and a figure made on a
+# branch can be shown before it lands. It is the same arrangement as
+# `v/<commit>/` in deploy.yml — a pinned build on the `pages-archive` branch,
+# listed in `versions.json` and offered from the About dialog, in a group of
+# its own — with two differences: a preview is replaced on every push to the
+# pull request instead of accumulating, and it is removed when the pull request
+# closes, because a review copy that outlives its review is a stale build with
+# a permanent address (docs/deploy.md, "Pull requests get a preview").
+#
+# **Who publishes.** Not this workflow. Pages replaces the whole site on every
+# deployment, and the site's root is `main`'s build, which this job does not
+# have. So this job writes the preview into the archive branch and *dispatches*
+# deploy.yml, which builds `main`, copies `v/` and `pr/` back in from the
+# branch, and deploys — one publisher, one concurrency group, no second copy of
+# the assembly step to drift. A run dispatched by the workflow token is one of
+# the two event kinds GitHub does deliver for that token.
+#
+# **Whose code runs.** `pull_request` from a fork carries a read-only token and
+# no secrets; this job needs to write a branch, so a fork's pull request is
+# skipped at the `if` below rather than granted `pull_request_target`, which
+# would run the fork's code with this repository's permissions. A maintainer
+# who wants a preview of a fork's change pushes it to a branch here.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions: {}
+
+# The same group as deploy.yml, so a preview never writes the archive branch
+# while a deploy is reading it, and never cancels one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  ARCHIVE_BRANCH: pages-archive
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      # The pull request's own head, not the merge commit `pull_request` checks
+      # out by default: the build stamps itself with the commit it was made from
+      # (`vite.config.ts` asks git), and a reviewer comparing the stamp in the
+      # About dialog with the branch should see the same hash. On `closed` the
+      # head still resolves — GitHub keeps `refs/pull/<n>/head` — and only the
+      # scripts are needed from it.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # The same resolution as deploy.yml, because the preview is served under
+      # the same site and Vite bakes the base into every asset URL.
+      - name: Resolve base path
+        id: base
+        run: |
+          override='${{ vars.BASE_PATH }}'
+          repo='${{ github.event.repository.name }}'
+          if [ -n "$override" ]; then
+            base="$override"
+          elif [ -f public/CNAME ] || [ "${repo%.github.io}" != "$repo" ]; then
+            base='/'
+          else
+            base="/$repo/"
+          fi
+          if [ -f public/CNAME ]; then host="$(tr -d '[:space:]' < public/CNAME)"; else host='${{ github.repository_owner }}.github.io'; fi
+          echo "path=$base" >> "$GITHUB_OUTPUT"
+          echo "url=https://${host}${base}pr/${{ github.event.number }}/" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        if: github.event.action != 'closed'
+        run: npm ci
+
+      # A preview of a tree that does not typecheck is a blank page with a
+      # console full of errors, so the check runs first. `build:pinned` does not
+      # typecheck on its own for the reason deploy.yml gives.
+      - name: Typecheck
+        if: github.event.action != 'closed'
+        run: npx tsc --noEmit
+
+      - name: Build the preview
+        if: github.event.action != 'closed'
+        run: npm run build:pinned
+        env:
+          PINNED_BASE: ${{ steps.base.outputs.path }}pr/${{ github.event.number }}/
+
+      # Shallow and by token, exactly as deploy.yml fetches it.
+      - name: Fetch the archive of published builds
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$ARCHIVE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$ARCHIVE_BRANCH" "$remote" archive
+          else
+            echo "No $ARCHIVE_BRANCH branch yet — starting one."
+            mkdir archive
+            git -C archive init --quiet --initial-branch "$ARCHIVE_BRANCH"
+            git -C archive remote add origin "$remote"
+          fi
+
+      - name: Add this preview to the archive
+        if: github.event.action != 'closed'
+        run: node scripts/archive-preview.mjs archive dist-pinned '${{ github.event.number }}'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+
+      - name: Remove this preview from the archive
+        if: github.event.action == 'closed'
+        run: node scripts/archive-preview.mjs archive --remove '${{ github.event.number }}'
+
+      # Fatal here, unlike the deploy's archive step: the archive *is* the
+      # preview, and a run that failed to write it has published nothing.
+      - name: Publish the archive
+        run: |
+          set -euo pipefail
+          cd archive
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --quiet --cached; then
+            echo "Nothing changed."
+          else
+            git commit --quiet -m 'preview #${{ github.event.number }}: ${{ github.event.action }}'
+            git push --quiet origin "HEAD:refs/heads/$ARCHIVE_BRANCH"
+          fi
+
+      # The publisher. `main` is what it builds and deploys, with `v/` and `pr/`
+      # copied back in from the branch this job just wrote.
+      #
+      # Left to the next run when the pull request has been pushed to again
+      # since this one began. GitHub holds one *pending* run per concurrency
+      # group and cancels it when another run joins the queue — so dispatching
+      # the deploy here, while the newer push's preview is waiting behind this
+      # run, would cancel that preview and publish a stale one under a comment
+      # naming a commit the branch no longer ends in. The waiting run makes the
+      # same check, finds the head still its own, and dispatches — publishing
+      # everything in the archive, this preview's replacement included. A close
+      # always dispatches, because nothing follows it; and if the question
+      # cannot be asked, the answer is to publish.
+      - name: Ask the deploy to publish the site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event.action }}' != 'closed' ]; then
+            head="$(gh pr view '${{ github.event.number }}' --repo '${{ github.repository }}' --json headRefOid --jq .headRefOid 2>/dev/null || echo "$BUILT")"
+            if [ -n "$head" ] && [ "$head" != "$BUILT" ]; then
+              echo "The pull request has moved on to ${head:0:7}; the preview run for that push will publish."
+              exit 0
+            fi
+          fi
+          gh workflow run deploy.yml --ref '${{ github.event.repository.default_branch }}'
+
+      # One comment per pull request, updated rather than repeated, so the
+      # thread carries the address once and says when it stopped answering.
+      - uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.base.outputs.url }}
+          ACTION: ${{ github.event.action }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const marker = '<!-- metacooler-preview -->'
+            const { PREVIEW_URL, ACTION, HEAD } = process.env
+            const short = HEAD.slice(0, 7)
+            const body = ACTION === 'closed'
+              ? `${marker}\nThe preview of this pull request has been taken down; it was published at ${PREVIEW_URL} while the pull request was open.`
+              : `${marker}\n**Preview:** ${PREVIEW_URL}\n\nBuilt from ${short}. It appears a few minutes after this comment, once the deploy that publishes the site has run; every push here replaces it, and it is removed when the pull request closes. The About dialog lists it under *Pull request previews*.`
+            const { owner, repo } = context.repo
+            const issue_number = context.issue.number
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 })
+            const mine = comments.find((c) => typeof c.body === 'string' && c.body.startsWith(marker))
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body })
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body })

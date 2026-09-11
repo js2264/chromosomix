@@ -35,9 +35,12 @@ import { COMMIT, TARGET } from '../version'
 import { takeNewestBuild } from '../pwa'
 import {
   PINNED_COMMIT,
+  PINNED_PULL,
   SITE_BASE,
   fetchVersions,
   isStaleShell,
+  pullLabel,
+  pullPath,
   versionLabel,
   versionPath,
   type Versions,
@@ -70,6 +73,12 @@ function goTo(commit: string | null): void {
  * `stuck` says we already know this page is not the newest, which is the case
  * where the worker has to be got out of the way rather than asked politely.
  */
+/** A preview is a navigation like any other build: the view comes along. */
+function goToPull(number: number): void {
+  const path = pullPath(SITE_BASE, number)
+  window.location.assign(`${path}${window.location.search}${window.location.hash}`)
+}
+
 async function goToNewest(stuck: boolean): Promise<void> {
   if (await takeNewestBuild(stuck)) return
   goTo(null)
@@ -123,11 +132,14 @@ export function versionPicker(): HTMLElement | null {
     // No list. On a dev server that is the truth and the end of it; on a pinned
     // build it is a reader stranded in an old commit with nothing to click, so
     // the way out is offered from what this build already knows about itself.
-    if (PINNED_COMMIT === null) {
+    if (PINNED_COMMIT === null && PINNED_PULL === null) {
       note.textContent = 'This deployment does not publish a list of past builds.'
       return
     }
-    note.textContent = `This build is pinned to commit ${PINNED_COMMIT}, and the list of published builds could not be read.`
+    note.textContent =
+      PINNED_PULL !== null
+        ? `This build is the preview of pull request #${PINNED_PULL}, and the list of published builds could not be read.`
+        : `This build is pinned to commit ${PINNED_COMMIT}, and the list of published builds could not be read.`
     row.appendChild(latestButton())
   })
 
@@ -144,7 +156,14 @@ function picker(versions: Versions): HTMLElement[] {
   // what is running.
   const current = PINNED_COMMIT ?? COMMIT
   const running = versions.entries.find((entry) => entry.commit === current)
-  const known = running !== undefined
+  // A preview knows the pull request it is, from its path; the manifest says
+  // which commit that preview holds now, which may not be this one if a push
+  // has landed since the page was loaded — then the row is offered unselected.
+  const preview =
+    PINNED_PULL === null
+      ? undefined
+      : versions.pulls.find((entry) => entry.number === PINNED_PULL && entry.commit === COMMIT)
+  const known = running !== undefined || preview !== undefined
 
   const select = el('select', {
     class: 'select version-select',
@@ -157,7 +176,12 @@ function picker(versions: Versions): HTMLElement[] {
     // does not open claiming to be something it is not.
     const unknown = el('option', {
       value: '',
-      text: COMMIT === '' ? 'this build' : `this build · ${COMMIT}`,
+      text:
+        PINNED_PULL !== null
+          ? `this preview of PR #${PINNED_PULL}${COMMIT === '' ? '' : ` · ${COMMIT}`}`
+          : COMMIT === ''
+            ? 'this build'
+            : `this build · ${COMMIT}`,
     })
     unknown.disabled = true
     select.appendChild(unknown)
@@ -173,17 +197,37 @@ function picker(versions: Versions): HTMLElement[] {
     if (entry.subject !== '') option.title = entry.subject
     select.appendChild(option)
   }
-  select.value = known ? current : ''
+
+  // Previews in a group of their own, after the builds: they are somebody's
+  // work in progress, not versions of the site, and a reviewer looking for one
+  // should not have to tell it apart from a release by its label.
+  if (versions.pulls.length > 0) {
+    const group = el('optgroup', { attrs: { label: 'Pull request previews' } })
+    for (const entry of versions.pulls) {
+      const option = el('option', { value: `pr:${entry.number}`, text: pullLabel(entry) })
+      option.title = [entry.branch, entry.date.slice(0, 10)].filter((part) => part !== '').join(' · ')
+      group.appendChild(option)
+    }
+    select.appendChild(group)
+  }
+  select.value = preview !== undefined ? `pr:${preview.number}` : known ? current : ''
 
   // Running the root build, but not the one the root now publishes: a worker is
   // serving a cache from an earlier visit. It changes what "go to the newest"
   // has to mean, and it is worth saying out loud — until this was written the
   // menu simply showed an older build as the selected one and left the reader
   // to work out why picking the newest did nothing.
-  const stale = isStaleShell(COMMIT, versions.latest, PINNED_COMMIT)
+  // A preview is pinned for this purpose: it is not the root, so the root's
+  // cache is not what is serving it.
+  const stale = isStaleShell(COMMIT, versions.latest, PINNED_PULL === null ? PINNED_COMMIT : COMMIT)
 
   select.addEventListener('change', () => {
     const commit = select.value
+    if (commit.startsWith('pr:')) {
+      const number = Number(commit.slice('pr:'.length))
+      if (number !== PINNED_PULL) goToPull(number)
+      return
+    }
     if (commit === '' || commit === current) return
     // The newest build is served from the site root, which is the copy with the
     // service worker and the install prompt behind it. Sending someone to
@@ -227,6 +271,19 @@ function picker(versions: Versions): HTMLElement[] {
   // reader; `…/v/v0.5.1/` is what belongs in a methods section, and offering it
   // only when the build in front of you *is* a release is what keeps it from
   // being a line of chrome nobody reads.
+  if (preview !== undefined) {
+    rows.push(
+      el('p', {
+        class: 'version-note',
+        text:
+          `This is the preview of pull request #${preview.number}` +
+          `${preview.branch === '' ? '' : ` (${preview.branch})`}, built from ${preview.commit}. ` +
+          'It is replaced on every push to the pull request and removed when it closes, so it is ' +
+          'not an address to cite.',
+      }),
+    )
+  }
+
   if (running !== undefined && running.tag !== '') {
     const href = new URL(versionPath(SITE_BASE, running.tag), window.location.href).href
     rows.push(
@@ -263,10 +320,15 @@ function picker(versions: Versions): HTMLElement[] {
  * characters.
  */
 export function mountPinnedNotice(): void {
-  if (TARGET !== 'web' || PINNED_COMMIT === null) return
+  if (TARGET !== 'web' || (PINNED_COMMIT === null && PINNED_PULL === null)) return
   if (remembered(DISMISSED)) return
 
-  const what = el('span', { text: `You are running the build from commit ${PINNED_COMMIT}.` })
+  const what = el('span', {
+    text:
+      PINNED_PULL !== null
+        ? `You are running the preview of pull request #${PINNED_PULL}.`
+        : `You are running the build from commit ${PINNED_COMMIT}.`,
+  })
   const close = el('button', {
     class: 'btn-quiet update-close',
     text: '×',
@@ -288,6 +350,14 @@ export function mountPinnedNotice(): void {
   document.body.appendChild(bar)
 
   void fetchVersions().then((versions) => {
+    if (PINNED_PULL !== null) {
+      const pull = versions?.pulls.find((candidate) => candidate.number === PINNED_PULL)
+      if (pull === undefined) return
+      what.textContent =
+        `You are running the preview of pull request #${PINNED_PULL}` +
+        `${pull.branch === '' ? '' : ` (${pull.branch})`}, built from ${pull.commit}.`
+      return
+    }
     const entry = versions?.entries.find((candidate) => candidate.commit === PINNED_COMMIT)
     const date = entry === undefined ? '' : entry.date.slice(0, 10)
     if (date === '') return
