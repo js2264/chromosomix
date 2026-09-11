@@ -15,7 +15,7 @@
  * no longer sends.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   AnalysisRunner,
@@ -23,6 +23,7 @@ import {
   type RunnerHost,
   type RunTarget,
 } from '@/analysis/runner'
+import { actions, forgetActions, resetActions } from '@/state/actions'
 import { READY } from '@/analysis/types'
 import type {
   AnalysisContext,
@@ -960,6 +961,136 @@ describe('a sequence or a track chosen as an input', () => {
     const run = fake.seen.find((message) => message.kind === 'run')
     if (run?.kind !== 'run') throw new Error('the job was not dispatched')
     expect(run.inputs.vectors).toBeUndefined()
+    runner.destroy()
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The console's record of a job (§23).
+ *
+ * The promise the whole feature rests on is that a line is written **per job**
+ * rather than per press, and the case that proves it is *run on all maps*: the
+ * drawer shows one result at a time, so the other five commands of a six-map
+ * batch exist nowhere but here. The second promise is that a run which produced
+ * nothing is still recorded — a failure and a Stop are exactly when a reader
+ * wants the parameters back, and both leave the runner without a result to read
+ * a provenance off.
+ */
+describe('the console record of a job', () => {
+  beforeEach(() => {
+    resetActions()
+  })
+
+  afterEach(() => {
+    forgetActions()
+  })
+
+  const lines = () => actions().filter((entry) => entry.kind === 'run')
+
+  it('writes one line per map of a batch, each naming its own file', async () => {
+    const { runner, fake } = harness(FRAMING, null, DECK, { block: null, map: 'lead' })
+    runner.runAll(task('coverage'), {}, DECK)
+    for (let at = 0; at < DECK.length; at++) {
+      await settle()
+      fake.finish()
+      await settle()
+    }
+    expect(lines()).toHaveLength(3)
+    expect(lines().map((entry) => entry.where)).toEqual(['lead.cool', 'rep2.cool', 'rep3.cool'])
+    expect(lines().every((entry) => entry.status === 'ok')).toBe(true)
+    runner.destroy()
+  })
+
+  it('names the file each job of a batch actually ran on, not the batch\u2019s framing', async () => {
+    // A batch shares one framing across every target (§18.4 takes it once, when
+    // Run is pressed), and an `AnalysisFraming` carries a uri — so the second
+    // job is dispatched against rep2.cool holding a framing that says lead.cool.
+    // Invisible in the drawer, which prints the label; not invisible in a
+    // command, where it is a reader running the wrong experiment in a shell.
+    const { runner, fake } = harness(FRAMING, null, DECK, { block: null, map: 'lead' })
+    runner.runAll(task('coverage'), {}, DECK)
+    for (let at = 0; at < DECK.length; at++) {
+      await settle()
+      fake.finish()
+      await settle()
+    }
+    const files = lines().map((entry) => entry.line.split(' ')[2])
+    expect(files).toEqual([URI, 'rep2.cool', 'rep3.cool'])
+    // The provenance block above the command says the same file it does: a row
+    // that quoted two would be worse than either.
+    expect(lines()[1].detail.some((line) => line === '# file: rep2.cool')).toBe(true)
+    expect(lines()[1].detail.some((line) => line.includes(URI))).toBe(false)
+    runner.destroy()
+  })
+
+  it('opens the line when the job starts and closes it when the job ends', async () => {
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), {})
+    await settle()
+    // On the worker, and on screen: a batch of thirty is only legible while it
+    // is in progress, and so is the console.
+    expect(lines()[0].status).toBe('running')
+    fake.finish()
+    await settle()
+    expect(lines()[0].status).toBe('ok')
+    expect(lines()[0].ms).toBeGreaterThanOrEqual(0)
+    runner.destroy()
+  })
+
+  it('keeps the line of a run that failed, with the failure on it', async () => {
+    // No source to mount: the job fails before it reaches the worker, which is
+    // the shape of every failure that has no result to take a provenance from.
+    const { runner } = harness(FRAMING, null, [], { block: null, map: 'lead' }, {
+      source: () => null,
+    })
+    runner.run(task('coverage'), {})
+    await settle()
+    expect(lines()).toHaveLength(1)
+    expect(lines()[0].status).toBe('failed')
+    expect(lines()[0].error).toContain('contact map')
+    // The command is still there, written from the parameters the job was
+    // queued with — which is the whole reason a failure is recorded at all.
+    expect(lines()[0].line).toContain('metacooler-run coverage')
+    runner.destroy()
+  })
+
+  it('writes a line for a press of Run that never became a job', async () => {
+    // Refused before anything is queued: there is no framing, so there is no
+    // command either — a `--window` is written from one. The line is prose with
+    // the reason on it, which is the answer to "why did nothing happen when I
+    // pressed run at two o'clock".
+    const { runner } = harness(null)
+    runner.run(task('coverage'), {})
+    await settle()
+    expect(lines()).toHaveLength(1)
+    expect(lines()[0].status).toBe('failed')
+    expect(lines()[0].shell).toBe(false)
+    expect(lines()[0].error).toContain('no contact map')
+    runner.destroy()
+  })
+
+  it('says a session-wide refusal once, however many maps the batch was aimed at', async () => {
+    // Both pre-flight refusals are about the session rather than the target, so
+    // three copies of one fact would be three lines a reader has to read before
+    // finding out they are the same line.
+    const { runner } = harness(null, null, DECK)
+    runner.runAll(task('coverage'), {}, DECK)
+    await settle()
+    expect(lines()).toHaveLength(1)
+    runner.destroy()
+  })
+
+  it('marks a stopped run as cancelled rather than as a failure', async () => {
+    const { runner } = harness()
+    runner.run(task('coverage'), {})
+    await settle()
+    runner.cancel('coverage')
+    await settle()
+    expect(lines()[0].status).toBe('cancelled')
+    expect(lines()[0].error).toBeUndefined()
     runner.destroy()
   })
 })

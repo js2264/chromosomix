@@ -7482,7 +7482,14 @@ span.deck-name {
 
 .analysis-drawer {
   position: absolute;
-  inset-block: 0;
+  top: 0;
+  /* Stops at the console's roof when there is one (§23). Both of these float
+     over the body — one down the right edge, one along the bottom — so at their
+     full sizes they overlap in the corner, and what was under the corner was
+     this drawer's run row: `run`, `run on all maps` and the cancel beside them,
+     hidden under a panel that lists the runs they start. The console writes the
+     property when it opens and drops it when it closes. */
+  bottom: var(--console-height, 0px);
   right: 0;
   z-index: 30;
   display: flex;
@@ -8119,4 +8126,283 @@ span.deck-name {
    without naming it would read as a mistake. */
 .meta-legend-more {
   font-style: italic;
+}
+
+/* ==========================================================================
+   The console: what this window has done, along the bottom of it (§23)
+   ========================================================================== */
+
+/*
+ * A drawer, and deliberately the *same* drawer.
+ *
+ * `.analysis-drawer` above is the pattern this follows in every respect that a
+ * reader can see — it floats over the body rather than joining the flex row, it
+ * carries a shadow off the edge that faces the window so it reads as "over"
+ * rather than as a fifth column, it has no backdrop and it swallows nothing.
+ * Only the axis is different: this one spans the body and is dragged by its top
+ * edge, because a command line is one long line and a day is a few dozen of
+ * them. What that buys is the pair being usable at once — the drawer down the
+ * right, the console along the bottom, and the map in the corner between them.
+ *
+ * The shadow is the one number copied rather than shared: the drawer's is cast
+ * leftward off a vertical edge and this one upward off a horizontal one, so
+ * they are the same offsets with the axes swapped.
+ */
+.console-drawer {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* A backstop under the inline height the drag writes: a window shrunk after a
+     drag would otherwise be a panel taller than the body it is inside. The
+     panel re-clamps itself on a resize as well, and this is what holds between
+     the resize and the repaint. */
+  max-height: 90%;
+  background: var(--bg-sunken);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -12px 24px -18px rgb(0 0 0 / 55%);
+}
+
+.console-drawer.collapsed {
+  display: none;
+}
+
+/* The mirror of the drawer's left-edge handle: the same six pixels, turned a
+   quarter-turn along the top edge, with the cursor that says which way it
+   moves. */
+.console-drawer > .panel-column-handle {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 6px;
+  cursor: row-resize;
+}
+
+.console-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.console-head-mark {
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+.console-title {
+  margin: 0;
+  font-size: var(--step-0);
+  font-weight: 600;
+}
+
+/* The count, and then the whole of the rest of the row pushed right: the three
+   buttons are actions on the list and belong beside the ✕ rather than beside
+   the name of the panel. */
+.console-count {
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-output {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.console-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.3rem 0 0.6rem;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--step--1);
+}
+
+.console-empty {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  max-width: 62ch;
+  font-family: var(--sans);
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* The day, across the list rather than in a column of its own. It is the unit a
+   reader asks the panel for — "what did I run on Tuesday" — so it carries its
+   own count and its own copy, and the header's copy is the one that means all
+   of them. */
+.console-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.9rem;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--sans);
+  font-size: var(--step--1);
+}
+
+.console-day-name {
+  font-weight: 600;
+}
+
+.console-day-count {
+  color: var(--text-faint);
+  flex: 1 1 auto;
+}
+
+.console-day-copy {
+  flex: 0 0 auto;
+}
+
+.console-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.2rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.console-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.console-time {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.1rem;
+}
+
+.console-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  padding-top: 0.15rem;
+  color: var(--text-dim);
+}
+
+/* The four outcomes, on the mark alone. A failed row is not painted red across
+   its whole width: the line is a command, and a command is the same command
+   whether or not it worked — what failed is the run, and the message under it
+   already says so in the colour refusals are written in. */
+.console-row.is-failed .console-mark {
+  color: var(--danger);
+}
+
+.console-row.is-ok .console-mark {
+  color: var(--ok);
+}
+
+.console-row.is-cancelled .console-mark,
+.console-row.is-interrupted .console-mark {
+  color: var(--text-faint);
+}
+
+.console-lines {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Wrapped rather than scrolled sideways, and indented where it wraps: a command
+   with eleven flags is two lines on a laptop, and the second one hanging under
+   the first is what says it is a continuation rather than a second command. */
+.console-line {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  padding-left: 1.2rem;
+  text-indent: -1.2rem;
+  color: var(--text-dim);
+}
+
+/* The line a shell would take, in the body colour: it is the thing this panel
+   is for, and everything around it is context. */
+.console-line.is-shell {
+  color: var(--text);
+}
+
+.console-note,
+.console-detail {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--text-faint);
+}
+
+.console-error {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--danger);
+}
+
+.console-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--text-faint);
+  max-width: 32%;
+}
+
+.console-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-ms {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shown on hover of its own row, like every other per-row action in the app —
+   a copy button on five hundred rows at rest is five hundred marks competing
+   with the text they are about. It keeps its place either way, so nothing moves
+   under the pointer. */
+.console-row-copy {
+  flex: 0 0 auto;
+  opacity: 0;
+}
+
+.console-row:hover .console-row-copy,
+.console-row-copy:focus-visible {
+  opacity: 1;
+}
+
+/* On a phone the console is the whole of the bottom half, and the two columns
+   of context on the right are the first thing to go: the command is what the
+   panel is for, and a file name repeated on every row is what a heading already
+   says. */
+@media (max-width: 700px) {
+  .console-drawer {
+    max-height: 60%;
+  }
+
+  .console-meta {
+    display: none;
+  }
+
+  .console-title {
+    display: none;
+  }
 }

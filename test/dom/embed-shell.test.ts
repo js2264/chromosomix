@@ -119,6 +119,16 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('.drawer-slot')).not.toBeNull()
   })
 
+  it('has no console, so nothing about the page author is recorded or offered', () => {
+    // Window furniture in the strongest sense: what an embed would be logging is
+    // the page author's own afternoon, its bar has no room for the button, and a
+    // panel nobody can open is a keydown listener taking Escape inside somebody
+    // else's page (§21.2, §23).
+    const { root } = windowAt('?embed=1')
+    expect(root.querySelector('.console-drawer')).toBeNull()
+    expect(root.querySelector('[aria-label="console"]')).toBeNull()
+  })
+
   it('keeps all five in a window of its own, and no bar', () => {
     const { root } = windowAt('')
     expect(root.querySelectorAll('.panel-column')).toHaveLength(5)
@@ -130,6 +140,25 @@ describe('a window mounted as an embed', () => {
     expect(root.querySelector('.app-head')).not.toBeNull()
     expect(root.querySelector('.tabstrip')).not.toBeNull()
     expect(root.querySelector('.app-foot')).not.toBeNull()
+  })
+
+  it('puts the console under the body, and its button before the theme (§23)', () => {
+    const { root } = windowAt('')
+    // Under everything and across the whole body: the drawer is beside the map
+    // and this is below it, so both can be up without either covering the
+    // other's controls.
+    const panel = root.querySelector('.app-body > .console-drawer')
+    expect(panel).not.toBeNull()
+    expect(panel?.classList.contains('collapsed')).toBe(true)
+
+    // Immediately before the theme toggle, after the two buttons that take
+    // something *out* of this window — a link and a file — because the commands
+    // that repeat the day are the third of those.
+    const actions = Array.from(
+      root.querySelectorAll('.head-actions [aria-label]'),
+    ).map((node) => node.getAttribute('aria-label'))
+    expect(actions.indexOf('console')).toBeGreaterThanOrEqual(0)
+    expect(actions[actions.indexOf('console') + 1]).toBe('colour theme')
   })
 
   it('reads a hand-edited "no" as a plain window', () => {

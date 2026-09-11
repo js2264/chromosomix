@@ -21,6 +21,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { PREFIX, forgetEverything, storedItems } from '@/state/stored'
+import { resetActions } from '@/state/actions'
 import { STORES, store } from '@/state/idb'
 import { WORKSPACE_VERSION, flushWorkspace, forgetWorkspace, writeWorkspace } from '@/state/workspace'
 import { buildConfig } from '@/state/SessionConfig'
@@ -52,6 +53,9 @@ beforeEach(async () => {
 afterEach(() => {
   window.localStorage.clear()
   window.sessionStorage.clear()
+  // The log is a module singleton, so a test that planted one must not leave it
+  // in memory for the next: `storedItems` reads the list, not the raw key.
+  resetActions()
 })
 
 describe('storedItems', () => {
@@ -89,6 +93,30 @@ describe('storedItems', () => {
     // Counted once, as a preference or as a key, never as both.
     expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
     expect(items.find((item) => item.label === 'Bucket keys')?.detail).not.toContain('secret')
+  })
+
+  it('names the console on its own line rather than counting it as a setting', async () => {
+    // A list of the files a reader opened and the loci they looked at, which is
+    // exactly the kind of thing §11 says somebody on a borrowed machine is owed
+    // a straight answer about before they decide whether to press the button.
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    window.localStorage.setItem(
+      `${PREFIX}actions`,
+      JSON.stringify({
+        version: 1,
+        entries: [
+          { id: 'a', at: Date.now(), kind: 'open', line: 'opened patient_04.cool', status: 'ok' },
+        ],
+      }),
+    )
+    resetActions()
+    const items = await storedItems()
+    const recorded = items.find((item) => item.label === 'Console')
+    expect(recorded?.detail).toContain('1 line')
+    // Counted once, as a record or as a preference, never as both.
+    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
+    // The names themselves stay out of it: the count is what the reader needs.
+    expect(recorded?.detail).not.toContain('patient_04')
   })
 
   it('ignores keys that are not this app’s', async () => {

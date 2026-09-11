@@ -149,6 +149,7 @@ import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, demoExamples } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
+import { logAction } from '../state/actions'
 import {
   MAP_NAMES_SCOPE,
   mapLabelIn,
@@ -2048,6 +2049,24 @@ export class Session {
       const info = await task.promise
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
+      // The console's line for the file (§23). Here rather than at the door,
+      // because a `.pairs` and an `.mmetacool` both reach that door twice — once
+      // to be refused, and again with the answer to the question the refusal
+      // asked — and a record written on the way in would carry the URI the
+      // reader never got to look at.
+      logAction({
+        kind: 'open',
+        line: `opened ${fileLabel(uri)}`,
+        detail: [
+          `# file: ${uri}`,
+          `# via: ${source.kind}`,
+          `# layout: ${info.layout.kind}`,
+          ...(binning === undefined
+            ? []
+            : [`# binned at: ${binning.base} bp, ${binning.rungs} rung${binning.rungs === 1 ? '' : 's'}`]),
+        ],
+        where: fileLabel(uri),
+      })
       const names = genomes.table.data['name'] as string[]
       // `entries` is non-empty only for a map inside an mmetacool; the group
       // path is what says which of them is open (§3.4).
@@ -2448,6 +2467,17 @@ export class Session {
         )
       }
       client.destroy()
+      logAction({
+        kind: 'open',
+        line: `opened ${fileLabel(uri)} as a genome`,
+        detail: [
+          `# file: ${uri}`,
+          `# via: ${source.kind}`,
+          `# format: ${result.format}`,
+          `# sequences: ${result.contigs.length}`,
+        ],
+        where: fileLabel(uri),
+      })
       const assembly = assemblyOf({
         uri,
         name: fileLabel(uri),

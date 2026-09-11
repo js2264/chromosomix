@@ -125,6 +125,11 @@ const LUCIDE = [
   'bookmark',
   'bookmark-plus',
   'arrow-right',
+  // The console (§23), on the header and on its own heading. A prompt with a
+  // caret and a line beside it, because what that panel holds is the commands
+  // that would repeat the day — the same thing `metacooler-run` is typed into,
+  // which is the association the mark has to make in one glance at 15 px.
+  'terminal',
 ]
 
 /** Brand marks, by their Simple Icons slug. Filled, not stroked. */
