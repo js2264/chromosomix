@@ -201,10 +201,10 @@
     },
     {
       "number": 44,
-      "commit": "ab9b439",
+      "commit": "d09469e",
       "title": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox",
       "branch": "claude/remote-file-providers-tu9b1q",
-      "date": "2026-09-11T21:39:40Z"
+      "date": "2026-09-11T22:01:59Z"
     }
   ]
 }
