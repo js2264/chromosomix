@@ -1,6 +1,13 @@
 {
-  "latest": "fc95dee",
+  "latest": "d810b80",
   "versions": [
+    {
+      "commit": "d810b80",
+      "version": "0.12.0",
+      "date": "2026-09-12T00:35:58+02:00",
+      "subject": "Publish the generated hubs through the site, because the repository is private (#48)",
+      "tag": ""
+    },
     {
       "commit": "fc95dee",
       "version": "0.12.0",
@@ -131,13 +138,6 @@
       "commit": "dd5ae83",
       "version": "0.10.0",
       "date": "2026-08-14T01:13:59+02:00",
-      "subject": "chores: update CHANGELOG",
-      "tag": ""
-    },
-    {
-      "commit": "1f62409",
-      "version": "0.10.0",
-      "date": "2026-08-13T20:17:56+02:00",
       "subject": "chores: update CHANGELOG",
       "tag": ""
     },
