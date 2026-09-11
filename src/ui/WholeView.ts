@@ -182,6 +182,21 @@ export interface WholeViewProps {
   onScaleChange(scale: ScaleState): void
   /** A cell was clicked: open that sequence, or the block between two. */
   onOpenRegion(region: string, region2?: string): void
+  /**
+   * An axis label was clicked and that label is a **genome** name.
+   *
+   * Only reached where the axis is divided and labelled by genome, which for
+   * this view means a selection of several of them ({@link selection}); the
+   * whole-file picker has its own, beside the two other destinations it opens
+   * ({@link wholeFileLevel}). Both go to the same place, and the split is only
+   * that the picker hands over three callbacks and a selection needs one.
+   *
+   * Absent leaves the label opening as a *region*, which is not a broken path —
+   * `parseMetacoolerRange` takes a bare genome name and the region view offers
+   * the genome view from there. It is one screen longer than the gesture meant,
+   * which is why this exists.
+   */
+  onOpenGenome?(genome: string): void
   onError(err: unknown): void
   /**
    * Annotations to draw beside and on the map (spec §8).
@@ -263,6 +278,17 @@ export class WholeView {
    * never another pass over every pixel.
    */
   private ladder: BlockLadder | null = null
+  /**
+   * Whether the axis on screen is divided and labelled by **genome** — and so
+   * whether an axis label is a genome name or a contig one.
+   *
+   * A fact about the block rather than about the view, because two views arrive
+   * at it by different routes: the whole-file level sets the flag itself
+   * ({@link byGenome}), and a map of several ticked genomes has it set by the
+   * reader, which is the half that knows what was ticked. A boolean rather than
+   * the block it is read off, so nothing here outlives the panel's own copy.
+   */
+  private axisIsGenomes = false
 
   constructor(private readonly props: WholeViewProps) {
     this.level = props.level
@@ -382,13 +408,29 @@ export class WholeView {
         }
         props.onOpenRegion(groups.row.label)
       },
-      // A label is a contig, except at the whole-file level where the axis is
-      // divided by genome and the label is one of those — which no region
-      // parser accepts, and which the genome view is the answer to anyway.
-      onLabelClick: (_axis, name) =>
-        props.wholeFileLevel === undefined
-          ? props.onOpenRegion(name)
-          : props.wholeFileLevel.onOpenGenome(name),
+      // A label is a contig, except where the axis is divided by genome — the
+      // whole-file level, and a map of several ticked genomes — and there it is
+      // a genome name, which the genome view is the answer to.
+      //
+      // Dispatched on **what the axis is** rather than on which of the two
+      // views this is (`labelTarget`). The old test asked the second question
+      // and so had one answer for the picker and another for everything else,
+      // which is how a picture divided and labelled by genome came to open its
+      // labels as regions — a genome name is a legal range, so the click landed
+      // one screen short of where it meant to go rather than failing.
+      onLabelClick: (_axis, name) => {
+        const whole = props.wholeFileLevel
+        const opensGenomes = whole !== undefined || props.onOpenGenome !== undefined
+        if (labelTarget({ axisIsGenomes: this.axisIsGenomes, opensGenomes }) === 'region') {
+          props.onOpenRegion(name)
+          return
+        }
+        // Called on their objects rather than through a lifted reference: these
+        // are callbacks a caller wrote, and detaching one is a `this` a caller
+        // did not agree to.
+        if (whole !== undefined) whole.onOpenGenome(name)
+        else props.onOpenGenome?.(name)
+      },
       // On the diagonal a box is one region; anywhere else it is the rectangle
       // between two windows — of two chromosomes in the trans corner, or of one
       // chromosome against itself above its own diagonal, which is a picture
@@ -824,9 +866,18 @@ export class WholeView {
    * (`handleSelection`): the flag arrives set and this method passes it through.
    */
   private byGenome(result: MatrixResult): MatrixResult {
-    if (this.props.wholeFileLevel === undefined) return result
-    if (result.rowGenomes === undefined || result.colGenomes === undefined) return result
-    return { ...result, genomeBoundaries: true }
+    const block =
+      this.props.wholeFileLevel !== undefined &&
+      result.rowGenomes !== undefined &&
+      result.colGenomes !== undefined
+        ? { ...result, genomeBoundaries: true }
+        : result
+    // Recorded here because this is the one place every block this view installs
+    // passes through — the gated read, each rung of the ladder, and the block it
+    // adopts — and because the question it answers, "what is a label here", is
+    // the same question this method decides.
+    this.axisIsGenomes = block.genomeBoundaries === true
+    return block
   }
 
   /**
@@ -896,4 +947,30 @@ export class WholeView {
     this.gate.classList.add('hidden')
     this.panelHost.classList.add('hidden')
   }
+}
+
+/**
+ * Where a clicked axis label leads.
+ *
+ * One rule for both pictures that are divided by genome — the whole-file picker
+ * and a map of several ticked genomes — because a label means the same thing in
+ * both and a reader clicking one is asking the same question. It used to be
+ * decided by which view was asking, which is how the two came to disagree.
+ *
+ * `opensGenomes` is the second half and not a formality: a view with nowhere to
+ * take a genome name falls back to the region, which the range parser accepts
+ * (§5.4's first rule) and the region view then offers the genome view from. A
+ * label that did nothing would be worse than a label one screen from home.
+ *
+ * Exported for the test that pins it, beside the selection helpers below
+ * `MatrixPanel` and for the same reason: the rule is arithmetic and the view it
+ * is read in needs a canvas.
+ */
+export function labelTarget(axis: {
+  /** The axis is divided and labelled by genome (`MatrixResult.genomeBoundaries`). */
+  axisIsGenomes: boolean
+  /** This view has somewhere to take a genome name. */
+  opensGenomes: boolean
+}): 'genome' | 'region' {
+  return axis.axisIsGenomes && axis.opensGenomes ? 'genome' : 'region'
 }

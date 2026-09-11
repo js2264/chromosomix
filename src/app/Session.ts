@@ -6369,6 +6369,13 @@ export class Session {
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
+      // A selection of several genomes is divided and labelled by genome, so an
+      // axis label here is a MAG and the gesture on it is the one the genomes
+      // table's own rows answer. The same navigation, so the two doors into a
+      // genome are one door. Passed whatever was ticked: a selection of contigs
+      // never reaches it, because the reader only marks the genome runs as the
+      // axis when genomes were the thing chosen.
+      onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenRegion: (region, region2) =>
         this.navigate({
           uri: state.uri,

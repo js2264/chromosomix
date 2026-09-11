@@ -31,6 +31,7 @@ import { describe, expect, it } from 'vitest'
 import { IDENTITY_PLAN, selectionPooling } from '@/metacooler/pooling'
 import { selectionDrawsGenomes } from '@/worker/groups'
 import { separatorsFor } from '@/ui/MatrixPanel'
+import { labelTarget } from '@/ui/WholeView'
 import type { AxisGroup, MatrixResult } from '@/worker/protocol'
 
 const run = (label: string, start: number, end: number): AxisGroup => ({ label, start, end })
@@ -150,5 +151,35 @@ describe('pooling a selection of genomes', () => {
     expect(pooling.ids.length).toBe(6)
     expect(pooling.contigsPerCell).toBe(1)
     expect([...pooling.ids]).toEqual([0, 1, 2, 3, 4, 5])
+  })
+})
+
+/**
+ * And clicking one of those labels goes where the label says.
+ *
+ * The other half of dividing by genome, and it was the half that made the first
+ * one only half-done: the picture named MAGs and a click on a MAG opened a
+ * *region* view of it — a legal destination, since the range parser takes a bare
+ * genome name (§5.4), and one screen short of the genome view the gesture meant.
+ * The whole-file picker has always gone straight there. Both now dispatch on
+ * what the axis is rather than on which view is asking.
+ */
+describe('labelTarget', () => {
+  it('opens the genome where the axis is genomes', () => {
+    expect(labelTarget({ axisIsGenomes: true, opensGenomes: true })).toBe('genome')
+  })
+
+  it('opens the region where the axis is contigs', () => {
+    // A single genome's map, a selection of contigs, a cooler: the label names a
+    // sequence, and a sequence is a region.
+    expect(labelTarget({ axisIsGenomes: false, opensGenomes: true })).toBe('region')
+  })
+
+  it('falls back to the region rather than doing nothing', () => {
+    // A view with nowhere to take a genome name still has somewhere to take the
+    // *name*: the region view resolves it and offers the genome view from there.
+    // A label that did nothing would be worse than one a screen from home.
+    expect(labelTarget({ axisIsGenomes: true, opensGenomes: false })).toBe('region')
+    expect(labelTarget({ axisIsGenomes: false, opensGenomes: false })).toBe('region')
   })
 })

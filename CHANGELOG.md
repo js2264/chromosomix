@@ -688,6 +688,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   block it closes carries a sliver of the next MAG, which is precisely the kind
   of invented adjacency the pooling rules exist to prevent.
 
+  **And clicking one of those labels opens that genome.** It used to open a
+  *region* view of it — a legal destination, since a bare genome name is a range
+  the parser takes (§5.4), and one screen short of where the gesture meant to go.
+  The whole-file picker has always gone straight to the genome; both now
+  dispatch on what the axis actually is rather than on which view is asking, so
+  the two pictures that are divided by genome behave alike. A label on an axis of
+  contigs opens a region, as it always has.
+
   A companion panel in a deck follows the lead here, because the decision is made
   on the read rather than in the view: `#genomes=` shows the same blocks in every
   map it is applied to.
