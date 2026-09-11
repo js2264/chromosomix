@@ -190,14 +190,5 @@
       "subject": "fix(versions): going to the newest build is not the same as going to the root",
       "tag": ""
     }
-  ],
-  "pulls": [
-    {
-      "number": 45,
-      "commit": "003a405",
-      "title": "Publish a preview of every pull request on the Pages site",
-      "branch": "claude/pr-previews-tu9b1q",
-      "date": "2026-09-11T19:30:24Z"
-    }
   ]
 }
