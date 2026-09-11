@@ -277,11 +277,14 @@ describe('the map card', () => {
     const map = TASKS.filter((task) => task.group === 'map').map((task) => task.id)
     expect(map).toEqual([
       'coverage',
+      'cistrans',
+      'cellqc',
       'expected',
       'fourc',
       'insulation',
       'compartments',
       'chromosight',
+      'hicrep',
     ])
   })
 })

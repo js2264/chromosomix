@@ -125,6 +125,13 @@ export interface BinOptions {
 }
 
 export interface BinnedPixels {
+  /**
+   * The four orientation curves, or `null` where the file carries no strands.
+   *
+   * Accumulated in the same pass and costing two more fields off each record —
+   * which is why it is here rather than being a second read of the file.
+   */
+  orientation?: OrientationCurves | null
   binSize: number
   contigs: PairsContig[]
   chromOffset: Float64Array
@@ -280,6 +287,81 @@ function hashString(name: string): number {
  * @throws ViewerError `dense-too-large` when the pixel table passes
  *   `maxPixelBytes`, naming the resolution that would fit.
  */
+/**
+ * The four orientation-resolved decay curves a pairs file can answer for.
+ *
+ * The standard QC on a contact list, and the one reading that is **only**
+ * available before binning: two reads ligated in each of the four relative
+ * orientations decay identically at long range and wildly differently at short
+ * range, because below a few kilobases the counts are dominated by
+ * self-circles, dangling ends and undigested fragments rather than by contacts.
+ * Where the four curves converge is the **minimum separation a library can be
+ * believed at** — the number `pairtools` and `distiller` plot to decide what to
+ * throw away, and a number no matrix can produce because binning has already
+ * summed the four together.
+ *
+ * Counted in **log-spaced base-pair bins rather than in the map's bins**, which
+ * is what makes the measurement worth having at all: the grid a reader chose is
+ * usually 1 kb or coarser and the convergence is usually below it, so a curve
+ * on the map's grid would answer the question with one point.
+ *
+ * Cis only. Two reads on different sequences have no separation, and counting
+ * them anywhere on this axis would put a flat floor under all four curves at
+ * whatever the trans rate happens to be.
+ */
+export interface OrientationCurves {
+  /** Bin edges in base pairs, `bins + 1` of them, log-spaced. */
+  edges: Float64Array
+  /**
+   * Counts per bin, in the order `++`, `+-`, `-+`, `--`.
+   *
+   * `+-` is the *inward* pair — the two reads facing each other — which is the
+   * one self-circles and undigested fragments inflate, and `-+` the outward one
+   * dangling ends inflate. Naming them by the strands rather than by the
+   * artefact is deliberate: the file says the strands, and which artefact
+   * inflates which orientation is a fact about the protocol.
+   */
+  counts: [Float64Array, Float64Array, Float64Array, Float64Array]
+  /** Records counted, so a curve can be read as a share of the library. */
+  total: number
+}
+
+/** Names in the order {@link OrientationCurves.counts} holds them. */
+export const ORIENTATION_NAMES = ['++', '+-', '-+', '--'] as const
+
+/**
+ * The separation axis the orientation curves are counted on.
+ *
+ * One base pair to the longest sequence, at a **fine** factor: the curves are
+ * re-binned for drawing and never drawn at this resolution, so the accumulator's
+ * job is to lose as little as possible on the way in. 1.05 is about 47 bins per
+ * decade and a few hundred bins over any assembly, which is nothing to hold and
+ * nothing to sum.
+ */
+const ORIENTATION_FACTOR = 1.05
+
+function orientationEdges(longest: number): Float64Array {
+  const edges: number[] = [0, 1]
+  let at = 1
+  while (at < longest) {
+    // `+ 1` as well as the factor, so the first decade advances by whole base
+    // pairs rather than stalling where `at * 1.05` rounds back to `at`.
+    at = Math.max(at + 1, Math.round(at * ORIENTATION_FACTOR))
+    edges.push(at)
+  }
+  return Float64Array.from(edges)
+}
+
+/** Which of the four a pair of strand bytes is, or `-1` for anything else. */
+function orientationOf(s1: number, s2: number): number {
+  if (s1 === PLUS) return s2 === PLUS ? 0 : s2 === MINUS ? 1 : -1
+  if (s1 === MINUS) return s2 === PLUS ? 2 : s2 === MINUS ? 3 : -1
+  return -1
+}
+
+const PLUS = 0x2b
+const MINUS = 0x2d
+
 export async function binPairs(
   source: ByteSource,
   options: BinOptions,
@@ -296,7 +378,35 @@ export async function binPairs(
   // record on a pairtools file and are read by nothing here. `Math.max` because
   // `#columns:` fixes no order: `chrom1 chrom2 pos1 pos2 readID` stops at 3 and
   // the pairtools default at 4.
-  const want = Math.max(columns.chrom1, columns.chrom2, columns.pos1, columns.pos2)
+  // The strands are read where the file has them, so the scan has to reach them
+  // — which is the whole cost of the orientation curves: two more fields off a
+  // record the loop is already walking, and a record whose strands sit past its
+  // coordinates is scanned a little further along the line.
+  const withStrands = columns.strand1 >= 0 && columns.strand2 >= 0
+  const want = withStrands
+    ? Math.max(
+        columns.chrom1,
+        columns.chrom2,
+        columns.pos1,
+        columns.pos2,
+        columns.strand1,
+        columns.strand2,
+      )
+    : Math.max(columns.chrom1, columns.chrom2, columns.pos1, columns.pos2)
+
+  let longestContig = 0
+  for (const contig of contigs) longestContig = Math.max(longestContig, contig.length)
+  const orientEdges = withStrands ? orientationEdges(longestContig) : null
+  const orientCounts: [Float64Array, Float64Array, Float64Array, Float64Array] | null =
+    orientEdges === null
+      ? null
+      : [
+          new Float64Array(orientEdges.length - 1),
+          new Float64Array(orientEdges.length - 1),
+          new Float64Array(orientEdges.length - 1),
+          new Float64Array(orientEdges.length - 1),
+        ]
+  let orientTotal = 0
 
   // Bin count per contig, so a position past the declared length is clamped
   // into the contig it belongs to rather than into its neighbour.
@@ -391,6 +501,8 @@ export async function binPairs(
     let c2 = -1
     let p1 = -1
     let p2 = -1
+    let s1 = -1
+    let s2 = -1
     const end = line.length
     for (let i = 0; i <= end; i++) {
       if (i !== end && line[i] !== TAB) continue
@@ -398,6 +510,11 @@ export async function binPairs(
       else if (field === columns.chrom2) c2 = index.lookup(line, start, i)
       else if (field === columns.pos1) p1 = readInt(line, start, i)
       else if (field === columns.pos2) p2 = readInt(line, start, i)
+      // One byte each, and only the first: a strand field is `+` or `-` in
+      // every file that has one, and decoding it would allocate a string per
+      // record for a character.
+      else if (withStrands && field === columns.strand1) s1 = i > start ? line[start] : -1
+      else if (withStrands && field === columns.strand2) s2 = i > start ? line[start] : -1
       field++
       if (field > want) break
       start = i + 1
@@ -410,6 +527,24 @@ export async function binPairs(
     if (p1 < 0 || p2 < 0) {
       skippedBadPosition++
       return
+    }
+
+    if (orientCounts !== null && orientEdges !== null && c1 === c2) {
+      const which = orientationOf(s1, s2)
+      if (which >= 0) {
+        // The **record's own** separation, not the bins': the whole point of
+        // this axis is that it is finer than the grid the reader chose.
+        const separation = Math.abs(p2 - p1)
+        let lo = 0
+        let hi = orientEdges.length - 1
+        while (lo + 1 < hi) {
+          const mid = (lo + hi) >> 1
+          if (orientEdges[mid] <= separation) lo = mid
+          else hi = mid
+        }
+        orientCounts[which][lo]++
+        orientTotal++
+      }
     }
 
     let b1 = binOf(p1)
@@ -549,6 +684,10 @@ export async function binPairs(
     contigsWithoutCisContacts: contigs
       .filter((_, index) => cisContig[index] === 0)
       .map((contig) => contig.name),
+    orientation:
+      orientEdges === null || orientCounts === null
+        ? null
+        : { edges: orientEdges, counts: orientCounts, total: orientTotal },
   }
   return needsReorder ? mergeDuplicates(result) : result
 }

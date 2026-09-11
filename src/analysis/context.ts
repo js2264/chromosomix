@@ -46,6 +46,12 @@ export interface ContextInput {
   framing: AnalysisFraming | null
   blockLoaded: boolean
   blockBytes: number
+  /** Cells in a single-cell container (§3.8); absent or `0` for every other file. */
+  cells?: number
+  /** How many of them are ticked; absent means all of them. */
+  activeCells?: number
+  /** The other maps of a deck, for a task that compares two files (§16). */
+  peers?: Array<{ label: string; uri: string; binsize: number }>
 }
 
 function strings(
@@ -112,6 +118,13 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     framing: input.framing,
     blockLoaded: input.blockLoaded,
     blockBytes: input.blockBytes,
+    // Absent rather than zero on a file with no cells, so that a task asking
+    // `(context.cells ?? 0) > 0` reads the same on an old stored context as on a
+    // fresh one.
+    ...(input.cells === undefined || input.cells === 0
+      ? {}
+      : { cells: input.cells, activeCells: input.activeCells ?? input.cells }),
+    ...(input.peers === undefined || input.peers.length === 0 ? {} : { peers: input.peers }),
   }
 }
 

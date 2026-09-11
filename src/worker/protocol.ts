@@ -269,6 +269,27 @@ export interface PairsImportSummary {
   sequencesWithoutCisContacts: string[]
   /** Whether the caller asked for the `.mcool` to be built and downloaded. */
   download: boolean
+  /**
+   * The four orientation-resolved decay curves, where the file carried strands.
+   *
+   * Accumulated in the import's own pass (`pairs/bin.ts`), so it costs two more
+   * fields off each record and no second read. Carried here rather than fetched
+   * because the records are gone once the pass ends: the map is the pixel table
+   * from then on, and this is the one reading that cannot be recovered from it.
+   *
+   * `null` for a file with no `strand1`/`strand2` columns, which is a fact about
+   * the file rather than a failure.
+   */
+  orientation: OrientationSummary | null
+  /** The binning that produced this map, so a second mount can reproduce it. */
+  binning: PairsBinning
+}
+
+/** {@link PairsImportSummary.orientation}, as plain arrays that cross a worker. */
+export interface OrientationSummary {
+  edges: Float64Array
+  counts: [Float64Array, Float64Array, Float64Array, Float64Array]
+  total: number
 }
 
 export interface OpenResult {

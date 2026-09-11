@@ -69,7 +69,7 @@ import {
   resolveCountKind,
 } from './matrix'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
-import { resolveCells, ScoolStore } from './scool'
+import { resolveCells, ScoolStore, type PerCellScanOptions } from './scool'
 import { HicFile } from '../hic/HicFile'
 import { isHicMagic } from '../hic/format'
 import { hicHandle } from '../hic/handle'
@@ -1417,6 +1417,29 @@ export class MetaCooler {
     }
     const resolved = resolveCells(this.cells, names)
     this.pixelStore = new ScoolStore(this.handle, this.layout, resolved, this.nBins, this.countKind)
+  }
+
+  /**
+   * Every selected cell's pixels, one cell at a time (§3.8).
+   *
+   * The read the per-cell QC task is built on, and it is here rather than in the
+   * task because {@link ScoolStore} is private to this class: a runner asking
+   * `mc.pixelStore instanceof ScoolStore` would be reaching through the seam
+   * `store.ts` exists to draw.
+   *
+   * Refused by name on any other container, rather than answered with an empty
+   * walk. A cooler has no cells, and a task that asked one for them and got
+   * silence would report a clean table of nothing.
+   */
+  async scanCells(options: PerCellScanOptions): Promise<void> {
+    if (!(this.pixelStore instanceof ScoolStore)) {
+      throw new ViewerError(
+        'unsupported',
+        `${this.uri} is not a single-cell container, so it has no cells to walk.`,
+        { layout: this.layout.kind },
+      )
+    }
+    await this.pixelStore.scanPerCell(options)
   }
 
   /**

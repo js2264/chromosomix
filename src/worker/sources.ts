@@ -85,6 +85,37 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
 }
 
 /**
+ * The same source, built **outside** the cache above and owned by the caller.
+ *
+ * Everything else in this module keeps one local and one remote mount alive, so
+ * that stepping through an `.mcool`'s resolutions reuses a slice cache rather
+ * than rebuilding one. That is exactly wrong for a *second* file opened
+ * alongside the first: {@link createSource}'s local road calls
+ * {@link releaseSources} when the `File` differs, which would close the mount
+ * the worker is already answering questions from — the map on screen, mid-task.
+ *
+ * So a caller that wants a second file for the length of one computation builds
+ * it here and closes it itself. It has no slice cache to share and does not want
+ * one: it is read once, sequence by sequence, and thrown away.
+ */
+export async function createDetachedSource(spec: SourceSpec): Promise<ByteSource> {
+  if (spec.kind === 'local') return new LocalFileSource(spec.file)
+  // Through {@link accessOf}, like every other road out of this module, and not
+  // through `spec.credential` alone. A bare credential is what a bucket needs
+  // and it is only half of what a request may carry: a hub, a portal share link,
+  // Google Drive and Dropbox are authorised by a **header**, and a second mount
+  // built from the credential alone would send those bare. It would typecheck,
+  // and the 401 would be reported against the file rather than against the
+  // missing token.
+  const access = accessOf(spec)
+  if (spec.reading === 'whole') return await wholeObjectOf(spec.url, access)
+  return await RemoteRangeSource.open(spec.url, {
+    ...access,
+    ...(spec.reading === 'fine' ? { chunkSize: FINE_CHUNK_SIZE } : {}),
+  })
+}
+
+/**
  * The `.px2` beside a pairs file, or `null` when there is not one.
  *
  * Opportunistic in §3.4's exact sense: an index makes the import's cost known

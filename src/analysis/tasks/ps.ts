@@ -226,6 +226,28 @@ const PARAMS: readonly ParamSpec[] = [
     hint: 'The shoulder and the plateau are visible there and not on the curve.',
     default: true,
   },
+  {
+    kind: 'toggle',
+    key: 'stranded',
+    label: 'Also the four orientations',
+    hint:
+      'From the records rather than from the matrix: the separation at which ++, +−, −+ and −− ' +
+      'converge is the shortest one this library can be believed at.',
+    default: false,
+    section: 'From the records',
+  },
+  {
+    kind: 'text',
+    key: 'pairsUri',
+    label: 'From this .pairs',
+    placeholder: 'https://… or s3://…',
+    hint:
+      'Leave empty to use the file this map was imported from, where it was. A URL is read for ' +
+      'its records only — nothing is binned and no map changes. A local file has no address to ' +
+      'name here: drop it on the app, which imports it and counts these curves in the same pass.',
+    when: (params) => params.stranded === true,
+    section: 'From the records',
+  },
   BALANCE_PARAM,
 ]
 
@@ -264,6 +286,26 @@ function boundedRequests(balance: boolean): number {
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const scope = scopeOf(params)
   const balance = balanceOf(params)
+
+  // **A named `.pairs` dominates every other cost here**, so it is priced first
+  // and the matrix's own road is described inside the same note rather than
+  // beside it. Reading somebody else's contact list is a pass over gigabytes of
+  // text; the curve it produces is a few hundred points.
+  const named =
+    params.stranded === true && typeof params.pairsUri === 'string'
+      ? params.pairsUri.trim()
+      : ''
+  if (named !== '') {
+    return {
+      class: 'scan',
+      requests: null,
+      bytes: null,
+      note:
+        `The matrix’s own curve as below, and then one pass over the records of ${named} for the ` +
+        'four orientations — which is the whole of that file, since a contact list has no index ' +
+        'to reach into. Progress is reported and it can be cancelled at any point.',
+    }
+  }
 
   const genomes = context.hasGenomes ? context.genomes : null
   if (scope === 'genome' && (genomes === null || genomes.length === 0)) {
@@ -345,7 +387,7 @@ export const EXPECTED_TASK: AnalysisTask = {
   blurb: 'How contact frequency falls with genomic separation.',
   group: 'map',
   venue: 'analysis',
-  version: 1,
+  version: 2,
   // Every contact map has a diagonal, so this is the one row that is offered on
   // everything — a cooler, a metacool, a file with nothing else loaded beside
   // it. The guard is against a mount with no bins at all, which is a file the

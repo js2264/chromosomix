@@ -133,6 +133,89 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   address. The preview job writes the archive branch and asks the deploy to publish, so the site
   keeps one publisher (`docs/deploy.md`, "Pull requests get a preview").
 
+- **Five new analysis tasks, and two existing ones grown a question they could
+  not answer.** Every one of them is a measurement the app could not produce
+  rather than a rearrangement of one it already draws, which is the line §18.9
+  draws and the reason each is argued where it is built.
+
+  **Reproducibility, across the maps on screen.** The deck opens N files under
+  one navigation, blends two in a square and overlays their curves — and every
+  one of those answers *do these look alike* with a picture. The question people
+  actually have is *are these replicates*, and its answer is a number. HiCRep's
+  stratum-adjusted correlation (Yang et al. 2017), ported: both maps smoothed
+  with a 2D mean filter, each diagonal correlated **separately** — where the
+  decay the two share is a constant and carries no variance — and the strata
+  pooled by the Cochran–Mantel–Haenszel weight. Plain Pearson on two matrices
+  comes out near 0.9 for two *unrelated* maps of the same assembly, which is why
+  the stratifying is the method rather than a refinement of it. Reads a band
+  rather than a square, so a mammalian chromosome is a few dozen bounded reads.
+  Three outputs, and the third says more than the scalar does: the N×N
+  coefficient matrix, the per-sequence table, and **correlation against
+  separation**, which tells *these agree near the diagonal and not far from it*
+  — a depth difference — from *these disagree everywhere*, which is two
+  experiments. A map on a different bin grid is refused by name, because a
+  stratum is a diagonal offset in bins and §16's lock is in base pairs on
+  purpose.
+
+  **Per-cell contact QC on an `.scool`.** That container's whole interaction is
+  one decision — which cells to sum — and the Cells table could only rank them
+  by `nnz` and `sum`, which is what the *writer* recorded and a statement about
+  the sequencing rather than about the contacts. Depth is also the least
+  interesting axis a single-cell library varies along: cells differ mostly by
+  where in the cycle they were fixed, and a pseudo-bulk across phases smears
+  exactly the structure somebody opened the file to see. Per cell, from its own
+  pixels: contacts, cis fraction, and the share in each of four separation bands
+  — Nagano et al. (2017)'s, whose near-against-mitotic scatter is the cell cycle
+  drawn as a horseshoe. It costs what summing the same cells costs, to the read:
+  the same reads in the same order, one accumulator per cell instead of one
+  shared. The numbers land back **in the Cells table** as sortable columns,
+  because the gesture they are for is the one that table already has — sort,
+  tick a run of rows, sum them. No phase is assigned: the bands are a
+  measurement with a citation and a cut through the horseshoe is a method with
+  choices.
+
+  **Cis and trans per sequence**, with the sequence × sequence square beside it.
+  The first number any Hi-C paper quotes, per sequence rather than per bin, and
+  the off-diagonal read against what the two sequences' own trans coverage
+  predicts under indifference. Above 1 is a translocation, a fusion, a
+  centromere cluster or a Rabl configuration. It is the inter-MAG network's own
+  accumulation with the group being a contig rather than a genome — and it is
+  **not** a translocation caller, for the reason §18.9 gives about any second
+  caller.
+
+  **Fraction of signal in features** — ChIP-seq's FRiP, over any loaded tracks
+  and any interval set. The covered fraction sits beside it and the ratio of the
+  two is the column to read: thirty per cent of the signal in thirty per cent of
+  the genome is a track with no preference at all.
+
+  **A shuffle null under interval overlap.** Jaccard, shared bases and features
+  hit are all descriptive and none has a scale, so *how many of my loops sit on
+  a boundary* — the question §18.8 gives as the task's whole reason — was not
+  actually answerable. `bedtools shuffle`'s null: one set relocated at random
+  within the sequences it already occupies, keeping its count and its lengths.
+  Reported as a fold, a z and a permutation p on the tail the observation fell
+  on, with Phipson and Smyth's `+1` so the p has a floor instead of coming out
+  at zero.
+
+  **Every pair of a feature set, and pileups split by separation.** APA gains a
+  third anchor mode: rather than a loop set somebody produced, every pair of one
+  feature set inside a separation range — which is the test a loaded BEDPE
+  cannot be, since a BEDPE is already a claim about which pairs matter. And
+  either off-diagonal mode may be split into log-spaced separation bands, each
+  with its own pileup and its own control, because one pileup over 30 kb to 2 Mb
+  is an average of a strong short-range contact and a weak long-range one.
+
+  **The four pair orientations, beside P(s).** Read from the records during the
+  import's own pass and at record resolution, because binning sums the four
+  together and destroys the one thing they are for: the separation at which
+  `++`, `+−`, `−+` and `−−` converge is the shortest one a library can be
+  believed at, and it is usually *below* whatever grid the reader chose. A
+  `.pairs` that was never imported can be named in the form and read for its
+  records alone. §3.7's *nothing about strands is read* is narrowed in the open:
+  its reason was **filtering**, no strand reaches a bin or a pixel or the written
+  `.mcool`, and the pixels are identical whether the columns are there or not —
+  which is asserted rather than claimed.
+
 - **A lane can draw its values as colour, and multi-scale insulation does.**
   `heatmap` joins line, area and bars in the **style** picker: the value becomes
   a colour across the whole lane instead of a position in it, so it costs no
@@ -230,6 +313,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   takes.
 
 ### Fixed
+
+- **Analysis tasks on a map imported from a `.pairs` failed at the mount.** §3.7
+  says every §18 task reads an imported map through `PixelStore` exactly as it
+  reads a cooler, and that was true of the reader worker and not of the analysis
+  one: it opens the file for itself (§18.3), reached `MetaCooler.open` with a
+  contact list, and was refused with *choose a bin size* — a dialog the reader
+  had already filled in, on a map that was on screen and working. The binning
+  now travels with the job, and the second mount re-reads the records once,
+  behind the bar and the cancel the first pass had. The pairs road moved into
+  `worker/open.ts`, which is where that module's own docstring argues the
+  knowledge of *how many roads there are into a map* belongs — the HiC-Pro
+  defect it was written for, a second time.
+
+- **A curve output can draw as points.** Every other figure in the catalogue is
+  a function of a separation, a position or a rank, so joining consecutive
+  samples says something true about what lies between them. A cell-cycle scatter
+  is two fractions measured on the same cell with no order along x, and a line
+  through it would draw a path nothing travelled.
+
 
 - **Diamond insulation's estimate counts the reads it makes.** It still said one
   dense square per sequence, which is what it read before the diagonal was

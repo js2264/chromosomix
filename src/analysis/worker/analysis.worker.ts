@@ -34,7 +34,7 @@ import { MetaCooler } from '../../metacooler/MetaCooler'
 import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
-import { releaseSources } from '../../worker/sources'
+import { createDetachedSource, releaseSources } from '../../worker/sources'
 import { openMap } from '../../worker/open'
 import { correlationField, type CorrelationField } from '../compartments'
 import { adaptiveSmoothValues } from '../../render/smooth'
@@ -114,6 +114,9 @@ async function handleOpen(
   const { mc, source } = await openMap(request.uri, request.source, {
     report: (done, total, note) => post({ type: 'progress', id: request.id, done, total, note }),
     cancelled: () => cancelled.has(request.id),
+    // Carried rather than re-asked: a contact list has no resolution of its own
+    // and the reader chose one when the *first* worker opened it (§3.7).
+    ...(request.binning === undefined ? {} : { binning: request.binning }),
   })
   // The cells the reader has ticked, not the file's whole set. A task measures
   // what is on screen, and an scool with two cells selected draws two: opening
@@ -198,6 +201,33 @@ async function handleRun(
     // answer at the resolution asked for; the honest floor is the resolution it
     // has.
     toBins: (bp) => Math.max(1, Math.round(bp / mc.binsize)),
+    // A **second** mount inside this worker, for the length of one computation.
+    // Detached from the source cache the first one uses, because that cache
+    // holds one local and one remote mount and releasing the held one is how it
+    // makes room — which on the local road would close the file this very task
+    // is reading through (`worker/sources.ts`).
+    // Bytes rather than a container, for a file this application reads and does
+    // not mount — see `JobContext.openBytes`. Detached from the mount cache for
+    // the same reason `peer` is.
+    openBytes: async (url) => await createDetachedSource({ kind: 'remote', url }),
+    peer: async (map) => {
+      const opened = await openMap(map.uri, map.source, {
+        report: (done, total, note) => post({ type: 'progress', id, done, total, note }),
+        cancelled: () => cancelled.has(id),
+        detached: true,
+        ...(map.binning === undefined ? {} : { binning: map.binning }),
+      })
+      if (map.cells !== undefined && opened.mc.cells.length > 0) {
+        opened.mc.selectCells(map.cells)
+      }
+      return {
+        mc: opened.mc,
+        close: () => {
+          opened.mc.close()
+          opened.source.close()
+        },
+      }
+    },
   }
 
   const outputs = await runner(job)

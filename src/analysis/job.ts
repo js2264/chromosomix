@@ -33,8 +33,9 @@ import type { Region, TrackSampleSet } from '../annotations/types'
 import type { Contig } from '../genome/assembly'
 import type { NameContext } from '../genome/naming'
 import type { MetaCooler } from '../metacooler/MetaCooler'
+import type { ByteSource } from '../types'
 import type { AnalysisFraming, Params, ParamValue, TaskOutput } from './types'
-import type { TaskInputs } from './worker/protocol'
+import type { PeerMap, TaskInputs } from './worker/protocol'
 
 export interface JobContext {
   /** The file, mounted by this worker and nobody else. */
@@ -76,6 +77,41 @@ export interface JobContext {
   toBp(bins: number): number
   /** Bins for a span in base pairs, rounded to at least one. */
   toBins(bp: number): number
+  /**
+   * Mount another map, for the one task whose question is about two files.
+   *
+   * **Optional, unlike everything above**, and the asymmetry is the same one
+   * {@link TrackJobContext.bases} draws: the rest of this interface is
+   * answerable by anything that can run a task at all, and this one is
+   * answerable only by a venue that knows how to open a container. A test
+   * harness holding a hand-built `MetaCooler` does not, and a runner that needs
+   * this says so in a sentence rather than reading `undefined` out of a call
+   * that type-checked.
+   *
+   * The mount is the **caller's to close**, and it is built outside the source
+   * cache the first mount uses — see `worker/sources.ts`'s `createDetachedSource`
+   * for why a second file opened through the ordinary road would close the first.
+   */
+  peer?(map: PeerMap): Promise<{ mc: MetaCooler; close(): void }>
+  /**
+   * Open an address for its **bytes**, for a task that reads a file this
+   * application does not mount as a map.
+   *
+   * One case, and it is `.pairs`: the four orientation curves are a property of
+   * records rather than of a matrix (§3.7), so a reader who wants them for a
+   * file they never imported is asking for a *read* and not for an open. Handing
+   * back a `ByteSource` rather than a container is what keeps that honest —
+   * nothing is binned, no map changes, and the caller gets exactly what a
+   * contact list is.
+   *
+   * Optional for {@link peer}'s reason: only a venue that knows how to build a
+   * source can answer, and a runner that needs one says so in a sentence.
+   *
+   * Remote addresses only. A local file has no address — it arrives as a `File`
+   * from a drop target — so the road for one is to drop it on the app, which
+   * imports it and counts the same curves in the same pass.
+   */
+  openBytes?(url: string): Promise<ByteSource>
 }
 
 /** What a task actually does. Registered in `analysis/run/index.ts`. */

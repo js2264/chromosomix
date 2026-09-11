@@ -207,7 +207,7 @@ Used in the file picker, in error messages, and in the URL hash so views are sha
 Versions **7, 8 and 9**, local and remote, read-only, at BP resolutions only. A `.hic` is opened as
 what it is — a contact map with chromosomes and no genome layer — and is therefore a **cooler-class
 citizen** in every sense §9 uses the phrase: the contigs table is the landing view, a region is one
-bounded read, tracks and annotations are offered (§8.5), and thirteen of the fourteen §18 tasks apply.
+bounded read, tracks and annotations are offered (§8.5), and every §18 task but the metagenome four applies.
 `genomes` is `null`; the four metagenome tasks are absent, not disabled.
 
 **Why the format is here at all.** It is where the published record is. Most mammalian Hi-C on 4DN,
@@ -288,9 +288,14 @@ difference is not there.
 
 **One pass, and then it is a cooler.** The chosen resolution is binned in a single streaming pass
 over the records, and every rung above it is derived from that table rather than from the file. The
-result is held in memory and *is* the map: every view, the deck, the turn and all fourteen §18 tasks
+result is held in memory and *is* the map: every view, the deck, the turn and every §18 task
 read it through `PixelStore` exactly as they read a cooler, and none of them learns that the
-container exists. The shape that makes this the right design is the data's own — on this
+container exists. **The second mount pays for that a second time**, and it is worth saying where
+the cost is rather than leaving it to be discovered: the analysis worker opens the file for itself
+(§18.3), a contact list has no index to reach into, and so a task on an imported map re-reads the
+records once — behind the same bar and the same cancel the first pass had, once per session, with
+every task after it answered from memory. The binning the reader chose travels with the job rather
+than being asked again, because it is the same question and they have already answered it. The shape that makes this the right design is the data's own — on this
 repository's demo files, yeast Micro-C is 179 M records and 13.7 M stored pixels at 1 kb, and the
 mock community is 10.9 M records and 7.1 M pixels. **The input is gigabytes and the output is tens
 of megabytes.** Pay for the file once; answer from memory afterwards.
@@ -328,18 +333,42 @@ read whole and the progress bar counts compressed bytes instead. Both work; the 
 makes the same file cheaper. It is **not** §8.13's case: a pairs file has a whole-file fallback that
 respects §12, so its absence is never a refusal.
 
-**What is deliberately not read**: the strand, pair-type and mapping-quality columns, and any
-filtering on them. A pairs file is the output of a pipeline that has already made those decisions,
-and re-making them here would be the second application §13 refuses — the importer counts the
-records the file contains, and if a reader wants different records they filter with `pairtools
-select` and import the result. Nothing is inferred about restriction fragments, and no matrix is
+**What is deliberately not read**: ~~the strand, pair-type and mapping-quality columns, and any
+filtering on them.~~ **Narrowed**: the pair-type and mapping-quality columns, and **any filtering
+at all**. A pairs file is the output of a pipeline that has already made those decisions, and
+re-making them here would be the second application §13 refuses — the importer counts the records
+the file contains, and if a reader wants different records they filter with `pairtools select` and
+import the result. Nothing is inferred about restriction fragments, and no matrix is
 ever built from alignments (§13); a `.pairs` is a contact list, which is a different thing and is
 the reason this fits.
 
+**The strands are read, and what the original rule was about is untouched.** The rule's reason was
+*filtering*: a viewer that decided which records count would be re-making a pipeline's decisions.
+Reading `strand1` and `strand2` decides nothing. No strand reaches a bin, a pixel, a rung or the
+written `.mcool`; no record is kept or dropped for one; every number the matrix is built from is
+identical whether the columns are there or not, and that is asserted rather than claimed
+(`test/unit/pairs-bin.test.ts`). What they are read *for* is a **curve beside** the matrix: the four
+orientation-resolved decays, counted in the import's own pass, at record resolution rather than on
+the grid the reader chose.
+
+It is worth the narrowing for one reason. The separation at which `++`, `+−`, `−+` and `−−`
+converge is the **shortest separation a library can be believed at** — below it the counts are
+self-circles, dangling ends and undigested fragments, each landing in one orientation and not the
+others — and it is the one reading that binning destroys, because a bin sums the four together. It
+is also usually *below* the grid somebody chose, which is why a curve on the map's bins could not
+answer it. Every pairs-level QC in the field plots it; nothing that opens a matrix can.
+
+The cost is two more fields off a record the loop is already walking, and the columns are optional:
+a file trimmed to five columns imports exactly as before and simply has no such curve. Reported and
+never acted on — nothing trims a file, sets a minimum separation, or warns that a map was binned
+below the convergence point, because a threshold is a method with choices in it and §18.9's
+argument about a half-good caller applies to one exactly as it applies to a loop. Where the figure
+lives is §18.8, under P(s).
+
 **Equivalence with a cooler is asserted, not assumed.** An imported map and the `.mcool` written
 from it must answer *every* `PixelStore` method identically — `forEachWindow` on and off the
-diagonal, `forEachBands`, `scanAll` and `binOffsets`. That is the property every view and all
-fourteen §18 tasks actually depend on, and the way it would fail is the way that matters: not an
+diagonal, `forEachBands`, `scanAll` and `binOffsets`. That is the property every view and every
+§18 task actually depends on, and the way it would fail is the way that matters: not an
 error, but one number differing for whichever tasks happen to use the method that diverged.
 
 **An incomplete file is reported, not drawn in silence.** A BGZF file says where each of its
@@ -453,6 +482,14 @@ the reader's, so it has to be *told* the selection — without it a task opened 
 answered a question about two cells with the number for four thousand, which is a worse failure than
 an error because nothing on screen contradicts it. The set travels with the run's target, and that
 worker's mount is keyed on the cells as well as on the file: re-ticking is a new map at the same URI.
+
+**One task measures the cells themselves**, and it is the exception the sentence above needs rather
+than a contradiction of it. Per-cell contact QC (§18.8) is the only task whose unit is a cell: it
+walks each of them separately and reports a row apiece, so *the ticked set* is what it is helping
+the reader choose rather than what it measures — and it therefore defaults to every cell in the
+file, restoring the selection afterwards. It costs what summing the same cells costs, to the read:
+the same reads in the same order, with one accumulator per cell instead of one shared, which is why
+a reader who has agreed to a pseudo-bulk has already agreed to this.
 
 **Summing says how far it has got.** A cell sum is the only read here whose cost is linear in
 something other than the picture asked for: the same window that draws instantly over one cell is
@@ -2590,7 +2627,7 @@ whole file:
 | Probe a `.pairs`: header, and the index if there is one | ≤ 3 range requests. One BGZF member for the format check — cut *exactly*, from the member's own header — then the preamble, then the `.px2` whole, which is small by construction |
 | The binning pass | **one sequential read of the file**, and no second pass ever. Measured on `demo/ecoli/SRR19500734.pairs.gz` (17.7 M records, 238 MB): **0.69 M records/s** at the 64 KiB BGZF framing `bgzip` writes, and **0.12 M records/s** at the ~1.4 KB framing that file actually has. The 5.7× is decompression, not parsing — see below. Progress in records where a `.px2` gave an exact count, in compressed bytes otherwise; cancellable throughout |
 | Every rung above the base | 0 reads. Derived from the base pixel table, which is smaller than the record stream by the ratio of records to stored pixels — thirteen to one on `demo/yeast/` |
-| Every view, afterwards | **0 reads, ever.** The map is in memory; a rung switch, a pan, a zoom, the deck and all fourteen §18 tasks cost no I/O at all |
+| Every view, afterwards | **0 reads, ever.** The map is in memory; a rung switch, a pan, a zoom, the deck and every §18 task cost no I/O at all |
 | Writing the `.mcool` | 0 reads. Runs beside the open map, with its own bar and its own cancel; the int64 conversion buffer is capped at one chunk rather than one column |
 
 If metadata reads explode, the known cause is walking HDF5's object hierarchy;
@@ -3891,7 +3928,7 @@ them, which is a header a BED consumer would choke on and a reader needs.
 
 ### 18.8 The catalogue
 
-Seventeen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
+Nineteen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
 one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
@@ -3909,9 +3946,50 @@ factor of fifty apart at 1.2 Mb — and on a mammalian map, whose chromosomes ar
 longer, indistinguishable over everything anybody fits. The second is also what observed/expected, the
 compartment chain and the pileups **divide by**, and they reach it through `expectedAt` rather than
 through the panel: the plotted curve is a figure and the denominator is a denominator, and changing what
-is on screen must not change what an O/E is taken against. *Coverage and marginals* — total, cis, trans
+is on screen must not change what an O/E is taken against.
+
+**And, where the map was imported from a `.pairs`, the four orientations beside it.** Not a
+property of the matrix at all: it is counted from the records, in log-spaced base-pair bins, in the
+import's own pass (§3.7), because binning sums the four together and destroys exactly the thing they
+are read for. The separation at which `++`, `+−`, `−+` and `−−` converge is the shortest one the
+library can be believed at, it is usually *below* whatever grid the reader chose, and the run reports
+it as a number under the plot. All four are normalised by **one shared denominator** rather than each
+by its own: ligation does not know which way a fragment pointed, so at long range the four are
+equally abundant and lie on top of each other, and scaling each by its own total would divide the
+short-range excess back out and take the convergence point with it. A `.pairs` that was never
+imported can be named in the form and is read for its records alone — no map changes and nothing is
+binned — and a local file has no address to name, so it is dropped on the app instead, which counts
+the same curves in the same pass. Absent, with a sentence, on a map that was opened as a matrix.
+
+*Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
-artefact. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
+artefact. *Cis and trans per sequence* is the same question one level up and the first number any
+Hi-C paper quotes: per sequence its cis and trans contacts and the ratio between them, and beside
+that the **sequence × sequence** square with a ranked table under it. The off-diagonal value is
+observed over what the two sequences' own trans coverage predicts under indifference, `T_a·T_b/2T`,
+scaled so that the expectation sums to the contacts there actually are — without that correction the
+model spends part of the mass on a sequence contacting *itself*, which is not a trans contact, and
+every cell comes out uniformly above one so a picture centred on 1 is centred on nothing. Above 1 is
+a translocation, a fusion, a centromere cluster or a Rabl configuration, depending on the organism.
+It is the same accumulation the inter-MAG network performs with the group being a contig rather
+than a genome, and **it is not a translocation caller**: a ranked table against a stated null is a
+summary of the file, and a call would need false-discovery control and a golden built from
+`hic_breakfinder`'s own output, which is §18.9's bar and which nothing here attempts. The diagonal
+is left out of the square rather than drawn, being one to three orders of magnitude above every
+other cell and therefore the whole colour scale.
+*Per-cell contact QC* is offered on an `.scool` and nowhere else, and it is there because the whole
+of that container's interaction is a decision nothing was helping anybody make: the Cells table ranks
+by `nnz` and `sum`, which is what the *writer* recorded and a statement about the sequencing rather
+than about the contacts. Per cell, from its own pixels: total contacts, cis fraction, and the share
+of its contacts in each of four separation bands — Nagano et al. (2017)'s, whose *near* against
+*mitotic* scatter is the cell cycle drawn as a horseshoe. The edges are typed in base pairs with that
+paper's mouse-sized defaults, because a yeast chromosome is inside the near band and the run says so
+rather than drawing a column of points on the axis. It costs exactly what a pseudo-bulk of the same
+cells costs — the same reads in the same order, with one accumulator per cell instead of one shared —
+and its numbers land back in the **Cells table** as sortable columns, because the gesture they are
+for is the one that table already has: sort, tick a run of rows, sum them. It does not assign a
+phase: the bands are a measurement with a citation and a cut through the horseshoe is a method with
+choices, and §18.9's argument applies to a phase call as it does to a loop call. *Diamond insulation* at any window, or several windows at once, with boundary calling from its
 minima; it never sums across a contig boundary, and never across a MAG boundary on a metacool.
 **Both scans on the map read a diagonal rather than a square**, and that is what decides how fine a
 resolution either can be run at. A diamond reaches `window` bins each side of the bin it scores and
@@ -3989,6 +4067,32 @@ rather than where the pattern did; and a table of the strongest calls. This is t
 output is a *claim about the data* rather than a summary of it, which is why §18.9's paragraph
 against loop calling is answered in that section rather than here, and why its golden is the
 package's own output rather than a re-derivation (§18.10).
+*Reproducibility* is the one task in the catalogue whose unit is a **pair of files**, and it is a
+port: HiCRep's stratum-adjusted correlation (Yang et al. 2017), which smooths both maps with a 2D
+mean filter, correlates each diagonal **separately** — where the decay the two share is a constant
+and contributes no variance — and pools the per-diagonal coefficients by the Cochran–Mantel–Haenszel
+weight `N_k √(var₁ₖ·var₂ₖ)`. Both halves are load-bearing. Plain Pearson on two matrices comes out
+near 0.9 for two *unrelated* maps of the same assembly, because almost all of the variance is in the
+one gradient every Hi-C map has; and without the smoothing the coefficient measures depth as much as
+structure, which is why two shallow replicates would score worse than two deep ones of different
+conditions. It reads a **band** rather than a square, so a mammalian chromosome is a few dozen
+bounded reads.
+
+**The other maps are the deck's**, in the order they are on screen and under the reader's own names
+(§16) — there is no second file picker, because a coefficient against a file that is not on screen
+is a number with nothing to look at beside it. The one thing the deck deliberately does not settle
+is the grid: §16's lock is in base pairs precisely so a 1 kb file and a 5 kb one can follow each
+other, and a stratum is a diagonal offset in *bins*, so a mismatched map is refused by name in the
+estimate exactly as §5.7's triangle refuses a mismatched pair. Three outputs: the N×N coefficient
+matrix on a fixed `[0, 1]` scale, the per-sequence table, and — the one that says more than the
+scalar — the **correlation against separation**, which distinguishes *these agree near the diagonal
+and not far from it*, which is a depth difference, from *these disagree everywhere*, which is two
+experiments. Two departures from the reference are stated where they are made
+(`analysis/hicrep.ts`): the reference is defined over dense raw counts and has no missing cells,
+so a smoothing window here is a mean over the cells that **have** values and a stratum is correlated
+over the positions where **both** maps do. Neither changes the answer on a file the reference was
+defined for.
+
 *CID* — insulation plus boundary calls plus a pileup over those calls — is **gone**, and its going is
 the argument that withheld it carried to its end. Everything it did is reachable and now in one place:
 insulation calls the boundaries, calls the domains between them, and an APA over those domains is the
@@ -4015,7 +4119,8 @@ to be on screen.
 of bigWig or synthetic tracks, with a bootstrap band and a companion per-feature heatmap — because the
 mean of a bimodal set is a line that describes nothing. *Aggregate peak analysis*, likewise in both
 **fixed** (centre ± W bins) and **scaled-region** (the domain, or the rectangle between two anchors,
-resampled to a fixed grid) modes; on-diagonal from a feature set and off-diagonal from a pair set;
+resampled to a fixed grid) modes; on-diagonal from a feature set, off-diagonal from a pair set, and
+off-diagonal from **every pair of one feature set** inside a separation range;
 normalised by **distance-matched controls by default**, by observed/expected, by **chromosight**, or
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
@@ -4056,8 +4161,58 @@ set is detrended against a curve fitted to short ranges; and **every anchor come
 not, because quantification answers about the positions it was given. It reports the same score
 spectrum the detector does, over the same templates.
 *Track correlation* across any set of tracks, over fixed bins or over a feature set's intervals.
+*Fraction of signal in features* — ChIP-seq's FRiP, over whatever is loaded: of everything a track
+carries, the share of it inside a chosen interval set, against the share of the assembly that set
+covers. The ratio of the two is the column to read, and it is the reason the covered fraction is
+beside the FRiP rather than behind it: thirty per cent of the signal in thirty per cent of the
+genome is a track with no preference at all, and the same FRiP over half a per cent is a sixtyfold
+enrichment. The quantity is an **area**, `Σ value × width`, and not a mean of per-feature means — the
+latter weights a 200 bp peak and a 20 kb domain alike, so it moves with the width distribution
+rather than with the signal, and every published FRiP is a ratio of sums. The features are merged
+before they are measured, or a GTF with one row per transcript counts its shared bases once per row
+and reports a fraction above one; the features are read finely and the assembly coarsely, because a
+span-weighted sum estimates the same area at any resolution *except at a boundary*, and a peak set is
+nothing but boundaries while a genome-wide total has almost none. Both resolutions are reported.
 *Interval overlap* — counts, Jaccard, intersection and differences — because "how many of my loops sit
 on a boundary" is the question that follows every domain call.
+
+**And that question is not answerable from those four numbers**, which is what the shuffle test
+under them is for. Every one of them is descriptive and none has a scale: forty per cent of a loop
+set on a boundary is either the result the run was made for or exactly what any forty per cent of the
+genome would have given. The null is `bedtools shuffle`'s — one set relocated uniformly at random
+**within the sequences it already occupies**, preserving its per-sequence count and its length
+distribution exactly, which is what makes the comparison about position rather than about size or
+about which chromosomes the set is on. Which of the two moves is a parameter, because the
+per-feature statistic is not symmetric and neither is the question: *are my loops on boundaries* and
+*are boundaries on my loops* have different nulls. Reported as the observed against the null's mean,
+a fold, a z and a permutation p on the tail the observation actually fell on — one tail rather than
+both, because a table offering both invites the smaller one to be quoted whichever way the result
+went. The p carries Phipson and Smyth's `+1` and therefore has a floor of `1/(iterations+1)`: an
+uncorrected permutation p can come out at exactly zero, which claims a significance the number of
+shuffles cannot support. A sequence whose length this session does not know is drawn over the
+furthest position either set reaches there, which is shorter than the sequence and overstates the
+enrichment — so it is named rather than absorbed.
+
+**The third anchor mode is the test a loaded loop set cannot be.** A BEDPE is somebody's claim about
+which pairs matter, so a pileup over one measures the claim; every pair of a peak set within a
+separation range is not a claim about anything, which is what makes it an answer to *do these places
+contact each other more than places like them do*. The pairs are generated by a sliding window over
+the set's own order, so the cost is the number of pairs **produced** rather than `n²` — four orders
+of magnitude apart on a genome-wide set with a 2 Mb reach — and past a cap they are **sampled with
+the run's own seed rather than truncated**, for §18.8's reason about the anchor cap that used to be
+here: taking the first two hundred thousand is taking whichever sequences sort first, and a pileup of
+chromosome I captioned *200,000 pairs* is a change of subject.
+
+**And either off-diagonal mode may be split by separation**, into log-spaced bands with a pileup and
+a control apiece. One pileup over pairs spanning 30 kb to 2 Mb is an average of a strong short-range
+contact and a weak long-range one, which is a picture of neither — and the bands are log-spaced on
+the observed range rather than by equal counts, because contact falls off with separation as a power
+law and equal-count bands over a skewed set give a first band spanning a decade and a last one
+spanning a factor of two, which are then not comparable with each other. Splitting by separation and
+splitting by rank are two divisions of the same anchors and never both at once: `N × K` panels is a
+figure nobody reads, so separation wins where it is asked for. A pair whose two anchors land in one
+bin has no separation to band by and goes in the nearest band rather than being dropped, since every
+anchor is piled up.
 
 Both aggregation tasks carry the same **ranking and subsetting** control: sort the features by any
 numeric column and take a top-N, a quantile band, or K equal groups aggregated separately. This is what
@@ -4182,6 +4337,29 @@ file from `cooler cload` returns a categorical of chromosome names. Everything n
 **No differential APA**, and **no differential insulation task**. Two insulation tracks from two files
 are two synthetic tracks, and comparing tracks is something the app already does; a task that only
 subtracts one from the other would be a worse version of a picture the reader can already make.
+
+**This does not reach a *statistic* about two maps, and the distinction is the whole of why
+reproducibility is built.** The argument above is that a subtraction is a worse version of an
+existing picture. A stratum-adjusted correlation is not a subtraction, derives nothing from two
+figures, and is not a picture at all — there is no arrangement of this app's outputs that produces
+it, which is the opposite of the case the paragraph refuses. `analysis/combine.ts` made the same
+distinction for overlaying N curves on one axis and it holds here with more force, because a curve
+at least *looks* like something the deck could draw and a coefficient does not. It is also a port
+rather than an invention, with the two things §18.9's rule for a port demands — a published,
+benchmarked method (`hicrep`, `hicreppy`) and the reference's own definition reproduced including
+where it is inconvenient.
+
+**No phase call on a single cell, and no clustering of cells.** Per-cell QC reports four band
+fractions per cell and draws the scatter they make; where to cut the horseshoe is a method with
+choices in it, and the paragraph at the top of this section applies to a phase label exactly as it
+applies to a loop. The reader ticks the cells, which is what they would be doing in the paper's own
+figure.
+
+**No translocation or structural-variant calling.** *Cis and trans per sequence* ranks sequence
+pairs against a stated null, which is a summary of the file in the sense the inter-MAG network is
+one. A **call** needs false-discovery control and a golden built from `hic_breakfinder`'s or
+`EagleC`'s own output, which is the bar the first paragraph of this section sets for any second
+caller, and neither is attempted.
 
 **And, restating C1 because this is the section most likely to erode it:** no analysis runs anywhere but
 in the reader's own browser. There is no compute service, no offloading of the expensive cases, and no

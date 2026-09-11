@@ -14,8 +14,11 @@
 
 import type { TaskRunner } from '../job'
 import { runApa } from './apa'
+import { runCellQc } from './cellqc'
 import { runChromosight } from './chromosight'
+import { runCisTrans } from './cistrans'
 import { runCompartments } from './compartments'
+import { runHicrep } from './hicrep'
 import { runCoverage } from './coverage'
 import { runExpected } from './expected'
 import { runFourC } from './fourc'
@@ -34,11 +37,14 @@ import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from './mags'
 export const RUNNERS: Record<string, TaskRunner> = {
   expected: runExpected,
   coverage: runCoverage,
+  cistrans: runCisTrans,
+  cellqc: runCellQc,
   insulation: runInsulation,
   fourc: runFourC,
   apa: runApa,
   chromosight: runChromosight,
   compartments: runCompartments,
+  hicrep: runHicrep,
   magqc: runMagQc,
   magnetwork: runMagNetwork,
   magpurity: runMagPurity,

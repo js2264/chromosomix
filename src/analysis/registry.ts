@@ -23,6 +23,9 @@
  */
 
 import { CHROMOSIGHT_TASK } from "./tasks/chromosight";
+import { CELL_QC_TASK } from "./tasks/cellqc";
+import { HICREP_TASK } from "./tasks/hicrep";
+import { CIS_TRANS_TASK } from "./tasks/cistrans";
 import { COVERAGE_TASK } from "./tasks/coverage";
 import { FOURC_TASK } from "./tasks/fourc";
 import { APA_TASK } from "./tasks/apa";
@@ -33,6 +36,7 @@ import {
   MAG_QC_TASK,
   MAG_SPLIT_TASK,
 } from "./tasks/mags";
+import { FRIP_TASK } from "./tasks/frip";
 import { OVERLAP_TASK } from "./tasks/overlap";
 import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
@@ -43,7 +47,10 @@ import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
 
 export const TASKS: readonly AnalysisTask[] = [
   // The map group reads outward from the axis: what every bin *has* first
-  // (coverage and the marginals), then how contact falls away from it (P(s)),
+  // (coverage and the marginals), then what every *sequence* has — cis, trans
+  // and which pairs of sequences touch, which is the same question one level up
+  // and the one that says whether the assembly is the karyotype — then how
+  // contact falls away from the diagonal (P(s)),
   // then one locus's slice of that decay (4C), then the domains it resolves
   // into (insulation), then the compartments those domains sit in. Each is a
   // question the one before it makes it sensible to ask. Detection comes last
@@ -51,11 +58,14 @@ export const TASKS: readonly AnalysisTask[] = [
   // decay the tasks above it describe, and what it produces — a loop set — is
   // what the aggregation tasks below it take as input.
   COVERAGE_TASK,
+  CIS_TRANS_TASK,
+  CELL_QC_TASK,
   EXPECTED_TASK,
   FOURC_TASK,
   INSULATION_TASK,
   COMPARTMENTS_TASK,
   CHROMOSIGHT_TASK,
+  HICREP_TASK,
   // The tracks group opens with the one task that *makes* an interval set out of
   // the file rather than reading one somebody loaded: a motif search answers
   // where a sequence occurs, and what it produces is exactly the input the three
@@ -65,6 +75,7 @@ export const TASKS: readonly AnalysisTask[] = [
   METAPLOT_TASK,
   APA_TASK,
   TRACK_CORRELATION_TASK,
+  FRIP_TASK,
   OVERLAP_TASK,
   MAG_QC_TASK,
   MAG_NETWORK_TASK,
