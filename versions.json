@@ -198,13 +198,6 @@
       "title": "Five new analysis tasks, and two that could not answer a question they were for",
       "branch": "claude/browser-analysis-review-ld1e0p",
       "date": "2026-09-11T21:55:05Z"
-    },
-    {
-      "number": 44,
-      "commit": "d09469e",
-      "title": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox",
-      "branch": "claude/remote-file-providers-tu9b1q",
-      "date": "2026-09-11T22:01:59Z"
     }
   ]
 }
