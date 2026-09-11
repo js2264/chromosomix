@@ -30,11 +30,11 @@ import { execSync } from 'node:child_process'
 import { chmodSync, readFileSync } from 'node:fs'
 import { join as joinPath } from 'node:path'
 
-const VERSION = (
-  JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
-    version?: string
-  }
-).version ?? '0.0.0'
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version?: string
+  homepage?: string
+}
+const VERSION = pkg.version ?? '0.0.0'
 
 function gitCommit(): string {
   try {
@@ -77,6 +77,7 @@ export default defineConfig({
   plugins: [executable()],
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
+    __APP_HOMEPAGE__: JSON.stringify(pkg.homepage ?? ''),
     __APP_COMMIT__: JSON.stringify(gitCommit()),
     __APP_COMMIT_DATE__: JSON.stringify(''),
     __APP_TARGET__: JSON.stringify('cli'),

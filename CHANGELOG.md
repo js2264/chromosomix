@@ -20,7 +20,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   without opening anything. The picker draws it as a sortable, filterable table and offers three
   built-in hubs: the **Demos**, now with two 4DN open-data maps beside the four workspaces;
   **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals by
-  `.github/workflows/hubs.yml` and read off the `hubs` branch. Paste a URL to connect a lab's hub,
+  `.github/workflows/hubs.yml` and published beside the app by the deploy. Paste a URL to connect a lab's hub,
   or arrive on it with `?hub=<url>` beside `?config=` and `?embed=`. A row may be a workspace, which
   is what a *pre-configured session* is; a row carries its size so the cost is on the table before
   the click. Nothing is fetched on load: a hub is read when it is chosen.

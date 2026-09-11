@@ -58,6 +58,8 @@
 import { splitUri } from './labels'
 import type { Hub, HubEntry, HubRef } from '../state/hub'
 import { HUB_KIND, HUB_VERSION } from '../state/hub'
+import { HOMEPAGE } from '../version'
+import { SITE_BASE } from '../versions'
 
 export type { HubRef } from '../state/hub'
 
@@ -376,19 +378,45 @@ const DEMO_4DN: HubEntry[] = [
 ]
 
 /**
- * Where the generated hubs are published.
+ * Where the generated hubs are read from: the site's own `hubs/` directory.
  *
- * The `hubs` branch of this repository rather than the deployed site, and raw
- * GitHub rather than a bucket: `raw.githubusercontent.com` serves
- * `Access-Control-Allow-Origin: *` and needs no build, so a fork gets the whole
- * arrangement with no secret to add (§24.3). The site is rebuilt from `main` on
- * every push, and a weekly hub is fresher than that.
+ * `.github/workflows/hubs.yml` writes them to the `hubs` branch, and
+ * `.github/workflows/deploy.yml` copies the current three files from that
+ * branch into `hubs/` beside the app on every deploy — which the hubs workflow
+ * asks for as soon as it has published, so a fresh hub is on the site minutes
+ * later with no push to `main` (§24.3). The branch is where the workflow
+ * *writes*; the site is where a browser *reads*, and the reason that
+ * distinction exists took a private repository to notice: the first design
+ * read the branch straight off `raw.githubusercontent.com`, which answers 404
+ * to anyone not logged in when the repository is private — and a Pages site is
+ * public whether or not its repository is. Same origin as the page, so no CORS
+ * enters into it; an archived build or a preview reaches up to the site root
+ * through `SITE_BASE`, since the hubs are published once and not per copy.
  *
- * **Both 404 until `.github/workflows/hubs.yml` has run once**, which is a state
- * rather than a failure and is the reason `fetchHub` tells 404 apart from every
- * other answer: the table says "not generated yet" and names the workflow.
+ * A build with no site to be relative to — the desktop's `app://viewer`, a
+ * standalone file — reads the deployed site by its absolute address, which is
+ * `package.json`'s `homepage`; GitHub Pages serves every file with
+ * `Access-Control-Allow-Origin: *`, so that read is allowed from anywhere. With
+ * no homepage either, the path is left relative and answers 404, which the
+ * table reports as the state it is.
+ *
+ * **Both 404 until `hubs.yml` has run once and the deploy it asks for has
+ * finished**, which is a state rather than a failure and is the reason
+ * `fetchHub` tells 404 apart from every other answer: the table says "not
+ * generated yet" and names the workflow.
  */
-const HUBS_BRANCH = 'https://raw.githubusercontent.com/js2264/metacooler.js/hubs/'
+function hubsBase(): string {
+  const onSite = typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)
+  if (onSite) {
+    try {
+      return `${new URL(SITE_BASE, window.location.href).href}hubs/`
+    } catch {
+      // Fall through to the deployed site: a base that does not resolve is not
+      // a site this page is on.
+    }
+  }
+  return `${HOMEPAGE}hubs/`
+}
 
 /** The Demos hub: the four published workspaces, and two files that are not ours. */
 function demosHub(): Hub {
@@ -434,8 +462,8 @@ function demosHub(): Hub {
 export function builtinHubs(): HubRef[] {
   return [
     { id: 'demos', label: 'Demos', hub: demosHub(), builtin: true },
-    { id: '4dn', label: '4DN open data', url: `${HUBS_BRANCH}4dn.json`, builtin: true },
-    { id: 'encode', label: 'ENCODE Hi-C', url: `${HUBS_BRANCH}encode.json`, builtin: true },
+    { id: '4dn', label: '4DN open data', url: `${hubsBase()}4dn.json`, builtin: true },
+    { id: 'encode', label: 'ENCODE Hi-C', url: `${hubsBase()}encode.json`, builtin: true },
   ]
 }
 

@@ -5029,13 +5029,20 @@ non-zero so that a workflow never overwrites a good hub with an empty one.
 `.github/workflows/hubs.yml` runs both portal front ends weekly and on demand, uploads the pair as
 a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes them to the
 `hubs` branch: `4dn.json`, `encode.json`, an `index.json` naming what is there, and dated copies
-under `archive/`. The viewer reads
-`https://raw.githubusercontent.com/<owner>/<repo>/hubs/<name>.json`, which serves
-`Access-Control-Allow-Origin: *` and needs no build. A branch rather than the site because the
-site is built from `main` on every push and a hub is fresher than that; a branch rather than a
-bucket because a fork gets the whole arrangement with no secret to add. Every generated hub
-carries `generatedAt` and `source` — the query it came from — because a shelf with no provenance
-is a screenshot.
+under `archive/`. The branch is where the workflow *writes*; where a browser *reads* is the
+**site**: `.github/workflows/deploy.yml` copies the three current files from the branch into
+`hubs/` beside the app on every deploy, and the hubs workflow asks for a deploy as soon as it has
+published, so a fresh hub is on the site minutes later with no push to `main`. The viewer reads
+`<site>/hubs/<name>.json` — same origin, so no CORS enters into it, and an archived build or a
+preview reaches up to the site root for it, since the hubs are published once and not per copy; a
+build with no site to be relative to (the desktop, a standalone file) reads the deployed site by
+`package.json`'s `homepage`, which GitHub Pages serves with `Access-Control-Allow-Origin: *`. Not
+`raw.githubusercontent.com`, which was the first design: it answers 404 to anyone not logged in
+when the repository is private, and a Pages site is public whether or not its repository is. A
+branch rather than a commit to `main` because a hub is data about somebody else's data and changes
+on their cadence; a branch rather than a bucket because a fork gets the whole arrangement with no
+secret to add. Every generated hub carries `generatedAt` and `source` — the query it came from —
+because a shelf with no provenance is a screenshot.
 
 The catalogues juicebox.js reads (`igvteam/igv-data`, MIT) were read while designing this and are
 a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-links another

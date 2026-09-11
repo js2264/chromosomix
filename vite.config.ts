@@ -7,6 +7,7 @@ import { precacheUrls } from './scripts/sw-manifest.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
+  homepage?: string
 }
 
 /**
@@ -98,6 +99,7 @@ export default defineConfig({
   // the output as an undefined identifier, which is why neither is optional.
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
+    __APP_HOMEPAGE__: JSON.stringify(pkg.homepage ?? ''),
     __APP_COMMIT__: JSON.stringify(COMMIT),
     __APP_COMMIT_DATE__: JSON.stringify(git(['log', '-1', '--format=%cs'])),
     __APP_TARGET__: JSON.stringify('web'),

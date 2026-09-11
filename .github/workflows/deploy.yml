@@ -29,6 +29,7 @@ concurrency:
 # Pages source stays "GitHub Actions" and there is no setting to change.
 env:
   ARCHIVE_BRANCH: pages-archive
+  HUBS_BRANCH: hubs
 
 jobs:
   build:
@@ -108,6 +109,23 @@ jobs:
             git -C archive remote add origin "$remote"
           fi
 
+      # The generated hubs, which hubs.yml keeps on a branch of their own and
+      # the viewer reads from the site (docs/hubs.md): the picker's 4DN and
+      # ENCODE shelves. The same shallow, by-token fetch as the archive; only
+      # the three current files are copied in below, never the dated copies.
+      # Absent until that workflow has run once, and the picker says so.
+      - name: Fetch the published hubs
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$HUBS_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$HUBS_BRANCH" "$remote" hubs
+          else
+            echo "No $HUBS_BRANCH branch yet — the picker will say so until the Hubs workflow has run."
+          fi
+
       - name: Archive this build and prune what falls out of the window
         run: node scripts/archive-versions.mjs archive dist-pinned
 
@@ -136,14 +154,21 @@ jobs:
       # cannot disagree about what exists.
       # `pr/` holds the pull-request previews, written by preview.yml into the
       # same branch and listed in the same manifest; absent until the first
-      # pull request has been previewed, hence the test.
+      # pull request has been previewed, hence the test. `hubs/` is the three
+      # current files of the hubs branch, fetched above, on the same terms.
       - name: Assemble the site
         run: |
           set -euo pipefail
           cp -R archive/v dist/v
           if [ -d archive/pr ]; then cp -R archive/pr dist/pr; fi
           cp archive/versions.json dist/versions.json
-          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr )
+          if [ -d hubs ]; then
+            mkdir -p dist/hubs
+            for name in 4dn.json encode.json index.json; do
+              if [ -f "hubs/$name" ]; then cp "hubs/$name" dist/hubs/; fi
+            done
+          fi
+          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr ) $( [ -d dist/hubs ] && echo dist/hubs )
 
       - uses: actions/upload-pages-artifact@v3
         with:

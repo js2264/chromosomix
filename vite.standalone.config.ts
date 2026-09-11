@@ -50,6 +50,7 @@ import { standaloneIndexProblems } from './scripts/standalone-shape.mjs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version?: string
+  homepage?: string
 }
 const VERSION = pkg.version ?? '0.0.0'
 
@@ -170,6 +171,7 @@ export default defineConfig({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(VERSION),
+    __APP_HOMEPAGE__: JSON.stringify(pkg.homepage ?? ''),
     __APP_COMMIT__: JSON.stringify(git(['rev-parse', '--short', 'HEAD'])),
     __APP_COMMIT_DATE__: JSON.stringify(git(['log', '-1', '--format=%cs'])),
     __APP_TARGET__: JSON.stringify('standalone'),

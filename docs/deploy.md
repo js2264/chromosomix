@@ -470,6 +470,18 @@ maintainer who wants a preview of a fork's change pushes it to a branch here.
 archive lives in, and gone when the pull request is. A pull request open for a month with fifty
 pushes still costs one directory.
 
+### The generated hubs are published here too
+
+The picker's **4DN open data** and **ENCODE Hi-C** hubs are JSON files that
+`.github/workflows/hubs.yml` regenerates weekly and commits to the `hubs` branch (docs/hubs.md).
+The deploy copies the three current files from that branch into `hubs/` beside the app, so the
+viewer reads them from its own origin, and the hubs workflow dispatches a deploy as soon as it has
+published something new — the arrangement the previews use, on the same `pages` concurrency group.
+The branch was first meant to be read directly over `raw.githubusercontent.com`; that host answers
+404 to anyone not logged in when the repository is private, and a Pages site is public whether or
+not its repository is, which is why the copy lives here. Absent until the hubs workflow has run
+once, hence the test in the assembly step.
+
 ## Why Pages works at all for this app
 
 Worth recording, because it is the usual reason a wasm app *cannot* be on Pages: GitHub Pages does
