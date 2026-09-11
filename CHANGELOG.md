@@ -51,11 +51,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   says otherwise.
 
 - **Sign in to Google to read private Drive files and GCS objects.** The lab supplies a client id
-  registered for the app's origin, as it supplies a bucket key; the token lives in this tab's memory
-  and rides every request as a header; a `401` from a Google host offers sign-in instead of the CORS
-  explanation. The dialog says the one thing a consent screen buries: `drive.readonly` is all of the
-  reader's Drive, where a bucket scope is one prefix. Absent in the standalone build, which has no
-  origin to register.
+  registered for the app's origin, as it supplies a bucket key (**Connect → A Google account**);
+  the token lives in this tab's memory, is never written down, and rides every request as a
+  header; a `401` or `403` from a Google host offers *sign in* on the error screen instead of the
+  CORS explanation, and retries the open once it succeeds. The dialog says the one thing a consent
+  screen buries: `drive.readonly` is all of the reader's Drive, where a bucket scope is one prefix.
+  Absent in the standalone build, which has no origin to register, and in the desktop build, whose
+  `app://` origin Google will not register either; the API-key half stays in both. Nothing here
+  could be exercised against Google from where it was written — `docs/hosting.md` ends with the
+  five-step check to run once, and it is the one item of this release still to be confirmed by hand.
 
 - **The README says what already works.** Object storage, not one vendor: R2, MinIO, Azure with a
   SAS, GCS through its JSON-API URL and the 4DN and ENCODE buckets all opened before this release;
