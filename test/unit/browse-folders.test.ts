@@ -50,6 +50,14 @@ import '../../src/browse/gdrive'
 import { handleFolder, snapshotFolder } from '../../src/browse/local'
 import { routeOf, unroutableNote } from '../../src/browse/route'
 import { addDriveRow } from '../../src/state/drives'
+import { DROPBOX_FOLDER_ID } from '../../src/browse/dropbox'
+import {
+  beginSignIn,
+  finishSignIn,
+  setDropboxFetch,
+  signOut as dropboxSignOut,
+  writeAppKey,
+} from '../../src/auth/dropbox'
 
 /** A `File` with the relative path a `webkitdirectory` input would give it. */
 function fileAt(path: string, size = 10): File {
@@ -414,5 +422,88 @@ describe('a backend that registers itself', () => {
 
     signOut()
     expect(await folderUsable(folder)).toBe(false)
+  })
+})
+
+/**
+ * The third kind of place, which composes itself in rather than being named.
+ *
+ * `browse/connected.ts` knows about the disk and the bucket because they were
+ * here first; a Dropbox registers itself at its own module load, so the file
+ * every panel subscribes to imports nothing that reaches for a token and a
+ * backend absent from a build (§19) simply never registers. Two properties of
+ * that arrangement are worth pinning, because both are invisible until somebody
+ * opens the panel:
+ *
+ * - **The rows are read on every call**, so an app key saved in the dialog puts
+ *   the folder in the panel without either screen knowing the other exists —
+ *   and a browser that was never given one contributes no folder at all, rather
+ *   than one that refuses when it is clicked.
+ * - **`usable` follows the sign-in**, which nothing else in this file has to:
+ *   a reload empties the bearer registry, so the folder that was browsable
+ *   yesterday is still listed and is not usable this morning. A backend that
+ *   answered `true` here would draw an ordinary folder row that answers 401 on
+ *   the first click.
+ */
+describe('a folder backend that registers itself', () => {
+  const APP_KEY = 'a1b2c3d4e5f6g7h'
+
+  /** Sign in through the real exchange, with the one response stubbed. */
+  const signIn = async (): Promise<void> => {
+    setDropboxFetch(
+      (() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ access_token: 'sl.TOKEN', expires_in: 14_400 }),
+          text: () => Promise.resolve(''),
+        } as unknown as Response)) as unknown as typeof fetch,
+    )
+    await beginSignIn()
+    await finishSignIn('CODE')
+  }
+
+  const dropbox = () => connectedFolders().find((folder) => folder.kind === 'dropbox')
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    setDropboxFetch(
+      (() => Promise.resolve({ ok: true, status: 200 } as unknown as Response)) as unknown as typeof fetch,
+    )
+    dropboxSignOut()
+  })
+
+  afterEach(() => {
+    dropboxSignOut()
+    setDropboxFetch(null)
+    window.localStorage.clear()
+  })
+
+  it('contributes nothing until there is an app to reach it with', () => {
+    expect(dropbox()).toBeUndefined()
+  })
+
+  it('appears among the connected folders the moment a key is stored', () => {
+    writeAppKey(APP_KEY)
+    const folder = dropbox()
+    expect(folder?.id).toBe(DROPBOX_FOLDER_ID)
+    expect(folder?.label).toBe('Dropbox')
+    expect(folder?.root).toBe('/')
+  })
+
+  it('is listed but not usable until the reader signs in', async () => {
+    writeAppKey(APP_KEY)
+    const folder = dropbox()
+    expect(folder).toBeDefined()
+    // Listed and refused, which is the honest pair: the folder is connected —
+    // the app key says so — and reading it needs a token this page does not
+    // have until somebody signs in.
+    expect(await folderUsable(folder!)).toBe(false)
+
+    await signIn()
+    expect(await folderUsable(folder!)).toBe(true)
+
+    dropboxSignOut()
+    expect(await folderUsable(folder!)).toBe(false)
   })
 })

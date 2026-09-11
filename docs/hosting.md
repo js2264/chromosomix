@@ -459,6 +459,92 @@ register and no sign-in section in its dialog. The desktop build serves itself f
 and Google's console accepts only `http`/`https` JavaScript origins, so it has none to register
 either and the section is absent there too; a public Drive file still opens there with the API key.
 
+### Reading from Dropbox
+
+Two different things live behind that name, and only the second needs anything set up.
+
+A Dropbox **share link** pasted into the URL box opens today, with no account and nothing
+registered: the viewer swaps the host to `dl.dropboxusercontent.com`, which serves ranges and
+answers CORS for every origin (SPECS §23.5). Nothing below applies to it.
+
+**Browsing** a Dropbox — the folder in the Files panel, one level at a time — is the other thing,
+and it needs the reader's own account: the listing API takes a bearer token and nothing else, so
+there is no public way to browse a Dropbox the way a public bucket can be browsed. That needs an
+**app key the lab registers**. SPECS §20 and §23.7 are the specification; `src/auth/dropbox.ts` and
+`src/browse/dropbox.ts` are the implementation.
+
+There is no app key in this repository, for the reason there is no Google client id: it names the
+lab's own registration, and a shared one would be everybody's. Making one, in the Dropbox App
+Console:
+
+1. **App Console → Create app → Scoped access.**
+2. Choose the access the app gets: **App folder** or **Full Dropbox**. App folder confines it to a
+   single directory Dropbox creates for it, which is the narrower grant and the one to prefer where
+   the data can live there; Full Dropbox is read access to the whole account. The viewer shows
+   whichever it was given and cannot tell from the outside which one it has — the App Console entry
+   is where that is written down.
+3. **Permissions tab:** tick `files.metadata.read` and `files.content.read`, and submit. Those two
+   and no others: there is no `account_info.read`, so the app never learns whose account it is, and
+   the dialog says as much rather than printing an address it does not have. A permission added
+   *after* somebody has signed in does not apply to the token they are holding — they sign out and
+   in again.
+4. **Settings tab:** copy the **App key** and paste it into **Connect → Dropbox**. Leave
+   **Redirect URIs empty.** The viewer asks for a code with no `redirect_uri`, which is what makes
+   Dropbox display the code on its own page for the reader to copy — and that is why one app key
+   works for the published site, a fork of it on another domain, the desktop build and a local
+   `npm run dev`, with nothing registered per address. The **App secret** beside it is for server
+   applications and is never used here: there is no server to keep it in (C1), and PKCE (RFC 7636)
+   is what stands in for it — the page proves it asked for the code by presenting a random verifier
+   whose SHA-256 it sent with the request.
+
+**What the reader is agreeing to**, which the dialog says in two sentences: the app is granted read
+access to everything in their Dropbox, or to the app's own folder inside it, depending on step 2 —
+and the token this produces is held **in this tab's memory only**, never written to storage, gone
+when the tab closes, and expiring on the `expires_in` Dropbox returns with it, which the dialog
+shows as a clock time. `token_access_type=online`, so no refresh token comes back: a refresh token
+is a long-lived credential, and storing one is the thing §23.8 refuses outright.
+
+**A picked file's link lasts four hours.** Clicking a file in a Dropbox folder calls
+`/2/files/get_temporary_link`, which answers a URL on `dl.dropboxusercontent.com` that carries its
+own authorisation and, by Dropbox's own documentation, expires four hours later. Two consequences
+worth knowing before they happen:
+
+- The share link this viewer produces for such a file **is that URL**, so a session link sent to a
+  colleague stops working the same afternoon. For something durable, send them the Dropbox share
+  link instead — the viewer rewrites it to the content host, and it lasts as long as the share does.
+- A map left open past the expiry fails on its next read, the way any expired link fails. Picking
+  the file again in the panel mints a new one; there is deliberately nothing in the viewer that
+  watches the clock and re-mints behind the reader's back.
+
+**The manual check**, which is the only way to verify this end to end — the flow needs
+`www.dropbox.com`, a real authorization page and a real Dropbox, none of which a test environment
+has:
+
+1. Register the app as above, serve the viewer (`npm run dev` is the quickest), and open it.
+2. **Connect → Dropbox:** paste the app key, press *save*. The line under the box should print it
+   back, and *sign in with Dropbox* should stop being disabled.
+3. Press *sign in with Dropbox*. A Dropbox tab opens asking to allow the app; allow it, and Dropbox
+   shows a code instead of returning to the viewer. Copy the code into the box that has appeared and
+   press *finish*. The section should then say **signed in**, with the time the token is good until,
+   and offer *browse my Dropbox* and *sign out*.
+4. Press *browse my Dropbox*. The Files panel opens on the root of what the app was granted, folders
+   first; walking into a folder lists that folder and nothing below it. Click a `.mcool`, `.cool`,
+   `.metacool` or `.hic` and the map opens. A file this viewer has no route for is listed, dimmed,
+   with the reason in its tooltip — it is not hidden (§20.5).
+5. Press *sign out*, then click a folder in the panel again. It must refuse, in words, with an offer
+   to sign in to Dropbox — not list, and not report a CORS problem.
+6. Reload the page. The Dropbox is still in the Files panel, because the app key is stored; it is
+   not usable until you sign in again, because the token never was.
+
+Steps 5 and 6 are the pair worth doing carefully: together they are the assertion that the token is
+what read the folder, and that nothing was written down that goes on reading it afterwards.
+
+**Where it is absent.** The single-file build (§19) has an opaque origin, so every request to
+Dropbox fails before a byte moves and the section is absent from its dialog. The desktop build keeps
+it, unlike the Google sign-in above: nothing here is registered against an origin, so `app://viewer`
+signs in as well as a website does — the authorize page opens in the machine's real browser
+(`electron/main.cts` sends every `window.open` there), and the code is pasted back into the app.
+
 ## What already works, host by host
 
 "Supports S3" undersells it: what the reader supports is *object storage*, and the only two things
@@ -476,6 +562,7 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 | Azure Blob, public container or a SAS URL | yes | CORS on the storage account |
 | Google Drive share link | with a Google API key (public file) or a signed-in account (private) | a Google project of the lab's own — see [above](#reading-from-google-drive-and-gcs-with-an-account) |
 | Dropbox share link | yes | nothing; the link is rewritten to the content host |
+| Dropbox folder, browsed in the Files panel | with a signed-in account | a Dropbox app of the lab's own — see [above](#reading-from-dropbox) |
 | Presigned S3 or signed GCS URL, Azure SAS | yes, until it expires | nothing |
 | GitHub Pages, GEO, SRA | no | cannot be fixed by the owner (compression; no ranges; no CORS) |
 | Aiden Lab `hicfiles.s3.amazonaws.com` | no browser can | the bucket refuses every browser user agent |
