@@ -378,7 +378,7 @@ describe('showing a hub directly', () => {
     entries: [{ label: 'a hit', uri: 'https://h/a.hic', kind: 'map' }],
   }
 
-  it('draws it with no fetch and no reference — what a portal search hands over', () => {
+  it('draws it with no fetch and no reference — a hub handed over already in hand', () => {
     const built = build([SHELF])
     built.table.show(HUB)
     expect(requested).toEqual([])

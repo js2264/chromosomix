@@ -32,11 +32,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `docs/remote-sources.md`: the unmodified viewer already opened a 2.2 GB 4DN `.mcool` in 7.8 s
   over 13 requests; what was missing was a name for it.
 
-- **Search a portal from the picker.** ENCODE's and 4DN's search APIs, asked for released Hi-C
-  files matching a query, answered as a hub in the same table. A portal that will not let the page
-  read its results says so and points at the generated hub, which lists the same files; nothing is
-  proxied (C1).
-
 - **Links that were not yet the file now open as pasted.** A Dropbox share link is read from the
   content host; a Google Drive share link becomes the Drive API's ranged form (a public file needs
   the lab's API key, kept beside the bucket keys; a private one, the account below); `gs://` and

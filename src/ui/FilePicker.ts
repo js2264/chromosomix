@@ -25,7 +25,6 @@ import { appMark } from './mark'
 import { canonicalUrl } from '../sources/rewrite'
 import { splitUri } from './labels'
 import { HubTable } from './HubTable'
-import { PortalSearch } from './PortalSearch'
 import { registerShelf } from './examples'
 import { addHubRow } from '../state/hubs'
 import type { HubEntry, HubRef } from '../state/hub'
@@ -210,24 +209,6 @@ export class FilePicker {
                 'until you choose one.',
             }),
             this.hubs.el,
-            // The other way onto the same table (§23.4): ask ENCODE or 4DN
-            // directly for one page of released Hi-C files matching a query.
-            // The form fetches nothing until its button is pressed, and what
-            // comes back is a hub, drawn by the table above — never a second
-            // table with rules of its own.
-            el('p', {
-              class: 'hint hubs-portal-hint',
-              text:
-                'Or ask a portal directly: one page of released Hi-C files matching a query, ' +
-                'shown in the same table. A portal that will not answer this page says so.',
-            }),
-            new PortalSearch({
-              onResults: (hub) => this.hubs?.show(hub),
-              // The form prints the message on its own status line; the table
-              // keeps whatever it was showing, since a failed search is not a
-              // reason to lose a shelf that had loaded.
-              onError: () => undefined,
-            }).el,
           )
 
     // The privacy note comes *last*. It is reassurance about what the controls

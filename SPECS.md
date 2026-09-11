@@ -4893,16 +4893,19 @@ a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-l
 project's file inherits that project's cadence and schema, and the point of the format is that
 this viewer owns what it offers.
 
-### 23.4 Live search over a portal
+### 23.4 Live search over a portal (withdrawn)
 
-`state/portal.ts` asks a portal's own search API — ENCODE's, whose CORS is a documented line of its
-Apache configuration; 4DN's, whose CORS was not verifiable when this was written — for released
-Hi-C files matching a free-text query, and turns one page of hits into **a hub**, drawn by the
-same table (§23.1: a hit has a biosource; a folder row has a name). `ui/PortalSearch.ts` is the
-form: a portal, a query, a button, nothing on load. A portal that will not let this page read its
-results is reported in those words, with the generated hub named as the alternative that lists the
-same files, and is **never proxied** — a proxy is the server C1 forbids, and §23.3 is the answer
-that needs none.
+Built, and taken out again before release. A form (`ui/PortalSearch.ts`, over `state/portal.ts`)
+asked a portal's own search API from the browser for released Hi-C files matching a free-text
+query and drew one page of hits as a hub in the §23.1 table. ENCODE answered, its CORS being a
+documented line of its Apache configuration. 4DN's portal, whose CORS could not be verified when
+the form was written, was observed from the deployed preview on 2026-09-11 answering with no
+`Access-Control-Allow-Origin`: the browser discards such a response and hands script no detail,
+and nothing here may proxy (C1). A form that could only ever fail on the portal it was most wanted
+for, and whose hits on the other were files the generated hub already lists, did not earn its
+place on the picker. The generated hubs (§23.3) are the whole answer for both portals — served from a host
+that answers browsers, searched by the table's own filter — and the form is in the history should
+a portal start answering cross-origin.
 
 ### 23.5 URLs that are not yet the file
 

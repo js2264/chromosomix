@@ -17,8 +17,9 @@
  * memory** and nothing is ever refetched. The line under the table says how many
  * of how many are showing, which is what keeps "not in this hub" from reading as
  * "not anywhere" — and what makes it obvious that a second hub is a different
- * question. Searching *across* hubs is `ui/PortalSearch.ts`'s job, and it
- * answers by producing a hub of its own for this same table to draw.
+ * question, which this table does not try to answer. Asking the portals' own
+ * search APIs from the browser was built and withdrawn (SPECS §23.4): the
+ * shelf *is* the search, and the generated hubs are what it searches.
  *
  * ## Nothing is fetched until somebody asks
  *
@@ -175,9 +176,9 @@ export class HubTable {
   /**
    * Replace what the table shows. Absolute entries only (already resolved).
    *
-   * `ref` is what the hub was reached *through*, and it is optional because it
-   * is not always one: `ui/PortalSearch.ts` hands over a hub built out of a
-   * query, which has no reference and nothing to remember.
+   * `ref` is what the hub was reached *through*, and it is optional because a
+   * hub can be handed over already in hand — built in memory, out of anything —
+   * and then there is no reference and nothing to remember.
    */
   show(hub: Hub, ref?: HubRef): void {
     // A hub shown directly is not the answer to a load that is still in flight,
