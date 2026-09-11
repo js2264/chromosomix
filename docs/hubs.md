@@ -101,15 +101,19 @@ never by the portal's `@@download` path, which answers with a link presigned for
 `.github/workflows/hubs.yml` — **Actions → Hubs** — runs both portal front ends every Monday and on
 demand, uploads the pair as a timestamped workflow artifact (`hubs-<date>`, kept ninety days), and
 publishes them to the `hubs` branch: `4dn.json`, `encode.json`, an `index.json` naming what is
-there, and dated copies under `archive/`. The picker's built-in **4DN open data** and **ENCODE
-Hi-C** hubs read `https://raw.githubusercontent.com/<owner>/<repo>/hubs/<name>.json`, which serves
-`Access-Control-Allow-Origin: *` and needs no build.
+there, and dated copies under `archive/`. The branch is the store, not the door: the deploy
+(`.github/workflows/deploy.yml`) copies the three current files into `hubs/` beside the app on
+every deploy, and the hubs workflow asks for a deploy as soon as it has published something new.
+The picker's built-in **4DN open data** and **ENCODE Hi-C** hubs read `<site>/hubs/<name>.json` —
+the same origin as the page, so no CORS is involved and a private repository changes nothing; the
+desktop build reads the deployed site by the `homepage` in `package.json`.
 
 Until the workflow has run once on a fork, those two menu entries answer *not generated yet* and
 name the workflow to run. On the first run, check the "Generate both hubs" step's counts (well over
 a thousand 4DN rows once the `.mcool` twins are in, around two hundred ENCODE rows), that `--check`
-passed on both, and that `raw.githubusercontent.com/<owner>/<repo>/hubs/4dn.json` answers `200`. A
-second run must commit nothing when the portals answered the same thing.
+passed on both, that the deploy it asked for has finished, and that `<site>/hubs/4dn.json` answers
+`200`. A second run must commit nothing when the portals answered the same thing, and then asks for
+no deploy.
 
-A fork that would rather publish its hubs elsewhere changes the two URLs in `builtinHubs()`
-(`src/ui/examples.ts`) and the branch name in the workflow; nothing else knows where they live.
+A fork that would rather publish its hubs elsewhere changes `hubsBase()` in `src/ui/examples.ts`
+and the branch name in the two workflows; nothing else knows where they live.

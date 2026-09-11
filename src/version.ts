@@ -22,6 +22,7 @@
  */
 
 declare const __APP_VERSION__: string
+declare const __APP_HOMEPAGE__: string
 declare const __APP_COMMIT__: string
 declare const __APP_COMMIT_DATE__: string
 declare const __APP_TARGET__: string
@@ -31,6 +32,17 @@ export const VERSION: string = typeof __APP_VERSION__ === 'string' ? __APP_VERSI
 
 /** Short commit hash, or `''` when the build had no git repository. */
 export const COMMIT: string = typeof __APP_COMMIT__ === 'string' ? __APP_COMMIT__ : ''
+
+/**
+ * The deployed site, absolute, from `package.json`'s `homepage` — or `''`.
+ *
+ * What a build with no site of its own reaches for when it needs one: the
+ * desktop and a standalone file read the generated hubs from here
+ * (`ui/examples.ts`), having no origin of their own to publish beside. Empty
+ * in the test runtime, which defines nothing, and the code that reads it
+ * treats empty as "no site".
+ */
+export const HOMEPAGE: string = typeof __APP_HOMEPAGE__ === 'string' ? __APP_HOMEPAGE__ : ''
 
 /** `YYYY-MM-DD` of that commit, or `''`. */
 export const COMMIT_DATE: string =

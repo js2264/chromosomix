@@ -446,15 +446,16 @@ describe('the Demos hub', () => {
     }
   })
 
-  it('points the two generated hubs at the branch the workflow publishes', () => {
+  it('points the two generated hubs at hubs/ on the site the deploy copies them to', () => {
     for (const id of ['4dn', 'encode']) {
       const ref = builtinHubs().find((held) => held.id === id)
       expect(ref?.builtin).toBe(true)
       // A URL and no inline hub: nothing is fetched until a reader chooses one.
       expect(ref?.hub).toBeUndefined()
-      expect(ref?.url, `the ${id} hub must be read from the hubs branch`).toMatch(
-        /^https:\/\/raw\.githubusercontent\.com\/.+\/hubs\/.+\.json$/,
-      )
+      // No page in this runtime and no homepage defined, so the path is the
+      // bare `hubs/<id>.json`; `test/dom/builtin-hubs.test.ts` holds the
+      // on-a-page half, where it is the site's own origin.
+      expect(ref?.url, `the ${id} hub must be read from the site's hubs/`).toBe(`hubs/${id}.json`)
     }
   })
 })
