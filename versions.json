@@ -191,5 +191,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 49,
+      "commit": "4768de8",
+      "title": "Divide a map of several ticked genomes by genome, not by contig",
+      "branch": "claude/metacool-genome-dividers-labels-qta5r3",
+      "date": "2026-09-11T23:09:21Z"
+    }
+  ]
 }
