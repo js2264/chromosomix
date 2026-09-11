@@ -194,10 +194,10 @@
   "pulls": [
     {
       "number": 44,
-      "commit": "fda2fd4",
+      "commit": "ab9b439",
       "title": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox",
       "branch": "claude/remote-file-providers-tu9b1q",
-      "date": "2026-09-11T19:43:32Z"
+      "date": "2026-09-11T21:39:40Z"
     }
   ]
 }
