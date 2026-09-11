@@ -25,7 +25,9 @@ import type { ByteSource, SourceStats } from '../types'
 import { ViewerError } from '../errors'
 import type { H5FSNode } from '../h5/bootstrap'
 import { getH5 } from '../h5/bootstrap'
-import { signS3Request, type S3Credential } from '../s3/sigv4'
+import type { S3Credential } from '../s3/sigv4'
+import { accessHeaders } from './access'
+import { isSignedUrl } from './rewrite'
 
 /** 1 MiB. Large enough that HDF5's metadata walk lands repeatedly in one chunk. */
 const DEFAULT_CHUNK_SIZE = 1 << 20
@@ -56,6 +58,15 @@ export interface RemoteRangeOptions {
    * from there.
    */
   credential?: S3Credential
+  /**
+   * Static headers for every request this source makes (SPECS §23.7).
+   *
+   * An API key or a bearer token, decided on the main thread where the storage
+   * is. Unlike the credential above they are not recomputed per request — there
+   * is nothing in them that goes stale within a session — so they are simply
+   * held and merged in front of the signature by `sources/access.ts`.
+   */
+  headers?: Record<string, string>
 }
 
 export class RemoteRangeSource implements ByteSource {
@@ -74,6 +85,7 @@ export class RemoteRangeSource implements ByteSource {
   private bytesRead: number
   private mountPath: string | null = null
   private readonly credential: S3Credential | undefined
+  private readonly headers: Record<string, string> | undefined
 
   private constructor(
     url: string,
@@ -85,6 +97,7 @@ export class RemoteRangeSource implements ByteSource {
     this.id = url
     this.size = size
     this.credential = options.credential
+    this.headers = options.headers
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
     const requested = Math.trunc(options.maxCacheBytes ?? DEFAULT_CACHE_BYTES)
     this.maxCacheBytes = Math.max(this.chunkSize, requested)
@@ -102,6 +115,17 @@ export class RemoteRangeSource implements ByteSource {
    * `no-cors` mode does not require CORS headers, so if that one succeeds while
    * the plain request failed, the host is reachable and the response was
    * blocked by the browser's CORS check.
+   *
+   * ## The `HEAD` is skipped for a URL that carries its own signature
+   *
+   * A presigned S3 URL and a signed GCS one are signed for **one method**, so
+   * the probe below is refused where the `GET` behind it would have been served
+   * — which is what §11 recorded as "presigned URLs do not work" and what SPECS
+   * §23.6 now unwinds. There is nothing to add for it: the `bytes=0-0` probe is
+   * already the road taken by every host that says nothing about ranges (4DN's
+   * bucket is one), and it yields both answers the `HEAD` would have. So a
+   * signed URL takes that road from the start, and a link that expires opens and
+   * later stops opening with the `403` that says so.
    */
   static async open(url: string, options: RemoteRangeOptions = {}): Promise<RemoteRangeSource> {
     const doFetch = options.fetchImpl ?? globalThis.fetch
@@ -109,11 +133,15 @@ export class RemoteRangeSource implements ByteSource {
     // signature and S3 refuses a stamp more than fifteen minutes old, so a
     // header bag computed at open time would start failing partway through a
     // long session — on a file that had been reading fine, which is the worst
-    // shape a failure can have.
+    // shape a failure can have. The static headers beside it do not go stale and
+    // are merged in front of it by `sources/access.ts`.
     const sign = (method: string): Record<string, string> =>
-      options.credential === undefined
-        ? {}
-        : signS3Request({ method, url, credential: options.credential })
+      accessHeaders({
+        url,
+        method,
+        ...(options.headers === undefined ? {} : { headers: options.headers }),
+        ...(options.credential === undefined ? {} : { credential: options.credential }),
+      })
     if (typeof doFetch !== 'function') {
       throw new ViewerError('remote-cors', 'this runtime has no fetch(); remote files need one', {
         url,
@@ -123,11 +151,13 @@ export class RemoteRangeSource implements ByteSource {
     const cost: SourceStats = { requests: 0, bytes: 0 }
 
     let head: Response | null = null
-    try {
-      cost.requests += 1
-      head = await doFetch(url, { method: 'HEAD', headers: sign('HEAD') })
-    } catch (cause) {
-      await failCrossOrigin(url, host, cause, doFetch, cost)
+    if (!isSignedUrl(url)) {
+      try {
+        cost.requests += 1
+        head = await doFetch(url, { method: 'HEAD', headers: sign('HEAD') })
+      } catch (cause) {
+        await failCrossOrigin(url, host, cause, doFetch, cost)
+      }
     }
     if (head && !head.ok) {
       // An HTTP error status is neither of spec §10's two remote refusals: the
@@ -144,9 +174,9 @@ export class RemoteRangeSource implements ByteSource {
         options.credential === undefined
           ? `${host} answered ${head.status} ${head.statusText} to a HEAD of ${url}; ` +
             'the viewer needs a publicly readable object, or a bucket entry holding a key ' +
-            'for it (Open a file → Private buckets). A presigned URL will not work — it is ' +
-            'signed for a single method, so the HEAD probe fails even when the GET would ' +
-            'have succeeded.'
+            'for it (Open a file → Private buckets). A presigned link is read without this ' +
+            'probe and does not reach here, so a URL carrying a signature in its query that ' +
+            'fails has expired rather than been rejected for its method.'
           : `${host} answered ${head.status} ${head.statusText} to a signed HEAD of ${url}. ` +
             'The key reached the bucket and was rejected: check that the region on the ' +
             'bucket entry matches the bucket, that the key is allowed `s3:GetObject` on ' +
@@ -386,9 +416,16 @@ export class RemoteRangeSource implements ByteSource {
     // `Range` is set *after* signing and is deliberately not part of the
     // signature. S3 does not require it to be, and signing it would mean a
     // fresh derivation for every chunk of every read rather than one per
-    // request against a cached key.
-    if (this.credential !== undefined) {
-      const headers = signS3Request({ method: 'GET', url: this.url, credential: this.credential })
+    // request against a cached key. The static headers — an API key, a bearer
+    // token — go on with it and before it, for the same reason and in the order
+    // `sources/access.ts` fixes.
+    if (this.credential !== undefined || this.headers !== undefined) {
+      const headers = accessHeaders({
+        url: this.url,
+        method: 'GET',
+        ...(this.headers === undefined ? {} : { headers: this.headers }),
+        ...(this.credential === undefined ? {} : { credential: this.credential }),
+      })
       for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
     }
     xhr.setRequestHeader('Range', `bytes=${from}-${to}`)

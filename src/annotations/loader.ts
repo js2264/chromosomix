@@ -45,6 +45,7 @@ export {
   splitIndexFragment,
   type PairedDrop,
 }
+import { canonicalUrl } from '../sources/rewrite'
 import { grantFor } from '../ui/chooseFiles'
 
 /**
@@ -200,7 +201,12 @@ export class AnnotationLoader {
    * business taking the default just because its bytes are somewhere else.
    */
   addUrl(url: string, label?: string, placement?: Placement): void {
-    const trimmed = url.trim()
+    // The rewrite table, at the one door a track's URL comes through (SPECS
+    // §23.5). A track is remembered in session storage and named in a shared
+    // link by this string, so a Dropbox page pasted here would be stored and
+    // shared as a page. `#index=` survives it — `canonicalUrl` carries a
+    // fragment across a rewrite for exactly this — and is split off below.
+    const trimmed = canonicalUrl(url.trim())
     if (trimmed === '') return
     const { address, index } = splitIndexFragment(trimmed)
     const name = address.split('/').pop() ?? address

@@ -21,14 +21,31 @@ distinguish.
 **Cloudflare R2 is the recommended host**, because egress is free and the Hi-C use case is
 read-heavy with large objects. Any S3-compatible store that meets the four requirements works.
 
-## Use public URLs, not presigned ones
+## Presigned links open, and they expire
 
-h5wasm issues a `HEAD` before its first `GET` to test range support. A presigned S3 URL is signed
-for a **single method**, so the `HEAD` returns 403 and the open fails before it starts. Plain public
-bucket URLs avoid this entirely.
+The viewer probes a URL with a `HEAD` before its first `GET`, to find out whether the host serves
+ranges. A presigned S3 URL is signed for a **single method**, so that `HEAD` used to come back 403
+and the open failed before it started — a failure that looked like a CORS problem and was not one.
 
-This is worth stating in the deployment runbook rather than leaving to be rediscovered: the failure
-looks like a CORS problem and is not one.
+It no longer happens. The probe recognises a signature in the query — `X-Amz-Signature` for S3,
+`X-Goog-Signature` for Google Cloud Storage, `sig=` beside `sv=` for an Azure SAS — and goes
+straight to the one-byte `Range: bytes=0-0` request it already had for hosts that say nothing about
+range support. A presigned link therefore opens, reads, and keeps reading until its signature
+expires, at which point the bucket answers 403 and the viewer says so.
+
+Two things follow, and both are about **what to publish**:
+
+- **A link with an expiry is a link with an expiry.** Put one in a paper, a README or a workspace
+  file and it stops working on a date nobody wrote down. Presigned URLs are for handing a colleague
+  a file this afternoon; a public object, or a bucket entry holding a read-only key, is what a
+  citation points at.
+- **The signature is in the URL**, so anyone the link reaches can read the object until it expires,
+  and it will be in the address bar, the session hash and any share link written from it. That is a
+  property of presigning rather than of this viewer, and it is the reason a private bucket is better
+  served by a bucket entry: the key stays in the reader's browser and the URL stays public-looking.
+
+An Azure SAS is not scoped to one method and always worked; it is named here so the rule reads as
+one rule.
 
 ## GEO and SRA cannot be hosts
 

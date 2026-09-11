@@ -27,12 +27,22 @@
  * `ui/bucketForm.ts`, shared with the credentials dialog. Public is one field —
  * the link — and a key is behind a switch, because the reader who arrives with a
  * URL out of a paper should not meet six boxes.
+ *
+ * ## And a third thing, which is neither a folder nor a key
+ *
+ * A Google API key (SPECS §23.7) is not a folder, so it connects nothing and
+ * appears in no panel — it is the one credential that has to exist before a
+ * *link* works, because the Drive API refuses a public file without one. It is
+ * here rather than in a dialog of its own for the reason the bucket half is
+ * here: this is the screen a reader opens when the thing they were given will
+ * not open, and a second dialog would be a second place to look.
  */
 
 import { Modal } from './Modal'
-import { button, el } from './dom'
+import { button, el, field } from './dom'
 import { icon } from './icons'
 import { bucketForm } from './bucketForm'
+import { clearApiKey, readApiKey, writeApiKey } from '../s3/credentials'
 import { announce, connectSnapshot } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
 import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from '../browse/local'
@@ -76,8 +86,10 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
     localSection(done),
     // A single-file page has an opaque origin, so every remote read fails before
     // a byte moves (§19). §8.5: a control that cannot keep its promise is
-    // absent, not disabled.
+    // absent, not disabled. The Google half goes with it for the same reason —
+    // a key that authorises a request nothing can make is a box that lies.
     IS_STANDALONE ? null : bucketSection(done),
+    IS_STANDALONE ? null : googleSection(),
     privacyNote(),
   )
 }
@@ -147,6 +159,74 @@ function bucketSection(done: (id: string) => void): HTMLElement {
     { class: 'connect-section' },
     el('h3', {}, icon('cloud', { size: 15 }), el('span', { text: 'A bucket' })),
     bucketForm({ onSaved: (scope) => done(bucketFolderId(scope.id)) }),
+  )
+}
+
+/**
+ * The Google API key: one box, save, forget.
+ *
+ * Deliberately the smallest section in this dialog, because it is the least
+ * interesting thing in it — a string that makes one host answer. It connects no
+ * folder and so calls no `done`; what it changes is whether a Drive *link*
+ * opens, which the reader finds out by opening one.
+ *
+ * `type=password`, as the bucket secret is, and for the same reason: this box is
+ * opened in front of an audience precisely when somebody is being shown how the
+ * feature works.
+ *
+ * The status line rather than a toast, because the question a reader has when
+ * they come back to this dialog is *is there one stored*, and a toast has long
+ * since gone. It reports presence and never the key — printing it back would
+ * make a screenshot of this dialog a leak.
+ */
+function googleSection(): HTMLElement {
+  const input = el('input', { class: 'input', type: 'password', placeholder: 'AIza…' })
+  const status = el('p', { class: 'hint' })
+  const show = (): void => {
+    status.textContent =
+      readApiKey() === null
+        ? 'No key stored. Google Drive links will not open without one.'
+        : 'A key is stored in this browser. It is listed under About → what is stored.'
+  }
+  show()
+
+  return el(
+    'div',
+    { class: 'connect-section' },
+    el('h3', {}, icon('link', { size: 15 }), el('span', { text: 'A Google API key' })),
+    el('p', {
+      class: 'hint',
+      text:
+        'Needed to open a public Google Drive file: the Drive API refuses a request without a ' +
+        'key, even for a file anyone can read. A public Google Cloud Storage object needs none — ' +
+        'a gs:// link opens as it is. A private file on either needs the account sign-in, which ' +
+        'is not here yet. Make the key in your own Google Cloud project and restrict it to the ' +
+        'Drive API; it is kept in this browser, exactly as a bucket key is.',
+    }),
+    field('key', input),
+    status,
+    el(
+      'div',
+      { class: 'bucket-actions' },
+      button(
+        'save',
+        () => {
+          writeApiKey(input.value)
+          input.value = ''
+          show()
+        },
+        { class: 'btn btn-primary' },
+      ),
+      button(
+        'forget',
+        () => {
+          clearApiKey()
+          input.value = ''
+          show()
+        },
+        { class: 'btn' },
+      ),
+    ),
   )
 }
 

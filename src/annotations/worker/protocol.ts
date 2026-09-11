@@ -75,6 +75,13 @@ export type DetectedFormat =
  * no `localStorage` to build one from, so the one key the URL needs travels
  * with the URL. Absent means an unsigned request, which is every public track.
  *
+ * `headers` is the other kind of credential — a Google API key, a bearer token —
+ * and travels for the same reason again, with one difference worth naming: it is
+ * *static*, so it goes on every request this worker makes for the URL rather
+ * than being recomputed per request the way a signature is (SPECS §23.7). Both
+ * are merged by `sources/access.ts`, which is also what the reader worker uses,
+ * so a private bigWig and a private cooler are authorised identically.
+ *
  * `index` is a tabix sidecar (`annotations/tabix.ts`), and it travels the same
  * way for the same reason: the worker cannot go looking for a `File` the drop
  * target was handed, and probing a URL for one is the *caller's* network call to
@@ -83,7 +90,14 @@ export type DetectedFormat =
  */
 export type WireSource =
   | { kind: 'local'; file: File; name: string; index?: File }
-  | { kind: 'remote'; url: string; name: string; credential?: S3Credential; index?: string }
+  | {
+      kind: 'remote'
+      url: string
+      name: string
+      credential?: S3Credential
+      headers?: Record<string, string>
+      index?: string
+    }
 
 export interface LoadResult {
   format: DetectedFormat

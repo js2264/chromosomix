@@ -25,7 +25,9 @@ import { ViewerError } from '../errors'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { parseBins, parseMatrix } from '../hicpro/parse'
 import { MetaCooler } from '../metacooler/MetaCooler'
-import { signS3Request, type S3Credential } from '../s3/sigv4'
+import type { S3Credential } from '../s3/sigv4'
+import { accessHeaders } from '../sources/access'
+import { isSignedUrl } from '../sources/rewrite'
 import type { ByteSource } from '../types'
 import type { SourceSpec } from './protocol'
 import { createSource, readWhole } from './sources'
@@ -186,7 +188,7 @@ export async function binsFor(spec: SourceSpec): Promise<BinsSpec | null> {
   if (!isHicProMatrix(name)) return null
   if (spec.bins !== undefined) return spec.bins
   if (spec.kind === 'remote') {
-    const found = await probeBins(spec.url, spec.credential)
+    const found = await probeBins(spec.url, spec.credential, spec.headers)
     if (found !== null) return found
   }
   throw new ViewerError(
@@ -200,11 +202,27 @@ export async function binsFor(spec: SourceSpec): Promise<BinsSpec | null> {
   )
 }
 
-/** Try the conventional bin-file URLs beside a matrix; `null` if none answers. */
+/**
+ * Try the conventional bin-file URLs beside a matrix; `null` if none answers.
+ *
+ * Not attempted at all for a URL carrying its own signature (SPECS §23.6): a
+ * presigned link authorises **one object**, so every candidate beside it is a
+ * `403` whatever it is named, and three requests to establish that is three
+ * requests spent to reach the same refusal. The refusal `binsFor` raises names
+ * `#bins=`, which is the road that works for such a link — a second presigned
+ * URL for the bed.
+ */
 async function probeBins(
   url: string,
   credential: S3Credential | undefined,
-): Promise<{ kind: 'remote'; url: string; credential?: S3Credential } | null> {
+  headers: Record<string, string> | undefined,
+): Promise<{
+  kind: 'remote'
+  url: string
+  credential?: S3Credential
+  headers?: Record<string, string>
+} | null> {
+  if (isSignedUrl(url)) return null
   const slash = url.lastIndexOf('/')
   const directory = slash < 0 ? '' : url.slice(0, slash + 1)
   const name = url.slice(slash + 1)
@@ -217,20 +235,20 @@ async function probeBins(
       candidates.push(`${directory.replace('/iced/', '/raw/')}${n}`)
     }
   }
+  const access = {
+    ...(credential === undefined ? {} : { credential }),
+    ...(headers === undefined ? {} : { headers }),
+  }
   for (const candidate of candidates) {
     try {
       const response = await fetch(candidate, {
         method: 'HEAD',
-        headers:
-          credential === undefined
-            ? {}
-            : signS3Request({ method: 'HEAD', url: candidate, credential }),
+        headers: accessHeaders({ url: candidate, method: 'HEAD', ...access }),
       })
-      if (response.ok) {
-        return credential === undefined
-          ? { kind: 'remote', url: candidate }
-          : { kind: 'remote', url: candidate, credential }
-      }
+      // The matrix's own access, carried onto the bed it found: the two halves
+      // of a HiC-Pro pair are written side by side by one pipeline, so whatever
+      // authorised the first authorises the second.
+      if (response.ok) return { kind: 'remote', url: candidate, ...access }
     } catch {
       // Not there, or not allowed. The next spelling, then the refusal.
     }
@@ -299,16 +317,27 @@ async function assertLoadAffordable(
   )
 }
 
-/** The byte length of a source, without reading it. */
+/**
+ * The byte length of a source, without reading it.
+ *
+ * `null` for a URL that carries its own signature, without asking: the signature
+ * covers one method and this is the other one (SPECS §23.6), so the request
+ * would cost a round trip to learn nothing. That is the same answer this already
+ * gives for a host that will not answer a `HEAD`, and it means the same thing —
+ * no number to quote, so the gate below does not fire and the file is read.
+ */
 async function sizeOfSource(spec: SourceSpec): Promise<number | null> {
   if (spec.kind === 'local') return spec.file.size
+  if (isSignedUrl(spec.url)) return null
   try {
     const response = await fetch(spec.url, {
       method: 'HEAD',
-      headers:
-        spec.credential === undefined
-          ? {}
-          : signS3Request({ method: 'HEAD', url: spec.url, credential: spec.credential }),
+      headers: accessHeaders({
+        url: spec.url,
+        method: 'HEAD',
+        ...(spec.credential === undefined ? {} : { credential: spec.credential }),
+        ...(spec.headers === undefined ? {} : { headers: spec.headers }),
+      }),
     })
     const length = Number(response.headers.get('Content-Length') ?? Number.NaN)
     return Number.isFinite(length) ? length : null

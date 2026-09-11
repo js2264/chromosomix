@@ -91,6 +91,26 @@ describe('storedItems', () => {
     expect(items.find((item) => item.label === 'Bucket keys')?.detail).not.toContain('secret')
   })
 
+  it('names the Google API key on its own line, beside the bucket keys', async () => {
+    // The second secret this browser can be holding (SPECS §23.7), and it gets
+    // the bucket key's treatment for the bucket key's reason: it is a
+    // credential, it is readable by any script on this origin, and a reader on a
+    // borrowed machine must not have to press "forget everything" to find out it
+    // is there. Its own line rather than a clause under Bucket keys, because a
+    // reader who set one and not the other is owed a screen that says which.
+    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
+    window.localStorage.setItem(`${PREFIX}access`, '[{"id":"google-api-key","kind":"google-api-key","key":"AIzaX"}]')
+    const items = await storedItems()
+    const labels = items.map((item) => item.label)
+    expect(labels).toContain('Google API key')
+    expect(labels).not.toContain('Bucket keys')
+    // Counted once, as a preference or as a key, never as both.
+    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
+    // The key itself is never printed back: a screenshot of this dialog must
+    // not be a leak.
+    expect(items.find((item) => item.label === 'Google API key')?.detail).not.toContain('AIzaX')
+  })
+
   it('ignores keys that are not this app’s', async () => {
     window.localStorage.setItem('some-other-app', 'x')
     window.sessionStorage.setItem('unrelated', 'y')

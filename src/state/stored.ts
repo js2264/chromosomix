@@ -129,7 +129,8 @@ export async function storedItems(): Promise<StoredItem[]> {
 
   const local = localKeys()
   const buckets = local.filter((key) => key === `${PREFIX}buckets`)
-  const preferences = local.length - buckets.length
+  const access = local.filter((key) => key === `${PREFIX}access`)
+  const preferences = local.length - buckets.length - access.length
   if (preferences > 0) {
     items.push({
       label: 'Preferences',
@@ -141,6 +142,22 @@ export async function storedItems(): Promise<StoredItem[]> {
       label: 'Bucket keys',
       // Named, not counted. See the docstring above.
       detail: 'Access keys for private buckets, stored in this browser in plain text',
+    })
+  }
+  if (access.length > 0) {
+    items.push({
+      label: 'Google API key',
+      // The second secret, and named for the first one's reason: it is a
+      // credential to the reader's own Google project, it is readable by any
+      // script on this origin, and a reader on a borrowed machine should not
+      // have to press "forget everything" to find out it is there. Its own line
+      // rather than a second sentence under Bucket keys, because a reader who
+      // set one and not the other is owed a screen that says which.
+      //
+      // The bearer token a signed-in account produces is deliberately *not*
+      // here: it is held in memory and never written, so there is nothing on
+      // this machine for this screen to account for (SPECS §23.7).
+      detail: 'Google API key, stored in this browser in plain text',
     })
   }
 

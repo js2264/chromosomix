@@ -16,7 +16,7 @@
  */
 
 import { registerThread, type ThreadHandle } from '../../perf/threads'
-import { withCredential } from '../../s3/attach'
+import { withAccess } from '../../s3/attach'
 import { spawnAnnotationsWorker } from '../../worker/spawn'
 import type {
   AnnotationRequest,
@@ -96,7 +96,7 @@ export class AnnotationClient {
     // same boundary treatment the reader worker's client gives its own
     // messages, so a private bigWig and a private cooler need the same nothing
     // of their callers.
-    const message = withCredential({ ...payload, id }) as unknown as AnnotationRequest
+    const message = withAccess({ ...payload, id }) as unknown as AnnotationRequest
     return new Promise<AnnotationResultMap[K]>((resolve, reject) => {
       this.pending.set(id, {
         resolve: resolve as (value: unknown) => void,

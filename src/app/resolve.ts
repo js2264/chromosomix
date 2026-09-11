@@ -40,6 +40,7 @@
  * *"drop the same file again"* without waiting for storage.
  */
 
+import { canonicalUrl } from '../sources/rewrite'
 import { hasHandle, resolveHandle } from '../state/handles'
 import { splitUri } from '../ui/labels'
 import type { SourceSpec } from '../worker/protocol'
@@ -52,12 +53,23 @@ import type { SourceSpec } from '../worker/protocol'
  * property rather than a limitation (§11). Returning `null` sends the user to
  * the picker with an explanation.
  *
- * Unchanged since it lived in `app/Session.ts`, and unchanged on purpose: this
- * is the test for whether a URI is fit to *travel*, which is a question about
- * every reader rather than about this one. See the header.
+ * ## Canonicalised first, and the test itself is untouched
+ *
+ * `sources/rewrite.ts` runs before the `https?:` test rather than after it, and
+ * that ordering is the whole of what changed here (SPECS §23.5). The test still
+ * asks *can anybody open this*, and still answers it about an `http(s)` URL
+ * alone; what moved is that `gs://bucket/file.mcool` and `s3://bucket/file.cool`
+ * now **are** such a URL by the time it is asked. Both were already admitted by
+ * `state/shareLink.ts`'s `openableElsewhere` as addresses that mean the same
+ * thing in anybody's browser, which is the same question from the other side, so
+ * this closes a disagreement rather than widening a gate: a scheme that could
+ * travel in a link could not be opened out of one.
+ *
+ * A local file name is unchanged by the rewrite table and still answers `null`,
+ * which is the property this function exists for and the one its tests pin.
  */
 export function inferSource(uri: string): SourceSpec | null {
-  const { path } = splitUri(uri)
+  const path = canonicalUrl(splitUri(uri).path)
   return /^https?:\/\//i.test(path) ? { kind: 'remote', url: path } : null
 }
 

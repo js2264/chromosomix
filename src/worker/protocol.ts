@@ -84,6 +84,22 @@ type SourceLocation =
       kind: 'remote'
       url: string
       credential?: S3Credential
+      /**
+       * Static headers put on **every** request for this URL (SPECS §23.7).
+       *
+       * The other kind of credential, and it travels for the same reason the
+       * first one does: a Google API key and a bearer token are read from
+       * `localStorage` and from a registry that exist only on the main thread,
+       * so the worker is handed the headers the URL it was given needs rather
+       * than a way to work them out.
+       *
+       * Unlike the signature, they are *static* — the same on the `HEAD`, the
+       * probe, every ranged read and the whole-object fallback — because they
+       * are a statement about who is asking rather than about what is being
+       * asked. `sources/access.ts` is the one place the two are merged, in the
+       * one order that works.
+       */
+      headers?: Record<string, string>
     }
 
 /**

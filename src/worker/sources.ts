@@ -11,7 +11,8 @@ import { ViewerError } from '../errors'
 import type { ByteSource } from '../types'
 import { LocalFileSource } from '../sources/LocalFileSource'
 import { RemoteRangeSource } from '../sources/RemoteRangeSource'
-import { signS3Request, type S3Credential } from '../s3/sigv4'
+import { accessHeaders } from '../sources/access'
+import type { S3Credential } from '../s3/sigv4'
 import type { SourceSpec } from './protocol'
 import { decodeAnnotationBytes } from '../annotations/parse'
 
@@ -41,21 +42,21 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
   if (spec.reading === 'whole') {
     const held = borrowWhole(spec.url)
     if (held !== null) return held
-    return keepWhole(spec.url, await wholeObjectOf(spec.url, spec.credential, watch))
+    return keepWhole(spec.url, await wholeObjectOf(spec.url, accessOf(spec), watch))
   }
   const reading = spec.reading ?? ''
   const reused = borrowRemote(spec.url, reading)
   if (reused !== null) return reused
-  // Present only for a private bucket; `undefined` is the public path and is
-  // the one every demo takes. See `SourceSpec` on why the credential arrives
-  // with the URL rather than being configured on this worker.
-  const credential = spec.credential
+  // Present only for a private bucket or a host that wants a key; `undefined` is
+  // the public path and is the one every demo takes. See `SourceSpec` on why
+  // both arrive with the URL rather than being configured on this worker.
+  const access = accessOf(spec)
   try {
     return keep(
       spec.url,
       reading,
       await RemoteRangeSource.open(spec.url, {
-        ...(credential === undefined ? {} : { credential }),
+        ...access,
         // `fine` is the other half of the gate's answer: read the scattered
         // metadata in small pieces rather than dragging a megabyte across for
         // every 500-byte record of it.
@@ -66,7 +67,7 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
     if (err instanceof ViewerError && err.code === 'remote-compressed') {
       // Retained like any other remote source, and here it matters most: this
       // path has already downloaded the whole object once.
-      return keep(spec.url, reading, await wholeObject(spec.url, err, credential))
+      return keep(spec.url, reading, await wholeObject(spec.url, err, access))
     }
     if (err instanceof ViewerError) throw err
     // A failed probe is almost always one of two things, and the two need
@@ -104,8 +105,10 @@ export async function openIndexSource(spec: SourceSpec): Promise<ByteSource | nu
   }
   const url = `${stripQuery(spec.url)}.px2`
   try {
-    const credential = spec.credential
-    return await RemoteRangeSource.open(url, credential === undefined ? {} : { credential })
+    // The matrix's own access, on its index: the two are one object published
+    // twice, under the same prefix and behind the same key. The headers travel
+    // for the same reason the credential does.
+    return await RemoteRangeSource.open(url, accessOf(spec))
   } catch {
     return null
   }
@@ -115,6 +118,27 @@ export async function openIndexSource(spec: SourceSpec): Promise<ByteSource | nu
 function stripQuery(url: string): string {
   const at = url.search(/[?#]/)
   return at < 0 ? url : url.slice(0, at)
+}
+
+/**
+ * What authorises a request for this source: a signature, a header bag, both or
+ * neither.
+ *
+ * One accessor because the two fields travel together at all five remote reads
+ * in this file, and the spread that carries only the fields that are present is
+ * exactly the line an omission hides in — `exactOptionalPropertyTypes` makes an
+ * explicit `credential: undefined` a type error, so each site would otherwise
+ * write the same two ternaries, and a site that wrote only the first would send
+ * a Google object's request without its key and report the 403 against the file.
+ */
+function accessOf(spec: { credential?: S3Credential; headers?: Record<string, string> }): {
+  credential?: S3Credential
+  headers?: Record<string, string>
+} {
+  return {
+    ...(spec.credential === undefined ? {} : { credential: spec.credential }),
+    ...(spec.headers === undefined ? {} : { headers: spec.headers }),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +268,7 @@ const MAX_WHOLE_OBJECT_BYTES = 128 << 20
 async function wholeObject(
   url: string,
   cause: ViewerError,
-  credential?: S3Credential,
+  access: { credential?: S3Credential; headers?: Record<string, string> } = {},
 ): Promise<ByteSource> {
   const encoded = cause.detail['encodedLength']
   const size = typeof encoded === 'number' ? encoded : null
@@ -259,11 +283,11 @@ async function wholeObject(
   }
   let bytes: Uint8Array
   try {
-    // Signed like every other read of the same object: this is a `GET` of the
-    // whole thing rather than a range of it, which changes nothing about what
-    // the bucket requires to answer it.
+    // Authorised like every other read of the same object: this is a `GET` of
+    // the whole thing rather than a range of it, which changes nothing about
+    // what the host requires to answer it.
     const response = await fetch(url, {
-      headers: credential === undefined ? {} : signS3Request({ method: 'GET', url, credential }),
+      headers: accessHeaders({ url, method: 'GET', ...access }),
     })
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}`)
@@ -317,13 +341,13 @@ const MAX_CHOSEN_WHOLE_BYTES = 2 * (1 << 30)
 /** The whole-object source a gated open asked for, downloaded and mounted. */
 async function wholeObjectOf(
   url: string,
-  credential?: S3Credential,
+  access: { credential?: S3Credential; headers?: Record<string, string> } = {},
   watch?: ReadWatch,
 ): Promise<ByteSource> {
   let bytes: Uint8Array
   try {
     const response = await fetch(url, {
-      headers: credential === undefined ? {} : signS3Request({ method: 'GET', url, credential }),
+      headers: accessHeaders({ url, method: 'GET', ...access }),
     })
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
     const declared = Number(response.headers.get('Content-Length') ?? Number.NaN)
@@ -397,14 +421,10 @@ export async function readWhole(
   if (spec.kind === 'local') {
     bytes = new Uint8Array(await spec.file.arrayBuffer())
   } else {
-    const credential = spec.credential
     let response: Response
     try {
       response = await fetch(spec.url, {
-        headers:
-          credential === undefined
-            ? {}
-            : signS3Request({ method: 'GET', url: spec.url, credential }),
+        headers: accessHeaders({ url: spec.url, method: 'GET', ...accessOf(spec) }),
       })
     } catch (err) {
       throw new ViewerError(

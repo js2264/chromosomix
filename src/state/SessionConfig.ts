@@ -39,6 +39,7 @@ import type { Bookmark } from '../annotations/bookmarks'
 import type { ManualMark } from '../annotations/manual'
 import type { PlotOptions } from '../render/heatmap'
 import type { TableUiState } from '../ui/VirtualTable'
+import { canonicalUrl } from '../sources/rewrite'
 import type { ViewState } from '../types'
 import {
   MAP_NAMES_SCOPE,
@@ -785,8 +786,14 @@ export function resolveConfig(config: SessionConfig, base: string): SessionConfi
       // already refused an empty `state.uri`, so this is a track naming nothing.
       return uri
     }
-    if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return uri
-    return formatUri(new URL(parsed.path, base).href, parsed.group)
+    // Canonicalised either way, because both roads end in a URI this session
+    // will open and write into its own links (SPECS §23.5). A published
+    // workspace may name `gs://` or a Drive share link absolutely, and one
+    // resolved against a config's own URL cannot become either — but running the
+    // table over both is one call and keeps the rule *every URI is canonical*
+    // true without a caller having to know which branch it took.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(parsed.path)) return canonicalUrl(uri)
+    return canonicalUrl(formatUri(new URL(parsed.path, base).href, parsed.group))
   }
 
   // Through the deck's own pair, never a second `|` splitter written here. The

@@ -2523,8 +2523,11 @@ without opening any of them.
 support. Such files are inputs to publication, never live sources.
 
 **Remote HDF5** reads through Emscripten's `FS.createLazyFile` in a worker (h5wasm's `lazyFileLRU`
-demo is the reference). h5wasm issues a `HEAD` before its `GET` to test range support, which breaks
-presigned S3 URLs since those are single-method; plain public bucket URLs avoid this.
+demo is the reference). The open probes with a `HEAD` before its `GET` to test range support, and
+that `HEAD` is skipped for a URL carrying its own signature — `X-Amz-Signature`, `X-Goog-Signature`,
+or `sig=` beside `sv=` — since such a URL is signed for a single method. A presigned link therefore
+opens and goes on working until it expires (§23.6); a public bucket URL is still what a citation
+should point at, because a signature has a date on it.
 
 **Private files:** local drag-and-drop only. Identical code path, different byte source. Nothing is
 uploaded, so there are no accounts, no storage, no hosting cost and no GDPR review. Stated

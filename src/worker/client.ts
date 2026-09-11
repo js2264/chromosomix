@@ -8,7 +8,7 @@
  */
 
 import { registerThread } from '../perf/threads'
-import { withCredential } from '../s3/attach'
+import { withAccess } from '../s3/attach'
 import { spawnReaderWorker } from './spawn'
 import {
   reviveError,
@@ -105,7 +105,7 @@ export class ReaderClient {
     // what keeps the dozen construction sites ignorant of credentials, and what
     // makes a key edited mid-session apply to the next request rather than to
     // the next reload.
-    const message = withCredential({ ...payload, id }) as WorkerRequest
+    const message = withAccess({ ...payload, id }) as WorkerRequest
     return new Promise<ResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)

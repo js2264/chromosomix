@@ -22,6 +22,7 @@ import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { bucketBrowseButton } from './browseButton'
 import { credentialOf, type BucketScope } from '../s3/credentials'
 import { appMark } from './mark'
+import { canonicalUrl } from '../sources/rewrite'
 import { splitUri } from './labels'
 import type { SourceSpec } from '../worker/protocol'
 import { ViewerError } from '../errors'
@@ -373,7 +374,11 @@ export class FilePicker {
   }
 
   private openRemote(): void {
-    const url = this.urlInput.value.trim()
+    // Canonicalised at the door, so the hash, the share link and the workspace
+    // file all carry the address that works rather than the page a reader copied
+    // out of Dropbox (SPECS §23.5). A URL the table does not recognise — which
+    // is nearly all of them — comes back exactly as it was typed.
+    const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     const { path } = splitUri(url)
     // No credential attached here on purpose. The lookup happens once, at the

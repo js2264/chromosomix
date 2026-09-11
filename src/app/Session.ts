@@ -158,8 +158,9 @@ import {
   type MapNames,
 } from '../ui/mapNames'
 import { rungsOf } from '../ui/refine'
-import { credentialFor } from '../s3/credentials'
-import { signS3Request } from '../s3/sigv4'
+import { accessHeaders } from '../sources/access'
+import { canonicalUrl } from '../sources/rewrite'
+import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { rememberHandle } from '../state/handles'
 import { grantFor } from '../ui/chooseFiles'
@@ -1818,7 +1819,13 @@ export class Session {
    * after this line, which is the property worth having and the reason there is
    * no second door.
    */
-  async openConfigUrl(url: string): Promise<void> {
+  async openConfigUrl(rawUrl: string): Promise<void> {
+    // `?config=` is the other road a URL arrives on — a link, not a box — so the
+    // rewrite table runs here the way it runs in `inferSource` for `#uri=`
+    // (SPECS §23.5). A workspace published on Drive or named `gs://` is fetched
+    // from the address that serves it, and the names inside it are then resolved
+    // against that address by `resolveConfig`, which canonicalises them too.
+    const url = canonicalUrl(rawUrl)
     this.showContent(loading(`Reading ${fileLabel(url)}`))
     this.host.sessionChanged(this)
     try {
@@ -1827,11 +1834,18 @@ export class Session {
       // figure — it names the files beside it, and every one of those is read
       // through the workers, which sign their own requests — so this fetch
       // being the one unsigned link would make the whole arrangement fail at
-      // its first step.
+      // its first step. The static headers ride along by the same argument: a
+      // workspace published on a Google host needs the API key its data needs
+      // (SPECS §23.7), and a bare link here fails exactly as an unsigned one
+      // would.
       const credential = credentialFor(url)
       const response = await fetch(url, {
-        headers:
-          credential === null ? {} : signS3Request({ method: 'GET', url, credential }),
+        headers: accessHeaders({
+          url,
+          method: 'GET',
+          headers: accessHeadersFor(url),
+          ...(credential === null ? {} : { credential }),
+        }),
       })
       if (!response.ok) {
         throw new Error(
@@ -7383,10 +7397,16 @@ function sameNames(a: readonly string[], b: readonly string[]): boolean {
  * being read unsigned.
  */
 export function withHicProBins(uri: string, source: SourceSpec, index?: File): SourceSpec {
-  const { address, bins } = splitBinsFragment(uri)
+  const { address, bins: named } = splitBinsFragment(uri)
   if (!isHicProMatrix(splitUri(address).path)) return source
   if (index !== undefined) return { ...source, bins: { kind: 'local', file: index } }
-  if (bins === undefined) return source
+  if (named === undefined) return source
+  // The named half goes through the rewrite table on its own (SPECS §23.5): it
+  // is a URL somebody typed after a `#bins=`, and nothing else canonicalises it
+  // — `canonicalUrl` treats a fragment as opaque text, which is what makes it
+  // safe to carry one across a rewrite of the other half and is why the inner
+  // URL has to be asked separately.
+  const bins = canonicalUrl(named)
   // The fragment is stripped from the *source*, not from the URI. A `#` is
   // never sent to a server, so the fetch would have worked either way — but the
   // name is read off this URL to decide the file is a matrix at all, and
