@@ -58,10 +58,15 @@ import { shellIcon } from './scripts/shell-icon.mjs'
  * mistake worth failing the build over.
  */
 const PINNED_BASE = process.env.PINNED_BASE ?? ''
-const SHAPE = /^\/(?:[\w.-]+\/)*v\/[0-9a-f]{7,40}\/$/
+// Two shapes, one kind of build: an archived push lives under `v/<commit>/`
+// and a pull-request preview under `pr/<number>/` (docs/deploy.md, "Pull
+// requests get a preview"). Both are copies served from a sub-path, and
+// everything else about them — no worker, not installable, no data — is the
+// same, which is why they share a config and a checker.
+const SHAPE = /^\/(?:[\w.-]+\/)*(?:v\/[0-9a-f]{7,40}|pr\/[1-9][0-9]{0,6})\/$/
 if (!SHAPE.test(PINNED_BASE)) {
   throw new Error(
-    `PINNED_BASE must look like /<site base>v/<commit>/ — got ${JSON.stringify(PINNED_BASE)}. ` +
+    `PINNED_BASE must look like /<site base>v/<commit>/ or /<site base>pr/<number>/ — got ${JSON.stringify(PINNED_BASE)}. ` +
       'It is the sub-path this archived build will be served from, and Vite bakes it into ' +
       'every asset URL, so there is nothing to guess.',
   )

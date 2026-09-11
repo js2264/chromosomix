@@ -35,6 +35,9 @@ import {
   nextManifest,
   parseManifest,
   tagAliases,
+  withPull,
+  withoutPull,
+  pullDirectory,
 } from '../../scripts/versions-manifest.mjs'
 import { parseVersions } from '@/versions'
 
@@ -264,6 +267,64 @@ describe('the tag aliases', () => {
   })
 })
 
+/**
+ * Pull-request previews share the manifest and nothing else with the pushes:
+ * a push neither adds nor removes one, a preview is replaced on every push to
+ * its pull request, and closing the pull request is the only thing that takes
+ * it out. Each of those is a way of quietly leaking a directory.
+ */
+describe('the previews', () => {
+  const preview = (number: number, commit = 'b2c3d4e') => ({
+    number,
+    commit,
+    title: 'Remote sources',
+    branch: 'claude/remote',
+    date: '2026-09-11T11:00:00Z',
+  })
+
+  it('are read back, newest number first, dropping what cannot name a directory', () => {
+    const read = parseManifest(
+      JSON.stringify({
+        latest: '',
+        versions: [],
+        pulls: [preview(3), preview(12), { number: 'x', commit: 'b2c3d4e' }, { number: 5, commit: 'nope' }],
+      }),
+    )
+    expect(read.pulls.map((one: { number: number }) => one.number)).toEqual([12, 3])
+  })
+
+  it('are none in a manifest written before they existed', () => {
+    expect(parseManifest(JSON.stringify({ latest: '', versions: [] })).pulls).toEqual([])
+  })
+
+  it('survive a push untouched', () => {
+    const before = { ...manifest(build(2)), pulls: [preview(12)] }
+    const after = nextManifest(before, build(1))
+    expect(after.pulls).toEqual([preview(12)])
+  })
+
+  it('are replaced, not repeated, by a second push to the same pull request', () => {
+    const once = withPull({ ...EMPTY }, preview(12, 'b2c3d4e'))
+    const twice = withPull(once, preview(12, 'c3d4e5f'))
+    expect(twice.pulls).toEqual([preview(12, 'c3d4e5f')])
+  })
+
+  it('are removed by the number alone, and removing an absent one is nothing', () => {
+    const two = withPull(withPull({ ...EMPTY }, preview(12)), preview(40))
+    expect(withoutPull(two, 12).pulls.map((one: { number: number }) => one.number)).toEqual([40])
+    expect(withoutPull(two, 99).pulls).toEqual(two.pulls)
+  })
+
+  it('refuse a row that could not name a directory', () => {
+    expect(() => withPull({ ...EMPTY }, { number: 0, commit: 'b2c3d4e' })).toThrow()
+    expect(() => withPull({ ...EMPTY }, { number: 12, commit: 'main' })).toThrow()
+  })
+
+  it('live under pr/<number>', () => {
+    expect(pullDirectory(12)).toBe('pr/12')
+  })
+})
+
 describe('the file the two sides share', () => {
   it('is written by the deploy in the shape the app reads', () => {
     const written = nextManifest(manifest(build(2), build(3, '0.4.0', 'v0.4.0')), build(1))
@@ -272,5 +333,19 @@ describe('the file the two sides share', () => {
     expect(read?.latest).toBe(written.latest)
     expect(read?.entries.map((one) => one.commit)).toEqual(written.versions.map((one) => one.commit))
     expect(read?.entries.map((one) => one.tag)).toEqual(written.versions.map((one) => one.tag))
+  })
+
+  it('carries a preview from the archive script to the menu', () => {
+    const written = withPull(nextManifest(manifest(build(2)), build(1)), {
+      number: 12,
+      commit: 'b2c3d4e',
+      title: 'Remote sources',
+      branch: 'claude/remote',
+      date: '2026-09-11T11:00:00Z',
+    })
+    const read = parseVersions(JSON.parse(JSON.stringify(written)))
+    expect(read?.pulls).toEqual([
+      { number: 12, commit: 'b2c3d4e', title: 'Remote sources', branch: 'claude/remote', date: '2026-09-11T11:00:00Z' },
+    ])
   })
 })

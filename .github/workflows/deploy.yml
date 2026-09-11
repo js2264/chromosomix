@@ -134,12 +134,16 @@ jobs:
       # The published site is the site plus the archive. `versions.json` is
       # copied from the same working tree the directories came from, so the two
       # cannot disagree about what exists.
+      # `pr/` holds the pull-request previews, written by preview.yml into the
+      # same branch and listed in the same manifest; absent until the first
+      # pull request has been previewed, hence the test.
       - name: Assemble the site
         run: |
           set -euo pipefail
           cp -R archive/v dist/v
+          if [ -d archive/pr ]; then cp -R archive/pr dist/pr; fi
           cp archive/versions.json dist/versions.json
-          du -sh dist dist/v
+          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr )
 
       - uses: actions/upload-pages-artifact@v3
         with:

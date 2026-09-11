@@ -51,7 +51,10 @@ const PRECACHED = new Set(PRECACHE)
  * emitted beside the shell it serves and therefore already knows where it is.
  * `new URL('./', …)` is the directory this file sits in, which is the scope.
  */
-const PINNED_PREFIX = `${new URL('./', self.location.href).pathname}v/`
+const SCOPE_DIR = new URL('./', self.location.href).pathname
+// …and the same for pull-request previews under `pr/<number>/`, which are the
+// same kind of copy at a different address (docs/deploy.md).
+const PINNED_PREFIXES = [`${SCOPE_DIR}v/`, `${SCOPE_DIR}pr/`]
 
 /**
  * Fill the cache, then wait.
@@ -111,7 +114,8 @@ self.addEventListener('fetch', (event) => {
   // scope and it has to come from the network, or the reader gets this build
   // wearing that build's address.
   if (request.mode === 'navigate') {
-    if (new URL(request.url).pathname.startsWith(PINNED_PREFIX)) return
+    const pathname = new URL(request.url).pathname
+    if (PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return
     event.respondWith(
       caches.match(PRECACHE[0]).then((cached) => cached ?? fetch(request)),
     )
