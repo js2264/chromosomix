@@ -15,13 +15,13 @@ GAPS G10 (a catalogue) and the constraints at §1.
   public S3 buckets with CORS and range support, and the unmodified viewer opens them: a 2.2 GB 4DN
   `.mcool` lands on its chromosomes table in 7.8 s over 13 requests (11.5 MB), a 839 MB 4DN `.hic`
   in 6.7 s over 6 requests (22 MB), and a workspace JSON pointing at the `.mcool` opens a balanced
-  12 Mb window through `?config=` exactly as the demos do. There are **1,825 contact maps** on the
-  4DN open-data bucket today (901 `.mcool`, 915 `.hic`, 9 `.cool`), plus 4,316 bigWigs and 592
+  12 Mb window through `?config=` exactly as the demos do. There are **2,367 contact maps** on the
+  4DN open-data bucket today (1,166 `.mcool`, 1,182 `.hic`, 19 `.cool`), plus 5,327 bigWigs and 722
   bigBeds. No new reader code is needed for any of them.
 - **What is missing is discovery, not access.** The viewer has no notion of a *server*: the only
   catalogue is a compile-time array of four demo workspaces (`src/ui/examples.ts`), the only
   remembered connections are S3 prefixes (`src/s3/credentials.ts`), and a connected 4DN bucket is
-  62,698 UUID-named folders under one prefix, capped at 1,000 by §20.1 — a listing nobody can use.
+  39,800 UUID-named folders under one prefix, capped at 1,000 by §20.1 — a listing nobody can use.
   juicebox.js's advantage on this axis is entirely a *menu*: three static catalogues — 571 Aiden
   Lab maps shipped with the app, 606 4DN and 176 ENCODE `.hic` files in two TSVs that a script
   regenerates from the portals' APIs and the app fetches from GitHub. It does not talk to either
@@ -52,7 +52,7 @@ rest of this note is about which of them each option touches.
 | `SourceLocation` | `src/worker/protocol.ts:81-87` | The remote arm is `{ kind: 'remote', url, credential?: S3Credential }`. There is nowhere to put a bearer token, an API key or a per-host header today. |
 | `withCredential` and the scopes | `src/s3/attach.ts:93-114`, `src/s3/credentials.ts` | A `localStorage` array of `BucketScope { base, region?, accessKeyId?, … }`, matched by longest URL prefix, stamped onto the message at the two `postMessage` boundaries. A scope with no key is a *public* prefix somebody wants to browse. |
 | `createSource` | `src/worker/sources.ts:25-84` | The one place a `ByteSource` is constructed: `RemoteRangeSource.open`, the whole-object fallback, the `.px2` sidecar guess. |
-| `RemoteRangeSource.open` | `src/sources/RemoteRangeSource.ts:106-229` | `HEAD`, then the `Content-Encoding` refusal, then `Accept-Ranges` + `Content-Length` → done, else a `Range: bytes=0-0` probe. `Content-Type` is not checked. A missing `Content-Range` is tolerated (`windowOf`) as long as `Content-Length` is readable, which it always is: it is a CORS-safelisted response header. |
+| `RemoteRangeSource.open` | `src/sources/RemoteRangeSource.ts:106-229` | `HEAD`, then the `Content-Encoding` refusal, then `Accept-Ranges` + `Content-Length` → done, else a `Range: bytes=0-0` probe. `Content-Type` is not checked. A missing `Content-Range` is tolerated (`windowOf`) as long as `Content-Length` is readable, which it always is: it is a CORS-safelisted response header. `Accept-Ranges` is not safelisted, so a bucket that does not expose it (4DN) sends a browser down the one-byte probe path — one extra request per open, then the same source. |
 | `handleFor` | `src/annotations/worker/annotations.worker.ts:853-869` | The **second** remote path — bigWig, bigBed, BAM, tabix — through `generic-filehandle2`'s `RemoteFile` with a `fetch` override that signs. It shares nothing with `RemoteRangeSource`: no LRU, no §12 counter, no compression refusal. |
 | `ConnectedFolder` | `src/browse/folder.ts:94-116` | `{ id, label, kind: 'local' \| 'bucket', root, durable, list(path), pick(entry) }`. Two backends, a directory and a key prefix; `kind` is the only closed part. |
 | `DEMO` | `src/ui/examples.ts:113-167` | Four workspace URLs on the lab's bucket, resolved against `DEMO_BUCKET` at build time. The only catalogue. |
@@ -71,7 +71,7 @@ All against the live hosts, with an `Origin:` header set so the answer is what a
 
 | Host | Ranges | CORS | Exposes `Content-Range` | Verdict |
 |---|---|---|---|---|
-| `4dn-open-data-public.s3.amazonaws.com` | `206`, `Accept-Ranges: bytes` | `*`, preflight allows `range` | no (only `ETag`) | **Opens.** `Content-Length` is safelisted, so the size is known; `windowOf` copes without `Content-Range`. `Content-Type` is `binary/octet-stream`, which nothing checks. Listing is public, 62,698 keys. |
+| `4dn-open-data-public.s3.amazonaws.com` | `206`, `Accept-Ranges: bytes` | `*`, preflight allows `range` | no (only `ETag`) | **Opens.** Neither `Accept-Ranges` nor `Content-Range` is exposed, so a browser takes the one-byte probe path and learns the size from `Content-Length`, which is safelisted; `windowOf` copes without `Content-Range`. `Content-Type` is `binary/octet-stream`, which nothing checks. Listing is public: 72,973 keys, 39,800 of them under `wfoutput/`. |
 | `encode-public.s3.amazonaws.com` | `206`, `Accept-Ranges: bytes` | `*`, preflight allows `range` | yes | **Opens.** Listing is public. The portal host `www.encodeproject.org` could not be reached from this environment (egress policy), so `@@download` redirects and the search API were not measured here; igv.js loads both from the browser, so both are known to answer CORS. |
 | `hicfiles.s3.amazonaws.com` (Aiden Lab) | `206` — to an `IGV` user agent | `*` | — | **Does not open in any browser.** The bucket lists publicly, but its objects answer `403` unless the `User-Agent` starts with `IGV`, which a browser cannot send (§3.2). Not a bucket configuration this viewer can meet; juicebox.js itself needs a proxy for it. |
 | `storage.googleapis.com/<bucket>/<object>` (GCS XML host) | `206` | **none** unless the bucket has a CORS policy | — | Same rule as S3: the owner must set CORS. The Broad public-references bucket has none. |
@@ -95,20 +95,22 @@ The `.hic` reads twice the bytes in half the requests, which is the §3.6 trade 
 
 ### 2.2 The 4DN open-data bucket, by extension
 
-62,698 objects under `fourfront-webprod/wfoutput/<uuid>/<accession>.<ext>`, one folder per file:
+72,973 objects under `fourfront-webprod/`: 39,800 processed files under
+`wfoutput/<uuid>/<accession>.<ext>`, one folder per file, and 33,173 raw submissions under `files/`
+(27,357 `.gz` and almost nothing else), which is why a catalogue only ever walks `wfoutput/`:
 
-| Extension | Files | Size |
+| Extension, under `wfoutput/` | Files | Size |
 |---|---|---|
-| `mcool` | 901 | 2.02 TB |
-| `hic` | 915 | 2.43 TB |
-| `cool` | 9 | 0.02 TB |
-| `bw` | 4,316 | 0.43 TB |
-| `bb` | 592 | — |
-| `px2` (pairs indexes) | 3,317 | — |
-| `pairs.gz` and other `gz` | 32,141 | 79.6 TB |
-| `bam` | 8,840 | 152 TB |
+| `mcool` | 1,166 | 2.71 TB |
+| `hic` | 1,182 | 3.31 TB |
+| `cool` | 19 | 0.18 TB |
+| `bw` | 5,327 | 0.67 TB |
+| `bb` | 722 | — |
+| `px2` (pairs indexes) | 4,281 | 0.05 TB |
+| `gz` (pairs, mostly) | 10,011 | 22.2 TB |
+| `bam` | 9,976 | 209 TB |
 
-Every one of the 1,825 maps is openable by URL today. None of them has a name: the bucket knows
+Every one of the 2,367 maps is openable by URL today. None of them has a name: the bucket knows
 `4DNFIOKRZ21H.mcool`, and the portal knows it is a Hi-C of a particular cell line, assembly and lab.
 That is the whole gap, and it is a metadata gap. The portal's JSON API carries an
 `open_data_url` calculated property per file (`fourfront/src/encoded/types/file.py`,
@@ -183,8 +185,9 @@ known URLs to their normalisation-vector index so a menu entry skips one read �
 G10's per-file metadata and this viewer's `?edges=` sidecar.
 
 That is shape A plus shape C of §5, and nothing else. The interesting consequence for this
-viewer: 4DN publishes each experiment set as `.hic` *and* `.mcool`, juicebox.js reads only the
-first, and this viewer reads both — so a 4DN hub here is not smaller than juicebox's.
+viewer: 4DN publishes each experiment set as `.hic` *and* `.mcool` (1,182 and 1,166 on the
+bucket), juicebox.js reads only the first, and this viewer reads both — so a 4DN hub here is not
+smaller than juicebox's.
 
 ### 3.4 Sessions and links
 
@@ -281,6 +284,13 @@ bucket owner sets a policy, exactly as on S3.
   in the rewrite table; `inferSource` learns the scheme so it can travel in a link. Private
   buckets take the same bearer token as §4.2 (scope `devstorage.read_only`).
 - **Cost:** small. It is one more row in the rewrite table and one regex in `inferSource`.
+- **Browsing, and private buckets:** the XML host answers the exact query `s3/list.ts` sends —
+  `list-type=2`, `delimiter`, `prefix`, `max-keys` — with S3's element names, a `KeyCount` and a
+  `NextContinuationToken` (measured on a public bucket), so the existing lister parses it. GCS also
+  accepts AWS-style SigV4 with HMAC interoperability keys, which would make a private GCS prefix an
+  ordinary bucket scope with no new code; not measured here. Both need a bucket CORS policy, because
+  the XML host sends no CORS headers without one — the JSON-API endpoint does, but it is not what
+  the lister speaks.
 
 ### 4.4 Azure Blob Storage — nothing, or a SAS in the query string
 
@@ -333,14 +343,15 @@ what `DEMO` in `examples.ts` is, made into a file:
   "version": 1,
   "name": "4DN open data — Hi-C and micro-C",
   "base": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/",
+  "columns": ["assembly", "biosource", "assay", "lab"],
   "entries": [
     {
       "label": "Hi-C, GM12878, in situ (Rao 2014 reprocessed)",
       "uri": "00034edc-e0dc-45b1-b2a1-7db3a13ef869/4DNFIOKRZ21H.mcool",
       "kind": "map",
-      "assembly": "GRCh38",
       "size": 2191787975,
-      "note": "4DNESVKLYDOL · Dekker lab",
+      "fields": { "assembly": "GRCh38", "biosource": "GM12878", "assay": "in situ Hi-C", "lab": "Dekker" },
+      "note": "4DNESVKLYDOL",
       "session": "sessions/4DNFIOKRZ21H.metacooler.json",
       "tracks": [{ "label": "CTCF ChIP", "url": "…/4DNFIK9NBYGJ.bw" }]
     }
@@ -348,9 +359,16 @@ what `DEMO` in `examples.ts` is, made into a file:
 }
 ```
 
-- **Offered where the demos are** — the picker's examples list becomes "hubs", each hub a group —
-  and addressable as `?hub=<url>` so a lab can send colleagues a link that lands on *its* shelf.
-  Remembered hubs are one more row kind in the stored-data screen, beside bucket scopes.
+- **Offered where the demos are, as a table rather than a tree.** Six hundred rows are chosen by
+  *filtering* — assembly, biosource, assay, lab — and then sorting, and `FolderListing` has nowhere
+  to put a biosource; forcing a hub through `ConnectedFolder.list()` would draw the flat folder of
+  opaque accessions that juicebox deliberately does not show. So a hub declares its `columns`, each
+  entry carries `fields`, and the picker renders a filterable table that ends in the same
+  `PickedFile` a folder row does. It is addressable as `?hub=<url>` so a lab can send colleagues a
+  link that lands on *its* shelf, and a remembered hub is one more row kind in the stored-data
+  screen, beside bucket scopes — connected by pasting a URL, exactly as a bucket is.
+- **A row carries its byte size**, so the load gate can ask its question before the first request
+  rather than after the `HEAD`, and a table can warn about the 5 GB row before it is clicked.
 - **Entries carry relative names resolved against `base`**, as workspaces already do against their
   own URL, so a hub can be copied with its data.
 - **A hub entry may point at a session**, not only a file: `session` is a `.metacooler.json`,
@@ -376,10 +394,10 @@ from the browser, shows the hits as a table (cell line, assay, lab, assembly), a
   so it would be a web-tier setting — and if it does not, the adapter cannot exist without a
   proxy, which C1 refuses, and shapes A and C are the whole answer for 4DN. Note that juicebox.js
   does not do this for either portal; it ships the generated tables.
-- **Fits as a third `ConnectedFolder` kind** (`'portal'`): `list` runs a query and returns hits
-  as file entries, `pick` returns the open-data URL as a remote source. The Files column, the
-  `browse…` buttons and drag-and-drop then work unchanged. §20.1's one-level rule maps onto a
-  paged query.
+- **It produces a hub, not a folder.** A query's hits are rows with fields, so the adapter fills
+  the same table shape A renders and ends in the same `PickedFile`. Mapping it onto
+  `ConnectedFolder.list()` was the first draft here and is wrong for the reason given under A: a
+  hit has a biosource, and a folder row has a name. §20.1's one-level rule maps onto a paged query.
 - **Cost:** medium per portal; each portal's facet vocabulary is its own. Tests against recorded
   responses.
 
@@ -393,9 +411,12 @@ experiment set published beside it. Published to the lab bucket, it is a hub any
 `?hub=` at, and it needs no CORS from the portal at all.
 
 - **Cost:** a script and a workflow to refresh it. The 4DN census in §2.2 is two-thirds of it,
-  and `igv-data`'s two tables (§3.3) are a ready seed: 606 4DN `.hic` rows with biosource, assay,
-  lab and assembly already joined, and 176 ENCODE rows — plus the 901 `.mcool` twins on the 4DN
-  bucket that juicebox.js has no use for and this viewer does.
+  and `igv-data`'s two tables (§3.3, MIT-licensed) are a ready seed: 606 4DN `.hic` rows with
+  biosource, assay, lab and assembly already joined, and 176 ENCODE rows — plus the 1,166 `.mcool`
+  twins on the 4DN bucket that juicebox.js has no use for and this viewer does. Seed from them
+  offline; do not fetch them at runtime. A hub that hot-links another project's data file inherits
+  that project's release cadence and schema, and the point of the format is that the viewer owns
+  what it offers.
 
 ### D. Being linked *from* the portal
 
@@ -409,8 +430,11 @@ the one piece of that arrangement C1 rules out; a hub entry keyed by accession i
 
 ### The order
 
-1. **A + C**: the hub format, `?hub=`, the picker section, and the generator script with two
-   generated hubs (4DN open data; ENCODE released `.hic`). This is what turns "1,825 openable
+0. **Say what already works.** R2, MinIO, Ceph, Azure with a SAS, and GCS through its JSON-API URL
+   open today, and neither the README nor `docs/hosting.md` says so; "supports S3" reads as one
+   vendor when what is supported is object storage. Hours, and the cheapest win on this list.
+1. **A + C**: the hub format, `?hub=`, the table in the picker, and the generator script with two
+   generated hubs (4DN open data; ENCODE released `.hic`). This is what turns "2,367 openable
    files" into "a menu of named experiments", and it is the one item that reaches every reader.
 2. **§4.5** (presigned URLs, `s3://`) and **§4.3** (`gs://`): a few lines each on `resolve.ts` and
    `RemoteRangeSource.open`.
@@ -430,7 +454,9 @@ the one piece of that arrangement C1 rules out; a hub entry keyed by accession i
   an object on Google's, read through Google's API; the reasons not to *recommend* it are quota and
   throttling, not the constraint.
 - **§11, private files never leave the machine.** Unchanged. An OAuth token is the reader's own,
-  held in memory, and reads go from Google to the browser.
+  held in memory, and reads go from Google to the browser. A hub fetch reveals only that somebody
+  opened the viewer, which the demos already do — and it should happen **on a gesture, not on
+  load**, so a reader who never opens the shelf makes no third-party request at all.
 - **§13, no accounts.** The app still has none. Signing in to Google to read one's own Drive is
   the reader's account with Google, which is the same bargain a bucket key already makes, stated
   at `docs/hosting.md` under *The key is in the browser*.
@@ -441,7 +467,8 @@ the one piece of that arrangement C1 rules out; a hub entry keyed by accession i
 
 | Phase | Files | Tests |
 |---|---|---|
-| Hub format and `?hub=` | new `src/state/hub.ts` (parse, resolve against `base`, `ConfigRefusal`), `src/embed.ts` (`hub` beside `config`), `src/ui/FilePicker.ts` (hub section replacing the examples `<select>`), `src/ui/examples.ts` (the four demos become the built-in hub), `src/state/stored.ts`, `src/app/App.ts` `restore()` | `test/unit/hub.test.ts` (parse, relative names, refusals), `test/dom/file-picker.test.ts`, `demo-examples.test.ts` extended to the built-in hub |
+| Say what already works | `README.md`, `docs/hosting.md`; a 4DN open-data example beside the demos | `demo-examples.test.ts` |
+| Hub format and `?hub=` | new `src/state/hub.ts` (parse, `columns` and `fields`, resolve against `base`, `ConfigRefusal`), new `src/ui/HubTable.ts` (a filterable table ending in `PickedFile`), `src/embed.ts` (`hub` beside `config`), `src/ui/FilePicker.ts`, `src/ui/examples.ts` (the four demos become the built-in hub), `src/state/stored.ts`, `src/app/App.ts` `restore()` | `test/unit/hub.test.ts` (parse, relative names, refusals), a DOM test for the table's filters, `demo-examples.test.ts` extended to the built-in hub |
 | Generator | `scripts/make_hub.py` (4DN and ENCODE queries → hub JSON, optional per-map workspaces) | a fixture response per portal |
 | Presigned and `s3://`, `gs://` | `src/app/resolve.ts`, new `src/sources/rewrite.ts`, `src/sources/RemoteRangeSource.ts` (skip `HEAD` on `X-Amz-Signature`) | `resolve.test.ts`, `remote-open.test.ts` |
 | Portal adapter | new `src/browse/portal.ts` (`ConnectedFolder` of kind `'portal'`), `src/browse/folder.ts` (widen `kind`), `src/browse/connected.ts`, `src/ui/ConnectCard.ts` (a third section) | `browse-folders.test.ts` with recorded responses |
@@ -460,7 +487,11 @@ curl -sS -o /dev/null -D - -X OPTIONS -H 'Origin: https://js2264.github.io' \
   -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: range' "$U"
 ```
 
-The census walks the bucket with `list-type=2` and continuation tokens (73 pages of 1,000). The
+The census walks the bucket with `list-type=2` and continuation tokens (74 pages of 1,000 across
+the two prefixes), parsing each `<Contents>` block on its own. That last clause is a pitfall worth
+recording for `make_hub.py`: newer objects carry a `<ChecksumAlgorithm>` element between `ETag`
+and `Size`, and a regex that assumes the four-element order silently drops them — a first pass here
+undercounted every category by about a quarter for exactly that reason. The
 browser runs drive the dev server with Playwright's Chromium, counting responses from the S3 host
 and reading the DOM for the chromosomes table or the error view; the workspace for the `?config=`
 run was the demo shape with `state.uri` set to the `.mcool` at `::resolutions/25000`.
