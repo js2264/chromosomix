@@ -604,6 +604,11 @@ assert the correspondence has not degraded rather than pretend to an equality th
   what a reader of both documents needs.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
+- `docs/remote-sources.md` — a design note on remote sources beyond S3: what juicebox.js does
+  for Dropbox, Google Drive, GCS, ENCODE, 4DN and the Aiden Lab server, measured against what this
+  viewer does today (the 4DN and ENCODE buckets already open unmodified), what each further
+  provider would cost, and the ways to arrive **pre-connected** to a public server with sessions
+  ready to open — a hub file and a generator script first.
 - `docs/deploy.md` — how the site is built and published, how it works offline, how past builds
   stay reachable, and how a release is cut.
 - `CHANGELOG.md` — what changed between versions. The running build names itself in
