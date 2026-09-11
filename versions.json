@@ -193,13 +193,6 @@
   ],
   "pulls": [
     {
-      "number": 48,
-      "commit": "cf5ab66",
-      "title": "Publish the generated hubs through the site, because the repository is private",
-      "branch": "claude/remote-file-providers-tu9b1q",
-      "date": "2026-09-11T22:29:43Z"
-    },
-    {
       "number": 46,
       "commit": "3262b99",
       "title": "Five new analysis tasks, and two that could not answer a question they were for",
