@@ -61,6 +61,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   could be exercised against Google from where it was written — `docs/hosting.md` ends with the
   five-step check to run once, and it is the one item of this release still to be confirmed by hand.
 
+- **A Google Drive folder and a Dropbox, as connected folders.** Both join the Files column
+  behind the same `ConnectedFolder` interface as a disk and a bucket (SPECS §23.9): one level at a
+  time, a thousand entries, then *truncated*. A Drive folder — My Drive, or a folder named by link
+  or id, shared drives included — is listed with the signed-in account, folders first, Google-native
+  documents left out; a picked file opens at the same API address a pasted share link does, and
+  the map takes the file's name. Dropbox is the one provider with an account and no key: the lab
+  registers a scoped-access app, the reader signs in through PKCE with the code Dropbox shows and
+  the reader pastes — no redirect, so it works on any origin, the desktop's included — and the
+  whole Dropbox the app was granted is browsable; a picked file is a temporary link, unsigned and
+  valid four hours, which is what a shared address then carries. Tokens live only in this tab; the
+  refresh token Dropbox offers is refused. Neither could be exercised against its provider from
+  where this was written; `docs/hosting.md` carries the manual check for each.
+
 - **The README says what already works.** Object storage, not one vendor: R2, MinIO, Azure with a
   SAS, GCS through its JSON-API URL and the 4DN and ENCODE buckets all opened before this release;
   `docs/hosting.md` ends with the table, host by host.

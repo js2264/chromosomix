@@ -4967,7 +4967,51 @@ header on every request — which is why it is a header bag and not a Google int
 A **CORS proxy** (C1). **Fetching a hub on load** (§11). **Storing a bearer token** — it expires
 inside a session, and a secret that outlives its use is the one kind the stored-data screen cannot
 make safe. **Hot-linking another project's catalogue** (§23.3). **Rewriting the GCS XML host**
-(§23.5). And one host fact, stated so nobody spends a week on it: the Aiden Lab bucket
-`hicfiles.s3.amazonaws.com` answers `403` to every browser user agent and `206` to one that
-begins with `IGV`, which no browser can send; juicebox.js needs a proxy for its own public server,
-and this viewer will not have one.
+(§23.5). **A Dropbox refresh token** — the one credential in this section that would make a
+sign-in survive a reload, and a long-lived secret in `localStorage` for the convenience of not
+pasting a code twice a day (§23.9). And one host fact, stated so nobody spends a week on it: the
+Aiden Lab bucket `hicfiles.s3.amazonaws.com` answers `403` to every browser user agent and `206`
+to one that begins with `IGV`, which no browser can send; juicebox.js needs a proxy for its own
+public server, and this viewer will not have one.
+
+### 23.9 A Drive folder and a Dropbox, as connected folders
+
+§23.5 and §23.7 open *one file* a reader has the address of. The way people work with a Drive or a
+Dropbox is the way §20 describes for a disk and a bucket — open one, look, open the next — so both
+are **connected folders**, behind the same `ConnectedFolder` interface, in the same Files column,
+with the same one-level, thousand-entry, no-walk rules (§20.1). Two things the interface did not
+have were added for them and are stated here because they change what a backend may assume: a
+backend may say **what a path is called** (`labelOf`), since a Drive path is a chain of folder ids
+the crumb trail should not print; and a picked file may carry a **name**, which the session gives
+the map (§16.10), since a Drive file is addressed by an id and a Dropbox file by a link that need
+not end in its name. Both backends **register themselves** with `browse/connected.ts` rather than
+being imported by it, so the file every panel subscribes to reaches for no token and a build that
+cannot offer a backend (§19) never loads it.
+
+**Google Drive** (`browse/gdrive.ts`) lists a folder — My Drive, or a folder the reader names by
+link or id, shared drives included — with the account §23.7 signed in, through the Drive API's
+`files.list`, folders first, Google-native documents left out because they have no bytes, a
+thousand entries and then *truncated*. A folder is remembered by its id and label in
+`localStorage`, named in the stored-data screen; the listing needs the account, so a remembered
+folder after a reload says *sign in to Google* until the reader does. A picked file is the API's
+media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
+beside it. What the row does not carry is a folder tree: `files.list` answers one parent at a time,
+which is §20.1's rule arriving from the other side.
+
+**Dropbox** (`auth/dropbox.ts`, `browse/dropbox.ts`) is the one provider here with an account and
+no key: a lab registers a *scoped-access* app with `files.metadata.read` and `files.content.read`,
+and the app key — public by design, no secret — is the one thing kept, beside the bucket keys. The
+sign-in is **PKCE with the code shown by Dropbox and pasted by the reader**, not a redirect: a
+static page on any origin can do it, the desktop build's `app://` origin included, and there is no
+callback route to add to a viewer that has none. The token lives in this tab's memory and dies
+with it; the refresh token Dropbox would also hand over is refused (§23.8). The folder is the whole
+Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
+time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
+with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague
+can open for an afternoon and not a week, and the honest thing to put in a hash for a file whose
+real address needs an account.
+
+Neither backend was exercised against its provider from where it was written — the sandbox
+reaches neither `accounts.google.com` nor any Dropbox host — so both are asserted against their
+documented wire formats through a stubbed transport, and `docs/hosting.md` carries the manual check
+for each. What is specified above is the contract; the first sign-in is the test.

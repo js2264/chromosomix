@@ -7,7 +7,8 @@ hosts; the commands are in the [appendix](#appendix-how-the-measurements-were-ta
 
 This is the design note the build was made from. **Since: built.** SPECS §23 is the specification
 that came out of it — hubs, the rewrite table, links that expire, credentials that are not a bucket
-key, live portal search, Google sign-in — and `docs/hubs.md` is the operator's page; the
+key, live portal search, Google sign-in, and past this note's own scope a Drive folder and a
+Dropbox as connected folders (§23.9) — and `docs/hubs.md` is the operator's page; the
 `[Unreleased]` section of `CHANGELOG.md` says what landed. The measurements below stand as they
 were made. It touches SPECS §11 (hosting), §20 (connected folders), §21 (`?config=`), GAPS G10 (a
 catalogue) and the constraints at §1.
