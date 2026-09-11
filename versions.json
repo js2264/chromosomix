@@ -1,6 +1,13 @@
 {
-  "latest": "d810b80",
+  "latest": "77ce3df",
   "versions": [
+    {
+      "commit": "77ce3df",
+      "version": "0.12.0",
+      "date": "2026-09-12T00:42:38+02:00",
+      "subject": "Five new analysis tasks, and two that could not answer a question they were for (#46)",
+      "tag": ""
+    },
     {
       "commit": "d810b80",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
       "subject": "0.11.0",
-      "tag": ""
-    },
-    {
-      "commit": "dd5ae83",
-      "version": "0.10.0",
-      "date": "2026-08-14T01:13:59+02:00",
-      "subject": "chores: update CHANGELOG",
       "tag": ""
     },
     {
