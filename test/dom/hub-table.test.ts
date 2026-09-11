@@ -322,6 +322,35 @@ describe('a hub added by hand', () => {
     expect(textsOf(built.el, 'optgroup[label="Hubs you connected"] option')).toEqual(['Lab shelf'])
   })
 
+  it('offers to forget a hub that is already remembered, from the same spot', async () => {
+    addHubRow({ label: 'Lab shelf', url: 'https://lab.example/hub.json' })
+    const built = build([])
+    // The remembered row is in the menu; choose it there.
+    await built.table.load({ id: 'hub:1', label: 'Lab shelf', url: 'https://lab.example/hub.json', builtin: false })
+    expect(names(built.el)).toHaveLength(3)
+    expect(buttonNamed(built.el, 'remember this hub')).toBeNull()
+    const forget = buttonNamed(built.el, 'forget this hub')
+    expect(forget).not.toBeNull()
+    forget?.click()
+    expect(readHubRows()).toEqual([])
+    // The menu has dropped it, and the table has not lost what it was showing.
+    expect(textsOf(built.el, 'optgroup[label="Hubs you connected"] option')).toEqual([])
+    expect(names(built.el)).toHaveLength(3)
+  })
+
+  it('reads a gs:// shelf typed into the box as its https URL', async () => {
+    const built = build([])
+    const box = built.el.querySelector('.hub-url') as HTMLInputElement
+    box.value = 'gs://bucket/shelf.json'
+    ;(buttonNamed(built.el, 'add') as HTMLButtonElement).click()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(requested).toEqual([
+      'https://storage.googleapis.com/storage/v1/b/bucket/o/shelf.json?alt=media',
+    ])
+  })
+
   it('refuses a box that is not an http(s) URL before fetching anything', async () => {
     const built = build([])
     const box = built.el.querySelector('.hub-url') as HTMLInputElement

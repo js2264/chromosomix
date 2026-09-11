@@ -313,17 +313,35 @@ describe('resolving a hub', () => {
     expect(hub.base).toBe('https://data.example/maps/')
   })
 
-  it('leaves an absolute name alone, whatever its scheme', () => {
-    for (const uri of [
-      'https://other.example/a.mcool',
-      'http://other.example/a.mcool',
-      's3://bucket/key.hic',
-      'gs://bucket/key.hic',
-    ]) {
+  it('leaves an absolute http(s) name alone', () => {
+    for (const uri of ['https://other.example/a.mcool', 'http://other.example/a.mcool']) {
       expect(resolveHub(one(uri, { base: 'https://data.example/maps/' }), AT).entries[0].uri).toBe(
         uri,
       )
     }
+  })
+
+  /**
+   * §23.5: a row carries the form that opens. The rewrite is the same one every
+   * URL box applies, so a hub may name a `gs://` object or a Dropbox share link
+   * and the picker hands over — and a shared link then carries — the working
+   * URL rather than the page it stands for.
+   */
+  it('canonicalises an absolute name that is not yet the file', () => {
+    const at = (uri: string): string =>
+      resolveHub(one(uri, { base: 'https://data.example/maps/' }), AT).entries[0].uri
+    expect(at('gs://bucket/dir/key.hic')).toBe(
+      'https://storage.googleapis.com/storage/v1/b/bucket/o/dir%2Fkey.hic?alt=media',
+    )
+    expect(at('s3://bucket/key.hic')).toBe('https://bucket.s3.amazonaws.com/key.hic')
+    expect(at('https://www.dropbox.com/s/abc/map.mcool?dl=0')).toBe(
+      'https://dl.dropboxusercontent.com/s/abc/map.mcool?dl=0',
+    )
+    // The group half survives the rewrite, as it survives resolution (and is
+    // written absolute, as `parseUri` reads it).
+    expect(at('s3://bucket/key.mcool::resolutions/1000')).toBe(
+      'https://bucket.s3.amazonaws.com/key.mcool::/resolutions/1000',
+    )
   })
 
   it('keeps the ::group half out of the arithmetic', () => {

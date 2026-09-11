@@ -1,4 +1,4 @@
-name: Publish hubs
+name: Hubs
 
 # The two portal catalogues the picker's Hubs section offers (SPECS §23.3).
 # `scripts/make_hub.py` asks 4DN and ENCODE for every released contact map they

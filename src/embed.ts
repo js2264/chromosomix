@@ -58,6 +58,8 @@
  * pass `embed=1`.
  */
 
+import { canonicalUrl } from './sources/rewrite'
+
 /** What the query string asks of this mount. */
 export interface Mounting {
   /** Chrome-less: one view, and none of the window around it. */
@@ -142,7 +144,9 @@ export function readMounting(search: string, base: string): Mounting {
 function fetchable(named: string | null, base: string): string | null {
   if (named === null || named === '') return null
   try {
-    const url = new URL(named, base)
+    // Canonicalised first (§23.5), so `?hub=gs://…` and `?config=s3://…` are
+    // the https URLs they stand for by the time the scheme is judged.
+    const url = new URL(canonicalUrl(named), base)
     if (url.protocol === 'http:' || url.protocol === 'https:') return url.href
   } catch {
     /* not a URL this page can resolve; the picker is the honest answer */

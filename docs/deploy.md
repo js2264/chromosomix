@@ -128,18 +128,20 @@ usual chain accepts. It is **not** part of `npm run build` and not part of the d
 data changes on the order of once a year and the app deploys on every push, so coupling them would
 mean re-uploading 250 MB to publish a CSS fix.
 
-None of them is in the example dropdown. What the dropdown offers is the workspaces below, and those
+None of them is a row of the Demos hub. What the hub offers is the workspaces below, and those
 name these.
 
 ## The published workspaces
 
-The picker's list (`ui/examples.ts`) is **three workspace files and nothing else**:
+The picker's **Demos** hub (`builtinHubs()` in `ui/examples.ts`, SPECS §23.2) lists **four
+workspace files**, plus two 4DN open-data maps that live on 4DN's bucket rather than the lab's:
 
 | file | opens |
 | --- | --- |
-| `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
 | `Yeast_microC.metacooler.json` | `Yeast_microC_G2M_1kb.cool` at `IV:1.0–1.4 Mb`, balanced, with six lanes placed across the two edges and the loop calls drawn on the map |
 | `Yeast_tracks.metacooler.json` | the same assembly with **no contact map**: ten tracks over 50 kb of chromosome IV, in two groups |
+| `Yeast_deck.metacooler.json` | the micro-C `.cool` beside a Juicer `.hic` of the same locus, in two locked columns |
+| `Mock_microbial_community.metacooler.json` | the `.mmetacool` ladder at its finest level, on the genomes table sorted by length |
 
 They are ordinary `metacooler.workspace` files — the exact format the save button in the top bar
 writes (`state/workspace.ts`) — so choosing one from the list and dropping one somebody sent you are
@@ -236,7 +238,7 @@ its neutral value is **1, not 0**, and a renderer that baselines at zero will dr
 positive; and `Yeast_microC_loops.tsv` is cis-only, so there is nothing to draw off the diagonal.
 
 These are data by every rule in `scripts/sw-manifest.mjs`, so they are not precached and not in
-`DEMO_FILES`, which holds the three workspace files. `test/unit/demo-examples.test.ts` reads each of
+`DEMO_FILES`, which holds the four workspace files. `test/unit/demo-examples.test.ts` reads each of
 them with the app's own parser, resolves it as the app resolves it, checks that **every file it
 names is in this directory** — map, comparison, companions, lanes and tracks alike — and opens the
 map ones. That is the check that matters here: renaming a bigWig no longer breaks a dropdown entry,

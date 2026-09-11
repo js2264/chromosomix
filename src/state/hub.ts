@@ -51,8 +51,9 @@
 
 import { formatUri, parseUri } from '../uri'
 import { routeOf } from '../browse/route'
-import { credentialFor } from '../s3/credentials'
-import { signS3Request } from '../s3/sigv4'
+import { accessHeadersFor, credentialFor } from '../s3/credentials'
+import { applyAccess } from '../sources/access'
+import { canonicalUrl } from '../sources/rewrite'
 import { looksLikeConfig, type ConfigRefusal } from './SessionConfig'
 
 /** What a hub file must call itself. */
@@ -399,7 +400,11 @@ function resolveAddress(path: string, base: string | null): string {
   const hash = path.indexOf('#')
   const address = hash < 0 ? path : path.slice(0, hash)
   const fragment = hash < 0 ? '' : path.slice(hash)
-  return `${absolute(address, base)}${resolveFragment(fragment, base)}`
+  // Canonicalised once absolute (§23.5): a hub may name a Dropbox share link, a
+  // Drive file or a `gs://` object, and the row should carry the form that
+  // opens — the same rewrite every URL box applies — so that what the picker
+  // hands over, and what a shared link then carries, is already the working one.
+  return `${canonicalUrl(absolute(address, base))}${resolveFragment(fragment, base)}`
 }
 
 /** `value` against `base`, or `value` when it is already absolute or will not resolve. */
@@ -420,7 +425,7 @@ function absolute(value: string, base: string): string {
 function resolveFragment(fragment: string, base: string): string {
   const named = /^#(index|bins)=(.+)$/.exec(fragment)
   if (named === null) return fragment
-  return `#${named[1]}=${absolute(named[2], base)}`
+  return `#${named[1]}=${canonicalUrl(absolute(named[2], base))}`
 }
 
 // ---------------------------------------------------------------------------
@@ -470,10 +475,19 @@ export async function fetchHub(url: string, options: FetchHubOptions = {}): Prom
   const run = options.fetchImpl ?? fetch
   let response: Response
   try {
+    // Signed when a bucket scope covers the URL, and carrying whatever static
+    // headers the URL needs (§23.7) — a hub published on a Drive or GCS JSON-API
+    // URL is read with the same key its rows will be.
     const credential = credentialFor(url)
-    response = await run(url, {
-      headers: credential === null ? {} : signS3Request({ method: 'GET', url, credential }),
-    })
+    response = await run(
+      url,
+      applyAccess(undefined, {
+        url,
+        method: 'GET',
+        headers: accessHeadersFor(url),
+        ...(credential === null ? {} : { credential }),
+      }),
+    )
   } catch (err) {
     // A `TypeError` here is almost always the CORS answer the host did not
     // give, and saying so is more use than the browser's own "Failed to fetch":

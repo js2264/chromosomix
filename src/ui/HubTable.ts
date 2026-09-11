@@ -38,7 +38,8 @@
 
 import { button, el, fmt } from './dom'
 import { fetchHub, type Hub, type HubEntry, type HubRef } from '../state/hub'
-import { readHubRows, rememberedHubs, subscribeHubs } from '../state/hubs'
+import { readHubRows, rememberedHubs, removeHubRow, subscribeHubs } from '../state/hubs'
+import { canonicalUrl } from '../sources/rewrite'
 import { refusalMessage } from '../state/SessionConfig'
 
 export interface HubTableProps {
@@ -290,7 +291,9 @@ export class HubTable {
 
   /** Read the typed URL and load it — the "add a hub by URL" gesture. */
   private async loadTyped(): Promise<void> {
-    const url = this.urlInput.value.trim()
+    // Canonicalised so a `gs://` or `s3://` shelf is the https URL it stands
+    // for before the scheme is judged (§23.5).
+    const url = canonicalUrl(this.urlInput.value.trim())
     if (url === '') return
     if (!/^https?:\/\//i.test(url)) {
       this.say(`${url} is not an http(s) URL, so there is nothing to fetch.`, true)
@@ -315,7 +318,20 @@ export class HubTable {
     const remember = this.props.onRemember
     if (ref === null || remember === undefined) return
     if (ref.builtin || ref.url === undefined) return
-    if (readHubRows().some((row) => row.url === ref.url)) return
+    const kept = readHubRows().find((row) => row.url === ref.url)
+    if (kept !== undefined) {
+      // The other half of remembering: a hub already in the menu can be taken
+      // out of it from the same spot, so the stored-data screen's "forget
+      // everything" is not the only way to drop one lab's shelf. The table
+      // hears the change back through `subscribeHubs` and repaints its menu.
+      this.rememberSlot.appendChild(
+        button('forget this hub', () => removeHubRow(kept.id), {
+          class: 'btn-link',
+          title: 'Take it out of the menu in this browser. Nothing on the host changes.',
+        }),
+      )
+      return
+    }
     const url = ref.url
     this.rememberSlot.appendChild(
       button(

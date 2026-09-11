@@ -123,6 +123,9 @@ describe('the file picker', () => {
     const { el } = build([DEMOS])
     expect(el.querySelector('.hubs-box')).not.toBeNull()
     expect(textsOf(el, '.hubs-box h3')).toEqual(['Hubs'])
+    // The other way onto the same table (§23.4): a portal search form, which
+    // fetches nothing until its button is pressed.
+    expect(el.querySelector('.hubs-box .portal-search')).not.toBeNull()
     const select = el.querySelector('.hub-select') as HTMLSelectElement
     expect(select).not.toBeNull()
     // The placeholder, then one row per hub on offer. Still one line at any

@@ -605,6 +605,9 @@ assert the correspondence has not degraded rather than pretend to an equality th
   what a reader of both documents needs.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
+- `docs/hubs.md` — publishing a hub: the file, the generator (`scripts/make_hub.py`, for a lab's
+  bucket or the 4DN and ENCODE portals), and the weekly workflow that keeps the two shipped hubs
+  fresh on the `hubs` branch.
 - `docs/remote-sources.md` — a design note on remote sources beyond S3: what juicebox.js does
   for Dropbox, Google Drive, GCS, ENCODE, 4DN and the Aiden Lab server, measured against what this
   viewer does today (the 4DN and ENCODE buckets already open unmodified), what each further

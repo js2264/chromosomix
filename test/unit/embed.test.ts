@@ -85,6 +85,15 @@ describe('reading a mount', () => {
     expect(readMounting(`?hub=${encodeURIComponent(url)}`, AT).hub).toBe(url)
   })
 
+  it('reads a gs:// or s3:// hub as the https URL it stands for (§23.5)', () => {
+    expect(readMounting('?hub=gs%3A%2F%2Fbucket%2Fshelf.json', AT).hub).toBe(
+      'https://storage.googleapis.com/storage/v1/b/bucket/o/shelf.json?alt=media',
+    )
+    expect(readMounting('?config=s3%3A%2F%2Fbucket%2Fsession.json', AT).config).toBe(
+      'https://bucket.s3.amazonaws.com/session.json',
+    )
+  })
+
   it('refuses a hub that is not something to fetch', () => {
     for (const named of ['javascript:alert(1)', 'data:application/json,{}', 'file:///etc/passwd']) {
       expect(readMounting(`?hub=${encodeURIComponent(named)}`, AT).hub).toBeNull()
