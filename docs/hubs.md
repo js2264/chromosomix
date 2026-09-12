@@ -104,12 +104,17 @@ exists; a file the portal does not describe keeps its row with empty metadata ce
 | `optional` | publish the spine with the metadata columns empty — for the week a portal is down |
 | `skip` | never ask; for a dry run, or a machine that can reach a bucket and not a search API |
 
-Neither search asks for everything at once. `limit=all` over 4DN's set query is an 83 MB response
-and the first live run of it died half way through one — `IncompleteRead(43378383 bytes read,
-39983032 more expected)` — so both walk `&limit=&from=` instead: `--page-size` records a request,
-50 at 4DN and 500 at ENCODE, retried three times each if the host stops talking part-way. Lower it
-if a portal keeps cutting responses off; `--portal-base` points the same front end at a mirror or a
-staging instance.
+**How much of a search to ask for at once differs by portal**, and `--page-size` is the knob:
+
+| | default | why |
+|---|---|---|
+| `4dn` | 50 records a request | `limit=all` is an 83 MB answer and a live run died half way through one — `IncompleteRead(43378383 bytes read, 39983032 more expected)` |
+| `encode` | `0`, meaning `limit=all` | it answers **403** to a query carrying `from`, and its whole answer is ten megabytes of scalars |
+
+Lower it if a portal cuts responses off part-way; set it to `0` if a portal refuses `from` — a 403
+on a page says so in its own message. Every whole read is retried three times when a host agrees to
+answer and then stops talking. `--portal-base` points the same front end at a mirror or a staging
+instance.
 
 The filter on what gets a row is **whether this viewer can open the file name**, and nothing else.
 There is no experiment-type filter and no format list, which is why Micro-C, bigWigs, peaks, pairs

@@ -5293,19 +5293,24 @@ follows the lead file** (`landingState`, §5.1): a contact map opens on its geno
 a track in the 1D browser. And a group with a map and no tracks is **skipped**, because it would be
 a row that opens one file, which that file's own row already does.
 
-**A portal search is paged, never asked for whole**, and that rule was bought the hard way: the
-first live run of this design died on `IncompleteRead(43378383 bytes read, 39983032 more
-expected)`. `limit=all` over 4DN's set search with its files embedded is an 83 MB response, the
-socket closed half way through it, and the run ended in a Python traceback where every other
-failure here is a sentence. Both searches now walk `&limit=&from=` — 50 records a page at 4DN,
-whose records embed every file they own, and 500 at ENCODE, whose records are seven scalar fields —
-so the answer arrives as forty small requests that each succeed or are retried on their own. Every
-whole read is retried three times when the host agrees to answer and then stops talking; an HTTP
-*status* is never retried, because 4DN's JSON-bodied 404 is zero results and retrying it would turn
-it into a failure. The walk stops on `total`, on a short page, or on a page that adds no record it
-has not already seen — and that last one is **fatal when the walk is short**, because a portal
-ignoring `from` would otherwise publish a hub whose enrichment covers a fiftieth of its rows: a
-catalogue that draws, and has empty cells in nine rows out of ten.
+**How much of a search to ask for at once is a fact about each portal, and both were measured the
+hard way.** 4DN must be **paged**: `limit=all` over its set search with the files embedded is an
+83 MB response, and the first live run of this design died on `IncompleteRead(43378383 bytes read,
+39983032 more expected)` — the socket closed half way through, and the run ended in a Python
+traceback where every other failure here is a sentence. ENCODE must **not** be: the run after that
+one was answered `403 Forbidden` on `&limit=500&from=0`, having answered the same query with
+`limit=all` perfectly the week before. So `PAGE_4DN` is 50 records a request and `PAGE_ENCODE` is
+`limit=all`, and `--page-size` is there for the run that disagrees; the tempting uniformity is the
+one thing the evidence rules out.
+
+Around that, three rules that hold for both. Every **whole read is retried** three times when a
+host agrees to answer and then stops talking — an HTTP *status* is never retried, because 4DN's
+JSON-bodied 404 is zero results and retrying it would turn it into a failure. A **refused page says
+what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
+the fix and no status page will suggest it. And the paged walk stops on `total`, on a short page, or
+on a page that adds no record it has not already seen — the last of which is **fatal when the walk
+is short**, since a portal ignoring `from` would otherwise publish a hub whose enrichment covers a
+fiftieth of its rows: a catalogue that draws, and has empty cells in nine rows out of ten.
 
 Three more facts the generator has to know are recorded here so they are not rediscovered: a 4DN
 search with no hits answers **HTTP 404 with a JSON body**, which is zero results and not a failure;

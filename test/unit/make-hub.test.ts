@@ -1136,7 +1136,24 @@ const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
   const limit = Number(url.searchParams.get('limit'))
   const from = Number(url.searchParams.get('from'))
-  appendFileSync(asks, limit + ' ' + from + '\\n')
+  appendFileSync(asks, (url.searchParams.get('limit') ?? '-') + ' ' + (url.searchParams.get('from') ?? '-') + '\\n')
+
+  // ENCODE's shape, measured on 2026-09-12: 403 to a query carrying \`from\`,
+  // and the whole answer to the same query with \`limit=all\`.
+  if (mode === 'refuses-from') {
+    if (url.searchParams.has('from')) {
+      res.writeHead(403, { 'Content-Type': 'text/html' })
+      res.end('<html><body>Forbidden</body></html>')
+      return
+    }
+    const whole = JSON.stringify({ total: graph.length, '@graph': graph })
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(whole)),
+    })
+    res.end(whole)
+    return
+  }
 
   if (mode === 'notfound') {
     const body = JSON.stringify({ '@type': ['HTTPNotFound', 'Error'], code: 404, '@graph': [] })
@@ -1312,6 +1329,45 @@ server.listen(0, '127.0.0.1', () => {
     expect(row(read('stale.json'), '4DNFIRZ9WSAO')?.fields).toMatchObject({
       dataset: 'Hi-C on mouse cerebellar granule neurons',
     })
+  })
+
+  it('asks for everything in one answer at --page-size 0, and sends no `from`', async () => {
+    // ENCODE's default. Its answer is ten megabytes of scalars, which has never
+    // been cut, and it refuses to be paged — so paging it would buy nothing and
+    // cost the run (SPECS §24.3).
+    const held = await portal('refuses-from')
+    const run = make(
+      '4dn',
+      '--out',
+      join(out, 'whole.json'),
+      '--from-xml',
+      join(FIXTURES, '4dn-bucket'),
+      '--portal-base',
+      held.base,
+      '--page-size',
+      '0',
+    )
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    expect(run.status, run.stderr).toBe(0)
+    expect(held.asked()).toEqual(['all -'])
+    // One request, every record, every row joined.
+    expect(row(read('whole.json'), '4DNFIRZ9WSAO')?.fields).toMatchObject({
+      dataset: 'Hi-C on mouse cerebellar granule neurons',
+    })
+  })
+
+  it('names --page-size 0 when a portal refuses the page it was sent', async () => {
+    // The run of 2026-09-12 that this sentence exists for: ENCODE answered
+    // `&limit=500&from=0` with 403, and the message said to check a status page.
+    const held = await portal('refuses-from')
+    const target = join(out, 'refused.json')
+    const run = against(held.base, 'refused.json')
+    expect(run.status).toBe(1)
+    expect(run.stderr).not.toMatch(/Traceback/)
+    expect(run.stderr).toMatch(/answered HTTP 403/)
+    expect(run.stderr).toMatch(/This was one \*page\* of a search/)
+    expect(run.stderr).toMatch(/try --page-size 0/)
+    expect(existsSync(target)).toBe(false)
   })
 
   it('reads a JSON-bodied 404 from the live portal as zero results', async () => {

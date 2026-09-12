@@ -22,13 +22,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   published, because a run that loses one front end publishes none of them (the branch is replaced
   wholesale, so a missing hub would delete last week's good copy of that shelf).
 
-  Both portal searches are now paged — `--page-size` records a request, 50 at 4DN and 500 at
-  ENCODE — and every whole read is retried three times when a host agrees to answer and then stops
+  4DN's search is now paged — 50 records a request, each retried on its own — and **ENCODE's is
+  deliberately not**, which the next run proved the hard way: paged uniformly, ENCODE answered
+  `&limit=500&from=0` with `403 Forbidden`, having answered the same query with `limit=all`
+  perfectly the week before. The two portals want opposite things of one search, both answers are
+  measured, and `--page-size` is there for the run that disagrees. A 403 on a page now names
+  `--page-size 0` in its own message, since that is the fix and no status page will suggest it.
+
+  Around that: every whole read is retried three times when a host agrees to answer and then stops
   talking. An HTTP *status* is still never retried, since 4DN answers a search matching nothing
-  with a JSON-bodied 404 and retrying that would turn zero results into a failure. The walk stops
-  on the portal's `total`, on a short page, or on a page that repeats what it has already sent —
-  and that last one fails the run when it happens early, because a portal ignoring `from` would
-  otherwise publish a catalogue that draws with empty cells in nine rows out of ten.
+  with a JSON-bodied 404 and retrying that would turn zero results into a failure. The paged walk
+  stops on the portal's `total`, on a short page, or on a page that repeats what it has already
+  sent — and that last one fails the run when it happens early, because a portal ignoring `from`
+  would otherwise publish a catalogue that draws with empty cells in nine rows out of ten.
 
   The suite drove the generator only through recorded responses, which is how this shipped: the
   recorded path reads a file and the live path walks a portal. `--portal-base` now points a front

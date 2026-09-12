@@ -118,13 +118,15 @@ viewer needs no new code for this — a workspace row is a road it already has.
    expression assuming four elements in a fixed order, and undercounted every
    category by about a quarter — silently.  So the XML is parsed **as XML**,
    element by name, and the order in the document means nothing.
-3. **A portal search is paged, never asked for whole.**  ``limit=all`` over
-   4DN's set search with its files embedded is an 83 MB response, and on
-   2026-09-12 the socket closed at 43 MB — half an answer, no way to resume it,
-   and a Python traceback where every other failure here is a sentence.  Both
-   searches now walk ``&limit=&from=``, every whole read is retried, and the
-   stopping rule allows for a portal that ignores ``from`` (see
-   ``fetch_graph``).
+3. **The two portals want opposite things of one search, and both answers were
+   measured on 2026-09-12.**  4DN must be **paged**: ``limit=all`` over its set
+   search with the files embedded is 83 MB and the socket closed at 43 MB of it
+   — half an answer, no way to resume, and a Python traceback where every other
+   failure here is a sentence.  ENCODE must **not** be: it answered
+   ``&limit=500&from=0`` with **403 Forbidden**, having answered the same query
+   with ``limit=all`` perfectly well.  So ``PAGE_4DN`` is 50 and ``PAGE_ENCODE``
+   is 0, every whole read is retried, and the paged walk allows for a portal
+   that ignores ``from`` (see ``fetch_graph``).
 
 **Zero entries exits 2**, distinct from the 1 an HTTP failure exits with, so the
 workflow can refuse to publish an empty hub over a good one without having to
@@ -250,21 +252,27 @@ def query_encode(base: str = PORTAL_ENCODE) -> str:
     )
 
 
-#: How many records to ask a portal for at a time.
+#: How many records to ask a portal for at a time, or ``0`` for all of them.
 #:
-#: Neither query says `limit=all` any more, and the reason is a run that failed:
-#: 4DN's answer to the whole set search, with every processed file embedded, is
-#: about 83 MB, and on 2026-09-12 the connection was cut at 43 MB —
-#: `IncompleteRead(43378383 bytes read, 39983032 more expected)`. One response
-#: that large is one thing to go wrong with no way to recover half of it, so the
-#: search is paged and a page that fails is retried.
+#: **The two portals want opposite things, and both answers were measured.**
 #:
-#: The two numbers differ by a factor of ten because the records do. A 4DN set
-#: embeds every file it owns and runs to tens of kilobytes; an ENCODE experiment
-#: here is seven scalar fields. Both land at roughly a megabyte or two a page,
-#: which is a size a socket reliably delivers.
+#: 4DN is paged because asking for its set search whole does not work: with
+#: every processed file embedded the answer is about 83 MB, and on 2026-09-12
+#: the connection was cut at 43 MB — `IncompleteRead(43378383 bytes read,
+#: 39983032 more expected)`. Fifty sets a page is a megabyte or two, which is a
+#: size a socket reliably delivers, and a page that fails is retried on its own.
+#:
+#: ENCODE is *not* paged because asking for a page does not work: on 2026-09-12
+#: `&limit=500&from=0` was answered **403 Forbidden** on the first request,
+#: where the same query with `limit=all` had answered 27,043 experiments the
+#: run before. Its whole answer is seven scalar fields per experiment and about
+#: ten megabytes — a size that has never been cut — so there is nothing paging
+#: would buy even if the portal allowed it.
+#:
+#: Neither number is a guess and neither is a default worth changing without a
+#: measurement: `--page-size` is there for the run that disagrees.
 PAGE_4DN = 50
-PAGE_ENCODE = 500
+PAGE_ENCODE = 0
 
 #: Fixed per front end, and fixed in *order*: the columns are the table's header
 #: row, so a generator that emitted them in dictionary order would reshuffle a
@@ -640,9 +648,21 @@ def fetch_json(url: str) -> dict:
         if failure.code == 404 and empty is not None:
             log.info("%s answered 404 with a JSON body: zero results.", failure.url)
             return empty if isinstance(empty, dict) else {}
+        # A *page* refused is worth its own sentence, because it has a fix that
+        # a status page will not suggest. ENCODE answers 403 to a query carrying
+        # `from` and 200 to the same query with `limit=all`; 4DN is the other
+        # way round. Whichever way a portal turns out to be, the operator should
+        # not have to read this file to find the switch.
+        paged = (
+            "\n  This was one *page* of a search. A portal that will not be paged answers like "
+            "this to a query carrying `from`, and answers the same query with `limit=all`: "
+            "try --page-size 0."
+            if "&from=" in failure.url
+            else ""
+        )
         raise SystemExit(
             f"{failure.url}\n"
-            f"  answered HTTP {failure.code} {failure.reason}.\n"
+            f"  answered HTTP {failure.code} {failure.reason}.{paged}\n"
             "  Nothing was written. Check the portal's status page, then rerun; if the query "
             "itself is wrong the body above says so."
         ) from failure
@@ -657,7 +677,11 @@ def fetch_json(url: str) -> dict:
 
 
 def fetch_graph(query: str, page: int) -> list:
-    """Every record a portal search matches, a page at a time.
+    """Every record a portal search matches, a page at a time — or in one answer.
+
+    ``page <= 0`` asks for ``limit=all``, which is what ENCODE needs: it refuses
+    a query carrying ``from`` (see {@link PAGE_ENCODE}). Everything below is the
+    paged walk, which is what 4DN needs for the opposite reason.
 
     ``limit=all`` is what this used to send, and the 4DN failure of 2026-09-12
     is why it no longer does: one 83 MB response is one thing to go wrong, and
@@ -682,6 +706,9 @@ def fetch_graph(query: str, page: int) -> list:
     and has empty cells in nine rows out of ten, which is precisely the failure
     ``--portal require`` exists to refuse.
     """
+    if page <= 0:
+        return listed(fetch_json(f"{query}&limit=all").get("@graph"))
+
     records: list = []
     seen: set[str] = set()
     offset = 0
@@ -2739,8 +2766,9 @@ def build_parser() -> argparse.ArgumentParser:
             "--page-size",
             type=int,
             default=page,
-            help=f"Records per search request (default: {page}). Lower it if the portal keeps "
-            "cutting a response off part-way.",
+            help=f"Records per search request; 0 asks for all of them in one answer "
+            f"(default: {page}). Lower it if the portal cuts a response off part-way; set it "
+            "to 0 if the portal refuses a query carrying `from`.",
         )
         return sub
 
