@@ -21,8 +21,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { maxSeparation, separation, squareBand } from '@/analysis/band'
-import { directionalityIndex } from '@/analysis/di'
+import { directionBorders, directionalityIndex, integratedDirection } from '@/analysis/di'
 import { ExpectedAccumulator } from '@/analysis/expected'
+import { domainsBetween } from '@/analysis/insulation'
 
 /** A symmetric square, built from a function of the two bins. */
 function square(size: number, cell: (i: number, j: number) => number): Float32Array {
@@ -193,5 +194,130 @@ describe('ExpectedAccumulator, round a circle', () => {
     // The same map read as a line: the curve turns back up past half way, which
     // is the artefact, and it is large.
     expect(straight.mean[n - 1]).toBeGreaterThan(straight.mean[n / 2])
+  })
+})
+
+/**
+ * Borders and domains, from the shape of the index rather than its values.
+ *
+ * A domain reads as a positive block followed by a negative one, so the border
+ * between two of them is the negative-to-positive flip — and the thing that
+ * makes calling it delicate is that the flip is a *shape* and a noisy track
+ * crosses zero many times inside one domain. The properties below are the four
+ * ways a caller gets a plausible set of borders that is wrong:
+ *
+ * - the **bin**, because a border reported one bin early is a domain set adrift
+ *   by one bin at both ends, which at 40 kb is 40 kb of the neighbour;
+ * - the **stutter**, because a track that wobbles across zero has crossings a
+ *   bin apart and only one of them is an edge;
+ * - the **depth**, because the index is a χ² and grows with sequencing, so a
+ *   caller that thresholds the raw curve calls twice as many borders on the same
+ *   structure sequenced twice as far;
+ * - and the **gaps**, since a dropped stretch must not be able to be the floor of
+ *   a trough.
+ */
+
+
+/** A DI track for domains of the given lengths: first half downstream, second up. */
+function domainsOf(lengths: readonly number[], amplitude = 1): Float64Array {
+  const total = lengths.reduce((sum, length) => sum + length, 0)
+  const out = new Float64Array(total)
+  let at = 0
+  for (const length of lengths) {
+    const half = length / 2
+    for (let i = 0; i < length; i++) out[at + i] = i < half ? amplitude : -amplitude
+    at += length
+  }
+  return out
+}
+
+describe('integratedDirection', () => {
+  it('climbs through a downstream block and falls through an upstream one', () => {
+    const curve = integratedDirection(domainsOf([20]))
+    // Ten bins up, ten back down, so the peak is the middle of the domain and
+    // the floor is its far end.
+    expect(curve[9]).toBeCloseTo(10, 10)
+    expect(curve[19]).toBeCloseTo(0, 10)
+    for (let i = 1; i <= 9; i++) expect(curve[i]).toBeGreaterThan(curve[i - 1])
+    for (let i = 11; i <= 19; i++) expect(curve[i]).toBeLessThan(curve[i - 1])
+  })
+
+  it('is unchanged by how deep the library was sequenced', () => {
+    const shallow = integratedDirection(domainsOf([20, 20], 1))
+    const deep = integratedDirection(domainsOf([20, 20], 37))
+    for (let i = 0; i < shallow.length; i++) expect(deep[i]).toBeCloseTo(shallow[i], 10)
+  })
+
+  it('leaves the index’s gaps as gaps, and carries the sum across them', () => {
+    const di = domainsOf([20, 20])
+    for (let i = 24; i < 28; i++) di[i] = Number.NaN
+    const curve = integratedDirection(di)
+    for (let i = 24; i < 28; i++) expect(curve[i]).toBeNaN()
+    // The sum picks up where it left off rather than restarting, which would put
+    // a step in the curve — and a step is a minimum.
+    expect(curve[28]).toBeCloseTo(curve[23] + 1, 10)
+  })
+
+  it('says nothing at all about a track with no direction in it', () => {
+    const curve = integratedDirection(new Float64Array(40))
+    for (const value of curve) expect(value).toBeNaN()
+  })
+})
+
+describe('directionBorders', () => {
+  it('calls one border between two domains, at the first downstream bin', () => {
+    const di = domainsOf([20, 20])
+    const borders = directionBorders(di, { prominence: 5, spacing: 0 })
+    expect(borders.map((border) => border.bin)).toEqual([20])
+    // The bin the call lands on is the first that looks downstream again — the
+    // opening bin of the new domain, not the closing bin of the old one.
+    expect(di[borders[0].bin]).toBeGreaterThan(0)
+    expect(di[borders[0].bin - 1]).toBeLessThan(0)
+    // Ten bins of steady bias on each side, which is what the unit means.
+    expect(borders[0].prominence).toBeCloseTo(10, 10)
+  })
+
+  it('does not call the two ends of the sequence', () => {
+    // The first bin and the last are minima of the curve — there is nothing
+    // beyond them to climb — and a prominence of zero is what says so.
+    const borders = directionBorders(domainsOf([20, 20]), { prominence: 0.5, spacing: 0 })
+    expect(borders.map((border) => border.bin)).toEqual([20])
+  })
+
+  it('reads a stutter across zero as one border rather than two', () => {
+    const di = domainsOf([20, 20])
+    // One bin in the middle of the first domain's upstream arm flips sign, which
+    // is what a noisy track does and what a crossing-by-crossing caller reports
+    // as a second border a few bins early.
+    di[15] = 1
+    const borders = directionBorders(di, { prominence: 5, spacing: 0 })
+    expect(borders.map((border) => border.bin)).toEqual([20])
+  })
+
+  it('drops a flip too shallow to be an edge', () => {
+    const borders = directionBorders(domainsOf([20, 20]), { prominence: 11, spacing: 0 })
+    expect(borders).toHaveLength(0)
+  })
+
+  it('calls the same borders however deep the map is', () => {
+    const shallow = directionBorders(domainsOf([20, 20, 20], 1), { prominence: 5, spacing: 0 })
+    const deep = directionBorders(domainsOf([20, 20, 20], 500), { prominence: 5, spacing: 0 })
+    expect(deep.map((border) => border.bin)).toEqual(shallow.map((border) => border.bin))
+    expect(deep.map((border) => border.bin)).toEqual([20, 40])
+  })
+
+  it('puts the domains between its borders on the domains themselves', () => {
+    const borders = directionBorders(domainsOf([20, 20, 20]), { prominence: 5, spacing: 0 })
+    const domains = domainsBetween(borders)
+    // Three domains, two interior borders, and the one domain with both of its
+    // edges called is the middle one — exactly the span it was built at.
+    expect(domains.map((domain) => [domain.from, domain.to])).toEqual([[20, 40]])
+  })
+
+  it('invents no border at the edge of a dropped stretch', () => {
+    const di = domainsOf([20, 20])
+    for (let i = 4; i < 9; i++) di[i] = Number.NaN
+    const borders = directionBorders(di, { prominence: 5, spacing: 0 })
+    expect(borders.map((border) => border.bin)).toEqual([20])
   })
 })

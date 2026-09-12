@@ -11,21 +11,33 @@
  * and gives the sign flip that Dixon's HMM segmented on. A boundary both agree
  * about is a boundary.
  *
- * ## The window, and why it is in base pairs
+ * ## The window is in bins, like the diamond's
  *
- * The diamond's window is a count of bins and says so at length: the diamond is
- * cells on each side of the bin being scored, so bins are what it was always
- * measured in. The directionality index is the opposite case. Its window is a
- * **genomic distance** — Dixon's 2 Mb, and the number every published DI track is
- * computed at — and it means the same 2 Mb at 10 kb and at 40 kb. Asking for it
- * in bins would make the one number a reader knows depend on which rung of an
- * `.mcool` they happen to have open, and a stored session moved between two
- * resolutions would silently compute two different statistics.
+ * Both tasks look a bounded distance up the diagonal and down it, and both are
+ * read side by side against the same map — so a reader comparing them is
+ * comparing two windows, and a form that asks for one in bins and the other in
+ * base pairs makes that comparison arithmetic. The diamond's argument for bins
+ * applies here unchanged: the window is a count of cells the statistic sums, so
+ * the number that decides what it measures has always been this one, and a
+ * reader who wants the two tasks at the same scale can now type the same number
+ * into both.
  *
- * So: base pairs, defaulting to **2 Mb**, which is Dixon et al. 2012's own
- * window and the one a mammalian map should be read at. The runner divides by
- * the bin size once and says in a note how many bins that came to, because a
- * window that rounds to three bins is a window worth knowing about.
+ * The cost is the one bins always carry: **the default is a different genomic
+ * distance on every rung of an `.mcool`**, where Dixon's 2 Mb was the same
+ * distance everywhere. {@link DEFAULT_DI_WINDOW_BINS} is 50, which is that 2 Mb
+ * at the 40 kb the 2012 paper worked at, and the runner says in a note what the
+ * window came to in base pairs on the file actually open — because a 50-bin
+ * window on a 1 kb bacterial map is 50 kb and is a different reading of the
+ * genome, and that is worth being told once rather than inferring from a track.
+ *
+ * ## Borders and domains
+ *
+ * The same two outputs the diamond produces, called from the same kernel: see
+ * `analysis/di.ts` for why the index is integrated first and what the prominence
+ * is measured in. A border here is a **sign flip** — the bin where the track
+ * stops looking upstream and starts looking downstream — where the diamond's is
+ * a minimum, so the two sets are independent readings of the same edges and a
+ * border both agree on is worth more than either.
  */
 
 import { contigNamed, framingCovers } from '../context'
@@ -41,18 +53,19 @@ import type {
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 
-/** Dixon et al. 2012's window, and the default a mammalian map wants. */
-export const DEFAULT_DI_WINDOW_BP = 2_000_000
+/**
+ * Dixon et al. 2012's 2 Mb, in bins of the 40 kb map the paper computed it on.
+ *
+ * A default has to be a number rather than a distance now that the form asks in
+ * bins, and this is the number that reproduces the published reading on a
+ * mammalian map opened at its usual resolution.
+ */
+export const DEFAULT_DI_WINDOW_BINS = 50
 
-/** The window in base pairs, as the form holds it. */
-export function windowBpOf(params: Params): number {
-  const value = typeof params.window === 'number' ? params.window : DEFAULT_DI_WINDOW_BP
+/** The window in bins, at least one. */
+export function windowBinsOf(params: Params): number {
+  const value = typeof params.window === 'number' ? params.window : DEFAULT_DI_WINDOW_BINS
   return Math.max(1, Math.round(value))
-}
-
-/** The window in bins of a file with this bin size, at least one. */
-export function windowBinsAt(params: Params, binsize: number): number {
-  return Math.max(1, Math.round(windowBpOf(params) / Math.max(1, binsize)))
 }
 
 function regionOf(params: Params): string {
@@ -70,12 +83,12 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'window',
     label: 'Window',
     hint:
-      'Contacts are summed this far upstream and this far downstream of every bin. ' +
-      '2 Mb is Dixon et al.’s, and what a mammalian map is normally read at.',
-    default: DEFAULT_DI_WINDOW_BP,
+      'Contacts are summed this many bins upstream and this many downstream of every bin. ' +
+      '50 is Dixon et al.’s 2 Mb at the 40 kb they worked at.',
+    default: DEFAULT_DI_WINDOW_BINS,
     min: 1,
     integer: true,
-    unit: 'bp',
+    unit: 'bins',
   },
   {
     kind: 'region',
@@ -113,11 +126,75 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Quality',
   },
   BALANCE_PARAM,
+  /**
+   * The borders, and the domains between them.
+   *
+   * On by default, for the reason the diamond's are: the index is a reading and
+   * a reader almost always wants the call under it, the calls cost nothing once
+   * the track exists, and producing only the track left the same eight lines of
+   * script to be written every time. A reader who wants the curve alone unticks
+   * it.
+   */
+  {
+    kind: 'toggle',
+    key: 'call',
+    label: 'Call borders from the sign flips',
+    hint: 'Adds a BED of domain borders, drawn on the map.',
+    default: true,
+    section: 'Borders',
+  },
+  {
+    kind: 'number',
+    key: 'prominence',
+    label: 'Minimum prominence',
+    /**
+     * In bins of ordinary directional bias, which is the unit
+     * `integratedDirection` standardises the curve into and is not the index's
+     * own. A χ² grows with how deep the library was sequenced, so a
+     * threshold in χ² is a different threshold on every file and a reader who
+     * found a good one on one map would look for it again from scratch on the
+     * next. This one is a property of the structure: *how many bins of typical
+     * bias does the arm on each side of this border carry*.
+     *
+     * Ten by default — a domain arm of about ten bins at full strength, which at
+     * the 50-bin window above is a modest domain and calls a set a reader can
+     * then thin rather than one they have to go looking for.
+     */
+    hint: 'How many bins of steady bias the track must carry on both sides of a flip.',
+    default: 10,
+    min: 0,
+    max: 200,
+    step: 1,
+    slider: true,
+    when: (params) => params.call === true,
+    section: 'Borders',
+  },
+  {
+    kind: 'number',
+    key: 'spacing',
+    label: 'Minimum spacing',
+    hint: 'Two calls closer than this many bins keep only the stronger.',
+    default: 0,
+    min: 0,
+    integer: true,
+    unit: 'bins',
+    when: (params) => params.call === true,
+    section: 'Borders',
+  },
+  {
+    kind: 'toggle',
+    key: 'domains',
+    label: 'Also the domains between them',
+    hint: 'A second overlay: the span from each border to the next, as a BED.',
+    default: true,
+    when: (params) => params.call === true,
+    section: 'Borders',
+  },
 ]
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
-  const window = windowBinsAt(params, context.binsize)
+  const window = windowBinsOf(params)
   const contig = regionContig(context, regionOf(params))
 
   if (contig !== undefined && contig.bins <= window) {
@@ -190,12 +267,12 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 export const DI_TASK: AnalysisTask = {
   id: 'di',
   title: 'Directionality index',
-  blurb: 'Which way each bin looks, and where the sign flips.',
+  blurb: 'Which way each bin looks, and the domains the sign flips call.',
   group: 'map',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
-  outputs: ['profile'],
+  outputs: ['profile', 'intervals'],
   estimate,
 }

@@ -25,6 +25,19 @@
  * once: `A − E = (A − B)/2` and `B − E = (B − A)/2`, so the bracket is
  * `((A − B)²/4 + (A − B)²/4) / E = (A − B)²/(2E) = (A − B)²/(A + B)`.
  *
+ * ## The track, and the borders under it
+ *
+ * Dixon's own segmentation was a three-state HMM over this track — downstream
+ * biased, upstream biased, neither — and a domain ran from the first bin of a
+ * downstream-biased run to the last bin of the upstream-biased run before the
+ * next one. What {@link directionBorders} does instead is integrate the index and
+ * hand the curve to the diamond's own {@link callBoundaries}; the reasoning for
+ * that choice, and what it costs, is at {@link integratedDirection}. The two
+ * outputs differ in one visible way worth knowing before comparing a domain set
+ * against a published one: the HMM leaves *gaps* — stretches it calls
+ * unorganised and puts in no domain — and borders-between-borders tile, so every
+ * base of a scored sequence is inside exactly one domain.
+ *
  * ## Three things that decide whether the track means anything
  *
  * **The window never crosses a contig boundary.** `analysis/insulation.ts` says
@@ -53,6 +66,7 @@
  */
 
 import type { SeparationBand } from './band'
+import { callBoundaries, type Boundary } from './insulation'
 
 export interface DirectionalityOptions {
   /** How far the statistic looks each way, in bins. */
@@ -144,6 +158,128 @@ export function directionalityIndex(
     const difference = upstream - downstream
     const chi = (difference * difference) / total
     out[bin] = downstream >= upstream ? chi : -chi
+  }
+  return out
+}
+
+/**
+ * The running sum of the index, standardised — the curve whose minima are the
+ * domain borders.
+ *
+ * ## Why the integral, rather than the sign flips themselves
+ *
+ * The reading the index gives of a domain is a **shape along the sequence**, not
+ * a value at a bin: the 5′ half of a domain looks downstream and the 3′ half
+ * looks upstream, so one domain is a positive block followed by a negative one
+ * and the border between two domains is where the track crosses from negative
+ * back to positive. Read crossing by crossing that is a fragile thing to call —
+ * a track that stutters `− − + − + + +` has two crossings a bin apart and only
+ * one of them is a border, and the rules that pick the right one are the rules
+ * of prominence written out badly.
+ *
+ * Summing the index turns the shape into a topography. The curve climbs through
+ * every downstream-biased block and falls through every upstream-biased one, so
+ * **each border is a local minimum** and a stutter is a shallow dimple on the
+ * flank of the real trough — which is exactly the distinction
+ * {@link callBoundaries} already draws, for the diamond, with tests. So the
+ * borders of this task are called by the same kernel as the boundaries of that
+ * one, the two sets mean the same kind of thing, and there is one implementation
+ * of *what a called edge is* rather than two that drift.
+ *
+ * ## Why it is standardised first
+ *
+ * The index is a χ², so its size grows with how deep the map is: the same domain
+ * in a library sequenced twice as far scores roughly twice as high. An absolute
+ * threshold on the raw integral would therefore be a different threshold on
+ * every file, and a reader who found a good one would find it again from scratch
+ * on the next map. Dividing by the **median absolute index** over the sequence
+ * removes that: the curve then climbs by about one unit per bin through a block
+ * of typical strength, and a prominence reads as *how many bins of ordinary
+ * directional bias this arm carries*, which is a property of the structure
+ * rather than of the sequencing.
+ *
+ * Bins the index left as gaps stay gaps here — the sum carries across them but
+ * emits nothing, so a dropped stretch cannot be the floor of a trough and cannot
+ * invent a border at its edge. What the carry does mean is that a long gap glues
+ * the two sides together rather than restarting the curve, which is the gentler
+ * of the two wrong answers: restarting would put a step in the curve, and a step
+ * is a minimum.
+ */
+export function integratedDirection(di: ArrayLike<number>): Float64Array {
+  const n = di.length
+  const out = new Float64Array(n).fill(Number.NaN)
+
+  const magnitudes: number[] = []
+  for (let i = 0; i < n; i++) {
+    const value = di[i]
+    if (Number.isFinite(value)) magnitudes.push(Math.abs(value))
+  }
+  if (magnitudes.length === 0) return out
+  magnitudes.sort((a, b) => a - b)
+  const scale = magnitudes[magnitudes.length >> 1]
+  // Every bin even-handed, or every one of them a gap. Either way there is no
+  // structure to integrate and no scale to divide by, and the honest curve is
+  // the one that says nothing rather than one built on a division by zero.
+  if (!(scale > 0)) return out
+
+  let total = 0
+  for (let i = 0; i < n; i++) {
+    const value = di[i]
+    if (!Number.isFinite(value)) continue
+    total += value / scale
+    out[i] = total
+  }
+  return out
+}
+
+/** One called domain border, in bins local to its sequence. */
+export interface DirectionBorderOptions {
+  /**
+   * How far the integrated curve must climb on both sides of a minimum, in bins
+   * of ordinary directional bias. See {@link integratedDirection} for what the
+   * unit means and why it is not the index's own.
+   */
+  prominence: number
+  /** Minimum gap between two calls, in bins. */
+  spacing: number
+}
+
+/**
+ * The domain borders of one sequence, from its index.
+ *
+ * **The call lands one bin past the minimum**, and the bin matters. The floor of
+ * a trough in the integrated curve is the last bin that still looks *upstream* —
+ * the last bin of the domain that is ending — so the border itself, the first
+ * bin that looks downstream, is the one after it. Reporting the minimum would
+ * put every border one bin early and every domain one bin adrift of the domain
+ * it is meant to be, which at 40 kb is 40 kb of somebody else's TAD at each end.
+ *
+ * The prominence is carried through from the curve rather than recomputed, so it
+ * is comparable with the number in {@link Boundary} the diamond reports even
+ * though the two are in different units — both answer *how far does the track
+ * have to climb to escape this call*, which is what a reader filtering an
+ * overlay on its score is asking.
+ */
+export function directionBorders(
+  di: ArrayLike<number>,
+  options: DirectionBorderOptions,
+): Boundary[] {
+  const n = di.length
+  const minima = callBoundaries(integratedDirection(di), {
+    prominence: options.prominence,
+    spacing: options.spacing,
+  })
+  const out: Boundary[] = []
+  const seen = new Set<number>()
+  for (const minimum of minima) {
+    const bin = minimum.bin + 1
+    // A minimum on the last bin has no bin after it to be the border of, and
+    // the same call arriving twice is one border: both are the shift's doing
+    // rather than the curve's, so both are dropped here rather than left for
+    // the BED writer to trip over.
+    if (bin >= n || seen.has(bin)) continue
+    seen.add(bin)
+    out.push({ bin, score: di[bin], prominence: minimum.prominence })
   }
   return out
 }

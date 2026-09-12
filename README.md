@@ -242,11 +242,15 @@ metacooler-run tasks
 ## 
 ## di
 ##     Directionality index
-##       --window (default 2000000)  Window
+##       --window (default 50)  Window
 ##       --region  Sequence
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of each side
 ##       --balance (default false)  Use balancing weights
+##       --call (default true)  Call borders from the sign flips
+##       --prominence (default 10)  Minimum prominence
+##       --spacing (default 0)  Minimum spacing
+##       --domains (default true)  Also the domains between them
 ## 
 ## hicscore
 ##     HiC score

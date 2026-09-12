@@ -4179,17 +4179,39 @@ assert an edge the data never placed.
 diamond asks. Insulation says *little contact crosses here* and finds a boundary whatever is on either
 side of it; the index says *this bin looks one way* and finds it from the asymmetry, which also marks
 the inside edges of a domain and gives the sign flip the original paper's HMM segmented on. A boundary
-both agree about is a boundary. Its window is in **base pairs and not bins**, which is the opposite of
-the diamond's and for a stated reason: the diamond is a count of cells each side of the bin it scores,
-and this is a genomic distance — Dixon's 2 Mb, the number every published DI track is computed at, and
-the default here. Asked for in bins it would be a different statistic on every rung of an `.mcool`. The
-statistic is computed as `sign(B − A)·(A − B)²/(A + B)`, which is the paper's long form collapsed by an
-identity the tests check rather than trust, and `ignore_diags` defaults to **0** here where the diamond's
-is 2: the index *differences* two sums that both contain the near-diagonal, so it largely cancels, and
-Dixon's own numbers were computed with every cell in. `minValid` is a fraction of **each side
-separately**, because a bin with a full window one way and an empty one the other is the worst case and
-would pass a test on the total. No boundary calling: a segmentation of this track is an HMM with
-choices, and §18.9's argument applies to it as it does to a loop call.
+both agree about is a boundary. Its window is in **bins, like the diamond's**, because both tasks are
+read side by side against the same map and a form that asks for one in bins and the other in base pairs
+makes that comparison arithmetic; the default is **50 bins**, which is Dixon's 2 Mb at the 40 kb his
+paper worked at, and the run notes what that came to in base pairs on the file actually open, since a
+50-bin window on a 1 kb bacterial map is 50 kb and is a different reading of the genome. The statistic
+is computed as `sign(B − A)·(A − B)²/(A + B)`, which is the paper's long form collapsed by an identity
+the tests check rather than trust, and `ignore_diags` defaults to **0** here where the diamond's is 2:
+the index *differences* two sums that both contain the near-diagonal, so it largely cancels, and Dixon's
+own numbers were computed with every cell in. `minValid` is a fraction of **each side separately**,
+because a bin with a full window one way and an empty one the other is the worst case and would pass a
+test on the total.
+
+It calls **borders and domains**, the same two overlays the diamond produces and through the same
+kernel. The reading the index gives of a domain is a shape rather than a value — the 5′ half looks
+downstream and the 3′ half upstream — so a border is the negative-to-positive flip between two domains.
+Called flip by flip that is fragile, because a track that stutters across zero has crossings a bin apart
+and only one of them is an edge, and the rules that pick it are the rules of prominence written out
+badly. So the index is **integrated** first: the running sum climbs through every downstream-biased
+block and falls through every upstream-biased one, which makes each border a *local minimum* and each
+stutter a dimple on the flank of the real trough — exactly the distinction `callBoundaries` already
+draws for the diamond, with tests. One kernel decides what a called edge is, both overlays filter on the
+same column and tile the same way, and the call lands **one bin past the minimum**, which is the first
+bin that looks downstream again and therefore the opening bin of the new domain rather than the closing
+bin of the old one.
+
+The curve is standardised by the **median absolute index** before it is integrated, so the prominence is
+in *bins of ordinary directional bias* rather than in χ². A χ² grows with how deep the library was
+sequenced, so a threshold in the index's own units is a different threshold on every file; this one is a
+property of the structure, and it is what makes a prominence a reader found on one map worth typing into
+the next. The gaps the index leaves stay gaps — the sum carries across them but emits nothing, so a
+dropped stretch cannot be the floor of a trough — and Dixon's own HMM differs from this in one visible
+way worth knowing before comparing against a published set: the HMM leaves stretches it calls
+unorganised in no domain at all, where borders-between-borders tile.
 *HiC score* — the sum of every cell in a square window centred on the bin, which is the reading Bignaud
 et al. use where the question is not where a domain ends but how tightly a stretch is folded against
 itself. The first two are **ratios** and are deliberately blind to depth, which is what makes them

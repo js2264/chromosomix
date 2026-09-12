@@ -85,8 +85,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
   (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the
-  question the diamond asks, with its window in base pairs and defaulting to the 2 Mb every published DI
-  track is computed at; the **HiC score**, the sum of every cell in a square window centred on each bin,
+  question the diamond asks, with its window in bins like the diamond's and defaulting to 50, which is
+  Dixon's 2 Mb at the 40 kb his paper worked at; the **HiC score**, the sum of every cell in a square window centred on each bin,
   which is the reading Bignaud et al. use where the question is how tightly a stretch is folded rather
   than where a domain ends; and the **scalogram** (Cournac et al. 2012, `HiContacts::scalogram()`), which
   is P(s) with one summation left undone — at every bin, the separations at which its contacts reach each
@@ -99,6 +99,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it whatever the anchor. The divisor is each bin's own total contact centred on one, so a raw profile
   stays in contacts and an O/E ratio stays centred on one. With trans it means the pixel walk can no
   longer stop at the anchor, and the estimate says the pass is the whole file rather than half of it.
+
+- **The directionality index calls TAD borders and domains.** The same two overlays the diamond
+  produces, and through the same kernel. A domain reads as a *shape* along the index — the 5′ half looks
+  downstream, the 3′ half upstream — so a border is the negative-to-positive flip between two of them.
+  Called flip by flip that is fragile: a track that stutters across zero has crossings a bin apart and
+  only one is an edge, and the rules that pick it are the rules of prominence written out badly. So the
+  index is **integrated** first. The running sum climbs through every downstream-biased block and falls
+  through every upstream-biased one, which makes each border a local minimum and each stutter a dimple on
+  the flank of the real trough — exactly what `callBoundaries` already distinguishes, for the diamond,
+  with tests. One implementation decides what a called edge is; both overlays filter on the same column
+  and tile the same way; and the call lands one bin past the minimum, which is the opening bin of the new
+  domain rather than the closing bin of the old one.
+
+  The curve is standardised by the median absolute index before it is integrated, so the prominence is in
+  **bins of ordinary directional bias** rather than in χ². A χ² grows with how deep the library was
+  sequenced, so a threshold in the index's own units is a different threshold on every file; this one is a
+  property of the structure, and a value found on one map is worth typing into the next. Dixon's own HMM
+  differs in one visible way, stated at §18.8 rather than left to be discovered: it leaves stretches it
+  calls unorganised in no domain at all, where borders-between-borders tile.
 
 - **Ribbons: a lane style for a set of quantiles (SPECS §18.12).** A `ribbon` fills the band between its
   own curve and the curve of the member below it in the same lane, so the scalogram's five quantiles draw
