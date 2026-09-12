@@ -1,19 +1,33 @@
 name: Hubs
 
-# The two portal catalogues the picker's Hubs section offers (SPECS §24.3).
-# `scripts/make_hub.py` asks 4DN and ENCODE for every released contact map they
-# have, joins each file to the cell line, assay, assembly and lab that name it,
-# and writes one static JSON per portal. This workflow runs that once a week and
-# publishes the result.
+# The catalogues the picker's Hubs section offers (SPECS §24.3).
+# `scripts/make_hub.py` asks IGV, 4DN and ENCODE for everything they publish
+# that this viewer can open, joins each file to the genome, cell line, assay and
+# lab that name it, and writes static JSON. This workflow runs that once a week
+# and publishes the result.
+#
+# **What it writes**, and why it is more than three files. Widening the two
+# portal front ends from "Hi-C only" to "every file this viewer can open" took
+# 4DN from 1,200 rows to 25,000 and ENCODE from 200 to 1.2 million. A quarter of
+# a gigabyte of JSON is not a table a browser can draw, so ENCODE is published
+# at `--breadth representative` — one file per dataset, assembly and format,
+# which is every dataset ENCODE has and 210,000 rows — and sharded by assembly
+# and output category into twelve files, none over about 25 MB. Each shard is
+# its own shelf in the picker, and `src/ui/examples.ts` ships a reference to
+# each; `test/dom/builtin-hubs.test.ts` checks the two lists still agree.
+#
+# Three session hubs come with them. A pre-configured session is a hub row of
+# `kind: "workspace"` (§24.1) pointing at a `.metacooler.json` this workflow
+# also writes — IGV's hg38 as its FASTA with its tracks placed, a 4DN
+# experiment set as its map with its bigWigs on it — which is the *one click
+# and it is on screen* answer that three rows in a table is not.
 #
 # **Where the viewer reads it.** Not from this branch. `src/ui/examples.ts`
-# points the two built-in hubs at
-#   <site>/hubs/4dn.json
-#   <site>/hubs/encode.json
-# which .github/workflows/deploy.yml copies out of this branch into the site on
-# every deploy — and the last step here asks for a deploy as soon as something
-# new is published, so the site is minutes behind the branch and never a push
-# to `main` behind it. Same origin as the page, so no CORS is involved, and a
+# points every built-in hub at `<site>/hubs/<name>.json`, which
+# .github/workflows/deploy.yml copies out of this branch into the site on every
+# deploy — and the last step here asks for a deploy as soon as something new is
+# published, so the site is minutes behind the branch and never a push to
+# `main` behind it. Same origin as the page, so no CORS is involved, and a
 # private repository changes nothing. That last point is why it is not
 # `raw.githubusercontent.com`, the first design: that host answers 404 to
 # anyone not logged in when the repository is private, and a Pages site is
@@ -28,19 +42,30 @@ name: Hubs
 # the same reasoning, and the same technique, as `pages-archive` in deploy.yml
 # — and the deploy reads it the way it reads the archive.
 #
+# **The branch is rewritten, not appended to.** Roughly 100 MB of JSON changes
+# every week, and a branch that kept each week as a commit would carry five
+# gigabytes of git objects within a year for a store whose only interesting
+# state is its tip. So the publish below force-pushes a single orphan commit,
+# and what survives between runs is the small part worth citing: `index.json`
+# dated per run, and dated copies of the hubs under 2 MB, pruned to the last
+# 26 runs. The 90-day workflow artifact holds everything, including the large
+# shards, for the reader who needs last Monday's exact shelf.
+#
 # **The first run has to be by hand.** Until it has happened, and the deploy it
-# asks for has finished, the two URLs answer 404, and the picker says so in
+# asks for has finished, the hub URLs answer 404, and the picker says so in
 # those words ("not generated yet; the Hubs workflow publishes it") rather than
 # showing an error. To do it: Actions → Hubs → Run workflow, on `main`. Nothing
 # else needs setting up — no secret, no branch to create, no Pages setting to
 # change.
 #
 # What lands on the `hubs` branch:
-#   4dn.json, encode.json      the current pair, which is what the viewer reads
+#   igv.json                   IGV's genomes and their tracks
+#   4dn.json                   every openable file on the 4DN open-data bucket
+#   encode-<assembly>-<kind>.json   twelve ENCODE shards
+#   <front>-sessions.json      the three session shelves
+#   sessions/*.metacooler.json the sessions those shelves name
 #   index.json                 what is there, how many rows each has, and when
-#   archive/<name>-<date>.json every past run, so a figure can cite the shelf
-#                              it was chosen from
-
+#   archive/                   dated copies of index.json and the small hubs
 on:
   schedule:
     # Mondays at 04:17 UTC. Off the hour on purpose: GitHub queues every cron
@@ -94,13 +119,17 @@ jobs:
       #
       # `out/` is gitignored, so running these two commands locally to inspect
       # the result leaves nothing for a stray `git add -A` to pick up.
-      - name: Generate both hubs
+      - name: Generate every hub
         run: |
           set -uo pipefail
           failed=0
-          for front in 4dn encode; do
+          for front in igv 4dn encode; do
             echo "::group::$front"
-            python3 scripts/make_hub.py "$front" --out "out/$front.json" --timestamp --check \
+            python3 scripts/make_hub.py "$front" \
+              --out "out/$front.json" \
+              --sessions-dir out/sessions \
+              --sessions-out "out/$front-sessions.json" \
+              --check \
               || failed=1
             echo "::endgroup::"
           done
@@ -109,29 +138,91 @@ jobs:
       # Read back from the files rather than counted as they were written: the
       # index has to describe what is about to be published, and the only thing
       # that knows that for certain is the published bytes.
+      # Read back from the files rather than counted as they were written: the
+      # index has to describe what is about to be published, and the only thing
+      # that knows that for certain is the published bytes. Discovered by
+      # globbing rather than from a list, because the shard list lives in the
+      # generator and a second copy here would be a third thing to keep in step.
       - name: Write the index
         run: |
           python3 - <<'PY'
           import datetime
           import json
           import pathlib
+          import re
 
           out = pathlib.Path("out")
           hubs = []
-          for hub_id in ("4dn", "encode"):
-              hub = json.loads((out / f"{hub_id}.json").read_text(encoding="utf-8"))
+          for path in sorted(out.glob("*.json")):
+              if path.name == "index.json" or re.search(r"-\d{8}$", path.stem):
+                  # A dated copy is the archive's, not the index's:
+                  # `4dn-20260914.json` would be the same shelf listed twice.
+                  continue
+              hub = json.loads(path.read_text(encoding="utf-8"))
+              if hub.get("kind") != "metacooler.hub":
+                  continue
               hubs.append({
-                  "id": hub_id,
-                  "file": f"{hub_id}.json",
+                  "id": path.stem,
+                  "file": path.name,
+                  "name": hub.get("name", ""),
                   "entries": len(hub["entries"]),
+                  "bytes": path.stat().st_size,
                   "generatedAt": hub["generatedAt"],
               })
+          sessions = sorted((out / "sessions").glob("*.metacooler.json"))
           now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
-          index = {"generatedAt": now.isoformat().replace("+00:00", "Z"), "hubs": hubs}
+          index = {
+              "generatedAt": now.isoformat().replace("+00:00", "Z"),
+              "hubs": hubs,
+              "sessions": len(sessions),
+              "entries": sum(hub["entries"] for hub in hubs),
+          }
           (out / "index.json").write_text(
               json.dumps(index, indent=2) + "\n", encoding="utf-8"
           )
           print(json.dumps(index, indent=2))
+          PY
+
+      # What "nothing changed" means, written down so it can be compared.
+      #
+      # Every file this workflow writes carries the instant it was written —
+      # `generatedAt` on a hub, `createdAt` on a session — so byte equality
+      # between two runs is impossible and the "nothing changed" shortcut below
+      # was, before this, unreachable: every Monday pushed a hundred megabytes
+      # and asked for a deploy whether or not a portal had published anything.
+      # So the question is asked of the *contents*: each file hashed with its
+      # timestamps removed, and the map of hashes committed beside the files.
+      # A run whose fingerprint matches the published one has nothing to say.
+      - name: Fingerprint what was written
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+
+          def digest(path: pathlib.Path) -> str:
+              parsed = json.loads(path.read_text(encoding="utf-8"))
+              if isinstance(parsed, dict):
+                  parsed.pop("generatedAt", None)
+                  parsed.pop("createdAt", None)
+                  for tab in parsed.get("tabs", []):
+                      if isinstance(tab, dict):
+                          tab.pop("createdAt", None)
+              body = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+              return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+          out = pathlib.Path("out")
+          # `index.json` is excluded because it is a *description* of the other
+          # files — it carries their sizes and the run's instant — and cannot
+          # be the reason to republish them.
+          files = [p for p in sorted(out.rglob("*.json")) if p.name != "index.json"]
+          fingerprint = {
+              str(path.relative_to(out)): digest(path) for path in files
+          }
+          (out / "fingerprint.json").write_text(
+              json.dumps(fingerprint, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print(f"fingerprinted {len(fingerprint)} files")
           PY
 
       # Ninety days of runs, independent of the branch. The branch is what the
@@ -150,6 +241,13 @@ jobs:
       # is the tip the remote already has. When the branch does not exist yet the
       # directory is initialised as an orphan — no history, no `main` in it, and
       # the first push creates the branch.
+      # Shallow, because only the tip of the branch is of interest and a full
+      # clone of a repository carrying 250 MB of demo data in its history is not
+      # a thing to do weekly. The clone is what carries `archive/` forward: the
+      # branch is force-pushed as one orphan commit below, so the previous run's
+      # dated copies survive because they are *copied*, not because git
+      # remembers them. When the branch does not exist yet the directory is
+      # initialised as an orphan and the first push creates it.
       - name: Fetch the hubs branch
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -165,33 +263,82 @@ jobs:
             git -C published remote add origin "$remote"
           fi
 
-      # The dated copies are globbed rather than named from the stamp above: a
-      # run that starts at 04:17 and crosses midnight would have the generator
-      # write one date and this step look for another.
+      # The current files replace whatever was there, wholesale: a shard the
+      # generator stops writing — an assembly ENCODE retires — must leave the
+      # branch rather than linger as a shelf nothing regenerates. `archive/` is
+      # the one thing kept, and it is added to below only when something
+      # actually changed, so "nothing changed" stays a real answer rather than
+      # being defeated by a dated copy written on every run.
       - name: Publish to the hubs branch
         id: publish
+        env:
+          DAY: ${{ steps.stamp.outputs.day }}
         run: |
           set -euo pipefail
-          mkdir -p published/archive
-          cp out/4dn.json out/encode.json out/index.json published/
-          cp out/4dn-*.json out/encode-*.json published/archive/
+          # Asked before anything is disturbed, and of the fingerprint rather
+          # than of the bytes: a run that found what the last run found should
+          # not push a hundred megabytes and ask for a deploy to change two
+          # timestamps. On the very first run there is nothing to compare
+          # against, and that run is always worth making.
+          if [ -f published/fingerprint.json ] &&
+             cmp -s out/fingerprint.json published/fingerprint.json; then
+            echo "Nothing changed: every hub and session is what was published last time."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          find published -mindepth 1 -maxdepth 1 \
+            -not -name .git -not -name archive -exec rm -rf {} +
+          cp out/*.json published/
+          mkdir -p published/sessions
+          cp out/sessions/*.metacooler.json published/sessions/
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Dated copies of the small hubs only, and always of the index. A run
+          # writes about 100 MB, most of it the four large ENCODE shards, and a
+          # weekly dated copy of those would be five gigabytes of branch within
+          # a year for a citation nobody has asked for. What is kept is enough
+          # to answer "how big was each shelf on that Monday" for half a year;
+          # the 90-day workflow artifact above holds the shelves themselves.
+          mkdir -p archive
+          cp index.json "archive/index-$DAY.json"
+          for file in *.json; do
+            # `index.json` is archived above under its own name; `fingerprint.json`
+            # is machinery for the comparison and not a shelf anybody cites.
+            case "$file" in index.json|fingerprint.json) continue ;; esac
+            if [ "$(stat -c%s "$file")" -le 2097152 ]; then
+              cp "$file" "archive/${file%.json}-$DAY.json"
+            fi
+          done
+          # Twenty-six runs of each, oldest dropped. Pruned per id rather than
+          # over the directory as a whole, so a shelf that only just started
+          # being published is not evicted by the six months of its neighbours.
+          python3 - <<'PRUNE'
+          import collections
+          import pathlib
+          import re
+
+          held = collections.defaultdict(list)
+          for path in pathlib.Path("archive").glob("*.json"):
+              match = re.match(r"^(.*)-(\d{8})$", path.stem)
+              if match is None:
+                  continue
+              held[match.group(1)].append((match.group(2), path))
+          for name, copies in held.items():
+              for _, path in sorted(copies, reverse=True)[26:]:
+                  print(f"pruning {path}")
+                  path.unlink()
+          PRUNE
           git add -A
-          # `git diff --cached` needs a HEAD to compare against, and on the very
-          # first run there is not one yet — the orphan above has no commit. So
-          # the "nothing changed" shortcut is only taken when there *is* a
-          # previous commit; otherwise this is the branch's first, and it is
-          # always worth making.
-          if git rev-parse --verify --quiet HEAD >/dev/null && git diff --quiet --cached; then
-            echo "Nothing changed."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            git commit --quiet -m 'hubs ${{ steps.stamp.outputs.day }}'
-            git push --quiet origin "HEAD:refs/heads/$HUB_BRANCH"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+          # One orphan commit, force-pushed. The branch is a store and its only
+          # interesting state is its tip; keeping each week as a commit would
+          # carry a hundred megabytes of new blobs into the history every
+          # Monday, and a shallow clone of it is what the deploy does on every
+          # push to `main`.
+          git checkout --quiet --orphan republished
+          git commit --quiet -m 'hubs ${{ steps.stamp.outputs.day }}'
+          git push --quiet --force origin "HEAD:refs/heads/$HUB_BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       # The publisher of the site. The branch above is where the hubs are kept;
       # the site is where they are read, and only deploy.yml rebuilds the site —

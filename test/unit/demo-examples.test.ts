@@ -446,16 +446,22 @@ describe('the Demos hub', () => {
     }
   })
 
-  it('points the two generated hubs at hubs/ on the site the deploy copies them to', () => {
-    for (const id of ['4dn', 'encode']) {
-      const ref = builtinHubs().find((held) => held.id === id)
-      expect(ref?.builtin).toBe(true)
+  it('points every generated hub at hubs/ on the site the deploy copies them to', () => {
+    // Every shelf but the inline Demos, which is the point: whatever the
+    // generator grows to — IGV, the twelve ENCODE shards, the three session
+    // hubs — the picker reads all of it from one directory beside the page.
+    const generated = builtinHubs().filter((ref) => ref.id !== 'demos')
+    expect(generated.length).toBeGreaterThan(1)
+    for (const ref of generated) {
+      expect(ref.builtin).toBe(true)
       // A URL and no inline hub: nothing is fetched until a reader chooses one.
-      expect(ref?.hub).toBeUndefined()
+      expect(ref.hub).toBeUndefined()
       // No page in this runtime and no homepage defined, so the path is the
       // bare `hubs/<id>.json`; `test/dom/builtin-hubs.test.ts` holds the
       // on-a-page half, where it is the site's own origin.
-      expect(ref?.url, `the ${id} hub must be read from the site's hubs/`).toBe(`hubs/${id}.json`)
+      expect(ref.url, `the ${ref.id} hub must be read from the site's hubs/`).toBe(
+        `hubs/${ref.id}.json`,
+      )
     }
   })
 })

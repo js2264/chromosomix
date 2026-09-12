@@ -14,6 +14,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
+  already on.** The two shipped portal shelves listed contact maps and nothing else — 1,200 rows
+  of 4DN and 200 of ENCODE — and the filter that did it was on the *experiment*, which needed
+  editing every time a consortium published something new. The rule is now on the file: if this
+  viewer has a route for the name, it gets a row. So the shelves are:
+
+  - **IGV genomes** (new). The reference genomes IGV ships, read from the same
+    `igv.org.genomes/genomes.json` the IGV desktop app and igv.js load their menu from, plus every
+    annotation track published beside them. Each URL is probed with a ranged GET — the request the
+    viewer itself makes — which records the size that table does not carry and settles whether the
+    file opens without credentials. Two sets of rows fall out: IGV's 29 `refgene` tracks are UCSC
+    `genePred` tables this viewer has no reader for, and six genomes' sequences are not public at
+    all — `igv-genepattern-org` answers `403 AccessDenied` anonymously, which takes out IGV's own
+    `hg38` and `hg19` (GRCh38 stays on the shelf through IGV's `hg38_1kg`, on the public
+    `1000genomes` bucket). Both are named in the run's log rather than shipped as rows that fail
+    when they are clicked.
+  - **4DN open data**, ~25,700 rows where it was 1,200: the bigWigs, peaks, pairs, bedGraphs and
+    BAMs as well as the maps.
+  - **ENCODE**, ~210,000 rows across twelve shelves. ENCODE's manifest holds 1,209,805 released
+    files this viewer can open; the default breadth keeps one per dataset, assembly and format —
+    every dataset it has — and each row says how many files it stands for. `--breadth full` and
+    `--breadth all` publish the other two answers.
+  - **Preconfigured sessions**, three shelves of them. A row is a whole saved session: pick
+    *IGV hg38* and the sequence and its gene track are on screen together; pick a 4DN experiment
+    set and its richest contact map opens with the bigWigs and peak files of the same set on it.
+    This needed no new code in the viewer — a hub row could already be a workspace (§24.1) — only
+    a generator that writes the files.
+
+  The picker groups the eighteen shipped shelves under five headings (Built in · IGV · 4DN ·
+  ENCODE · Preconfigured sessions), with *Hubs you connected* below them as before, and the table
+  now draws a window of a thousand rows while filtering and sorting over all of them — 126,000
+  rows of eight cells is a million elements and a tab that stops on every keystroke. Nothing is
+  fetched until a shelf is chosen, which is unchanged and is why eighteen references cost what
+  three did.
+
+  `scripts/make_hub.py` grew an `igv` front end and reads **two sources** per portal instead of
+  one: a *spine* that says which files exist, from a place that cannot be incomplete (4DN's bucket
+  listing, ENCODE's daily `encode_file_manifest.tsv`), and an *enrichment* that says what each one
+  is of, from one lean portal search keyed by accession. The old portal-only 4DN query embedded the
+  experiment *set's* processed files and not the per-experiment ones, so it was missing about nine
+  files in ten and said nothing about it. `--portal require|optional|skip` decides what an
+  unreachable portal means; `--sessions-dir` writes the sessions. `.github/workflows/hubs.yml`
+  publishes all of it, and two things about the `hubs` branch changed with the volume: it is
+  force-pushed as one orphan commit (100 MB a week as commits is five gigabytes a year for a store
+  whose only interesting state is its tip), and *nothing changed* is finally a real answer —
+  compared on a fingerprint of each file with its timestamps removed, rather than on bytes that
+  could never match. SPECS §24.3 has the measurements and the reasoning; `docs/hubs.md` is the
+  operator's page.
+
 - **Hubs: a shelf of named datasets in the picker, and any lab can publish one.** A hub is one
   JSON file beside the data (`kind: "metacooler.hub"`, SPECS §24): maps, genome files and whole
   workspaces with columns to filter on — assembly, biosource, assay, lab — so a reader chooses

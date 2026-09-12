@@ -132,9 +132,24 @@ export interface Hub {
  * that owns the *type* of a hub should own the type of a pointer to one.
  */
 export interface HubRef {
-  /** `'demos' | '4dn' | 'encode'` for the built-ins, `'hub:<n>'` for a remembered one. */
+  /** `'demos' | 'igv' | '4dn' | 'encode-GRCh38-signal' | …` for the built-ins, `'hub:<n>'` for a remembered one. */
   id: string
   label: string
+  /**
+   * Which heading the picker files this under — `'IGV'`, `'ENCODE'`,
+   * `'Preconfigured sessions'` — or absent for the shipped shelves that are
+   * nobody's in particular.
+   *
+   * A field on the reference rather than a `Map<string, HubRef[]>` handed to
+   * the table, because the list is assembled from two places that do not know
+   * about each other: `ui/examples.ts` owns the built-ins and `state/hubs.ts`
+   * the remembered ones, and every remembered hub belongs under one heading
+   * whatever the built-ins did. It exists because there are now eighteen
+   * shipped shelves rather than three — ENCODE alone is twelve, one per
+   * assembly and output category (§24.3) — and eighteen unlabelled options in
+   * one `<select>` is a list a reader scrolls rather than reads.
+   */
+  group?: string
   /** Inline hub (the demos), already absolute. */
   hub?: Hub
   /** Or a URL to fetch on the reader's gesture. */

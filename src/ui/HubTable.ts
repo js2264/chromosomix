@@ -86,6 +86,29 @@ function columnKey(key: string): string {
   return `c:${key}`
 }
 
+/**
+ * How many rows are put in the document at once.
+ *
+ * A hub was six hundred rows when this table was written and a `<tbody>` of six
+ * hundred is nothing. The ENCODE shelves are 126,000 (§24.3), and 126,000 rows
+ * of eight cells is a million elements: the tab stops for several seconds on
+ * every keystroke of the filter, and on a phone it stops for good.
+ *
+ * A cap rather than virtual scrolling, and the choice is worth stating. Virtual
+ * scrolling would draw the same window on a scroll rather than on a filter, and
+ * it would cost this table its two best properties: the browser's own find-in-
+ * page, and a `<table>` a screen reader can walk. What a reader does with a
+ * catalogue this size is *narrow it* — that is what the filter row is for, and
+ * what the line under the table says when the cap bites. A thousand rows is
+ * about thirty screens: far more than anybody scrolls, and few enough to draw
+ * in one frame.
+ *
+ * The cap is on **drawing** and never on filtering or sorting: both run over
+ * every entry the hub has, so the rows that appear are the first thousand of
+ * the real answer rather than a filter of the first thousand.
+ */
+const DRAWN = 1000
+
 export class HubTable {
   readonly el: HTMLElement
 
@@ -262,24 +285,52 @@ export class HubTable {
     return [...(this.props.hubs ?? []), ...rememberedHubs()]
   }
 
+  /**
+   * The selector, grouped by where each shelf came from.
+   *
+   * Every reference names its own heading (`HubRef.group`), and the *order of
+   * first appearance* is the order the headings come out in — so what the menu
+   * looks like is decided by `ui/examples.ts`'s list and not by a second
+   * ordering written here that would have to be kept in step with it.
+   * Remembered hubs are the one heading this module names, because it is the
+   * one nothing else can: `state/hubs.ts` knows a label and a URL and has no
+   * business knowing what the picker calls its own section.
+   *
+   * A reference with no group falls back to *Built in*, which is what the
+   * three shipped shelves were before there were eighteen of them — so a build
+   * that hands this table a bare `{id, label, url}` still gets a sane menu.
+   *
+   * **Ungrouped when there is only one heading and it is not the reader's own**,
+   * which is the rule this had before and the reason it had it: an `<optgroup>`
+   * over a list with no other part is a heading for nothing. A remembered hub
+   * is the exception and keeps its heading whatever else is in the menu,
+   * because that heading is what tells a reader which rows are theirs — the
+   * ones that offer *forget*, and the ones whose 404 is an honest 404 rather
+   * than a sentence about our workflow.
+   */
   private paintSelect(): void {
     const held = this.select.value
-    const builtin = this.props.hubs ?? []
-    const remembered = rememberedHubs()
     const option = (ref: HubRef): HTMLOptionElement =>
       el('option', { value: ref.id, text: ref.label, title: ref.url ?? '' })
+    const ordered = new Map<string, HubRef[]>()
+    for (const ref of this.props.hubs ?? []) {
+      const heading = ref.group ?? 'Built in'
+      const shelf = ordered.get(heading)
+      if (shelf === undefined) ordered.set(heading, [ref])
+      else shelf.push(ref)
+    }
+    const remembered = rememberedHubs()
+    if (remembered.length > 0) ordered.set('Hubs you connected', remembered)
+
     const groups: HTMLElement[] = []
-    if (remembered.length === 0) {
-      groups.push(...builtin.map(option))
+    if (ordered.size <= 1 && remembered.length === 0) {
+      for (const shelf of ordered.values()) groups.push(...shelf.map(option))
     } else {
-      // Grouped only once there is a second kind, because an `<optgroup>` over
-      // the three shipped hubs and nothing else is a heading for a list that
-      // has no other part.
-      const shipped = el('optgroup', { attrs: { label: 'Built in' } })
-      for (const ref of builtin) shipped.appendChild(option(ref))
-      const mine = el('optgroup', { attrs: { label: 'Hubs you connected' } })
-      for (const ref of remembered) mine.appendChild(option(ref))
-      groups.push(shipped, mine)
+      for (const [heading, shelf] of ordered) {
+        const box = el('optgroup', { attrs: { label: heading } })
+        for (const ref of shelf) box.appendChild(option(ref))
+        groups.push(box)
+      }
     }
     this.select.replaceChildren(
       el('option', { value: '', text: 'choose a hub…' }),
@@ -411,7 +462,11 @@ export class HubTable {
       this.header('Size', SIZE),
       this.header('Note', NOTE),
     )
-    const body = el('tbody', {}, ...rows.map((entry) => this.row(entry, hub)))
+    // Sliced *after* filtering and sorting, which is the whole of what makes
+    // the cap honest: the rows drawn are the first thousand of the answer to
+    // the reader's question, not the answer to a question about the first
+    // thousand rows.
+    const body = el('tbody', {}, ...rows.slice(0, DRAWN).map((entry) => this.row(entry, hub)))
     this.tableBox.replaceChildren(
       el('table', { class: 'hub-grid' }, el('thead', {}, head), body),
     )
@@ -524,13 +579,25 @@ export function hubLabelFor(url: string): string {
  */
 export function note(hub: Hub, total: number, showing: number): string {
   if (total === 0) return `${hub.name === '' ? 'This hub' : hub.name} lists nothing.`
+  // Drawn before matched, because a reader looking at a thousand rows out of
+  // 54,000 needs to be told that the table is not the answer *before* being
+  // told how the filters work. Said in both arms below for the same reason: a
+  // capped view of an unfiltered hub and a capped view of a filtered one are
+  // the same situation to whoever is reading it.
+  const capped =
+    showing > DRAWN
+      ? ` The first ${DRAWN} are drawn; narrow the filters to see the rest.`
+      : ''
   if (showing === total) {
-    return `${total} ${total === 1 ? 'entry' : 'entries'}.`
+    return `${total} ${total === 1 ? 'entry' : 'entries'}.${capped}`
   }
   if (showing === 0) {
     return `Nothing here matches. ${total} ${total === 1 ? 'entry' : 'entries'} in this hub.`
   }
-  return `Showing ${showing} of ${total}. The filters narrow what is listed, and fetch nothing.`
+  return (
+    `Showing ${showing} of ${total}. The filters narrow what is listed, and fetch nothing.` +
+    capped
+  )
 }
 
 /** Order two entries by one column key. */

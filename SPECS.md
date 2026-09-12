@@ -5156,6 +5156,14 @@ Four rules carry most of the design:
   before the first request instead of after the `HEAD`, and the table can say what a five-gigabyte
   row costs before it is clicked. `tracks` on a row are a shelf: once the row is open, the Tracks
   card offers them the way it offers the demo annotations (§8.5).
+- **The table draws a window of a thousand rows**, and filters and sorts over every row the hub
+  has. Six hundred rows is nothing to a `<tbody>`; the ENCODE shelves are 126,000 (§24.3), which is
+  a million cells and a tab that stops for seconds on every keystroke. A cap rather than virtual
+  scrolling, because scrolling a catalogue that size is not what anybody does with it — narrowing
+  is, which is what the filter row is for — and because virtual rows cost the table find-in-page
+  and a `<table>` a screen reader can walk. The cap is on **drawing** only: the rows that appear
+  are the first thousand of the real answer, never a filter of the first thousand, and the line
+  under the table says so when it bites.
 
 The parser refuses what it must and tolerates the rest: a JSON that is not a hub, or a hub of a
 newer major version, is a `ConfigRefusal` with a message naming which; an entry with no `label` or
@@ -5165,14 +5173,24 @@ column before a viewer knows it.
 
 ### 24.2 Where hubs are offered, and what is never fetched
 
-The picker's **Hubs** section replaces the examples list. It offers three built-in hubs — **Demos**
-(the four demo workspaces, inline, plus two 4DN open-data maps so a first-time reader meets a file
-that was never on the lab's bucket), **4DN open data** and **ENCODE Hi-C** (by URL, §24.3) — then
-every hub the reader has **connected by pasting a URL**, kept in `localStorage` under
+The picker's **Hubs** section replaces the examples list. It offers the built-in hubs under five
+headings — **Built in** (the *Demos* hub: the four demo workspaces, inline, plus two 4DN open-data
+maps so a first-time reader meets a file that was never on the lab's bucket), **IGV**, **4DN**,
+**ENCODE** (twelve shards) and **Preconfigured sessions** (three), all but the first by URL,
+§24.3 — then every hub the reader has **connected by pasting a URL**, kept in `localStorage` under
 `metacooler-viewer:hubs`, named in the stored-data screen and swept by *forget everything*, exactly
 as a bucket scope is. `?hub=<url>` is the third mounting parameter beside `?embed=` and `?config=`
 (§21.1): a link that lands on a lab's shelf, with the offer to remember it. Only `http:` and
 `https:` are kept, for the reason `?config=` gives.
+
+The headings are `HubRef.group`, a field on the reference rather than a shape imposed by the
+table, and they exist because there are eighteen shipped shelves rather than three: eighteen
+unlabelled options in one `<select>` is a list a reader scrolls. The order of the headings is the
+order `ui/examples.ts` lists them in, so what the menu looks like is decided in the one place that
+knows what is on offer; *Hubs you connected* is the one heading the table names itself, because
+`state/hubs.ts` knows a label and a URL and has no business knowing what the picker calls its
+sections. One heading and no remembered rows draws a flat list, which is what the menu was when
+there were three.
 
 **Nothing is fetched on load.** The demos are inline; the other hubs are read when the reader
 selects one, or when a `?hub=` link names one — a link is a gesture. A reader who never opens the
@@ -5186,46 +5204,144 @@ it has no bucket half.
 
 ### 24.3 Where the built-in hubs come from
 
-`scripts/make_hub.py` is the generator, with three front ends and no dependency beyond the standard
-library: `4dn`, which asks the 4DN portal's search API for every experiment set's processed files
-and keeps the `.hic`, `.mcool` and `.cool` that have an `open_data_url` — **without** an
-experiment-type filter, so Micro-C and whatever comes next are kept, and with the biosource, assay,
-dataset, lab and condition the portal's `track_and_facet_info` carries; `encode`, which asks the
-ENCODE portal for released experiments with a `.hic` and names each file by its
-`cloud_metadata.url` — the unsigned object on the `encode-public` bucket — rather than the
-`@@download` path, which answers with a link presigned for `GET` alone; and `bucket`, which walks
-a prefix with `ListObjectsV2` and emits one row per openable object with its size, which is the
-`make_catalog.py` §11 and GAPS G10 always promised, aimed at a lab's own bucket.
+`scripts/make_hub.py` is the generator, with four generating front ends and no dependency beyond
+the standard library. Its shape changed once the answer to *what should a portal hub list* became
+**everything this viewer can open** rather than *the contact maps*, and the change is worth stating
+as a rule, because it is the rule that needs no maintenance: the filter is on whether a file name
+has a route (§20.5), never on an experiment type or a format list, so Micro-C, a bigWig, a peak
+file and whatever a consortium publishes next are in a hub nobody edited.
+
+**A spine and an enrichment.** The first version asked a portal's search API for both halves of a
+row — which files exist, and what they are of — and that is the wrong shape for a complete
+catalogue: a search is paged, slow over a million records, and answers with whatever its current
+facets allow, while an object store's listing is complete by construction. Each portal front end
+therefore has two sources and treats them differently. The **spine** says what files there are:
+4DN's `ListObjectsV2` over `4dn-open-data-public`, and ENCODE's `encode_file_manifest.tsv` — a
+gigabyte of TSV, rewritten daily at the root of `encode-public`, streamed line by line. A row
+exists because an object exists. The **enrichment** says what each file is of — biosource, assay,
+target, lab — from one lean search per portal, keyed by accession, never one request per file; a
+file the enrichment does not cover keeps its row and loses cells. `--portal require|optional|skip`
+decides what an unreachable portal means: fail the run (the default, so a hub with columns is
+never replaced by one without), publish the spine with its metadata columns empty, or never ask.
+
+The old arrangement's failure was the silent one: 4DN's `ExperimentSetReplicate` search embeds the
+*set's* processed files and not the per-experiment ones, so a catalogue built from it alone was
+missing about nine files in ten and said nothing about it. The query now asks for
+`experiments_in_set.processed_files` and both `other_processed_files` arrays as well, and the
+bucket decides what is a row.
+
+The four front ends:
+
+- **`igv`** — `igv.org.genomes/genomes.json`, the file the IGV desktop app and igv.js both load
+  their genome menu from: 41 genomes, each a FASTA and the tracks published with it. One row per
+  file this viewer can draw, and one pre-configured session per genome. Every URL is **probed with
+  a ranged GET** — the request the viewer itself makes, not a `HEAD`, because the two differ on a
+  real bucket — which answers two questions at once: the size, which IGV's table does not carry,
+  and whether the file opens with no credentials. A file that does not answer gets no row, and that
+  drops more than it sounds: IGV's `refgene` tracks (29 of its 63) are UCSC `genePred` tables this
+  viewer has no parser for, and six genomes' sequences are **not public** — `igv-genepattern-org`
+  answers `403 AccessDenied` anonymously, taking out IGV's own `hg38` and `hg19`, and one object on
+  `igv.broadinstitute.org` takes out `rn6`. A genome whose sequence will not open is dropped whole,
+  since its tracks annotate coordinates nothing can read; GRCh38 remains on the shelf through IGV's
+  `hg38_1kg`, whose FASTA is on the public `1000genomes` bucket. Every refusal is named in the log,
+  and a run after the permissions are fixed picks the rows back up with no change to the generator.
+  The catalogue and the sessions are built from **one** reading of that table, so a file the
+  catalogue dropped cannot reappear as a lane in a session.
+- **`4dn`** — every routable object on the open-data bucket under `fourfront-webprod/wfoutput/`
+  and `.../files/`, enriched from the portal. About 25,700 rows, where the Hi-C-only version had
+  1,200: the bams, bigWigs, pairs, peaks and bedGraphs are what the other 24,500 are.
+- **`encode`** — every released file in the manifest this viewer can open, enriched from the
+  portal's `Experiment` search, at a breadth and in shards (both below). Annotation datasets are
+  deliberately **not** enriched: 502,000 of them are the one-per-biosample footprint sets, a search
+  over which costs more than the manifest itself, so an annotation's row carries its accession,
+  output type, assembly and lab — everything the manifest knows — and an empty Biosample cell.
+- **`bucket`** — `ListObjectsV2` over a prefix, one row per openable object with its size, which is
+  the `make_catalog.py` §11 and GAPS G10 always promised, aimed at a lab's own bucket.
+
+**Breadth, because ENCODE is 1,209,805 files.** That is what the manifest holds that this viewer
+has a route for: 658,000 BED, 284,000 bigWig, 134,000 BAM, 123,000 bigBed, 4,100 `.hic`. One JSON
+of it is a quarter of a gigabyte and a table nothing can draw, so `--breadth` chooses:
+`representative` (the default) keeps one file per dataset, assembly and format — the one made from
+the most libraries, then the newest, then the lowest accession, which is a total order so two runs
+over unchanged data pick the same file — and drops the bulk `footprints` dump; `full` keeps every
+file but that dump; `all` keeps everything. The default is **210,000 rows and every dataset ENCODE
+has**, and each row says how many files it stands for, so what was collapsed is on the row rather
+than in this paragraph.
+
+**Shards, because 210,000 rows is still four shelves too many.** The `encode` front end writes one
+hub per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
+`annotation`, `alignment`) — twelve files, the largest about 25 MB and 55,000 rows, which is a
+3 MB fetch once Pages has gzipped it. The two dimensions are the two things a reader arrives
+already knowing: which genome, and whether they want signal, peaks or reads. The shard list is
+fixed and enumerated in the generator, and `src/ui/examples.ts` ships a reference to each;
+`test/dom/builtin-hubs.test.ts` reads both lists and checks they agree, because a name that
+drifted would be a menu entry answering 404 for a file that exists under another name — and the
+picker would report it as *not generated yet*, which is the one failure that looks like a normal
+state. An unnamed assembly lands in `other`: a new assembly appearing at a portal must widen a
+shard, never vanish.
+
+**Pre-configured sessions.** A front end may also write session files — one `.metacooler.json` per
+genome or per dataset, with the tracks placed — and a hub of its own listing them as
+`kind: "workspace"` rows (§24.1). IGV's hg38 is a FASTA and a gene track, and offering those as two
+rows asks the reader to assemble what IGV had already assembled; a 4DN experiment set is a contact
+map and the bigWigs published beside it. The viewer needs no new code for this, which is the point:
+a workspace row is a road it already has (§21.1). Three rules the generator follows are worth
+recording. A session is **one set of coordinates**: sessions are grouped by dataset *and assembly*,
+because ENCODE publishes one experiment against GRCh38 and hg19 both and a session grouped on the
+dataset alone drew hg19 tracks over a GRCh38 map with nothing on screen saying so. The **view
+follows the lead file** (`landingState`, §5.1): a contact map opens on its genome list, a genome or
+a track in the 1D browser. And a group with a map and no tracks is **skipped**, because it would be
+a row that opens one file, which that file's own row already does.
 
 Two facts the generator has to know are recorded here so they are not rediscovered: a 4DN search
 with no hits answers **HTTP 404 with a JSON body**, which is zero results and not a failure; and a
 bucket listing's objects carry a `<ChecksumAlgorithm>` element between `ETag` and `Size`, so the
 XML is parsed as XML — a regex that assumes the four-element order silently drops a quarter of the
-bucket, which is how the first census of 4DN came out short. A run that finds nothing exits
-non-zero so that a workflow never overwrites a good hub with an empty one.
+bucket, which is how the first census of 4DN came out short. ENCODE's manifest is read **by column
+name** for the same reason: columns have been added to that file before, and a reader that counted
+fields would have shifted every cell the week it happened. A run that finds nothing exits 2 —
+distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a good hub
+with an empty one and never has to tell a portal outage from an empty catalogue by reading a log.
 
-`.github/workflows/hubs.yml` runs both portal front ends weekly and on demand, uploads the pair as
-a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes them to the
-`hubs` branch: `4dn.json`, `encode.json`, an `index.json` naming what is there, and dated copies
-under `archive/`. The branch is where the workflow *writes*; where a browser *reads* is the
-**site**: `.github/workflows/deploy.yml` copies the three current files from the branch into
-`hubs/` beside the app on every deploy, and the hubs workflow asks for a deploy as soon as it has
-published, so a fresh hub is on the site minutes later with no push to `main`. The viewer reads
-`<site>/hubs/<name>.json` — same origin, so no CORS enters into it, and an archived build or a
-preview reaches up to the site root for it, since the hubs are published once and not per copy; a
-build with no site to be relative to (the desktop, a standalone file) reads the deployed site by
-`package.json`'s `homepage`, which GitHub Pages serves with `Access-Control-Allow-Origin: *`. Not
-`raw.githubusercontent.com`, which was the first design: it answers 404 to anyone not logged in
-when the repository is private, and a Pages site is public whether or not its repository is. A
-branch rather than a commit to `main` because a hub is data about somebody else's data and changes
-on their cadence; a branch rather than a bucket because a fork gets the whole arrangement with no
-secret to add. Every generated hub carries `generatedAt` and `source` — the query it came from —
-because a shelf with no provenance is a screenshot.
+`.github/workflows/hubs.yml` runs all three portal front ends weekly and on demand, uploads
+everything as a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes
+to the `hubs` branch: the hubs, the `sessions/` directory, an `index.json` naming what is there
+with each shelf's row count and size, and a `fingerprint.json`. The branch is where the workflow
+*writes*; where a browser *reads* is the **site**: `.github/workflows/deploy.yml` copies the
+current files from the branch into `hubs/` beside the app on every deploy, and the hubs workflow
+asks for a deploy as soon as it has published, so a fresh hub is on the site minutes later with no
+push to `main`. The viewer reads `<site>/hubs/<name>.json` — same origin, so no CORS enters into
+it, and an archived build or a preview reaches up to the site root for it, since the hubs are
+published once and not per copy; a build with no site to be relative to (the desktop, a standalone
+file) reads the deployed site by `package.json`'s `homepage`, which GitHub Pages serves with
+`Access-Control-Allow-Origin: *`. Not `raw.githubusercontent.com`, which was the first design: it
+answers 404 to anyone not logged in when the repository is private, and a Pages site is public
+whether or not its repository is. A branch rather than a commit to `main` because a hub is data
+about somebody else's data and changes on their cadence; a branch rather than a bucket because a
+fork gets the whole arrangement with no secret to add.
+
+Two things about that branch changed when a run started writing 100 MB. It is **rewritten, not
+appended to** — one orphan commit, force-pushed — because a branch that kept each week as a commit
+would carry five gigabytes of git objects within a year for a store whose only interesting state is
+its tip, and a shallow clone of it is what every deploy does. What survives between runs is the
+small part worth citing: `archive/` keeps dated copies of `index.json` and of every hub under 2 MB,
+pruned per shelf to the last 26 runs, and the 90-day artifact holds the large shards for anybody
+who needs last Monday's exact ENCODE shelf. And **"nothing changed" is now a real answer**: every
+file carries the instant it was written, so byte equality between two runs is impossible and the
+shortcut was unreachable — every Monday pushed a hundred megabytes and asked for a deploy whether
+or not a portal had published anything. `fingerprint.json` is the map of each file's hash with its
+timestamps removed; a run whose fingerprint matches the published one stops there.
+
+Every generated hub carries `generatedAt` and `source` — *both* of the places it came from, the
+store that decided which rows exist and the query that decided what is in their cells — because a
+shelf with no provenance is a screenshot.
 
 The catalogues juicebox.js reads (`igvteam/igv-data`, MIT) were read while designing this and are
 a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-links another
 project's file inherits that project's cadence and schema, and the point of the format is that
-this viewer owns what it offers.
+this viewer owns what it offers. IGV's `genomes.json` is the one exception and is not an
+exception to that rule: it is read by the *generator*, weekly, and what a browser fetches is this
+project's own static file.
 
 ### 24.4 Live search over a portal (withdrawn)
 

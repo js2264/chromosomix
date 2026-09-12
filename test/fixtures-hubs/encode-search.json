@@ -1,7 +1,9 @@
 {
   "@context": "/terms/",
   "@id": "/search/?type=Experiment&files.file_format=hic&status=released&field=accession&field=biosample_summary&field=assay_title&field=assay_term_name&field=lab.title&field=target.title&field=files.accession&field=files.file_format&field=files.assembly&field=files.file_size&field=files.output_type&field=files.status&field=files.href&field=files.cloud_metadata.url&field=files.biological_replicates&field=files.technical_replicates&format=json&limit=all",
-  "@type": ["Search"],
+  "@type": [
+    "Search"
+  ],
   "clear_filters": "/search/?type=Experiment",
   "notification": "Success",
   "title": "Search",
@@ -9,226 +11,102 @@
   "@graph": [
     {
       "@id": "/experiments/ENCSR683EDC/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR683EDC",
       "assay_term_name": "HiC",
       "assay_title": "in situ Hi-C",
       "biosample_summary": "Homo sapiens HL-60/S4",
-      "lab": { "title": "Erez Aiden, Baylor" },
-      "files": [
-        {
-          "@id": "/files/ENCFF177TYX/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF177TYX",
-          "assembly": "hg19",
-          "biological_replicates": [1, 2],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2020/09/03/3797b443-1ba4-4cb8-8fcf-96f414888e2a/ENCFF177TYX.hic"
-          },
-          "file_format": "hic",
-          "file_size": 10659125733,
-          "href": "/files/ENCFF177TYX/@@download/ENCFF177TYX.hic",
-          "output_type": "mapping quality thresholded contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1", "1_2", "2_1", "2_2"]
-        },
-        {
-          "@id": "/files/ENCFF288DNV/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF288DNV",
-          "assembly": "GRCh38",
-          "biological_replicates": [1, 2],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2020/09/03/edc545e2-ffe0-48a3-b749-929486737094/ENCFF288DNV.hic"
-          },
-          "file_format": "hic",
-          "file_size": 10646875531,
-          "href": "/files/ENCFF288DNV/@@download/ENCFF288DNV.hic",
-          "output_type": "mapping quality thresholded contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1", "1_2", "2_1", "2_2"]
-        },
-        {
-          "@id": "/files/ENCFF640PLW/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF640PLW",
-          "assembly": "GRCh38",
-          "file_format": "bigWig",
-          "file_size": 214748364,
-          "href": "/files/ENCFF640PLW/@@download/ENCFF640PLW.bigWig",
-          "output_type": "signal of unique reads",
-          "status": "released"
-        }
-      ]
+      "lab": {
+        "title": "Erez Aiden, Baylor"
+      },
+      "description": "in situ Hi-C on HL-60/S4"
     },
     {
       "@id": "/experiments/ENCSR846DUS/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR846DUS",
       "assay_term_name": "HiC",
       "assay_title": "in situ Hi-C",
       "biosample_summary": "Homo sapiens hTERT RPE-1",
-      "lab": { "title": "Erez Aiden, Baylor" },
-      "files": [
-        {
-          "@id": "/files/ENCFF876OWE/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF876OWE",
-          "assembly": "GRCh38",
-          "biological_replicates": [1, 2, 3, 4],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2020/09/03/48b4c5c9-376e-451a-a3a3-366805fc7836/ENCFF876OWE.hic"
-          },
-          "file_format": "hic",
-          "file_size": 9284069376,
-          "href": "/files/ENCFF876OWE/@@download/ENCFF876OWE.hic",
-          "output_type": "contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1", "2_1", "3_1", "3_2", "4_1", "4_2"]
-        },
-        {
-          "@id": "/files/ENCFF922ERE/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF922ERE",
-          "assembly": "hg19",
-          "biological_replicates": [1, 2, 3, 4],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2019/11/12/9c1a2b3d-4e5f-4061-8273-a4b5c6d7e8f9/ENCFF922ERE.hic"
-          },
-          "file_format": "hic",
-          "file_size": 8975482880,
-          "href": "/files/ENCFF922ERE/@@download/ENCFF922ERE.hic",
-          "output_type": "contact matrix",
-          "status": "revoked",
-          "technical_replicates": ["1_1", "2_1", "3_1", "3_2", "4_1", "4_2"]
-        }
-      ]
+      "lab": {
+        "title": "Erez Aiden, Baylor"
+      },
+      "description": "in situ Hi-C on hTERT RPE-1"
     },
     {
       "@id": "/experiments/ENCSR080ODG/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR080ODG",
       "assay_term_name": "HiC",
       "assay_title": "dilution Hi-C",
       "biosample_summary": "Homo sapiens mammary epithelial cell female",
-      "lab": { "title": "Erez Aiden, Baylor" },
-      "files": [
-        {
-          "@id": "/files/ENCFF706SFK/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF706SFK",
-          "assembly": "hg19",
-          "biological_replicates": [1],
-          "file_format": "hic",
-          "file_size": 2147483648,
-          "href": "/files/ENCFF706SFK/@@download/ENCFF706SFK.hic",
-          "output_type": "contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1"]
-        }
-      ]
+      "lab": {
+        "title": "Erez Aiden, Baylor"
+      },
+      "description": "dilution Hi-C on mammary epithelial cell"
     },
     {
       "@id": "/experiments/ENCSR000CAC/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR000CAC",
       "assay_term_name": "ChIA-PET",
       "assay_title": "in situ ChIA-PET",
       "biosample_summary": "Homo sapiens GM12878",
-      "lab": { "title": "Michael Snyder, Stanford" },
-      "target": { "title": "CTCF (Homo sapiens)" },
-      "files": [
-        {
-          "@id": "/files/ENCFF995DKN/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF995DKN",
-          "assembly": "GRCh38",
-          "biological_replicates": [1],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2020/09/03/2d513131-0269-4866-97a6-cb6d3cc95835/ENCFF995DKN.hic"
-          },
-          "file_format": "hic",
-          "file_size": 11330455239,
-          "href": "/files/ENCFF995DKN/@@download/ENCFF995DKN.hic",
-          "output_type": "contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1"]
-        }
-      ]
+      "lab": {
+        "title": "Michael Snyder, Stanford"
+      },
+      "target": {
+        "title": "CTCF (Homo sapiens)"
+      },
+      "description": "ChIA-PET against CTCF on GM12878"
     },
     {
       "@id": "/experiments/ENCSR549VZT/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR549VZT",
       "assay_term_name": "HiC",
       "assay_title": "in situ Hi-C",
       "biosample_summary": "Mus musculus strain B10.H-2aH-4bp/Wts CH12F3",
-      "lab": { "title": "Erez Aiden, Baylor" },
-      "files": [
-        {
-          "@id": "/files/ENCFF759YCW/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF759YCW",
-          "assembly": "mm9",
-          "biological_replicates": [1, 2],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2019/06/18/5a6b7c8d-9e0f-4a12-b334-c5d6e7f8a9b0/ENCFF759YCW.hic"
-          },
-          "file_format": "hic",
-          "file_size": 4294967296,
-          "href": "/files/ENCFF759YCW/@@download/ENCFF759YCW.hic",
-          "output_type": "contact matrix",
-          "status": "released",
-          "technical_replicates": ["1_1", "1_2", "1_3", "1_4", "2_1", "2_2"]
-        }
-      ]
+      "lab": {
+        "title": "Erez Aiden, Baylor"
+      },
+      "description": "in situ Hi-C on CH12.LX"
     },
     {
       "@id": "/experiments/ENCSR481HGA/",
-      "@type": ["Experiment", "Dataset", "Item"],
+      "@type": [
+        "Experiment",
+        "Dataset",
+        "Item"
+      ],
       "accession": "ENCSR481HGA",
       "assay_term_name": "HiC",
       "assay_title": "in situ Hi-C",
       "biosample_summary": "Mus musculus strain B10.H-2aH-4bp/Wts CH12F3 genetically modified (mutagenesis) using CRISPR targeting M. musculus Ctcf",
-      "lab": { "title": "Erez Aiden, Baylor" },
-      "files": [
-        {
-          "@id": "/files/ENCFF465ESX/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF465ESX",
-          "assembly": "mm9",
-          "biological_replicates": [1, 2, 3],
-          "cloud_metadata": {
-            "url": "https://encode-public.s3.amazonaws.com/2018/02/09/1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b/ENCFF465ESX.hic"
-          },
-          "file_format": "hic",
-          "file_size": 3221225472,
-          "href": "/files/ENCFF465ESX/@@download/ENCFF465ESX.hic",
-          "output_type": "contact matrix",
-          "status": "archived",
-          "technical_replicates": ["1_1", "1_2", "2_1", "2_2", "3_1"]
-        },
-        {
-          "@id": "/files/ENCFF311ZQF/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF311ZQF",
-          "assembly": "mm9",
-          "file_format": "bigWig",
-          "file_size": 536870912,
-          "href": "/files/ENCFF311ZQF/@@download/ENCFF311ZQF.bigWig",
-          "output_type": "signal of unique reads",
-          "status": "released"
-        },
-        {
-          "@id": "/files/ENCFF802KNB/",
-          "@type": ["File", "Item"],
-          "accession": "ENCFF802KNB",
-          "assembly": "mm9",
-          "file_format": "hic",
-          "output_type": "contact matrix",
-          "status": "released"
-        }
-      ]
+      "lab": {
+        "title": "Erez Aiden, Baylor"
+      },
+      "description": "in situ Hi-C on CTCF-depleted CH12.LX"
     }
   ]
 }

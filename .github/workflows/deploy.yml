@@ -110,10 +110,11 @@ jobs:
           fi
 
       # The generated hubs, which hubs.yml keeps on a branch of their own and
-      # the viewer reads from the site (docs/hubs.md): the picker's 4DN and
-      # ENCODE shelves. The same shallow, by-token fetch as the archive; only
-      # the three current files are copied in below, never the dated copies.
-      # Absent until that workflow has run once, and the picker says so.
+      # the viewer reads from the site (docs/hubs.md): the picker's IGV, 4DN,
+      # ENCODE and session shelves. The same shallow, by-token fetch as the
+      # archive; only the current files are copied in below, never the dated
+      # copies under `archive/`. Absent until that workflow has run once, and
+      # the picker says so.
       - name: Fetch the published hubs
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -154,8 +155,16 @@ jobs:
       # cannot disagree about what exists.
       # `pr/` holds the pull-request previews, written by preview.yml into the
       # same branch and listed in the same manifest; absent until the first
-      # pull request has been previewed, hence the test. `hubs/` is the three
-      # current files of the hubs branch, fetched above, on the same terms.
+      # pull request has been previewed, hence the test. `hubs/` is the current
+      # files of the hubs branch, fetched above, on the same terms.
+      #
+      # Copied by *shape* rather than by name — every `.json` at the root, plus
+      # the `sessions/` directory — because the names are the generator's and
+      # there are now about twenty of them: ENCODE alone is twelve shards, one
+      # per assembly and output category (SPECS §24.3), and a list here would
+      # be a third place to keep them in step with. `archive/` is deliberately
+      # not copied: those are the dated copies, which the branch keeps and the
+      # site has no reason to serve.
       - name: Assemble the site
         run: |
           set -euo pipefail
@@ -164,9 +173,9 @@ jobs:
           cp archive/versions.json dist/versions.json
           if [ -d hubs ]; then
             mkdir -p dist/hubs
-            for name in 4dn.json encode.json index.json; do
-              if [ -f "hubs/$name" ]; then cp "hubs/$name" dist/hubs/; fi
-            done
+            find hubs -maxdepth 1 -name '*.json' -exec cp {} dist/hubs/ \;
+            if [ -d hubs/sessions ]; then cp -R hubs/sessions dist/hubs/sessions; fi
+            echo "Copied $(find dist/hubs -name '*.json' | wc -l) hub and session files."
           fi
           du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr ) $( [ -d dist/hubs ] && echo dist/hubs )
 
