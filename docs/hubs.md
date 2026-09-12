@@ -71,49 +71,154 @@ exactly as its rows will be. Nothing is fetched until a reader chooses the hub.
 python3 scripts/make_hub.py bucket https://my-lab.s3.eu-west-3.amazonaws.com/hic/ \
     --name 'Lab Hi-C' --out hub.json
 
-# The two portals, from their own search APIs (this is what the workflow runs).
-python3 scripts/make_hub.py 4dn    --out out/4dn.json    --timestamp
-python3 scripts/make_hub.py encode --out out/encode.json --timestamp
+# The three public stores, from their own APIs (this is what the workflow runs).
+python3 scripts/make_hub.py igv    --out out/igv.json    --sessions-dir out/sessions
+python3 scripts/make_hub.py 4dn    --out out/4dn.json    --sessions-dir out/sessions
+python3 scripts/make_hub.py encode --out out/encode.json --sessions-dir out/sessions
 
-# Validate a hub somebody else wrote.
+# Validate a hub — or a session — somebody else wrote.
 python3 scripts/make_hub.py check hub.json
 ```
 
-`--timestamp` also writes a dated copy beside `--out`; `--limit N` caps the rows for a dry run;
-`--formats hic,mcool,cool` narrows the 4DN front end; `--from-json` and `--from-xml` replay a
-recorded response, which is how the tests run without a network. A run that finds **nothing exits
-2 and writes nothing**, so a workflow never overwrites a good hub with an empty one.
+Common options: `--limit N` caps the rows for a dry run; `--timestamp` writes a dated copy beside
+`--out`; `--check` re-reads everything it wrote and validates it; `--sessions-dir DIR` writes the
+pre-configured sessions and `--sessions-out FILE` the hub that lists them (default
+`<out-stem>-sessions.json`). `--from-json`, `--from-xml` and `--from-tsv` replay a recorded
+response, which is how the tests run without a network. A run that finds **nothing exits 2 and
+writes nothing**, so a workflow never overwrites a good hub with an empty one.
+
+### What each front end asks, and of whom
+
+Both portal front ends read **two** sources, and which is which matters when something goes wrong.
+The *spine* says what files exist and comes from an object store, which is complete by
+construction: 4DN's bucket listing, and ENCODE's `encode_file_manifest.tsv` — a gigabyte of TSV
+that ENCODE rewrites daily at the root of `encode-public`. The *enrichment* says what each file is
+of, and comes from one lean portal search keyed by accession. A row exists because an object
+exists; a file the portal does not describe keeps its row with empty metadata cells.
+
+`--portal` decides what an unreachable portal means:
+
+| | |
+|---|---|
+| `require` (default) | fail the run and write nothing, so a hub **with** columns is never replaced by one without |
+| `optional` | publish the spine with the metadata columns empty — for the week a portal is down |
+| `skip` | never ask; for a dry run, or a machine that can reach a bucket and not a search API |
+
+The filter on what gets a row is **whether this viewer can open the file name**, and nothing else.
+There is no experiment-type filter and no format list, which is why Micro-C, bigWigs, peaks, pairs
+and BAMs are all there and why nobody has to edit the query when a consortium publishes something
+new. `--formats hic,mcool` narrows it for a dry run.
+
+The `igv` front end reads [IGV's own genome table][igv] — the file the IGV desktop app and igv.js
+both load their genome menu from — and **probes every URL** with a ranged GET before writing a row
+(`--probe off` skips it). Two things come out of one request: the size, which that table does not
+carry, and the answer to *does this open without credentials*. Both of the rows it drops are worth
+knowing about:
+
+- **IGV's `refgene` tracks**, 29 of its 63: UCSC `genePred` tables in a `.txt.gz`, a format this
+  viewer has no parser for. Counted in the log rather than written as rows that fail when they are
+  clicked.
+- **Six genomes whose sequence is not public.** As of 2026-09-11, `igv-genepattern-org` answers
+  `403 AccessDenied` to an anonymous ranged GET, which takes out IGV's `hg38`, `hg19`,
+  `GCF_016699485.2`, `NC_016856.1` and `GCA_000182895.1`; so does one object on
+  `igv.broadinstitute.org` (`rn6`). A genome whose sequence will not open is dropped whole — its
+  tracks annotate coordinates this viewer cannot read — and every refused URL is named in the log.
+  GRCh38 is still on the shelf through IGV's `hg38_1kg` row, whose FASTA is on the public
+  `1000genomes` bucket; GRCh37 has no readable alternative in IGV's table. If those permissions are
+  ever fixed, the next run picks the rows up with no change to anything here.
+
+[igv]: https://s3.amazonaws.com/igv.org.genomes/genomes.json
 
 The `bucket` front end lists with `ListObjectsV2`, so the prefix's bucket needs `s3:ListBucket`
 granted to `*` for that prefix ([hosting.md](hosting.md), *Making a public bucket browsable*), or
-run it from a machine whose AWS credentials cover it. It emits no columns: what a bucket knows about
-a file is its name and its size. Add columns by hand, or generate them from your own sample sheet;
-the format is plain JSON and the `check` front end will tell you if a row is malformed.
+run it from a machine whose AWS credentials cover it. It emits no columns: what a bucket knows
+about a file is its name and its size. Add columns by hand, or generate them from your own sample
+sheet; the format is plain JSON and the `check` front end will tell you if a row is malformed.
 
-The `4dn` front end asks for every experiment set's processed files **with no experiment-type
-filter**, so Micro-C and whatever the consortium publishes next are kept; the row's biosource, assay,
-dataset, lab and condition come from the portal's `track_and_facet_info`. The `encode` front end
-names each file by its `cloud_metadata.url`, the unsigned object on the `encode-public` bucket,
-never by the portal's `@@download` path, which answers with a link presigned for `GET` alone.
+### How much ENCODE
 
-## The two hubs the app ships
+ENCODE's manifest holds **1,209,805 released files this viewer can open** — 658,000 BED, 284,000
+bigWig, 134,000 BAM, 123,000 bigBed, 4,100 `.hic`. Listing all of them in one file is a quarter of
+a gigabyte of JSON, so `--breadth` chooses how much is published:
 
-`.github/workflows/hubs.yml` — **Actions → Hubs** — runs both portal front ends every Monday and on
-demand, uploads the pair as a timestamped workflow artifact (`hubs-<date>`, kept ninety days), and
-publishes them to the `hubs` branch: `4dn.json`, `encode.json`, an `index.json` naming what is
-there, and dated copies under `archive/`. The branch is the store, not the door: the deploy
-(`.github/workflows/deploy.yml`) copies the three current files into `hubs/` beside the app on
-every deploy, and the hubs workflow asks for a deploy as soon as it has published something new.
-The picker's built-in **4DN open data** and **ENCODE Hi-C** hubs read `<site>/hubs/<name>.json` —
+| `--breadth` | rows | what it keeps |
+|---|---|---|
+| `representative` (default) | ~210,000 | one file per dataset, assembly and format — every dataset ENCODE has, with the per-replicate and intermediate duplicates collapsed. Each row says how many files it stands for. |
+| `full` | ~700,000 | every file, less the 502,000-row `footprints` annotation dump |
+| `all` | 1,209,805 | everything |
+
+The chosen file is the one made from the most libraries, then the newest, then the lowest
+accession — a total order, so two runs over unchanged data pick the same file and the published
+diff is empty.
+
+Even at the default, 210,000 rows is too much for one file, so the `encode` front end **shards**:
+one hub per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
+`annotation`, `alignment`), twelve files, largest about 25 MB. `--out out/encode.json` writes
+`out/encode-GRCh38-signal.json` and its eleven siblings and no `out/encode.json`; `--shards off`
+writes the single file instead. Each shard is its own shelf in the picker, and the shard list is
+fixed in the generator and mirrored in `src/ui/examples.ts` — `test/dom/builtin-hubs.test.ts`
+checks the two agree, because a name that drifted would be a menu entry answering 404 for a file
+that exists under another name.
+
+### Pre-configured sessions
+
+`--sessions-dir DIR` writes one `.metacooler.json` per genome or dataset with its tracks already
+placed, and a hub listing them as `kind: "workspace"` rows. IGV's hg38 becomes its FASTA plus every
+track IGV publishes for hg38; a 4DN experiment set becomes its richest contact map with the
+bigWigs and peak files of the same set on it. One click and it is on screen, which is what three
+rows in a table is not — and the viewer needed no new code for it, because a workspace row is a
+road it already has.
+
+Three rules the generator follows:
+
+- **One session is one set of coordinates.** Sessions are grouped by dataset *and* assembly.
+  ENCODE publishes one experiment against GRCh38 and hg19 both, and grouping on the dataset alone
+  drew hg19 tracks over a GRCh38 map with nothing on screen saying so.
+- **The view follows the lead file.** A contact map opens on its genome list; a genome or a track
+  opens in the 1D browser.
+- **A group with a map and no tracks is skipped**, because it would be a row that opens one file,
+  which that file's own row already does. So is a group with tracks and no map: a session whose
+  lead is a bigWig is a fine thing and is not what picking an experiment set means.
+
+At most 24 tracks are placed per session — a 4DN set can carry two hundred processed files, and a
+session that opened all of them would be unreadable when it had finished drawing. The cap is on the
+session; every one of those files still has its own row in the data hub.
+
+## The hubs the app ships
+
+`.github/workflows/hubs.yml` — **Actions → Hubs** — runs all three front ends every Monday and on
+demand, uploads everything as a timestamped workflow artifact (`hubs-<date>`, kept ninety days),
+and publishes to the `hubs` branch:
+
+```
+igv.json  4dn.json  encode-<assembly>-<category>.json ×12
+igv-sessions.json  4dn-sessions.json  encode-sessions.json
+sessions/*.metacooler.json
+index.json        what is there, how many rows each has, how big, and when
+fingerprint.json  each file's hash with its timestamps removed
+archive/          dated copies of index.json and of every hub under 2 MB, last 26 runs
+```
+
+The branch is the store, not the door: the deploy (`.github/workflows/deploy.yml`) copies the
+current files into `hubs/` beside the app on every deploy, and the hubs workflow asks for a deploy
+as soon as it has published something new. The picker's shelves read `<site>/hubs/<name>.json` —
 the same origin as the page, so no CORS is involved and a private repository changes nothing; the
 desktop build reads the deployed site by the `homepage` in `package.json`.
 
-Until the workflow has run once on a fork, those two menu entries answer *not generated yet* and
-name the workflow to run. On the first run, check the "Generate both hubs" step's counts (well over
-a thousand 4DN rows once the `.mcool` twins are in, around two hundred ENCODE rows), that `--check`
-passed on both, that the deploy it asked for has finished, and that `<site>/hubs/4dn.json` answers
-`200`. A second run must commit nothing when the portals answered the same thing, and then asks for
-no deploy.
+Two properties of that branch are worth knowing before you look at it. It is **force-pushed as one
+orphan commit** each run: about 100 MB changes weekly, and a branch that kept every week as a
+commit would be five gigabytes within a year for a store whose only interesting state is its tip.
+And **a run that found nothing new publishes nothing**: every file carries the instant it was
+written, so the comparison is made on `fingerprint.json` — each file hashed with `generatedAt` and
+`createdAt` removed — rather than on the bytes. A second run over unchanged portals commits
+nothing, pushes nothing and asks for no deploy.
+
+Until the workflow has run once on a fork, those menu entries answer *not generated yet* and name
+the workflow to run. On the first run, check the "Generate every hub" step's counts (about 75 IGV
+rows and 41 sessions; about 25,700 4DN rows; about 210,000 ENCODE rows across twelve shards), that
+`--check` passed on everything, that the deploy it asked for has finished, and that
+`<site>/hubs/4dn.json` answers `200`. A second run must publish nothing when the three sources
+answered the same thing.
 
 A fork that would rather publish its hubs elsewhere changes `hubsBase()` in `src/ui/examples.ts`
 and the branch name in the two workflows; nothing else knows where they live.

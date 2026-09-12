@@ -452,20 +452,115 @@ function demosHub(): Hub {
 }
 
 /**
+ * ENCODE's shards, as the generator writes them (`scripts/make_hub.py`).
+ *
+ * **These two lists have to agree**, and `test/dom/builtin-hubs.test.ts`
+ * checks that they do. ENCODE has 1.2 million released files this viewer can
+ * open; one hub of them would be a quarter of a gigabyte and a table nothing
+ * could draw, so the generator writes one per assembly group and output
+ * category and the picker ships a reference to each (§24.3). Enumerated rather
+ * than discovered because §24.2 is not negotiable: the picker may not fetch an
+ * index on load to find out what exists.
+ *
+ * The order is the order the menu offers: the assembly a reader is most likely
+ * to want first, and within it signal before peaks before alignments, which is
+ * the order of how often each is asked for.
+ */
+const ENCODE_SHARDS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'GRCh38-signal', label: 'GRCh38 signal' },
+  { id: 'GRCh38-annotation', label: 'GRCh38 peaks and annotations' },
+  { id: 'GRCh38-alignment', label: 'GRCh38 alignments' },
+  { id: 'hg19-signal', label: 'hg19 signal' },
+  { id: 'hg19-annotation', label: 'hg19 peaks and annotations' },
+  { id: 'hg19-alignment', label: 'hg19 alignments' },
+  { id: 'mm10-signal', label: 'mouse signal' },
+  { id: 'mm10-annotation', label: 'mouse peaks and annotations' },
+  { id: 'mm10-alignment', label: 'mouse alignments' },
+  { id: 'other-signal', label: 'other assemblies — signal' },
+  { id: 'other-annotation', label: 'other assemblies — peaks and annotations' },
+  { id: 'other-alignment', label: 'other assemblies — alignments' },
+]
+
+/** The headings the picker files the shipped shelves under. */
+export const HUB_GROUPS = {
+  builtin: 'Built in',
+  igv: 'IGV',
+  fourdn: '4DN',
+  encode: 'ENCODE',
+  sessions: 'Preconfigured sessions',
+} as const
+
+/**
  * The hubs this build ships a pointer to, in the order they are offered.
  *
  * Demos first and inline, because it is the only one that costs no request and
- * the only one that is certainly there. The two generated ones follow as URLs:
- * nothing is fetched until a reader selects one (§24.2), which is what keeps
- * "open the viewer" from being a third-party request.
+ * the only one that is certainly there. Every other one is a URL: nothing is
+ * fetched until a reader selects one (§24.2), which is what keeps "open the
+ * viewer" from being a third-party request — and it is what makes eighteen
+ * references cost exactly as much as three did, which is nothing.
+ *
+ * ## Why there are eighteen
+ *
+ * The first version of this list was Hi-C only, and shipped one hub per portal.
+ * Widening the two portal front ends to *every file this viewer can open* made
+ * 4DN four times the size and ENCODE four hundred times it, so ENCODE is
+ * sharded (see {@link ENCODE_SHARDS}) and each shard is its own shelf. Grouping
+ * them is the other half of that answer: `HubRef.group` is what turns eighteen
+ * options into five headings, and the headings are the sources — which is how a
+ * reader thinks about it, since *the 4DN shelf* and *the ENCODE shelf* are
+ * different catalogues rather than different filters of one.
+ *
+ * ## Why sessions are a group and not a column
+ *
+ * A pre-configured session is a hub row like any other (`kind: 'workspace'`,
+ * §24.1) and could simply live in its source's own hub. It does not, because
+ * the two are different questions: *which file do I open* and *show me this
+ * assembly with everything on it*. A reader arriving with the second question
+ * in a table of 126,000 files has no filter that finds the eleven sessions
+ * hiding in it — `kind` is a column, but it is one of eight — whereas a heading
+ * called *Preconfigured sessions* is the answer to the question as asked.
  */
 export function builtinHubs(): HubRef[] {
+  const base = hubsBase()
   return [
-    { id: 'demos', label: 'Demos', hub: demosHub(), builtin: true },
-    { id: '4dn', label: '4DN open data', url: `${hubsBase()}4dn.json`, builtin: true },
-    { id: 'encode', label: 'ENCODE Hi-C', url: `${hubsBase()}encode.json`, builtin: true },
+    { id: 'demos', label: 'Demos', hub: demosHub(), builtin: true, group: HUB_GROUPS.builtin },
+    {
+      id: 'igv',
+      label: 'IGV genomes',
+      url: `${base}igv.json`,
+      builtin: true,
+      group: HUB_GROUPS.igv,
+    },
+    {
+      id: '4dn',
+      label: '4DN open data',
+      url: `${base}4dn.json`,
+      builtin: true,
+      group: HUB_GROUPS.fourdn,
+    },
+    ...ENCODE_SHARDS.map((shard): HubRef => ({
+      id: `encode-${shard.id}`,
+      label: shard.label,
+      url: `${base}encode-${shard.id}.json`,
+      builtin: true,
+      group: HUB_GROUPS.encode,
+    })),
+    ...(['igv', '4dn', 'encode'] as const).map((front): HubRef => ({
+      id: `${front}-sessions`,
+      label: SESSION_LABELS[front],
+      url: `${base}${front}-sessions.json`,
+      builtin: true,
+      group: HUB_GROUPS.sessions,
+    })),
   ]
 }
+
+/** What each session shelf is called, since `<front> sessions` is not a name. */
+const SESSION_LABELS = {
+  igv: 'IGV genomes, with their tracks',
+  '4dn': '4DN experiment sets, with their tracks',
+  encode: 'ENCODE datasets, with their tracks',
+} as const
 
 // ---------------------------------------------------------------------------
 // Shelves a hub brought with it

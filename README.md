@@ -21,7 +21,7 @@ server-side processing or data upload.
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
-- Hubs: The picker offers shelves of named datasets — the demos, **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals — and any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file.
+- Hubs: The picker offers shelves of named datasets, grouped by where they came from — the demos, **IGV's genomes** with their tracks, **4DN open data** (every openable file on its bucket, ~25,700 rows), **ENCODE** (~210,000 rows across twelve shelves, by assembly and by signal/peaks/alignments), and **pre-configured sessions** for each — all regenerated weekly, plus any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file: pick *IGV hg38* and the sequence and its gene tracks are on screen together.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
 - Console: A bottom panel recording every run, file opened and file written, each run written as the `metacooler-run` command that repeats it — one line per map, so a run over a deck is a line each. Copy or save a day of work as a shell script.
 
@@ -624,7 +624,7 @@ assert the correspondence has not degraded rather than pretend to an equality th
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
 - `docs/hubs.md` — publishing a hub: the file, the generator (`scripts/make_hub.py`, for a lab's
-  bucket or the 4DN and ENCODE portals), and the weekly workflow that keeps the two shipped hubs
+  bucket or the IGV, 4DN and ENCODE stores), and the weekly workflow that keeps the shipped hubs
   fresh on the site.
 - `docs/remote-sources.md` — a design note on remote sources beyond S3: what juicebox.js does
   for Dropbox, Google Drive, GCS, ENCODE, 4DN and the Aiden Lab server, measured against what this

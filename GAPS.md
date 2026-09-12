@@ -315,8 +315,12 @@ the natural end of a session spent finding that a binning is wrong.
 
 > **Since:** built as a *hub* — a static JSON of maps, genomes and workspaces with columns to filter
 > on, drawn as a table in the picker, connectable by URL and addressable as `?hub=`. The generator is
-> `scripts/make_hub.py`, with a `bucket` front end that is the `make_catalog.py` below, and two
-> portal front ends (4DN, ENCODE) that a weekly workflow runs and publishes to the `hubs` branch.
+> `scripts/make_hub.py`, with a `bucket` front end that is the `make_catalog.py` below and three
+> public-store front ends — `igv`, `4dn` and `encode` — that a weekly workflow runs and publishes
+> to the `hubs` branch. Those three list **every file this viewer has a route for**, not the contact
+> maps only: IGV's 41 genomes and their tracks, ~25,700 files on the 4DN open-data bucket, and
+> ~210,000 ENCODE rows across twelve shards, plus one pre-configured session per genome and per
+> dataset that carries both a map and something to draw on it (SPECS §24.3).
 > What this entry asked for that is *not* in a hub row is the per-file `ngenomes`/`nnz`/edge-list
 > metadata, which needs the metacooler CLI over each file; the format has room for it (`fields`),
 > and the `bucket` front end is where it would be computed.

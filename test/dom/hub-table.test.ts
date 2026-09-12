@@ -422,3 +422,160 @@ describe('naming a hub from its URL alone', () => {
     expect(hubLabelFor('not a url')).toBe('not a url')
   })
 })
+
+/**
+ * The two things that changed when the shelves grew (SPECS §24.3).
+ *
+ * Eighteen built-in hubs rather than three, and one of them 126,000 rows — so
+ * the selector groups and the table draws a window. Both are about a reader
+ * being able to *find* something, which is the only reason either exists.
+ */
+describe('a menu of many shelves', () => {
+  /** A reference per heading, in the order `ui/examples.ts` lists them. */
+  const SHELVES: HubRef[] = [
+    { id: 'demos', label: 'Demos', builtin: true, group: 'Built in' },
+    { id: 'igv', label: 'IGV genomes', url: 'https://site/hubs/igv.json', builtin: true, group: 'IGV' },
+    { id: '4dn', label: '4DN open data', url: 'https://site/hubs/4dn.json', builtin: true, group: '4DN' },
+    {
+      id: 'encode-GRCh38-signal',
+      label: 'GRCh38 signal',
+      url: 'https://site/hubs/encode-GRCh38-signal.json',
+      builtin: true,
+      group: 'ENCODE',
+    },
+    {
+      id: 'encode-hg19-signal',
+      label: 'hg19 signal',
+      url: 'https://site/hubs/encode-hg19-signal.json',
+      builtin: true,
+      group: 'ENCODE',
+    },
+    {
+      id: 'igv-sessions',
+      label: 'IGV genomes, with their tracks',
+      url: 'https://site/hubs/igv-sessions.json',
+      builtin: true,
+      group: 'Preconfigured sessions',
+    },
+  ]
+
+  it('files each shelf under its own heading, in the order it was given', () => {
+    const built = build(SHELVES)
+    expect(
+      all(built.el, 'optgroup').map((group) => group.getAttribute('label')),
+    ).toEqual(['Built in', 'IGV', '4DN', 'ENCODE', 'Preconfigured sessions'])
+    expect(textsOf(built.el, 'optgroup[label="ENCODE"] option')).toEqual([
+      'GRCh38 signal',
+      'hg19 signal',
+    ])
+    // Still nothing fetched: a heading is not a request (§24.2).
+    expect(requested).toEqual([])
+  })
+
+  it('adds the reader’s own heading below the shipped ones', () => {
+    addHubRow({ label: 'Lab shelf', url: 'https://lab.example/hub.json' })
+    const built = build(SHELVES)
+    expect(
+      all(built.el, 'optgroup').map((group) => group.getAttribute('label')),
+    ).toEqual(['Built in', 'IGV', '4DN', 'ENCODE', 'Preconfigured sessions', 'Hubs you connected'])
+  })
+
+  it('draws a flat list when there is only one heading and none of it is the reader’s', () => {
+    // An `<optgroup>` over a list with no other part is a heading for nothing,
+    // which is the rule this had when there were three shelves.
+    const built = build([SHELVES[0], { ...SHELVES[1], group: 'Built in' }])
+    expect(all(built.el, 'optgroup')).toHaveLength(0)
+    expect(textsOf(built.el, 'option')).toEqual(['choose a hub…', 'Demos', 'IGV genomes'])
+  })
+
+  it('files a reference with no heading under Built in', () => {
+    // A build handing this table a bare `{id, label, url}` still gets a sane
+    // menu rather than an `<optgroup label="undefined">`.
+    const built = build([{ id: 'plain', label: 'Plain', url: 'https://x/h.json', builtin: true }])
+    // Remembering one repaints the mounted menu through `subscribeHubs`, which
+    // is why the table reads the rows itself rather than being handed them.
+    addHubRow({ label: 'Lab shelf', url: 'https://lab.example/hub.json' })
+    expect(
+      all(built.el, 'optgroup').map((group) => group.getAttribute('label')),
+    ).toEqual(['Built in', 'Hubs you connected'])
+  })
+})
+
+describe('a shelf too large to draw', () => {
+  /** A hub of `count` rows, all alike but for a number. */
+  function many(count: number): string {
+    return JSON.stringify({
+      kind: HUB_KIND,
+      version: HUB_VERSION,
+      name: 'ENCODE — GRCh38 signal',
+      base: 'https://data.example/',
+      columns: [{ key: 'assembly', label: 'Assembly' }],
+      entries: Array.from({ length: count }, (_, index) => ({
+        label: `row ${String(index).padStart(5, '0')}`,
+        uri: `f${index}.bw`,
+        kind: 'genome',
+        fields: { assembly: index % 2 === 0 ? 'GRCh38' : 'hg19' },
+      })),
+    })
+  }
+
+  const SHELF: HubRef = {
+    id: 'encode-GRCh38-signal',
+    label: 'GRCh38 signal',
+    url: 'https://site/hubs/encode-GRCh38-signal.json',
+    builtin: true,
+    group: 'ENCODE',
+  }
+
+  it('draws a thousand rows of a larger hub, and says how to see the rest', async () => {
+    answering(200, many(2500))
+    const built = build([SHELF])
+    await built.table.load(SHELF)
+    // 126,000 rows of eight cells is a million elements and a tab that stops
+    // for several seconds on every keystroke (§24.3).
+    expect(names(built.el)).toHaveLength(1000)
+    expect(status(built.el)).toContain('2500 entries')
+    expect(status(built.el)).toContain('The first 1000 are drawn')
+    expect(status(built.el)).toContain('narrow the filters')
+  })
+
+  it('filters over every entry and not over the thousand it drew', async () => {
+    // The whole of what makes the cap honest: the rows that appear are the
+    // first thousand of the real answer, not an answer about the first
+    // thousand rows.
+    answering(200, many(2500))
+    const built = build([SHELF])
+    await built.table.load(SHELF)
+    const box = all(built.el, '.hub-filter-column')[0] as HTMLInputElement
+    box.value = 'hg19'
+    box.dispatchEvent(new window.Event('input'))
+    // Every odd row, which is 1250 of them — so the cap still bites, and the
+    // count under the table is of the match and not of the drawing.
+    expect(status(built.el)).toContain('Showing 1250 of 2500')
+    expect(status(built.el)).toContain('The first 1000 are drawn')
+    box.value = 'row 0000'
+    box.dispatchEvent(new window.Event('input'))
+    // A row that only exists beyond the thousandth drawn row is still findable,
+    // which a filter over the drawn window would have lost.
+    box.value = 'GRCh38'
+    box.dispatchEvent(new window.Event('input'))
+    const nameBox = built.el.querySelector('.hub-filter:not(.hub-filter-column)') as HTMLInputElement
+    nameBox.value = 'row 02400'
+    nameBox.dispatchEvent(new window.Event('input'))
+    expect(names(built.el)).toEqual(['row 02400'])
+    expect(requested).toEqual(['https://site/hubs/encode-GRCh38-signal.json'])
+  })
+
+  it('says nothing about a cap on a hub that fits', () => {
+    const hub: Hub = {
+      kind: HUB_KIND,
+      version: HUB_VERSION,
+      name: 'Small',
+      columns: [],
+      entries: [],
+    }
+    expect(note({ ...hub, entries: [] }, 3, 3)).toBe('3 entries.')
+    expect(note(hub, 3, 2)).toContain('Showing 2 of 3')
+    expect(note(hub, 3, 2)).not.toContain('are drawn')
+  })
+})
