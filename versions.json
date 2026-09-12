@@ -193,6 +193,13 @@
   ],
   "pulls": [
     {
+      "number": 50,
+      "commit": "8b7bb38",
+      "title": "Public stores: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks on",
+      "branch": "claude/public-data-hubs-support-b8hymm",
+      "date": "2026-09-12T00:00:22Z"
+    },
+    {
       "number": 49,
       "commit": "4768de8",
       "title": "Divide a map of several ticked genomes by genome, not by contig",
