@@ -1,6 +1,13 @@
 {
-  "latest": "918d7f6",
+  "latest": "16dca39",
   "versions": [
+    {
+      "commit": "16dca39",
+      "version": "0.12.0",
+      "date": "2026-09-12T10:49:50Z",
+      "subject": "Reconcile pull-request previews in the deploy, because the removal gets cancelled",
+      "tag": ""
+    },
     {
       "commit": "918d7f6",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "7a74b65",
-      "version": "0.11.0",
-      "date": "2026-09-05T22:13:23+02:00",
-      "subject": "Support mirrored contact map comparisons and per-contig rulers (#34)",
-      "tag": ""
-    },
-    {
       "commit": "815b0ad",
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
@@ -205,13 +205,6 @@
       "title": "Three near-diagonal readings, a 4C coverage divisor, a ribbon lane — and circular sequences",
       "branch": "claude/app-tasks-circular-chromosome-tbfdll",
       "date": "2026-09-12T10:08:18Z"
-    },
-    {
-      "number": 50,
-      "commit": "8b7bb38",
-      "title": "Public stores: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks on",
-      "branch": "claude/public-data-hubs-support-b8hymm",
-      "date": "2026-09-12T00:00:22Z"
     },
     {
       "number": 49,
