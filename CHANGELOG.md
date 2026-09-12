@@ -57,6 +57,77 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **This chromosome is circular — and then the map slides round it.** A tickbox in
+  the **Map** card, on any view that is a window on one sequence (SPECS §8.15). A `.cool`
+  cannot say that a sequence joins its own ends, and nothing can infer it — a bright far
+  corner is a circular chromosome, or a translocation, or an assembly error — so it is a
+  declaration, kept per file and carried in an exported workspace.
+
+  With it the window becomes **unwrapped**: it runs off either end of the sequence and
+  comes back on at the other, so a square across the junction is up to four stored blocks,
+  one of which is the far corner where the contacts joining the two ends of the molecule
+  live. Panning past the end reads the same block width rotated round to where you now
+  are — in the square view and under the turn alike, and with no limit but one lap, past
+  which a bin would be drawn twice. Ticks, the coordinate readout, tracks, features and
+  hand-drawn marks survive the join, because the block's axis carries the sequence twice
+  and says which lap each half is on; a mark is now drawn at *every* place its locus lands
+  rather than the first, or it would flicker in and out as you slid past the junction.
+
+  And the numbers follow, automatically and with no per-task tickbox: the separation
+  between two bins becomes the shorter of the two ways round, and the longest separation a
+  sequence has becomes half of it. **P(s)** stops turning back up at the far end — that
+  upturn is the two ends of the molecule wearing a chromosome-long separation, and every
+  fit through it is a fit through an artefact — **diamond insulation** scores the bins at
+  the junction it used to leave as gaps, and the directionality index, the HiC score and
+  the scalogram wrap with them. What does *not* yet: compartments, chromosight and the O/E
+  map divide by an expected curve at a linear separation, and a deck companion draws the
+  sequence linearly. Both are stated at §8.15 rather than left to be found.
+
+- **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
+  (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the
+  question the diamond asks, with its window in bins like the diamond's and defaulting to 50, which is
+  Dixon's 2 Mb at the 40 kb his paper worked at; the **HiC score**, the sum of every cell in a square window centred on each bin,
+  which is the reading Bignaud et al. use where the question is how tightly a stretch is folded rather
+  than where a domain ends; and the **scalogram** (Cournac et al. 2012, `HiContacts::scalogram()`), which
+  is P(s) with one summation left undone — at every bin, the separations at which its contacts reach each
+  of a set of quantiles. All three read a **band and never a square**, so a 2 Mb window on a mammalian
+  chromosome is a run rather than a refusal.
+
+  The 4C's *Normalisation* becomes one control with four answers — none, by coverage, by P(s), by both.
+  Coverage is the other bias and a different one: the decay is a property of separation, coverage is a
+  property of the target bin, and on a raw map a repeat-rich bin is a dip in every profile drawn against
+  it whatever the anchor. The divisor is each bin's own total contact centred on one, so a raw profile
+  stays in contacts and an O/E ratio stays centred on one. With trans it means the pixel walk can no
+  longer stop at the anchor, and the estimate says the pass is the whole file rather than half of it.
+
+- **The directionality index calls TAD borders and domains.** The same two overlays the diamond
+  produces, and through the same kernel. A domain reads as a *shape* along the index — the 5′ half looks
+  downstream, the 3′ half upstream — so a border is the negative-to-positive flip between two of them.
+  Called flip by flip that is fragile: a track that stutters across zero has crossings a bin apart and
+  only one is an edge, and the rules that pick it are the rules of prominence written out badly. So the
+  index is **integrated** first. The running sum climbs through every downstream-biased block and falls
+  through every upstream-biased one, which makes each border a local minimum and each stutter a dimple on
+  the flank of the real trough — exactly what `callBoundaries` already distinguishes, for the diamond,
+  with tests. One implementation decides what a called edge is; both overlays filter on the same column
+  and tile the same way; and the call lands one bin past the minimum, which is the opening bin of the new
+  domain rather than the closing bin of the old one.
+
+  The curve is standardised by the median absolute index before it is integrated, so the prominence is in
+  **bins of ordinary directional bias** rather than in χ². A χ² grows with how deep the library was
+  sequenced, so a threshold in the index's own units is a different threshold on every file; this one is a
+  property of the structure, and a value found on one map is worth typing into the next. Dixon's own HMM
+  differs in one visible way, stated at §18.8 rather than left to be discovered: it leaves stretches it
+  calls unorganised in no domain at all, where borders-between-borders tile.
+
+- **Ribbons: a lane style for a set of quantiles (SPECS §18.12).** A `ribbon` fills the band between its
+  own curve and the curve of the member below it in the same lane, so the scalogram's five quantiles draw
+  as one nested shape rather than five lines and a legend. Four filled areas cannot express that — they
+  paint over each other in the order they were drawn. Ribbons tile rather than overlay, so they are not
+  dimmed; the lane's order is the nesting order; a band exists only where both its curves do; and only
+  the top edge of each is stroked, since the lower one is the neighbour's. A `ProfileOutput` may now also
+  suggest a **display scale**, which is what puts the scalogram on a log axis — its values are genomic
+  separations, and on a linear axis all five bands live in the bottom tenth of the lane.
+
 - **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
   already on.** The two shipped portal shelves listed contact maps and nothing else — 1,200 rows
   of 4DN and 200 of ENCODE — and the filter that did it was on the *experiment*, which needed

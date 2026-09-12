@@ -20,6 +20,14 @@
  * lands in it. Past that point nothing can contribute, so `onChunk` returns
  * `false` and the read ends there: on average half the file rather than all of
  * it, which is exactly what §18.6 prices.
+ *
+ * **Except under the coverage correction**, which is a statement about every bin
+ * and therefore about every pixel. A marginal accumulated from half the file is
+ * half a marginal, and a profile divided by one would be corrected on the bins
+ * before the anchor and uncorrected after it — one quantity by the axis, two by
+ * the arithmetic, with nothing on the picture to say which bin is which. That is
+ * the failure {@link wholeProfile} already exists to prevent for the decay, and
+ * the answer is the same: the pass runs to the end, and the estimate says so.
  */
 
 
@@ -85,13 +93,17 @@ export const runFourC: TaskRunner = async (job) => {
   // assemblies, so the ratio would carry two meanings in one track.
   const whole = job.mc.hasGenomes
   const cis = !whole && boolParam(job.params, 'cis', true)
-  const overExpected = !whole && strParam(job.params, 'normalise', 'none') === 'ps'
+  // One control, four answers, read as two independent divisions — which is what
+  // they are. A metagenome is settled to neither, for the reason above.
+  const normalise = whole ? 'none' : strParam(job.params, 'normalise', 'none')
+  const overExpected = normalise === 'ps' || normalise === 'ps+coverage'
+  const overCoverage = normalise === 'coverage' || normalise === 'ps+coverage'
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const anchor = resolveAnchor(job, text)
 
   const values = cis
-    ? await cisProfile(job, anchor, balance, value, overExpected)
-    : await wholeProfile(job, anchor, balance, overExpected)
+    ? await cisProfile(job, anchor, balance, value, overExpected, overCoverage)
+    : await wholeProfile(job, anchor, balance, overExpected, overCoverage)
 
   const profile: ProfileOutput = {
     kind: 'profile',
@@ -99,12 +111,16 @@ export const runFourC: TaskRunner = async (job) => {
     // The suffix marks a *choice*, so a metagenome — where every 4C is over the
     // whole file — does not carry it. There it would name the only thing the
     // task does, on every track, which is a label that distinguishes nothing.
-    label: `4C · ${text}${cis || whole ? '' : ' (with trans)'}${overExpected ? ' · O/E' : ''}`,
+    label:
+      `4C · ${text}${cis || whole ? '' : ' (with trans)'}` +
+      `${overExpected ? ' · O/E' : ''}${overCoverage ? ' · per coverage' : ''}`,
     values,
     extent: [0, job.mc.nBins],
     binsize: job.mc.binsize,
     // A ratio has no unit, and calling one "contacts" would put a number
-    // centred on 1 under an axis labelled as a count.
+    // centred on 1 under an axis labelled as a count. The coverage divisor is
+    // centred on one, so it does **not** cost the track its unit: a corrected
+    // count is still a count, at the depth the map has on average.
     unit: overExpected ? '' : 'contacts',
   }
   const outputs: TaskOutput[] = [profile]
@@ -132,6 +148,7 @@ async function wholeProfile(
   anchor: Anchor,
   balance: boolean,
   overExpected: boolean,
+  overCoverage: boolean,
 ): Promise<Float32Array> {
   // Before the walk rather than after it, so the progress line runs forwards:
   // `transProfile` reports its way through the file and this would otherwise
@@ -143,14 +160,20 @@ async function wholeProfile(
   const scored = overExpected
     ? await cisProfile(job, anchor, balance, DEFAULT_COUNT_COLUMN, true)
     : null
-  const read = await transProfile(job, anchor, balance)
-  if (scored === null) return read
-  const out = overTransMean(job, read, anchor)
-  // The anchor's own sequence, over its own decay; everything else over the
-  // trans mean {@link overTransMean} just applied.
-  for (let bin = anchor.scope.from; bin < Math.min(anchor.scope.to, out.length); bin++) {
-    out[bin] = scored[bin]
+  const marginals = overCoverage ? new Float64Array(job.mc.nBins) : null
+  const read = await transProfile(job, anchor, balance, marginals)
+  let out = scored === null ? read : overTransMean(job, read, anchor)
+  if (scored !== null) {
+    // The anchor's own sequence, over its own decay; everything else over the
+    // trans mean {@link overTransMean} just applied.
+    for (let bin = anchor.scope.from; bin < Math.min(anchor.scope.to, out.length); bin++) {
+      out[bin] = scored[bin]
+    }
   }
+  // Last, and over the whole vector: the divisor is centred on one, so it
+  // corrects a raw profile and a ratio alike without moving either off its own
+  // scale. See {@link relativeCoverage}.
+  if (marginals !== null) out = overCoverageOf(job, out, marginals)
   return out
 }
 
@@ -245,6 +268,7 @@ async function cisProfile(
   balance: boolean,
   value: string,
   overExpected = false,
+  overCoverage = false,
 ): Promise<Float32Array> {
   job.progress(0, 1, `Reading ${anchor.label}`)
   // The view's block only where it holds the column being asked for.
@@ -280,6 +304,99 @@ async function cisProfile(
   // not make.
   const out = new Float32Array(job.mc.nBins).fill(Number.NaN)
   for (let i = 0; i < scored.length; i++) out[anchor.scope.from + i] = scored[i]
+  if (!overCoverage) return out
+
+  // **The coverage of this sequence, out of the square already in hand.** A cis
+  // profile is a statement about one sequence, so the depth to divide by is the
+  // depth *within* it — the column sums of the same square the profile came
+  // from. Reaching for a genome-wide marginal here would cost a pass over the
+  // whole file to correct a reading that never left one chromosome, and would
+  // divide by a number that includes contacts this profile did not look at.
+  const marginals = new Float64Array(job.mc.nBins)
+  for (let r = 0; r < square.nrows; r++) {
+    const base = r * square.ncols
+    for (let c = 0; c < square.ncols; c++) {
+      const cell = square.values[base + c]
+      if (Number.isFinite(cell)) marginals[anchor.scope.from + c] += cell
+    }
+  }
+  return overCoverageOf(job, out, marginals)
+}
+
+/**
+ * A profile divided by how much each bin is seen at all.
+ *
+ * The divisor is the bin's own total contact **relative to the mean** — see
+ * {@link relativeCoverage} — so this is a bias correction and not a change of
+ * units: a raw profile stays in contacts, an O/E ratio stays centred on one, and
+ * the axis label goes on meaning what it said.
+ *
+ * A bin with no coverage becomes a gap rather than keeping its numerator, which
+ * is the rule {@link overDecay} states for the same reason: half of a ratio is
+ * not a ratio, and it would be indistinguishable on the axis from the corrected
+ * values around it.
+ */
+function overCoverageOf(
+  job: JobContext,
+  values: Float32Array,
+  marginals: Float64Array,
+): Float32Array {
+  const relative = relativeCoverage(marginals)
+  if (relative === null) {
+    job.note(
+      'No bin carried any coverage, so there was nothing to correct for and the profile is as ' +
+        'it was counted.',
+    )
+    return values
+  }
+  const out = new Float32Array(values.length).fill(Number.NaN)
+  let dropped = 0
+  for (let bin = 0; bin < values.length; bin++) {
+    const value = values[bin]
+    if (!Number.isFinite(value)) continue
+    const divisor = relative[bin]
+    if (!(divisor > 0)) {
+      dropped++
+      continue
+    }
+    out[bin] = value / divisor
+  }
+  if (dropped > 0) {
+    job.note(
+      `${dropped.toLocaleString()} ${dropped === 1 ? 'bin has' : 'bins have'} a value but no ` +
+        'coverage to divide it by, so they are gaps rather than uncorrected numbers.',
+    )
+  }
+  return out
+}
+
+/**
+ * Per-bin coverage as a multiplier centred on one, or `null` where there is none.
+ *
+ * The mean is taken over the bins that **have** coverage rather than over every
+ * bin in the file, and that is the whole subtlety of this function. A cis run
+ * fills the marginal for one sequence and leaves the rest of the assembly at
+ * zero; averaging over all of them would put the mean at a fraction of the true
+ * one and multiply the whole profile by the reciprocal — a correction that
+ * changes the scale of the track by however much of the file the anchor's
+ * sequence happens to be, which is not a property of anything being measured.
+ */
+function relativeCoverage(marginals: Float64Array): Float64Array | null {
+  let total = 0
+  let seen = 0
+  for (let bin = 0; bin < marginals.length; bin++) {
+    const value = marginals[bin]
+    if (!Number.isFinite(value) || value <= 0) continue
+    total += value
+    seen++
+  }
+  if (seen === 0) return null
+  const mean = total / seen
+  const out = new Float64Array(marginals.length)
+  for (let bin = 0; bin < marginals.length; bin++) {
+    const value = marginals[bin]
+    out[bin] = Number.isFinite(value) && value > 0 ? value / mean : 0
+  }
   return out
 }
 
@@ -296,6 +413,16 @@ async function transProfile(
   job: JobContext,
   anchor: Anchor,
   balance: boolean,
+  /**
+   * Total contact per bin, filled in as the walk goes — or `null`, which is what
+   * makes the walk stop early.
+   *
+   * The two are one decision and it is written as one parameter for that reason:
+   * a marginal is a statement about every pixel in the file, so asking for one
+   * *is* asking for the whole pass, and a caller that could ask for the marginal
+   * and the early stop separately is a caller that can ask for half a marginal.
+   */
+  marginals: Float64Array | null = null,
 ): Promise<Float32Array> {
   const mc = job.mc
   const weights = validBins(mc, balance)
@@ -314,13 +441,22 @@ async function transProfile(
       job.throwIfCancelled()
       for (let i = 0; i < chunk.length; i++) {
         const bin1 = chunk.bin1[i]
-        if (!accumulator.reachable(bin1)) {
+        const reachable = accumulator.reachable(bin1)
+        if (!reachable && marginals === null) {
           stopped = true
           return false
         }
         const bin2 = chunk.bin2[i]
         const raw = chunk.count[i]
-        accumulator.add(bin1, bin2, weights === null ? raw : raw * weights[bin1] * weights[bin2])
+        const value = weights === null ? raw : raw * weights[bin1] * weights[bin2]
+        // Both ends, and a self-contact once: the same identity `cisMarginal`
+        // relies on, which is what makes a marginal off an upper-triangular
+        // sparse table equal to one off a mirrored dense block.
+        if (marginals !== null && Number.isFinite(value)) {
+          marginals[bin1] += value
+          if (bin2 !== bin1) marginals[bin2] += value
+        }
+        if (reachable) accumulator.add(bin1, bin2, value)
       }
       return true
     },

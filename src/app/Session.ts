@@ -29,13 +29,14 @@ import { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from '../analysis/worker/client'
 import type { CorrelationField } from '../analysis/compartments'
 import { buildAnalysisContext } from '../analysis/context'
-import type { AnalysisContext, TableOutput } from '../analysis/types'
+import type { AnalysisContext, AnalysisFraming, TableOutput } from '../analysis/types'
 import type {
   AnalysisWorkspace,
   AnalysisWorkspaceHost,
   CarriedResult,
 } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
+import { CircularStore } from '../state/circular'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
@@ -74,7 +75,11 @@ import type { Normalisation, SmoothedField, SmoothingRequest } from '../render/d
 import { parseSmooth } from '../render/smooth'
 import type { RotateDirection } from '../render/rotate'
 import { LEAD_MAP, type Lane } from '../annotations/placement'
-import type { DerivePresentation, TurnPresentation } from '../ui/MatrixPanel'
+import type {
+  CircularPresentation,
+  DerivePresentation,
+  TurnPresentation,
+} from '../ui/MatrixPanel'
 import { isCancellation, ReaderClient, type Cancellable } from '../worker/client'
 import type {
   CellsResult,
@@ -478,6 +483,28 @@ interface FileAnnotations {
   contigLength(name: string): number | undefined
 }
 
+/**
+ * A framing with the reader's circular declarations attached.
+ *
+ * A free function rather than a method, and applied at the *session* level
+ * rather than in the panel, because the declaration is about the **file** while
+ * a panel knows about the one sequence it is showing. A task run from a
+ * whole-genome view on a file with three circular plasmids has to measure all
+ * three of them the short way round, and a framing carrying only what happened
+ * to be on screen would give one answer from one view and another from another
+ * (SPECS §8.15).
+ *
+ * `null` in, `null` out: a session with no block on screen has no framing, and
+ * a declaration does not make one.
+ */
+function withCircularNames(
+  framing: AnalysisFraming | null,
+  names: readonly string[],
+): AnalysisFraming | null {
+  if (framing === null || names.length === 0) return framing
+  return { ...framing, circular: names }
+}
+
 let nextSessionId = 1
 
 /** Reserve the ids a restore is about to hand out, so a new tab cannot reuse one. */
@@ -613,6 +640,15 @@ export class Session {
      * the key is still documented where a reader looks for it.
      */
     focusSearch?(): void
+    /**
+     * Adopt a change of the circular declaration without being rebuilt (§8.15).
+     *
+     * Present on the region view alone, for {@link showFocus}'s reason: it is
+     * the only view a sequence can be declared circular from. Its absence is
+     * what makes the toggle a no-op elsewhere rather than a remount of a view
+     * the declaration does not change.
+     */
+    setCircular?(on: boolean): void
   } | null = null
   /**
    * Everything annotations need, for the file that is open (spec §8).
@@ -4243,6 +4279,73 @@ export class Session {
     return uri === undefined ? null : this.memoryKey(uri)
   }
 
+  /**
+   * The circular declarations for the file on screen, built on demand.
+   *
+   * Rebuilt when the key changes rather than on every call, because the store
+   * reads storage in its constructor and the control asks for it once per
+   * render. Keyed on {@link sessionKey} for the reason that key exists: a
+   * declaration is about the *file*, and an `.mcool` at 1 kb and the same file
+   * at 5 kb are one file.
+   */
+  private circularHeld: { key: string; store: CircularStore } | null = null
+
+  private circularStore(): CircularStore | null {
+    const key = this.sessionKey()
+    if (key === null) return null
+    if (this.circularHeld?.key !== key) this.circularHeld = { key, store: new CircularStore(key) }
+    return this.circularHeld.store
+  }
+
+  /**
+   * The *this sequence is circular* control, for a view that is a window on one.
+   *
+   * `undefined` on every other view, and each exclusion is a question the
+   * tickbox could not answer honestly: a two-contig block has no diagonal to
+   * slide along, a whole-genome picture is a list of sequences of which some may
+   * be circular and some not, and a name that is not a sequence of this file is
+   * a genome or a typo (SPECS §8.15).
+   */
+  private circularPresentation(state: ViewState): CircularPresentation | undefined {
+    if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
+      return undefined
+    }
+    const store = this.circularStore()
+    if (store === null) return undefined
+    const names = this.contigNames()
+    if (names === null) return undefined
+    // Through `contigOf`, which is what resolves `chrI:20,000-80,000` to `chrI`
+    // and a Roman numeral the reader typed to the spelling the file uses (§5.9).
+    // `null` is a region naming a genome or nothing this file has, and neither is
+    // a sequence a declaration could be about.
+    const name = contigOf(state.region, names)
+    if (name === null) return undefined
+    return {
+      label: name,
+      on: store.has(name),
+      onChange: (on) => {
+        store.set(name, on)
+        // **Not a remount.** The declaration changes how the block is *read* —
+        // wrapped or not, with a ceiling or a lap — so the ladder has to be
+        // built again; but a remount would rebuild the view from its named
+        // region and throw away the reader's zoom, which is the one thing they
+        // had to do to get somewhere worth asking the question from. The view
+        // re-arms its ladder against the block already on screen instead.
+        this.current?.setCircular?.(on)
+      },
+    }
+  }
+
+  /**
+   * A framing with the reader's circular declarations attached.
+   *
+   * Added here rather than in the panel, and that is the point: the declaration
+   * is about the **file** and the panel knows about the one sequence it is
+   * showing. A task run from a whole-genome view on a file with three circular
+   * plasmids has to measure all three of them the short way round, and a framing
+   * that carried only what happened to be on screen would give one answer from
+   * one view and another from another.
+   */
   /** Every map name this session is holding; `{}` before there is a file. */
   private mapNames(): MapNames {
     const key = this.sessionKey()
@@ -6355,6 +6458,9 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      ...(this.circularPresentation(state) === undefined
+        ? {}
+        : { circular: this.circularPresentation(state) }),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       level: matrixLevel(state),
@@ -6441,6 +6547,9 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      ...(this.circularPresentation(state) === undefined
+        ? {}
+        : { circular: this.circularPresentation(state) }),
       neighbours: { prev: this.stepTarget(-1), next: this.stepTarget(1) },
       onStep: (delta) => this.step(delta),
       ...(state.region2 === undefined ? {} : { region2: state.region2 }),
@@ -6914,13 +7023,14 @@ export class Session {
         const starred = this.deck?.starredPanel ?? null
         if (starred !== null) {
           const facts = starred.analysisFacts()
-          return facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
+          const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
+          return withCircularNames(framed, this.circularStore()?.list() ?? [])
         }
         const file = this.file
         const panel = this.current?.panel
         return file === undefined || file === null || panel === undefined
           ? null
-          : panel.analysisFraming(file.uri)
+          : withCircularNames(panel.analysisFraming(file.uri), this.circularStore()?.list() ?? [])
       },
       block: () => {
         const starred = this.deck?.starredPanel ?? null

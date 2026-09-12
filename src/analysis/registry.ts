@@ -42,6 +42,9 @@ import { TRACK_CORRELATION_TASK } from "./tasks/trackcorr";
 import { METAPLOT_TASK } from "./tasks/metaplot";
 import { MOTIF_TASK } from "./tasks/motif";
 import { INSULATION_TASK } from "./tasks/insulation";
+import { DI_TASK } from "./tasks/di";
+import { HIC_SCORE_TASK } from "./tasks/hicscore";
+import { SCALOGRAM_TASK } from "./tasks/scalogram";
 import { EXPECTED_TASK } from "./tasks/ps";
 import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
 
@@ -51,9 +54,13 @@ export const TASKS: readonly AnalysisTask[] = [
   // and which pairs of sequences touch, which is the same question one level up
   // and the one that says whether the assembly is the karyotype — then how
   // contact falls away from the diagonal (P(s)),
+  // then how far each *bin* reaches within that decay (the scalogram, which is
+  // P(s) kept per bin instead of averaged over the sequence),
   // then one locus's slice of that decay (4C), then the domains it resolves
-  // into (insulation), then the compartments those domains sit in. Each is a
-  // question the one before it makes it sensible to ask. Detection comes last
+  // into — insulation, the directionality index that reads the same edge from
+  // its asymmetry, and the HiC score that says how much contact is there at all
+  // rather than how it is shared out — then the compartments those domains sit
+  // in. Each is a question the one before it makes it sensible to ask. Detection comes last
   // of the map group and is the only one that *calls* anything: it needs the
   // decay the tasks above it describe, and what it produces — a loop set — is
   // what the aggregation tasks below it take as input.
@@ -61,8 +68,11 @@ export const TASKS: readonly AnalysisTask[] = [
   CIS_TRANS_TASK,
   CELL_QC_TASK,
   EXPECTED_TASK,
+  SCALOGRAM_TASK,
   FOURC_TASK,
   INSULATION_TASK,
+  DI_TASK,
+  HIC_SCORE_TASK,
   COMPARTMENTS_TASK,
   CHROMOSIGHT_TASK,
   HICREP_TASK,

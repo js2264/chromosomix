@@ -37,7 +37,6 @@
  */
 
 import { ViewerError } from '../../errors'
-import type { MetaCooler } from '../../metacooler/MetaCooler'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
 import {
@@ -51,6 +50,7 @@ import {
   boolParam,
   contigIdFor,
   numParam,
+  readsAsCircular,
   strParam,
   type JobContext,
   type TaskRunner,
@@ -87,9 +87,25 @@ interface Unit {
    * of two 400-bin contigs has separations up to 399, not up to 799.
    */
   maxOffset: number
+  /**
+   * Bins in the sequence, where this curve is of a **circular** one — `0`
+   * otherwise (SPECS §8.15).
+   *
+   * Set only for a unit that is a single span covering a whole sequence the
+   * reader has declared circular, which is the only shape the question has an
+   * answer for: a genome-scope curve over four contigs of one MAG is not a
+   * circle however many of those contigs are, and a curve over a *window* of a
+   * sequence is a window whether or not the sequence joins its own ends.
+   *
+   * Two things follow, and both are in {@link makeUnit}: the longest separation
+   * is half the sequence rather than all of it, because past half the circle the
+   * short way round is the other way; and the pairs each separation could hold
+   * are counted round the circle rather than along a line.
+   */
+  lap: number
 }
 
-function makeUnit(name: string, spans: Span[]): Unit {
+function makeUnit(name: string, spans: Span[], lap = 0): Unit {
   let bins = 0
   let longest = 0
   for (const span of spans) {
@@ -97,7 +113,19 @@ function makeUnit(name: string, spans: Span[]): Unit {
     bins += length
     if (length > longest) longest = length
   }
-  return { name, spans, bins, maxOffset: Math.max(0, longest - 1) }
+  // Half the circle, and a line's `L − 1` otherwise. A circular curve that ran
+  // to `L − 1` would plot the same cells twice, folded back on themselves — the
+  // far half of it a mirror image of the near half, which is exactly the upturn
+  // a circular chromosome scored as a line shows and which this is here to
+  // remove rather than to reproduce.
+  const circular = lap > 0 && spans.length === 1 && longest === lap
+  return {
+    name,
+    spans,
+    bins,
+    maxOffset: circular ? Math.floor(lap / 2) : Math.max(0, longest - 1),
+    lap: circular ? lap : 0,
+  }
 }
 
 
@@ -111,7 +139,17 @@ function makeUnit(name: string, spans: Span[]): Unit {
  * asked for. The two must not disagree, since one of them prices what the other
  * runs.
  */
-function planUnits(mc: MetaCooler, scope: string, region: string): Unit[] {
+function planUnits(job: JobContext, scope: string, region: string): Unit[] {
+  const mc = job.mc
+  /**
+   * The lap of a contig the reader has declared circular, or `0`.
+   *
+   * Asked only where a unit is one whole sequence, because that is the only
+   * shape {@link makeUnit} can answer for — see its `circular` test.
+   */
+  const lapOf = (cid: number, span: Span): number =>
+    readsAsCircular(job, mc.chromnames[cid]) ? span.to - span.from : 0
+
   if (scope === 'file') {
     const spans: Span[] = []
     for (const cid of displayableContigs(mc)) {
@@ -158,13 +196,13 @@ function planUnits(mc: MetaCooler, scope: string, region: string): Unit[] {
     // and reported a failure about a file that has the sequence (§5.9).
     const cid = contigIdFor(mc, parseRegionString(region)[0])
     const span = cid < 0 ? null : spanOfContig(mc, cid)
-    return span === null ? [] : [makeUnit(mc.chromnames[cid], [span])]
+    return span === null ? [] : [makeUnit(mc.chromnames[cid], [span], lapOf(cid, span))]
   }
 
   const out: Unit[] = []
   for (const cid of displayableContigs(mc)) {
     const span = spanOfContig(mc, cid)
-    if (span !== null) out.push(makeUnit(mc.chromnames[cid], [span]))
+    if (span !== null) out.push(makeUnit(mc.chromnames[cid], [span], lapOf(cid, span)))
   }
   return out
 }
@@ -207,9 +245,31 @@ function countPairs(units: Unit[], doubled: boolean, weight: Float64Array | null
     const count = new Float64Array(unit.maxOffset + 1)
     for (const span of unit.spans) {
       const length = span.to - span.from
-      for (let k = 0; k < length; k++) {
-        let pairs = length - k
-        if (weight !== null) {
+      const lap = unit.lap
+      for (let k = 0; k <= unit.maxOffset && k < length; k++) {
+        let pairs: number
+        if (lap > 0) {
+          // **Round the circle, every bin has a partner at every separation.**
+          // A line loses one pair per bin of separation — the `L − k` above —
+          // because its two ends run out; a circle has no ends, so the count is
+          // flat at `L` all the way to half way round. The one exception is
+          // exactly half way on an even-length sequence, where `i` and `i + L/2`
+          // is the same unordered pair arrived at from both sides and there are
+          // `L / 2` of them rather than `L`.
+          if (weight === null) {
+            pairs = 2 * k === lap ? lap / 2 : lap
+          } else {
+            pairs = 0
+            for (let i = 0; i < length; i++) {
+              const a = span.from + i
+              const b = span.from + ((i + k) % lap)
+              if (!Number.isNaN(weight[a]) && !Number.isNaN(weight[b])) pairs++
+            }
+            if (k > 0 && 2 * k === lap) pairs /= 2
+          }
+        } else if (weight === null) {
+          pairs = length - k
+        } else {
           pairs = 0
           for (let i = span.from; i + k < span.to; i++) {
             if (!Number.isNaN(weight[i]) && !Number.isNaN(weight[i + k])) pairs++
@@ -247,10 +307,16 @@ async function scanUnits(
   const mc = job.mc
   const spanOfBin = new Int32Array(mc.nBins).fill(-1)
   const unitOfSpan: number[] = []
+  // The lap of each span, so the inner loop can measure a separation the short
+  // way round without a lookup per pixel. `0` on every ordinary span, which is
+  // the branch the whole-file pass takes on every file that has no circular
+  // sequence declared.
+  const lapOfSpan: number[] = []
   for (let u = 0; u < units.length; u++) {
     for (const span of units[u].spans) {
       spanOfBin.fill(unitOfSpan.length, span.from, span.to)
       unitOfSpan.push(u)
+      lapOfSpan.push(units[u].lap)
     }
   }
 
@@ -275,7 +341,10 @@ async function scanUnits(
         if (!(span >= 0) || spanOfBin[b2] !== span) continue
         const value = weight === null ? chunk.count[i] : chunk.count[i] * weight[b1] * weight[b2]
         if (Number.isNaN(value)) continue
-        sums[unitOfSpan[span]][b2 > b1 ? b2 - b1 : b1 - b2] += value
+        const straight = b2 > b1 ? b2 - b1 : b1 - b2
+        const lap = lapOfSpan[span]
+        const offset = lap > 0 ? Math.min(straight, lap - straight) : straight
+        sums[unitOfSpan[span]][offset] += value
       }
     },
     onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
@@ -310,7 +379,7 @@ async function measure(
     for (let u = 0; u < units.length; u++) {
       job.throwIfCancelled()
       job.progress(u, units.length, units[u].name)
-      const accumulator = new ExpectedAccumulator(units[u].maxOffset)
+      const accumulator = new ExpectedAccumulator(units[u].maxOffset, units[u].lap)
       for (const span of units[u].spans) accumulator.addBlock(squareOf(block, span))
       out.push(accumulator.finish())
     }
@@ -331,7 +400,7 @@ async function measure(
       value,
     })
     job.throwIfCancelled()
-    const accumulator = new ExpectedAccumulator(units[0].maxOffset)
+    const accumulator = new ExpectedAccumulator(units[0].maxOffset, units[0].lap)
     accumulator.addBlock(matrix)
     return { curves: [accumulator.finish()], mirrored: true }
   }
@@ -391,7 +460,7 @@ export const runExpected: TaskRunner = async (job) => {
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
-  const planned = planUnits(job.mc, scope, region)
+  const planned = planUnits(job, scope, region)
   if (planned.length === 0) {
     job.note('No sequence in this file has any bins in it, so there is nothing to measure.')
     return []

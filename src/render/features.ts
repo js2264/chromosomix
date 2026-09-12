@@ -105,8 +105,11 @@ export function layoutFeatures(
     // spelling of the map it was loaded against, which is one of them at most.
     const contig = contigIndexOf(set.contigs, window.contig)
     if (contig < 0) continue
-    const segment = axis.segmentOf(window.contig)
-    if (segment === null || !(segment.bpPerUnit > 0)) continue
+    // The window's **own** stretch, not the first one on the axis with this
+    // name: a circular sequence panned across its junction is the same contig
+    // twice, and `segmentOf` would place the far half a sequence out (§8.15).
+    const segment = window.segment
+    if (!(segment.bpPerUnit > 0)) continue
     const [from, to] = featureRange(set, contig, window.start, window.end)
     for (let i = from; i < to; i++) {
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue

@@ -38,7 +38,16 @@ interface Held {
   /** The power-of-two bases-per-pixel these were fetched at. */
   bucket: number
   /** Genomic span held per contig. */
-  covered: Map<string, [number, number]>
+  /**
+   * What was fetched, by contig — a **list**, because one contig can be asked
+   * for twice.
+   *
+   * A circular sequence panned across its own junction is two windows on one
+   * name (SPECS §8.15): the tail of the sequence and its head. Keyed by contig
+   * alone, the second overwrote the first, `covers` then answered `false` on
+   * every frame, and the lane refetched continuously while the reader slid.
+   */
+  covered: Map<string, Array<[number, number]>>
   /**
    * The read controls these were counted under, for the one kind that has any.
    *
@@ -226,8 +235,12 @@ export class SampleCache {
         // the wire when the cancel was sent resolves anyway, and storing it
         // would file the old filter's numbers under the new key.
         if (this.disposed || this.inflight.get(key) !== slot) return
-        const covered = new Map<string, [number, number]>()
-        for (const window of wanted) covered.set(window.contig, [window.start, window.end])
+        const covered = new Map<string, Array<[number, number]>>()
+        for (const window of wanted) {
+          const held = covered.get(window.contig)
+          if (held === undefined) covered.set(window.contig, [[window.start, window.end]])
+          else held.push([window.start, window.end])
+        }
         this.held.set(key, { bucket, covered, filter, samples })
         this.onChange()
       })
@@ -255,12 +268,16 @@ export class SampleCache {
 
 /** `true` when every visible window is inside what was fetched. */
 function covers(
-  covered: Map<string, [number, number]>,
+  covered: Map<string, Array<[number, number]>>,
   windows: Array<{ contig: string; start: number; end: number }>,
 ): boolean {
   for (const window of windows) {
-    const span = covered.get(window.contig)
-    if (span === undefined || span[0] > window.start || span[1] < window.end) return false
+    const spans = covered.get(window.contig)
+    // Inside **any** of them, not inside their union: two fetched windows on one
+    // contig are the two ends of a circle and the gap between them is the part
+    // of the sequence nobody asked for, so a union would claim to cover it.
+    if (spans === undefined) return false
+    if (!spans.some((span) => span[0] <= window.start && span[1] >= window.end)) return false
   }
   return true
 }

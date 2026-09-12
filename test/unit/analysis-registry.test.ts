@@ -264,13 +264,15 @@ describe('every descriptor', () => {
  *
  * Registry order is a reading order rather than an alphabetical one, and the map
  * group's is an argument: what every bin *has* (coverage and the marginals),
- * then how contact falls away from it (P(s)), then one locus's slice of that
- * decay (4C), then the domains it resolves into (insulation), then the
- * compartments those domains sit in — and last, detection, which is the only one
- * that makes a claim rather than a summary: it needs the decay the tasks above
- * it describe, and what it produces is what the aggregation tasks take as input.
- * Pinned because the argument is invisible in an array literal and reordering it
- * is one line.
+ * then how contact falls away from it (P(s)), then the same decay kept per bin
+ * instead of averaged (the scalogram), then one locus's slice of it (4C), then
+ * the domains it resolves into — insulation, the directionality index that reads
+ * the same edge from its asymmetry, and the HiC score that says how much contact
+ * is there at all — then the compartments those domains sit in — and last,
+ * detection, which is the only one that makes a claim rather than a summary: it
+ * needs the decay the tasks above it describe, and what it produces is what the
+ * aggregation tasks take as input. Pinned because the argument is invisible in
+ * an array literal and reordering it is one line.
  */
 describe('the map card', () => {
   it('reads outward from the axis', () => {
@@ -280,8 +282,11 @@ describe('the map card', () => {
       'cistrans',
       'cellqc',
       'expected',
+      'scalogram',
       'fourc',
       'insulation',
+      'di',
+      'hicscore',
       'compartments',
       'chromosight',
       'hicrep',

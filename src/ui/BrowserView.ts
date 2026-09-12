@@ -34,6 +34,7 @@ import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationClient } from '../annotations/worker/client'
 import {
   colormapOf,
+  nestsAsRibbons,
   stacksAsHeatmaps,
   drawnFromSamples,
   hasTrackControls,
@@ -1937,6 +1938,9 @@ export class BrowserView {
           )
         : null
       labelBands = bands
+      // **Ribbons tile, they do not overlay** — the same rule, from the same
+      // module, read here for the same reason the heatmap one is.
+      const nested = nestsAsRibbons(lane.profiles.map(({ entry: member }) => member))
       for (const [at, { entry: member, profile }] of lane.profiles.entries()) {
         const laneFrame = bands?.[at] ?? frame
         const extent = extentFor(member, profile.extent, groups)
@@ -1958,9 +1962,12 @@ export class BrowserView {
           // what overlaying them was for. Stacked heatmaps do not overlap, so
           // they keep the opacity the reader set.
           opacity:
-            lane.profiles.length > 1 && bands === null
+            lane.profiles.length > 1 && bands === null && !nested
               ? member.style.opacity * OVERLAY_DIM
               : member.style.opacity,
+          // The band below this one, for a ribbon: the lane's order is the
+          // nesting order, and the first member has only the floor under it.
+          ...(nested && at > 0 ? { floor: lane.profiles[at - 1].profile } : {}),
         }
         if (dragged === null || !hasTrackControls(member.kind)) {
           drawTrack(ctx, laneFrame, profile, paint)

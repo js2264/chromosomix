@@ -12,12 +12,13 @@ server-side processing or data upload.
 - Support 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., with resolution ladder and on-the-fly balancing.
 - Dedicated Analysis panel, with exportable results: 
   - for common 1D analysis tasks: metaplots, track correlation, interval overlap with a shuffle null, FRiP over a feature set, ...
-  - for common 2D analysis tasks: P(s), diamond insulation, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, loops and borders detection, APA, loop ranking, ...
+  - for common 2D analysis tasks: P(s), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, loops and borders detection, APA, loop ranking, ...
   - for comparing what is on screen: HiCRep reproducibility across the maps in a deck, stratum by stratum and pooled.
   - for single cells: per-cell contact QC over an `.scool`, with the cell-cycle phasing scatter feeding back into the Cells table.
 - Dedicated Annotations panel, supporting linear tracks, 1D and 2D manual annotations, bookmarks and synthetic annotations.
 - Dedicated Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
 - Tabbed sessions: Several genomes opened at once, as tabs. 
+- Circular chromosomes: Tick *circular* in the Map card and the sequence stops having ends — the map slides past its last bin and back on at its first, in the square view and under the turn, with tracks, annotations and the coordinate readout carrying across the junction. Every cis analysis on it then measures separation the short way round, so a P(s) of a plasmid falls instead of turning back up.
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
@@ -181,6 +182,23 @@ metacooler-run tasks
 ##       --trans (default false)  Trans coverage
 ##       --balance (default false)  Use balancing weights
 ## 
+## cistrans
+##     Cis and trans per sequence
+##       --sequences  Sequences
+##       --normalise (default "enrichment")  Off-diagonal value
+##       --minContacts (default 10)  Least contact worth listing
+##       --maxEdges (default 500)  Pairs to list
+##       --matrix (default true)  Also draw the square
+##       --balance (default false)  Use balancing weights
+## 
+## cellqc
+##     Per-cell contact QC
+##       --cells (default "all")  Cells
+##       --nearFrom (default 23000)  Near band, from
+##       --nearTo (default 2000000)  Near band, to
+##       --mitoticTo (default 12000000)  Mitotic band, to
+##       --balance (default false)  Use balancing weights
+## 
 ## expected
 ##     Contact probability P(s)
 ##       --scope (default "contig")  Scope
@@ -189,6 +207,17 @@ metacooler-run tasks
 ##       --factor (default 1.1)  Log bins per step
 ##       --minSeparation (default 0)  Minimum separation
 ##       --derivative (default true)  Also plot the log-log slope
+##       --stranded (default false)  Also the four orientations
+##       --pairsUri  From this .pairs
+##       --balance (default false)  Use balancing weights
+## 
+## scalogram
+##     Scalogram
+##       --quantiles (default "standard")  Quantiles
+##       --reach (default 0)  Look out to
+##       --region  Sequence
+##       --ignoreDiags (default 1)  Diagonals to ignore
+##       --minValid (default 0.5)  Minimum coverage of the distribution
 ##       --balance (default false)  Use balancing weights
 ## 
 ## fourc
@@ -210,6 +239,26 @@ metacooler-run tasks
 ##       --prominence (default 0.2)  Minimum prominence
 ##       --spacing (default 0)  Minimum spacing
 ##       --domains (default true)  Also the domains between them
+## 
+## di
+##     Directionality index
+##       --window (default 50)  Window
+##       --region  Sequence
+##       --ignoreDiags (default 0)  Diagonals to ignore
+##       --minValid (default 0.5)  Minimum coverage of each side
+##       --balance (default false)  Use balancing weights
+##       --call (default true)  Call borders from the sign flips
+##       --prominence (default 10)  Minimum prominence
+##       --spacing (default 0)  Minimum spacing
+##       --domains (default true)  Also the domains between them
+## 
+## hicscore
+##     HiC score
+##       --window (default 50000)  Window
+##       --region  Sequence
+##       --ignoreDiags (default 0)  Diagonals to ignore
+##       --minValid (default 0.5)  Minimum coverage of the window
+##       --balance (default false)  Use balancing weights
 ## 
 ## compartments
 ##     Compartments (eigenvectors)
@@ -240,6 +289,10 @@ metacooler-run tasks
 ##       --maxQvalue (default 1)  Report down to a q-value of
 ##       --balance (default false)  Use balancing weights
 ## 
+## hicrep
+##     Reproducibility (HiCRep)
+##       hicrep compares the maps open beside each other, and a shell has one file and one mount. Run it in the app, with the maps side by side.
+## 
 ## motif
 ##     Find a sequence
 ##       --sequence  Reference
@@ -268,6 +321,9 @@ metacooler-run tasks
 ##       --minShiftScale (default 1)  Smallest shift
 ##       --maxShiftScale (default 3)  Largest shift
 ##       --seed (default 1)  Seed
+##       --minSep (default 20000)  Nearest two features may be
+##       --maxSep (default 2000000)  Furthest two features may be
+##       --byDistance (default 0)  Split by separation into
 ##       --rankBy  Rank by
 ##       --subset (default "all")  Then
 ##       --count (default 500)  N
@@ -278,11 +334,19 @@ metacooler-run tasks
 ##     Track correlation
 ##       trackcorr reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
 ## 
+## frip
+##     Fraction of signal in features
+##       frip reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
+## 
 ## overlap
 ##     Interval set overlap
 ##       --a  First set
 ##       --b  Second set
 ##       --minFraction (default 0.000001)  Least of a feature covered
+##       --shuffle (default false)  Test against shuffled placements
+##       --shuffleWhich (default "a")  Set that moves
+##       --iterations (default 1000)  Shuffles
+##       --seed (default 1)  Seed
 ## 
 ## magqc
 ##     MAG contact QC

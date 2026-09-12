@@ -18,6 +18,9 @@ import { runCellQc } from './cellqc'
 import { runChromosight } from './chromosight'
 import { runCisTrans } from './cistrans'
 import { runCompartments } from './compartments'
+import { runDi } from './di'
+import { runHicScore } from './hicscore'
+import { runScalogram } from './scalogram'
 import { runHicrep } from './hicrep'
 import { runCoverage } from './coverage'
 import { runExpected } from './expected'
@@ -40,6 +43,9 @@ export const RUNNERS: Record<string, TaskRunner> = {
   cistrans: runCisTrans,
   cellqc: runCellQc,
   insulation: runInsulation,
+  di: runDi,
+  hicscore: runHicScore,
+  scalogram: runScalogram,
   fourc: runFourC,
   apa: runApa,
   chromosight: runChromosight,

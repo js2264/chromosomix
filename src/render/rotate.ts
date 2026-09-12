@@ -53,7 +53,7 @@
  * improvement; nothing here pretends they are zeros.
  */
 
-import { LocusAxis, type Locus } from './locus'
+import { LocusAxis, type Locus, type LocusSegment } from './locus'
 
 /** The part of a read this module needs. */
 export interface RotatableBlock {
@@ -531,14 +531,25 @@ export function isTurnable(block: {
   level: 'bin' | 'contig' | 'genome'
   rowExtent: readonly [number, number]
   colExtent: readonly [number, number]
-  rowGroups?: ReadonlyArray<unknown>
+  rowGroups?: ReadonlyArray<{ label?: string }>
+  /** Set where the block was read round a circle — see `worker/wrap.ts`. */
+  wrapped?: readonly [number, number]
 }): boolean {
   if (block.level !== 'bin') return false
   if (block.rowExtent[0] !== block.colExtent[0]) return false
   if (block.rowExtent[1] !== block.colExtent[1]) return false
+  const groups = block.rowGroups
   // One run, or none at all — a plain cooler read as a single span has no runs
   // and is one sequence by construction.
-  return (block.rowGroups?.length ?? 1) <= 1
+  if ((groups?.length ?? 1) <= 1) return true
+  // **Or one sequence carried twice, which is what a circle looks like** (§8.15).
+  // A block read across a sequence's own junction has two runs — its tail, then
+  // its head — and refusing it here is refusing to turn the one picture the
+  // declaration was made for. The test is still *one sequence*: several runs of
+  // several names is a whole-genome block, which has no diagonal to stand on.
+  if (block.wrapped === undefined || groups === undefined) return false
+  const first = groups[0]?.label
+  return first !== undefined && groups.every((group) => group.label === first)
 }
 
 /**
@@ -559,20 +570,57 @@ export function turnedAxis(
   rotated: Pick<RotatedBlock, 'ncols' | 'originBin'>,
   contig: { label: string; firstBin: number; length: number },
   binsize: number,
+  /**
+   * The block's own runs, where it has more than one — which is a block read
+   * round a circle and nothing else (§8.15).
+   *
+   * `start` and `end` are block-local **bins**, and a turned column is half a
+   * bin, so a run covers twice as many columns as it does bins. `unitStart` is
+   * the bin the *sequence* begins at for that stretch, which on the far side of
+   * a junction is a whole lap further along than on the near side — and carrying
+   * it through is the whole of what makes the turned picture read the second
+   * stretch as the beginning of the sequence rather than as somewhere past its
+   * end.
+   */
+  runs: ReadonlyArray<{ start: number; end: number; unitStart?: number }> = [],
 ): LocusAxis | null {
   if (!(binsize > 0) || rotated.ncols <= 0) return null
-  return new LocusAxis([
-    {
+  const bpPerUnit = binsize * BIN_FRACTION
+  if (runs.length <= 1) {
+    return new LocusAxis([
+      {
+        contig: contig.label,
+        unitStart: 0,
+        unitEnd: rotated.ncols,
+        // Where column 0's left edge sits inside the sequence. The block may
+        // begin part-way into it, and the turned block inherits that offset
+        // unchanged.
+        bpStart: (rotated.originBin - contig.firstBin) * binsize,
+        bpPerUnit,
+        contigLength: contig.length,
+      },
+    ])
+  }
+
+  const segments: LocusSegment[] = []
+  for (const run of runs) {
+    const from = Math.round(run.start / BIN_FRACTION)
+    const to = Math.min(rotated.ncols, Math.round(run.end / BIN_FRACTION))
+    if (!(to > from)) continue
+    const firstBin = run.unitStart ?? rotated.originBin + run.start
+    segments.push({
       contig: contig.label,
-      unitStart: 0,
-      unitEnd: rotated.ncols,
-      // Where column 0's left edge sits inside the sequence. The block may begin
-      // part-way into it, and the turned block inherits that offset unchanged.
-      bpStart: (rotated.originBin - contig.firstBin) * binsize,
-      bpPerUnit: binsize * BIN_FRACTION,
+      unitStart: from,
+      unitEnd: to,
+      // `locusAxisFrom`'s arithmetic, in the turned block's own units: the
+      // unwrapped bin this stretch opens at, measured from where its own lap of
+      // the sequence begins.
+      bpStart: (rotated.originBin + run.start - firstBin) * binsize,
+      bpPerUnit,
       contigLength: contig.length,
-    },
-  ])
+    })
+  }
+  return segments.length === 0 ? null : new LocusAxis(segments)
 }
 
 /**

@@ -151,6 +151,30 @@ const PARAMS: readonly ParamSpec[] = [
      * `none` stays the default because the raw profile is what a bigWig of a 4C
      * experiment holds and what a reader comparing against one expects — and
      * because a ratio is a derived quantity that should be asked for.
+     *
+     * ## Coverage is the other bias, and it is a different one
+     *
+     * The decay is a property of *separation*; coverage is a property of the
+     * **target bin**. A bin in a repeat, a bin with few restriction sites, a bin
+     * the mapper half-lost: each is seen less by everything, so it is a dip in
+     * every profile drawn against it, whatever the anchor. On a raw map those
+     * dips are most of the small-scale structure a reader would otherwise take
+     * for real, and they are in exactly the places — repeats, segmental
+     * duplications — where a spurious interaction is most tempting to believe.
+     *
+     * Dividing by each bin's own total contact is the standard correction, and
+     * the divisor is **centred on one** so that it is a bias correction and not
+     * a change of units: the profile keeps the scale it had, and an O/E ratio
+     * corrected this way is still a ratio centred on one rather than one divided
+     * by a depth.
+     *
+     * It is offered *with* the decay rather than instead of it because the two
+     * are independent and a reader wanting a clean profile wants both — the
+     * decay out of the shape along the axis, the depth out of each bin across
+     * it. A balanced map has had something very like the second done to it
+     * already (that is what balancing is), so it is most useful on a raw one;
+     * the control does not hide itself there, because a reader balancing on a
+     * partly-balanced file is entitled to see what the second pass does.
      */
     options: [
       {
@@ -159,9 +183,19 @@ const PARAMS: readonly ParamSpec[] = [
         hint: 'Contacts as they were counted.',
       },
       {
+        value: 'coverage',
+        label: 'By coverage',
+        hint: 'Each bin divided by how much it is seen at all, so a dead bin is not a dip.',
+      },
+      {
         value: 'ps',
         label: 'By P(s)',
         hint: 'Observed over expected at that separation, from this sequence’s own decay.',
+      },
+      {
+        value: 'ps+coverage',
+        label: 'By P(s) and coverage',
+        hint: 'Both divisions: the decay out of the shape, the depth out of each bin.',
       },
     ],
   },
@@ -224,14 +258,24 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // would do on a metacool — the key is still there, still `true` by default,
   // and no longer the answer.
   if (!cisRun(context, params)) {
+    // The coverage correction is a statement about every bin, so it is a
+    // statement about every pixel: the walk cannot stop at the anchor, and the
+    // number a reader decides on has to say that rather than quote the half-file
+    // pass it would otherwise have been (§18.6).
+    const wholeFile =
+      !context.hasGenomes && String(params.normalise ?? 'none').includes('coverage')
     return {
       class: 'scan',
       requests: null,
       bytes: null,
-      note:
-        'Walks the pixel table as far as the anchor, which is about half the file, to reach the ' +
-        `contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}. Progress is ` +
-        'reported as it goes and it can be cancelled at any point.',
+      note: wholeFile
+        ? 'Walks the whole pixel table: the contacts that leave this sequence are reached ' +
+          'by the anchor, and the coverage to divide by is a total over every bin, which only ' +
+          'the full pass has. Progress is reported as it goes and it can be cancelled at any ' +
+          'point.'
+        : 'Walks the pixel table as far as the anchor, which is about half the file, to reach ' +
+          `the contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}. Progress ` +
+          'is reported as it goes and it can be cancelled at any point.',
     }
   }
 

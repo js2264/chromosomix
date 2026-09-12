@@ -18,7 +18,7 @@
  */
 
 import { valueAcross, laneRect, laneX, laneY, type LaneFrame } from './lane'
-import type { LocusAxis } from './locus'
+import type { LocusAxis, LocusSegment } from './locus'
 import {
   onScale,
   type Limits,
@@ -84,6 +84,19 @@ export interface PixelProfile {
 }
 
 /**
+ * Every stretch of one axis that carries a contig, in axis order.
+ *
+ * One on nearly every axis, and the loop that walks it is written for the one
+ * case where there are two: a circular sequence whose window crosses its own
+ * junction is the same contig at both ends of the picture (SPECS §8.15).
+ * `LocusAxis.segmentOf` deliberately answers with the first, which is right for
+ * a caller resolving a *place* and wrong for one placing *data*.
+ */
+function segmentsOf(axis: LocusAxis, contig: string): LocusSegment[] {
+  return axis.segments.filter((segment) => segment.contig === contig)
+}
+
+/**
  * Reduce samples to one value per pixel.
  *
  * Every interval is distributed across the pixels it overlaps in proportion to
@@ -122,47 +135,54 @@ export function profileOf(
   let envelope = false
 
   for (const region of samples.regions) {
-    const segment = axis.segmentOf(region.contig)
-    if (segment === null || !(segment.bpPerUnit > 0)) continue
-    const { starts, ends, values } = region
-    const hasBand = region.min !== null && region.max !== null
-    if (hasBand) envelope = true
-    const varied = region.variant
-    if (varied !== null && differing === null) differing = new Float64Array(slots)
+    // **Every** stretch of the axis with this name, not the first. An axis holds
+    // a contig twice when a circular sequence is panned across its own junction
+    // (SPECS §8.15), and the two stretches hold different halves of it — so a
+    // region is offered to both and lands on whichever one contains it, the
+    // other placing it outside the visible slots, where the clip below drops it.
+    // On every other axis this loop runs once and nothing changes.
+    for (const segment of segmentsOf(axis, region.contig)) {
+      if (!(segment.bpPerUnit > 0)) continue
+      const { starts, ends, values } = region
+      const hasBand = region.min !== null && region.max !== null
+      if (hasBand) envelope = true
+      const varied = region.variant
+      if (varied !== null && differing === null) differing = new Float64Array(slots)
 
-    for (let i = 0; i < values.length; i++) {
-      const value = values[i]
-      if (!Number.isFinite(value)) continue
-      // (contig, bp) → matrix coordinate → canvas pixel, through the axis the
-      // heatmap itself is drawn in. Inlined rather than routed through
-      // `locusToUnit`, because this runs once per interval and the segment has
-      // already been resolved.
-      const u0 = segment.unitStart + (starts[i] - segment.bpStart) / segment.bpPerUnit
-      const u1 = segment.unitStart + (ends[i] - segment.bpStart) / segment.bpPerUnit
-      let p0 = frame.toPixel(u0) - from
-      let p1 = frame.toPixel(u1) - from
-      if (p1 < p0) [p0, p1] = [p1, p0]
-      if (p1 <= 0 || p0 >= slots) continue
-      if (p0 < 0) p0 = 0
-      if (p1 > slots) p1 = slots
+      for (let i = 0; i < values.length; i++) {
+        const value = values[i]
+        if (!Number.isFinite(value)) continue
+        // (contig, bp) → matrix coordinate → canvas pixel, through the axis the
+        // heatmap itself is drawn in. Inlined rather than routed through
+        // `locusToUnit`, because this runs once per interval and the segment has
+        // already been resolved.
+        const u0 = segment.unitStart + (starts[i] - segment.bpStart) / segment.bpPerUnit
+        const u1 = segment.unitStart + (ends[i] - segment.bpStart) / segment.bpPerUnit
+        let p0 = frame.toPixel(u0) - from
+        let p1 = frame.toPixel(u1) - from
+        if (p1 < p0) [p0, p1] = [p1, p0]
+        if (p1 <= 0 || p0 >= slots) continue
+        if (p0 < 0) p0 = 0
+        if (p1 > slots) p1 = slots
 
-      const first = Math.floor(p0)
-      const last = Math.min(slots - 1, Math.ceil(p1) - 1)
-      const lo = hasBand ? (region.min as Float32Array)[i] : value
-      const hi = hasBand ? (region.max as Float32Array)[i] : value
-      for (let slot = first; slot <= last; slot++) {
-        const covered = Math.min(p1, slot + 1) - Math.max(p0, slot)
-        // A sub-pixel interval still owns the pixel it lands in: without a floor
-        // its weight is its width in pixels, which for a 1 bp feature at
-        // whole-genome zoom is 7e-5 and rounds to nothing beside its neighbours.
-        const share = covered > 0 ? covered : 1e-3
-        sum[slot] += value * share
-        weight[slot] += share
-        // Through the same weights as the mean, which is what keeps the ratio
-        // of the two a fraction rather than two numbers reduced differently.
-        if (varied !== null && differing !== null) differing[slot] += varied[i] * share
-        if (Number.isFinite(lo) && (Number.isNaN(low[slot]) || lo < low[slot])) low[slot] = lo
-        if (Number.isFinite(hi) && (Number.isNaN(high[slot]) || hi > high[slot])) high[slot] = hi
+        const first = Math.floor(p0)
+        const last = Math.min(slots - 1, Math.ceil(p1) - 1)
+        const lo = hasBand ? (region.min as Float32Array)[i] : value
+        const hi = hasBand ? (region.max as Float32Array)[i] : value
+        for (let slot = first; slot <= last; slot++) {
+          const covered = Math.min(p1, slot + 1) - Math.max(p0, slot)
+          // A sub-pixel interval still owns the pixel it lands in: without a floor
+          // its weight is its width in pixels, which for a 1 bp feature at
+          // whole-genome zoom is 7e-5 and rounds to nothing beside its neighbours.
+          const share = covered > 0 ? covered : 1e-3
+          sum[slot] += value * share
+          weight[slot] += share
+          // Through the same weights as the mean, which is what keeps the ratio
+          // of the two a fraction rather than two numbers reduced differently.
+          if (varied !== null && differing !== null) differing[slot] += varied[i] * share
+          if (Number.isFinite(lo) && (Number.isNaN(low[slot]) || lo < low[slot])) low[slot] = lo
+          if (Number.isFinite(hi) && (Number.isNaN(high[slot]) || hi > high[slot])) high[slot] = hi
+        }
       }
     }
   }
@@ -443,6 +463,21 @@ export interface TrackPaint {
    * one for a screen, so it is a preference rather than a constant.
    */
   baseline: boolean
+  /**
+   * The curve a `ribbon` fills **down to**; ignored by every other mode.
+   *
+   * The member below this one in the same lane, which the painter of the stack
+   * supplies because it is the only side that knows what order the lane is in.
+   * Absent means the innermost band of the set, which fills to the lane's own
+   * baseline exactly as an area does — so a lane of one ribbon is an area, which
+   * is the right thing for it to be.
+   *
+   * It must be on the **same slots** as `profile`: both are read at the same
+   * pixel resolution over the same window by the same pass, so the painter hands
+   * over its neighbour's profile unchanged rather than resampling it, and a slot
+   * where either is a gap breaks the band there.
+   */
+  floor?: PixelProfile
 }
 
 /**
@@ -493,6 +528,51 @@ export function drawTrack(
       ctx.fillRect(x, y, width, height)
     }
     drawVariants(ctx, frame, profile, norm, baseAcross, paint)
+    ctx.restore()
+    return
+  }
+
+  // **A band between two curves**, and the only mode whose picture depends on a
+  // track that is not this one. The path is this profile's polyline forward and
+  // the floor's backward, closed — which is the one shape that is right whether
+  // the two curves cross, touch, or run far apart, and which needs no assumption
+  // that this track is the higher of the two.
+  //
+  // Only where both curves have a value. A slot where either is a gap has no
+  // band, and drawing across it would invent an edge from the last value that
+  // was measured to the next one — over a stretch the run deliberately said
+  // nothing about.
+  if (paint.mode === 'ribbon') {
+    const floor = paint.floor
+    const runs = floor === undefined ? pathRuns(profile) : sharedRuns(profile, floor)
+    ctx.fillStyle = paint.colour
+    for (const [start, stop] of runs) {
+      ctx.beginPath()
+      tracePath(ctx, frame, profile, norm, start, stop)
+      if (floor === undefined) {
+        // The innermost band: down to the baseline and back, which is an area.
+        ctx.lineTo(...pointOf(frame, profile.from + stop - 0.5, baseAcross))
+        ctx.lineTo(...pointOf(frame, profile.from + start + 0.5, baseAcross))
+      } else {
+        traceBack(ctx, frame, floor, norm, start, stop)
+      }
+      ctx.closePath()
+      ctx.fill()
+    }
+    // The top edge only. A ribbon's own curve is the quantile it stands for and
+    // is worth an outline; its lower edge is the *neighbour's* curve and is
+    // drawn by the neighbour, so stroking the closed path would draw every
+    // interior edge twice and the hairlines would darken where bands meet.
+    ctx.strokeStyle = paint.outline ? paint.guideColour : paint.colour
+    ctx.lineWidth = paint.outline ? OUTLINE_WIDTH : 1
+    ctx.lineJoin = 'round'
+    for (const [start, stop] of runs) {
+      ctx.beginPath()
+      tracePath(ctx, frame, profile, norm, start, stop)
+      ctx.stroke()
+    }
+    drawVariants(ctx, frame, profile, norm, baseAcross, paint)
+    drawFloor(ctx, frame, paint)
     ctx.restore()
     return
   }
@@ -634,6 +714,46 @@ function drawVariants(
   }
   ctx.fill()
   ctx.restore()
+}
+
+/**
+ * The half-open slot ranges where **both** profiles have data.
+ *
+ * A ribbon's band exists where its own curve and the one under it both do; a
+ * slot either of them is missing is a hole in the band. Written as its own walk
+ * rather than as an intersection of two {@link pathRuns} results, because the
+ * merge of two run lists is the kind of thing that is right until the day one
+ * of them starts with a gap.
+ */
+function sharedRuns(a: PixelProfile, b: PixelProfile): Array<[number, number]> {
+  const runs: Array<[number, number]> = []
+  const slots = Math.min(a.mean.length, b.mean.length)
+  let start = -1
+  for (let slot = 0; slot < slots; slot++) {
+    const present = !Number.isNaN(a.mean[slot]) && !Number.isNaN(b.mean[slot])
+    if (present && start < 0) start = slot
+    if (!present && start >= 0) {
+      runs.push([start, slot])
+      start = -1
+    }
+  }
+  if (start >= 0) runs.push([start, slots])
+  return runs
+}
+
+/** {@link tracePath} in reverse, for the returning half of a closed band. */
+function traceBack(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  profile: PixelProfile,
+  norm: (value: number) => number,
+  start: number,
+  stop: number,
+): void {
+  for (let slot = stop - 1; slot >= start; slot--) {
+    const across = valueAcross(frame, norm(profile.mean[slot]))
+    ctx.lineTo(...pointOf(frame, profile.from + slot + 0.5, across))
+  }
 }
 
 /** The half-open slot ranges that have data, so gaps break the line. */

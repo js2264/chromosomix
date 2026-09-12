@@ -51,3 +51,23 @@ export function diagonalTiles(bins: number, halo: number): number {
   const body = tileRows(Math.max(0, halo) * 2, Math.max(0, halo) * 2)
   return Math.max(1, Math.ceil(Math.max(1, bins) / body))
 }
+
+/**
+ * Strips a sequence of `bins` is read in as a **band** `hi` diagonals deep.
+ *
+ * `bandFor`'s walk rather than `forEachDiagonalTile`'s, and it is a different
+ * number: a band tile is a run of rows read out to `hi` past its own last row,
+ * with no overlap between tiles, where a diagonal tile carries a halo on both
+ * sides and its neighbours overlap it. The three tasks that read a band price
+ * themselves with this one, for the reason at the top of this module — an
+ * estimate that counts the other walk's reads is the number a reader decides on
+ * and it is wrong by whatever the halo was.
+ *
+ * The wrapped corner a circular sequence costs is **not** counted here: it is one
+ * request, it is the same one request whatever the sequence, and the caller adds
+ * it where it knows whether the sequence is circular at all.
+ */
+export function bandTiles(bins: number, hi: number): number {
+  const depth = Math.max(0, hi)
+  return Math.max(1, Math.ceil(Math.max(1, bins) / tileRows(depth, depth)))
+}

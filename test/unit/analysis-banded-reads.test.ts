@@ -179,6 +179,82 @@ describe('bandFor', () => {
     expect(band.hi).toBe(CONTIGS[0].bins - 1)
     expect(band.at(0, CONTIGS[0].bins - 1)).toBe(valueAt(0, CONTIGS[0].bins - 1))
   })
+
+  it('answers past the end of a linear sequence with a gap, not a zero', async () => {
+    const band = await bandFor(job(), SPAN, { hi: 5, ...READ })
+    // A cell that does not exist and a cell that was not read are both gaps to
+    // `forward`, which is the accessor the banded kernels count with — a zero
+    // there would be counted as a measurement of no contact.
+    expect(band.forward(CONTIGS[0].bins - 1, 1)).toBeNaN()
+    expect(band.forward(-1, 1)).toBeNaN()
+    expect(band.forward(0, 6)).toBeNaN()
+    expect(band.forward(3, 2)).toBe(valueAt(3, 5))
+    // And `at`, which chromosight is written against, is unchanged: outside the
+    // band it is still the zero the sparse original never stored.
+    expect(band.at(3, 30)).toBe(0)
+  })
+})
+
+/**
+ * The circular band, and the one extra read it costs.
+ *
+ * The cells joining the end of a circular sequence to its beginning are nowhere
+ * near the diagonal — they are the top-right corner of the contig's own square —
+ * so a band walk that merely changed its accessor would answer `NaN` for every
+ * bin within `hi` of the junction. That is the one place the flag was set to fix,
+ * and the failure would look exactly like a real feature there.
+ */
+describe('bandFor, on a circular sequence', () => {
+  const n = CONTIGS[0].bins
+
+  it('wraps past the last bin, with the file’s own numbers', async () => {
+    const band = await bandFor(job(), SPAN, { hi: 5, ...READ, circular: true })
+    expect(band.circular).toBe(true)
+    // The bin after the last one is the first one, and the cell joining them is
+    // the one the matrix stores at `(0, n − 1)`.
+    expect(band.forward(n - 1, 1)).toBe(valueAt(0, n - 1))
+    expect(band.forward(n - 3, 5)).toBe(valueAt(2, n - 3))
+    // And a negative offset is the same cell read from the other end.
+    expect(band.forward(1, -2)).toBe(valueAt(n - 1, 1))
+  })
+
+  it('costs exactly one more read than the linear band', async () => {
+    const linear: Read[] = []
+    await bandFor(job(linear), SPAN, { hi: 5, ...READ })
+    const circular: Read[] = []
+    await bandFor(job(circular), SPAN, { hi: 5, ...READ, circular: true })
+    expect(circular).toHaveLength(linear.length + 1)
+    // And the extra one is the corner: the first `hi` rows against the last `hi`
+    // columns, which is `hi²` cells whatever the sequence is.
+    const corner = circular[circular.length - 1]
+    expect(corner.rows).toEqual([SPAN.from, SPAN.from + 5])
+    expect(corner.cols).toEqual([SPAN.to - 5, SPAN.to])
+  })
+
+  it('takes the corner out of the block on screen without reading at all', async () => {
+    const values = new Float32Array(n * n)
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) values[r * n + c] = valueAt(r, c)
+    const block: BlockInput = {
+      nrows: n,
+      ncols: n,
+      values,
+      rowExtent: [SPAN.from, SPAN.to],
+      colExtent: [SPAN.from, SPAN.to],
+      binsPerCell: 1,
+    }
+    const reads: Read[] = []
+    const band = await bandFor(job(reads), SPAN, { hi: 4, ...READ, block, circular: true })
+    expect(reads).toHaveLength(0)
+    expect(band.forward(n - 1, 1)).toBe(valueAt(0, n - 1))
+    expect(band.forward(n - 2, 3)).toBe(valueAt(1, n - 2))
+  })
+
+  it('never reaches further than half the circle', async () => {
+    const band = await bandFor(job(), SPAN, { hi: n - 1, ...READ, circular: true })
+    // Past half way the short way round is the other way, so a wider band would
+    // hold every cell twice and a curve plotted past it would fold back on itself.
+    expect(band.hi).toBe(Math.floor(n / 2))
+  })
 })
 
 describe('forEachDiagonalTile', () => {

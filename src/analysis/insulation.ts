@@ -29,6 +29,8 @@
  * every sequence — exactly where a reader looks for a telomeric boundary.
  */
 
+import type { SeparationBand } from './band'
+
 /** A dense on-diagonal square for one sequence, row-major. */
 export interface ContigSquare {
   /** Bins on a side. */
@@ -136,6 +138,65 @@ export function diamondSums(square: ContigSquare, options: DiamondOptions): Floa
         if (col - row < ignore) continue
         const value = values[base + col]
         if (Number.isNaN(value)) continue
+        total += value
+        seen++
+      }
+    }
+    out[i] = seen >= needed ? total : Number.NaN
+  }
+  return out
+}
+
+/**
+ * The same diamond, read from a band rather than from a square — for a sequence
+ * that joins its own ends (SPECS §8.15).
+ *
+ * The diamond at bin `i` is `[i − w, i) × [i, i + w)`, so every cell in it is at
+ * a separation between `1` and `2w − 1`: **it is a band already**, and the square
+ * was never needed for it. What the square *was* needed for is the two ends of a
+ * linear sequence, where the diamond hangs off and `diamondSums` says so by
+ * scoring `NaN` — and a circle has no such ends, so every bin scores and the band
+ * is the honest shape to read it from.
+ *
+ * Written beside {@link diamondSums} rather than replacing it, on purpose. That
+ * function is goldened against cooltools cell for cell and is what every linear
+ * run still takes; this one is checked against it — `analysis-insulation.test.ts`
+ * asserts the two agree on a linear band, which is the property that makes a
+ * second implementation safe rather than a second answer.
+ *
+ * `band.circular` decides what happens at the ends: on a circular band `forward`
+ * wraps and every bin is scored, on a linear one it answers `NaN` past either end
+ * and the first and last `w` bins come out as gaps, exactly as the square gives
+ * them.
+ */
+export function diamondSumsBanded(band: SeparationBand, options: DiamondOptions): Float64Array {
+  const n = band.n
+  const w = Math.max(1, Math.trunc(options.window))
+  const ignore = Math.max(0, Math.trunc(options.ignoreDiags ?? 0))
+  const out = new Float64Array(n).fill(Number.NaN)
+  const cells = diamondCells(w, ignore)
+  if (cells <= 0 || n === 0) return out
+  const needed = Math.max(1, Math.ceil(cells * options.minValid))
+
+  for (let i = 0; i < n; i++) {
+    // **The whole diamond, or none of it** — `diamondSums`' rule, restated here
+    // because it is not implied by `minValid`: at `minValid = 0` a bin with one
+    // countable cell would score, and the sum of a partial window is a *smaller*
+    // sum from *fewer* cells, which reads as strong insulation rather than as no
+    // data. On a circular band there is no partial window to have: the diamond
+    // wraps, so every bin has a whole one.
+    if (!band.circular && (i - w < 0 || i + w > n)) continue
+    let total = 0
+    let seen = 0
+    for (let row = i - w; row < i; row++) {
+      // `col` runs `i … i + w`, so the separation `col − row` runs from `i − row`
+      // up to `i − row + w − 1`. Addressed by that separation rather than by the
+      // pair, which is the whole of what lets the wrap live in one place.
+      const near = i - row
+      for (let offset = near; offset < near + w; offset++) {
+        if (offset < ignore) continue
+        const value = band.forward(row, offset)
+        if (!Number.isFinite(value)) continue
         total += value
         seen++
       }

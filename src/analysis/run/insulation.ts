@@ -23,6 +23,7 @@ import {
   callBoundaries,
   diamondCells,
   diamondSums,
+  diamondSumsBanded,
   domainsBetween,
   insulationScore,
   type Boundary,
@@ -31,6 +32,7 @@ import {
   boolParam,
   contigIdFor,
   numParam,
+  readsAsCircular,
   strParam,
   type JobContext,
   type TaskRunner,
@@ -38,12 +40,14 @@ import {
 import { windowLadder } from '../tasks/insulation'
 import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 import {
+  bandFor,
   displayableContigs,
   forEachDiagonalTile,
   spanOfContig,
   usableBlock,
   type Span,
 } from './blocks'
+import { formatBp } from './labels'
 
 /** One sequence this run will score. */
 interface Unit {
@@ -51,6 +55,8 @@ interface Unit {
   span: Span
   /** Base pairs of the sequence, for clamping the last interval of a BED. */
   length: number
+  /** Whether the reader has declared it circular (SPECS §8.15). */
+  circular: boolean
 }
 
 /**
@@ -68,7 +74,12 @@ function planUnits(job: JobContext, region: string): Unit[] {
     const span = spanOfContig(mc, cid)
     if (span === null) return null
     const name = mc.chromnames[cid]
-    return { name, span, length: lengths.get(name) ?? (span.to - span.from) * mc.binsize }
+    return {
+      name,
+      span,
+      length: lengths.get(name) ?? (span.to - span.from) * mc.binsize,
+      circular: readsAsCircular(job, name),
+    }
   }
 
   if (region !== '') {
@@ -172,6 +183,32 @@ export const runInsulation: TaskRunner = async (job) => {
   // track whose x axis is bins was being typed in base pairs and divided here.
   const spacing = Math.max(1, Math.round(numParam(job.params, 'spacing', 0)))
 
+  /**
+   * One sequence's sums, turned into the lane and (at the base scale) the calls.
+   *
+   * A closure rather than two copies, because the two read paths above it —
+   * tiled squares for a line, one band for a circle — differ only in how the
+   * sums are filled in, and everything after that is the same for both. Two
+   * copies of it is two places for the local-to-absolute conversion to be
+   * written, and that conversion is the one `run/insulation.ts` opens by warning
+   * about.
+   */
+  const finish = (unit: Unit, size: number, sums: Float64Array[]): void => {
+    for (let w = 0; w < windows.length; w++) {
+      const score = insulationScore(sums[w])
+      for (let local = 0; local < size; local++) {
+        scores[w][unit.span.from + local] = score[local]
+      }
+      // Called from the *base* scale only. Boundaries at four widths are four
+      // overlapping sets of the same features at different smoothings, and
+      // merging them is a decision this task has no basis for making; the reader
+      // who wants the wider set runs it again with that width as the base.
+      if (call && w === 0) {
+        calls.push({ unit, boundaries: callBoundaries(score, { prominence, spacing }), window: windows[w] })
+      }
+    }
+  }
+
   for (let u = 0; u < units.length; u++) {
     const unit = units[u]
     const size = unit.span.to - unit.span.from
@@ -191,6 +228,44 @@ export const runInsulation: TaskRunner = async (job) => {
     // rather than merely close. `diamondSums` is unchanged and still goldened
     // against cooltools; it simply sees a smaller square.
     const sums = windows.map(() => new Float64Array(size).fill(Number.NaN))
+
+    // **A circular sequence is read as a band, not as tiled squares.** The
+    // diamond at a bin spans separations `1 … 2w − 1`, so it *is* a band — the
+    // square was only ever needed for the two ends of a linear sequence, where
+    // the window hangs off and the bin scores `NaN`. A circle has no such ends,
+    // and the one thing a tiled square walk cannot give it is the cell joining
+    // its last bin to its first, which lives in the far corner of the contig's
+    // own square and which `bandFor` reads with one extra request (§8.15).
+    if (unit.circular) {
+      await job.breathe()
+      job.progress(u, units.length, unit.name)
+      const band = await bandFor(job, unit.span, {
+        hi: 2 * widest,
+        block,
+        balance,
+        value,
+        circular: true,
+        onTile: async (done, total) => {
+          await job.breathe()
+          job.progress(
+            u,
+            units.length,
+            total === 1 ? unit.name : `${unit.name} · strip ${Math.min(done + 1, total)} of ${total}`,
+          )
+        },
+      })
+      for (let w = 0; w < windows.length; w++) {
+        const local = diamondSumsBanded(band, {
+          window: windows[w],
+          minValid,
+          ignoreDiags,
+        })
+        sums[w].set(local)
+      }
+      finish(unit, size, sums)
+      continue
+    }
+
     await forEachDiagonalTile(
       job,
       unit.span,
@@ -216,21 +291,19 @@ export const runInsulation: TaskRunner = async (job) => {
       },
     )
 
-    for (let w = 0; w < windows.length; w++) {
-      const score = insulationScore(sums[w])
-      for (let local = 0; local < size; local++) {
-        scores[w][unit.span.from + local] = score[local]
-      }
-      // Called from the *base* scale only. Boundaries at four widths are four
-      // overlapping sets of the same features at different smoothings, and
-      // merging them is a decision this task has no basis for making; the reader
-      // who wants the wider set runs it again with that width as the base.
-      if (call && w === 0) {
-        calls.push({ unit, boundaries: callBoundaries(score, { prominence, spacing }), window: windows[w] })
-      }
-    }
+    finish(unit, size, sums)
   }
   job.progress(units.length, units.length, 'Done')
+
+  const round = units.filter((unit) => unit.circular).length
+  if (round > 0) {
+    job.note(
+      `${round.toLocaleString()} of ${units.length.toLocaleString()} ` +
+        `${units.length === 1 ? 'sequence was' : 'sequences were'} read as circular, so the ` +
+        'diamond wraps past the end and every bin is scored — including the ones at the ' +
+        'junction, which a linear reading leaves as gaps.',
+    )
+  }
 
   // **Widest first, because the stack reads top-down.** A multi-scale run is one
   // picture — the same score at doubling smoothings — and the lanes are laid out
@@ -404,13 +477,3 @@ function domainOutput(
   }
 }
 
-/** `10 kb`, for a lane label. Small enough not to be worth `format.ts`. */
-function formatBp(bp: number): string {
-  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
-  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
-  return `${Math.round(bp)} bp`
-}
-
-function trim(value: number): string {
-  return String(Number(value.toFixed(2)))
-}

@@ -19,10 +19,12 @@ import {
   diamondCells,
   diamondSums,
   domainsBetween,
+  diamondSumsBanded,
   insulationScore,
   type Boundary,
   type ContigSquare,
 } from '@/analysis/insulation'
+import { squareBand } from '@/analysis/band'
 
 /** A square of ones, so every diamond sum is its own cell count. */
 function ones(size: number): ContigSquare {
@@ -295,3 +297,74 @@ describe('domainsBetween', () => {
     expect(domainsBetween([call(10, 1), call(10, 2)])).toHaveLength(0)
   })
 })
+
+/**
+ * The banded diamond, against the square one it stands in for.
+ *
+ * A circular sequence's diamond has to be read from a band — the square has two
+ * ends and a circle has none — and a second implementation of a goldened kernel
+ * is a second answer unless something holds them together. This is that
+ * something: on a **linear** band the two must agree cell for cell, including
+ * where they both give up.
+ */
+describe('diamondSumsBanded', () => {
+  /** A square with no symmetry an indexing mistake could hide behind. */
+  function noisy(size: number): Float32Array {
+    const values = new Float32Array(size * size)
+    for (let i = 0; i < size; i++) {
+      for (let j = i; j < size; j++) {
+        const value = ((i * 7919 + j * 104729) % 97) + 1
+        values[i * size + j] = value
+        values[j * size + i] = value
+      }
+    }
+    return values
+  }
+
+  it('agrees with the square diamond on a linear sequence', () => {
+    const size = 60
+    const values = noisy(size)
+    for (const options of [
+      { window: 5, minValid: 1 },
+      { window: 8, minValid: 0.5, ignoreDiags: 2 },
+      { window: 3, minValid: 0, ignoreDiags: 0 },
+    ]) {
+      const square = diamondSums({ size, values }, options)
+      const banded = diamondSumsBanded(squareBand(values, size, { hi: 2 * options.window }), options)
+      for (let i = 0; i < size; i++) {
+        if (Number.isNaN(square[i])) expect(banded[i]).toBeNaN()
+        else expect(banded[i]).toBeCloseTo(square[i], 6)
+      }
+    }
+  })
+
+  it('scores every bin of a circular sequence, junction included', () => {
+    const size = 60
+    const values = noisy(size)
+    const banded = diamondSumsBanded(squareBand(values, size, { circular: true, hi: 10 }), {
+      window: 5,
+      minValid: 1,
+    })
+    for (let i = 0; i < size; i++) expect(Number.isNaN(banded[i])).toBe(false)
+  })
+
+  it('reads the junction of a circle as one continuous stretch', () => {
+    const size = 60
+    // Contact that depends only on the circular separation: no boundary anywhere,
+    // so every diamond holds the same sum and the track is flat — the junction
+    // most of all, which is where a linear reading would put a hole.
+    const values = new Float32Array(size * size)
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        const d = Math.min(Math.abs(i - j), size - Math.abs(i - j))
+        values[i * size + j] = 1 / (1 + d)
+      }
+    }
+    const banded = diamondSumsBanded(squareBand(values, size, { circular: true, hi: 10 }), {
+      window: 5,
+      minValid: 1,
+    })
+    for (let i = 1; i < size; i++) expect(banded[i]).toBeCloseTo(banded[0], 10)
+  })
+})
+

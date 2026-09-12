@@ -25,7 +25,7 @@
  */
 
 import type { GroupMode } from '../annotations/groups'
-import type { AnnotationEntry, AnnotationPayload, TrackMode } from '../annotations/types'
+import type { AnnotationEntry, AnnotationPayload, TrackMode, TrackScale } from '../annotations/types'
 import type { Extent, LayoutKind } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -482,6 +482,25 @@ export interface AnalysisFraming {
   level: 'bin' | 'contig' | 'genome'
   /** `chrIV:1–1,531,933 at 1 kb, balanced, count` — for the drawer's header. */
   label: string
+  /**
+   * The sequences the reader has declared **circular** (§8.15), by this file's
+   * own names. Absent — not empty — where none is.
+   *
+   * A fact about the assembly rather than about the window, and it is in the
+   * framing for the one reason the framing exists: it changes every number a cis
+   * task produces, so it has to be in the provenance of the result. A plasmid
+   * scored as a line has two artificial ends — every window overlapping them is
+   * dropped, the decay curve turns up at the far end where the two ends of the
+   * sequence are in fact adjacent, and nothing in the figure says so. Scored as a
+   * circle it has none of that, and a reader comparing two exported tracks needs
+   * to be able to tell which of the two they are holding.
+   *
+   * Names rather than ids, because a result outlives the mount it was computed on
+   * and an id is meaningless against a different file. Optional so that every
+   * existing construction site is unchanged and a session written by an older
+   * build restores as what it was: nothing circular.
+   */
+  circular?: readonly string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +587,22 @@ export interface ProfileOutput {
    * apart comes back the way they left it.
    */
   groupMode?: GroupMode
+  /**
+   * The value axis the lane should open on, where the quantity has one.
+   *
+   * Absent means linear, which is right for every track that is a count, a
+   * ratio against a mean, or a signed statistic. It is here for the scalogram,
+   * whose values are **genomic separations**: those run from one bin to a whole
+   * chromosome, so on a linear axis the four bands a reader is comparing are all
+   * squashed into the bottom tenth of the lane and the picture is entirely
+   * carried by whichever bin reached furthest.
+   *
+   * A display scale and nothing else, exactly as `AnnotationStyle.scale` is: the
+   * numbers behind the lane and every number that leaves it as a file stay as
+   * they were computed. And a *suggestion* — from the moment the row exists the
+   * axis is the reader's, and changing it back is one control.
+   */
+  scale?: TrackScale
 }
 
 /** One line of a {@link CurveOutput}, with an optional band around it. */

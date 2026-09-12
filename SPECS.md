@@ -2458,6 +2458,148 @@ by a pixel; `bcftools view` writes the text, and the name guess claims no `.bcf`
 so one is refused by its bytes like anything else. And no **variant calling**, which is
 §18.9's argument and not a new one.
 
+### 8.15 Circular sequences
+
+A `.cool` cannot say that a sequence joins its own ends. Bins run from zero to
+the last one and stop, and there is no field anywhere in the format for *and then
+it starts again* — so a bacterial chromosome, a plasmid, a mitochondrion and a
+phage all arrive looking exactly like a linear chromosome that happens to be
+short. Everything the viewer then does with one is correct and slightly wrong:
+the map has two artificial corners, the diagonal runs into a wall at each end,
+every window near either end is dropped by every task for want of a whole window,
+and the contacts joining the last bin to the first — which on a circle are the
+most local contacts there are — sit in the far corner of the square, as far from
+the diagonal as two bins can be.
+
+**Nobody can infer it from the data, so the reader declares it.** A circular
+chromosome's map has a bright far corner; so does a translocation, so does an
+assembly error, and so does nothing at all if the sample is shallow. The one
+thing that reliably knows is the person who chose the organism. So it is a
+tickbox in the **Map** card, offered on a view that is a window on one sequence
+and nowhere else — a two-contig block has no diagonal to slide along, and a
+whole-genome picture is a list of sequences of which some may be circular and
+some not, which is one question about several things.
+
+It is kept per file and carried in an exported workspace, beside the tracks
+somebody loaded and the marks they drew. **Not in the view state**: a bare
+`#`-hash link names a place and a colour scale (§5.5), and this is a fact about
+the assembly rather than about the window.
+
+#### What the flag does to the picture
+
+The window becomes **unwrapped**. A region view on a circular sequence pans in a
+coordinate space that runs off both ends and is resolved modulo the sequence, so
+`chrom:2,900,000-3,100,000` on a 3 Mb circle is an ordinary place to be looking
+and is two stored pieces: the last 100 kb and the first 100 kb. On both axes at
+once, so a square window across the junction is up to **four** stored blocks, one
+of which is that far corner. `worker/wrap.ts` says which pieces and
+`worker/wrappedMatrix.ts` reads and assembles them.
+
+Unwrapped rather than modular because it is the only space in which panning is
+*monotonic*. The alternative is a window whose start jumps from 2,999,000 to 0,
+and every `covers`, `pad` and `recentre` in `ui/refine.ts` — the whole
+zoom-and-travel policy of §2 — would have to learn about that. What those
+rules learn instead is one thing: on a circular axis **every edge of the block
+gives**, because there is no end of the world for one of them to be, and the
+answer to reaching one is the same block width rotated round to where the reader
+now is. The ceiling stops being a limit on *where* and becomes a cap on *how
+wide*: one lap, past which a bin would be drawn twice.
+
+**A circular view reads as it moves, whatever the refine setting says.** §2's
+zoom-to-refine is off until a reader turns it on, and that is the right default
+for what it was written for: a sharper picture of a place you are already at,
+bought with reads you did not ask for. A circular slide is not that — past the
+end of the sequence there is *no* block in hand, the window having left
+everything that was ever read, so with the ladder asleep the picture stops at the
+last bin, which is the exact wall the declaration was made to remove. A reader
+who ticks the box has asked for the reads that make the wrap possible. Only for a
+sequence they have declared: every other view keeps the setting's answer.
+
+And the declaration does **not** rebuild the view. It changes how the block is
+read, so the ladder is armed again — against the block that is *drawn*, not the
+one the view first loaded — and nothing else moves. Rebuilding would reload the
+view from its named region and throw away the zoom the reader needed in order to
+be somewhere the question is worth asking from, which is most of the way to a
+tickbox nobody would use twice.
+
+The grid is chosen once for the whole window and every piece is read on it, which
+is what makes the two halves of a junction-crossing block halves of one picture
+rather than two pictures with a seam — `snapToGrid` anchors cells to the
+*sequence*, so the piece ending at its last bin keeps that end and the piece
+beginning at its first is already on a cell edge. One artefact survives and it is
+honest: where the sequence's length is not a whole number of cells, the cell at
+the junction is short. That is the partial last cell every pooled view of every
+chromosome already ends with; what circularity does is move it into the middle of
+the picture instead of leaving it at the edge.
+
+**Everything drawn on the axis follows, and almost none of it had to be told.**
+The block's axis runs carry the sequence *twice* — its tail, then its head — with
+the second run's `unitStart` shifted a lap along, so `render/locus.ts` reads it as
+*the beginning of the sequence, one lap on* rather than as somewhere past its
+end. Ticks, the coordinate readout, tracks, features and annotations then place
+themselves through the same piecewise map they already used for a
+whole-genome view, which has carried several sequences on one axis since it was
+written. Three things did have to change, and each is a place where *the first
+stretch with this name* stopped being the right answer: a window now carries the
+stretch it was cut from rather than looking one up by name, a mark is drawn at
+**every** place its locus lands rather than the first — or it would flicker in
+and out as the reader slid past the join — and the window a refine carries across
+a change of grid picks the narrowest ordered pair of landings, without which the
+panel refuses the very block the reader is sliding towards.
+
+The turn (§17) needs nothing at all: it rotates whatever block is on screen, and
+a wrapped block has a diagonal like any other.
+
+#### What the flag does to the numbers
+
+**Automatically, and with no per-task tickbox.** A plasmid is circular or it is
+not; that is a fact about the molecule rather than a setting of the
+directionality index, and a catalogue in which eleven tasks each carry their own
+copy of it is one where a reader can get ten circular answers and one linear one
+out of the same file without being told. The declaration travels in
+`AnalysisFraming.circular`, which puts it in the provenance of every result — so
+two exported tracks can be told apart.
+
+The separation between two bins becomes the shorter of the two ways round,
+`min(|i − j|, n − |i − j|)`, and the longest separation a sequence has becomes
+half of it rather than all of it. `analysis/band.ts` is where that lives: a
+**separation-addressed** accessor, `forward(row, offset)`, which the banded
+kernels are written against as though every sequence were linear. A kernel asking
+for `(row, col)` would have to decide for itself which of the two arcs it meant
+and put `col` back inside the sequence before asking — two decisions, at every
+call site, each of which is the wrap. Reading one costs exactly one extra
+request: the corner of the contig's own square, where the cells joining its two
+ends are stored.
+
+What is circular today: **P(s)**, whose curve stops falling and turns *up* at the
+far end when a circle is scored as a line — those are the contacts joining the two
+ends of the molecule, wearing a chromosome-long separation, and every fit through
+that tail is a fit through an artefact; **diamond insulation**, which reads a band
+rather than tiled squares there and therefore scores the bins at the junction that
+a linear reading leaves as gaps; and the three banded readings of §18.8 — the
+**directionality index**, the **HiC score** and the **scalogram**.
+
+What is not, and is stated rather than left to be discovered: **compartments**,
+**chromosight** and the **observed/expected** map divide by an expected curve at a
+linear separation, so near the junction their denominator is the curve's far tail
+rather than its near one. A **deck companion** draws the sequence linearly — the
+declaration is the lead map's — so a deck of a circular chromosome shows the lead
+sliding and the companions standing still. Both are seams rather than wrong
+answers, and both are in the same place: the reader can see the junction.
+
+**The turn slides too, and it needed one gate widened.** `isTurnable` asked for
+*one run or none*, on the sound ground that a boundary between two sequences is a
+discontinuity in the x axis and the distance across it is not a distance. A
+wrapped block has two runs — the sequence's tail, then its head — so it was
+refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
+declines a block it cannot turn, so the ladder read the very block the reader was
+sliding towards and the picture simply stopped at the last bin with nothing said
+anywhere. The gate now asks *one sequence*, which is what it always meant: several
+runs are allowed when the block was read round a circle and every one of them
+carries the same name. `turnedAxis` then builds a segment per run instead of one,
+each carrying its own lap, and the turned picture reads the far side of the
+junction as the beginning of the sequence exactly as the square one does.
+
 ---
 
 ## 9. cool and mcool
@@ -3928,7 +4070,7 @@ them, which is a header a BED consumer would choke on and a reader needs.
 
 ### 18.8 The catalogue
 
-Nineteen tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
+Twenty-two tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
 one must be.
 
 **On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
@@ -3960,6 +4102,24 @@ short-range excess back out and take the convergence point with it. A `.pairs` t
 imported can be named in the form and is read for its records alone — no map changes and nothing is
 binned — and a local file has no address to name, so it is dropped on the app instead, which counts
 the same curves in the same pass. Absent, with a sentence, on a map that was opened as a matrix.
+
+*Scalogram*, which is P(s) with one summation left undone, and sits directly after it for that reason.
+The decay curve averages every bin of a sequence into one line and answers *how does this genome fold*;
+the scalogram keeps the bins apart and answers *where does this genome fold differently from itself*.
+At each bin it accumulates the cumulative distribution of its contacts over separation — the two cells
+either side of it at each distance, which on a circular sequence are the two ways round — and reports
+the separation at which that cumulative reaches each of a set of quantiles. Cournac et al. (2012)'s
+reading, and `HiContacts::scalogram()`'s quantity. It is a **distribution** and not a mean, because
+contact probability has a heavy tail by construction: the mean separation of a bin's contacts moves by
+a factor of two when the balancer drops a single distant cell, and its median does not. The quantile is
+**interpolated** between the two separations the cumulative crosses the threshold between, because
+rounding to the bin would quantise five smooth bands onto multiples of the bin size and step all five
+in the same places.
+Its reach is what it costs, and the default is **the whole sequence** because that is the only
+unbounded answer: cut at 1 Mb on a 250 Mb chromosome and the ninetieth centile is the ninetieth centile
+*of what is within 1 Mb*, a different number wearing the same name. The estimate prices the uncut run
+as the square it is and says so; a reader who sets a cut gets the cut in the lane's own label, on every
+band, so the picture cannot be mistaken for the unbounded one.
 
 *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
@@ -4015,12 +4175,81 @@ segmentation the way the A/B track does, and each carries the **weaker** of its 
 because a domain is only as well defined as its worse-supported side. Two boundaries make a domain and
 one makes nothing: the two ends of a sequence are left out rather than run to the telomere, which would
 assert an edge the data never placed.
+*Directionality index* — Dixon et al. (2012)'s signed χ², and the other answer to the question the
+diamond asks. Insulation says *little contact crosses here* and finds a boundary whatever is on either
+side of it; the index says *this bin looks one way* and finds it from the asymmetry, which also marks
+the inside edges of a domain and gives the sign flip the original paper's HMM segmented on. A boundary
+both agree about is a boundary. Its window is in **bins, like the diamond's**, because both tasks are
+read side by side against the same map and a form that asks for one in bins and the other in base pairs
+makes that comparison arithmetic; the default is **50 bins**, which is Dixon's 2 Mb at the 40 kb his
+paper worked at, and the run notes what that came to in base pairs on the file actually open, since a
+50-bin window on a 1 kb bacterial map is 50 kb and is a different reading of the genome. The statistic
+is computed as `sign(B − A)·(A − B)²/(A + B)`, which is the paper's long form collapsed by an identity
+the tests check rather than trust, and `ignore_diags` defaults to **0** here where the diamond's is 2:
+the index *differences* two sums that both contain the near-diagonal, so it largely cancels, and Dixon's
+own numbers were computed with every cell in. `minValid` is a fraction of **each side separately**,
+because a bin with a full window one way and an empty one the other is the worst case and would pass a
+test on the total.
+
+It calls **borders and domains**, the same two overlays the diamond produces and through the same
+kernel. The reading the index gives of a domain is a shape rather than a value — the 5′ half looks
+downstream and the 3′ half upstream — so a border is the negative-to-positive flip between two domains.
+Called flip by flip that is fragile, because a track that stutters across zero has crossings a bin apart
+and only one of them is an edge, and the rules that pick it are the rules of prominence written out
+badly. So the index is **integrated** first: the running sum climbs through every downstream-biased
+block and falls through every upstream-biased one, which makes each border a *local minimum* and each
+stutter a dimple on the flank of the real trough — exactly the distinction `callBoundaries` already
+draws for the diamond, with tests. One kernel decides what a called edge is, both overlays filter on the
+same column and tile the same way, and the call lands **one bin past the minimum**, which is the first
+bin that looks downstream again and therefore the opening bin of the new domain rather than the closing
+bin of the old one.
+
+The curve is standardised by the **median absolute index** before it is integrated, so the prominence is
+in *bins of ordinary directional bias* rather than in χ². A χ² grows with how deep the library was
+sequenced, so a threshold in the index's own units is a different threshold on every file; this one is a
+property of the structure, and it is what makes a prominence a reader found on one map worth typing into
+the next. The gaps the index leaves stay gaps — the sum carries across them but emits nothing, so a
+dropped stretch cannot be the floor of a trough — and Dixon's own HMM differs from this in one visible
+way worth knowing before comparing against a published set: the HMM leaves stretches it calls
+unorganised in no domain at all, where borders-between-borders tile.
+*HiC score* — the sum of every cell in a square window centred on the bin, which is the reading Bignaud
+et al. use where the question is not where a domain ends but how tightly a stretch is folded against
+itself. The first two are **ratios** and are deliberately blind to depth, which is what makes them
+comparable between chromosomes; this is a **sum** and is not, which is why it is a third reading rather
+than a third smoothing of the same one — a region that has lost its local structure has a smaller sum
+and an unremarkable insulation score, because the ratio it is measured against fell with it. The whole
+square, corners included: the cells where the two ends of the window contact each other are the half of
+it insulation throws away, and they are what tells a compact domain from an open one. The window is the
+**side** of that square in base pairs rather than its reach each way, because a reader asking for a
+200 kb score means a 200 kb window; the band behind it is therefore read `2h` deep, since the corners
+are `2h` apart, and an estimate quoting `h` would price half the reads the runner makes. It is computed
+one diagonal at a time with a running prefix — the same addition in a different order, exact rather than
+approximate — which is `O(n·h)` where the double loop is `O(n·h²)`.
 *4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
 as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
 **over expected**, where "expected" means the anchor's own sequence's decay in cis and the mean of what
 the anchor reaches off it in trans, so that a profile carrying both halves carries one quantity. Per
 sequence rather than from P(s)'s genome-wide curve: a small chromosome divided by the average behaviour
 of the large ones comes out with a slope that is a property of the set.
+**And optionally over coverage, which is the other bias and a different one.** The decay is a property
+of *separation*; coverage is a property of the **target bin** — a bin in a repeat, a bin with few
+restriction sites, a bin the mapper half-lost is seen less by everything, so it is a dip in every
+profile drawn against it whatever the anchor. On a raw map those dips are most of the small-scale
+structure a reader would otherwise take for real, and they sit exactly where a spurious interaction is
+most tempting to believe. So *Normalisation* is one control with four answers — none, by coverage, by
+P(s), by both — rather than two controls or three exclusive options: the two divisions are independent,
+a reader wanting a clean profile wants both, and the provenance line then says which of the four the
+numbers are. The divisor is each bin's own total contact **centred on one**, so it is a bias correction
+and not a change of units: a raw profile stays in contacts and an O/E ratio stays centred on one. The
+mean behind that centring is taken over the bins that *have* coverage and not over every bin in the
+file, or a cis run — which fills the marginal for one sequence and leaves the rest of the assembly at
+zero — would scale the whole track by however much of the file that sequence happens to be. In cis the
+divisor is the column sums of the square already in hand and costs nothing; with trans it is a total
+over every bin, so the pixel walk **cannot stop at the anchor** the way §18.6 otherwise prices it, and
+the estimate says the pass is the whole file rather than half of it. A marginal accumulated from half
+the file would correct the bins before the anchor and leave those after it uncorrected — one quantity
+by the axis and two by the arithmetic, which is the failure the trans expectation already exists to
+prevent.
 **On a metacool the form asks for the anchor and nothing else**, and the two switches are absent
 because neither question survives contact with the file. An anchor there is one MAG among hundreds
 sharing a tube, and the reading wanted is what it touches *everywhere* — a profile restricted to the
@@ -4543,6 +4772,44 @@ worse picture of one track than the track.
 The Synthetic card carries the style control, and that is not an accident of layout: it is the **only**
 card that lists a computed row, since the Tracks card leaves them out on purpose (§18.5), so a style
 offered only there would be one a computed lane could never be given.
+
+### 18.12 A set of quantiles is one shape
+
+The scalogram needs something the heatmap stack cannot give it, and the difference is worth stating
+because both look at first like "several profiles in one lane". Multi-scale insulation is several
+*independent readings* of the same quantity, stacked so they can be compared; the scalogram's bands are
+the **edges of one picture**, and what a reader is meant to see is a single shaded shape rising and
+falling along the genome — not five lines to be matched against a legend.
+
+So a lane gets a fifth drawing style, `ribbon`, and it is the only one whose picture depends on a track
+that is not itself: a ribbon fills the band between its own curve and the curve of the member **below it
+in the same lane**. Four filled areas in one lane cannot express that — they paint over each other in
+the order they were drawn, and the reader sees the topmost one and four edges. Everything else about the
+lane is unchanged for §18.11's reason: the same limits, the same autoscale group, the same ceiling drag,
+the same `NaN`-is-a-gap rule, the same export, and it is a mode of `drawTrack` rather than a second
+renderer.
+
+**Ribbons tile; they do not overlay.** They do not overlap, so they are not dimmed — the dimming is what
+makes two *overlapping* tracks both visible — and the rule is one function in `annotations/types.ts`
+beside the heatmap one, because both lane renderers ask it. Two consequences follow. The **order
+matters**, since each fills down to the one before it, and a lane whose members have been reordered
+draws a different picture, which is correct: the reader has said the bands go in a different order. And
+the band exists only where **both** curves do; a slot either of them is missing is a hole, because
+drawing across it would invent an edge from the last value measured to the next one, over a stretch the
+run deliberately said nothing about. Only the **top** edge of each band is stroked: the lower edge is
+the neighbour's curve and is drawn by the neighbour, so stroking the closed path would draw every
+interior hairline twice and darken every join.
+
+The bands are emitted **innermost first** — ascending quantile — which is the opposite of §18.11's
+widest-first and for the opposite reason: those are independent readings laid out by convention, and
+these are the edges of one shape, so the order they are produced in *is* the order they nest in.
+
+A `ProfileOutput` may also carry a **display scale**, and the scalogram is what that is for. Its values
+are genomic separations, which run from one bin to a whole chromosome; on a linear axis the bands a
+reader is comparing are squashed into the bottom tenth of the lane and the picture is carried entirely
+by whichever bin reached furthest. A suggestion like the group and the style, written into the row's
+style on the way in and the reader's from that moment, and a display scale and nothing else — the
+numbers behind the lane and every number that leaves it as a file stay as they were computed.
 
 ---
 

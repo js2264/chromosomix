@@ -515,6 +515,7 @@ export function syntheticEntry(
       // a property of the result that would come back on the next repaint.
       ...(output.group === undefined ? {} : { group: groupNameOn(output.group, on) }),
       ...(output.mode === undefined ? {} : { mode: output.mode }),
+      ...(output.scale === undefined ? {} : { scale: output.scale }),
     },
     // The same seed a bigWig's header gives a loaded row: it is what the limits
     // boxes start at when the reader leaves autoscale, and without it an

@@ -90,6 +90,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
 import {
   colormapOf,
+  nestsAsRibbons,
   stacksAsHeatmaps,
   scaleOf,
   LANE_EDGES,
@@ -1177,6 +1178,11 @@ export class AnnotationLanes {
             )
           : null
         labelBands = bands
+        // **Ribbons tile, they do not overlay** — `annotations/types.ts`'s rule,
+        // read here and in the browser for the reason the heatmap one is read
+        // twice: both surfaces draw this lane and a rule about what a lane *is*
+        // that lives in one painter is a rule the other drifts from.
+        const nested = nestsAsRibbons(profiles.map(({ entry: member }) => member))
         for (const [at, { entry: member, profile }] of profiles.entries()) {
           const laneFrame = bands?.[at] ?? frame
           const limits = resolveLimits(
@@ -1196,9 +1202,13 @@ export class AnnotationLanes {
             // Stacked heatmaps do not overlap, so they are not dimmed: the
             // dimming is what makes two *overlaid* tracks both visible.
             opacity:
-              profiles.length > 1 && bands === null
+              profiles.length > 1 && bands === null && !nested
                 ? member.style.opacity * OVERLAY_DIM
                 : member.style.opacity,
+            // The band below this one, for a ribbon. `at - 1` because the lane's
+            // order *is* the nesting order: the innermost band is drawn first
+            // and has nothing under it but the floor.
+            ...(nested && at > 0 ? { floor: profiles[at - 1].profile } : {}),
             colormap: colormapOf(member.style, limits),
             fills,
             outline,
@@ -1440,9 +1450,12 @@ export class AnnotationLanes {
         const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
         for (const line of this.manual.lines) {
           if (line.axis !== 'both' && line.axis !== measures) continue
-          const unit = axis.locusToUnit(line.at.contig, line.at.bp)
-          if (unit === null) continue
-          hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
+          // Every place it lands, which on a circular axis panned across its
+          // junction is two: a mark drawn at only one of them vanishes and
+          // reappears as the reader slides (§8.15).
+          for (const unit of axis.locusToUnits(line.at.contig, line.at.bp)) {
+            hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
+          }
         }
       }
     }
@@ -1469,12 +1482,13 @@ export class AnnotationLanes {
       for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
-          const unit = axis?.locusToUnit(anchor.contig, anchor.bp) ?? null
-          // An on-diagonal loop names one place twice, and an on-diagonal box
-          // names two places twice; drawing a triangle again only darkens it.
-          if (unit === null || drawn.has(unit)) continue
-          drawn.add(unit)
-          anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+          for (const unit of axis?.locusToUnits(anchor.contig, anchor.bp) ?? []) {
+            // An on-diagonal loop names one place twice, and an on-diagonal box
+            // names two places twice; drawing a triangle again only darkens it.
+            if (drawn.has(unit)) continue
+            drawn.add(unit)
+            anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+          }
         }
       }
 

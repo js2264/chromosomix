@@ -582,11 +582,19 @@ export function normalisePlacement(placement: Partial<Placement> | undefined): P
  * that is unreadable at 20 pixels as a line is perfectly readable at 20 pixels
  * as a strip of colour, so a stack of them fits on a screen — which is what
  * multi-scale insulation needs and what `laneBands` divides a lane for.
+ *
+ * `ribbon` is the fifth and the only one that is not a statement about *this*
+ * track alone: it fills the band between its own curve and the curve of the
+ * track below it in the same lane, so a set of them draws as one nested shape.
+ * That is the scalogram's picture (§8.17) and it is not expressible as four
+ * areas — four filled areas in one lane paint over each other in the order they
+ * were drawn, and the reader sees the topmost one and four edges. See
+ * {@link nestsAsRibbons}.
  */
-export type TrackMode = 'line' | 'area' | 'bar' | 'heatmap'
+export type TrackMode = 'line' | 'area' | 'bar' | 'heatmap' | 'ribbon'
 
 /** Every mode, in the order the picker offers them. */
-export const TRACK_MODES: readonly TrackMode[] = ['area', 'line', 'bar', 'heatmap']
+export const TRACK_MODES: readonly TrackMode[] = ['area', 'line', 'bar', 'heatmap', 'ribbon']
 
 /** A clip on the value axis. `auto` recomputes from what is in view. */
 export interface Limits {
@@ -658,6 +666,33 @@ export function colormapOf(
  */
 export function stacksAsHeatmaps(members: ReadonlyArray<{ style: { mode: TrackMode } }>): boolean {
   return members.length > 1 && members.every((member) => member.style.mode === 'heatmap')
+}
+
+/**
+ * Whether the tracks sharing a lane are the *edges* of one nested picture.
+ *
+ * **Ribbons tile, they do not overlay.** A ribbon is not a track that happens to
+ * be filled: it is the band between its own curve and the curve of the member
+ * below it, so a lane of them is one picture cut into strips rather than several
+ * pictures drawn over each other. The scalogram is the case it exists for — the
+ * separations at which each bin's contacts reach a tenth, a quarter, a half, and
+ * the three quarters and nine tenths above them — and what a reader is meant to
+ * see is a single shaded shape rising and falling along the genome, not five
+ * lines to be matched against a legend.
+ *
+ * Two consequences, and both are what the heatmap rule already establishes for
+ * its own case. The members are **not dimmed**, because they do not overlap and
+ * dimming is what makes two overlapping tracks both visible. And the **order
+ * matters**: each fills down to the one before it, so a lane whose members have
+ * been reordered draws a different picture, which is correct — the reader has
+ * said the bands go in a different order.
+ *
+ * All of them, not most, exactly as the heatmap rule insists: one line among
+ * four ribbons has no band to be the top of, and a mixed lane therefore overlays
+ * as any other does.
+ */
+export function nestsAsRibbons(members: ReadonlyArray<{ style: { mode: TrackMode } }>): boolean {
+  return members.length > 1 && members.every((member) => member.style.mode === 'ribbon')
 }
 
 /** This lane's scale, or the linear one every lane starts on. */

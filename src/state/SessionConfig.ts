@@ -27,6 +27,7 @@
  * `detached` machinery answers it.
  */
 
+import { CIRCULAR_SCOPE } from './circular'
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { formatUri, parseUri } from '../uri'
@@ -158,6 +159,18 @@ export interface SessionConfig {
   bookmarks: Bookmark[]
   /** Ticked sequences, when the session is a genome browser. */
   sequences: string[]
+  /**
+   * Sequences the reader has declared **circular** (SPECS §8.15).
+   *
+   * A declaration rather than a reading — no contact map says whether a sequence
+   * joins its own ends, and no statistic reliably infers it — so it belongs with
+   * the tracks somebody loaded and the marks they drew rather than in the view
+   * state beside `region=`. See `state/circular.ts`.
+   *
+   * Optional, so a workspace written before this existed imports as what it was:
+   * nothing circular.
+   */
+  circular?: string[]
   /** Per-group stacking and scaling, by group name. */
   groups: GroupModes
   scaling: GroupModes
@@ -370,6 +383,7 @@ const SCOPES = {
   manual: 'manual-annotations',
   bookmarks: 'bookmarks',
   sequences: 'browser:sequences',
+  circular: CIRCULAR_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
   normalise: 'compare:normalise',
@@ -433,6 +447,7 @@ export function buildConfig(options: {
     manual: recall<ManualMark[]>(key, SCOPES.manual) ?? [],
     bookmarks: recall<Bookmark[]>(key, SCOPES.bookmarks) ?? [],
     sequences: recall<string[]>(key, SCOPES.sequences) ?? [],
+    ...circularOf(recall<string[]>(key, SCOPES.circular)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
     compareNormalise: recall<boolean>(key, SCOPES.normalise) ?? false,
@@ -453,6 +468,17 @@ export function buildConfig(options: {
     plot: options.plot,
     ...(options.panels === undefined ? {} : { panels: options.panels }),
   }
+}
+
+/**
+ * `{ circular: … }` for a file with a declared circular sequence, else nothing.
+ *
+ * Absent rather than empty, on the rule the fields around it follow: a config
+ * that carries the key means *these and no others*, and one that does not means
+ * *this build had nothing to say*, which is what an older workspace is.
+ */
+function circularOf(names: string[] | null): { circular?: string[] } {
+  return Array.isArray(names) && names.length > 0 ? { circular: names } : {}
 }
 
 /** `{ name: … }` for a tab the reader has named, and nothing for one they have not. */
@@ -479,6 +505,10 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   remember(key, SCOPES.manual, config.manual)
   remember(key, SCOPES.bookmarks, config.bookmarks)
   remember(key, SCOPES.sequences, config.sequences)
+  // Only where the config carries it, on the rule the deck's fields below use:
+  // a workspace written before circularity existed must leave whatever this tab
+  // already declared alone rather than clearing it.
+  if (config.circular !== undefined) remember(key, SCOPES.circular, config.circular)
   remember(key, SCOPES.groups, config.groups)
   remember(key, SCOPES.scaling, config.scaling)
   remember(key, SCOPES.normalise, config.compareNormalise)
