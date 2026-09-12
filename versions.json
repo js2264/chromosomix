@@ -1,6 +1,13 @@
 {
-  "latest": "6e77a99",
+  "latest": "918d7f6",
   "versions": [
+    {
+      "commit": "918d7f6",
+      "version": "0.12.0",
+      "date": "2026-09-12T09:13:42Z",
+      "subject": "Page 4DN and do not page ENCODE, because each refuses what the other needs",
+      "tag": ""
+    },
     {
       "commit": "a560ca8",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.11.0",
       "date": "2026-09-05T22:13:23+02:00",
       "subject": "Support mirrored contact map comparisons and per-contig rulers (#34)",
-      "tag": ""
-    },
-    {
-      "commit": "0b25002",
-      "version": "0.11.0",
-      "date": "2026-09-05T17:02:42+02:00",
-      "subject": "Chromosight pattern detection, and P(s) that agrees with the tools it names (#33)",
       "tag": ""
     },
     {
