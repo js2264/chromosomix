@@ -201,10 +201,10 @@
   "pulls": [
     {
       "number": 52,
-      "commit": "8640527",
+      "commit": "2815f22",
       "title": "Segments say which strand, which way and which column, on every interval lane",
       "branch": "claude/genomic-features-styling-vx83q2",
-      "date": "2026-09-12T11:18:08Z"
+      "date": "2026-09-12T13:25:02Z"
     },
     {
       "number": 49,
