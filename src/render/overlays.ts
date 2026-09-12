@@ -211,9 +211,16 @@ export function drawDiagonalFeatures(
     const [from, to] = featureRange(set, contig, window.start, window.end)
     for (let i = from; i < to; i++) {
       if (set.end[i] <= window.start || set.start[i] >= window.end) continue
-      const colFrom = cols.locusToUnit(window.contig, set.start[i])
-      const colTo = cols.locusToUnit(window.contig, set.end[i])
-      if (colFrom === null || colTo === null) continue
+      // Against the window's **own** stretch, not the first on the axis with
+      // this name: a circular sequence panned across its junction carries the
+      // same contig at both ends of the picture, and resolving by name would
+      // draw everything on the far side of the join a sequence out (§8.16).
+      const segment = window.segment
+      if (!(segment.bpPerUnit > 0)) continue
+      const at = (bp: number): number =>
+        segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
+      const colFrom = at(set.start[i])
+      const colTo = at(set.end[i])
 
       if (turn !== null) {
         const base = toY(frame, axisRow(turn))
@@ -258,9 +265,16 @@ export function drawDiagonalFeatures(
         continue
       }
 
-      const rowFrom = rows?.locusToUnit(window.contig, set.start[i]) ?? null
-      const rowTo = rows?.locusToUnit(window.contig, set.end[i]) ?? null
-      if (rowFrom === null || rowTo === null) continue
+      // The row axis's copy of the *same* stretch, so a box on a circular
+      // sequence panned across its junction stands on the diagonal rather than a
+      // sequence away from it (§8.16). On every other view this is the one
+      // stretch there is, and `at` and `rowAt` are the same mapping.
+      const rowSegment = rows?.like(segment) ?? null
+      if (rowSegment === null || !(rowSegment.bpPerUnit > 0)) continue
+      const rowAt = (bp: number): number =>
+        rowSegment.unitStart + (bp - rowSegment.bpStart) / rowSegment.bpPerUnit
+      const rowFrom = rowAt(set.start[i])
+      const rowTo = rowAt(set.end[i])
 
       if (paint.shape === 'border') {
         // A short rule *across* the diagonal at the feature's midpoint: it
@@ -375,13 +389,20 @@ export function drawPairs(
       if (!insideX(frame, x) || !insideY(frame, y)) return null
       return { x, y, upper: true }
     }
-    const row = rows?.locusToUnit(rowContig, rowBp) ?? null
-    const col = cols.locusToUnit(colContig, colBp)
-    if (row === null || col === null) return null
-    const x = toX(frame, col)
-    const y = toY(frame, row)
-    if (!insideX(frame, x) || !insideY(frame, y)) return null
-    return { x, y, upper: row <= col }
+    // Every place each end lands, which on a circular axis panned across its
+    // junction is two — and the pair is drawn at the combination that is
+    // actually on screen. First-occurrence-only made a loop near the join
+    // disappear rather than be misplaced, which is the quieter failure and the
+    // harder one to notice (§8.16).
+    for (const row of rows?.locusToUnits(rowContig, rowBp) ?? []) {
+      for (const col of cols.locusToUnits(colContig, colBp)) {
+        const x = toX(frame, col)
+        const y = toY(frame, row)
+        if (!insideX(frame, x) || !insideY(frame, y)) continue
+        return { x, y, upper: row <= col }
+      }
+    }
+    return null
   }
 
   ctx.save()
@@ -436,28 +457,27 @@ export function drawManualLines(
     const wantsVertical = turn !== null || line.axis !== 'horizontal'
     const wantsHorizontal = turn === null && line.axis !== 'vertical'
 
+    // Every landing, not the first: a hand-drawn rule on a circular sequence is
+    // on screen twice while the junction is (§8.16), and drawing one of them
+    // makes the mark flicker in and out as the reader slides past the join.
     if (wantsVertical && axes.cols !== null) {
-      const unit = axes.cols.locusToUnit(line.at.contig, line.at.bp)
-      if (unit !== null) {
+      for (const unit of axes.cols.locusToUnits(line.at.contig, line.at.bp)) {
         const x = snap(toX(frame, unit), frame.dpr)
-        if (insideX(frame, x)) {
-          ctx.beginPath()
-          ctx.moveTo(x, frame.data.y)
-          ctx.lineTo(x, frame.data.y + frame.data.height)
-          ctx.stroke()
-        }
+        if (!insideX(frame, x)) continue
+        ctx.beginPath()
+        ctx.moveTo(x, frame.data.y)
+        ctx.lineTo(x, frame.data.y + frame.data.height)
+        ctx.stroke()
       }
     }
     if (wantsHorizontal && axes.rows !== null) {
-      const unit = axes.rows.locusToUnit(line.at.contig, line.at.bp)
-      if (unit !== null) {
+      for (const unit of axes.rows.locusToUnits(line.at.contig, line.at.bp)) {
         const y = snap(toY(frame, unit), frame.dpr)
-        if (insideY(frame, y)) {
-          ctx.beginPath()
-          ctx.moveTo(frame.data.x, y)
-          ctx.lineTo(frame.data.x + frame.data.width, y)
-          ctx.stroke()
-        }
+        if (!insideY(frame, y)) continue
+        ctx.beginPath()
+        ctx.moveTo(frame.data.x, y)
+        ctx.lineTo(frame.data.x + frame.data.width, y)
+        ctx.stroke()
       }
     }
   }

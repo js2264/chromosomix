@@ -1450,9 +1450,12 @@ export class AnnotationLanes {
         const measures = laneIsHorizontal(edge) ? 'vertical' : 'horizontal'
         for (const line of this.manual.lines) {
           if (line.axis !== 'both' && line.axis !== measures) continue
-          const unit = axis.locusToUnit(line.at.contig, line.at.bp)
-          if (unit === null) continue
-          hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
+          // Every place it lands, which on a circular axis panned across its
+          // junction is two: a mark drawn at only one of them vanishes and
+          // reappears as the reader slides (§8.16).
+          for (const unit of axis.locusToUnits(line.at.contig, line.at.bp)) {
+            hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
+          }
         }
       }
     }
@@ -1479,12 +1482,13 @@ export class AnnotationLanes {
       for (const mark of axis === null ? [] : anchorsOf(this.manual)) {
         const drawn = new Set<number>()
         for (const anchor of mark.at) {
-          const unit = axis?.locusToUnit(anchor.contig, anchor.bp) ?? null
-          // An on-diagonal loop names one place twice, and an on-diagonal box
-          // names two places twice; drawing a triangle again only darkens it.
-          if (unit === null || drawn.has(unit)) continue
-          drawn.add(unit)
-          anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+          for (const unit of axis?.locusToUnits(anchor.contig, anchor.bp) ?? []) {
+            // An on-diagonal loop names one place twice, and an on-diagonal box
+            // names two places twice; drawing a triangle again only darkens it.
+            if (drawn.has(unit)) continue
+            drawn.add(unit)
+            anchorMark(ctx, last.frame, last.frame.toPixel(unit), mark.colour)
+          }
         }
       }
 

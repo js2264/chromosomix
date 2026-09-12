@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest'
 
 import { maxSeparation, separation, squareBand } from '@/analysis/band'
 import { directionalityIndex } from '@/analysis/di'
+import { ExpectedAccumulator } from '@/analysis/expected'
 
 /** A symmetric square, built from a function of the two bins. */
 function square(size: number, cell: (i: number, j: number) => number): Float32Array {
@@ -137,5 +138,60 @@ describe('separation and maxSeparation', () => {
   it('stops a circular band at half the sequence', () => {
     expect(maxSeparation(40, true)).toBe(20)
     expect(maxSeparation(40, false)).toBe(39)
+  })
+})
+
+/**
+ * P(s) round a circle.
+ *
+ * The separation two bins are at is the one number a decay curve is built from,
+ * and on a circular sequence it is the shorter of the two ways round. Scored as
+ * a line, a circular chromosome's curve stops falling and turns *up* at the far
+ * end — those are the contacts joining the two ends of the molecule, which are
+ * local contacts wearing a chromosome-long separation — and every fit through
+ * that tail is a fit through an artefact.
+ */
+describe('ExpectedAccumulator, round a circle', () => {
+  it('measures separation the short way round', () => {
+    const circle = new ExpectedAccumulator(20, 40)
+    expect(circle.separation(0, 39)).toBe(1)
+    expect(circle.separation(5, 12)).toBe(7)
+    expect(circle.separation(0, 20)).toBe(20)
+    const line = new ExpectedAccumulator(39)
+    expect(line.separation(0, 39)).toBe(39)
+  })
+
+  it('turns a circular map’s decay into a decay rather than a fold', () => {
+    const n = 40
+    const values = new Float32Array(n * n)
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        // Contact that falls with the circular separation — what a circular
+        // chromosome's map actually looks like.
+        const d = Math.min(Math.abs(i - j), n - Math.abs(i - j))
+        values[i * n + j] = 1 / (1 + d)
+      }
+    }
+    const block = {
+      nrows: n,
+      ncols: n,
+      values,
+      rowExtent: [0, n] as [number, number],
+      colExtent: [0, n] as [number, number],
+    }
+
+    const circle = new ExpectedAccumulator(n / 2, n)
+    circle.addBlock(block)
+    const round = circle.finish()
+    // Monotonically falling all the way to half way round, which is as far apart
+    // as two bins on this sequence can be.
+    for (let k = 1; k <= n / 2; k++) expect(round.mean[k]).toBeLessThan(round.mean[k - 1])
+
+    const line = new ExpectedAccumulator(n - 1)
+    line.addBlock(block)
+    const straight = line.finish()
+    // The same map read as a line: the curve turns back up past half way, which
+    // is the artefact, and it is large.
+    expect(straight.mean[n - 1]).toBeGreaterThan(straight.mean[n / 2])
   })
 })

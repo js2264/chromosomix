@@ -62,6 +62,18 @@ export interface LocusWindow {
   /** Matrix coordinates of the visible part, for placing what comes back. */
   unitFrom: number
   unitTo: number
+  /**
+   * The stretch this window was cut from — what places its answer on the axis.
+   *
+   * Carried rather than looked up again by name, and that is not only an economy.
+   * An axis may hold the **same contig twice**: a circular sequence panned across
+   * its own junction is one stretch ending at the sequence's last bin and another
+   * beginning at its first (SPECS §8.16), and `windows` returns one window for
+   * each. A caller that answered `segmentOf(window.contig)` would get the first
+   * of them both times and draw everything on the far side of the join a whole
+   * sequence out of place.
+   */
+  segment: LocusSegment
 }
 
 /**
@@ -113,6 +125,30 @@ export class LocusAxis {
     return this.byContig.get(contig) ?? null
   }
 
+  /**
+   * This axis's copy of a stretch that came from **another** axis.
+   *
+   * Both axes of a symmetric block carry the same sequences, and on a circular
+   * one they carry the same sequence twice (SPECS §8.16) — so a mark whose
+   * column was placed against the second stretch has to have its row placed
+   * against the second stretch too, or the box is drawn at a place where nothing
+   * is. Matched on the contig and on where the stretch *starts in the sequence*,
+   * which is what distinguishes two laps of the same name.
+   *
+   * `null` where this axis does not carry it, which is every off-diagonal view.
+   */
+  like(segment: LocusSegment): LocusSegment | null {
+    let fallback: LocusSegment | null = null
+    for (const candidate of this.segments) {
+      if (candidate.contig !== segment.contig) continue
+      if (candidate.bpStart === segment.bpStart) return candidate
+      if (fallback === null) fallback = candidate
+    }
+    // A block whose two axes are windows on *different* parts of one sequence is
+    // an ordinary off-diagonal view, and there the only copy is the right one.
+    return fallback
+  }
+
   /** The stretch containing a matrix coordinate, or `null` outside the block. */
   segmentAt(unit: number): LocusSegment | null {
     let low = 0
@@ -144,11 +180,41 @@ export class LocusAxis {
     return { contig: segment.contig, bp: clamp(bp, 0, segment.contigLength) }
   }
 
-  /** Contig and base pair → matrix coordinate, or `null` for a contig off-axis. */
+  /**
+   * Contig and base pair → matrix coordinate, or `null` for a contig off-axis.
+   *
+   * **The first stretch**, where the axis holds a contig more than once — see
+   * {@link locusToUnits}, which is the answer for a caller that draws a mark
+   * rather than one that resolves a place.
+   */
   locusToUnit(contig: string, bp: number): number | null {
     const segment = this.byContig.get(contig)
     if (segment === undefined || segment.bpPerUnit <= 0) return null
     return segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
+  }
+
+  /**
+   * Every matrix coordinate a locus lands at, which on most axes is one.
+   *
+   * A circular sequence panned across its own junction has the same base pair on
+   * the axis **twice** — once near the left edge and once near the right — and a
+   * mark drawn at only one of them is a mark that vanishes and reappears as the
+   * reader slides (SPECS §8.16). Every caller that draws *at* a locus wants this;
+   * a caller that resolves a locus to a place — a search, a minimap — wants
+   * {@link locusToUnit}, because there is one place and the picture shows it
+   * twice.
+   */
+  locusToUnits(contig: string, bp: number): number[] {
+    const out: number[] = []
+    for (const segment of this.segments) {
+      if (segment.contig !== contig || !(segment.bpPerUnit > 0)) continue
+      const unit = segment.unitStart + (bp - segment.bpStart) / segment.bpPerUnit
+      // Only where it actually falls inside this stretch: a lap's worth of axis
+      // is a window on the sequence, and a position outside it is drawn by the
+      // stretch that does hold it — or by none, which is right.
+      if (unit >= segment.unitStart - 0.5 && unit <= segment.unitEnd + 0.5) out.push(unit)
+    }
+    return out
   }
 
   /**
@@ -180,6 +246,7 @@ export class LocusAxis {
         end: Math.min(segment.contigLength, Math.ceil(bpTo + margin)),
         unitFrom: from,
         unitTo: to,
+        segment,
       })
     }
     return out
@@ -193,6 +260,7 @@ export class LocusAxis {
       end: segment.contigLength,
       unitFrom: segment.unitStart,
       unitTo: segment.unitEnd,
+      segment,
     }))
   }
 }

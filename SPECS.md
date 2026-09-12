@@ -2458,6 +2458,118 @@ by a pixel; `bcftools view` writes the text, and the name guess claims no `.bcf`
 so one is refused by its bytes like anything else. And no **variant calling**, which is
 §18.9's argument and not a new one.
 
+### 8.16 Circular sequences
+
+A `.cool` cannot say that a sequence joins its own ends. Bins run from zero to
+the last one and stop, and there is no field anywhere in the format for *and then
+it starts again* — so a bacterial chromosome, a plasmid, a mitochondrion and a
+phage all arrive looking exactly like a linear chromosome that happens to be
+short. Everything the viewer then does with one is correct and slightly wrong:
+the map has two artificial corners, the diagonal runs into a wall at each end,
+every window near either end is dropped by every task for want of a whole window,
+and the contacts joining the last bin to the first — which on a circle are the
+most local contacts there are — sit in the far corner of the square, as far from
+the diagonal as two bins can be.
+
+**Nobody can infer it from the data, so the reader declares it.** A circular
+chromosome's map has a bright far corner; so does a translocation, so does an
+assembly error, and so does nothing at all if the sample is shallow. The one
+thing that reliably knows is the person who chose the organism. So it is a
+tickbox in the **Map** card, offered on a view that is a window on one sequence
+and nowhere else — a two-contig block has no diagonal to slide along, and a
+whole-genome picture is a list of sequences of which some may be circular and
+some not, which is one question about several things.
+
+It is kept per file and carried in an exported workspace, beside the tracks
+somebody loaded and the marks they drew. **Not in the view state**: a bare
+`#`-hash link names a place and a colour scale (§5.5), and this is a fact about
+the assembly rather than about the window.
+
+#### What the flag does to the picture
+
+The window becomes **unwrapped**. A region view on a circular sequence pans in a
+coordinate space that runs off both ends and is resolved modulo the sequence, so
+`chrom:2,900,000-3,100,000` on a 3 Mb circle is an ordinary place to be looking
+and is two stored pieces: the last 100 kb and the first 100 kb. On both axes at
+once, so a square window across the junction is up to **four** stored blocks, one
+of which is that far corner. `worker/wrap.ts` says which pieces and
+`worker/wrappedMatrix.ts` reads and assembles them.
+
+Unwrapped rather than modular because it is the only space in which panning is
+*monotonic*. The alternative is a window whose start jumps from 2,999,000 to 0,
+and every `covers`, `pad` and `recentre` in `ui/refine.ts` — the whole
+zoom-and-travel policy of §8.15 — would have to learn about that. What those
+rules learn instead is one thing: on a circular axis **every edge of the block
+gives**, because there is no end of the world for one of them to be, and the
+answer to reaching one is the same block width rotated round to where the reader
+now is. The ceiling stops being a limit on *where* and becomes a cap on *how
+wide*: one lap, past which a bin would be drawn twice.
+
+The grid is chosen once for the whole window and every piece is read on it, which
+is what makes the two halves of a junction-crossing block halves of one picture
+rather than two pictures with a seam — `snapToGrid` anchors cells to the
+*sequence*, so the piece ending at its last bin keeps that end and the piece
+beginning at its first is already on a cell edge. One artefact survives and it is
+honest: where the sequence's length is not a whole number of cells, the cell at
+the junction is short. That is the partial last cell every pooled view of every
+chromosome already ends with; what circularity does is move it into the middle of
+the picture instead of leaving it at the edge.
+
+**Everything drawn on the axis follows, and almost none of it had to be told.**
+The block's axis runs carry the sequence *twice* — its tail, then its head — with
+the second run's `unitStart` shifted a lap along, so `render/locus.ts` reads it as
+*the beginning of the sequence, one lap on* rather than as somewhere past its
+end. Ticks, the coordinate readout, tracks, features and annotations then place
+themselves through the same piecewise map they already used for a
+whole-genome view, which has carried several sequences on one axis since it was
+written. Three things did have to change, and each is a place where *the first
+stretch with this name* stopped being the right answer: a window now carries the
+stretch it was cut from rather than looking one up by name, a mark is drawn at
+**every** place its locus lands rather than the first — or it would flicker in
+and out as the reader slid past the join — and the window a refine carries across
+a change of grid picks the narrowest ordered pair of landings, without which the
+panel refuses the very block the reader is sliding towards.
+
+The turn (§17) needs nothing at all: it rotates whatever block is on screen, and
+a wrapped block has a diagonal like any other.
+
+#### What the flag does to the numbers
+
+**Automatically, and with no per-task tickbox.** A plasmid is circular or it is
+not; that is a fact about the molecule rather than a setting of the
+directionality index, and a catalogue in which eleven tasks each carry their own
+copy of it is one where a reader can get ten circular answers and one linear one
+out of the same file without being told. The declaration travels in
+`AnalysisFraming.circular`, which puts it in the provenance of every result — so
+two exported tracks can be told apart.
+
+The separation between two bins becomes the shorter of the two ways round,
+`min(|i − j|, n − |i − j|)`, and the longest separation a sequence has becomes
+half of it rather than all of it. `analysis/band.ts` is where that lives: a
+**separation-addressed** accessor, `forward(row, offset)`, which the banded
+kernels are written against as though every sequence were linear. A kernel asking
+for `(row, col)` would have to decide for itself which of the two arcs it meant
+and put `col` back inside the sequence before asking — two decisions, at every
+call site, each of which is the wrap. Reading one costs exactly one extra
+request: the corner of the contig's own square, where the cells joining its two
+ends are stored.
+
+What is circular today: **P(s)**, whose curve stops falling and turns *up* at the
+far end when a circle is scored as a line — those are the contacts joining the two
+ends of the molecule, wearing a chromosome-long separation, and every fit through
+that tail is a fit through an artefact; **diamond insulation**, which reads a band
+rather than tiled squares there and therefore scores the bins at the junction that
+a linear reading leaves as gaps; and the three banded readings of §18.8 — the
+**directionality index**, the **HiC score** and the **scalogram**.
+
+What is not, and is stated rather than left to be discovered: **compartments**,
+**chromosight** and the **observed/expected** map divide by an expected curve at a
+linear separation, so near the junction their denominator is the curve's far tail
+rather than its near one. A **deck companion** draws the sequence linearly — the
+declaration is the lead map's — so a deck of a circular chromosome shows the lead
+sliding and the companions standing still. Both are seams rather than wrong
+answers, and both are in the same place: the reader can see the junction.
+
 ---
 
 ## 9. cool and mcool

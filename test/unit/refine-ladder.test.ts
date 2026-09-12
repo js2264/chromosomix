@@ -56,7 +56,7 @@ function block(rows: Extent, binsPerCell: number, cols: Extent = rows): MatrixRe
 }
 
 /** A ladder with a fake clock, a fake timer and a recording reader. */
-function ladder(options: { ceiling?: Extent; reads?: Array<Extent> } = {}) {
+function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; lap?: number } = {}) {
   const ceiling: Extent = options.ceiling ?? [0, 50_000]
   const asked: Array<{ rows: Extent; cols: Extent }> = []
   const given: MatrixResult[] = []
@@ -67,6 +67,7 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent> } = {}) {
 
   const it = new BlockLadder({
     ceiling: { rows: ceiling, cols: ceiling },
+    ...(options.lap === undefined ? {} : { wrap: { rows: options.lap, cols: options.lap } }),
     read: (rows, cols) => {
       asked.push({ rows, cols })
       return {
@@ -567,6 +568,76 @@ describe('reads in flight', () => {
     l.it.destroy()
     expect(l.cancels).toBe(1)
     l.it.consider({ rows: [10_000, 12_000], cols: [10_000, 12_000], binsPerCell: 13 })
+    expect(l.asked).toHaveLength(1)
+  })
+})
+
+/**
+ * A circle has no ends, so the ladder's own ends have to stop being walls.
+ *
+ * The rule the whole slide rests on: every edge of a circular block gives, and
+ * what answers a reader who has reached one is the same block width rotated
+ * round to where they now are. Three things can go wrong and all three are here
+ * — the reader stuck at a wall that is not the world's, a read for a window
+ * wider than the sequence (which would draw every bin twice), and the read loop
+ * a view as wide as its own block would otherwise fall into.
+ */
+describe('BlockLadder, round a circular sequence', () => {
+  const LAP = 10_000
+  const circle = (): ReturnType<typeof ladder> =>
+    ladder({ ceiling: [0, LAP], lap: LAP })
+
+  it('gives ground at an edge that is also the end of the sequence', () => {
+    const l = circle()
+    // A block that runs to the sequence's own last bin. On a linear axis that is
+    // the end of the world and nothing more is read; on a circle it is a place
+    // like any other.
+    l.it.adopt(block([LAP - 2_000, LAP], 1))
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
+    expect(l.asked).toHaveLength(1)
+    // Same width, moved: panning changes place, not scale.
+    const asked = l.asked[0].rows
+    expect(asked[1] - asked[0]).toBe(2_000)
+    // And it has gone *past* the end, which is the whole point — the window is
+    // unwrapped, and the reader resolves it modulo the sequence.
+    expect(asked[1]).toBeGreaterThan(LAP)
+  })
+
+  it('never asks for more than one lap', () => {
+    const l = circle()
+    l.it.adopt(block([0, 2_000], 1))
+    // Pulling back hard from a small block: the widen would reach four windows
+    // out, and on a circle there is nothing four windows out to reach.
+    l.it.consider({ rows: [0, 4_000], cols: [0, 4_000], binsPerCell: 1 })
+    expect(l.asked.length).toBeGreaterThan(0)
+    for (const ask of l.asked) {
+      expect(ask.rows[1] - ask.rows[0]).toBeLessThanOrEqual(LAP)
+      expect(ask.cols[1] - ask.cols[0]).toBeLessThanOrEqual(LAP)
+    }
+  })
+
+  it('does not read for a view that fills its own block', async () => {
+    const l = circle()
+    l.it.adopt(block([0, LAP], 1))
+    // The view is the block: both edges touch, and there is nowhere to move to.
+    // Without the guard this recentres on itself, lands the block it already
+    // had, finds itself pressed again, and reads once per frame for ever.
+    for (let frame = 0; frame < 5; frame++) {
+      l.it.consider({ rows: [0, LAP], cols: [0, LAP], binsPerCell: 1 })
+      await l.land(block([0, LAP], 1))
+    }
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('stops asking once the reader is back in the middle of a block', async () => {
+    const l = circle()
+    l.it.adopt(block([LAP - 2_000, LAP], 1))
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
+    expect(l.asked).toHaveLength(1)
+    const asked = l.asked[0]
+    await l.land(block(asked.rows, 1, asked.cols))
+    // The view now sits in the middle of what was read, so nothing is pressed.
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
     expect(l.asked).toHaveLength(1)
   })
 })

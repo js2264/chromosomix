@@ -565,6 +565,21 @@ export interface MatrixResult {
   genomeBoundaries?: boolean
   level: 'bin' | 'contig' | 'genome'
   /**
+   * The sequence this block was read round, where it was read round one.
+   *
+   * Present only on a wrapped read (see the `matrix` request's `wrap`), and it is
+   * what tells the view that `rowExtent` and `colExtent` are **unwrapped** — that
+   * they may run off either end of the sequence, and that a bin of them is a bin
+   * of the file only after being taken modulo this. In bins of the open map, like
+   * the extents beside it.
+   *
+   * The axis runs need no such warning, because they already carry the answer:
+   * a run's `unitStart` is shifted a lap per revolution, which is what makes the
+   * second stretch of a junction-crossing block say *this is the beginning of the
+   * sequence, one lap along* rather than *this is somewhere past its end*.
+   */
+  wrapped?: Extent
+  /**
    * Bins summed into one cell, where the block was read at a coarser bin size
    * than the file stores (`metacooler/pooling.ts`). Absent, or 1, for the
    * ordinary read.
@@ -788,6 +803,23 @@ export type WorkerRequest =
       rung?: string
       rows: Extent
       cols?: Extent
+      /**
+       * Read `rows` and `cols` as positions on a **circle** whose bins are this
+       * extent (SPECS §8.16).
+       *
+       * With it, the two extents are *unwrapped*: they may run off either end of
+       * the sequence and are resolved modulo it, so a window across the junction
+       * is up to four stored blocks assembled into one — see `worker/wrap.ts` for
+       * the two coordinate spaces and why the request is written in the one that
+       * runs off the ends.
+       *
+       * The sequence's own extent, in bins of the **open** map, exactly as `rows`
+       * and `cols` are: the worker converts both together when a rung is named.
+       * Absent is every ordinary read, and a window that happens to fall entirely
+       * inside the sequence takes the ordinary path whether this is set or not —
+       * same bins, same block, same grid.
+       */
+      wrap?: Extent
       balance?: boolean
       /** `/pixels` column the values come from; `count` when absent. */
       value?: string

@@ -129,6 +129,21 @@ export interface LadderOptions {
    */
   ceiling: { rows: Extent; cols: Extent }
   /**
+   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.16).
+   *
+   * A circular sequence's window is written in unwrapped bins — it may run off
+   * either end, and `worker/wrap.ts` resolves it modulo the sequence — so the
+   * ceiling that ordinarily stops a read at the edge of the data is the one thing
+   * that must not apply. What replaces it is a cap on the *width*: a window wider
+   * than one lap would hold every bin twice, which is a contact drawn twice and a
+   * click that resolves to whichever copy the hit test reached first.
+   *
+   * Per axis, because a circular region view is circular on both and a companion
+   * showing it against a linear sequence is circular on one. Absent on an axis
+   * is every ordinary view, and there the ceiling does what it always did.
+   */
+  wrap?: { rows?: number; cols?: number }
+  /**
    * Hand a block over, and say whether it went in.
    *
    * `false` where the panel could not place it — a window it cannot convert on
@@ -288,8 +303,18 @@ export class BlockLadder {
   private plan(view: RefineView): { rows: Extent; cols: Extent } {
     const block = this.held0()
     return {
-      rows: this.axisPlan(view.rows, block?.rows ?? null, this.options.ceiling.rows),
-      cols: this.axisPlan(view.cols, block?.cols ?? null, this.options.ceiling.cols),
+      rows: this.axisPlan(
+        view.rows,
+        block?.rows ?? null,
+        this.options.ceiling.rows,
+        this.options.wrap?.rows,
+      ),
+      cols: this.axisPlan(
+        view.cols,
+        block?.cols ?? null,
+        this.options.ceiling.cols,
+        this.options.wrap?.cols,
+      ),
     }
   }
 
@@ -311,7 +336,19 @@ export class BlockLadder {
    *   once. That is a zoom *out*, so buy several windows at a stroke rather than
    *   stopping again on the next notch.
    */
-  private axisPlan(view: Extent, block: Extent | null, bound: Extent): Extent {
+  private axisPlan(view: Extent, block: Extent | null, bound: Extent, lap?: number): Extent {
+    // **A circular axis has no ends**, so the three cases are told apart by the
+    // block alone rather than by which end of the *world* the block has reached
+    // — there is no such end, and the `bound[0]`/`bound[1]` tests would answer
+    // with whatever the ceiling happened to be set to. The shapes are otherwise
+    // the ones below: widen when the block no longer holds the view, travel when
+    // it does and the reader has run out of it, look around otherwise. Each is
+    // then capped at one lap, which is the widest honest picture of a circle.
+    if (lap !== undefined) {
+      if (block === null || !covers(block, view)) return capSpan(pad(view, WIDEN_REACH), lap)
+      if (pressedRound(view, block)) return capSpan(recentre(block, view), lap)
+      return capSpan(pad(view, REFINE_PAD), lap)
+    }
     if (block === null || !covers(block, view)) return clip(pad(view, WIDEN_REACH), bound)
     const low = view[0] <= block[0] && block[0] > bound[0]
     const high = view[1] >= block[1] && block[1] < bound[1]
@@ -363,11 +400,13 @@ export class BlockLadder {
    * middle rather than at its rim.
    */
   private atEdge(view: RefineView, block: Held): boolean {
-    const pressed = (at: Extent, held: Extent, bound: Extent): boolean =>
-      (at[0] <= held[0] && held[0] > bound[0]) || (at[1] >= held[1] && held[1] < bound[1])
+    const pressed = (at: Extent, held: Extent, bound: Extent, lap?: number): boolean =>
+      lap !== undefined
+        ? pressedRound(at, held)
+        : (at[0] <= held[0] && held[0] > bound[0]) || (at[1] >= held[1] && held[1] < bound[1])
     return (
-      pressed(view.rows, block.rows, this.options.ceiling.rows) ||
-      pressed(view.cols, block.cols, this.options.ceiling.cols)
+      pressed(view.rows, block.rows, this.options.ceiling.rows, this.options.wrap?.rows) ||
+      pressed(view.cols, block.cols, this.options.ceiling.cols, this.options.wrap?.cols)
     )
   }
 
@@ -516,6 +555,43 @@ export function recentre(held: Extent, at: Extent): Extent {
   const middle = (at[0] + at[1]) / 2
   const lo = Math.round(middle - width / 2)
   return [lo, lo + width]
+}
+
+/**
+ * Whether a circular view has run out of block in the direction it is going.
+ *
+ * The circular counterpart of {@link BlockLadder.atEdge}'s test, and the
+ * difference is the clause about the world: on a linear axis an edge of the
+ * block that is also the edge of the sequence is not pressed, because there is
+ * nothing beyond it. A circle has no such edge — beyond the end is the
+ * beginning — so **every** block edge gives, and the answer to reaching one is
+ * always the same block width, rotated round to where the reader now is.
+ *
+ * The one exception is the whole point of the guard: a view as wide as its own
+ * block has nowhere to move to, so it is not pressed however its edges line up.
+ * Without that, a view exactly one lap wide sits in a block exactly one lap wide
+ * with both edges touching, asks to be recentred on itself, gets the block it
+ * already had, and asks again — a read per frame, for ever.
+ */
+function pressedRound(view: Extent, block: Extent): boolean {
+  if (block[1] - block[0] <= view[1] - view[0]) return false
+  return view[0] <= block[0] || view[1] >= block[1]
+}
+
+/**
+ * An extent no wider than one lap, keeping its middle where it was.
+ *
+ * The circular counterpart of {@link clip}: there is no position to be held
+ * inside, only a width. A window that has grown past the sequence is pulled back
+ * to exactly one lap around the place the reader is looking at, which is the
+ * widest honest picture of a circle — past it the same bin appears twice.
+ */
+export function capSpan(extent: Extent, lap: number): Extent {
+  const span = extent[1] - extent[0]
+  if (!(lap > 0) || span <= lap) return extent
+  const middle = (extent[0] + extent[1]) / 2
+  const lo = Math.round(middle - lap / 2)
+  return [lo, lo + lap]
 }
 
 /** An extent held inside `bounds`. */
@@ -735,6 +811,21 @@ export function attachRefine(options: {
     rung: string | undefined,
   ): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
   ceiling: { rows: Extent; cols: Extent }
+  /**
+   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.16).
+   *
+   * A circular sequence's window is written in unwrapped bins — it may run off
+   * either end, and `worker/wrap.ts` resolves it modulo the sequence — so the
+   * ceiling that ordinarily stops a read at the edge of the data is the one thing
+   * that must not apply. What replaces it is a cap on the *width*: a window wider
+   * than one lap would hold every bin twice, which is a contact drawn twice and a
+   * click that resolves to whichever copy the hit test reached first.
+   *
+   * Per axis, because a circular region view is circular on both and a companion
+   * showing it against a linear sequence is circular on one. Absent on an axis
+   * is every ordinary view, and there the ceiling does what it always did.
+   */
+  wrap?: { rows?: number; cols?: number }
   /** The file's own bin size; the effective one is this times `binsPerCell`. */
   binsize: number
   /**
@@ -798,6 +889,7 @@ export function attachRefine(options: {
       options.panel.setFrozen(busy, () => ladder.abort())
       options.onBusy?.(busy)
     },
+    ...(options.wrap === undefined ? {} : { wrap: options.wrap }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
   const enabled = options.enabled ?? refineEnabled

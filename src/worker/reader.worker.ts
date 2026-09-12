@@ -32,6 +32,8 @@ import {
   idRuns,
 } from './groups'
 import { overviewUnitCap, poolUnits, TriangleAccumulator, type UnitPooling } from './overview'
+import { needsWrapping } from './wrap'
+import { readWrapped, type WrapEnv } from './wrappedMatrix'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import {
   serialiseError,
@@ -625,6 +627,15 @@ async function handleMatrix(
   const rows = crossRung(open, mc, request.rows)
   const asked = planOf(request.binsPerCell, request.contigsPerCell)
   const asked_ = { rows: request.rows, cols: request.cols ?? request.rows }
+  // A circular window, and one that actually crosses the junction — a request
+  // carrying `wrap` whose extents happen to lie inside the sequence takes the
+  // ordinary road below, which reads the same bins onto the same grid.
+  if (request.wrap !== undefined) {
+    const wrap = crossRung(open, mc, request.wrap)
+    if (needsWrapping(rows, wrap) || needsWrapping(cols, wrap)) {
+      return atRung(mc, open, asked_, await readWrapped(mc, request, rows, cols, wrap, wrapEnvFor(mc, request.id)))
+    }
+  }
   if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
     return atRung(mc, open, asked_, await pooledResult(mc, request, rows, cols, asked))
   }
@@ -654,6 +665,36 @@ async function handleMatrix(
     hintFor(rows, cols),
   )
   return atRung(mc, open, asked_, binLevelResult(mc, dense, request.genomes === true))
+}
+
+/**
+ * The three decisions a wrapped read borrows from this worker.
+ *
+ * Built per call rather than held, because two of them close over the request's
+ * own id — a cancel is per read — and because the whole object is three small
+ * closures. See `worker/wrappedMatrix.ts`, which is the half of the wrapped path
+ * worth testing and therefore the half that is not in this file.
+ */
+function wrapEnvFor(mc: MetaCooler, id: number): WrapEnv {
+  return {
+    // A wrapped window has the same cell count as an unwrapped one of the same
+    // width on the same sequence, so the plan is fitted against a real extent of
+    // that width — `fitPlan` measures from the contig table and is not written
+    // to survive an extent that runs off the end of it.
+    planFor: (wrap, rowWidth, colWidth) => {
+      const lane = (span: number): Extent => {
+        const width = Math.max(1, Math.min(span, wrap[1] - wrap[0]))
+        return [wrap[0], wrap[0] + width]
+      }
+      return fitPlan(mc, lane(rowWidth), lane(colWidth))
+    },
+    snap: (extent, plan) => snapToGrid(mc, extent, plan),
+    hint: (rows, cols) => hintFor(rows, cols),
+    throwIfCancelled: () => {
+      if (cancelled.has(id)) throw abortError()
+    },
+    hooks: scanHooks(id),
+  }
 }
 
 /**

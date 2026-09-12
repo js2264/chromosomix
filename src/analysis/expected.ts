@@ -84,11 +84,43 @@ export class ExpectedAccumulator {
   readonly maxOffset: number
   private readonly sum: Float64Array
   private readonly count: Float64Array
+  /**
+   * Bins in the sequence, where it is **circular** — `0` on every other curve.
+   *
+   * What it changes is one line: the separation between two bins becomes the
+   * shorter of the two ways round (SPECS §8.16). Everything else about the
+   * accumulator — the sums, the counts, the mirror rule, the merge — is
+   * untouched, because none of it was ever about *where* a cell was, only about
+   * how far apart its two ends are.
+   *
+   * The curve that comes out is a different shape, and the difference is the
+   * whole point. A circular chromosome scored as a line has a decay that stops
+   * falling and turns *up* at the far end — those are the contacts joining the
+   * two ends of the molecule, which are local contacts wearing a chromosome-long
+   * separation — and every fit through that tail is a fit through an artefact.
+   * Scored as a circle the curve simply stops at half the sequence, which is as
+   * far apart as two bins on it can be.
+   */
+  private readonly lap: number
 
-  constructor(maxOffset: number) {
+  constructor(maxOffset: number, lap = 0) {
     this.maxOffset = Math.max(0, Math.trunc(maxOffset))
     this.sum = new Float64Array(this.maxOffset + 1)
     this.count = new Float64Array(this.maxOffset + 1)
+    this.lap = Math.max(0, Math.trunc(lap))
+  }
+
+  /**
+   * The separation between two absolute bins, as this curve measures it.
+   *
+   * `|i − j|` on a line and `min(|i − j|, n − |i − j|)` on a circle. Public
+   * because a caller that divides a block by the curve has to ask the *same*
+   * question the curve was built from — an observed/expected map whose numerator
+   * wrapped and whose denominator did not would be a picture of the disagreement.
+   */
+  separation(a: number, b: number): number {
+    const straight = Math.abs(a - b)
+    return this.lap > 0 ? Math.min(straight, this.lap - straight) : straight
   }
 
   /**
@@ -143,7 +175,7 @@ export class ExpectedAccumulator {
       for (let c = 0; c < ncols; c++) {
         const value = values[base + c]
         if (Number.isNaN(value)) continue
-        const offset = Math.abs(colFrom + c - row)
+        const offset = this.separation(colFrom + c, row)
         if (offset > this.maxOffset) continue
         this.sum[offset] += value
         this.count[offset] += 1

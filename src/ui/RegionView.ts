@@ -33,6 +33,7 @@ import {
   axisRegion,
   blockSummary,
   type AnnotationContext,
+  type CircularPresentation,
   type DerivePresentation,
   type TurnPresentation,
 } from './MatrixPanel'
@@ -139,6 +140,17 @@ export interface RegionViewProps {
    */
   neighbours?: { prev: string | null; next: string | null }
   onStep?(delta: number): void
+  /**
+   * *This sequence is circular* (SPECS §8.16) — the reader's declaration, and
+   * the control for it.
+   *
+   * Absent on a two-contig block, which has no diagonal to slide along, and on a
+   * file the session has no circular store for. When it is present and `on`, the
+   * block is read **wrapped**: the window may run off either end of the sequence
+   * and comes back on at the other, and the ladder's ceiling becomes a cap on the
+   * window's *width* rather than on where it may sit.
+   */
+  circular?: CircularPresentation
 }
 
 export class RegionView {
@@ -211,6 +223,7 @@ export class RegionView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.circular === undefined ? {} : { circular: props.circular }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,
@@ -381,17 +394,30 @@ export class RegionView {
     this.ladder = null
     const ceiling = await this.wholeOf(rows, cols)
     if (this.disposed || ceiling === null) return
+    // **The sequence, when the reader has said it joins its own ends** (§8.16).
+    // A window on one is read wrapped, and the ceiling that ordinarily stops a
+    // read at the edge of the data stops being a limit on *where* and becomes a
+    // cap on *how wide*: one lap, past which a bin would be drawn twice.
+    //
+    // On a two-contig block there is nothing to wrap — the axes are two different
+    // sequences and the slide has no diagonal to run along — so the control is
+    // not offered there and this is `undefined`.
+    const wrap =
+      cols === undefined && this.props.circular?.on === true ? ceiling.rows : undefined
+    const lap = wrap === undefined ? undefined : wrap[1] - wrap[0]
     const query = (rowExtent: [number, number], colExtent: [number, number], rung?: string) => ({
       kind: 'matrix' as const,
       ...(rung === undefined ? {} : { rung }),
       rows: rowExtent,
       ...(cols === undefined ? {} : { cols: colExtent }),
+      ...(wrap === undefined ? {} : { wrap }),
       balance: this.props.balance,
       ...(this.props.value === undefined ? {} : { value: this.props.value }),
     })
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling,
+      ...(lap === undefined ? {} : { wrap: { rows: lap, cols: lap } }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       read: (rowExtent, colExtent, rung) => {

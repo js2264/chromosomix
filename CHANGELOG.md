@@ -57,6 +57,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **This chromosome is circular — and then the map slides round it.** A tickbox in
+  the **Map** card, on any view that is a window on one sequence (SPECS §8.16). A `.cool`
+  cannot say that a sequence joins its own ends, and nothing can infer it — a bright far
+  corner is a circular chromosome, or a translocation, or an assembly error — so it is a
+  declaration, kept per file and carried in an exported workspace.
+
+  With it the window becomes **unwrapped**: it runs off either end of the sequence and
+  comes back on at the other, so a square across the junction is up to four stored blocks,
+  one of which is the far corner where the contacts joining the two ends of the molecule
+  live. Panning past the end reads the same block width rotated round to where you now
+  are — in the square view and under the turn alike, and with no limit but one lap, past
+  which a bin would be drawn twice. Ticks, the coordinate readout, tracks, features and
+  hand-drawn marks survive the join, because the block's axis carries the sequence twice
+  and says which lap each half is on; a mark is now drawn at *every* place its locus lands
+  rather than the first, or it would flicker in and out as you slid past the junction.
+
+  And the numbers follow, automatically and with no per-task tickbox: the separation
+  between two bins becomes the shorter of the two ways round, and the longest separation a
+  sequence has becomes half of it. **P(s)** stops turning back up at the far end — that
+  upturn is the two ends of the molecule wearing a chromosome-long separation, and every
+  fit through it is a fit through an artefact — **diamond insulation** scores the bins at
+  the junction it used to leave as gaps, and the directionality index, the HiC score and
+  the scalogram wrap with them. What does *not* yet: compartments, chromosight and the O/E
+  map divide by an expected curve at a linear separation, and a deck companion draws the
+  sequence linearly. Both are stated at §8.16 rather than left to be found.
+
 - **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
   (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the
   question the diamond asks, with its window in base pairs and defaulting to the 2 Mb every published DI

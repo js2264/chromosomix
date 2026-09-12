@@ -18,6 +18,7 @@ server-side processing or data upload.
 - Dedicated Annotations panel, supporting linear tracks, 1D and 2D manual annotations, bookmarks and synthetic annotations.
 - Dedicated Aesthetics panel: to customize scales, color map, normalization, track layout, grouping, ...
 - Tabbed sessions: Several genomes opened at once, as tabs. 
+- Circular chromosomes: Tick *circular* in the Map card and the sequence stops having ends — the map slides past its last bin and back on at its first, in the square view and under the turn, with tracks, annotations and the coordinate readout carrying across the junction. Every cis analysis on it then measures separation the short way round, so a P(s) of a plasmid falls instead of turning back up.
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.

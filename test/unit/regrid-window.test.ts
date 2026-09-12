@@ -127,3 +127,70 @@ describe('carrying a window across a change of grid', () => {
     expect(spanOnAxis(axis, edges(400_000, 400_000), cells)).toBeNull()
   })
 })
+
+/**
+ * The same conversion, across the junction of a circular sequence.
+ *
+ * A block read round a circle carries the sequence **twice** — its tail, then
+ * its head (SPECS §8.16) — and a window across the join is one whose two ends
+ * are on different stretches of the same name. Resolved by name alone, the
+ * second end comes back on the first stretch, lands *before* the first end, and
+ * the regrid is refused: the ladder reads the block the reader is sliding
+ * towards and the panel declines to install it, leaving them against a wall with
+ * the way past it already in memory. That is the failure this pins.
+ */
+describe('carrying a window across a circular junction', () => {
+  const BINSIZE = 1000
+  const bins = Math.ceil(IV_LENGTH / BINSIZE)
+
+  /**
+   * A wrapped block: the last `tail` bins of IV, then its first `head` bins.
+   *
+   * Built exactly as `wrappedRuns` builds it — the second run's `unitStart` is a
+   * whole lap further along, which is what makes `bpStart` come out as zero on
+   * it rather than as a sequence length.
+   */
+  function wrappedAxis(tail: number, head: number) {
+    const blockStart = bins - tail
+    const runs: AxisRun[] = [
+      { label: 'IV', start: 0, end: tail, unitStart: blockStart - (bins - tail), unitLength: IV_LENGTH },
+      { label: 'IV', start: tail, end: tail + head, unitStart: blockStart + tail, unitLength: IV_LENGTH },
+    ]
+    return {
+      axis: locusAxisFrom({
+        runs,
+        blockStart,
+        level: 'bin',
+        binsize: BINSIZE,
+        contigLength: lengthOf,
+      }),
+      cells: tail + head,
+    }
+  }
+
+  it('reads the two stretches as the two ends of one sequence', () => {
+    const { axis } = wrappedAxis(200, 200)
+    expect(axis).not.toBeNull()
+    // The first cell is 200 bins from the end; the cell just past the join is
+    // the sequence's own beginning.
+    expect(axis?.unitToLocus(0)?.bp).toBe((bins - 200) * BINSIZE)
+    expect(axis?.unitToLocus(200)?.bp).toBe(0)
+  })
+
+  it('carries a window whose two ends are on different laps', () => {
+    const { axis, cells } = wrappedAxis(200, 200)
+    // From 100 bins before the end of the sequence to 100 bins after its start —
+    // a window straddling the junction, which is the whole gesture.
+    const span = spanOnAxis(axis, edges((bins - 100) * BINSIZE, 100 * BINSIZE), cells)
+    expect(span).not.toBeNull()
+    const [from, to] = span as readonly [number, number]
+    expect(from).toBeCloseTo(100, 6)
+    expect(to).toBeCloseTo(300, 6)
+  })
+
+  it('still refuses a window it genuinely cannot place', () => {
+    const { axis, cells } = wrappedAxis(200, 200)
+    expect(spanOnAxis(axis, edges(0, 0), cells)).toBeNull()
+    expect(spanOnAxis(axis, { from: { contig: 'V', bp: 0 }, to: { contig: 'V', bp: 1 } }, cells)).toBeNull()
+  })
+})

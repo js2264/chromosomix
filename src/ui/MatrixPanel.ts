@@ -532,6 +532,29 @@ export interface MatrixPanelOptions {
    * grey itself.
    */
   turn?: TurnPresentation
+  /**
+   * *This sequence is circular* — the declaration, and the control for it
+   * (SPECS §8.16).
+   *
+   * Offered only on a view that is a window on **one** sequence, because that is
+   * the only view the answer changes anything about: a two-contig block has no
+   * diagonal to slide along, and a whole-genome picture is a list of sequences of
+   * which some might be circular and some not — a single tickbox over it would be
+   * asking one question about several things.
+   *
+   * A presentation rather than a boolean, on {@link derive}'s rule: the state
+   * lives in the session (`state/circular.ts`), the panel draws it and reports
+   * back, and nothing here remembers an answer.
+   */
+  circular?: CircularPresentation
+}
+
+/** The *this sequence is circular* control, as the session hands it over. */
+export interface CircularPresentation {
+  /** The sequence it is about, spelled as this map spells it. */
+  label: string
+  on: boolean
+  onChange(on: boolean): void
 }
 
 /**
@@ -1975,6 +1998,27 @@ export class MatrixPanel {
         options.onLevelChange?.(this.level)
       })
       controls.unshift(field('level', levelSelect, 'Summed from the loaded matrix — no further reads.'))
+    }
+
+    // *This sequence is circular*, in the card about the map, because that is
+    // what it changes: with it the picture slides past the end of the sequence
+    // and comes back on at its beginning, in the square view and under the turn
+    // alike (§8.16). A tickbox rather than a mark in the overlay row below —
+    // those five are things drawn *over* the data, and this is a statement about
+    // what the data is.
+    const circular = this.options.circular
+    if (circular !== undefined) {
+      const box = el('input', { class: 'checkbox', type: 'checkbox' }) as HTMLInputElement
+      box.checked = circular.on
+      box.addEventListener('change', () => circular.onChange(box.checked))
+      controls.push(
+        field(
+          'circular',
+          box,
+          `Read ${circular.label} as a circle: the map slides past its end and back on at its ` +
+            'beginning, and every cis analysis measures separation the short way round.',
+        ),
+      )
     }
 
     // The four marks that draw on the matrix, in the card about the matrix.
@@ -3587,6 +3631,16 @@ export class MatrixPanel {
     const data = this.data
     if (data === null) return null
     if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
+    // **Never a block read round a circle** (SPECS §8.16). Its extents are
+    // unwrapped — they run off the end of the sequence and resolve modulo it —
+    // and every consumer of this one reads them as ordinary absolute bins:
+    // `run/blocks.ts` asks whether the block *covers* a sequence's span and then
+    // indexes straight into it. The arithmetic that keeps the two apart today is
+    // a coincidence of the width cap rather than a rule, and a task reading a
+    // rotated block as an unrotated one is the exact shape of wrong answer this
+    // whole subtree is written against. The task reads for itself instead, which
+    // is slower and right.
+    if (data.wrapped !== undefined) return null
     return {
       nrows: data.nrows,
       ncols: data.ncols,
@@ -7881,6 +7935,19 @@ export function binsOf(
  *
  * Clamped to the block, since the incoming window is padded beyond the view and
  * its edges can fall outside a block that stopped at a sequence end.
+ *
+ * **Every landing of each end, not the first**, and that is what makes a
+ * circular slide work at all. A block read across a sequence's own junction
+ * carries that sequence *twice* — the tail of it, then the head (SPECS §8.16) —
+ * so a window running from 2.95 Mb to 50 kb is a perfectly ordinary window whose
+ * two ends are on different stretches of the same name. Resolved by name alone,
+ * the second end came back on the first stretch, landed before the first end,
+ * and the regrid was refused: the ladder had read the block the reader was
+ * sliding towards and the panel declined to install it, leaving them against a
+ * wall with the way past it already in memory.
+ *
+ * The pair chosen is the **narrowest ordered one**, which on every axis that
+ * carries a contig once is the only one there is.
  */
 export function spanOnAxis(
   axis: LocusAxis | null,
@@ -7888,12 +7955,31 @@ export function spanOnAxis(
   cells: number,
 ): readonly [number, number] | null {
   if (axis === null || want === null) return null
-  const lo = axis.locusToUnit(want.from.contig, want.from.bp)
-  const hi = axis.locusToUnit(want.to.contig, want.to.bp)
-  if (lo === null || hi === null) return null
-  const from = Math.max(0, Math.min(lo, cells))
-  const to = Math.min(cells, Math.max(hi, from))
-  return to > from ? [from, to] : null
+  // `locusToUnits` answers only where the position genuinely falls on a stretch,
+  // which is what a mark wants and is one case short of what this wants: a
+  // *padded* window runs past the end of the sequence on purpose, and the old
+  // behaviour — extrapolate off the one stretch, then clamp to the block — is
+  // right for it. So the strict answer first, and the extrapolation as the
+  // fallback where there is no stretch to land on.
+  const landings = (contig: string, bp: number): number[] => {
+    const inside = axis.locusToUnits(contig, bp)
+    if (inside.length > 0) return inside
+    const outside = axis.locusToUnit(contig, bp)
+    return outside === null ? [] : [outside]
+  }
+  const lows = landings(want.from.contig, want.from.bp)
+  const highs = landings(want.to.contig, want.to.bp)
+  if (lows.length === 0 || highs.length === 0) return null
+  let best: readonly [number, number] | null = null
+  for (const lo of lows) {
+    for (const hi of highs) {
+      const from = Math.max(0, Math.min(lo, cells))
+      const to = Math.min(cells, Math.max(hi, from))
+      if (!(to > from)) continue
+      if (best === null || to - from < best[1] - best[0]) best = [from, to]
+    }
+  }
+  return best
 }
 
 export function bpWithin(
