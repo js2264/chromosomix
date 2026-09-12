@@ -55,6 +55,7 @@ import {
   type LaneFrame,
 } from './lane'
 import { basePixels } from './sequence'
+import { rotateHue } from './hue'
 import type { PairLayout, ReadPile } from '../annotations/types'
 import { FLAG } from '../annotations/bam/format'
 
@@ -753,27 +754,9 @@ export function readColoursFor(
  */
 export function readPalette(groups: readonly string[], colour: string): string[] {
   if (groups.length <= 1) return [colour]
-  const base = hueOf(colour)
   return groups.map((_, i) =>
-    i === 0 ? colour : `hsl(${Math.round((base + (i * 360) / (groups.length + 1)) % 360)} 55% 48%)`,
+    i === 0 ? colour : rotateHue(colour, (i * 360) / (groups.length + 1)),
   )
-}
-
-/** The hue of a `#rrggbb`, so a palette can be rotated from it. */
-function hueOf(colour: string): number {
-  const hex = /^#?([0-9a-f]{6})$/i.exec(colour.trim())
-  if (hex === null) return 210
-  const value = Number.parseInt(hex[1], 16)
-  const r = ((value >> 16) & 255) / 255
-  const g = ((value >> 8) & 255) / 255
-  const b = (value & 255) / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  if (max === min) return 210
-  const d = max - min
-  const h =
-    max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
-  return (h * 60 + 360) % 360
 }
 
 /**

@@ -7,6 +7,13 @@
  * layout is a greedy row packing — the same thing every genome browser does, and
  * for the same reason: a peak drawn on top of another peak is one peak.
  *
+ * Where the file carries strands and the lane has the rows for it, that packing
+ * runs **once per strand** into a band of its own — unstranded, then forward,
+ * then reverse, outward from the map (§8.16). Two features on the same bases and
+ * opposite strands are the case it is for: packed together they are two boxes
+ * one above the other and which is which is a colour you have to look up, and
+ * banded they are two boxes in the two places the strands live.
+ *
  * The zoomed-out case is handled by *changing what is drawn*, not by drawing
  * less of it. Past the point where there are more features than pixels, packing
  * is meaningless — every row is full at every position — so the lane collapses
@@ -18,6 +25,7 @@
 import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
+import { strandBands } from '../annotations/fields'
 import type { FeatureSet } from '../annotations/types'
 import {
   canvasToAcross,
@@ -42,7 +50,14 @@ export interface FeaturePlacement {
 
 export interface FeatureLayout {
   placements: FeaturePlacement[]
-  /** How many rows the packing used. At least 1. */
+  /**
+   * How many rows the lane is divided into. At least 1.
+   *
+   * What the packing *used* on an unbanded lane, and what it was *given* on a
+   * banded one — see {@link layoutFeatures}. The difference matters because
+   * this is the divisor for the row height: a band that fits into fewer rows
+   * than it was allotted still has to sit where the allotment put it.
+   */
   rows: number
   /** `true` when there were more features than pixels and rows were collapsed. */
   dense: boolean
@@ -71,6 +86,13 @@ const LAYOUT_CAP = 100_000
  * Candidates come per contig from the sorted index, so the whole visible set is
  * already in ascending order along the axis — which is exactly what a greedy
  * packing needs, and why this makes one pass rather than sorting.
+ *
+ * The rows are **banded by strand** when the file uses more than one and the
+ * lane is at least that many rows tall (§8.16): each band gets a contiguous
+ * slice of the rows and is packed inside it. The bands come from the file rather
+ * than from the window (`strandBands`), so panning never re-lays out the lane;
+ * a lane too short to give every band a row falls back to the one packing over
+ * all of them, which is what a 16-pixel lane beside a map gets.
  */
 export function layoutFeatures(
   frame: LaneFrame,
@@ -154,15 +176,81 @@ export function layoutFeatures(
     }
   }
 
-  if (dense || maxRows <= 1) {
+  if (dense) {
     return { placements, rows: 1, dense, total }
   }
 
+  // Banded by strand where the file has more than one and the lane has the room
+  // for each: unstranded at the near edge, then forward, then reverse (§8.16). A
+  // band is a *sub-range of the rows*, so the packing below is the same greedy
+  // pass it always was — run once per band, over its own rows.
+  //
+  // Asked of the lane's **thickness** rather than of `maxRows`, and the
+  // difference is the whole of whether this works where it is most wanted.
+  // `maxRows` is calibrated on the height a row needs to carry a *name under a
+  // feature* — twenty-odd pixels — so a segments lane at its default sixteen
+  // gets one row and would never band at all, which is exactly the lane a
+  // stranded BED lands in. A band needs only {@link MIN_BAND_ROW}: a glyph and
+  // the gap under it. Where both fit, the bands win and the labels go back
+  // inside the features, which is what a lane that short does anyway.
+  const bands = strandBands(set)
+  if (bands.length > 1 && frame.thickness / bands.length >= MIN_BAND_ROW) {
+    const rows = Math.max(maxRows, bands.length)
+    const shares = shareRows(rows, bands.length)
+    let offset = 0
+    for (let band = 0; band < bands.length; band++) {
+      packRows(
+        placements.filter((placement) => sign(set.strand[placement.index]) === bands[band]),
+        offset,
+        shares[band],
+      )
+      offset += shares[band]
+    }
+    // The *allocated* height, not the used one: a band that packed into one of
+    // its two rows still sits where the allocation put it, and reporting the
+    // smaller number would scale every row up and slide the bands over each
+    // other.
+    return { placements, rows: offset, dense: false, total }
+  }
+
+  if (maxRows <= 1) {
+    return { placements, rows: 1, dense, total }
+  }
+
+  const used = packRows(placements, 0, maxRows)
+  return { placements, rows: Math.max(1, used), dense: false, total }
+}
+
+/**
+ * The shortest a strand band may be, in pixels.
+ *
+ * A three-pixel glyph — the floor `drawSegments` keeps for a box — plus the gap
+ * that makes two rows read as two, plus a pixel either side of the glyph. Below
+ * it the two strands are two hairlines and the packing has bought nothing;
+ * above it they are two rows of small boxes, which is what a sixteen-pixel
+ * segments lane should be when its file has both strands in it.
+ */
+const MIN_BAND_ROW = 8
+
+/** `+1`, `-1` or `0`, so a strand column with other values in it still bands. */
+function sign(strand: number): number {
+  return strand > 0 ? 1 : strand < 0 ? -1 : 0
+}
+
+/**
+ * Greedy row packing over `rows` rows starting at `from`. Returns how many were
+ * used.
+ *
+ * Candidates arrive in ascending order along the axis — the sorted index gives
+ * them that way, and a band is a filter over them, which preserves it — so this
+ * is one pass rather than a sort.
+ */
+function packRows(placements: FeaturePlacement[], from: number, rows: number): number {
   const rowEnds: number[] = []
   for (const placement of placements) {
     let row = rowEnds.findIndex((end) => end + ROW_GAP <= placement.along0)
     if (row < 0) {
-      if (rowEnds.length < maxRows) {
+      if (rowEnds.length < rows) {
         row = rowEnds.length
         rowEnds.push(placement.along1)
       } else {
@@ -175,9 +263,24 @@ export function layoutFeatures(
     } else {
       rowEnds[row] = placement.along1
     }
-    placement.row = row
+    placement.row = from + row
   }
-  return { placements, rows: Math.max(1, rowEnds.length), dense: false, total }
+  return rowEnds.length
+}
+
+/**
+ * How the lane's rows are split between the strand bands.
+ *
+ * Evenly, with the remainder going to the earliest bands, and **not** in
+ * proportion to how many features each band holds in this window. Proportional
+ * would pack better and would move every glyph in the lane each time a pan
+ * changed the balance; an even split is the same split at every position in the
+ * genome, which is what makes the three bands readable as three bands.
+ */
+function shareRows(rows: number, bands: number): number[] {
+  const each = Math.floor(rows / bands)
+  const spare = rows - each * bands
+  return Array.from({ length: bands }, (_, i) => each + (i < spare ? 1 : 0))
 }
 
 function smallestIndex(values: number[]): number {
@@ -220,27 +323,47 @@ export interface FeaturePaint {
   /**
    * A colour per feature, where one feature's ink is not the lane's.
    *
-   * Only a variant lane has one today (§8.14): a substitution is drawn in the
-   * colour of the base it substitutes to, so the row agrees in a column with the
-   * sequence above it and the pile below it. Absent — which is every other
-   * caller — draws the whole set in {@link colour}, in one path, exactly as it
-   * always did.
+   * Resolved by `render/featureInk.ts` from the field the lane's style names
+   * (§8.16) — by strand, which is where every feature lane starts; by a called
+   * variant's substituted base, which is §8.14's older rule and still its
+   * default; by a column of the file; or not at all. Absent draws the whole set
+   * in {@link colour}, in one path, exactly as this always did — which is what
+   * `one colour` in the picker resolves to.
    *
    * The index is into the {@link FeatureSet}, not into the layout, because that
    * is what a placement carries and what the label pass already uses.
    */
   colourOf?: (index: number) => string
+  /**
+   * Point a stranded feature the way it runs.
+   *
+   * `true` unless said otherwise, because a stranded file is the common case
+   * and the direction is the fact two colours cannot state: an ink says *which*
+   * strand, a point says *which way*, and a reader following an operon is
+   * reading the second. It reaches only the features that have a strand and the
+   * room for a head — see {@link ARROW_MIN_WIDTH} — so a peak set with no strand
+   * column comes out in the plain rectangles it always did, whatever this says.
+   */
+  arrows?: boolean
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
 export const LABEL_BAND = 11
 
 /**
- * Plain segments: a box per feature.
+ * Plain segments: a box per feature, pointed where the file gives it a strand.
  *
- * Strand, where the file carries one, is a notch on the trailing end rather than
- * an arrow beside the box — at the sizes a peak lane runs to there is no room
- * beside anything, and a notch costs no width at all.
+ * The point is *part of the box* rather than a mark beside it — the head is cut
+ * out of the leading end, so the glyph occupies exactly the bases the feature
+ * does and the thing that is drawn, the thing that is clicked and the thing the
+ * packing kept a row clear for stay one span (§8.4). At the sizes a peak lane
+ * runs to there is no room beside anything, and an arrow drawn past the end of
+ * a feature is an arrow claiming bases the file never mentioned.
+ *
+ * A feature with no strand, and every feature on a lane whose reader has turned
+ * the points off, is the rectangle this always drew. So is one too narrow to
+ * hold a head: below {@link ARROW_MIN_WIDTH} a point is a smudge that makes a
+ * five-pixel peak look like a four-pixel peak.
  */
 export function drawSegments(
   ctx: CanvasRenderingContext2D,
@@ -256,20 +379,126 @@ export function drawSegments(
   const rowHeight = frame.thickness / layout.rows
   const band = labelBandOf(paint, rowHeight)
   const boxHeight = Math.max(3, rowHeight - band - 2)
+  const pointed = paint.arrows !== false
   ctx.save()
   ctx.globalAlpha = paint.opacity
-  // Grouped by ink rather than one rectangle per fill: a lane of ten thousand
-  // boxes in one colour is one path, and a variant lane's five inks are five —
-  // which is the difference between one state change and ten thousand of them.
-  // The common case, no `colourOf`, is the single group it always was.
-  //
-  // It does reorder the painting, and where two features in one row overlap the
-  // one on top is now the one whose *ink* was laid down last rather than the one
-  // later in the set — so it can differ from the feature `featureAt` names. That
-  // is bounded to a lane with more than one ink, which is a variant lane, where
-  // two records overlapping in one row means two calls at the same position;
-  // the hit test's answer is a real record at the place that was clicked either
-  // way, and the card names which.
+  for (const [ink, placements] of groupByInk(layout, paint)) {
+    ctx.fillStyle = ink
+    ctx.beginPath()
+    for (const placement of placements) {
+      const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
+      segmentPath(
+        ctx,
+        frame,
+        placement.along0,
+        placement.along1,
+        top,
+        boxHeight,
+        pointed ? set.strand[placement.index] : 0,
+      )
+    }
+    ctx.fill()
+  }
+
+  if (!layout.dense) {
+    // Chevrons *inside* a long box, in the halo colour, so a segment that runs
+    // across the whole window says which way it goes at every point rather than
+    // only at the end the head is on. Only on the long ones: on a box a few
+    // times the height of its own row the head is the whole of the answer, and
+    // a tick through it is noise over a fact already stated.
+    if (pointed) {
+      drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band, {
+        least: SEGMENT_MARK_MIN,
+        reach: boxHeight * 0.3,
+      })
+    }
+    if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
+  }
+  ctx.restore()
+}
+
+/**
+ * The narrowest a feature can be and still be worth pointing, in pixels.
+ *
+ * A head is cut out of the box, so on a narrow one it eats the part that says
+ * *where*: at four pixels a pentagon and a rectangle are the same three pixels
+ * of ink with a different corner, and the reader has lost a pixel of extent to
+ * learn nothing. Six is where a head reads as a head.
+ */
+export const ARROW_MIN_WIDTH = 6
+
+/** …and the shortest head worth cutting, once the two caps below are applied. */
+const ARROW_MIN_HEAD = 2
+
+/** Chevrons along each spine, every {@link STRAND_MARK_GAP} pixels. */
+const STRAND_MARK_GAP = 26
+
+/**
+ * How long a segment must be before chevrons are drawn through it.
+ *
+ * Four gaps, so the first box to get them holds three of them and reads as a
+ * run rather than as a box with one mark in it.
+ */
+const SEGMENT_MARK_MIN = STRAND_MARK_GAP * 4
+
+/**
+ * One feature's outline: a rectangle, or a rectangle with a point on it.
+ *
+ * Through `laneRect` in the flat case and through `laneMove`/`laneLine` in the
+ * pointed one, so a right-hand lane's quarter turn stays `render/lane.ts`'s
+ * business in both (§8.8). The head is capped twice — by the glyph's own height,
+ * so it is a point rather than a spear, and by a third of the feature's width,
+ * so a short feature keeps most of its body.
+ */
+function segmentPath(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  along0: number,
+  along1: number,
+  top: number,
+  height: number,
+  strand: number,
+): void {
+  const width = along1 - along0
+  const head = strand === 0 ? 0 : Math.min(height * 0.55, width * 0.35)
+  if (head < ARROW_MIN_HEAD || width < ARROW_MIN_WIDTH) {
+    const [x, y, boxWidth, boxHeight] = laneRect(frame, along0, along1, top, top + height)
+    ctx.rect(x, y, boxWidth, boxHeight)
+    return
+  }
+  // `+1` is further along the axis, which on a right-hand lane is downward —
+  // the same reading the chevrons make, so the two agree on every edge.
+  const tip = strand > 0 ? along1 : along0
+  const neck = strand > 0 ? along1 - head : along0 + head
+  const tail = strand > 0 ? along0 : along1
+  laneMove(ctx, frame, tail, top)
+  laneLine(ctx, frame, neck, top)
+  laneLine(ctx, frame, tip, top + height / 2)
+  laneLine(ctx, frame, neck, top + height)
+  laneLine(ctx, frame, tail, top + height)
+  ctx.closePath()
+}
+
+/**
+ * The placements, gathered under the ink each is drawn in.
+ *
+ * Grouped by ink rather than one fill per feature: a lane of ten thousand boxes
+ * in one colour is one path, and a lane coloured by a twelve-category column is
+ * twelve — which is the difference between twelve state changes and ten
+ * thousand of them. The common case, no `colourOf`, is the single group it
+ * always was.
+ *
+ * It does reorder the painting, and where two features in one row overlap the
+ * one on top is now the one whose *ink* was laid down last rather than the one
+ * later in the set — so it can differ from the feature `featureAt` names. That
+ * happens only where the packing had to overlap two features in one row, where
+ * the hit test's answer is a real record at the place that was clicked either
+ * way, and the card names which.
+ */
+function groupByInk(
+  layout: FeatureLayout,
+  paint: FeaturePaint,
+): Map<string, FeaturePlacement[]> {
   const byInk = new Map<string, FeaturePlacement[]>()
   for (const placement of layout.placements) {
     const ink = paint.colourOf === undefined ? paint.colour : paint.colourOf(placement.index)
@@ -277,27 +506,7 @@ export function drawSegments(
     if (held === undefined) byInk.set(ink, [placement])
     else held.push(placement)
   }
-  for (const [ink, placements] of byInk) {
-    ctx.fillStyle = ink
-    ctx.beginPath()
-    for (const placement of placements) {
-      const top = placement.row * rowHeight + (rowHeight - band - boxHeight) / 2
-      const [x, y, width, height] = laneRect(
-        frame,
-        placement.along0,
-        placement.along1,
-        top,
-        top + boxHeight,
-      )
-      ctx.rect(x, y, width, height)
-    }
-    ctx.fill()
-  }
-
-  if (paint.labels && !layout.dense) {
-    labelFeatures(ctx, frame, set, layout, paint, rowHeight)
-  }
-  ctx.restore()
+  return byInk
 }
 
 /**
@@ -342,79 +551,91 @@ export function drawGenes(
   const exonHeight = Math.max(3, Math.min(9, glyph * 0.5))
   const cdsHeight = Math.max(exonHeight + 2, Math.min(13, glyph * 0.78))
 
+  const pointed = paint.arrows !== false
   ctx.save()
   ctx.globalAlpha = paint.opacity
 
-  // The spines first, in one path: a gene with no exon table is a bare box, and
-  // one with exons is a line the boxes sit on.
-  ctx.strokeStyle = paint.colour
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  for (const placement of layout.placements) {
-    if (set.exonAt[placement.index + 1] === set.exonAt[placement.index]) continue
-    const centre = placement.row * rowHeight + glyph / 2
-    const [x, y, width, height] = laneRect(
-      frame,
-      placement.along0,
-      placement.along1,
-      centre - 0.5,
-      centre + 0.5,
-    )
-    ctx.rect(x, y, width, height)
-  }
-  ctx.fillStyle = paint.colour
-  ctx.fill()
+  // One group of placements per ink, and all three passes inside it: a gene's
+  // spine, its exons and its coding part are one glyph and must come out in one
+  // colour, whatever column the reader is colouring by (§8.16). A lane with no
+  // `colourOf` is the single group it always was.
+  for (const [ink, placements] of groupByInk(layout, paint)) {
+    ctx.strokeStyle = ink
+    ctx.fillStyle = ink
+    ctx.lineWidth = 1
 
-  // Exons, then the coding part of each exon over them.
-  for (const pass of [0, 1] as const) {
-    const height = pass === 0 ? exonHeight : cdsHeight
+    // The spines first, in one path: a gene with no exon table is a bare box,
+    // and one with exons is a line the boxes sit on.
     ctx.beginPath()
-    for (const placement of layout.placements) {
-      const index = placement.index
-      const cdsFrom = set.cdsStart[index]
-      const cdsTo = set.cdsEnd[index]
-      if (pass === 1 && !(cdsTo > cdsFrom)) continue
+    for (const placement of placements) {
+      if (set.exonAt[placement.index + 1] === set.exonAt[placement.index]) continue
       const centre = placement.row * rowHeight + glyph / 2
-      const top = centre - height / 2
-      const first = set.exonAt[index]
-      const last = set.exonAt[index + 1]
-
-      if (first === last) {
-        // No sub-structure: the feature is its own single block, and only on the
-        // first pass — there is no coding span to thicken.
-        if (pass === 0) {
-          const [x, y, width, boxHeight] = laneRect(
-            frame,
-            placement.along0,
-            placement.along1,
-            top,
-            top + height,
-          )
-          ctx.rect(x, y, width, boxHeight)
-        }
-        continue
-      }
-
-      const scale = (placement.along1 - placement.along0) / Math.max(1, set.end[index] - set.start[index])
-      for (let exon = first; exon < last; exon++) {
-        let bpFrom = set.exonStart[exon]
-        let bpTo = set.exonEnd[exon]
-        if (pass === 1) {
-          bpFrom = Math.max(bpFrom, cdsFrom)
-          bpTo = Math.min(bpTo, cdsTo)
-          if (!(bpTo > bpFrom)) continue
-        }
-        const a0 = placement.along0 + (bpFrom - set.start[index]) * scale
-        const a1 = placement.along0 + (bpTo - set.start[index]) * scale
-        const [x, y, width, boxHeight] = laneRect(frame, a0, a1, top, top + height)
-        ctx.rect(x, y, width, boxHeight)
-      }
+      const [x, y, width, height] = laneRect(
+        frame,
+        placement.along0,
+        placement.along1,
+        centre - 0.5,
+        centre + 0.5,
+      )
+      ctx.rect(x, y, width, height)
     }
     ctx.fill()
+
+    // Exons, then the coding part of each exon over them.
+    for (const pass of [0, 1] as const) {
+      const height = pass === 0 ? exonHeight : cdsHeight
+      ctx.beginPath()
+      for (const placement of placements) {
+        const index = placement.index
+        const cdsFrom = set.cdsStart[index]
+        const cdsTo = set.cdsEnd[index]
+        if (pass === 1 && !(cdsTo > cdsFrom)) continue
+        const centre = placement.row * rowHeight + glyph / 2
+        const top = centre - height / 2
+        const first = set.exonAt[index]
+        const last = set.exonAt[index + 1]
+
+        if (first === last) {
+          // No sub-structure: the feature is its own single block, and only on
+          // the first pass — there is no coding span to thicken. It is pointed
+          // like a segment, because a box is all this gene has and the chevrons
+          // below ride a spine it does not own.
+          if (pass === 0) {
+            segmentPath(
+              ctx,
+              frame,
+              placement.along0,
+              placement.along1,
+              top,
+              height,
+              pointed ? set.strand[index] : 0,
+            )
+          }
+          continue
+        }
+
+        const scale =
+          (placement.along1 - placement.along0) / Math.max(1, set.end[index] - set.start[index])
+        for (let exon = first; exon < last; exon++) {
+          let bpFrom = set.exonStart[exon]
+          let bpTo = set.exonEnd[exon]
+          if (pass === 1) {
+            bpFrom = Math.max(bpFrom, cdsFrom)
+            bpTo = Math.min(bpTo, cdsTo)
+            if (!(bpTo > bpFrom)) continue
+          }
+          const a0 = placement.along0 + (bpFrom - set.start[index]) * scale
+          const a1 = placement.along0 + (bpTo - set.start[index]) * scale
+          const [x, y, width, boxHeight] = laneRect(frame, a0, a1, top, top + height)
+          ctx.rect(x, y, width, boxHeight)
+        }
+      }
+      ctx.fill()
+    }
   }
 
   if (!layout.dense) {
-    drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band)
+    if (pointed) drawStrandMarks(ctx, frame, set, layout, paint, rowHeight, band)
     if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
@@ -476,8 +697,21 @@ function drawDensity(
   ctx.restore()
 }
 
-/** Chevrons along each spine, every {@link STRAND_MARK_GAP} pixels. */
-const STRAND_MARK_GAP = 26
+/**
+ * Where the chevrons go, for the caller that is not a gene model.
+ *
+ * A gene's chevrons ride a spine that is thinner than the glyph around it, so
+ * they may be as tall as the row allows and they start on the first gene long
+ * enough to hold one. A segment's ride *inside* a filled box: they must fit the
+ * box's own height, and they are worth drawing only on a box long enough that
+ * the head on its end has stopped being the whole answer.
+ */
+interface MarkOptions {
+  /** The narrowest feature that gets any. */
+  least: number
+  /** How far a chevron reaches from the centre line, before the row's own cap. */
+  reach: number
+}
 
 function drawStrandMarks(
   ctx: CanvasRenderingContext2D,
@@ -487,18 +721,23 @@ function drawStrandMarks(
   paint: FeaturePaint,
   rowHeight: number,
   band = 0,
+  options?: MarkOptions,
 ): void {
   ctx.save()
   ctx.strokeStyle = paint.haloColour
   ctx.lineWidth = 1
   ctx.globalAlpha = paint.opacity * 0.9
   ctx.beginPath()
-  const reach = Math.max(2, Math.min(3.5, rowHeight * 0.2))
+  const reach = Math.max(
+    2,
+    Math.min(3.5, rowHeight * 0.2, options?.reach ?? Number.POSITIVE_INFINITY),
+  )
+  const least = Math.max(STRAND_MARK_GAP, options?.least ?? 0)
   for (const placement of layout.placements) {
     const strand = set.strand[placement.index]
     if (strand === 0) continue
     const width = placement.along1 - placement.along0
-    if (width < STRAND_MARK_GAP) continue
+    if (width < least) continue
     // The chevrons ride the spine, so they follow it above the name's band.
     const centre = placement.row * rowHeight + (rowHeight - band) / 2
     for (let at = placement.along0 + STRAND_MARK_GAP / 2; at < placement.along1; at += STRAND_MARK_GAP) {

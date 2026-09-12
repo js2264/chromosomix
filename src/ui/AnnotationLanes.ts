@@ -72,7 +72,9 @@ import {
   type NameBox,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
-import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
+import { VARIANT_MIN_WIDTH } from '../render/variants'
+import { featureColouring } from '../render/featureInk'
+import { featuresOf } from '../annotations/fields'
 import type { OverlayAxes } from '../render/overlays'
 import type { Rect } from '../render/heatmap'
 import type { Scale } from '../render/scale'
@@ -1315,6 +1317,12 @@ export class AnnotationLanes {
         const layout = layoutFeatures(frame, axis, entry.payload.data, rows, least)
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const set = entry.payload.data
+        // The same rule as the browser's, on the same lane drawn beside a map
+        // (§8.16, and §8.14 for the variant arm of it). One resolution of the
+        // colouring on both surfaces, because a lane that read one way under the
+        // map and another in the browser would be two pictures of one file.
+        const features = featuresOf(entry.style, entry.kind)
+        const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
         const paint = {
           colour: entry.style.colour,
           guideColour: geometry.palette.guide,
@@ -1324,22 +1332,20 @@ export class AnnotationLanes {
           labels: text,
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
-          // The same rule as the browser's, on the same lane drawn beside a map
-          // (§8.14). A variant lane belongs on both surfaces — unlike a pile,
-          // which needs a base to have a pixel — because a variant is an
-          // interval and a bin is a range of them, so the density this collapses
-          // to at bin resolution is a true reading rather than a smear.
-          ...(entry.kind === 'variants'
-            ? {
-                colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
-              }
-            : {}),
+          arrows: features.arrows,
+          colourOf: ink.colourOf,
         }
         if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
         else drawSegments(ctx, frame, set, layout, paint)
         if (text) {
           label = {
-            entries: [entry],
+            // Named with a colour that is in the lane — §8.12's rule, as the
+            // categorical strip above uses it.
+            entries: [
+              ink.chip === entry.style.colour
+                ? entry
+                : { ...entry, style: { ...entry.style, colour: ink.chip } },
+            ],
             detail: layout.dense
               ? {
                   kind: 'text',

@@ -2194,6 +2194,32 @@ p {
   flex: none;
 }
 
+/* A numeric colouring's key: the ramp itself, with its two ends written on it.
+
+   Chips are the wrong shape for a hundred thousand p-values — there are no
+   categories to name — and the only two numbers worth printing are the ones the
+   ramp runs between. It fills the row so the gradient is long enough to read a
+   middle value off, which is the whole reason a ramp beats five swatches. */
+.ann-key-ramp {
+  flex: 1 1 3rem;
+  min-width: 2.5rem;
+  height: 0.55rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--line);
+}
+
+.ann-key-end {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The whole ramp row on one line, since its three parts are one sentence. */
+.ann-key:has(.ann-key-ramp) {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* Three switches on one line where they fit, two and one where they do not.
    `.ann-inline` does not wrap — it is for a pair of fields that must stay
    level — and these are independent buttons with nothing to line up. */
