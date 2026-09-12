@@ -57,7 +57,9 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import { variantInk, VARIANT_MIN_WIDTH } from '../render/variants'
+import { VARIANT_MIN_WIDTH } from '../render/variants'
+import { featureColouring } from '../render/featureInk'
+import { featuresOf } from '../annotations/fields'
 import type {
   AnnotationEntry,
   BaseRegion,
@@ -2039,6 +2041,12 @@ export class BrowserView {
       const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows, least)
       this.layouts.set(entry.id, { frame, layout })
       const set = entry.payload.data
+      // What the boxes are coloured by, and whether the stranded ones point
+      // (§8.16). Resolved through `featureColouring` on both surfaces and in the
+      // settings card's key, so the picture, the legend and the lane's own name
+      // cannot disagree about what a colour means.
+      const features = featuresOf(entry.style, entry.kind)
+      const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
       const paint = {
         colour: entry.style.colour,
         guideColour: palette.labelColor,
@@ -2048,21 +2056,23 @@ export class BrowserView {
         labels: this.text,
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
-        // A variant lane, and only a variant lane, draws each record in the ink
-        // of the base it substitutes to and gives a single base a floor to be
-        // seen and hit at (§8.14). Every other feature lane keeps the one path
-        // and the one-pixel floor it always had.
-        ...(entry.kind === 'variants'
-          ? {
-              colourOf: (at: number) => variantInk(set.detail[at] ?? '', entry.style.colour),
-            }
-          : {}),
+        arrows: features.arrows,
+        colourOf: ink.colourOf,
       }
       if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
       else drawSegments(ctx, frame, set, layout, paint)
       if (this.text) {
         label = {
-          entries: [entry],
+          // Chipped in a colour that is **in the lane**: §8.12's rule, which a
+          // categorical colouring needs here for the reason it needs it there —
+          // a green chip over a lane of blue and orange is a legend for a track
+          // that is not there. `featureColouring` decides it, and answers with
+          // the entry's own colour wherever that colour is still drawn.
+          entries: [
+            ink.chip === entry.style.colour
+              ? entry
+              : { ...entry, style: { ...entry.style, colour: ink.chip } },
+          ],
           detail: layout.dense
             ? {
                 kind: 'text',

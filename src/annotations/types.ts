@@ -35,6 +35,7 @@
  */
 import { DEFAULT_DIVERGING_COLORMAP } from '../render/colormaps'
 import type { TrackOp } from './derived'
+import type { FeatureStyle } from './fields'
 
 /**
  * `metadata` and `classes` are the two the file itself supplies (§8.12). A
@@ -718,6 +719,15 @@ export interface AnnotationStyle {
    * Optional, so nothing else changes shape — see {@link ReadStyle}.
    */
   reads?: ReadStyle
+  /**
+   * The controls only a lane of intervals has (§8.16).
+   *
+   * Optional for the reason `reads` is, and a type-only import for a reason of
+   * its own: `colourBy` is a key of the file rather than a member of a closed
+   * set, so the module that can say what one means is `annotations/fields.ts`,
+   * and that module reads this one. See {@link FeatureStyle}.
+   */
+  features?: FeatureStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number

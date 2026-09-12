@@ -128,6 +128,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   suggest a **display scale**, which is what puts the scalogram on a log axis — its values are genomic
   separations, and on a linear axis all five bands live in the bottom tenth of the lane.
 
+- **Genomic features are drawn as what they are: coloured by strand, pointing the way they run, and
+  banded so the two strands are two places.** Every interval lane — a BED, a peak set, a bigBed, a
+  gene model, a VCF — used to be one flat colour with the direction hidden in a tooltip, which meant
+  a screenful of boxes said *where* and nothing else. Three changes, on all of them at once, because
+  they are one renderer (§8.16):
+
+  - **Strand is the default colouring**, in three colours: forward keeps the colour on the lane's own
+    chip, reverse is that hue turned most of the way round, and a feature whose file carries no
+    strand takes the grey this app already draws an `N` in and already gives a variant with no single
+    base behind it. The two hues come from the reader's own colour rather than a fixed blue and red,
+    so four peak sets on one screen are still told apart by the colours they were given — the same
+    argument an alignment lane's categories already make. A file with *no* strand in it — a peak set,
+    most BEDs — keeps its one colour rather than turning entirely grey, since a grey meaning "no
+    strand" says nothing where nothing has one.
+  - **A stranded feature is pointed.** The head is cut *out of* the leading end rather than drawn
+    past it, so the glyph covers exactly the bases the feature does and what is clicked is still what
+    is drawn; a long one carries chevrons through it as well, so a segment spanning the window says
+    its direction at every point. Below six pixels there is no head, because a pentagon three pixels
+    wide is a rectangle that has lost a pixel. A gene *with* exons keeps the chevrons on its spine and
+    takes no head — a point on its last exon would be a point on a piece of the gene rather than on
+    the gene.
+  - **The rows are banded**: unstranded, then forward, then reverse, outward from the map. Two genes
+    on the same bases and opposite strands used to be two boxes one above the other with the
+    difference carried entirely by colour. The bands are read from the *file* rather than from the
+    window, so panning never rearranges the lane, and whether they fit is asked of the lane's height
+    rather than of the rows a *label* needs — so a segments lane at its default sixteen pixels, which
+    is exactly where a stranded BED lands, bands into two rather than never banding at all. Below
+    eight pixels a band would be a hairline, and the lane falls back to the packing it always had.
+
+- **A drop-down on every interval lane, to colour the segments by any column the file carries.**
+  `source`, `biotype`, `signal`, `-log10 q`, `QUAL`, `filter`, `score` — whatever the parsers wrote.
+  The keys are read back out of the joined attribute string each feature carries (§8.3's decision,
+  and this is what it costs), sampled across the whole file rather than its head, cached per set and
+  bounded at twenty thousand rows — so a picker over a four-million-line annotation opens as fast as
+  one over a BED with nine lines in it. A categorical column gets the same colour-vision-safe palette
+  a metadata strip uses, handed out commonest-first with a twelfth-and-beyond `other` bucket; a
+  numeric one gets a `viridis` ramp fitted to the file, never to the window — a colour that meant one
+  thing before a pan and another after it is a legend that lies without saying so. The key sits in
+  the card under the picker, built from the same function the renderer calls, and the chip on the
+  lane's name becomes a colour that is actually in the lane.
+
+  A choice whose column the open file does not have is **kept and marked** rather than quietly
+  corrected, because the same session opened against the other half of an experiment should colour by
+  `biotype` again the moment the GTF comes back. Nothing here refetches: a feature set is in memory
+  whole and a field is a column of it, so a dozen answers cost one repaint between them.
+
+  Alongside it, a **point strands** switch for the readers and the figures that want the plain
+  rectangles back.
+
 - **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
   already on.** The two shipped portal shelves listed contact maps and nothing else — 1,200 rows
   of 4DN and 200 of ENCODE — and the filter that did it was on the *experiment*, which needed
@@ -614,6 +663,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   keep their indices.
 
 ### Changed
+
+- **A GTF's biotype is written into the feature's attributes with its key in front of it**
+  (`biotype protein_coding`, where it was a bare `protein_coding`). An attribute with no key is a
+  fact nothing can ask for — invisible to the new column picker — and the feature card behind a
+  click gains a label it was missing anyway.
 
 - **The number under a domain pileup is no longer P2LL.** Peak-to-lower-left
   measures a dot against the corner furthest from it, and the lower-left corner

@@ -17,6 +17,13 @@
 
 import type { AnnotationStore } from '../annotations/store'
 import {
+  featureFields,
+  featuresOf,
+  fieldFor,
+  type FeatureStyle,
+} from '../annotations/fields'
+import { featureColouring, rampStops } from '../render/featureInk'
+import {
   COLOUR_BY,
   PAIR_LAYOUTS,
   TRACK_MODES,
@@ -25,6 +32,7 @@ import {
   scaleOf,
   type AnnotationEntry,
   type ColourBy,
+  type FeatureSet,
   type PairLayout,
   type ReadStyle,
   type TrackMode,
@@ -691,5 +699,192 @@ export function layoutField(store: AnnotationStore, entry: AnnotationEntry): HTM
     { class: 'field ann-field ann-field-tight' },
     el('span', { class: 'field-label', text: 'draw as' }),
     select,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The controls a lane of intervals has (§8.16)
+// ---------------------------------------------------------------------------
+
+/**
+ * The feature controls **as the store holds them now**, and the write after it.
+ *
+ * `patchReads`' twin, and it is a separate function for the one reason that
+ * matters: a nested record cannot be merged by `restyle`, so writing
+ * `{ features: {...} }` replaces the whole record and the other field has to
+ * come from somewhere. It comes from the *store* rather than from the `entry`
+ * the control was built with, because `AnnotationCard.render` defers rebuilding
+ * while a control holds focus — so after picking a colouring the row on screen
+ * is older than the store, and a write built from it would silently undo the
+ * reader's previous edit.
+ *
+ * Nothing is written through to a partner row, which is the whole difference
+ * from `patchReads`: these are about how one lane is *drawn*, and a feature set
+ * has no second row drawn from the same bytes.
+ */
+function patchFeatures(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  patch: Partial<FeatureStyle>,
+): void {
+  const live = store.byId(entry.id) ?? entry
+  store.restyle(entry.id, { features: { ...featuresOf(live.style, live.kind), ...patch } })
+}
+
+/** The set behind a row, or `undefined` while the worker is still parsing it. */
+function setOf(entry: AnnotationEntry): FeatureSet | undefined {
+  return entry.payload?.kind === 'features' ? entry.payload.data : undefined
+}
+
+/**
+ * Which column the segments take their colour from.
+ *
+ * A select, and a long one, because the answers are the *file's* — `source`,
+ * `biotype`, `signal`, `filter` — and the reader recognises the one they want
+ * by name rather than choosing between four fixed pictures. What is offered
+ * comes from `annotations/fields.ts`, which reads the keys back out of the
+ * detail strings the parsers wrote, so nothing here has to know that a GTF has
+ * biotypes and a narrowPeak has q-values.
+ *
+ * Unlike an alignment lane's colouring this one **refetches nothing**. A
+ * feature set is in memory whole, the field is a column of it, and the change is
+ * a repaint — which is why the picker can offer a dozen answers without any of
+ * them costing a read.
+ *
+ * The lane's own strand is first and is where every one of these lanes starts.
+ * A choice whose column the file no longer carries is kept rather than
+ * corrected: the same session opened against the other half of an experiment
+ * should colour by `biotype` again when the GTF comes back, and the picker shows
+ * it as missing rather than quietly moving the reader somewhere else.
+ */
+export function featureColourField(
+  store: AnnotationStore,
+  entry: AnnotationEntry,
+  onPicked?: (by: string) => void,
+): HTMLElement {
+  const style = featuresOf(entry.style, entry.kind)
+  const fields = featureFields(setOf(entry), entry.kind)
+  const select = el('select', { class: 'select' })
+  for (const field of fields) {
+    select.appendChild(el('option', { value: field.key, text: field.label, title: field.hint }))
+  }
+  if (fieldFor(fields, style.colourBy) === null) {
+    // A column this file does not have — a session from another assembly, or a
+    // row still loading. Shown as itself and marked, so the reader can see what
+    // the choice *was* rather than watching it silently become something else.
+    select.appendChild(
+      el('option', {
+        value: style.colourBy,
+        text: `${style.colourBy} (not in this file)`,
+        title: 'Stored from another file. It comes back the moment a file carrying the column is loaded into this row.',
+      }),
+    )
+  }
+  select.value = style.colourBy
+  select.title = fieldFor(fields, style.colourBy)?.hint ?? ''
+  select.addEventListener('change', () => {
+    const by = select.value
+    select.title = fieldFor(fields, by)?.hint ?? ''
+    patchFeatures(store, entry, { colourBy: by })
+    // Refreshed here rather than left to the card's own rebuild: picking from a
+    // select leaves the focus on it, the card defers while a control has focus,
+    // and the lane does not — so the key under the picker would go on naming
+    // the old colours until the reader happened to click somewhere else.
+    onPicked?.(by)
+  })
+  return el(
+    'label',
+    { class: 'field ann-field ann-field-tight' },
+    el('span', { class: 'field-label', text: 'colour by' }),
+    select,
+  )
+}
+
+/**
+ * Point the stranded features the way they run.
+ *
+ * A switch rather than a setting with three answers, because there are two: a
+ * lane where the direction is worth a glyph and one where it is not. It changes
+ * nothing about features the file gives no strand, which is why it is offered on
+ * every interval lane rather than only on the stranded ones — a peak set that
+ * turns out to carry strands should not need its settings re-read to say so.
+ */
+export function arrowsToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const on = featuresOf(entry.style, entry.kind).arrows
+  const chip = button(
+    'point strands',
+    () =>
+      patchFeatures(store, entry, {
+        arrows: !featuresOf((store.byId(entry.id) ?? entry).style, entry.kind).arrows,
+      }),
+    {
+      class: `btn btn-chip${on ? ' is-on' : ''}`,
+      title:
+        'Cut an arrowhead out of the leading end of every feature the file gives a strand, and ' +
+        'run chevrons through the long ones. The glyph keeps the feature’s exact extent either way.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(on))
+  return el('div', { class: 'ann-chips' }, chip)
+}
+
+/**
+ * Which colour is which value, under the control that decides it.
+ *
+ * In the card rather than on the canvas, for §8.13's reason and one more of its
+ * own: a feature lane can be sixteen pixels tall beside a map, which is not a
+ * legend's worth of room at any font. Built from `featureColouring` — the
+ * function the renderer itself calls — so a key that disagreed with the picture
+ * would be a bug in the ink rule rather than a second palette drifting out of
+ * step.
+ *
+ * A numeric column gets a ramp with its two ends written on it instead of a row
+ * of chips, because a hundred thousand p-values have no categories to name and
+ * the only two numbers worth printing are the ones the ramp runs between.
+ */
+export function featureLegend(entry: AnnotationEntry): HTMLElement {
+  const host = el('div', { class: 'ann-key' })
+  fillFeatureLegend(host, entry)
+  return host
+}
+
+/** Redraw a key in place, for {@link featureColourField}'s change handler. */
+export function fillFeatureLegend(
+  host: HTMLElement,
+  entry: AnnotationEntry,
+  by?: string,
+): void {
+  const style = featuresOf(entry.style, entry.kind)
+  const { key } = featureColouring(
+    setOf(entry),
+    entry.kind,
+    by ?? style.colourBy,
+    entry.style.colour,
+  )
+  if (key.ramp !== null) {
+    host.replaceChildren(
+      el('span', { class: 'ann-key-end', text: trimNumber(key.ramp.min) }),
+      el('span', {
+        class: 'ann-key-ramp',
+        style: { background: `linear-gradient(to right, ${rampStops().join(', ')})` },
+      }),
+      el('span', { class: 'ann-key-end', text: trimNumber(key.ramp.max) }),
+    )
+    return
+  }
+  // One chip is not a key, it is a restatement of the lane's own colour.
+  if (key.levels.length <= 1) {
+    host.replaceChildren()
+    return
+  }
+  host.replaceChildren(
+    ...key.levels.map((level) =>
+      el(
+        'span',
+        { class: 'ann-key-item' },
+        el('span', { class: 'ann-key-chip', style: { background: level.colour } }),
+        el('span', { text: level.label }),
+      ),
+    ),
   )
 }

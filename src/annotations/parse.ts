@@ -552,8 +552,13 @@ export function parseGtf(text: string): FeatureSet {
     // `name === id` is how a nameless gene is spelled; see `FeatureSet.id`.
     const name = geneName !== '' ? geneName : draft.geneId
     const biotype = draft.biotype !== '' ? draft.biotype : (geneBiotypes.get(draft.geneId) ?? '')
+    // `biotype protein_coding` rather than a bare `protein_coding`: an
+    // attribute with no key in front of it is a fact nothing can ask for. The
+    // colour picker reads these strings back to find out which columns the file
+    // writes (§8.16, `annotations/fields.ts`) and a bare value is invisible to
+    // it, while the feature card gains a label it was missing anyway.
     const detail = [
-      biotype,
+      biotype === '' ? '' : `biotype ${biotype}`,
       draft.source === '' ? '' : `source ${draft.source}`,
       draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
     ]

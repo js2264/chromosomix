@@ -2600,6 +2600,119 @@ carries the same name. `turnedAxis` then builds a segment per run instead of one
 each carrying its own lap, and the turned picture reads the far side of the
 junction as the beginning of the sequence exactly as the square one does.
 
+### 8.16 How a segment is drawn
+
+Everything that is a `FeatureSet` — a BED, a peak set, a bigBed, a gene model, a VCF — is drawn by
+the same two renderers over the same layout (`render/features.ts`), so this is one set of rules for
+all of them rather than four lanes that happen to look alike. Three things decide what a reader sees:
+**what colour**, **which way**, and **where in the lane**.
+
+**A segment is coloured by a field of the file, and it starts on strand.** Strand is the one column
+every one of these formats can be asked for, it costs no scan to resolve, and it is the fact a reader
+is most often after. It resolves to exactly three colours: forward keeps the colour on the row's own
+chip, reverse is that hue turned 150°, and a feature whose file carries no strand takes
+`BASE_COLOURS`' fifth slot — the grey the sequence lane writes an `N` in and the grey §8.14 gives a
+variant with no single base behind it. One neutral for one claim, so a reader learns *no answer* once
+rather than three times.
+
+A file with **no strand in it at all** — a peak set, a call set, most BEDs — is the exception and
+falls back to the lane's own colour for everything. Every feature taking the neutral would cost the
+reader the colour that tells this lane from the three beside it and say nothing in exchange: a grey
+meaning *no strand* only means something where a neighbour has one. For the same reason the key names
+only the bands the file actually has, in the order they are drawn down the lane, so it can be read
+against the picture rather than matched to it.
+
+Deriving the two hues from the lane's own colour rather than fixing them at a conventional blue and
+red is a decision about **decks**, not about strands. Four peak sets on one screen are told apart by
+the colour their reader gave each of them, and a fixed pair would make all four the same picture; a
+turned hue keeps a lane recognisable as *one track drawn two ways*, which is the same argument
+§8.13 makes for an alignment lane's categories and is implemented through the same arithmetic
+(`render/hue.ts`).
+
+**Any other column of the file is offered too**, which is what makes this a control rather than a
+default. `annotations/fields.ts` reads the keys back out of the `detail` strings the parsers write —
+a GTF's `biotype` and `source`, a narrowPeak's `signal` and its two `-log10` columns, a VCF's `QUAL`,
+`filter` and `SVTYPE` — and the picker lists what it found. That is the cost of §8.3's decision to
+keep attributes in one joined string per feature rather than a column each, and it is paid in the
+one place that needs it: discovery is a **strided sample** of at most twenty thousand rows, cached
+per set, and a row's value is read from its own string once per *placement*, which the layout has
+already bounded by the pixels on screen. A key with its number on the wrong side (`4 exons`) is not
+a column and is not offered; a part with no key at all (a VCF's leading `A>G`) is not either.
+
+A categorical column is drawn in `CATEGORY_PALETTE` — §8.12's palette, for §8.12's reason: one swatch
+cannot describe six biotypes. Values are handed colours **commonest first**, so the palette's most
+distinct colours cover the most features; past twelve the tail becomes one `other` bucket, because a
+thirteenth colour nobody can name is not an answer. The lane's label chip then becomes the first
+category's colour, exactly as a metadata strip's does, so the name on the row is still a colour that
+is in the picture. A numeric column is a `viridis` ramp between the file's own ends, fitted to the
+**file** and never to the window: a track's autoscale is safe because its axis is redrawn beside it,
+and a colour that meant `protein_coding` before a pan and `lncRNA` after it is a legend that lies
+without saying so. A row carrying no value for the chosen column is the neutral again — a GTF where
+half the genes have a biotype is a file saying two things, and colouring the silent half as if they
+were some category would be inventing the fact.
+
+Both keys live in the **card**, under the control that decides them, for §8.13's reason and one more:
+a feature lane can be sixteen pixels tall beside a map, which is not a legend's worth of room at any
+font. They are built from `featureColouring` — the function the renderer itself calls — so a key that
+disagreed with the picture would be a bug in the ink rule rather than a second palette drifting out
+of step.
+
+**A stranded feature points the way it runs.** On a segment box — and on a gene the file gives no
+exon table, which is a box too — the arrowhead is cut *out of* the leading end rather than drawn past
+it, so the glyph occupies exactly the bases the feature does and §8.4's rule holds:
+the box that is drawn, the box that is clicked and the box the packing kept a row clear for are one
+span. An ink says *which* strand; a point says *which way*, and a reader following an operon or a
+tandem array is reading the second. The head is capped by the glyph's own height, so it is a point
+rather than a spear, and by a third of the feature's width; below six pixels there is no head at all,
+because a pentagon and a rectangle three pixels wide are the same ink with a different corner and the
+reader has lost a pixel of extent to learn nothing. A long box additionally carries chevrons in the
+halo colour, so a segment running across the whole window says its direction at every point rather
+than only at one end.
+
+A gene **with** exons keeps the chevrons on its spine and no head, which is not an omission: its
+glyph is a line with boxes on it, a point on the last exon would be a point on a piece of the gene
+rather than on the gene, and the chevrons already say the direction at every position along it. That
+is also what every genome browser draws, and the one place this lane should not be inventive.
+
+**The rows are banded by strand.** Unstranded first, then forward, then reverse, outward from the map
+— which on the 1D browser and on a bottom stack reads top to bottom. Two genes on the same bases and
+opposite strands are the case it is for: packed together they are two boxes one above the other and
+which is which is a colour you have to look up; banded they are two boxes in the two places the
+strands live, and the colour is a confirmation rather than the whole message. `+` above `−` is how
+every stranded picture in genomics is laid out, and the features a file could not place either way
+are neither of the two, so they go above both rather than between them.
+
+The bands come from the **file** and not from the window (`strandBands`), which is the difference
+between a layout and a flicker: decided per window, a region holding only forward genes would draw
+them across the whole lane and the first reverse gene to scroll in would move every glyph on screen.
+Each band gets a contiguous slice of the rows, split evenly with the remainder to the earliest bands
+— proportional-to-load would pack better and would rearrange the lane on every pan.
+
+Whether the bands fit is asked of the lane's **thickness**, not of `rowsThatFit`, and that is the
+whole of whether this works where it is most wanted: `rowsThatFit` measures the height a row needs to
+carry a *name under a feature*, twenty-odd pixels, so a segments lane at its default sixteen would
+have one row and never band — and that is exactly the lane a stranded BED lands in. A band needs a
+glyph and the gap under it, eight pixels, so a sixteen-pixel lane bands into two and its names go
+back inside the features, which is what a lane that short does anyway. Below that a band would be a
+hairline and the lane falls back to the single greedy packing it always had. A banded lane reports
+the rows it was **allotted** rather than the rows it used, because a band that packs into one of its
+two rows still has to sit where the allotment put it.
+
+None of this reaches the collapsed picture. Past the point where there are more features than the
+lane can draw apart, the lane is a count profile (§8.14's rule, unchanged) drawn in the lane's own
+colour: a density is a number, not a category, and colouring it by the first feature in each pixel
+would be a claim about the other four hundred.
+
+**Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows }` — a nested optional
+record in the shape `reads` is one and for the same reasons: the fields mean nothing to a value
+track, optional means no stored row changes shape, and one accessor (`featuresOf`) keeps `undefined`
+from reaching a renderer. `colourBy` is an **open string** rather than a union, because the
+interesting answers are the file's own; it is checked where it is used, and a stored choice whose
+column this file does not carry is **kept and marked** rather than corrected away — the same session
+opened against the other half of an experiment should colour by `biotype` again when the GTF comes
+back. Unlike an alignment lane's colouring, none of this refetches anything: a feature set is in
+memory whole and the field is a column of it, so a dozen answers cost one repaint between them.
+
 ---
 
 ## 9. cool and mcool

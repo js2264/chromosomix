@@ -61,10 +61,10 @@ function row(key: string, value: string): HTMLElement {
  * The attributes the parser kept, one to a line.
  *
  * Split back apart rather than shown as the single joined string the tooltip
- * uses: `YBR020W · protein_coding · source SGD · 1 exons` is four facts, and
- * four facts on four lines is the difference between a card that can be scanned
- * and a card that has to be read. See {@link DETAIL_SEP} for why the separator
- * is imported rather than spelled out.
+ * uses: `YBR020W · biotype protein_coding · source SGD · 1 exons` is four facts,
+ * and four facts on four lines is the difference between a card that can be
+ * scanned and a card that has to be read. See {@link DETAIL_SEP} for why the
+ * separator is imported rather than spelled out.
  *
  * A part that already reads as `key value` — `source SGD`, `score 12` — is split
  * at its first space so it lines up with the rows above it. One that does not
@@ -78,7 +78,7 @@ function attributeRows(detail: string): HTMLElement[] {
   // `QUAL 60` and `filter q10` are two facts that read as one run-on string
   // unless they are split here.
   const KEYED =
-    /^(source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE) (.+)$/
+    /^(biotype|source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE) (.+)$/
   return detail
     .split(DETAIL_SEP)
     .map((part) => part.trim())

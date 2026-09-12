@@ -30,7 +30,7 @@ import {
 } from '../annotations/derived'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
-import { hasTrackControls, readsAlignments } from '../annotations/types'
+import { hasTrackControls, isIntervalSet, readsAlignments } from '../annotations/types'
 import type { AnnotationEntry, ContigOverlap } from '../annotations/types'
 import { TRACK_DRAG_TYPE, button, dragHasFiles, el, fmt } from './dom'
 import { dragHasFileRow } from './fileDrag'
@@ -42,8 +42,12 @@ import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
 import {
+  arrowsToggle,
   colourByField,
   colourLegend,
+  featureColourField,
+  featureLegend,
+  fillFeatureLegend,
   fillLegend,
   flipButton,
   scaleField,
@@ -1027,6 +1031,30 @@ export class AnnotationCard {
         ),
         key,
         splitsToggle(this.props.store, entry),
+      )
+    }
+    // …and how a lane of intervals is drawn (§8.16). Every kind that is a
+    // `FeatureSet` gets it — a BED, a peak set, a gene model, a VCF — because
+    // the question "what are these coloured by" has the same answer and the
+    // same list of answers on all four. Not on an overlay, where the segments
+    // are drawn on the map as borders or boxes on the diagonal and there is no
+    // lane to colour: a control that silently does nothing is worse than an
+    // absent one.
+    if (entry.card === 'linear' && isIntervalSet(entry.kind)) {
+      // The key is built first and handed to the picker, for the reason the
+      // pile's is: this card defers its own rebuild while a control holds
+      // focus, and the lane does not.
+      const key = featureLegend(entry)
+      out.push(
+        el(
+          'div',
+          { class: 'ann-inline' },
+          featureColourField(this.props.store, entry, (by) =>
+            fillFeatureLegend(key, entry, by),
+          ),
+          arrowsToggle(this.props.store, entry),
+        ),
+        key,
       )
     }
     // A sequence lane's value axis is GC, and it is worth being able to clip:
