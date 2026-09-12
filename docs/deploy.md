@@ -444,17 +444,31 @@ Three things differ from an archived push, and each is a decision:
 - **A preview is removed when the pull request closes**, merged or not. A review copy that
   outlives its review is a stale build with a permanent address; a merged change is reachable at
   `v/<commit>/` of the push that carried it, which is the address to cite. The `closed` run deletes
-  the directory and the row and republishes.
+  the directory and the row and republishes — and **the deploy reconciles behind it**, dropping any
+  preview in the manifest whose pull request is no longer open.
+
+  The second half is not belt and braces; the first half alone loses previews. Merging fires
+  `pull_request: closed` and `push` to `main` in the same instant, both land in the `pages`
+  concurrency group, and GitHub keeps only the newest *pending* run in a group — so if anything was
+  already deploying, the removal is cancelled about a second after it queues and the preview
+  outlives its review. That is exactly what happened to #49 and #50, whose removals were cancelled
+  behind a deploy the Hubs workflow had dispatched a minute earlier. An event-shaped write that can
+  be evicted needs something that asks the question again, so the deploy asks
+  `repos/<owner>/<repo>/pulls/<n>` for each row before it publishes; a pull request the API will not
+  answer for is left alone, because *I could not ask* must not read as *it closed*. It also covers
+  the removals that failed, and the previews written before the removal step existed.
 - **The preview job does not deploy.** Pages replaces the whole site on every deployment, and the
   site's root is `main`'s build, which a pull-request job does not have. So the job writes the
   archive branch and dispatches `deploy.yml`, which builds `main`, copies `v/` *and* `pr/` back in,
   and deploys — one publisher, one `pages` concurrency group, nothing to keep in step. The comment
   on the pull request says the address appears a few minutes after it, which is that deploy. One
-  wrinkle of sharing the group: GitHub holds a single *pending* run per group and cancels it when
-  another joins the queue, so a job whose pull request has been pushed to again while it was
-  building leaves the dispatch to the run waiting behind it — otherwise its own dispatch would
-  cancel that run and publish a preview the branch had already moved past. A burst of pushes
-  therefore ends with the newest preview published, once.
+  wrinkle of sharing the group, and it cuts both ways: GitHub holds a single *pending* run per group
+  and cancels it when another joins the queue. In its favour, a job whose pull request has been
+  pushed to again while it was building leaves the dispatch to the run waiting behind it — otherwise
+  its own dispatch would cancel that run and publish a preview the branch had already moved past, so
+  a burst of pushes ends with the newest preview published, once. Against it, the `closed` run is
+  evicted the same way and its removal is simply lost, which is why the deploy reconciles the
+  previews rather than trusting that event (above).
 
 The About dialog lists previews under **Pull request previews**, after the builds and never among
 them: a preview is somebody's work in progress, and a reviewer should not have to tell it apart from

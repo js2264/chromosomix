@@ -36,8 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     # Only this job writes, and it writes one branch. Previously both jobs held
     # all three permissions; the deploy job now keeps only what it deploys with.
+    # `pull-requests: read` is for the preview reconciliation below — asking
+    # which pull requests are still open, never writing to one.
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
 
@@ -126,6 +129,44 @@ jobs:
           else
             echo "No $HUBS_BRANCH branch yet — the picker will say so until the Hubs workflow has run."
           fi
+
+      # Previews belong to open pull requests, and preview.yml removes one when
+      # its pull request closes. That removal is *event-shaped* and can be lost:
+      # merging a pull request fires `pull_request: closed` and `push` to main
+      # in the same instant, both land in this `pages` concurrency group, and
+      # GitHub keeps only the newest pending run in a group — so if anything was
+      # already deploying, the removal is cancelled a second after it queues and
+      # the preview outlives its review. That is how #49 and #50 stayed in the
+      # About dialog after they merged.
+      #
+      # So the deploy reconciles rather than trusting the event: every preview
+      # in the manifest is asked about, and one whose pull request is no longer
+      # open goes. Reconciliation rather than a second attempt at the event,
+      # because it also covers a removal that failed, a pull request closed
+      # while this workflow was broken, and a preview written before the removal
+      # step existed. A pull request the API will not answer for is left alone:
+      # "I could not ask" must never read as "it closed".
+      - name: Drop the previews of pull requests that have closed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -f archive/versions.json ] || exit 0
+          numbers=$(node -e '
+            const { readFileSync } = require("node:fs")
+            const manifest = JSON.parse(readFileSync("archive/versions.json", "utf8"))
+            for (const row of manifest.pulls ?? []) {
+              if (Number.isInteger(row?.number) && row.number > 0) console.log(row.number)
+            }
+          ')
+          for number in $numbers; do
+            state=$(gh api "repos/${{ github.repository }}/pulls/$number" --jq .state 2>/dev/null || echo unreadable)
+            case "$state" in
+              open) echo "#$number is open — keeping its preview." ;;
+              closed) node scripts/archive-preview.mjs archive --remove "$number" ;;
+              *) echo "::warning::could not read the state of #$number; leaving its preview alone" ;;
+            esac
+          done
 
       - name: Archive this build and prune what falls out of the window
         run: node scripts/archive-versions.mjs archive dist-pinned

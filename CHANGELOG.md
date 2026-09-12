@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A merged pull request's preview stayed in the About dialog's version picker.** Merging fires
+  `pull_request: closed` — the run that deletes the preview — and `push` to `main` in the same
+  instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
+  run in a group, so whenever something was already deploying, the removal was cancelled about a
+  second after it queued and the review copy outlived its review. #49 and #50 were both lost that
+  way, behind a deploy the Hubs workflow had dispatched a minute earlier.
+
+  The deploy now reconciles rather than trusting the event: before publishing, it asks GitHub about
+  every preview in the manifest and drops the ones whose pull request is no longer open. That also
+  covers a removal that failed outright, and one whose pull request closed while the workflow was
+  broken. A pull request the API will not answer for is left alone — *I could not ask* must not read
+  as *it closed*.
+
 - **The 4DN shelf could not be generated at all.** Its first live run died on
   `IncompleteRead(43378383 bytes read, 39983032 more expected)`: the widened query asks the portal
   for every experiment set with all four of its file arrays embedded, which is an 83 MB response,
