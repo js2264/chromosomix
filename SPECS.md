@@ -2587,6 +2587,18 @@ declaration is the lead map's — so a deck of a circular chromosome shows the l
 sliding and the companions standing still. Both are seams rather than wrong
 answers, and both are in the same place: the reader can see the junction.
 
+**And the slide is a square-view gesture.** Under a turn the ladder cannot tell
+where the reader is *inside* the band: `refineWindow` reports the on-diagonal
+square the band was cut from, which is the honest window for a picture whose rows
+are distance rather than position, and which is therefore the whole block however
+far along it the reader has panned. So there is no signal that they are pressing
+at an edge, and the window cannot leave the block. That is not circularity's
+doing — a linear chromosome behaves the same way, and a turned view is navigated
+by naming a region rather than by dragging out of one — but it does mean the
+declaration's effect on the *picture* is one the reader sees square. Its effect
+on the **numbers** is unaffected: a task reads the file for itself and never the
+block on screen.
+
 ---
 
 ## 9. cool and mcool

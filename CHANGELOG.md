@@ -81,7 +81,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the junction it used to leave as gaps, and the directionality index, the HiC score and
   the scalogram wrap with them. What does *not* yet: compartments, chromosight and the O/E
   map divide by an expected curve at a linear separation, and a deck companion draws the
-  sequence linearly. Both are stated at §8.15 rather than left to be found.
+  sequence linearly, and the slide itself is a **square-view** gesture — under a turn the
+  refine ladder cannot tell where the reader is inside the band, which is pre-existing and
+  true of a linear chromosome too. All three are stated at §8.15 rather than left to be
+  found.
 
 - **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
   (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the
