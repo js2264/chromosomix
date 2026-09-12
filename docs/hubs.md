@@ -104,6 +104,13 @@ exists; a file the portal does not describe keeps its row with empty metadata ce
 | `optional` | publish the spine with the metadata columns empty — for the week a portal is down |
 | `skip` | never ask; for a dry run, or a machine that can reach a bucket and not a search API |
 
+Neither search asks for everything at once. `limit=all` over 4DN's set query is an 83 MB response
+and the first live run of it died half way through one — `IncompleteRead(43378383 bytes read,
+39983032 more expected)` — so both walk `&limit=&from=` instead: `--page-size` records a request,
+50 at 4DN and 500 at ENCODE, retried three times each if the host stops talking part-way. Lower it
+if a portal keeps cutting responses off; `--portal-base` points the same front end at a mirror or a
+staging instance.
+
 The filter on what gets a row is **whether this viewer can open the file name**, and nothing else.
 There is no experiment-type filter and no format list, which is why Micro-C, bigWigs, peaks, pairs
 and BAMs are all there and why nobody has to edit the query when a consortium publishes something

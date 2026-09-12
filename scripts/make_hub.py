@@ -107,7 +107,7 @@ already assembled.  So a front end may also write **session files**: one
 and a hub of its own listing them (``--sessions-dir``/``--sessions-out``).  The
 viewer needs no new code for this — a workspace row is a road it already has.
 
-**Two facts worth not rediscovering**, both recorded in SPECS §24.3:
+**Three facts worth not rediscovering**, all recorded in SPECS §24.3:
 
 1. A 4DN search with no hits answers **HTTP 404 with a JSON body**.  That is
    zero results, not a failure, and a generator that crashes on it fails every
@@ -118,6 +118,13 @@ viewer needs no new code for this — a workspace row is a road it already has.
    expression assuming four elements in a fixed order, and undercounted every
    category by about a quarter — silently.  So the XML is parsed **as XML**,
    element by name, and the order in the document means nothing.
+3. **A portal search is paged, never asked for whole.**  ``limit=all`` over
+   4DN's set search with its files embedded is an 83 MB response, and on
+   2026-09-12 the socket closed at 43 MB — half an answer, no way to resume it,
+   and a Python traceback where every other failure here is a sentence.  Both
+   searches now walk ``&limit=&from=``, every whole read is retried, and the
+   stopping rule allows for a portal that ignores ``from`` (see
+   ``fetch_graph``).
 
 **Zero entries exits 2**, distinct from the 1 an HTTP failure exits with, so the
 workflow can refuse to publish an empty hub over a good one without having to
@@ -135,11 +142,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import http.client
 import io
 import json
 import logging
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -205,40 +214,57 @@ IGV_GENOMES = "https://s3.amazonaws.com/igv.org.genomes/genomes.json"
 #: (a per-experiment .bw, .bed or .pairs belongs to the experiment, not to the
 #: replicate set), and the two `other_processed_files` arrays are the
 #: supplementary groups a curator attaches — higlass views, loops, insulation.
-QUERY_4DN = (
-    f"{PORTAL_4DN}/search/?type=ExperimentSetReplicate"
-    "&field=accession"
-    "&field=award.project"
-    "&field=processed_files"
-    "&field=other_processed_files"
-    "&field=experiments_in_set.processed_files"
-    "&field=experiments_in_set.other_processed_files"
-    "&field=dataset_label"
-    "&field=lab.display_title"
-    "&field=experiments_in_set.experiment_type.display_title"
-    "&field=experiments_in_set.biosample.biosource.organism.name"
-    "&field=publications_of_set.display_title"
-    "&format=json"
-    "&limit=all"
-)
+def query_4dn(base: str = PORTAL_4DN) -> str:
+    return (
+        f"{base}/search/?type=ExperimentSetReplicate"
+        "&field=accession"
+        "&field=award.project"
+        "&field=processed_files"
+        "&field=other_processed_files"
+        "&field=experiments_in_set.processed_files"
+        "&field=experiments_in_set.other_processed_files"
+        "&field=dataset_label"
+        "&field=lab.display_title"
+        "&field=experiments_in_set.experiment_type.display_title"
+        "&field=experiments_in_set.biosample.biosource.organism.name"
+        "&field=publications_of_set.display_title"
+        "&format=json"
+    )
 
 #: ENCODE's datasets, **not** its files: the manifest is the file list, and what
 #: the portal is asked for is the join — what each experiment was done on and
 #: with. One record per experiment rather than one per file is the difference
 #: between a 25,000-record answer and a 1,200,000-record one.
-QUERY_ENCODE = (
-    f"{PORTAL_ENCODE}/search/?type=Experiment"
-    "&status=released"
-    "&field=accession"
-    "&field=biosample_summary"
-    "&field=assay_title"
-    "&field=assay_term_name"
-    "&field=lab.title"
-    "&field=target.title"
-    "&field=description"
-    "&format=json"
-    "&limit=all"
-)
+def query_encode(base: str = PORTAL_ENCODE) -> str:
+    return (
+        f"{base}/search/?type=Experiment"
+        "&status=released"
+        "&field=accession"
+        "&field=biosample_summary"
+        "&field=assay_title"
+        "&field=assay_term_name"
+        "&field=lab.title"
+        "&field=target.title"
+        "&field=description"
+        "&format=json"
+    )
+
+
+#: How many records to ask a portal for at a time.
+#:
+#: Neither query says `limit=all` any more, and the reason is a run that failed:
+#: 4DN's answer to the whole set search, with every processed file embedded, is
+#: about 83 MB, and on 2026-09-12 the connection was cut at 43 MB —
+#: `IncompleteRead(43378383 bytes read, 39983032 more expected)`. One response
+#: that large is one thing to go wrong with no way to recover half of it, so the
+#: search is paged and a page that fails is retried.
+#:
+#: The two numbers differ by a factor of ten because the records do. A 4DN set
+#: embeds every file it owns and runs to tens of kilobytes; an ENCODE experiment
+#: here is seven scalar fields. Both land at roughly a megabyte or two a page,
+#: which is a size a socket reliably delivers.
+PAGE_4DN = 50
+PAGE_ENCODE = 500
 
 #: Fixed per front end, and fixed in *order*: the columns are the table's header
 #: row, so a generator that emitted them in dictionary order would reshuffle a
@@ -533,10 +559,56 @@ def _request(url: str, accept: str) -> Any:
         ) from error
 
 
+#: How many times a read that was cut off is tried again, and how long the
+#: pause grows by. Short, because the caller is a weekly job and not a user
+#: interface, and because a portal that has cut two reads in six seconds is
+#: having a bad minute rather than a bad millisecond.
+READ_ATTEMPTS = 3
+READ_BACKOFF = 3.0
+
+
 def _read(url: str, accept: str) -> bytes:
-    """One GET, whole. For everything that is not the manifest."""
-    with _request(url, accept) as response:
-        return response.read()
+    """One GET, whole, retried when the answer is cut off part-way.
+
+    **The failure this exists for happened.** The 4DN run of 2026-09-12 died on
+    ``IncompleteRead(43378383 bytes read, 39983032 more expected)`` — the socket
+    closed half way through an 83 MB search response — and it died as a Python
+    traceback, which is the one thing nothing else in this script does. Paging
+    the searches (see {@link PAGE_4DN}) removes most of the cause; this removes
+    the class, for the manifest and for every page.
+
+    Read errors only. An HTTP status is a decision and is re-raised for the
+    caller to interpret — 4DN's JSON-bodied 404 is *zero results* and must not
+    be retried into a failure — and a connection that never opened is already a
+    sentence from {@link _request}. What is retried is the case where the host
+    agreed to answer and then stopped talking.
+    """
+    last = ""
+    for attempt in range(READ_ATTEMPTS):
+        try:
+            with _request(url, accept) as response:
+                return response.read()
+        except _HttpFailure:
+            raise
+        except (http.client.HTTPException, ConnectionError, TimeoutError, OSError) as error:
+            last = f"{type(error).__name__}: {error}"
+            if attempt + 1 < READ_ATTEMPTS:
+                pause = READ_BACKOFF * (attempt + 1)
+                log.warning(
+                    "%s was cut off (%s). Trying again in %.0fs (%d of %d).",
+                    url,
+                    last,
+                    pause,
+                    attempt + 2,
+                    READ_ATTEMPTS,
+                )
+                time.sleep(pause)
+    raise SystemExit(
+        f"{url}\n"
+        f"  answered, and then stopped part-way through, {READ_ATTEMPTS} times: {last}\n"
+        "  Nothing was written. A response this size is one thing to go wrong with no way to "
+        "recover half of it; if it keeps happening, lower --page-size."
+    )
 
 
 class _HttpFailure(Exception):
@@ -582,6 +654,82 @@ def fetch_json(url: str) -> dict:
             "an interstitial answers HTML with status 200, which looks exactly like this."
         )
     return parsed
+
+
+def fetch_graph(query: str, page: int) -> list:
+    """Every record a portal search matches, a page at a time.
+
+    ``limit=all`` is what this used to send, and the 4DN failure of 2026-09-12
+    is why it no longer does: one 83 MB response is one thing to go wrong, and
+    when it went wrong half of it was already on the floor. snovault — which is
+    both portals' search — pages on ``&limit=<n>&from=<offset>`` and reports the
+    match count in ``total``, so the whole answer arrives as forty small
+    requests that each succeed or are retried on their own.
+
+    **Three ways to stop, and all three are needed.** ``total`` says when the
+    end has been reached, and is trusted when it is there; a page shorter than
+    the one asked for is the end whatever ``total`` said; and a page that adds
+    no record this walk has not already seen stops it dead. That last one is the
+    guard against a portal that ignores ``from`` — which would otherwise answer
+    the first page for ever, and the loop would never end and the hub would be
+    the first fifty sets repeated a thousand times.
+
+    That third stop is **fatal when the walk is short** and quiet otherwise, and
+    the distinction is the whole of its worth. A repeat after ``total`` records
+    have been collected is a portal whose count was a little stale, and
+    everything asked for is already in hand. A repeat *before* then means the
+    enrichment covers a fiftieth of what it should — a hub that publishes, draws
+    and has empty cells in nine rows out of ten, which is precisely the failure
+    ``--portal require`` exists to refuse.
+    """
+    records: list = []
+    seen: set[str] = set()
+    offset = 0
+    while True:
+        document = fetch_json(f"{query}&limit={page}&from={offset}")
+        graph = listed(document.get("@graph"))
+        fresh = 0
+        for record in graph:
+            key = text(dig(record, "@id")) if isinstance(record, dict) else ""
+            # A record with no `@id` cannot be recognised on a second page and
+            # is kept rather than deduplicated: being unable to tell two apart
+            # is not a reason to drop either.
+            if key != "" and key in seen:
+                continue
+            if key != "":
+                seen.add(key)
+            records.append(record)
+            fresh += 1
+        total = document.get("total")
+        offset += len(graph)
+        if not graph:
+            break
+        if fresh == 0:
+            short = isinstance(total, int) and not isinstance(total, bool) and len(records) < total
+            if short:
+                raise SystemExit(
+                    f"{query.split('/search/')[0]}\n"
+                    f"  answered {len(graph)} records at from={offset - len(graph)} and every one "
+                    f"of them had already been sent: it is ignoring `from`.\n"
+                    f"  {len(records)} of {total} records were collected, so the metadata this "
+                    "hub needs is mostly missing.\n"
+                    "  Nothing was written. A hub that publishes with nine rows in ten missing "
+                    "their columns is worse than last week's, which is still the one readers see."
+                )
+            log.warning(
+                "%s answered %d records at from=%d and none of them were new; stopping there. "
+                "Everything the portal said it had is already in hand.",
+                query.split("/search/")[0],
+                len(graph),
+                offset - len(graph),
+            )
+            break
+        if len(graph) < page:
+            break
+        if isinstance(total, int) and not isinstance(total, bool) and offset >= total:
+            break
+        log.debug("%d records so far of %s.", len(records), total)
+    return records
 
 
 def fetch_json_list(url: str) -> list:
@@ -2459,7 +2607,7 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def searched(query: str, from_json: Optional[Path], what: str) -> tuple[list, str]:
+def searched(query: str, from_json: Optional[Path], what: str, page: int) -> tuple[list, str]:
     """``(@graph, source)`` from the live query, or from a recorded response.
 
     The source string records which of the two it was, because a hub published
@@ -2470,14 +2618,14 @@ def searched(query: str, from_json: Optional[Path], what: str) -> tuple[list, st
         graph = recorded_graph(from_json)
         source = f"{query} (recorded in {from_json})"
     else:
-        graph = listed(fetch_json(query).get("@graph"))
+        graph = fetch_graph(query, page)
         source = query
     log.info("%s answered %d %s.", query.split("/search/")[0], len(graph), what)
     return graph, source
 
 
 def enriched(
-    query: str, from_json: Optional[Path], what: str, portal: str, reader: Any
+    query: str, from_json: Optional[Path], what: str, portal: str, page: int, reader: Any
 ) -> tuple[dict[str, dict], str]:
     """The enrichment half of a portal front end, and what to record as its source.
 
@@ -2499,7 +2647,7 @@ def enriched(
         log.info("--portal skip: no metadata, so the columns the portal fills stay empty.")
         return {}, "the bucket listing alone (--portal skip)"
     try:
-        graph, source = searched(query, from_json, what)
+        graph, source = searched(query, from_json, what, page)
     except SystemExit:
         if portal != "optional":
             raise
@@ -2568,7 +2716,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         return sub
 
-    def with_portal(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    def with_portal(sub: argparse.ArgumentParser, base: str, page: int) -> argparse.ArgumentParser:
         sub.add_argument(
             "--from-json",
             type=Path,
@@ -2581,6 +2729,18 @@ def build_parser() -> argparse.ArgumentParser:
             default="require",
             help="What a portal that will not answer means: fail the run (default), publish "
             "without its columns, or never ask.",
+        )
+        sub.add_argument(
+            "--portal-base",
+            default=base,
+            help=f"Where the portal is (default: {base}). For a mirror, or a staging instance.",
+        )
+        sub.add_argument(
+            "--page-size",
+            type=int,
+            default=page,
+            help=f"Records per search request (default: {page}). Lower it if the portal keeps "
+            "cutting a response off part-way.",
         )
         return sub
 
@@ -2601,7 +2761,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     portal_4dn = with_sessions(
-        with_portal(generator("4dn", "Every openable file on the 4DN open-data bucket."))
+        with_portal(
+            generator("4dn", "Every openable file on the 4DN open-data bucket."),
+            PORTAL_4DN,
+            PAGE_4DN,
+        )
     )
     portal_4dn.add_argument(
         "--from-xml",
@@ -2625,7 +2789,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     portal_encode = with_sessions(
-        with_portal(generator("encode", "Every released ENCODE file this viewer can open."))
+        with_portal(
+            generator("encode", "Every released ENCODE file this viewer can open."),
+            PORTAL_ENCODE,
+            PAGE_ENCODE,
+        )
     )
     portal_encode.add_argument(
         "--from-tsv",
@@ -2733,7 +2901,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     elif args.front == "4dn":
         index, portal_source = enriched(
-            QUERY_4DN, args.from_json, "experiment sets", args.portal, metadata_4dn
+            query_4dn(args.portal_base.rstrip("/")),
+            args.from_json,
+            "experiment sets",
+            args.portal,
+            args.page_size,
+            metadata_4dn,
         )
         formats = (
             tuple(
@@ -2773,7 +2946,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     elif args.front == "encode":
         index, portal_source = enriched(
-            QUERY_ENCODE, args.from_json, "experiments", args.portal, metadata_encode
+            query_encode(args.portal_base.rstrip("/")),
+            args.from_json,
+            "experiments",
+            args.portal,
+            args.page_size,
+            metadata_encode,
         )
         lines = (
             recorded_lines(args.from_tsv)

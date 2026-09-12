@@ -70,7 +70,7 @@
  * the 4DN bucket came out a quarter short (SPECS §24.3).
  */
 
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -1093,5 +1093,238 @@ describe.skipIf(!havePython)('--timestamp and --limit', () => {
     const dated = join(out, `dated-${stamp}.json`)
     expect(existsSync(dated)).toBe(true)
     expect(readFileSync(dated, 'utf8')).toBe(readFileSync(target, 'utf8'))
+  })
+})
+
+/**
+ * The live search path, against a portal served from a process of its own.
+ *
+ * Everything above drives the generator through `--from-json`, and that is what
+ * let the 4DN failure of 2026-09-12 ship: the recorded path reads a file and
+ * the live path walks a portal, and the suite only ever exercised the first.
+ * `limit=all` over 4DN's set search with its files embedded is an 83 MB
+ * response; the socket closed at 43 MB and the run died with
+ * `IncompleteRead(43378383 bytes read, 39983032 more expected)` — a Python
+ * traceback where every other failure in this script is a sentence.
+ *
+ * So `--portal-base` points the front end at a server started here, and the
+ * four things that decide whether a walk finishes are each made to happen: the
+ * pages are followed, a cut-off answer is retried, a portal that ignores `from`
+ * is noticed rather than looped on, and a JSON-bodied 404 is still zero
+ * results.
+ *
+ * **The server is a second process, and that is not an implementation detail.**
+ * `make()` is `spawnSync`, which blocks this process until Python exits; a
+ * server listening on this event loop could never answer, and the first attempt
+ * at these tests deadlocked exactly there. For the same reason the server
+ * reports through *files* rather than through its stdout: nothing here can read
+ * a pipe while the generator is running.
+ */
+describe.skipIf(!havePython)('the live portal path', () => {
+  const running: ChildProcess[] = []
+
+  /** The server, written once: five behaviours over the fixture's six sets. */
+  const SERVER = `
+import { createServer } from 'node:http'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+
+const [, , mode, fixture, asks, port] = process.argv
+const graph = JSON.parse(readFileSync(fixture, 'utf8'))['@graph']
+let cut = 0
+
+const server = createServer((req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1')
+  const limit = Number(url.searchParams.get('limit'))
+  const from = Number(url.searchParams.get('from'))
+  appendFileSync(asks, limit + ' ' + from + '\\n')
+
+  if (mode === 'notfound') {
+    const body = JSON.stringify({ '@type': ['HTTPNotFound', 'Error'], code: 404, '@graph': [] })
+    res.writeHead(404, { 'Content-Type': 'application/json' })
+    res.end(body)
+    return
+  }
+  // 'stuck' answers the first page whatever \`from\` says, which is the shape of
+  // a portal that has forgotten how to page. 'stale-total' pages properly, says
+  // no total at all, and repeats the last page when asked past the end — the
+  // innocent way to produce the same "nothing new" signal.
+  const page =
+    mode === 'stuck'
+      ? graph.slice(0, limit)
+      : mode === 'stale-total' && from >= graph.length
+        ? graph.slice(-limit)
+        : graph.slice(from, from + limit)
+  const body = JSON.stringify(
+    mode === 'stale-total' ? { '@graph': page } : { total: graph.length, '@graph': page },
+  )
+  // Headers promising a length, then silence: what 4DN did at 43 MB of 83.
+  if (mode === 'never' || (mode === 'cut' && from === 2 && cut++ === 0)) {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(body) + 4096),
+    })
+    res.write(body.slice(0, 32))
+    res.destroy()
+    return
+  }
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Content-Length': String(Buffer.byteLength(body)),
+  })
+  res.end(body)
+})
+
+server.listen(0, '127.0.0.1', () => {
+  writeFileSync(port, String(server.address().port))
+})
+`
+
+  interface Portal {
+    base: string
+    /** Every \`(limit, from)\` the generator asked for, in order. */
+    asked(): string[]
+  }
+
+  async function portal(mode: string): Promise<Portal> {
+    const script = join(out, 'portal.mjs')
+    if (!existsSync(script)) writeFileSync(script, SERVER, 'utf8')
+    const asks = join(out, `asks-${mode}.log`)
+    const port = join(out, `port-${mode}.txt`)
+    writeFileSync(asks, '', 'utf8')
+    const child = spawn(
+      'node',
+      [script, mode, join(FIXTURES, '4dn-search.json'), asks, port],
+      { stdio: 'ignore' },
+    )
+    running.push(child)
+    // Polled rather than awaited on a pipe, because the file is the one channel
+    // that survives this process being blocked later on.
+    for (let tries = 0; tries < 200; tries++) {
+      if (existsSync(port) && readFileSync(port, 'utf8') !== '') break
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    const number = readFileSync(port, 'utf8')
+    expect(number, `the ${mode} portal did not start`).not.toBe('')
+    return {
+      base: `http://127.0.0.1:${number}`,
+      asked: () =>
+        readFileSync(asks, 'utf8')
+          .split('\n')
+          .filter((line) => line !== ''),
+    }
+  }
+
+  /** Run the 4DN front end against `base`, with the bucket from a fixture. */
+  function against(base: string, name: string): { status: number; stderr: string } {
+    return make(
+      '4dn',
+      '--out',
+      join(out, name),
+      '--from-xml',
+      join(FIXTURES, '4dn-bucket'),
+      '--portal-base',
+      base,
+      '--page-size',
+      '2',
+    )
+  }
+
+  afterAll(() => {
+    for (const child of running) child.kill()
+  })
+
+  it('walks every page, and joins a record that arrived on the last one', async () => {
+    const held = await portal('pages')
+    const run = against(held.base, 'live.json')
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    expect(run.status, run.stderr).toBe(0)
+
+    // Six sets at two a page: three pages, and a fourth is not asked for —
+    // `total` says where the end is and the walk believes it.
+    expect(held.asked()).toEqual(['2 0', '2 2', '2 4'])
+    const hub = read('live.json')
+    expect(hub.entries).toHaveLength(9)
+    // A file described by the *first* record and one described by the *last*: a
+    // walk that stopped after page one would fill the first and leave the
+    // second's cells empty, which is a hub that publishes and looks fine.
+    expect(row(hub, '4DNFIM7ZVQOQ')?.fields).toMatchObject({
+      dataset: 'Hi-C on RAD21-AID tagged HCT-116',
+    })
+    expect(row(hub, '4DNFIRZ9WSAO')?.fields).toMatchObject({
+      dataset: 'Hi-C on mouse cerebellar granule neurons',
+    })
+  })
+
+  it('retries a page the host stopped sending part-way, and says it did', async () => {
+    const held = await portal('cut')
+    const run = against(held.base, 'cut.json')
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    expect(run.status, run.stderr).toBe(0)
+    // Four requests for three pages: the second was asked for twice.
+    expect(held.asked()).toEqual(['2 0', '2 2', '2 2', '2 4'])
+    // Said once, in the log, naming what happened — not swallowed, because a
+    // portal that needs retrying every week is something to know about.
+    expect(run.stderr).toMatch(/was cut off/)
+    expect(run.stderr).toMatch(/Trying again/)
+    // And the walk completed: the record on the retried page is joined.
+    expect(row(read('cut.json'), '4DNFIO2TD17P')?.fields).toMatchObject({
+      dataset: 'Micro-C on HFF cells',
+    })
+  }, 60_000)
+
+  it('gives up with a sentence rather than a traceback when it never completes', async () => {
+    const held = await portal('never')
+    const target = join(out, 'never-completes.json')
+    const run = against(held.base, 'never-completes.json')
+    expect(run.status).toBe(1)
+    expect(run.stderr).not.toMatch(/Traceback/)
+    expect(run.stderr).toMatch(/stopped part-way through, 3 times/)
+    expect(run.stderr).toMatch(/lower --page-size/)
+    expect(existsSync(target)).toBe(false)
+  }, 60_000)
+
+  it('refuses to publish when the portal ignores `from`', async () => {
+    // Without the guard the walk never ends: every page is full, every page is
+    // the same. With it, the run stops — and stops *failing*, because two sets
+    // out of six is a hub that draws with empty cells in most of its rows,
+    // which is what `--portal require` is for.
+    const held = await portal('stuck')
+    const target = join(out, 'stuck.json')
+    const run = against(held.base, 'stuck.json')
+    expect(run.status).toBe(1)
+    expect(run.stderr).not.toMatch(/Traceback/)
+    expect(run.stderr).toMatch(/ignoring `from`/)
+    expect(run.stderr).toMatch(/2 of 6 records were collected/)
+    expect(existsSync(target)).toBe(false)
+    // Two requests: the first page, and the one that proved nothing was moving.
+    expect(held.asked()).toEqual(['2 0', '2 2'])
+  })
+
+  it('stops quietly when a repeat comes after everything was collected', async () => {
+    // The same signal, innocently: a `total` a little behind the index. The
+    // walk has what it asked for, so it stops and says so at debug volume
+    // rather than refusing to publish.
+    const held = await portal('stale-total')
+    const run = against(held.base, 'stale.json')
+    expect(run.status, run.stderr).toBe(0)
+    expect(run.stderr).not.toMatch(/Traceback/)
+    expect(read('stale.json').entries).toHaveLength(9)
+    expect(row(read('stale.json'), '4DNFIRZ9WSAO')?.fields).toMatchObject({
+      dataset: 'Hi-C on mouse cerebellar granule neurons',
+    })
+  })
+
+  it('reads a JSON-bodied 404 from the live portal as zero results', async () => {
+    // snovault's answer to a search that matched nothing (SPECS §24.3), on the
+    // path where it actually arrives.
+    const held = await portal('notfound')
+    const run = against(held.base, 'nothing-matched.json')
+    expect(run.status, run.stderr).toBe(0)
+    expect(run.stderr).toMatch(/zero results/)
+    const hub = read('nothing-matched.json')
+    expect(hub.entries).toHaveLength(9)
+    for (const entry of hub.entries ?? []) {
+      expect(Object.keys(entry.fields as Record<string, string>)).toEqual(['format'])
+    }
   })
 })

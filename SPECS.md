@@ -5293,15 +5293,31 @@ follows the lead file** (`landingState`, §5.1): a contact map opens on its geno
 a track in the 1D browser. And a group with a map and no tracks is **skipped**, because it would be
 a row that opens one file, which that file's own row already does.
 
-Two facts the generator has to know are recorded here so they are not rediscovered: a 4DN search
-with no hits answers **HTTP 404 with a JSON body**, which is zero results and not a failure; and a
-bucket listing's objects carry a `<ChecksumAlgorithm>` element between `ETag` and `Size`, so the
+**A portal search is paged, never asked for whole**, and that rule was bought the hard way: the
+first live run of this design died on `IncompleteRead(43378383 bytes read, 39983032 more
+expected)`. `limit=all` over 4DN's set search with its files embedded is an 83 MB response, the
+socket closed half way through it, and the run ended in a Python traceback where every other
+failure here is a sentence. Both searches now walk `&limit=&from=` — 50 records a page at 4DN,
+whose records embed every file they own, and 500 at ENCODE, whose records are seven scalar fields —
+so the answer arrives as forty small requests that each succeed or are retried on their own. Every
+whole read is retried three times when the host agrees to answer and then stops talking; an HTTP
+*status* is never retried, because 4DN's JSON-bodied 404 is zero results and retrying it would turn
+it into a failure. The walk stops on `total`, on a short page, or on a page that adds no record it
+has not already seen — and that last one is **fatal when the walk is short**, because a portal
+ignoring `from` would otherwise publish a hub whose enrichment covers a fiftieth of its rows: a
+catalogue that draws, and has empty cells in nine rows out of ten.
+
+Three more facts the generator has to know are recorded here so they are not rediscovered: a 4DN
+search with no hits answers **HTTP 404 with a JSON body**, which is zero results and not a failure;
+a bucket listing's objects carry a `<ChecksumAlgorithm>` element between `ETag` and `Size`, so the
 XML is parsed as XML — a regex that assumes the four-element order silently drops a quarter of the
-bucket, which is how the first census of 4DN came out short. ENCODE's manifest is read **by column
-name** for the same reason: columns have been added to that file before, and a reader that counted
-fields would have shifted every cell the week it happened. A run that finds nothing exits 2 —
-distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a good hub
-with an empty one and never has to tell a portal outage from an empty catalogue by reading a log.
+bucket, which is how the first census of 4DN came out short; and ENCODE's manifest is read **by
+column name** for the same reason, since columns have been added to that file before and a reader
+that counted fields would have shifted every cell the week it happened. A run that finds nothing
+exits 2 — distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a
+good hub with an empty one and never has to tell a portal outage from an empty catalogue by reading
+a log. A run that loses **one** front end publishes nothing at all, because the branch is replaced
+wholesale: a missing hub would delete last week's good copy of that shelf rather than leave it.
 
 `.github/workflows/hubs.yml` runs all three portal front ends weekly and on demand, uploads
 everything as a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes

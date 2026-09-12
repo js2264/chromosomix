@@ -12,6 +12,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 4DN shelf could not be generated at all.** Its first live run died on
+  `IncompleteRead(43378383 bytes read, 39983032 more expected)`: the widened query asks the portal
+  for every experiment set with all four of its file arrays embedded, which is an 83 MB response,
+  and the socket closed half way through it — as a Python traceback, where every other failure in
+  `make_hub.py` is a sentence saying what to do. IGV and ENCODE published fine; nothing was
+  published, because a run that loses one front end publishes none of them (the branch is replaced
+  wholesale, so a missing hub would delete last week's good copy of that shelf).
+
+  Both portal searches are now paged — `--page-size` records a request, 50 at 4DN and 500 at
+  ENCODE — and every whole read is retried three times when a host agrees to answer and then stops
+  talking. An HTTP *status* is still never retried, since 4DN answers a search matching nothing
+  with a JSON-bodied 404 and retrying that would turn zero results into a failure. The walk stops
+  on the portal's `total`, on a short page, or on a page that repeats what it has already sent —
+  and that last one fails the run when it happens early, because a portal ignoring `from` would
+  otherwise publish a catalogue that draws with empty cells in nine rows out of ten.
+
+  The suite drove the generator only through recorded responses, which is how this shipped: the
+  recorded path reads a file and the live path walks a portal. `--portal-base` now points a front
+  end at a portal served by the test itself — out of process, since `spawnSync` blocks the one
+  running the assertions — and the five ways a walk ends are each made to happen, including the cut
+  off response that started this.
+
 ### Added
 
 - **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks

@@ -122,7 +122,7 @@ jobs:
       - name: Generate every hub
         run: |
           set -uo pipefail
-          failed=0
+          failed=''
           for front in igv 4dn encode; do
             echo "::group::$front"
             python3 scripts/make_hub.py "$front" \
@@ -130,10 +130,19 @@ jobs:
               --sessions-dir out/sessions \
               --sessions-out "out/$front-sessions.json" \
               --check \
-              || failed=1
+              || failed="$failed $front"
             echo "::endgroup::"
           done
-          exit "$failed"
+          # Named, and outside the collapsed groups, because the groups are
+          # thousands of lines of `--check` saying "valid" and the one thing
+          # worth reading is which front end did not finish. A run that lost
+          # one publishes nothing: the shelves are separate files, but the
+          # publish below replaces the branch wholesale, so a missing hub would
+          # *delete* last week's good copy of it rather than leave it alone.
+          if [ -n "$failed" ]; then
+            echo "::error::These front ends failed:$failed. Nothing is published; the shelves             readers see are last week's."
+            exit 1
+          fi
 
       # Read back from the files rather than counted as they were written: the
       # index has to describe what is about to be published, and the only thing
