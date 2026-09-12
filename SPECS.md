@@ -2587,17 +2587,18 @@ declaration is the lead map's — so a deck of a circular chromosome shows the l
 sliding and the companions standing still. Both are seams rather than wrong
 answers, and both are in the same place: the reader can see the junction.
 
-**And the slide is a square-view gesture.** Under a turn the ladder cannot tell
-where the reader is *inside* the band: `refineWindow` reports the on-diagonal
-square the band was cut from, which is the honest window for a picture whose rows
-are distance rather than position, and which is therefore the whole block however
-far along it the reader has panned. So there is no signal that they are pressing
-at an edge, and the window cannot leave the block. That is not circularity's
-doing — a linear chromosome behaves the same way, and a turned view is navigated
-by naming a region rather than by dragging out of one — but it does mean the
-declaration's effect on the *picture* is one the reader sees square. Its effect
-on the **numbers** is unaffected: a task reads the file for itself and never the
-block on screen.
+**The turn slides too, and it needed one gate widened.** `isTurnable` asked for
+*one run or none*, on the sound ground that a boundary between two sequences is a
+discontinuity in the x axis and the distance across it is not a distance. A
+wrapped block has two runs — the sequence's tail, then its head — so it was
+refused, and the refusal was silent in the worst way: `MatrixPanel.regrid`
+declines a block it cannot turn, so the ladder read the very block the reader was
+sliding towards and the picture simply stopped at the last bin with nothing said
+anywhere. The gate now asks *one sequence*, which is what it always meant: several
+runs are allowed when the block was read round a circle and every one of them
+carries the same name. `turnedAxis` then builds a segment per run instead of one,
+each carrying its own lap, and the turned picture reads the far side of the
+junction as the beginning of the sequence exactly as the square one does.
 
 ---
 

@@ -5671,7 +5671,15 @@ export class MatrixPanel {
     const firstBin = run?.unitStart ?? data.rowExtent[0]
     const known = this.options.annotations?.contigLength(label)
     const length = known ?? (data.nrows + (data.rowExtent[0] - firstBin)) * this.options.binsize
-    return turnedAxis(turned, { label, firstBin, length }, this.options.binsize)
+    // The runs go through where there is more than one, which is a block read
+    // round a circle and nothing else (§8.15): the axis is then the sequence
+    // twice, and each stretch has to say which lap it is on.
+    return turnedAxis(
+      turned,
+      { label, firstBin, length },
+      this.options.binsize,
+      data.rowGroups.length > 1 ? data.rowGroups : [],
+    )
   }
 
   /**

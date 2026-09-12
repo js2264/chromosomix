@@ -33,6 +33,7 @@ import {
   binsForColumns,
   cellAt,
   isTurnable,
+  turnedAxis,
   positionAt,
   reachForRows,
   rotateBlock,
@@ -260,6 +261,82 @@ describe('what may be turned at all', () => {
   it('refuses a level where a cell is a whole sequence', () => {
     expect(isTurnable({ ...square, level: 'contig' })).toBe(false)
     expect(isTurnable({ ...square, level: 'genome' })).toBe(false)
+  })
+
+  /**
+   * A block read round a circle carries one sequence **twice** — its tail, then
+   * its head (SPECS §8.15) — and the one-run rule above refused it. That refusal
+   * was silent in the worst way: `MatrixPanel.regrid` declines a block it cannot
+   * turn, so the ladder read the very block the reader was sliding towards and
+   * the picture simply stopped at the last bin, with no error anywhere.
+   */
+  it('accepts one sequence carried twice, which is what a circle looks like', () => {
+    const wrapped = {
+      ...square,
+      wrapped: [0, 100] as const,
+      rowGroups: [{ label: 'plasmid' }, { label: 'plasmid' }],
+    }
+    expect(isTurnable(wrapped)).toBe(true)
+  })
+
+  it('still refuses two runs of two different sequences, wrapped or not', () => {
+    const two = [{ label: 'chrI' }, { label: 'chrII' }]
+    expect(isTurnable({ ...square, rowGroups: two })).toBe(false)
+    expect(isTurnable({ ...square, wrapped: [0, 100] as const, rowGroups: two })).toBe(false)
+    // And a block with two runs of one name that was *not* read round a circle
+    // is not a thing this viewer makes; refusing it costs nothing and keeps the
+    // gate about the one case it was widened for.
+    expect(isTurnable({ ...square, rowGroups: [{ label: 'x' }, { label: 'x' }] })).toBe(false)
+  })
+})
+
+/**
+ * The genomic axis under a turned block that crosses a junction.
+ *
+ * The turned picture's x axis is the thing every track, tick and annotation on
+ * it is placed through (§8.4), so a wrapped block whose axis says the second
+ * stretch is *past the end of the sequence* rather than *the beginning of it*
+ * draws everything on the far side of the join a chromosome away.
+ */
+describe('the turned axis, round a junction', () => {
+  const BINSIZE = 1000
+  // A 100-bin sequence starting at absolute bin 0, read from bin 90 for 20 bins:
+  // ten bins of its tail, then ten of its head.
+  const LAP = 100
+
+  it('reads the two stretches as the two ends of one sequence', () => {
+    const axis = turnedAxis(
+      { ncols: 40, originBin: 90 },
+      { label: 'plasmid', firstBin: 0, length: LAP * BINSIZE },
+      BINSIZE,
+      [
+        { start: 0, end: 10, unitStart: 0 },
+        { start: 10, end: 20, unitStart: 100 },
+      ],
+    )
+    expect(axis).not.toBeNull()
+    expect(axis?.segments).toHaveLength(2)
+    // A turned column is half a bin, so ten bins is twenty columns.
+    expect(axis?.segments.map((seg) => [seg.unitStart, seg.unitEnd])).toEqual([
+      [0, 20],
+      [20, 40],
+    ])
+    // Column 0 is ten bins from the end of the sequence…
+    expect(axis?.unitToLocus(0)?.bp).toBe(90 * BINSIZE)
+    // …and the first column past the join is its very beginning, not a lap on.
+    expect(axis?.unitToLocus(20)?.bp).toBe(0)
+    expect(axis?.unitToLocus(24)?.bp).toBe(2 * BINSIZE)
+  })
+
+  it('is the ordinary single stretch when the block does not wrap', () => {
+    const axis = turnedAxis(
+      { ncols: 40, originBin: 90 },
+      { label: 'plasmid', firstBin: 0, length: LAP * BINSIZE },
+      BINSIZE,
+    )
+    expect(axis?.segments).toHaveLength(1)
+    expect(axis?.unitToLocus(0)?.bp).toBe(90 * BINSIZE)
+    expect(axis?.unitToLocus(2)?.bp).toBe(91 * BINSIZE)
   })
 })
 
