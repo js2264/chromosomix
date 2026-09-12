@@ -534,7 +534,7 @@ export interface MatrixPanelOptions {
   turn?: TurnPresentation
   /**
    * *This sequence is circular* — the declaration, and the control for it
-   * (SPECS §8.16).
+   * (SPECS §8.15).
    *
    * Offered only on a view that is a window on **one** sequence, because that is
    * the only view the answer changes anything about: a two-contig block has no
@@ -2003,7 +2003,7 @@ export class MatrixPanel {
     // *This sequence is circular*, in the card about the map, because that is
     // what it changes: with it the picture slides past the end of the sequence
     // and comes back on at its beginning, in the square view and under the turn
-    // alike (§8.16). A tickbox rather than a mark in the overlay row below —
+    // alike (§8.15). A tickbox rather than a mark in the overlay row below —
     // those five are things drawn *over* the data, and this is a statement about
     // what the data is.
     const circular = this.options.circular
@@ -3627,11 +3627,24 @@ export class MatrixPanel {
    * this whole arrangement exists to protect. Past the limit the answer is
    * `null` and the worker reads for itself, which is what its own mount is for.
    */
+  /**
+   * The block on screen, as the reader worker sent it.
+   *
+   * Read-only, and for one caller: a ladder being armed again mid-view has to
+   * adopt the block that is *drawn* rather than the one the view first loaded,
+   * or it plans its next read from an extent nobody is looking at (§8.15's
+   * circular toggle is the case). Every other consumer wants
+   * {@link analysisBlock}, which copies and refuses a wrapped one.
+   */
+  get block(): MatrixResult | null {
+    return this.data
+  }
+
   analysisBlock(): BlockInput | null {
     const data = this.data
     if (data === null) return null
     if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
-    // **Never a block read round a circle** (SPECS §8.16). Its extents are
+    // **Never a block read round a circle** (SPECS §8.15). Its extents are
     // unwrapped — they run off the end of the sequence and resolve modulo it —
     // and every consumer of this one reads them as ordinary absolute bins:
     // `run/blocks.ts` asks whether the block *covers* a sequence's span and then
@@ -7938,7 +7951,7 @@ export function binsOf(
  *
  * **Every landing of each end, not the first**, and that is what makes a
  * circular slide work at all. A block read across a sequence's own junction
- * carries that sequence *twice* — the tail of it, then the head (SPECS §8.16) —
+ * carries that sequence *twice* — the tail of it, then the head (SPECS §8.15) —
  * so a window running from 2.95 Mb to 50 kb is a perfectly ordinary window whose
  * two ends are on different stretches of the same name. Resolved by name alone,
  * the second end came back on the first stretch, landed before the first end,

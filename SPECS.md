@@ -2458,7 +2458,7 @@ by a pixel; `bcftools view` writes the text, and the name guess claims no `.bcf`
 so one is refused by its bytes like anything else. And no **variant calling**, which is
 §18.9's argument and not a new one.
 
-### 8.16 Circular sequences
+### 8.15 Circular sequences
 
 A `.cool` cannot say that a sequence joins its own ends. Bins run from zero to
 the last one and stop, and there is no field anywhere in the format for *and then
@@ -2498,12 +2498,29 @@ of which is that far corner. `worker/wrap.ts` says which pieces and
 Unwrapped rather than modular because it is the only space in which panning is
 *monotonic*. The alternative is a window whose start jumps from 2,999,000 to 0,
 and every `covers`, `pad` and `recentre` in `ui/refine.ts` — the whole
-zoom-and-travel policy of §8.15 — would have to learn about that. What those
+zoom-and-travel policy of §2 — would have to learn about that. What those
 rules learn instead is one thing: on a circular axis **every edge of the block
 gives**, because there is no end of the world for one of them to be, and the
 answer to reaching one is the same block width rotated round to where the reader
 now is. The ceiling stops being a limit on *where* and becomes a cap on *how
 wide*: one lap, past which a bin would be drawn twice.
+
+**A circular view reads as it moves, whatever the refine setting says.** §2's
+zoom-to-refine is off until a reader turns it on, and that is the right default
+for what it was written for: a sharper picture of a place you are already at,
+bought with reads you did not ask for. A circular slide is not that — past the
+end of the sequence there is *no* block in hand, the window having left
+everything that was ever read, so with the ladder asleep the picture stops at the
+last bin, which is the exact wall the declaration was made to remove. A reader
+who ticks the box has asked for the reads that make the wrap possible. Only for a
+sequence they have declared: every other view keeps the setting's answer.
+
+And the declaration does **not** rebuild the view. It changes how the block is
+read, so the ladder is armed again — against the block that is *drawn*, not the
+one the view first loaded — and nothing else moves. Rebuilding would reload the
+view from its named region and throw away the zoom the reader needed in order to
+be somewhere the question is worth asking from, which is most of the way to a
+tickbox nobody would use twice.
 
 The grid is chosen once for the whole window and every piece is read on it, which
 is what makes the two halves of a junction-crossing block halves of one picture

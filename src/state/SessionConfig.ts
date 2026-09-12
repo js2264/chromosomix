@@ -160,7 +160,7 @@ export interface SessionConfig {
   /** Ticked sequences, when the session is a genome browser. */
   sequences: string[]
   /**
-   * Sequences the reader has declared **circular** (SPECS §8.16).
+   * Sequences the reader has declared **circular** (SPECS §8.15).
    *
    * A declaration rather than a reading — no contact map says whether a sequence
    * joins its own ends, and no statistic reliably infers it — so it belongs with

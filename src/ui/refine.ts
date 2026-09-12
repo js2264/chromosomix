@@ -129,7 +129,7 @@ export interface LadderOptions {
    */
   ceiling: { rows: Extent; cols: Extent }
   /**
-   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.16).
+   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.15).
    *
    * A circular sequence's window is written in unwrapped bins — it may run off
    * either end, and `worker/wrap.ts` resolves it modulo the sequence — so the
@@ -812,7 +812,7 @@ export function attachRefine(options: {
   ): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
   ceiling: { rows: Extent; cols: Extent }
   /**
-   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.16).
+   * The lap length, in bins, of an axis that has **no ends** (SPECS §8.15).
    *
    * A circular sequence's window is written in unwrapped bins — it may run off
    * either end, and `worker/wrap.ts` resolves it modulo the sequence — so the

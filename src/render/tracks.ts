@@ -88,7 +88,7 @@ export interface PixelProfile {
  *
  * One on nearly every axis, and the loop that walks it is written for the one
  * case where there are two: a circular sequence whose window crosses its own
- * junction is the same contig at both ends of the picture (SPECS §8.16).
+ * junction is the same contig at both ends of the picture (SPECS §8.15).
  * `LocusAxis.segmentOf` deliberately answers with the first, which is right for
  * a caller resolving a *place* and wrong for one placing *data*.
  */
@@ -137,7 +137,7 @@ export function profileOf(
   for (const region of samples.regions) {
     // **Every** stretch of the axis with this name, not the first. An axis holds
     // a contig twice when a circular sequence is panned across its own junction
-    // (SPECS §8.16), and the two stretches hold different halves of it — so a
+    // (SPECS §8.15), and the two stretches hold different halves of it — so a
     // region is offered to both and lands on whichever one contains it, the
     // other placing it outside the visible slots, where the clip below drops it.
     // On every other axis this loop runs once and nothing changes.

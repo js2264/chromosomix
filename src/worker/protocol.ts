@@ -805,7 +805,7 @@ export type WorkerRequest =
       cols?: Extent
       /**
        * Read `rows` and `cols` as positions on a **circle** whose bins are this
-       * extent (SPECS §8.16).
+       * extent (SPECS §8.15).
        *
        * With it, the two extents are *unwrapped*: they may run off either end of
        * the sequence and are resolved modulo it, so a window across the junction

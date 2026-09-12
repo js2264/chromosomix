@@ -132,7 +132,7 @@ describe('carrying a window across a change of grid', () => {
  * The same conversion, across the junction of a circular sequence.
  *
  * A block read round a circle carries the sequence **twice** — its tail, then
- * its head (SPECS §8.16) — and a window across the join is one whose two ends
+ * its head (SPECS §8.15) — and a window across the join is one whose two ends
  * are on different stretches of the same name. Resolved by name alone, the
  * second end comes back on the first stretch, lands *before* the first end, and
  * the regrid is refused: the ladder reads the block the reader is sliding

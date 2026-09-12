@@ -483,7 +483,7 @@ export interface AnalysisFraming {
   /** `chrIV:1–1,531,933 at 1 kb, balanced, count` — for the drawer's header. */
   label: string
   /**
-   * The sequences the reader has declared **circular** (§8.16), by this file's
+   * The sequences the reader has declared **circular** (§8.15), by this file's
    * own names. Absent — not empty — where none is.
    *
    * A fact about the assembly rather than about the window, and it is in the

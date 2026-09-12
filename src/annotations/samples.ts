@@ -43,7 +43,7 @@ interface Held {
    * for twice.
    *
    * A circular sequence panned across its own junction is two windows on one
-   * name (SPECS §8.16): the tail of the sequence and its head. Keyed by contig
+   * name (SPECS §8.15): the tail of the sequence and its head. Keyed by contig
    * alone, the second overwrote the first, `covers` then answered `false` on
    * every frame, and the lane refetched continuously while the reader slid.
    */

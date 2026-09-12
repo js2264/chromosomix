@@ -89,7 +89,7 @@ interface Unit {
   maxOffset: number
   /**
    * Bins in the sequence, where this curve is of a **circular** one — `0`
-   * otherwise (SPECS §8.16).
+   * otherwise (SPECS §8.15).
    *
    * Set only for a unit that is a single span covering a whole sequence the
    * reader has declared circular, which is the only shape the question has an

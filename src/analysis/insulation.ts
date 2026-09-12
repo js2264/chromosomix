@@ -149,7 +149,7 @@ export function diamondSums(square: ContigSquare, options: DiamondOptions): Floa
 
 /**
  * The same diamond, read from a band rather than from a square — for a sequence
- * that joins its own ends (SPECS §8.16).
+ * that joins its own ends (SPECS §8.15).
  *
  * The diamond at bin `i` is `[i − w, i) × [i, i + w)`, so every cell in it is at
  * a separation between `1` and `2w − 1`: **it is a band already**, and the square

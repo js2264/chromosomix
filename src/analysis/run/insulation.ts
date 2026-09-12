@@ -55,7 +55,7 @@ interface Unit {
   span: Span
   /** Base pairs of the sequence, for clamping the last interval of a BED. */
   length: number
-  /** Whether the reader has declared it circular (SPECS §8.16). */
+  /** Whether the reader has declared it circular (SPECS §8.15). */
   circular: boolean
 }
 
@@ -235,7 +235,7 @@ export const runInsulation: TaskRunner = async (job) => {
     // the window hangs off and the bin scores `NaN`. A circle has no such ends,
     // and the one thing a tiled square walk cannot give it is the cell joining
     // its last bin to its first, which lives in the far corner of the contig's
-    // own square and which `bandFor` reads with one extra request (§8.16).
+    // own square and which `bandFor` reads with one extra request (§8.15).
     if (unit.circular) {
       await job.breathe()
       job.progress(u, units.length, unit.name)

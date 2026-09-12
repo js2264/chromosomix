@@ -214,7 +214,7 @@ export function drawDiagonalFeatures(
       // Against the window's **own** stretch, not the first on the axis with
       // this name: a circular sequence panned across its junction carries the
       // same contig at both ends of the picture, and resolving by name would
-      // draw everything on the far side of the join a sequence out (§8.16).
+      // draw everything on the far side of the join a sequence out (§8.15).
       const segment = window.segment
       if (!(segment.bpPerUnit > 0)) continue
       const at = (bp: number): number =>
@@ -267,7 +267,7 @@ export function drawDiagonalFeatures(
 
       // The row axis's copy of the *same* stretch, so a box on a circular
       // sequence panned across its junction stands on the diagonal rather than a
-      // sequence away from it (§8.16). On every other view this is the one
+      // sequence away from it (§8.15). On every other view this is the one
       // stretch there is, and `at` and `rowAt` are the same mapping.
       const rowSegment = rows?.like(segment) ?? null
       if (rowSegment === null || !(rowSegment.bpPerUnit > 0)) continue
@@ -393,7 +393,7 @@ export function drawPairs(
     // junction is two — and the pair is drawn at the combination that is
     // actually on screen. First-occurrence-only made a loop near the join
     // disappear rather than be misplaced, which is the quieter failure and the
-    // harder one to notice (§8.16).
+    // harder one to notice (§8.15).
     for (const row of rows?.locusToUnits(rowContig, rowBp) ?? []) {
       for (const col of cols.locusToUnits(colContig, colBp)) {
         const x = toX(frame, col)
@@ -458,7 +458,7 @@ export function drawManualLines(
     const wantsHorizontal = turn === null && line.axis !== 'vertical'
 
     // Every landing, not the first: a hand-drawn rule on a circular sequence is
-    // on screen twice while the junction is (§8.16), and drawing one of them
+    // on screen twice while the junction is (§8.15), and drawing one of them
     // makes the mark flicker in and out as the reader slides past the join.
     if (wantsVertical && axes.cols !== null) {
       for (const unit of axes.cols.locusToUnits(line.at.contig, line.at.bp)) {

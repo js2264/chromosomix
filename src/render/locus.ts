@@ -68,7 +68,7 @@ export interface LocusWindow {
    * Carried rather than looked up again by name, and that is not only an economy.
    * An axis may hold the **same contig twice**: a circular sequence panned across
    * its own junction is one stretch ending at the sequence's last bin and another
-   * beginning at its first (SPECS §8.16), and `windows` returns one window for
+   * beginning at its first (SPECS §8.15), and `windows` returns one window for
    * each. A caller that answered `segmentOf(window.contig)` would get the first
    * of them both times and draw everything on the far side of the join a whole
    * sequence out of place.
@@ -129,7 +129,7 @@ export class LocusAxis {
    * This axis's copy of a stretch that came from **another** axis.
    *
    * Both axes of a symmetric block carry the same sequences, and on a circular
-   * one they carry the same sequence twice (SPECS §8.16) — so a mark whose
+   * one they carry the same sequence twice (SPECS §8.15) — so a mark whose
    * column was placed against the second stretch has to have its row placed
    * against the second stretch too, or the box is drawn at a place where nothing
    * is. Matched on the contig and on where the stretch *starts in the sequence*,
@@ -199,7 +199,7 @@ export class LocusAxis {
    * A circular sequence panned across its own junction has the same base pair on
    * the axis **twice** — once near the left edge and once near the right — and a
    * mark drawn at only one of them is a mark that vanishes and reappears as the
-   * reader slides (SPECS §8.16). Every caller that draws *at* a locus wants this;
+   * reader slides (SPECS §8.15). Every caller that draws *at* a locus wants this;
    * a caller that resolves a locus to a place — a search, a minimap — wants
    * {@link locusToUnit}, because there is one place and the picture shows it
    * twice.

@@ -88,7 +88,7 @@ export class ExpectedAccumulator {
    * Bins in the sequence, where it is **circular** — `0` on every other curve.
    *
    * What it changes is one line: the separation between two bins becomes the
-   * shorter of the two ways round (SPECS §8.16). Everything else about the
+   * shorter of the two ways round (SPECS §8.15). Everything else about the
    * accumulator — the sums, the counts, the mirror rule, the merge — is
    * untouched, because none of it was ever about *where* a cell was, only about
    * how far apart its two ends are.

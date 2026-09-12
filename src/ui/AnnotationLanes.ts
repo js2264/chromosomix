@@ -1452,7 +1452,7 @@ export class AnnotationLanes {
           if (line.axis !== 'both' && line.axis !== measures) continue
           // Every place it lands, which on a circular axis panned across its
           // junction is two: a mark drawn at only one of them vanishes and
-          // reappears as the reader slides (§8.16).
+          // reappears as the reader slides (§8.15).
           for (const unit of axis.locusToUnits(line.at.contig, line.at.bp)) {
             hairline(ctx, frame, frame.toPixel(unit), line.colour, dpr)
           }

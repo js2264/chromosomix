@@ -161,7 +161,7 @@ export class ContigBand implements SeparationBand {
     /** Highest offset `col - row` stored, inclusive. */
     readonly hi: number,
     /**
-     * Whether the sequence joins its own end to its own beginning (§8.16).
+     * Whether the sequence joins its own end to its own beginning (§8.15).
      *
      * What it changes is only what {@link forward} answers past either end — the
      * storage is identical, because a circular band's wrapped cells live at the
@@ -234,7 +234,7 @@ export async function bandFor(
     balance: boolean
     value: string
     /**
-     * Read the sequence as a circle: the band wraps past the last bin (§8.16).
+     * Read the sequence as a circle: the band wraps past the last bin (§8.15).
      *
      * `hi` is then capped at half the sequence rather than at its length, since
      * past half the circle the short way round is the other way and a band wider

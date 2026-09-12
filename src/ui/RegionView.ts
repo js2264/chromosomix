@@ -141,7 +141,7 @@ export interface RegionViewProps {
   neighbours?: { prev: string | null; next: string | null }
   onStep?(delta: number): void
   /**
-   * *This sequence is circular* (SPECS §8.16) — the reader's declaration, and
+   * *This sequence is circular* (SPECS §8.15) — the reader's declaration, and
    * the control for it.
    *
    * Absent on a two-contig block, which has no diagonal to slide along, and on a
@@ -184,6 +184,17 @@ export class RegionView {
    * zooming out of a window should reach the rest of what it is a window on.
    */
   private ladder: BlockLadder | null = null
+  /**
+   * What the ladder was last armed with, so it can be armed again.
+   *
+   * Held for one caller — {@link setCircular} — and it is the difference
+   * between a declaration that costs the reader their zoom and one that does
+   * not. Arming needs the parsed range and the block that was installed, and
+   * both are settled inside {@link load}; keeping them is what lets the ladder
+   * be rebuilt against the picture on screen rather than by reloading the view
+   * from its named region.
+   */
+  private armed: { rows: ParsedRange; result: MatrixResult; cols?: ParsedRange } | null = null
 
   constructor(private readonly props: RegionViewProps) {
     const store = props.annotations?.store
@@ -385,6 +396,32 @@ export class RegionView {
     this.applyFocus()
   }
 
+  /**
+   * Adopt a change of the circular declaration, keeping the picture (§8.15).
+   *
+   * The declaration changes how the block is **read** — whether the window may
+   * run off the end of the sequence, and whether the ceiling is a position or a
+   * width — so the ladder has to be built again. Nothing else does: the block on
+   * screen is a block of this sequence either way, and rebuilding the view would
+   * reload it from its *named region*, throwing away the zoom the reader needed
+   * in order to be somewhere the question is worth asking from.
+   *
+   * The presentation object is written through rather than replaced, because
+   * {@link armRefine} reads `circular.on` at arm time and the session hands a
+   * fresh object over only on its next render.
+   */
+  setCircular(on: boolean): void {
+    const held = this.armed
+    if (this.props.circular === undefined || held === null) return
+    if (this.props.circular.on === on) return
+    this.props.circular.on = on
+    // The block that is *drawn*, not the one the view first loaded: the reader
+    // has very likely zoomed since, and a ladder that adopted the original
+    // would plan its next read from an extent nobody is looking at.
+    const shown = this.panel.block ?? held.result
+    void this.armRefine(held.rows, shown, held.cols)
+  }
+
   private async armRefine(
     rows: ParsedRange,
     result: MatrixResult,
@@ -392,9 +429,10 @@ export class RegionView {
   ): Promise<void> {
     this.ladder?.destroy()
     this.ladder = null
+    this.armed = { rows, result, ...(cols === undefined ? {} : { cols }) }
     const ceiling = await this.wholeOf(rows, cols)
     if (this.disposed || ceiling === null) return
-    // **The sequence, when the reader has said it joins its own ends** (§8.16).
+    // **The sequence, when the reader has said it joins its own ends** (§8.15).
     // A window on one is read wrapped, and the ceiling that ordinarily stops a
     // read at the edge of the data stops being a limit on *where* and becomes a
     // cap on *how wide*: one lap, past which a bin would be drawn twice.
@@ -418,6 +456,21 @@ export class RegionView {
       panel: this.panel,
       ceiling,
       ...(lap === undefined ? {} : { wrap: { rows: lap, cols: lap } }),
+      // **A circular view reads as it moves, whatever the refine setting says.**
+      //
+      // Zoom-to-refine is off until a reader turns it on (`REFINE_DEFAULT`), and
+      // that is the right default for what it was written for: a sharper picture
+      // of a place you are already at, bought with reads you did not ask for. A
+      // circular slide is not that. Past the end of the sequence there is *no*
+      // block in hand — the window has left everything that was ever read — so
+      // with the ladder asleep the picture simply stops at the last bin, which
+      // is the exact wall the declaration was made to remove. A reader who ticks
+      // it has asked for the reads that make the wrap possible; refusing them
+      // would leave a tickbox that does nothing.
+      //
+      // Only for a sequence they have declared: every other view keeps the
+      // setting's answer, so nothing reads more than it did before.
+      ...(lap === undefined ? {} : { enabled: () => true }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
       read: (rowExtent, colExtent, rung) => {

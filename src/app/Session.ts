@@ -492,7 +492,7 @@ interface FileAnnotations {
  * whole-genome view on a file with three circular plasmids has to measure all
  * three of them the short way round, and a framing carrying only what happened
  * to be on screen would give one answer from one view and another from another
- * (SPECS §8.16).
+ * (SPECS §8.15).
  *
  * `null` in, `null` out: a session with no block on screen has no framing, and
  * a declaration does not make one.
@@ -640,6 +640,15 @@ export class Session {
      * the key is still documented where a reader looks for it.
      */
     focusSearch?(): void
+    /**
+     * Adopt a change of the circular declaration without being rebuilt (§8.15).
+     *
+     * Present on the region view alone, for {@link showFocus}'s reason: it is
+     * the only view a sequence can be declared circular from. Its absence is
+     * what makes the toggle a no-op elsewhere rather than a remount of a view
+     * the declaration does not change.
+     */
+    setCircular?(on: boolean): void
   } | null = null
   /**
    * Everything annotations need, for the file that is open (spec §8).
@@ -4295,7 +4304,7 @@ export class Session {
    * tickbox could not answer honestly: a two-contig block has no diagonal to
    * slide along, a whole-genome picture is a list of sequences of which some may
    * be circular and some not, and a name that is not a sequence of this file is
-   * a genome or a typo (SPECS §8.16).
+   * a genome or a typo (SPECS §8.15).
    */
   private circularPresentation(state: ViewState): CircularPresentation | undefined {
     if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
@@ -4316,10 +4325,13 @@ export class Session {
       on: store.has(name),
       onChange: (on) => {
         store.set(name, on)
-        // A remount rather than a repaint: the declaration changes how the block
-        // is *read* — wrapped or not, and with a ceiling or a lap — so the
-        // ladder and the view's first read both have to be built again.
-        this.remount()
+        // **Not a remount.** The declaration changes how the block is *read* —
+        // wrapped or not, with a ceiling or a lap — so the ladder has to be
+        // built again; but a remount would rebuild the view from its named
+        // region and throw away the reader's zoom, which is the one thing they
+        // had to do to get somewhere worth asking the question from. The view
+        // re-arms its ladder against the block already on screen instead.
+        this.current?.setCircular?.(on)
       },
     }
   }

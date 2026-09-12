@@ -58,7 +58,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Added
 
 - **This chromosome is circular — and then the map slides round it.** A tickbox in
-  the **Map** card, on any view that is a window on one sequence (SPECS §8.16). A `.cool`
+  the **Map** card, on any view that is a window on one sequence (SPECS §8.15). A `.cool`
   cannot say that a sequence joins its own ends, and nothing can infer it — a bright far
   corner is a circular chromosome, or a translocation, or an assembly error — so it is a
   declaration, kept per file and carried in an exported workspace.
@@ -81,7 +81,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the junction it used to leave as gaps, and the directionality index, the HiC score and
   the scalogram wrap with them. What does *not* yet: compartments, chromosight and the O/E
   map divide by an expected curve at a linear separation, and a deck companion draws the
-  sequence linearly. Both are stated at §8.16 rather than left to be found.
+  sequence linearly. Both are stated at §8.15 rather than left to be found.
 
 - **Three more readings of the near-diagonal, and a fourth normalisation for the 4C.** The catalogue
   (SPECS §18.8) gains the **directionality index** — Dixon et al.'s signed χ², the other answer to the

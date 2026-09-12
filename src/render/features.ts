@@ -107,7 +107,7 @@ export function layoutFeatures(
     if (contig < 0) continue
     // The window's **own** stretch, not the first one on the axis with this
     // name: a circular sequence panned across its junction is the same contig
-    // twice, and `segmentOf` would place the far half a sequence out (§8.16).
+    // twice, and `segmentOf` would place the far half a sequence out (§8.15).
     const segment = window.segment
     if (!(segment.bpPerUnit > 0)) continue
     const [from, to] = featureRange(set, contig, window.start, window.end)
