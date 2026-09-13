@@ -664,6 +664,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map of several ticked genomes is divided and labelled by genome.** Ticking
+  four MAGs in the genomes table asks for four blocks — their own maps on the
+  diagonal and everything between them off it — and the picture came back ruled
+  and named by *contig*, so the thing four ticks were spent on had two thousand
+  hairlines across it and no line anywhere saying where one MAG ended and the
+  next began. The whole-metagenome view has always refused exactly that wash; a
+  selection of genomes is the same picture of a chosen few and now reads the
+  same way.
+
+  The rule it follows is the one the whole-file levels already state, one level
+  down: **what was ticked is what the axis is divided and labelled by.** So
+  ticking *contigs* is unchanged — there the names picked are the contigs, and
+  coarsening to the genomes behind them would throw away the answer to "what did
+  I pick" — and so is a single genome, whose own contigs are the only structure
+  inside it. The genome of a contig is still on the tooltip in every one of
+  those cases, as it was; what changed is only which of two run lists gets the
+  ink.
+
+  Where the axis is pooled — enough small contigs and a cell holds several — a
+  cell is now kept **inside one genome**, the same guarantee the whole-metagenome
+  scan already makes for its slots. Without it a boundary can land a cell late and the
+  block it closes carries a sliver of the next MAG, which is precisely the kind
+  of invented adjacency the pooling rules exist to prevent.
+
+  **And clicking one of those labels opens that genome.** It used to open a
+  *region* view of it — a legal destination, since a bare genome name is a range
+  the parser takes (§5.4), and one screen short of where the gesture meant to go.
+  The whole-file picker has always gone straight to the genome; both now
+  dispatch on what the axis actually is rather than on which view is asking, so
+  the two pictures that are divided by genome behave alike. A label on an axis of
+  contigs opens a region, as it always has.
+
+  A companion panel in a deck follows the lead here, because the decision is made
+  on the read rather than in the view: `#genomes=` shows the same blocks in every
+  map it is applied to.
+
 - **A GTF's biotype is written into the feature's attributes with its key in front of it**
   (`biotype protein_coding`, where it was a bare `protein_coding`). An attribute with no key is a
   fact nothing can ask for — invisible to the new column picker — and the feature card behind a

@@ -8385,23 +8385,24 @@ function watchTheme(onChange: () => void): () => void {
  * Separator positions: the first row/column of every group after the first.
  *
  * The genome runs become the drawn boundaries only where the reader says so
- * (`genomeBoundaries`), which is the whole-metagenome overview and nothing
- * else. Elsewhere they are a fact the tooltip reports and not a line: a
- * whole-genome view of a metacool is still read contig by contig, and moving
- * its separators out to the genomes would coarsen a picture nobody asked to
- * have coarsened.
+ * (`genomeBoundaries`): the whole-metagenome overview, and a selection of
+ * several genomes, which are the two pictures whose subject *is* genomes.
+ * Elsewhere they are a fact the tooltip reports and not a line — a whole-genome
+ * view of a metacool is still read contig by contig, and so is a handful of
+ * ticked contigs, and moving those separators out to the genomes would coarsen
+ * a picture nobody asked to have coarsened.
  */
 export function separatorsFor(data: MatrixResult): SeparatorSet {
   const toSeparators = (groups: AxisGroup[]): Separator[] =>
     groups.map((group) => ({ at: group.start, label: group.label }))
 
-  // A whole-metagenome view is a picture of *genomes*. Where the reader marks
-  // its genome runs as the boundaries, those are the only ones drawn: 20,000
-  // contig hairlines over 4,000 genome blocks is a grey wash, and it hides the
-  // block structure the view exists to show. They go in both sets so the axis
-  // is also *labelled* by genome — the fine set is what `labelBlocks` reads —
-  // while the heavier stroke, drawn at the same coordinates, is what the eye
-  // lands on.
+  // A whole-metagenome view — or a map of several ticked MAGs — is a picture of
+  // *genomes*. Where the reader marks its genome runs as the boundaries, those
+  // are the only ones drawn: 20,000 contig hairlines over 4,000 genome blocks
+  // is a grey wash, and it hides the block structure the view exists to show.
+  // They go in both sets so the axis is also *labelled* by genome — the fine
+  // set is what `labelBlocks` reads — while the heavier stroke, drawn at the
+  // same coordinates, is what the eye lands on.
   const draw = data.genomeBoundaries === true
   const rowUnits = (draw ? data.rowGenomes : undefined) ?? data.rowGroups
   const colUnits = (draw ? data.colGenomes : undefined) ?? data.colGroups

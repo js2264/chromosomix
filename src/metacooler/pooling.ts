@@ -423,18 +423,33 @@ export function poolBins(
  *   them. Whoever chose the order is the caller: the tables sort, and a picture
  *   that reordered the selection behind them would be answering a different
  *   question.
+ * @param contigGroup Coarser structure over the selected contigs — the genome
+ *   each belongs to, indexed by contig id. Where cells hold whole contigs, a
+ *   cell is kept inside one genome, exactly as {@link partitionAxis} keeps one
+ *   and for the same reason: a selection of genomes is drawn *as* genomes, and a
+ *   cell straddling two of them puts one genome's block a cell into the next.
+ *   Passed only where the selection is by genome; a chosen handful of contigs is
+ *   a picture of the choice and has no coarser structure to preserve.
  */
 export function selectionPooling(
   nBins: number,
   extents: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
   plan: PoolPlan,
   cap = POOLED_CELL_CAP,
+  contigGroup?: ArrayLike<number>,
 ): BinPooling {
   const lengths = extents.map(({ extent }) => Math.max(0, extent[1] - extent[0]))
   const total = lengths.reduce((sum, length) => sum + length, 0)
+  // Per *position* in the selection rather than per contig id, because that is
+  // the index everything below counts in — the selected contigs are scattered
+  // through the file and their ids are not consecutive.
+  const groups =
+    contigGroup === undefined
+      ? undefined
+      : Int32Array.from(extents, ({ id }) => contigGroup[id] ?? -1)
   const capacity = Math.max(
     plan.binsPerCell,
-    smallestCapacity(lengths.length, (i) => lengths[i], Math.max(1, Math.trunc(cap))),
+    smallestCapacity(lengths.length, (i) => lengths[i], Math.max(1, Math.trunc(cap)), groups),
   )
 
   const slot = new Int32Array(nBins).fill(-1)
@@ -444,6 +459,7 @@ export function selectionPooling(
   const memberStart: number[] = []
   let placed = 0
   let open = 0
+  let openGroup = -1
   let widest = 1
   let held = 0
   for (let u = 0; u < extents.length; u++) {
@@ -451,6 +467,7 @@ export function selectionPooling(
     const [lo, hi] = extent
     const length = lengths[u]
     if (length === 0) continue
+    const group = groups === undefined ? 0 : groups[u]
     // The range's rule, applied to a scattered set: a sequence longer than the
     // capacity keeps cells of its own, cut at its own start; one too small to
     // fill a cell joins the one before it. A selection is exactly the axis a
@@ -461,13 +478,14 @@ export function selectionPooling(
       const offset = bin - lo
       const opens = ownCells
         ? offset % capacity === 0
-        : offset === 0 && (open === 0 || open + length > capacity)
+        : offset === 0 && (open === 0 || open + length > capacity || group !== openGroup)
       if (opens) {
         ids.push(id)
         cellStart.push(placed)
         memberStart.push(members.length)
         members.push(id)
         open = 0
+        openGroup = group
         held = 0
       } else if (offset === 0) {
         // Joined the open cell: it is a second sequence in it, not a second cell.
@@ -478,6 +496,9 @@ export function selectionPooling(
     }
     if (ownCells) {
       open = 0
+      // Nothing may join a sequence that filled its own cells, so the next one
+      // opens whatever its genome — `-1` says so without naming a genome.
+      openGroup = -1
       held = 0
     } else {
       open += length
