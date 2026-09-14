@@ -37,7 +37,7 @@ import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
-import { bucketBrowseButton } from './browseButton'
+import { folderPickButton } from './pickFromFolders'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
@@ -1424,9 +1424,18 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
           url,
           button('add', submit, { class: 'btn' }),
           // A track's URL is the one nobody has in their hand: a map is opened
-          // from a link or an example, and the bigWigs beside it are keys in a
-          // prefix whose names came off a run sheet.
-          bucketBrowseButton((picked) => loader.addUrl(picked)),
+          // from a link or a store, and the bigWigs beside it are keys in a
+          // prefix whose names came off a run sheet. A picked local file goes
+          // the way a dropped one does, with the index found beside it.
+          folderPickButton((picked) => {
+            if (picked.source.kind === 'local') {
+              loader.addFiles(
+                picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index],
+              )
+              return
+            }
+            loader.addUrl(picked.uri)
+          }),
         ),
       ),
     ],

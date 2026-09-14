@@ -128,13 +128,13 @@ usual chain accepts. It is **not** part of `npm run build` and not part of the d
 data changes on the order of once a year and the app deploys on every push, so coupling them would
 mean re-uploading 250 MB to publish a CSS fix.
 
-None of them is a row of the Demos hub. What the hub offers is the workspaces below, and those
-name these.
+Each of them is also a row of the lab's store, under the figures, so a reader can open one on its
+own; what the store leads with is the workspaces below, and those name these.
 
 ## The published workspaces
 
-The picker's **Demos** hub (`builtinHubs()` in `ui/examples.ts`, SPECS §24.2) lists **four
-workspace files**, plus two 4DN open-data maps that live on 4DN's bucket rather than the lab's:
+The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
+`ui/stores/registry.ts`, SPECS §24.2) leads with **four workspace files**, drawn as figures:
 
 | file | opens |
 | --- | --- |
@@ -452,7 +452,7 @@ Three things differ from an archived push, and each is a decision:
   concurrency group, and GitHub keeps only the newest *pending* run in a group — so if anything was
   already deploying, the removal is cancelled about a second after it queues and the preview
   outlives its review. That is exactly what happened to #49 and #50, whose removals were cancelled
-  behind a deploy the Hubs workflow had dispatched a minute earlier. An event-shaped write that can
+  behind a deploy the Stores workflow had dispatched a minute earlier. An event-shaped write that can
   be evicted needs something that asks the question again, so the deploy asks
   `repos/<owner>/<repo>/pulls/<n>` for each row before it publishes; a pull request the API will not
   answer for is left alone, because *I could not ask* must not read as *it closed*. It also covers
@@ -484,16 +484,16 @@ maintainer who wants a preview of a fork's change pushes it to a branch here.
 archive lives in, and gone when the pull request is. A pull request open for a month with fifty
 pushes still costs one directory.
 
-### The generated hubs are published here too
+### The generated stores are published here too
 
-The picker's **4DN open data** and **ENCODE Hi-C** hubs are JSON files that
-`.github/workflows/hubs.yml` regenerates weekly and commits to the `hubs` branch (docs/hubs.md).
-The deploy copies the three current files from that branch into `hubs/` beside the app, so the
-viewer reads them from its own origin, and the hubs workflow dispatches a deploy as soon as it has
+The drawer's **IGV genomes**, **4DN open data** and **ENCODE** stores are JSON files that
+`.github/workflows/stores.yml` regenerates weekly and commits to the `stores` branch (docs/stores.md).
+The deploy copies the current files from that branch into `stores/` beside the app, so the
+viewer reads them from its own origin, and the stores workflow dispatches a deploy as soon as it has
 published something new — the arrangement the previews use, on the same `pages` concurrency group.
 The branch was first meant to be read directly over `raw.githubusercontent.com`; that host answers
 404 to anyone not logged in when the repository is private, and a Pages site is public whether or
-not its repository is, which is why the copy lives here. Absent until the hubs workflow has run
+not its repository is, which is why the copy lives here. Absent until the stores workflow has run
 once, hence the test in the assembly step.
 
 ## Why Pages works at all for this app

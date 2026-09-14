@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Build a hub — the static catalogue the viewer's Hubs section reads (SPECS §24.3).
+"""Build a store — the static catalogue the viewer's Stores section reads (SPECS §24.3).
 
 Run with any Python 3.9 or newer.  **Standard library only**, deliberately::
 
-    python3 scripts/make_hub.py igv    --out out/igv.json    --timestamp
-    python3 scripts/make_hub.py 4dn    --out out/4dn.json    --timestamp
-    python3 scripts/make_hub.py encode --out out/encode.json --timestamp
-    python3 scripts/make_hub.py bucket https://my-lab.s3.amazonaws.com/hic/ \\
-        --name 'Lab Hi-C' --out hub.json
-    python3 scripts/make_hub.py check out/4dn.json
+    python3 scripts/make_store.py igv    --out out/igv.json    --timestamp
+    python3 scripts/make_store.py 4dn    --out out/4dn.json    --timestamp
+    python3 scripts/make_store.py encode --out out/encode.json --timestamp
+    python3 scripts/make_store.py bucket https://my-lab.s3.amazonaws.com/hic/ \\
+        --name 'Lab Hi-C' --out store.json
+    python3 scripts/make_store.py check out/4dn.json
 
-The output is a Contract-1 hub: ``kind``, ``version``, ``name``, ``columns`` and
+The output is a Contract-1 store: ``kind``, ``version``, ``name``, ``columns`` and
 ``entries``, each entry a label, a URI, a kind, a size when it is known, a note
-and one value per column.  ``src/state/hub.ts`` parses it and
-``.github/workflows/hubs.yml`` publishes what this writes to the ``hubs``
+and one value per column.  ``src/state/store.ts`` parses it and
+``.github/workflows/stores.yml`` publishes what this writes to the ``stores``
 branch, where the deploy copies it into the site the viewer reads from.
 
 **Why a script and not the browser.**  The join a shelf needs — accession to
@@ -24,12 +24,12 @@ happens here, once a week, and what the reader fetches is one static JSON on a
 host that already serves ``Access-Control-Allow-Origin: *``.  It is also what
 juicebox.js does — its ENCODE and 4DN menus are tables a script regenerated and
 somebody committed (``igvteam/igv-data``, MIT) — and the reason this viewer's
-version of that table is not simply *their* table is in SPECS §24.3: a hub that
+version of that table is not simply *their* table is in SPECS §24.3: a store that
 hot-links another project's file inherits that project's cadence and schema.
 
 **No dependencies, for the same reason the viewer has no backend.**  A weekly
 workflow that needs ``pip install`` is a weekly workflow that breaks on a
-resolver change, and a contributor who wants to regenerate a hub by hand should
+resolver change, and a contributor who wants to regenerate a store by hand should
 need nothing but the interpreter that is already on the machine.  ``urllib``
 fetches, ``json`` parses, ``xml.etree`` reads a bucket listing, ``csv`` reads a
 manifest.
@@ -94,17 +94,17 @@ files in ten and said nothing about it.
     name and the size, which is still enough to choose from.
 
 ``check``
-    Validate a hub, or a generated session, against its contract.
+    Validate a store, or a generated session, against its contract.
 
 ## Pre-configured sessions
 
-A hub row may be a ``workspace``: a whole saved session, opened through the same
+A store row may be a ``workspace``: a whole saved session, opened through the same
 road as ``?config=`` (SPECS §24.1).  That is the right shape for "a genome and
 everything published with it" — IGV's hg38 is a FASTA, its index and a gene
 track, and offering those as three rows asks the reader to assemble what IGV had
 already assembled.  So a front end may also write **session files**: one
 ``.metacooler.json`` per genome or per experiment set, with the tracks placed,
-and a hub of its own listing them (``--sessions-dir``/``--sessions-out``).  The
+and a store of its own listing them (``--sessions-dir``/``--sessions-out``).  The
 viewer needs no new code for this — a workspace row is a road it already has.
 
 **Three facts worth not rediscovering**, all recorded in SPECS §24.3:
@@ -129,14 +129,14 @@ viewer needs no new code for this — a workspace row is a road it already has.
    that ignores ``from`` (see ``fetch_graph``).
 
 **Zero entries exits 2**, distinct from the 1 an HTTP failure exits with, so the
-workflow can refuse to publish an empty hub over a good one without having to
+workflow can refuse to publish an empty store over a good one without having to
 tell a portal outage apart from an empty catalogue by reading a log.
 
 **Every field access is tolerant.**  ``.get`` and a default, never a subscript:
 the first live run of any change here happens in CI against a portal nobody can
 reach from a development sandbox, and a ``KeyError`` on the four-hundredth
 record throws away the other three hundred and ninety-nine.  A field that has
-moved leaves a column empty, which is visible in the published hub and fixable
+moved leaves a column empty, which is visible in the published store and fixable
 next week; a field that has moved must never lose the row.
 """
 
@@ -161,10 +161,10 @@ from typing import Any, Iterable, Iterator, Optional
 
 log = logging.getLogger("make_hub")
 
-#: `src/state/hub.ts` refuses anything else, and refuses a newer major version
+#: `src/state/store.ts` refuses anything else, and refuses a newer major version
 #: the way it refuses a newer workspace. Bump both together or not at all.
-HUB_KIND = "metacooler.hub"
-HUB_VERSION = 1
+STORE_KIND = "metacooler.store"
+STORE_VERSION = 1
 
 #: `src/state/workspace.ts` and `src/state/SessionConfig.ts`, for the sessions
 #: this script writes. Same rule: bump with the reader or not at all.
@@ -173,11 +173,11 @@ CONFIG_VERSION = 1
 
 #: What a generated session says wrote it. `SessionConfig.producer` is "which
 #: build wrote this", and the honest answer for these is not a viewer build.
-PRODUCER = "metacooler.js make_hub.py"
+PRODUCER = "metacooler.js make_store.py"
 
 #: Named, because a portal that rate-limits or blocks has to be able to tell who
 #: this is and where to complain. `urllib`'s default identifies only Python.
-USER_AGENT = "metacooler.js make_hub.py (+https://github.com/js2264/metacooler.js)"
+USER_AGENT = "metacooler.js make_store.py (+https://github.com/js2264/metacooler.js)"
 
 #: Seconds. A portal answering `limit=all` is doing real work — 4DN's set query
 #: is thousands of embedded files — so this is generous; it exists to stop a
@@ -280,7 +280,7 @@ PAGE_ENCODE = 0
 #: first thing anybody filters on and the first sort key below.
 #:
 #: `format` joined the two portal front ends when they stopped being Hi-C-only.
-#: With one format per hub it carried nothing; with nine of them it is the
+#: With one format per store it carried nothing; with nine of them it is the
 #: column a reader narrows on first — *the bigWigs on GM12878*, not *the files*.
 COLUMNS_4DN = [
     {"key": "assembly", "label": "Assembly"},
@@ -290,6 +290,11 @@ COLUMNS_4DN = [
     {"key": "dataset", "label": "Dataset"},
     {"key": "lab", "label": "Lab"},
     {"key": "project", "label": "Project"},
+    # The experiment set the file belongs to, by accession. It is the key the
+    # viewer groups a store's rows under and pairs a pre-configured session
+    # with (SPECS §24.3): a session is one set, and without the accession on
+    # the row there is nothing for the two to agree on.
+    {"key": "set", "label": "Experiment set"},
 ]
 
 COLUMNS_ENCODE = [
@@ -300,6 +305,9 @@ COLUMNS_ENCODE = [
     {"key": "target", "label": "Target"},
     {"key": "output", "label": "Output"},
     {"key": "lab", "label": "Lab"},
+    # The experiment the file belongs to, by accession: 4DN's `set`, under
+    # ENCODE's own name for the same thing, and for the same reason.
+    {"key": "dataset", "label": "Dataset"},
 ]
 
 #: IGV's table is not about experiments, so its columns are not the portals':
@@ -313,8 +321,8 @@ COLUMNS_IGV = [
     {"key": "host", "label": "Host"},
 ]
 
-#: A session hub's columns. `tracks` is a count and is why this is not simply a
-#: `kind: workspace` row inside the data hub: the one thing a reader wants to
+#: A session store's columns. `tracks` is a count and is why this is not simply a
+#: `kind: workspace` row inside the data store: the one thing a reader wants to
 #: know before opening a pre-configured session is how much it is about to put
 #: on screen.
 COLUMNS_SESSIONS = [
@@ -322,6 +330,11 @@ COLUMNS_SESSIONS = [
     {"key": "subject", "label": "Genome or dataset"},
     {"key": "tracks", "label": "Tracks"},
     {"key": "source", "label": "Source"},
+    # The group this session stands for, by the same key the data store's rows
+    # carry — an experiment set, an ENCODE experiment, an IGV assembly — so the
+    # viewer can offer *open with its tracks* on the group itself rather than
+    # in a shelf of its own (SPECS §24.3).
+    {"key": "dataset", "label": "Group"},
 ]
 
 #: What a name is worth clicking on, mirroring `src/browse/route.ts`.
@@ -330,7 +343,7 @@ COLUMNS_SESSIONS = [
 #: argues against, and it is unavoidable across a language boundary: this script
 #: cannot import TypeScript and the viewer cannot run Python. So the rule is
 #: copied with its source named, and the cost of them drifting is bounded — a
-#: hub row the viewer greys out, or an openable file missing from a catalogue,
+#: store row the viewer greys out, or an openable file missing from a catalogue,
 #: neither of which is silent. Keep them in step.
 ROUTE_WORKSPACE = re.compile(r"\.metacooler\.json$", re.I)
 ROUTE_MAP = re.compile(
@@ -511,7 +524,7 @@ def size_of(value: Any) -> Optional[int]:
 def joined_note(*pieces: Any) -> str:
     """The note cell: the non-empty pieces, ` · `-separated.
 
-    The same separator the demo hub's hand-written notes use, so a generated row
+    The same separator the demo store's hand-written notes use, so a generated row
     and a written one look like rows of one table.
     """
     return " · ".join(piece for piece in (text(p) for p in pieces) if piece != "")
@@ -520,10 +533,10 @@ def joined_note(*pieces: Any) -> str:
 def host_of(url: str) -> str:
     """The host a row's bytes come from, for a Host column or a note.
 
-    Worth a cell of its own on the IGV hub and nowhere else: its rows come from
+    Worth a cell of its own on the IGV store and nowhere else: its rows come from
     four hosts — IGV's bucket, UCSC's download server, GenePattern's bucket, the
     1000 Genomes bucket — and which one decides whether a file answers CORS at
-    all. On a portal hub every row is on the portal's own bucket and the column
+    all. On a portal store every row is on the portal's own bucket and the column
     would be one value repeated.
     """
     try:
@@ -562,7 +575,7 @@ def _request(url: str, accept: str) -> Any:
         raise SystemExit(
             f"Could not reach {url}\n"
             f"  {error.reason}\n"
-            "  Nothing was written. A hub is only replaced by a run that succeeded, so the "
+            "  Nothing was written. A store is only replaced by a run that succeeded, so the "
             "previously published one is still the one readers see."
         ) from error
 
@@ -637,7 +650,7 @@ def fetch_json(url: str) -> dict:
     search matching nothing with ``404`` and an ``HTTPNotFound`` body rather
     than ``200`` and an empty ``@graph``.  A generator that raised there would
     report an outage every time a facet was narrowed too far — and the caller
-    already refuses to publish an empty hub, which is the correct response to
+    already refuses to publish an empty store, which is the correct response to
     both.  A 404 with an HTML body is something else (a moved endpoint), and
     still fails.
     """
@@ -695,14 +708,14 @@ def fetch_graph(query: str, page: int) -> list:
     the one asked for is the end whatever ``total`` said; and a page that adds
     no record this walk has not already seen stops it dead. That last one is the
     guard against a portal that ignores ``from`` — which would otherwise answer
-    the first page for ever, and the loop would never end and the hub would be
+    the first page for ever, and the loop would never end and the store would be
     the first fifty sets repeated a thousand times.
 
     That third stop is **fatal when the walk is short** and quiet otherwise, and
     the distinction is the whole of its worth. A repeat after ``total`` records
     have been collected is a portal whose count was a little stale, and
     everything asked for is already in hand. A repeat *before* then means the
-    enrichment covers a fiftieth of what it should — a hub that publishes, draws
+    enrichment covers a fiftieth of what it should — a store that publishes, draws
     and has empty cells in nine rows out of ten, which is precisely the failure
     ``--portal require`` exists to refuse.
     """
@@ -739,8 +752,8 @@ def fetch_graph(query: str, page: int) -> list:
                     f"  answered {len(graph)} records at from={offset - len(graph)} and every one "
                     f"of them had already been sent: it is ignoring `from`.\n"
                     f"  {len(records)} of {total} records were collected, so the metadata this "
-                    "hub needs is mostly missing.\n"
-                    "  Nothing was written. A hub that publishes with nine rows in ten missing "
+                    "store needs is mostly missing.\n"
+                    "  Nothing was written. A store that publishes with nine rows in ten missing "
                     "their columns is worse than last week's, which is still the one readers see."
                 )
             log.warning(
@@ -870,7 +883,7 @@ def probe(url: str, timeout: int = 30, attempts: int = 2) -> Probed:
     next Monday's run picks the rows up with no change here.
 
     ``Content-Range: bytes 0-0/12400379`` carries the total, which is the size a
-    hub row needs (§24.1) and the one thing IGV's table does not carry.
+    store row needs (§24.1) and the one thing IGV's table does not carry.
 
     Two attempts, because a single timeout must not silently cost a genome a
     week, and never fatal: a probe that cannot decide answers "not ok", which
@@ -1290,7 +1303,7 @@ def entries_4dn(
     and nothing else. That is the rule SPECS §24.3 argues for: a filter on the
     file rather than on the experiment type needs no maintenance when the
     consortium's vocabulary grows, and it is why Micro-C, sn-Hi-C and whatever
-    comes next are in a hub nobody edited. ``--formats`` narrows it for a dry
+    comes next are in a store nobody edited. ``--formats`` narrows it for a dry
     run and is ``None`` — everything — for a publish.
 
     A file the portal did not describe still gets a row: it is a real object on
@@ -1349,9 +1362,9 @@ def entries_4dn(
                     "dataset": text(meta.get("dataset")),
                     "lab": text(meta.get("lab")),
                     "project": text(meta.get("project")),
+                    "set": text(meta.get("set")),
                 },
-                # Not published — `assemble` drops what Contract 1 has no key
-                # for — and used to group the sessions below.
+                # Also held bare, which is what groups the sessions below.
                 "_set": text(meta.get("set")),
                 "_accession": accession,
             }
@@ -1435,7 +1448,7 @@ CATEGORY_SHARDS = {
 #: Every shard this front end can write, in the order the picker offers them.
 #: Fixed and enumerated rather than discovered, because `src/ui/examples.ts`
 #: ships a built-in reference to each one and the two lists have to agree —
-#: `test/dom/builtin-hubs.test.ts` checks that they do.
+#: `test/dom/builtin-stores.test.ts` checks that they do.
 ENCODE_SHARDS = tuple(
     f"{assembly}-{category}"
     for assembly in ("GRCh38", "hg19", "mm10", "other")
@@ -1682,6 +1695,7 @@ def _entry_encode(row: dict, index: dict[str, dict], count: int) -> dict:
             "target": text(meta.get("target")),
             "output": row["output"],
             "lab": text(meta.get("lab")) or row["lab"],
+            "dataset": row["dataset"],
         },
         "_shard": shard_of(row["assembly"], row["category"]),
         "_dataset": row["dataset"],
@@ -1726,7 +1740,7 @@ def _lab_name(at_id: str) -> str:
 #: tab-separated format this viewer has no parser for. Those tracks are counted
 #: and skipped rather than written as rows that fail when they are clicked —
 #: `route_of` would refuse them anyway, since the name ends in ``.txt.gz``, and
-#: the count is logged so that "IGV has a gene track for hg38 and this hub does
+#: the count is logged so that "IGV has a gene track for hg38 and this store does
 #: not" is a known gap rather than a surprise.
 IGV_UNREADABLE = ("refgene", "genepred", "2bit", "cytoband", "alias", "chromsizes")
 
@@ -1990,7 +2004,7 @@ def track_entry(index: int, label: str, url: str, sidecar: str = "") -> Optional
     card, kind = pair
     colour = "#5b6169" if kind in ("gtf", "sequence") else PALETTE[index % len(PALETTE)]
     return {
-        "id": f"hub-{index}",
+        "id": f"store-{index}",
         "card": card,
         "kind": kind,
         "label": label or name,
@@ -2115,6 +2129,7 @@ def sessions_igv(genomes: list, entries: list[dict], created: str) -> list[dict]
                     "subject": label,
                     "tracks": str(len(placed)),
                     "source": "IGV",
+                    "dataset": assembly,
                 },
                 "document": session_document(
                     name=f"IGV {assembly}", uri=fasta, tracks=placed, created=created
@@ -2209,6 +2224,7 @@ def sessions_from_entries(
                     "subject": subject,
                     "tracks": str(min(len(tracks), SESSION_TRACKS) + 1),
                     "source": source,
+                    "dataset": name,
                 },
                 "document": session_document(
                     name=f"{source} {name}{f' ({assembly})' if assembly else ''}",
@@ -2257,10 +2273,10 @@ def write_sessions(sessions: list[dict], directory: Path) -> list[Path]:
 
 
 def session_entries(sessions: list[dict], folder: str) -> list[dict]:
-    """The session hub's rows: one ``kind: workspace`` entry per session file.
+    """The session store's rows: one ``kind: workspace`` entry per session file.
 
     Relative, with no ``base``, which is the self-contained-folder case
-    `resolveHub` documents: the hub is published beside the directory it names,
+    `resolveStore` documents: the store is published beside the directory it names,
     so the pair can be copied to another host — or served from a preview build —
     and still find each other.
     """
@@ -2278,7 +2294,7 @@ def session_entries(sessions: list[dict], folder: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Assembling a Contract-1 hub
+# Assembling a Contract-1 store
 # ---------------------------------------------------------------------------
 
 
@@ -2321,17 +2337,17 @@ def assemble(
     columns: list[dict],
     entries: list[dict],
 ) -> dict:
-    """Sort, relativise and wrap raw entries into the hub Contract 1 describes.
+    """Sort, relativise and wrap raw entries into the store Contract 1 describes.
 
     Sorted by assembly and then label, which is the order the table opens in and
-    therefore the order a diff between two weeks is readable in: a hub sorted by
+    therefore the order a diff between two weeks is readable in: a store sorted by
     whatever the portal answered would show four hundred moved rows the week a
     portal changed its default sort.
 
     Keys beginning with ``_`` are the front ends' own working notes — which
     experiment set a file belongs to, which shard a row goes in — and are
     dropped here rather than filtered at each call site, because Contract 1 has
-    no place for them and a hub carrying them would be a second, undocumented
+    no place for them and a store carrying them would be a second, undocumented
     format nobody reads.
     """
     ordered = sorted(
@@ -2352,7 +2368,7 @@ def assemble(
             row["note"] = entry["note"]
         # Empty cells are dropped rather than written as `""`: Contract 1 renders
         # a missing key as empty anyway, so the pair would carry nothing — and a
-        # hub that spells out every blank turns next week's diff into a wall.
+        # store that spells out every blank turns next week's diff into a wall.
         fields = {key: value for key, value in entry["fields"].items() if value != ""}
         if fields:
             row["fields"] = fields
@@ -2362,9 +2378,9 @@ def assemble(
             ]
         published.append(row)
 
-    hub: dict[str, Any] = {
-        "kind": HUB_KIND,
-        "version": HUB_VERSION,
+    store: dict[str, Any] = {
+        "kind": STORE_KIND,
+        "version": STORE_VERSION,
         "name": name,
         "description": description,
         "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
@@ -2373,16 +2389,16 @@ def assemble(
         "source": source,
     }
     if base is not None:
-        hub["base"] = base
-    hub["columns"] = columns
-    hub["entries"] = published
-    return hub
+        store["base"] = base
+    store["columns"] = columns
+    store["entries"] = published
+    return store
 
 
-def write_hub(hub: dict, out: Path, *, timestamp: bool) -> list[Path]:
-    """Write the hub, and a dated copy beside it when asked. Returns what it wrote."""
+def write_store(store: dict, out: Path, *, timestamp: bool) -> list[Path]:
+    """Write the store, and a dated copy beside it when asked. Returns what it wrote."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(hub, indent=2, ensure_ascii=False) + "\n"
+    body = json.dumps(store, indent=2, ensure_ascii=False) + "\n"
     written = [out]
     out.write_text(body, encoding="utf-8")
     if timestamp:
@@ -2394,48 +2410,48 @@ def write_hub(hub: dict, out: Path, *, timestamp: bool) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# Checking a hub, or a session, against its contract
+# Checking a store, or a session, against its contract
 # ---------------------------------------------------------------------------
 
 
-def check_hub(path: Path) -> list[str]:
+def check_store(path: Path) -> list[str]:
     """Every way *path* fails Contract 1, as sentences. Empty means it passes.
 
-    The parser in ``src/state/hub.ts`` is deliberately forgiving — an entry with
+    The parser in ``src/state/store.ts`` is deliberately forgiving — an entry with
     no label is dropped, an unknown key ignored — because a reader's shelf
-    should survive a hub somebody else wrote. That forgiveness is exactly why a
-    generator needs this: a hub that lost its labels would publish, parse, and
+    should survive a store somebody else wrote. That forgiveness is exactly why a
+    generator needs this: a store that lost its labels would publish, parse, and
     draw an empty table, and nothing in the pipeline would have said a word.
     """
     problems: list[str] = []
     try:
-        hub = json.loads(path.read_text(encoding="utf-8"))
+        store = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return [f"{path} does not exist."]
     except ValueError as error:
         return [f"{path} is not valid JSON: {error}"]
-    if not isinstance(hub, dict):
+    if not isinstance(store, dict):
         return [f"{path} is not a JSON object."]
-    if hub.get("kind") == WORKSPACE_KIND:
+    if store.get("kind") == WORKSPACE_KIND:
         return check_session(path)
 
-    if hub.get("kind") != HUB_KIND:
-        problems.append(f"kind is {hub.get('kind')!r}, not {HUB_KIND!r}.")
-    version = hub.get("version")
+    if store.get("kind") != STORE_KIND:
+        problems.append(f"kind is {store.get('kind')!r}, not {STORE_KIND!r}.")
+    version = store.get("version")
     if not isinstance(version, int) or isinstance(version, bool):
         problems.append(f"version is {version!r}, which is not an integer.")
-    elif version != HUB_VERSION:
-        problems.append(f"version is {version}, and this generator writes {HUB_VERSION}.")
-    if not text(hub.get("name")):
-        problems.append("name is missing or empty; it is what the picker calls the hub.")
+    elif version != STORE_VERSION:
+        problems.append(f"version is {version}, and this generator writes {STORE_VERSION}.")
+    if not text(store.get("name")):
+        problems.append("name is missing or empty; it is what the picker calls the store.")
 
-    generated = hub.get("generatedAt")
+    generated = store.get("generatedAt")
     if generated is not None and not _is_utc_iso(generated):
         problems.append(
             f"generatedAt is {generated!r}, which is not a UTC ISO 8601 instant ending in Z."
         )
 
-    base = hub.get("base")
+    base = store.get("base")
     if base is not None:
         if not isinstance(base, str) or not re.match(r"^https?://", base):
             problems.append(f"base is {base!r}, which is not an absolute http(s) URL.")
@@ -2443,7 +2459,7 @@ def check_hub(path: Path) -> list[str]:
             problems.append(f"base is {base!r} and does not end in '/', so names join wrongly.")
 
     keys: list[str] = []
-    columns = hub.get("columns")
+    columns = store.get("columns")
     if not isinstance(columns, list):
         problems.append("columns is missing; Contract 1 allows [] but not absent.")
     else:
@@ -2458,11 +2474,11 @@ def check_hub(path: Path) -> list[str]:
                 problems.append(f"columns[{index}] repeats the key {key!r}.")
             keys.append(key)
 
-    entries = hub.get("entries")
+    entries = store.get("entries")
     if not isinstance(entries, list):
         return problems + ["entries is missing or is not a list."]
     if not entries:
-        problems.append("entries is empty; a hub with no rows is not worth publishing.")
+        problems.append("entries is empty; a store with no rows is not worth publishing.")
 
     absolute = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)
     relatives = 0
@@ -2514,15 +2530,15 @@ def check_hub(path: Path) -> list[str]:
         previous = current
 
     # Relative names with no base are the self-contained-folder case
-    # `resolveHub` documents and the sessions hub uses: the hub is published
+    # `resolveStore` documents and the sessions store uses: the store is published
     # beside what it names, so the pair travels together. **Mixing** the two
     # with no base is the mistake that check exists to catch — the absolute
     # rows work, the relative ones resolve against whatever host is serving the
     # page, and only half the table is broken.
     if base is None and relatives and absolutes:
         problems.append(
-            f"{relatives} entries are relative and {absolutes} are absolute, and the hub "
-            "declares no base: the relative ones would resolve against wherever the hub "
+            f"{relatives} entries are relative and {absolutes} are absolute, and the store "
+            "declares no base: the relative ones would resolve against wherever the store "
             "happens to be served from. Declare a base, or name every entry the same way."
         )
 
@@ -2606,14 +2622,14 @@ DESCRIPTION_4DN = (
     "Every file on the 4D Nucleome open-data bucket this viewer can open — contact maps, "
     "signal tracks, peaks, pairs and alignments — joined to the biosource, assay, dataset and "
     "lab the portal names them by. Read straight off the bucket; the portal is not contacted "
-    "when this hub is opened."
+    "when this store is opened."
 )
 
 DESCRIPTION_ENCODE = (
     "Released files from the ENCODE portal, each named by its unsigned object on the "
     "encode-public bucket. Built from ENCODE's own daily file manifest and joined to the "
     "biosample, assay and target of the experiment it belongs to. The portal is not contacted "
-    "when this hub is opened."
+    "when this store is opened."
 )
 
 DESCRIPTION_IGV = (
@@ -2637,9 +2653,9 @@ def now_iso() -> str:
 def searched(query: str, from_json: Optional[Path], what: str, page: int) -> tuple[list, str]:
     """``(@graph, source)`` from the live query, or from a recorded response.
 
-    The source string records which of the two it was, because a hub published
+    The source string records which of the two it was, because a store published
     from a fixture by mistake is otherwise indistinguishable from one the portal
-    answered — and it would be a *plausible* hub, six rows and all.
+    answered — and it would be a *plausible* store, six rows and all.
     """
     if from_json is not None:
         graph = recorded_graph(from_json)
@@ -2661,7 +2677,7 @@ def enriched(
 
     ``require`` (the default)
         A portal that will not answer fails the run. Nothing is written, so the
-        published hub — which has columns — is not replaced by one that does
+        published store — which has columns — is not replaced by one that does
         not.
     ``optional``
         Publish the spine with empty metadata columns. For the week when a
@@ -2679,7 +2695,7 @@ def enriched(
         if portal != "optional":
             raise
         log.warning(
-            "--portal optional: the portal did not answer, so this hub is being written with "
+            "--portal optional: the portal did not answer, so this store is being written with "
             "its metadata columns empty."
         )
         return {}, f"{query} (unanswered; --portal optional)"
@@ -2687,7 +2703,7 @@ def enriched(
 
 
 def report(path: Path, problems: list[str]) -> bool:
-    """Print what is wrong with a hub. Answers whether anything was."""
+    """Print what is wrong with a store. Answers whether anything was."""
     if not problems:
         log.info("%s: valid.", path)
         return False
@@ -2699,7 +2715,7 @@ def report(path: Path, problems: list[str]) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="make_hub.py",
+        prog="make_store.py",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2708,9 +2724,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     def generator(name: str, help_text: str) -> argparse.ArgumentParser:
         sub = fronts.add_parser(name, help=help_text)
-        sub.add_argument("--out", type=Path, required=True, help="Where to write the hub.")
+        sub.add_argument("--out", type=Path, required=True, help="Where to write the store.")
         sub.add_argument(
-            "--name", help="Override the hub's name — what the picker calls this shelf."
+            "--name", help="Override the store's name — what the picker calls this shelf."
         )
         sub.add_argument(
             "--limit",
@@ -2734,12 +2750,12 @@ def build_parser() -> argparse.ArgumentParser:
             "--sessions-dir",
             type=Path,
             help="Also write one pre-configured session per genome or dataset into this "
-            "directory, and a hub listing them beside --out.",
+            "directory, and a store listing them beside --out.",
         )
         sub.add_argument(
             "--sessions-out",
             type=Path,
-            help="Where to write the session hub (default: <out-stem>-sessions.json).",
+            help="Where to write the session store (default: <out-stem>-sessions.json).",
         )
         return sub
 
@@ -2804,7 +2820,7 @@ def build_parser() -> argparse.ArgumentParser:
     portal_4dn.add_argument(
         "--formats",
         help="Comma-separated file extensions to keep. The default keeps every format this "
-        "viewer has a route for, which is the point of the hub.",
+        "viewer has a route for, which is the point of the store.",
     )
     portal_4dn.add_argument(
         "--bucket", default=BUCKET_4DN, help=f"The open-data bucket (default: {BUCKET_4DN})."
@@ -2844,7 +2860,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--shards",
         choices=("on", "off"),
         default="on",
-        help="Write one hub per assembly and output category (default), or one file with "
+        help="Write one store per assembly and output category (default), or one file with "
         "everything in it.",
     )
 
@@ -2862,7 +2878,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Objects per listing request (default 1000, S3's maximum).",
     )
 
-    checker = fronts.add_parser("check", help="Validate hubs and sessions against their contracts.")
+    checker = fronts.add_parser("check", help="Validate stores and sessions against their contracts.")
     checker.add_argument("paths", nargs="+", type=Path)
 
     return parser
@@ -2893,14 +2909,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.front == "check":
         failed = False
         for path in args.paths:
-            failed = report(path, check_hub(path)) or failed
+            failed = report(path, check_store(path)) or failed
         return 1 if failed else 0
 
     created = now_iso()
-    # `(path, hub)` pairs rather than one hub, because ENCODE is sharded and
+    # `(path, store)` pairs rather than one store, because ENCODE is sharded and
     # everything downstream — writing, timestamping, checking, the counts in the
     # log — is the same work whether there is one of them or twelve.
-    hubs: list[tuple[Path, dict]] = []
+    stores: list[tuple[Path, dict]] = []
     sessions: list[dict] = []
 
     if args.front == "igv":
@@ -2912,7 +2928,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             source = args.url
         log.info("IGV's table lists %d genomes.", len(genomes))
         rows = entries_igv(genomes, args.limit, probing=args.probe == "on")
-        hubs.append(
+        stores.append(
             (
                 args.out,
                 assemble(
@@ -2955,7 +2971,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             formats,
             args.limit,
         )
-        hubs.append(
+        stores.append(
             (
                 args.out,
                 assemble(
@@ -2996,7 +3012,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         source = f"{manifest_source} + {portal_source} (--breadth {args.breadth})"
         if args.shards == "off":
-            hubs.append(
+            stores.append(
                 (
                     args.out,
                     assemble(
@@ -3015,13 +3031,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             for shard in ENCODE_SHARDS:
                 rows = held.get(shard, [])
                 if not rows:
-                    # Skipped rather than written empty: Contract 1 says a hub
+                    # Skipped rather than written empty: Contract 1 says a store
                     # with no rows is not worth publishing, and the picker's
                     # built-in reference to it answers "not generated yet",
                     # which is exactly the state it is in.
                     log.warning("Shard %s has no rows and is not being written.", shard)
                     continue
-                hubs.append(
+                stores.append(
                     (
                         args.out.with_name(f"{args.out.stem}-{shard}{args.out.suffix}"),
                         assemble(
@@ -3056,7 +3072,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             walk_objects(prefix, max_keys=args.max_keys, pages=pages), prefix, args.limit
         )
         segments = [part for part in urllib.parse.urlsplit(prefix).path.split("/") if part]
-        hubs.append(
+        stores.append(
             (
                 args.out,
                 assemble(
@@ -3072,31 +3088,31 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
         )
 
-    if not any(hub["entries"] for _, hub in hubs):
+    if not any(store["entries"] for _, store in stores):
         log.error(
             "No entries. Nothing was written, and the exit code is 2 so a workflow can tell this "
-            "from a portal failure and leave the published hub alone."
+            "from a portal failure and leave the published store alone."
         )
         return 2
 
     written: list[Path] = []
-    for path, hub in hubs:
-        for one in write_hub(hub, path, timestamp=args.timestamp):
+    for path, store in stores:
+        for one in write_store(store, path, timestamp=args.timestamp):
             written.append(one)
-        log.info("wrote %s (%d entries)", path, len(hub["entries"]))
+        log.info("wrote %s (%d entries)", path, len(store["entries"]))
 
     if sessions:
         directory = args.sessions_dir
         out = args.sessions_out or args.out.with_name(f"{args.out.stem}-sessions{args.out.suffix}")
         files = write_sessions(sessions, directory)
-        # The directory's name *as seen from the hub*, so the two can be copied
-        # together and still find each other — `resolveHub`'s self-contained
+        # The directory's name *as seen from the store*, so the two can be copied
+        # together and still find each other — `resolveStore`'s self-contained
         # folder, which is the only reason these rows may be relative.
         try:
             folder = Path(directory).resolve().relative_to(Path(out).resolve().parent).as_posix()
         except ValueError:
             folder = Path(directory).name
-        hub = assemble(
+        store = assemble(
             name=f"{args.name or args.front.upper()} sessions"
             if args.front != "igv"
             else "IGV genome sessions",
@@ -3105,14 +3121,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             columns=COLUMNS_SESSIONS,
             entries=session_entries(sessions, folder),
         )
-        written.extend(write_hub(hub, out, timestamp=args.timestamp))
+        written.extend(write_store(store, out, timestamp=args.timestamp))
         written.extend(files)
         log.info("wrote %s (%d sessions) and %d session files", out, len(sessions), len(files))
 
     if args.check:
         failed = False
         for path in written:
-            failed = report(path, check_hub(path)) or failed
+            failed = report(path, check_store(path)) or failed
         if failed:
             return 1
     return 0

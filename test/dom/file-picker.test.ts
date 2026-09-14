@@ -1,25 +1,20 @@
 // @vitest-environment jsdom
 /**
- * The picker, and the two dialogs that are made of it.
+ * The landing page, and the load box the two dialogs are made of.
  *
- * One element serves three screens — the landing page, the file crumb's *open a
- * file*, and the header's `+` — and what separates them is a single optional
- * prop. That is a good arrangement while the difference stays visible, and an
- * invisible one the moment nothing asserts it: every row of a hub is a whole
- * file or a whole saved session, so offering the hubs section from the header's
- * dialog would offer to throw the reader's tab away from the one control whose
- * whole promise is that it will not.
- *
- * The rest is what both dialogs owe a reader whatever door they came through: a
- * drop target that also takes a click, a box for a URL, and the way to a private
- * bucket beside it.
+ * Two things are on the page and they are named: **Load files** and **Connect
+ * to a store**. What the tests below pin is that each is exactly one thing —
+ * one drop area, one URL box, one row of tiles — and that the tiles cost no
+ * request: a tile is a description, and pressing it is the gesture that opens
+ * the drawer (§24.2). The rest is what the box owes a reader whatever door they
+ * came through: a drop target that also takes a click, and a box for a URL.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FilePicker } from '@/ui/FilePicker'
+import { LoadBox } from '@/ui/LoadBox'
 import { icon } from '@/ui/icons'
-import { HUB_KIND, HUB_VERSION, type HubRef } from '@/state/hub'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -31,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   teardown()
+  vi.unstubAllGlobals()
 })
 
 interface Built {
@@ -38,43 +34,19 @@ interface Built {
   el: HTMLElement
   opened: Array<{ uri: string; local: boolean }>
   files: File[][]
+  stores: string[]
 }
 
-function build(hubs?: readonly HubRef[]): Built {
+function build(withStores = true): Built {
   const opened: Array<{ uri: string; local: boolean }> = []
   const files: File[][] = []
+  const stores: string[] = []
   const picker = new FilePicker({
     onOpen: (uri, source) => opened.push({ uri, local: source.kind === 'local' }),
     onOpenFiles: (chosen) => files.push([...chosen]),
-    ...(hubs === undefined ? {} : { hubs }),
+    ...(withStores ? { onStore: (id: string) => stores.push(id) } : {}),
   })
-  return { picker, el: picker.el, opened, files }
-}
-
-/** One hub, inline, so building the picker fetches nothing (§24.2). */
-const DEMOS: HubRef = {
-  id: 'demos',
-  label: 'Demos',
-  builtin: true,
-  hub: {
-    kind: HUB_KIND,
-    version: HUB_VERSION,
-    name: 'Demos',
-    columns: [{ key: 'assembly', label: 'Assembly' }],
-    entries: [
-      {
-        label: 'A published session',
-        uri: 'https://data.example/demo/yeast/Yeast_microC.metacooler.json',
-        kind: 'workspace',
-        fields: { assembly: 'S288C' },
-      },
-      {
-        label: 'A map on somebody else’s bucket',
-        uri: 'https://4dn.example/a.mcool',
-        kind: 'map',
-      },
-    ],
-  },
+  return { picker, el: picker.el, opened, files, stores }
 }
 
 /** A `drop`, with files on it, as jsdom will not build a real `DataTransfer`. */
@@ -84,13 +56,53 @@ function dropOn(node: HTMLElement, ...files: File[]): void {
   node.dispatchEvent(event)
 }
 
-describe('the file picker', () => {
-  it('offers a drop area, a URL box and a way to a private bucket', () => {
+describe('the landing page', () => {
+  it('names its two things, and offers one drop area and one URL box', () => {
     const { el } = build()
+    expect(textsOf(el, '.picker-heading')).toEqual(['Load files', 'Connect to a store'])
     expect(all(el, '.dropzone')).toHaveLength(1)
-    expect(all(el, '.remote-box .input-url')).toHaveLength(1)
+    expect(all(el, '.input-url')).toHaveLength(1)
+    expect(buttonNamed(el, 'choose files…')).not.toBeNull()
     expect(buttonNamed(el, 'open')).not.toBeNull()
-    expect(buttonNamed(el, 'browse…')).not.toBeNull()
+    // The doors that used to stand beside the box are gone: a bucket is a
+    // place, connected from the header, and a catalogue is a store.
+    expect(buttonNamed(el, 'browse…')).toBeNull()
+    expect(buttonNamed(el, 'private buckets…')).toBeNull()
+  })
+
+  it('offers the four shipped stores as tiles, then the one that adds a store', () => {
+    const { el } = build()
+    expect(textsOf(el, '.store-tile .store-tile-name')).toEqual([
+      'RSG lab data',
+      'IGV genomes',
+      '4DN open data',
+      'ENCODE',
+      'Your own store',
+    ])
+    // Every tile is a mark and a line, not a request.
+    expect(all(el, '.store-tile .store-mark')).toHaveLength(5)
+  })
+
+  it('fetches nothing when it is built or when the tiles are drawn', () => {
+    const fetched = vi.fn()
+    vi.stubGlobal('fetch', fetched)
+    build()
+    expect(fetched).not.toHaveBeenCalled()
+  })
+
+  it('hands a pressed tile up by id, which is the gesture that opens the drawer', () => {
+    const built = build()
+    const tiles = all<HTMLButtonElement>(built.el, '.store-tile')
+    tiles[2].click()
+    tiles[4].click()
+    expect(built.stores).toEqual(['4dn', 'custom'])
+  })
+
+  it('leaves the stores out when it is given no door to them, and keeps the rest', () => {
+    const { el } = build(false)
+    expect(textsOf(el, '.picker-heading')).toEqual(['Load files'])
+    expect(all(el, '.store-tile')).toHaveLength(0)
+    expect(all(el, '.dropzone')).toHaveLength(1)
   })
 
   it('takes a file dropped on the area', () => {
@@ -119,76 +131,21 @@ describe('the file picker', () => {
     expect(built.opened).toEqual([])
   })
 
-  it('shows the hubs section when it is given hubs', () => {
-    const { el } = build([DEMOS])
-    expect(el.querySelector('.hubs-box')).not.toBeNull()
-    expect(textsOf(el, '.hubs-box h3')).toEqual(['Hubs'])
-    const select = el.querySelector('.hub-select') as HTMLSelectElement
-    expect(select).not.toBeNull()
-    // The placeholder, then one row per hub on offer. Still one line at any
-    // length, which is what the table under it is not.
-    expect(all(select, 'option')).toHaveLength(2)
+  it('rewrites a share link to the address that opens (§24.5)', () => {
+    const built = build()
+    const box = built.el.querySelector('.input-url') as HTMLInputElement
+    box.value = 'https://www.dropbox.com/s/abc/a.mcool?dl=0'
+    ;(buttonNamed(built.el, 'open') as HTMLButtonElement).click()
+    expect(built.opened[0].uri).toBe('https://dl.dropboxusercontent.com/s/abc/a.mcool?dl=0')
   })
+})
 
-  /**
-   * The header's `+` builds exactly this one, and the assertion is the whole of
-   * why the prop is optional: everything a reader came for is still here, and
-   * the catalogue of whole sessions is not.
-   */
-  it('leaves the hubs out when it is given none, and keeps the rest', () => {
-    const { el } = build()
-    expect(el.querySelector('.hubs-box')).toBeNull()
-    expect(el.querySelector('.hub-table')).toBeNull()
-    expect(all(el, '.dropzone')).toHaveLength(1)
-    expect(all(el, '.remote-box')).toHaveLength(1)
-  })
-
-  /**
-   * What a `?hub=` link lands on.
-   *
-   * `App.restore` builds a reference and hands it here, and the table loads it
-   * without anybody touching the selector — a link is a gesture (§24.2). The
-   * hub in this case is inline, so the assertion is about the wiring rather
-   * than about a fetch.
-   */
-  it('lands on a hub it is handed, without a gesture in the page', () => {
-    const built = build([DEMOS])
-    expect(all(built.el, '.hub-name')).toHaveLength(0)
-    built.picker.loadHub(DEMOS)
-    expect(all(built.el, '.hub-name')).toHaveLength(2)
-  })
-
-  /**
-   * A picked row leaves by the same door a typed URL leaves by.
-   *
-   * That is the property worth asserting rather than the click: `onOpen` with a
-   * remote source is what `Session.openWithConfig` routes — a `.json` to
-   * `openConfigUrl`, anything else to the file path — so a hub row that left by
-   * some other door would be a second router to keep in step with the first.
-   */
-  it('opens a hub row as a remote file, by its absolute URI', () => {
-    const built = build([DEMOS])
-    // Chosen the way a reader chooses it, through the table's own selector.
-    // The Demos hub is inline, so nothing is fetched (§24.2).
-    const select = built.el.querySelector('.hub-select') as HTMLSelectElement
-    select.value = 'demos'
-    select.dispatchEvent(new Event('change'))
-    const rows = all<HTMLButtonElement>(built.el, '.hub-name')
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'A published session',
-      'A map on somebody else’s bucket',
-    ])
-    rows[1].click()
-    expect(built.opened).toEqual([
-      { uri: 'https://4dn.example/a.mcool', local: false },
-    ])
-    // And a workspace row hands over its `.json` URL unchanged, which is what
-    // `Session.openWithConfig` recognises as a session rather than a file.
-    rows[0].click()
-    expect(built.opened[1]).toEqual({
-      uri: 'https://data.example/demo/yeast/Yeast_microC.metacooler.json',
-      local: false,
-    })
+describe('the load box on its own', () => {
+  it('is the same drop area and URL box the landing page has, shallower', () => {
+    const box = new LoadBox({ onOpen: () => undefined, onOpenFiles: () => undefined, compact: true })
+    expect(box.el.querySelector('.dropzone-compact')).not.toBeNull()
+    expect(all(box.el, '.input-url')).toHaveLength(1)
+    expect(all(box.el, '.store-tile')).toHaveLength(0)
   })
 })
 
@@ -198,7 +155,6 @@ describe('the header’s add-a-file mark', () => {
     // the tab you are in. A shared glyph would make them the same button.
     const add = icon('file-plus')
     const tab = icon('plus')
-    expect(add.childElementCount).toBeGreaterThan(tab.childElementCount)
-    expect(add.getAttribute('stroke')).toBe('currentColor')
+    expect(add.innerHTML).not.toBe(tab.innerHTML)
   })
 })

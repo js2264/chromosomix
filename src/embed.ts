@@ -12,7 +12,7 @@
  *
  * So an embed says so, and this module is the one place that reads it:
  * `?embed=1` for the chrome-less mount, `?config=<url>` for the session to open
- * on arrival, `?hub=<url>` for the catalogue to land on (§24.2). Everything
+ * on arrival, `?store=<url>` for the catalogue to land on (§24.2). Everything
  * downstream asks {@link mounting} rather than parsing the URL a second time.
  *
  * ## Why the query string and not the hash
@@ -59,6 +59,7 @@
  */
 
 import { canonicalUrl } from './sources/rewrite'
+import { EMPTY_VIEW, readStoreView, type StoreView } from './state/facets'
 
 /** What the query string asks of this mount. */
 export interface Mounting {
@@ -77,25 +78,41 @@ export interface Mounting {
    */
   readonly config: string | null
   /**
-   * A hub to land on, absolute, or `null` (§24.2).
+   * A store to open the drawer on, or `null` (§24.2).
    *
    * The third parameter beside the two above, and the one that names a *shelf*
-   * rather than a picture: `?config=` says "open this figure", `?hub=` says
-   * "here is our catalogue, choose". A lab sends one link and colleagues land
-   * on its own list of maps, with the offer to keep it.
+   * rather than a picture: `?config=` says "open this figure", `?store=` says
+   * "here is a catalogue, choose". Two spellings: the id of a shipped store
+   * (`4dn`, `encode`) — a short name, kept as written — or the absolute URL of
+   * a store file a lab published, resolved and scheme-checked exactly as
+   * `config` is, because that value is about to be handed to `fetch`.
    *
    * It is read here, beside the other two, for the reason this module exists:
    * how a page was mounted is a fact no navigation can change, so it lives in
-   * the query string where `App.writeHash` cannot erase it.
-   *
-   * Resolved and scheme-checked exactly as `config` is, and for exactly the
-   * same reason: this value is about to be handed to `fetch`.
+   * the query string where `App.writeHash` cannot erase it. The drawer then
+   * writes the same parameter back as the reader narrows, which is what makes
+   * a narrowed store a link.
    */
-  readonly hub: string | null
+  readonly store: string | null
+  /**
+   * How the store is narrowed and drawn: the text, the ticked facets, the
+   * matrix — every other parameter in the address (`state/facets.ts`). Empty
+   * when no store was named.
+   */
+  readonly storeView: StoreView
 }
 
 /** The mount of a page that was not asked for anything in particular. */
-const PLAIN: Mounting = { embed: false, config: null, hub: null }
+const PLAIN: Mounting = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+
+/**
+ * A shipped store's id, or a remembered one's: a short name, not an address.
+ *
+ * Letters, digits, dashes and the `store:<n>` colon — `4dn` begins with a
+ * digit — and never a dot or a slash, which is what an address has and a name
+ * does not, so `store.json` beside the page is still resolved as a file.
+ */
+const STORE_ID = /^[a-z0-9][a-z0-9:-]*$/i
 
 /**
  * Read a query string as a mount.
@@ -109,9 +126,10 @@ const PLAIN: Mounting = { embed: false, config: null, hub: null }
  * `?embed=true` — and off for the three spellings of "no", because a hand-edited
  * `embed=0` should mean what it says rather than being a truthy string.
  *
- * `config` and `hub` are resolved against `base` so a self-hosted deployment
- * can write `?config=session.json` or `?hub=hub.json` beside its own files, and
- * both are kept only when they come out `http:` or `https:`. That check is not
+ * `config` and a `store` that is an address are resolved against `base` so a
+ * self-hosted deployment can write `?config=session.json` or `?store=store.json`
+ * beside its own files, and both are kept only when they come out `http:` or
+ * `https:`. That check is not
  * ceremony: the value is a URL from outside that this app is about to `fetch`,
  * and the schemes that are not those two are the ones with no server on the
  * other end and a document of their own to hand back.
@@ -126,17 +144,21 @@ export function readMounting(search: string, base: string): Mounting {
   const flag = params.get('embed')
   const embed = flag !== null && flag !== '0' && flag !== 'false' && flag !== 'off'
 
+  const named = params.get('store')
+  const store =
+    named !== null && named !== '' && STORE_ID.test(named) ? named : fetchable(named, base)
   return {
     embed,
     config: fetchable(params.get('config'), base),
-    hub: fetchable(params.get('hub'), base),
+    store,
+    storeView: store === null ? EMPTY_VIEW : readStoreView(params),
   }
 }
 
 /**
  * A query parameter naming something this page may fetch, or `null`.
  *
- * One function for `config` and `hub` rather than the check written twice: they
+ * One function for `config` and `store` rather than the check written twice: they
  * are the same kind of value — an outside URL about to be handed to `fetch` —
  * and the schemes that are not `http(s)` are the ones with no server on the
  * other end and a document of their own to hand back.
@@ -144,7 +166,7 @@ export function readMounting(search: string, base: string): Mounting {
 function fetchable(named: string | null, base: string): string | null {
   if (named === null || named === '') return null
   try {
-    // Canonicalised first (§24.5), so `?hub=gs://…` and `?config=s3://…` are
+    // Canonicalised first (§24.5), so `?store=gs://…` and `?config=s3://…` are
     // the https URLs they stand for by the time the scheme is judged.
     const url = new URL(canonicalUrl(named), base)
     if (url.protocol === 'http:' || url.protocol === 'https:') return url.href

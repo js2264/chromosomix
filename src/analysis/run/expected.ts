@@ -641,7 +641,7 @@ async function countNamed(job: JobContext, uri: string): Promise<OrientationCoun
     job.note(
       `“${uri}” is not an address this can fetch. A local file has none — drop it on the app, ` +
         'which imports it and counts these curves in the same pass. Only http(s) and s3 URLs can ' +
-        'be named here, and a URL is fetched as it stands — a file behind a hub, a share link, ' +
+        'be named here, and a URL is fetched as it stands — a file behind a store, a share link, ' +
         'Google Drive or Dropbox is authorised by a token this box has no way to carry, so those ' +
         'are opened the usual way and imported.',
     )

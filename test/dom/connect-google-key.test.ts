@@ -39,13 +39,18 @@ afterEach(() => {
   document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove())
 })
 
-/** The dialog's body, mounted, with the modal cleaned up after. */
-async function connectBody(): Promise<HTMLElement> {
+/** The dialog's body, mounted and opened on the Google Drive provider. */
+async function connectBody(provider: 'local' | 'drive' = 'drive'): Promise<HTMLElement> {
   const { openConnect } = await import('@/ui/ConnectCard')
-  openConnect({ onConnected: () => undefined })
+  openConnect({ onConnected: () => undefined, provider })
   const body = document.querySelector<HTMLElement>('.modal-body')
   expect(body).not.toBeNull()
   return body as HTMLElement
+}
+
+/** The provider tiles, by label. */
+function tiles(body: HTMLElement): string[] {
+  return textsOf(body, '.connect-provider')
 }
 
 /** The section whose heading names the key. */
@@ -58,20 +63,27 @@ function googleSection(body: HTMLElement): HTMLElement {
 }
 
 describe('the Google API key section', () => {
-  it('is offered beside the folder and the bucket, and before the account', async () => {
-    // The key comes before the account because that is the order a reader meets
-    // the two in: a public Drive link fails without a key, and a private one
-    // fails afterwards with a key in place. `test/dom/google-signin.test.ts`
-    // owns the section below it.
+  it('is under the Google Drive provider, first, and before the account', async () => {
+    // The dialog is providers — one tile per kind of place — and the key is a
+    // setting of one of them rather than a place of its own. It comes before
+    // the account because that is the order a reader meets the two in: a
+    // public Drive link fails without a key, and a private one fails afterwards
+    // with a key in place. `test/dom/google-signin.test.ts` owns the section
+    // below it.
     const body = await connectBody()
+    expect(tiles(body)).toEqual(['This machine', 'A bucket', 'Google Drive', 'Dropbox'])
     expect(textsOf(body, '.connect-section h3')).toEqual([
-      'A folder on this machine',
-      'A bucket',
       'A Google API key',
       'A Google account',
       'A Google Drive folder',
-      'Dropbox',
     ])
+  })
+
+  it('is not on the other providers’ panes', async () => {
+    const body = await connectBody('local')
+    expect(textsOf(body, '.connect-section h3')).toEqual(['A folder on this machine'])
+    all<HTMLButtonElement>(body, '.connect-provider')[1].click()
+    expect(textsOf(body, '.connect-section h3')).toEqual(['A bucket'])
   })
 
   it('says what it is for, and what does not need it', async () => {
@@ -124,7 +136,8 @@ describe('the Google API key section', () => {
       IS_STANDALONE: true,
     }))
     try {
-      const body = await connectBody()
+      const body = await connectBody('local')
+      expect(tiles(body)).toEqual(['This machine'])
       expect(textsOf(body, '.connect-section h3')).toEqual(['A folder on this machine'])
     } finally {
       vi.doUnmock('@/version')

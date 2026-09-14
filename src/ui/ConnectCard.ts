@@ -1,10 +1,16 @@
 /**
- * Connect a folder: a directory on this machine, or a bucket.
+ * Connect a place: a directory on this machine, a bucket, a Drive folder or a
+ * Dropbox.
  *
- * One dialog for both, because to a reader they are one thing — *the place my
- * data is* — and the app's own claim is that it reads them the same way. Two
- * dialogs would be two answers to a question nobody asked, and would put the
- * choice of *which kind of storage this is* before the choice of what to open.
+ * One dialog for all four, because to a reader they are one thing — *the
+ * place my data is* — and the app's own claim is that it reads them the same
+ * way, one level at a time, in the Files column (§20). It is drawn as
+ * **providers**: a row of four tiles, and the form of the one pressed under
+ * it. The dialog used to stack six sections down one scroll, and two of the
+ * six were not places at all — a Google API key and a Google account are
+ * settings of *one provider*, and a reader meeting them between a bucket and a
+ * Drive folder had to work out which of the two they belonged to. Now they sit
+ * under Google Drive, which is the only tile that needs them.
  *
  * ## What the local half offers depends on the browser, and it says so
  *
@@ -13,42 +19,24 @@
  * it is all still there after a reload. Firefox and Safari have no such thing;
  * what they have hands over a flat list of `File` objects, from which the tree
  * is rebuilt. That is a **snapshot** — it does not update and it does not
- * survive a reload.
+ * survive a reload. §8.5's doctrine is that a control which cannot keep its
+ * promise is absent rather than disabled, and the reading that would hide the
+ * local half in Firefox is the wrong one: the gesture works there, and what
+ * differs is how long the answer lasts. So the button is offered in both and
+ * the sentence under it changes.
  *
- * §8.5's doctrine is that a control which cannot keep its promise is absent
- * rather than disabled, and the reading that would hide the local half in
- * Firefox is the wrong one: the gesture works there, and what differs is how
- * long the answer lasts. So the button is offered in both and the sentence under
- * it changes. Hiding it would take a working feature away from two browsers to
- * avoid writing one clause.
+ * ## Which providers are offered
  *
- * ## The bucket half is the form, not a copy of it
- *
- * `ui/bucketForm.ts`, shared with the credentials dialog. Public is one field —
- * the link — and a key is behind a switch, because the reader who arrives with a
- * URL out of a paper should not meet six boxes.
- *
- * ## And two more things, neither of which is a folder
- *
- * A Google API key (SPECS §24.7) is not a folder, so it connects nothing and
- * appears in no panel — it is the one credential that has to exist before a
- * *link* works, because the Drive API refuses a public file without one. It is
- * here rather than in a dialog of its own for the reason the bucket half is
- * here: this is the screen a reader opens when the thing they were given will
- * not open, and a second dialog would be a second place to look.
- *
- * A Google **account** is the half a key cannot do: a private Drive file and a
- * private GCS object need a bearer token, and the only way a page with no
- * backend gets one is the reader signing in to Google in their own browser
- * (`auth/google.ts`). It sits *under* the key because that is the order a reader
- * meets the two in — a public link fails first and a private one afterwards —
- * and because the grant it asks for is far wider than the key's, which is worth
- * reading after the cheaper answer has been ruled out rather than instead of it.
+ * The standalone build has an opaque origin, so every remote read fails before
+ * a byte moves (§19): it offers this machine and nothing else. The desktop
+ * build cannot register a Google sign-in against `app://viewer`, so its Drive
+ * tile carries the API key alone and says so. Each provider's section decides
+ * the rest for itself.
  */
 
 import { Modal } from './Modal'
 import { button, el, field } from './dom'
-import { icon } from './icons'
+import { icon, type IconName } from './icons'
 import { bucketForm } from './bucketForm'
 import { clearApiKey, readApiKey, writeApiKey } from '../s3/credentials'
 import {
@@ -67,7 +55,11 @@ import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from 
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
+import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
+
+/** The four places, by the id the tiles and the tests name them by. */
+export type ProviderId = 'local' | 'bucket' | 'drive' | 'dropbox'
 
 export interface ConnectProps {
   /**
@@ -76,15 +68,48 @@ export interface ConnectProps {
    */
   onConnected(id: string): void
   onClose?(): void
+  /** The provider to open on. Default: this machine. */
+  provider?: ProviderId
 }
 
 export function openConnect(props: ConnectProps): Modal {
   return new Modal({
-    title: 'Connect a folder',
+    title: 'Connect a place',
     variant: 'modal-wide',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => connectBody(props, close),
   })
+}
+
+interface Provider {
+  id: ProviderId
+  label: string
+  mark: IconName
+  /** The pane, built when the tile is pressed. */
+  pane(done: (id: string) => void): HTMLElement
+}
+
+/** The providers this build can offer, in the order the tiles show them. */
+export function providers(): Provider[] {
+  const out: Provider[] = [
+    { id: 'local', label: 'This machine', mark: 'hard-drive', pane: localSection },
+  ]
+  // A single-file page has an opaque origin, so every remote read fails before
+  // a byte moves (§19): a control that cannot keep its promise is absent.
+  if (IS_STANDALONE) return out
+  out.push({ id: 'bucket', label: 'A bucket', mark: 'cloud', pane: bucketSection })
+  out.push({ id: 'drive', label: 'Google Drive', mark: 'googledrive', pane: drivePane })
+  // The one provider with an account and no key (§24.9); its section decides
+  // for itself where it can be offered.
+  if (DROPBOX_SIGN_IN_AVAILABLE) {
+    out.push({
+      id: 'dropbox',
+      label: 'Dropbox',
+      mark: 'dropbox',
+      pane: (done) => dropboxSection(done) ?? el('div'),
+    })
+  }
+  return out
 }
 
 function connectBody(props: ConnectProps, close: () => void): HTMLElement {
@@ -92,37 +117,51 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
     close()
     props.onConnected(id)
   }
+  const list = providers()
+  const paneSlot = el('div', { class: 'connect-pane' })
+  const tiles = el('div', { class: 'connect-providers', attrs: { role: 'tablist' } })
+  let chosen: ProviderId | null = null
+
+  const show = (id: ProviderId): void => {
+    const provider = list.find((one) => one.id === id) ?? list[0]
+    chosen = provider.id
+    for (const tile of tiles.children) {
+      const on = tile.getAttribute('data-provider') === provider.id
+      tile.classList.toggle('is-on', on)
+      tile.setAttribute('aria-selected', String(on))
+    }
+    paneSlot.replaceChildren(provider.pane(done))
+  }
+
+  for (const provider of list) {
+    const tile = el(
+      'button',
+      {
+        class: 'connect-provider',
+        type: 'button',
+        attrs: { role: 'tab', 'data-provider': provider.id, 'aria-selected': 'false' },
+      },
+      icon(provider.mark, { size: 22 }),
+      el('span', { text: provider.label }),
+    )
+    tile.addEventListener('click', () => show(provider.id))
+    tiles.appendChild(tile)
+  }
+  show(props.provider ?? 'local')
+  void chosen
 
   return el(
     'div',
-    { class: 'modal-body bucket-body' },
+    { class: 'modal-body bucket-body connect-body' },
     el('p', {
       class: 'hint',
       text:
-        'A connected folder is browsed in the Files panel and stays there: open one file, look ' +
-        'at it, open the next. A directory on this machine and a bucket are read the same way ' +
-        'and behave the same once open — the only difference is where the bytes come from.',
+        'A connected place is browsed in the Files column and stays there: open one file, look ' +
+        'at it, open the next. A directory on this machine, a bucket, a Drive folder and a Dropbox ' +
+        'are read the same way once connected — the only difference is where the bytes come from.',
     }),
-    localSection(done),
-    // A single-file page has an opaque origin, so every remote read fails before
-    // a byte moves (§19). §8.5: a control that cannot keep its promise is
-    // absent, not disabled. The Google half goes with it for the same reason —
-    // a key that authorises a request nothing can make is a box that lies.
-    IS_STANDALONE ? null : bucketSection(done),
-    IS_STANDALONE ? null : googleSection(),
-    // Null again in the desktop build, which the line above has no reason to
-    // be: a key is a string sent to a host, and `app://viewer` can send it,
-    // while a sign-in is a registration against an origin Google will not
-    // accept. `googleAccountSection` decides that for itself — see
-    // `auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`.
-    IS_STANDALONE ? null : googleAccountSection(),
-    // A Drive folder needs the account above; the section is null wherever the
-    // sign-in is (§24.9), and says "sign in first" when it is offered but the
-    // reader has not.
-    IS_STANDALONE ? null : driveFolderSection(done),
-    // The one provider with an account and no key (§24.9); the section decides
-    // for itself where it can be offered.
-    IS_STANDALONE ? null : dropboxSection(done),
+    tiles,
+    paneSlot,
     privacyNote(),
   )
 }
@@ -142,8 +181,7 @@ function localSection(done: (id: string) => void): HTMLElement {
     error.textContent = ''
     if (granted) {
       const handle = await chooseDirectory()
-      // A cancelled picker, which is not an error and needs no message: the
-      // reader changed their mind, and the dialog is still open behind it.
+      // A cancelled picker, which is not an error and needs no message.
       if (handle === null) return
       const id = mintDirectoryId()
       await rememberDirectory(id, handle, handle.name)
@@ -191,7 +229,35 @@ function bucketSection(done: (id: string) => void): HTMLElement {
     'div',
     { class: 'connect-section' },
     el('h3', {}, icon('cloud', { size: 15 }), el('span', { text: 'A bucket' })),
+    el('p', {
+      class: 'hint',
+      text:
+        'A URL prefix on S3, R2, MinIO, Google Cloud Storage or any store that answers ' +
+        'ListObjectsV2 — public, or with a read-only key kept in this browser. Every bucket ' +
+        'connected here is also listed under About → what is stored.',
+    }),
     bucketForm({ onSaved: (scope) => done(bucketFolderId(scope.id)) }),
+  )
+}
+
+/**
+ * Google Drive, in the three parts a reader meets them in.
+ *
+ * The **API key** first, because a *public* Drive link fails without it and
+ * that is the first thing anybody tries; the **account** second, because a
+ * private file fails afterwards with a key in place, and because the grant it
+ * asks for is far wider than the key's and is worth reading after the cheaper
+ * answer has been ruled out; and the **folder** last, because it needs the
+ * account. Absent halves say why: the desktop build can send a key and cannot
+ * register a sign-in (`auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`).
+ */
+function drivePane(done: (id: string) => void): HTMLElement {
+  return el(
+    'div',
+    { class: 'connect-pane-parts' },
+    googleSection(),
+    googleAccountSection(),
+    driveFolderSection(done),
   )
 }
 
@@ -205,12 +271,8 @@ function bucketSection(done: (id: string) => void): HTMLElement {
  *
  * `type=password`, as the bucket secret is, and for the same reason: this box is
  * opened in front of an audience precisely when somebody is being shown how the
- * feature works.
- *
- * The status line rather than a toast, because the question a reader has when
- * they come back to this dialog is *is there one stored*, and a toast has long
- * since gone. It reports presence and never the key — printing it back would
- * make a screenshot of this dialog a leak.
+ * feature works. The status line reports presence and never the key — printing
+ * it back would make a screenshot of this dialog a leak.
  */
 function googleSection(): HTMLElement {
   const input = el('input', { class: 'input', type: 'password', placeholder: 'AIza…' })
@@ -276,18 +338,27 @@ function googleSection(): HTMLElement {
  * §8.5 says a control that cannot keep its promise is absent rather than
  * disabled, and the sign-in button is the deliberate exception: it is *disabled
  * with the reason next to it* because it becomes available by filling in the box
- * directly above it. Hiding it would hide the consequence of the field — the
- * reader would save a client id and have no way to know what it was for — which
- * is the case the doctrine's own wording ("cannot keep its promise") excludes:
- * this one can, in a second, and says what it is waiting for.
+ * directly above it.
  *
- * The whole section is absent where a sign-in cannot work at all: the standalone
- * build (the caller's guard) and the desktop build (`GOOGLE_SIGN_IN_AVAILABLE` —
- * `app://viewer` is not an origin Google's console will register, whatever the
- * desktop CSP admits).
+ * Where a sign-in cannot work at all — the desktop build, whose `app://viewer`
+ * is not an origin Google's console will register — the section is one
+ * sentence saying so, so the Drive pane does not silently end at the key.
  */
-function googleAccountSection(): HTMLElement | null {
-  if (!GOOGLE_SIGN_IN_AVAILABLE) return null
+function googleAccountSection(): HTMLElement {
+  if (!GOOGLE_SIGN_IN_AVAILABLE) {
+    return el(
+      'div',
+      { class: 'connect-section' },
+      el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
+      el('p', {
+        class: 'hint',
+        text:
+          'Not on the desktop app: a sign-in is registered against a web address, and this ' +
+          'window has none. Public Drive files open with the key above; a private file or a ' +
+          'Drive folder needs the hosted viewer.',
+      }),
+    )
+  }
 
   const input = el('input', {
     class: 'input',
@@ -308,8 +379,7 @@ function googleAccountSection(): HTMLElement | null {
           'part of this that is kept.'
         : // Printed rather than withheld, which is the opposite of the key box
           // above and is the right answer for a value that is public: what a
-          // reader coming back here needs to know is *which project*, and a
-          // status line saying "one is stored" would not tell them.
+          // reader coming back here needs to know is *which project*.
           `Client id stored: ${id}`
     account.textContent = accountLine(state)
 
@@ -324,9 +394,6 @@ function googleAccountSection(): HTMLElement | null {
             error.textContent = cause instanceof Error ? cause.message : String(cause)
           })
           .finally(() => {
-            // Redrawn either way: a success has already announced and redrawn
-            // this row out from under us, and a failure has to put the button
-            // back or the reader cannot try again.
             show()
           })
       },
@@ -344,9 +411,6 @@ function googleAccountSection(): HTMLElement | null {
     signInButton.disabled = !state.configured
     actions.replaceChildren(
       signInButton,
-      // Offered only when there is something to sign out *of*, on §8.5's rule —
-      // and this one really is a control that could not keep its promise, unlike
-      // the button beside it.
       ...(state.signedIn ? [button('sign out', () => signOut(), { class: 'btn' })] : []),
     )
   }
@@ -355,8 +419,7 @@ function googleAccountSection(): HTMLElement | null {
   const off = subscribeGoogle(() => {
     // The dialog is built once and thrown away with the modal, and nothing hands
     // a detached body a teardown. It unsubscribes itself the first time it is
-    // spoken to after leaving the document — `ui/SequenceCard.ts`'s idiom, for
-    // its reason.
+    // spoken to after leaving the document.
     if (!stored.isConnected) {
       off()
       return
@@ -367,9 +430,6 @@ function googleAccountSection(): HTMLElement | null {
   return el(
     'div',
     { class: 'connect-section' },
-    // `plug` and not a person: the icon set is Lucide's, copied verbatim by
-    // `npm run icons`, and it carries no account mark. This section is a
-    // connection to a service, which is what the mark says.
     el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
     el('p', {
       class: 'hint',
@@ -418,8 +478,7 @@ function googleAccountSection(): HTMLElement | null {
         () => {
           error.textContent = ''
           // The id only. A token already granted is the reader's own and still
-          // opens the file they are reading; `auth/google.ts` says why taking it
-          // away here would answer a question nobody asked.
+          // opens the file they are reading.
           clearClientId()
           input.value = ''
           show()
@@ -437,9 +496,7 @@ function googleAccountSection(): HTMLElement | null {
 function accountLine(state: { signedIn: boolean; expiresAt: number | null }): string {
   const when = (at: number): string => new Date(at).toLocaleTimeString()
   if (state.signedIn && state.expiresAt !== null) {
-    // No address, because no `userinfo` scope was asked for (§24.7). Saying
-    // which account would cost a second grant for a label, so the line says
-    // what it actually knows and says why it knows no more.
+    // No address, because no `userinfo` scope was asked for (§24.7).
     return `Signed in. The token is good until ${when(state.expiresAt)}; no address was asked ` +
       'for, so this page does not know which account it is.'
   }
@@ -456,8 +513,7 @@ function accountLine(state: { signedIn: boolean; expiresAt: number | null }): st
  *
  * The picker says it on the first screen and the About dialog says it in full;
  * this is the one moment a reader hands over something wider than a single file,
- * so it is worth the four lines. It is also literally true of the code, which is
- * the standard `ui/FilePicker.ts` sets for saying it at all.
+ * so it is worth the four lines.
  */
 function privacyNote(): HTMLElement {
   return el(
@@ -467,13 +523,13 @@ function privacyNote(): HTMLElement {
     el(
       'div',
       {},
-      el('strong', { text: 'Connecting a folder still sends nothing anywhere.' }),
+      el('strong', { text: 'Connecting a place still sends nothing anywhere.' }),
       el('span', {
         text:
           ' A local folder is read in place by code running on your own computer, a few kilobytes ' +
           'at a time, exactly as a dropped file is. A bucket is read by your browser, from the ' +
           'bucket, directly. There is no server in between in either case, because there is no ' +
-          'server. Every folder you connect is listed under About → what is stored, with a ' +
+          'server. Every place you connect is listed under About → what is stored, with a ' +
           'button that forgets all of it.',
       }),
     ),

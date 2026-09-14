@@ -130,10 +130,21 @@ const LUCIDE = [
   // that would repeat the day — the same thing `metacooler-run` is typed into,
   // which is the association the mark has to make in one glance at 15 px.
   'terminal',
+  // The stores (§24): the header's toggle for the drawer, and the matrix mode
+  // inside it. A row of books for a shelf of somebody else's data, and a grid
+  // for a count at every crossing of two facets.
+  'library',
+  'grid-3x3',
 ]
 
-/** Brand marks, by their Simple Icons slug. Filled, not stroked. */
-const BRANDS = ['github']
+/**
+ * Brand marks, by their Simple Icons slug. Filled, not stroked.
+ *
+ * GitHub for the header's source link; Google Drive and Dropbox for the two
+ * providers a place can be connected through (§24.9), on their tiles in the
+ * Connect dialog and beside their folders in the Files column.
+ */
+const BRANDS = ['github', 'googledrive', 'dropbox']
 
 /**
  * The one shape upstream does not have.

@@ -1,7 +1,7 @@
 /**
  * The Google Drive folders this browser has been told to keep (SPECS §20, §24.7).
  *
- * A Drive folder is the same kind of thing as a remembered hub or a bucket
+ * A Drive folder is the same kind of thing as a remembered store or a bucket
  * scope: a place the reader connected to by pasting an address, which they will
  * want again next week and should not have to find twice. So it is kept the same
  * way — one `localStorage` key under the app's prefix, so the stored-data screen
@@ -108,7 +108,7 @@ export function readDriveRows(): DriveRow[] {
  *
  * Keyed on the **folder id** rather than on a minted id, which is what makes
  * connecting My Drive twice one row rather than two rows called the same thing
- * pointing at the same place — the rule `state/hubs.ts` states for a URL, for
+ * pointing at the same place — the rule `state/stores.ts` states for a URL, for
  * the same reason. The label of the later press wins, because it is the one the
  * reader has just typed.
  *
@@ -166,7 +166,7 @@ export function subscribeDrives(listener: () => void): () => void {
  * What this browser is keeping about Drive, as a line for the stored-data screen.
  *
  * Named rather than counted, on the rule `state/stored.ts` follows for the
- * folders and the hubs: a Drive folder is somewhere the reader connected to, and
+ * folders and the stores: a Drive folder is somewhere the reader connected to, and
  * the labels are the part worth reading back before deciding what to do on a
  * borrowed machine. What is *not* here is the credential, and the line says so —
  * the token that lists these folders is held in memory and never written (§24.8),

@@ -1,5 +1,6 @@
 /**
- * The demo workspaces published on the lab's bucket.
+ * The lab's own store: the demo workspaces published on the lab's bucket, and
+ * the data files they are made of.
  *
  * They used to ship inside the bundle, in `public/demo/`, which put 250 MB of
  * Hi-C into every Pages artifact and every desktop checkout — and made the
@@ -15,15 +16,16 @@
  * `Content-Length` and `Content-Range`. That is bucket configuration, not code,
  * and `scripts/publish-demo.sh` applies it alongside the upload.
  *
- * **Every entry in the picker is a workspace file, not a data file.** A `.cool`
+ * **Every figure in the store is a workspace file, not a data file.** A `.cool`
  * in the list could only ever offer what dropping that file offers: a map at
  * its landing view, with nothing beside it. What a first-time reader should
  * meet is the application doing its job — a window worth looking at, tracks on
  * both edges of the map, a group of two strands sharing a lane — and all of
- * that is exactly what `state/workspace.ts` writes down. So the catalogue is
+ * that is exactly what `state/workspace.ts` writes down. So the figures are
  * four `.metacooler.json` files that live next to the data they name, and
  * choosing one is the same gesture as dropping a workspace somebody sent you.
- * Nothing here is a second way of opening a file.
+ * The data files are listed too, under the figures, for the reader who wants
+ * the `.cool` alone — as rows, with the two verbs every store row has.
  *
  * The four are ordered as an argument rather than by dataset: **one map with
  * its tracks**, then **the same assembly with no map at all**, then **two maps
@@ -35,17 +37,10 @@
  * A note on the format, because it is what made every one of these stop
  * opening once: `App.openWorkspaceFile` reads `kind: "metacooler.workspace"`
  * and refuses anything else, so a published file still written in the older
- * single-session shape (`kind: "metacooler.session"`) is a picker entry that
- * fails on click with "not a workspace". The four files in `demo/` are the
- * current shape; the copies on the bucket are only as current as the last run
- * of `scripts/publish-demo.sh`, which is the step that makes the catalogue
- * true.
- *
- * Each is a workspace of **one tab**, which is what the format's `active` index
- * and `tabs` list collapse to when there is one of them. Nothing stops a
- * published example being several — a map and the genome browser over the same
- * assembly, say — and `demo-examples.test.ts` walks every tab of every entry
- * rather than the first, so a second one would be checked the day it arrives.
+ * single-session shape is a card that fails on click with "not a workspace".
+ * The four files in `demo/` are the current shape; the copies on the bucket are
+ * only as current as the last run of `scripts/publish-demo.sh`, which is the
+ * step that makes the store true.
  *
  * Each workspace sits in the bucket folder holding the files it names, and the
  * names *inside* it stay relative — resolved against the file's own URL on the
@@ -56,12 +51,8 @@
  */
 
 import { splitUri } from './labels'
-import type { Hub, HubEntry, HubRef } from '../state/hub'
-import { HUB_KIND, HUB_VERSION } from '../state/hub'
-import { HOMEPAGE } from '../version'
-import { SITE_BASE } from '../versions'
-
-export type { HubRef } from '../state/hub'
+import type { StoreEntry, StoreFile } from '../state/store'
+import { STORE_KIND, STORE_VERSION } from '../state/store'
 
 declare const __DEMO_BASE__: string
 
@@ -79,85 +70,172 @@ export const DEMO_BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/
  * Where to read the demos from, when it is not {@link DEMO_BUCKET}.
  *
  * Empty in both shipped builds, which is what makes the web target and the
- * desktop target read the identical URLs — the demos are no longer "beside the
- * app" in either one, so there is no longer a per-target base to get wrong.
- * The override survives as a build-time escape hatch (`DEMO_BASE=… vite build`)
- * for the two cases that want it: a fork publishing its own bucket, and
- * `python3 -m http.server` over a local copy of `demo/` when the network is
- * not available.
+ * desktop target read the identical URLs. The override survives as a
+ * build-time escape hatch (`DEMO_BASE=… vite build`) for the two cases that
+ * want it: a fork publishing its own bucket, and `python3 -m http.server` over
+ * a local copy of `demo/` when the network is not available.
  *
  * `typeof` because `vitest` applies no `define` block (see `version.ts`).
  */
 const DEMO_BASE: string = typeof __DEMO_BASE__ === 'string' ? __DEMO_BASE__ : ''
 
 /**
- * The catalogue, in the order it is offered.
+ * The figures, in the order they are offered.
  *
- * Each `note` names the accession the data came from, because a demo with no
- * provenance is a screenshot: it shows the viewer working and tells you nothing
- * you could check. And each one says what the *session* adds on top of the
- * file, because that is the part a reader cannot see from the name.
+ * Each card says enough to choose and no more: a `title`, one `line` on what
+ * is on screen, the `assembly`, and where the data came from (`provenance`,
+ * the accession or the DOI, because a demo with no provenance is a screenshot).
+ * The paragraph that used to be the whole row is `detail`, behind a fold on the
+ * card: it says what the *session* adds on top of the file, which is the part a
+ * reader cannot see from the name.
  *
  * `folder` is the dataset's own directory under {@link DEMO_BUCKET}, and it is
  * where every file that session names is looked for: entries sharing a folder —
  * as the three yeast sessions do — are that many figures over one copy of the
- * data, not that many copies of it. It may be nested (`metagenomics/mock-community`),
- * which is how a bucket groups datasets by the kind of experiment they are.
+ * data, not that many copies of it.
  */
 const DEMO: Array<{
   folder: string
   file: string
-  label: string
-  note: string
-  /** The value of the Demos hub's `assembly` column for this entry. */
+  title: string
+  line: string
   assembly: string
+  provenance: string
+  detail: string
 }> = [
   {
     folder: 'yeast',
     file: 'Yeast_microC.metacooler.json',
-    label: 'Yeast micro-C, G2/M — one map, tracks on both edges (cool)',
+    title: 'Yeast micro-C, G2/M',
+    line: 'One map, with the sequence, genes, ATAC, Pol II and 1,506 loop calls on its edges.',
     assembly: 'S288C (syn XIII-40)',
-    note:
+    provenance: 'DOI 10.1126/science.adm9466',
+    detail:
       'A mitotic micro-C map of synthetic yeast at 1 kb (XIII carries a 40 kb insertion, hence ' +
       'XIII-syn40), balanced, opened at IV:1.0–1.4 Mb. The sequence and the gene model run along ' +
       'both edges; ATAC and its peak calls sit under the map, Pol II over input and its peaks ' +
-      'beside it, and 1,506 loop calls are drawn on it. ' +
-      '(DOI: 10.1126/science.adm9466)',
+      'beside it, and 1,506 loop calls are drawn on it.',
   },
   {
     folder: 'yeast',
     file: 'Yeast_tracks.metacooler.json',
-    label: 'Yeast chromatin and transcription — the browser, no map (bigWig)',
+    title: 'Yeast chromatin and transcription',
+    line: 'The 1D browser with no map: eleven lanes over 50 kb of chromosome IV.',
     assembly: 'S288C (syn XIII-40)',
-    note:
-      'The same assembly with no contact map at all: eleven lanes over 50 kb of chromosome IV — ' +
-      'the sequence as GC content, the gene model, MNase and ATAC grouped on pinned axes, both ' +
-      'peak call sets, the micro-C anchors as an interval lane, the two RNA strands on one ' +
-      'shared axis with the reverse read downwards, and the loop calls as arcs. Drop a .cool on ' +
-      'it to turn the same session into a map.',
+    provenance: 'DOI 10.1126/science.adm9466',
+    detail:
+      'The same assembly with no contact map at all: the sequence as GC content, the gene ' +
+      'model, MNase and ATAC grouped on pinned axes, both peak call sets, the micro-C anchors ' +
+      'as an interval lane, the two RNA strands on one shared axis with the reverse read ' +
+      'downwards, and the loop calls as arcs. Drop a .cool on it to turn the same session into ' +
+      'a map.',
   },
   {
     folder: 'yeast',
     file: 'Yeast_deck.metacooler.json',
-    label: 'Yeast micro-C beside Hi-C — two maps in a deck (cool + hic)',
+    title: 'Micro-C beside Hi-C',
+    line: 'Two maps of one locus in two formats, a .cool and a .hic, locked side by side.',
     assembly: 'S288C (syn XIII-40)',
-    note:
+    provenance: 'DOI 10.1126/science.adm9466',
+    detail:
       'The same locus read out of two files in two different formats, in two locked columns: ' +
       'the micro-C .cool on the left and a Juicer .hic on the right, both balanced, both at ' +
       'IV:1.0–1.4 Mb. IV is one of the sequences the two assemblies agree about to the base, ' +
-      'which is why the window is there. Panning either panel pans both. ' +
-      '(DOI: 10.1126/science.adm9466)',
+      'which is why the window is there. Panning either panel pans both.',
   },
   {
     folder: 'metagenomics/mock-community',
     file: 'Mock_microbial_community.metacooler.json',
-    label: 'Mock microbial community — 49 MAGs over 20,566 contigs (metacool)',
+    title: 'Mock microbial community',
+    line: '49 MAGs over 20,566 contigs in one .metacool — the multi-genome file this viewer exists for.',
     assembly: 'mock community',
-    note:
+    provenance: 'SRA SRR32680160 · DOI 10.1038/s41564-025-02108-2',
+    detail:
       'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
-      'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first — ' +
-      'the multi-genome file this viewer exists for. ' +
-      '(SRA SRR32680160; DOI: 10.1038/s41564-025-02108-2)',
+      'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first.',
+  },
+]
+
+/**
+ * The data files under the figures, one row each.
+ *
+ * What the store lists *besides* the figures: the maps and the sequence the
+ * sessions are made of, so a reader who wants the `.cool` alone, or the
+ * metagenome as an `.mmetacool` ladder, has a row to press. The annotation
+ * tracks are not listed here — they are offered beside the map once it is open
+ * ({@link demoAnnotationsFor}), which is where a track is wanted.
+ */
+const DEMO_DATA: Array<{
+  folder: string
+  file: string
+  label: string
+  kind: 'map' | 'genome'
+  format: string
+  assembly: string
+  dataset: string
+}> = [
+  {
+    folder: 'yeast',
+    file: 'Yeast_microC_G2M_1kb.cool',
+    label: 'Yeast micro-C, G2/M, 1 kb',
+    kind: 'map',
+    format: 'cool',
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  },
+  {
+    folder: 'yeast',
+    file: 'Yeast_hic.hic',
+    label: 'Yeast Hi-C, G2/M',
+    kind: 'map',
+    format: 'hic',
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  },
+  {
+    folder: 'yeast',
+    file: 'S288c_syn40-XIII.fa',
+    label: 'S288C sequence, synthetic XIII',
+    kind: 'genome',
+    format: 'fasta',
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  },
+  {
+    folder: 'yeast-mpneumoniae',
+    file: 'Yeast_mpneumoniae_G2M.mcool',
+    label: 'Yeast with M. pneumoniae, G2/M',
+    kind: 'map',
+    format: 'mcool',
+    assembly: 'S288C + M. pneumoniae',
+    dataset: 'Yeast and M. pneumoniae',
+  },
+  {
+    folder: 'ecoli',
+    file: 'Ecoli.mcool',
+    label: 'E. coli Hi-C',
+    kind: 'map',
+    format: 'mcool',
+    assembly: 'E. coli',
+    dataset: 'E. coli',
+  },
+  {
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.metacool',
+    label: 'Mock community, 49 MAGs, 1 kb',
+    kind: 'map',
+    format: 'metacool',
+    assembly: 'mock community',
+    dataset: 'Mock microbial community',
+  },
+  {
+    folder: 'metagenomics/mock-community',
+    file: 'Mock_microbial_community.mmetacool',
+    label: 'Mock community, resolution ladder',
+    kind: 'map',
+    format: 'mmetacool',
+    assembly: 'mock community',
+    dataset: 'Mock microbial community',
   },
 ]
 
@@ -188,9 +266,7 @@ interface DemoAnnotation {
  * The folder is recorded even though {@link demoAnnotationsFor} never reads it
  * — that function resolves against the *map's own URL*, which is the only thing
  * that also works for a copy of the folder served from somewhere else. It is
- * here for the test, which has to find these files on disk, and writing it down
- * once beside the names is what keeps the two from disagreeing about where the
- * data lives.
+ * here for the test, which has to find these files on disk.
  */
 const DEMO_ANNOTATIONS: Record<string, { folder: string; entries: DemoAnnotation[] }> = {
   'Yeast_microC_G2M_1kb.cool': {
@@ -218,14 +294,12 @@ export interface DemoAnnotationLink extends DemoAnnotation {
 /**
  * The annotations published beside the map at `uri`, or `[]`.
  *
- * Two sources, asked in this order, and the order is the argument. A hub row
+ * Two sources, asked in this order, and the order is the argument. A store row
  * that carried `tracks` said so **about this exact file** — the catalogue's
  * publisher named them beside the URI the reader just clicked — where the table
  * below matches on a *file name*, which is a guess that happens to be a good
  * one. A specific answer beats a general one, so a registered shelf wins
- * outright rather than being concatenated: a hub naming three bigWigs for a map
- * that happens to be called `Yeast_microC_G2M_1kb.cool` means three, not
- * thirteen.
+ * outright rather than being concatenated.
  *
  * The table itself is matched on the file name at the end of the URI, so it
  * works for the bucket, for a local copy of `demo/yeast/` served from anywhere
@@ -247,22 +321,11 @@ export function demoAnnotationsFor(uri: string): DemoAnnotationLink[] {
 /**
  * The published tracks to *offer*, which is none once a session has its own.
  *
- * A separate question from {@link demoAnnotationsFor}, and worth its own name
- * because the two are about different things: that one asks what is published
- * beside this map, and this one asks whether the reader should be shown a button
- * that loads it. The button says *here is a set of tracks to look at*, which is
- * an offer to somebody who has none.
- *
  * A **restored session already names the tracks it wants** and is a moment away
  * from putting them on screen. Offered anyway, the button appeared under rows
  * that were already appearing and proposed ten more, most of them the same files
- * a second time — and worst on the published sessions, which are saved over
- * exactly this map, so a reader opening one met a viewer volunteering to
- * duplicate what it had just handed them.
- *
- * `restoring` covers an imported workspace, a `?config=` link and a plain
- * reload alike, because all three arrive the same way: rows in session memory,
- * written before the column is built.
+ * a second time. `restoring` covers an imported workspace, a `?config=` link and
+ * a plain reload alike, because all three arrive the same way.
  */
 export function demoAnnotationsToOffer(
   uri: string,
@@ -282,17 +345,13 @@ export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOT
 /**
  * The workspace files this module offers, as their paths under `demo/`, for the
  * test that reads every one of them off disk and opens what it names.
- *
- * A separate export rather than a `map` over {@link builtinHubs} because the
- * thing worth checking is the file on disk, which is what the sync uploads, not
- * the URL built around it.
  */
 export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder}/${entry.file}`)
 
-
-// ---------------------------------------------------------------------------
-// The demos, as a hub — and the two generated ones beside them
-// ---------------------------------------------------------------------------
+/** The data files the store lists, as their paths under `demo/`, for the same test. */
+export const DEMO_DATA_FILES: readonly string[] = DEMO_DATA.map(
+  (entry) => `${entry.folder}/${entry.file}`,
+)
 
 /**
  * Where the demos are read from, absolute, wherever this is running.
@@ -301,8 +360,7 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder
  * already absolute: it costs nothing, and it is what lets the escape hatch be a
  * *relative* base — `DEMO_BASE=/demo/ npm run build` for a copy served beside
  * the app. The `typeof` guard is for the node test runtime, which has no
- * `window` and in which this is still worth calling: a test that walks the
- * built-in hub is checking the entries, not the origin.
+ * `window` and in which this is still worth calling.
  */
 function demoBase(): string {
   const base = DEMO_BASE !== '' ? DEMO_BASE : DEMO_BUCKET
@@ -315,265 +373,75 @@ function demoBase(): string {
 }
 
 /**
- * The columns the Demos hub declares.
+ * The columns the lab's store declares.
  *
- * Four, and three of them are empty on every demo — which is part of why they
- * are there. The Demos hub is the first table a reader ever sees and it is also
- * the shape the 4DN and ENCODE hubs arrive in; a first table with one column
- * would teach that a hub is a list, and the second one would then be a surprise.
- * The two 4DN rows below fill all four, so the header row is honest about what
- * a column is for the moment anybody looks at it.
+ * Every card and every file row is drawn from these, so what a column is
+ * called here is what the gallery reads: `provenance` and `detail` are the
+ * card's chip and its fold, `format` and `dataset` are the file rows' chip and
+ * their grouping. A store somebody else writes may call its columns anything;
+ * this one is read by a front that knows it.
  */
 const DEMO_COLUMNS = [
   { key: 'assembly', label: 'Assembly' },
-  { key: 'biosource', label: 'Biosource' },
-  { key: 'assay', label: 'Assay' },
-  { key: 'lab', label: 'Lab' },
+  { key: 'dataset', label: 'Dataset' },
+  { key: 'format', label: 'Format' },
+  { key: 'provenance', label: 'Provenance' },
+  { key: 'detail', label: 'What is on screen' },
 ]
 
 /**
- * Two files on the 4DN open-data bucket, offered beside the lab's own demos.
+ * The lab's store, inline: the figures, then the data files.
  *
- * They are here because of what they prove, which no file on the lab's bucket
- * can: that a reader's *next* file does not have to be published by us. Both
- * were opened in the unmodified viewer on 2026-09-11 straight off 4DN's public
- * bucket, by range, with no key and no proxy — which is the claim §24 makes and
- * the one a first-time reader has no way to check from a demo folder this
- * project controls end to end.
- *
- * Sizes are recorded rather than guessed, because a size in a hub is what lets
- * the table say what a row costs before it is clicked (§24.1) — and these two
- * are exactly the rows worth saying it about.
+ * Inline rather than fetched because it is the one store that costs no request
+ * and the only one that is certainly there (§24.2). Every URI is absolute
+ * already, so `resolveStore` has nothing left to do to them: an inline store
+ * has no URL of its own to be relative to.
  */
-const DEMO_4DN: HubEntry[] = [
-  {
-    label: 'Hi-C, HCT116 RAD21-AID (Rao 2017) — 4DN open data (hic)',
-    uri:
-      'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/' +
-      '000789fe-9a22-4280-a71c-7ad228fd4cac/4DNFIM7ZVQOQ.hic',
-    kind: 'map',
-    size: 839405381,
-    fields: {
-      assembly: 'GRCh38',
-      biosource: 'HCT116 with Crispr generated mClover and AID-tagged RAD21',
-      assay: 'in situ Hi-C (MboI)',
-      lab: 'Erez Lieberman Aiden, BCM',
-    },
-    note:
-      '4DNFIM7ZVQOQ · Rao SSP et al. (2017) PMID:28985562 · read by range straight off the ' +
-      '4DN bucket',
-  },
-  {
-    label: 'Hi-C, human, 13 resolutions — 4DN open data (mcool)',
-    uri:
-      'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/' +
-      '00034edc-e0dc-45b1-b2a1-7db3a13ef869/4DNFIOKRZ21H.mcool',
-    kind: 'map',
-    size: 2191787975,
-    fields: { assembly: 'GRCh38' },
-    note:
-      '4DNFIOKRZ21H · 2.2 GB, 24 chromosomes, 1 kb to 10 Mb · a multi-resolution cooler the ' +
-      '4DN hub will name in full',
-  },
-]
-
-/**
- * Where the generated hubs are read from: the site's own `hubs/` directory.
- *
- * `.github/workflows/hubs.yml` writes them to the `hubs` branch, and
- * `.github/workflows/deploy.yml` copies the current three files from that
- * branch into `hubs/` beside the app on every deploy — which the hubs workflow
- * asks for as soon as it has published, so a fresh hub is on the site minutes
- * later with no push to `main` (§24.3). The branch is where the workflow
- * *writes*; the site is where a browser *reads*, and the reason that
- * distinction exists took a private repository to notice: the first design
- * read the branch straight off `raw.githubusercontent.com`, which answers 404
- * to anyone not logged in when the repository is private — and a Pages site is
- * public whether or not its repository is. Same origin as the page, so no CORS
- * enters into it; an archived build or a preview reaches up to the site root
- * through `SITE_BASE`, since the hubs are published once and not per copy.
- *
- * A build with no site to be relative to — the desktop's `app://viewer`, a
- * standalone file — reads the deployed site by its absolute address, which is
- * `package.json`'s `homepage`; GitHub Pages serves every file with
- * `Access-Control-Allow-Origin: *`, so that read is allowed from anywhere. With
- * no homepage either, the path is left relative and answers 404, which the
- * table reports as the state it is.
- *
- * **Both 404 until `hubs.yml` has run once and the deploy it asks for has
- * finished**, which is a state rather than a failure and is the reason
- * `fetchHub` tells 404 apart from every other answer: the table says "not
- * generated yet" and names the workflow.
- */
-function hubsBase(): string {
-  const onSite = typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)
-  if (onSite) {
-    try {
-      return `${new URL(SITE_BASE, window.location.href).href}hubs/`
-    } catch {
-      // Fall through to the deployed site: a base that does not resolve is not
-      // a site this page is on.
-    }
-  }
-  return `${HOMEPAGE}hubs/`
-}
-
-/** The Demos hub: the four published workspaces, and two files that are not ours. */
-function demosHub(): Hub {
+export function demosStore(): StoreFile {
   const base = demoBase()
   return {
-    kind: HUB_KIND,
-    version: HUB_VERSION,
-    name: 'Demos',
+    kind: STORE_KIND,
+    version: STORE_VERSION,
+    name: 'RSG lab data',
     description:
-      'Four composed sessions on the lab’s bucket, and two maps on 4DN’s. Every one of them ' +
-      'is read over the network exactly as a file on your own bucket would be.',
+      'Composed figures over the lab’s published data, and the files they are made of. Every ' +
+      'one is read over the network exactly as a file on your own bucket would be.',
     base,
     columns: DEMO_COLUMNS,
     entries: [
       ...DEMO.map(
-        (entry): HubEntry => ({
-          label: entry.label,
-          // Absolute already, so `resolveHub` has nothing left to do to them:
-          // an inline hub has no URL of its own to be relative to.
+        (entry): StoreEntry => ({
+          label: entry.title,
           uri: `${base}${entry.folder}/${entry.file}`,
-          // Every demo is a *workspace*, which is the argument this module's
-          // header makes at length: a `.cool` in the list could only offer what
-          // dropping that file offers, and what a first-time reader should meet
-          // is the application doing its job.
           kind: 'workspace',
-          note: entry.note,
-          fields: { assembly: entry.assembly },
+          note: entry.line,
+          fields: { assembly: entry.assembly, provenance: entry.provenance, detail: entry.detail },
         }),
       ),
-      ...DEMO_4DN,
+      ...DEMO_DATA.map(
+        (entry): StoreEntry => ({
+          label: entry.label,
+          uri: `${base}${entry.folder}/${entry.file}`,
+          kind: entry.kind,
+          fields: { assembly: entry.assembly, dataset: entry.dataset, format: entry.format },
+        }),
+      ),
     ],
   }
 }
 
-/**
- * ENCODE's shards, as the generator writes them (`scripts/make_hub.py`).
- *
- * **These two lists have to agree**, and `test/dom/builtin-hubs.test.ts`
- * checks that they do. ENCODE has 1.2 million released files this viewer can
- * open; one hub of them would be a quarter of a gigabyte and a table nothing
- * could draw, so the generator writes one per assembly group and output
- * category and the picker ships a reference to each (§24.3). Enumerated rather
- * than discovered because §24.2 is not negotiable: the picker may not fetch an
- * index on load to find out what exists.
- *
- * The order is the order the menu offers: the assembly a reader is most likely
- * to want first, and within it signal before peaks before alignments, which is
- * the order of how often each is asked for.
- */
-const ENCODE_SHARDS: ReadonlyArray<{ id: string; label: string }> = [
-  { id: 'GRCh38-signal', label: 'GRCh38 signal' },
-  { id: 'GRCh38-annotation', label: 'GRCh38 peaks and annotations' },
-  { id: 'GRCh38-alignment', label: 'GRCh38 alignments' },
-  { id: 'hg19-signal', label: 'hg19 signal' },
-  { id: 'hg19-annotation', label: 'hg19 peaks and annotations' },
-  { id: 'hg19-alignment', label: 'hg19 alignments' },
-  { id: 'mm10-signal', label: 'mouse signal' },
-  { id: 'mm10-annotation', label: 'mouse peaks and annotations' },
-  { id: 'mm10-alignment', label: 'mouse alignments' },
-  { id: 'other-signal', label: 'other assemblies — signal' },
-  { id: 'other-annotation', label: 'other assemblies — peaks and annotations' },
-  { id: 'other-alignment', label: 'other assemblies — alignments' },
-]
-
-/** The headings the picker files the shipped shelves under. */
-export const HUB_GROUPS = {
-  builtin: 'Built in',
-  igv: 'IGV',
-  fourdn: '4DN',
-  encode: 'ENCODE',
-  sessions: 'Preconfigured sessions',
-} as const
-
-/**
- * The hubs this build ships a pointer to, in the order they are offered.
- *
- * Demos first and inline, because it is the only one that costs no request and
- * the only one that is certainly there. Every other one is a URL: nothing is
- * fetched until a reader selects one (§24.2), which is what keeps "open the
- * viewer" from being a third-party request — and it is what makes eighteen
- * references cost exactly as much as three did, which is nothing.
- *
- * ## Why there are eighteen
- *
- * The first version of this list was Hi-C only, and shipped one hub per portal.
- * Widening the two portal front ends to *every file this viewer can open* made
- * 4DN four times the size and ENCODE four hundred times it, so ENCODE is
- * sharded (see {@link ENCODE_SHARDS}) and each shard is its own shelf. Grouping
- * them is the other half of that answer: `HubRef.group` is what turns eighteen
- * options into five headings, and the headings are the sources — which is how a
- * reader thinks about it, since *the 4DN shelf* and *the ENCODE shelf* are
- * different catalogues rather than different filters of one.
- *
- * ## Why sessions are a group and not a column
- *
- * A pre-configured session is a hub row like any other (`kind: 'workspace'`,
- * §24.1) and could simply live in its source's own hub. It does not, because
- * the two are different questions: *which file do I open* and *show me this
- * assembly with everything on it*. A reader arriving with the second question
- * in a table of 126,000 files has no filter that finds the eleven sessions
- * hiding in it — `kind` is a column, but it is one of eight — whereas a heading
- * called *Preconfigured sessions* is the answer to the question as asked.
- */
-export function builtinHubs(): HubRef[] {
-  const base = hubsBase()
-  return [
-    { id: 'demos', label: 'Demos', hub: demosHub(), builtin: true, group: HUB_GROUPS.builtin },
-    {
-      id: 'igv',
-      label: 'IGV genomes',
-      url: `${base}igv.json`,
-      builtin: true,
-      group: HUB_GROUPS.igv,
-    },
-    {
-      id: '4dn',
-      label: '4DN open data',
-      url: `${base}4dn.json`,
-      builtin: true,
-      group: HUB_GROUPS.fourdn,
-    },
-    ...ENCODE_SHARDS.map((shard): HubRef => ({
-      id: `encode-${shard.id}`,
-      label: shard.label,
-      url: `${base}encode-${shard.id}.json`,
-      builtin: true,
-      group: HUB_GROUPS.encode,
-    })),
-    ...(['igv', '4dn', 'encode'] as const).map((front): HubRef => ({
-      id: `${front}-sessions`,
-      label: SESSION_LABELS[front],
-      url: `${base}${front}-sessions.json`,
-      builtin: true,
-      group: HUB_GROUPS.sessions,
-    })),
-  ]
-}
-
-/** What each session shelf is called, since `<front> sessions` is not a name. */
-const SESSION_LABELS = {
-  igv: 'IGV genomes, with their tracks',
-  '4dn': '4DN experiment sets, with their tracks',
-  encode: 'ENCODE datasets, with their tracks',
-} as const
-
 // ---------------------------------------------------------------------------
-// Shelves a hub brought with it
+// Shelves a store brought with it
 // ---------------------------------------------------------------------------
 
 /**
- * The tracks a hub row named, held until the file it belongs to is opened.
+ * The tracks a store row named, held until the file it belongs to is opened.
  *
- * A hub entry may carry `tracks` — the bigWigs the same experiment published
+ * A store entry may carry `tracks` — the bigWigs the same experiment published
  * beside the map (§24.1) — and they are the same *offer* the demo map's ten
  * annotations are: here is a set of tracks to look at, for a reader who has
  * none. So they are answered through the same question rather than a second
- * one, and `Session` needs no idea that a hub exists.
+ * one, and `Session` needs no idea that a store exists.
  *
  * In memory and never in storage, deliberately. The offer is about the file
  * being opened right now; a shelf that outlived the tab would be a promise to
@@ -588,9 +456,9 @@ const shelves = new Map<string, DemoAnnotationLink[]>()
  * opened at an entry (`file.mcool::resolutions/1000`) as for the file itself —
  * which is the common case rather than the exotic one, since a collection
  * opened at its root lands on one of its entries and the URI the session ends
- * up on is not the one the hub row carried.
+ * up on is not the one the store row carried.
  *
- * Last registration wins: two hubs naming the same map is not a conflict worth
+ * Last registration wins: two stores naming the same map is not a conflict worth
  * a policy, and the one the reader has just clicked is the one they mean.
  */
 export function registerShelf(
@@ -608,7 +476,7 @@ export function registerShelf(
     tracks.map((track) => ({
       // The file name is what a track row falls back to when it has no label,
       // and what `demo-examples.test.ts` checks the published set against;
-      // derived here rather than asked for, since a hub carries a label and a
+      // derived here rather than asked for, since a store carries a label and a
       // URL and nothing in between.
       file: track.url.split('?')[0].split('#')[0].split('/').pop() ?? track.url,
       label: track.label,

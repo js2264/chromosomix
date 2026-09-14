@@ -551,17 +551,17 @@ export type ConfigRefusal =
   | { reason: 'not-json' }
   | { reason: 'not-a-workspace' }
   /**
-   * A JSON file that is not a **hub** (§24.1, `state/hub.ts`).
+   * A JSON file that is not a **store** (§24.1, `state/store.ts`).
    *
    * Its own reason rather than a second use of `not-a-workspace`, on the
    * argument the docstring above makes about the other two: the two formats
    * arrive through different doors and are written by different things — a
-   * workspace by the save button, a hub by `scripts/make_hub.py` or by hand —
-   * so a reader who pasted a workspace URL into the hub box has to be told
+   * workspace by the save button, a store by `scripts/make_store.py` or by hand —
+   * so a reader who pasted a workspace URL into the store box has to be told
    * which of the two they are holding. One sentence saying "not a workspace"
    * about a file that *is* one sends them to inspect the wrong thing.
    */
-  | { reason: 'not-a-hub' }
+  | { reason: 'not-a-store' }
   | { reason: 'newer'; version: number; producer?: string }
 
 /**
@@ -596,15 +596,15 @@ export function refusalMessage(refusal: ConfigRefusal, label: string): string {
       'ask for the session to be saved again from this one.'
     )
   }
-  if (refusal.reason === 'not-a-hub') {
-    // Names the shape rather than only the failure, because a hub is the one of
+  if (refusal.reason === 'not-a-store') {
+    // Names the shape rather than only the failure, because a store is the one of
     // these formats a reader may well be about to write by hand — it is four
-    // keys over a list — and "not a hub" with nothing after it is a message
+    // keys over a list — and "not a store" with nothing after it is a message
     // they can do nothing with.
     return (
-      `${label} is a JSON file but not a hub — it does not name itself as one. ` +
-      'A hub declares {"kind": "metacooler.hub", "version": 1, "entries": [...]}, and ' +
-      'scripts/make_hub.py writes one.'
+      `${label} is a JSON file but not a store — it does not name itself as one. ` +
+      'A store declares {"kind": "metacooler.store", "version": 1, "entries": [...]}, and ' +
+      'scripts/make_store.py writes one.'
     )
   }
   return (

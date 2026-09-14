@@ -102,7 +102,7 @@ export async function createDetachedSource(spec: SourceSpec): Promise<ByteSource
   if (spec.kind === 'local') return new LocalFileSource(spec.file)
   // Through {@link accessOf}, like every other road out of this module, and not
   // through `spec.credential` alone. A bare credential is what a bucket needs
-  // and it is only half of what a request may carry: a hub, a portal share link,
+  // and it is only half of what a request may carry: a store, a portal share link,
   // Google Drive and Dropbox are authorised by a **header**, and a second mount
   // built from the credential alone would send those bare. It would typecheck,
   // and the 401 would be reported against the file rather than against the

@@ -34,7 +34,7 @@ import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
-import { readHubRows } from './hubs'
+import { readStoreRows } from './stores'
 import { storedLines as driveStoredLines } from './drives'
 import { storedLines as dropboxStoredLines } from '../auth/dropbox'
 import { actions, dayOf, forgetActions } from './actions'
@@ -80,7 +80,7 @@ function count(n: number, one: string, many: string): string {
  * What is being kept, as lines a dialog can print.
  *
  * Counts rather than contents, with three deliberate exceptions: granted files,
- * connected folders and connected hubs are named, and bucket keys are called
+ * connected folders and connected stores are named, and bucket keys are called
  * what they are. Every other line describes something whose loss costs a reader
  * a preference; those describe what this browser knows about the reader's work,
  * and somebody deciding whether to press "forget everything" on a borrowed
@@ -157,17 +157,17 @@ export async function storedItems(): Promise<StoredItem[]> {
     })
   }
 
-  // Named rather than counted, on the rule the folders line follows: a hub is
+  // Named rather than counted, on the rule the folders line follows: a store is
   // somewhere the reader *connected to*, and the labels are the only part of it
   // worth reading back — a count would say a thing has been kept without saying
   // what. Nothing secret is in a row (a label and a URL), so the whole of it can
   // be shown; what it discloses is which lab's shelf this browser has been at,
   // which is exactly the fact a reader on a borrowed machine came here for.
-  const hubs = readHubRows()
-  if (hubs.length > 0) {
+  const stores = readStoreRows()
+  if (stores.length > 0) {
     items.push({
-      label: 'Hubs you connected',
-      detail: `${hubs.map((row) => row.label).join(', ')} — catalogue URLs, fetched only when ` +
+      label: 'Stores you connected',
+      detail: `${stores.map((row) => row.label).join(', ')} — catalogue URLs, fetched only when ` +
         'you open one',
     })
   }
@@ -189,7 +189,7 @@ export async function storedItems(): Promise<StoredItem[]> {
     (key) =>
       key === `${PREFIX}buckets` ||
       key === `${PREFIX}access` ||
-      key === `${PREFIX}hubs` ||
+      key === `${PREFIX}stores` ||
       key === `${PREFIX}google` ||
       key === `${PREFIX}drives` ||
       key === `${PREFIX}dropbox` ||

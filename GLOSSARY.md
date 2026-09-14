@@ -20,7 +20,7 @@ code disagree, the code is right and this file is a bug.
 - [The three shells](#the-three-shells) — window, session, tab
 - [Persistence](#persistence) — what is remembered where, grants and connected folders
 - [What is being looked at](#what-is-being-looked-at) — view state, views, levels
-- [Files and addressing](#files-and-addressing) — cool, metacool, entries, URIs
+- [Files and addressing](#files-and-addressing) — cool, metacool, entries, URIs, stores
 - [Genomes and sequences](#genomes-and-sequences) — genome, contig, assembly, naming
 - [Maps on screen](#maps-on-screen) — lead, companion, deck, star, the second file
 - [Annotations](#annotations) — track, lane, placement, group, mark, bookmark
@@ -183,8 +183,9 @@ tab, because two tabs on `rep1.cool` must share one grant.
 
 ### connected folder
 
-A place the window keeps and browses, rather than a file it opened (§20, `src/browse/`). Two things
-are one here: a **directory on the machine** and a **key prefix on a bucket**, read through the same
+A place the window keeps and browses, rather than a file it opened (§20, `src/browse/`). Four
+things are one here: a **directory on the machine**, a **key prefix on a bucket**, a **Google Drive
+folder** and a **Dropbox folder**, read through the same
 interface — given a path, the sub-folders and the files; given a file, how to open it. Shown in the
 **Files** panel, which is the one side column that is not about the file the session is of.
 
@@ -308,6 +309,17 @@ navigation.
 The reserved contig name for pixels that belong to no bin. Never displayable (§7.4).
 
 ---
+
+### store
+
+A shelf of named data somebody published: one JSON file (`kind: "metacooler.store"`, §24) listing
+maps, genome files and workspaces with columns to filter on, so a reader chooses without opening
+anything. The app ships four — the lab's own figures, IGV's genomes, 4DN and ENCODE — and a reader
+connects any other by URL. Each is a page in the **store drawer** (§24.2): a *gallery* of cards
+whose one button opens a pre-configured session, or a *portal* of facets with a matrix across any
+two of them. A row becomes a `PickedFile` the moment it is pressed, so a store is a door and not a
+source: what opens is the file the row names, on whatever bucket that is. Nothing is fetched until
+its tile is pressed. Earlier builds called it a *hub*; that word is gone.
 
 ## Genomes and sequences
 

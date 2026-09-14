@@ -143,30 +143,30 @@ describe('storedItems', () => {
   })
 
   /**
-   * A hub is somewhere the reader connected to, so it is named rather than
+   * A store is somewhere the reader connected to, so it is named rather than
    * counted — the rule the granted files and the connected folders follow, and
    * for the same reason: the labels are the part worth reading back before
    * deciding what to do on a borrowed machine.
    */
-  it('names the hubs that have been connected, and does not count them twice', async () => {
+  it('names the stores that have been connected, and does not count them twice', async () => {
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     window.localStorage.setItem(
-      `${PREFIX}hubs`,
-      JSON.stringify([{ id: 'hub:1', label: 'Lab shelf', url: 'https://lab.example/hub.json' }]),
+      `${PREFIX}stores`,
+      JSON.stringify([{ id: 'store:1', label: 'Lab shelf', url: 'https://lab.example/store.json' }]),
     )
     const items = await storedItems()
-    const hubs = items.find((item) => item.label === 'Hubs you connected')
-    expect(hubs?.detail).toContain('Lab shelf')
-    // Counted as a hub or as a preference, never as both: a reader told "2
+    const stores = items.find((item) => item.label === 'Stores you connected')
+    expect(stores?.detail).toContain('Lab shelf')
+    // Counted as a store or as a preference, never as both: a reader told "2
     // settings — theme, column widths, overlays" when one of the two is a
     // catalogue URL has been told something false.
     expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
   })
 
-  it('says nothing about hubs when none have been connected', async () => {
+  it('says nothing about stores when none have been connected', async () => {
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     const labels = (await storedItems()).map((item) => item.label)
-    expect(labels).not.toContain('Hubs you connected')
+    expect(labels).not.toContain('Stores you connected')
   })
 
   it('names the console on its own line rather than counting it as a setting', async () => {
@@ -211,14 +211,14 @@ describe('forgetEverything', () => {
   it('clears both web storages and the durable stores, and leaves other apps alone', async () => {
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     window.localStorage.setItem(`${PREFIX}buckets`, '[{"secretAccessKey":"shh"}]')
-    // The hubs key is swept by the prefix rule rather than by being named here,
+    // The stores key is swept by the prefix rule rather than by being named here,
     // which is the promise this module makes; it is in the fixture so that a
     // sweep which stopped covering it would fail rather than pass quietly.
     window.localStorage.setItem(
-      `${PREFIX}hubs`,
-      '[{"id":"hub:1","label":"Lab shelf","url":"https://lab.example/hub.json"}]',
+      `${PREFIX}stores`,
+      '[{"id":"store:1","label":"Lab shelf","url":"https://lab.example/store.json"}]',
     )
-    // The Google client id, in the fixture for the hubs key's reason: it is
+    // The Google client id, in the fixture for the stores key's reason: it is
     // swept by the prefix rule rather than by being named, and a sweep that
     // stopped covering it should fail here rather than pass quietly.
     window.localStorage.setItem(
@@ -241,7 +241,7 @@ describe('forgetEverything', () => {
 
     expect(await storedItems()).toEqual([])
     expect(window.localStorage.getItem(`${PREFIX}buckets`)).toBeNull()
-    expect(window.localStorage.getItem(`${PREFIX}hubs`)).toBeNull()
+    expect(window.localStorage.getItem(`${PREFIX}stores`)).toBeNull()
     expect(window.localStorage.getItem(`${PREFIX}google`)).toBeNull()
     expect(window.sessionStorage.getItem(`${PREFIX}sessions`)).toBeNull()
     expect(await store(STORES.workspace).get('current')).toBeNull()

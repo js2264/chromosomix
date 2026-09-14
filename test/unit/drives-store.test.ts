@@ -140,7 +140,7 @@ describe('what the stored-data screen is told', () => {
    *
    * A Drive folder is somewhere the reader connected to, so the labels are the
    * part worth reading back before deciding what to do on a borrowed machine
-   * (the rule the folders and the hubs already follow). And the line says what
+   * (the rule the folders and the stores already follow). And the line says what
    * is *not* here: the token that lists these folders is held in memory and
    * never written (§24.8), so a reader who reads this line has been told the
    * whole of what is on the disk.

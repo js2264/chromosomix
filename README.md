@@ -22,7 +22,7 @@ server-side processing or data upload.
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
-- Hubs: The picker offers shelves of named datasets, grouped by where they came from — the demos, **IGV's genomes** with their tracks, **4DN open data** (every openable file on its bucket, ~25,700 rows), **ENCODE** (~210,000 rows across twelve shelves, by assembly and by signal/peaks/alignments), and **pre-configured sessions** for each — all regenerated weekly, plus any hub a lab publishes as one JSON file beside its data (`?hub=<url>`). A hub row can be a whole pre-configured session, not only a file: pick *IGV hg38* and the sequence and its gene tracks are on screen together.
+- Stores: The landing page offers two things — **load files** and **connect to a store** — and the stores are a row of tiles: the lab's own figures, **IGV's genomes** with their tracks, **4DN open data** (every openable file on its bucket, ~25,700 rows), **ENCODE** (~210,000 rows, by assembly and by signal/peaks/alignments), and any store a lab publishes as one JSON file beside its data. A tile opens a drawer down the left, the way the console opens along the bottom. The lab's and IGV's stores are cards of pre-configured sessions with a line of context each: pick *hg38* and the sequence and its gene tracks are on screen together. The portals are a faceted search: tick assays, biosources and labs and watch every other facet's counts follow, cross two facets into a matrix and open a cell, or collect rows in a tray and open them together. What is open is in the address (`?store=4dn&assay=Hi-C&view=matrix`), so a narrowed store is a link. All of it is regenerated weekly, and nothing is fetched until a tile is pressed.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
 - Console: A bottom panel recording every run, file opened and file written, each run written as the `metacooler-run` command that repeats it — one line per map, so a run over a deck is a line each. Copy or save a day of work as a shell script.
 
@@ -423,16 +423,19 @@ src/
                  header and footer, the block index and its two numbering
                  schemes, and the cooler-shaped handle that hides all of it
   genome/        an assembly with no matrix behind it, and its one axis
-  browse/        a place read as a tree: one interface, a directory backend and a
-                 bucket one, and the name-routing both of them show rows by
+  browse/        a place read as a tree: one interface, a directory, bucket, Drive
+                 and Dropbox backend, and the name-routing all of them show rows by
   s3/            SigV4, the bucket scopes, and ListObjectsV2 as a folder listing
   worker/        message protocol; the worker owns all I/O
   render/        canvas heatmap, matplotlib LUTs, colour scale, colourbar, the
                  diagonal blend for two files, the 1D browser's ruler and arcs
   state/         ViewState and its URL-hash serialisation, the workspace record,
-                 and actions.ts — the log of what this window has done (§23)
-  ui/            file picker, genomes/contigs tables, genome/pair/region views,
-                 the 1D browser, its vector-PDF page, the console, errors
+                 the store format and its facets, and actions.ts — the log of what
+                 this window has done (§23)
+  ui/            the landing page (load files, connect to a store), the store
+                 drawer and its fronts under stores/, genomes/contigs tables,
+                 genome/pair/region views, the 1D browser, its vector-PDF page,
+                 the console, errors
   annotations/   the tracks and annotations layer: parsers, store, and their own worker
   analysis/      the nineteen tasks (§18): descriptors, pure kernels, a worker of its
                  own, the run/ adapters that walk pixels, and write/ — TSV, bedGraph
@@ -440,7 +443,7 @@ src/
   app/           App (the window, the tabs, the address bar) and Session (one file)
   main.ts        three lines of bootstrap
 scripts/
-  make_fixtures.py  make_golden.py  make_analysis_golden.py  gen_luts.py
+  make_fixtures.py  make_golden.py  make_analysis_golden.py  gen_luts.py  make_store.py
 test/
   fixtures/ (generated)   golden/ (committed)   unit/
 docs/
@@ -687,14 +690,14 @@ assert the correspondence has not degraded rather than pretend to an equality th
   what a reader of both documents needs.
 - `docs/hosting.md` — the bucket configuration a published `.metacool` needs, and why GEO and SRA
   cannot serve as hosts.
-- `docs/hubs.md` — publishing a hub: the file, the generator (`scripts/make_hub.py`, for a lab's
-  bucket or the IGV, 4DN and ENCODE stores), and the weekly workflow that keeps the shipped hubs
+- `docs/stores.md` — publishing a store: the file, the generator (`scripts/make_store.py`, for a lab's
+  bucket or the IGV, 4DN and ENCODE stores), and the weekly workflow that keeps the shipped stores
   fresh on the site.
 - `docs/remote-sources.md` — a design note on remote sources beyond S3: what juicebox.js does
   for Dropbox, Google Drive, GCS, ENCODE, 4DN and the Aiden Lab server, measured against what this
   viewer does today (the 4DN and ENCODE buckets already open unmodified), what each further
   provider would cost, and the ways to arrive **pre-connected** to a public server with sessions
-  ready to open — a hub file and a generator script first.
+  ready to open — a store file and a generator script first.
 - `docs/deploy.md` — how the site is built and published, how it works offline, how past builds
   stay reachable, and how a release is cut.
 - `CHANGELOG.md` — what changed between versions. The running build names itself in

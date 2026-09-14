@@ -1,16 +1,18 @@
-# Publishing a hub
+# Publishing a store
 
-A **hub** is one JSON file that names the maps, genome files and saved sessions on a bucket, with
-columns to filter on, so a reader can choose one without opening any. The picker draws it as a
-table; a lab connects one by pasting its URL or arrives on it with `?hub=<url>`. SPECS §24 is the
-specification; this is the operator's page: how to write one, how to generate one, and how the two
-portal hubs the app ships are kept fresh.
+A **store** is one JSON file that names the maps, genome files and saved sessions on a bucket, with
+columns to filter on, so a reader can choose one without opening any. The app draws it as a page
+in the store drawer — the lab's and IGV's as cards of pre-configured sessions, 4DN's and ENCODE's
+as a faceted search with a matrix, a lab's own as that search over its rows; a lab connects one by
+pasting its URL under *Your own store* or arrives on it with `?store=<url>`. SPECS §24 is the
+specification; this is the operator's page: how to write one, how to generate one, and how the
+three public stores the app ships are kept fresh.
 
 ## The file
 
 ```json
 {
-  "kind": "metacooler.hub",
+  "kind": "metacooler.store",
   "version": 1,
   "name": "Lab Hi-C",
   "description": "Everything under s3://my-lab/hic/, balanced at 1 kb.",
@@ -42,7 +44,7 @@ portal hubs the app ships are kept fresh.
 - `kind` and `version` are what the parser checks first; anything else is tolerated, and unknown
   keys are ignored, so a generator can add a column before a viewer knows it.
 - `base` is the prefix relative names resolve against. Leave it out and they resolve against the
-  hub's own URL, which makes a hub *beside its data* a self-contained folder that can be copied to
+  store's own URL, which makes a store *beside its data* a self-contained folder that can be copied to
   another bucket with everything it names — the same rule a saved workspace follows.
 - `uri` may carry `::group` (`::resolutions/1000`) and `#index=`/`#bins=` sidecars exactly as any
   URI the viewer takes. Dropbox and Drive share links, `gs://` and `s3://` names are rewritten to
@@ -58,34 +60,34 @@ portal hubs the app ships are kept fresh.
 - `tracks` are offered from the Tracks card once the row is open, the way the demo annotations are.
 
 Serve it from anywhere that answers a cross-origin `GET` — a bucket with the public CORS policy in
-[hosting.md](hosting.md), GitHub raw, a lab website. A hub in a **private** prefix is read with the
+[hosting.md](hosting.md), GitHub raw, a lab website. A store in a **private** prefix is read with the
 bucket key that covers it, and one on a Google host with the API key or the signed-in account,
-exactly as its rows will be. Nothing is fetched until a reader chooses the hub.
+exactly as its rows will be. Nothing is fetched until a reader chooses the store.
 
 ## Generating one
 
-`scripts/make_hub.py` needs nothing but Python 3.9 or newer — no `pip install`.
+`scripts/make_store.py` needs nothing but Python 3.9 or newer — no `pip install`.
 
 ```bash
 # A lab's own bucket: one row per openable object under the prefix, with sizes.
-python3 scripts/make_hub.py bucket https://my-lab.s3.eu-west-3.amazonaws.com/hic/ \
-    --name 'Lab Hi-C' --out hub.json
+python3 scripts/make_store.py bucket https://my-lab.s3.eu-west-3.amazonaws.com/hic/ \
+    --name 'Lab Hi-C' --out store.json
 
 # The three public stores, from their own APIs (this is what the workflow runs).
-python3 scripts/make_hub.py igv    --out out/igv.json    --sessions-dir out/sessions
-python3 scripts/make_hub.py 4dn    --out out/4dn.json    --sessions-dir out/sessions
-python3 scripts/make_hub.py encode --out out/encode.json --sessions-dir out/sessions
+python3 scripts/make_store.py igv    --out out/igv.json    --sessions-dir out/sessions
+python3 scripts/make_store.py 4dn    --out out/4dn.json    --sessions-dir out/sessions
+python3 scripts/make_store.py encode --out out/encode.json --sessions-dir out/sessions
 
-# Validate a hub — or a session — somebody else wrote.
-python3 scripts/make_hub.py check hub.json
+# Validate a store — or a session — somebody else wrote.
+python3 scripts/make_store.py check store.json
 ```
 
 Common options: `--limit N` caps the rows for a dry run; `--timestamp` writes a dated copy beside
 `--out`; `--check` re-reads everything it wrote and validates it; `--sessions-dir DIR` writes the
-pre-configured sessions and `--sessions-out FILE` the hub that lists them (default
+pre-configured sessions and `--sessions-out FILE` the store that lists them (default
 `<out-stem>-sessions.json`). `--from-json`, `--from-xml` and `--from-tsv` replay a recorded
 response, which is how the tests run without a network. A run that finds **nothing exits 2 and
-writes nothing**, so a workflow never overwrites a good hub with an empty one.
+writes nothing**, so a workflow never overwrites a good store with an empty one.
 
 ### What each front end asks, and of whom
 
@@ -100,7 +102,7 @@ exists; a file the portal does not describe keeps its row with empty metadata ce
 
 | | |
 |---|---|
-| `require` (default) | fail the run and write nothing, so a hub **with** columns is never replaced by one without |
+| `require` (default) | fail the run and write nothing, so a store **with** columns is never replaced by one without |
 | `optional` | publish the spine with the metadata columns empty — for the week a portal is down |
 | `skip` | never ask; for a dry run, or a machine that can reach a bucket and not a search API |
 
@@ -164,18 +166,19 @@ accession — a total order, so two runs over unchanged data pick the same file 
 diff is empty.
 
 Even at the default, 210,000 rows is too much for one file, so the `encode` front end **shards**:
-one hub per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
+one store per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
 `annotation`, `alignment`), twelve files, largest about 25 MB. `--out out/encode.json` writes
 `out/encode-GRCh38-signal.json` and its eleven siblings and no `out/encode.json`; `--shards off`
-writes the single file instead. Each shard is its own shelf in the picker, and the shard list is
-fixed in the generator and mirrored in `src/ui/examples.ts` — `test/dom/builtin-hubs.test.ts`
-checks the two agree, because a name that drifted would be a menu entry answering 404 for a file
-that exists under another name.
+writes the single file instead. Each shard is one file, and the ENCODE page turns the shard list
+into its first two facets — *Genome* and *Files* — so a reader never meets twelve entries; the list
+is fixed in the generator and mirrored in `src/ui/stores/registry.ts` —
+`test/dom/builtin-stores.test.ts` checks the two agree, because a name that drifted would be a
+facet answering 404 for a file that exists under another name.
 
 ### Pre-configured sessions
 
 `--sessions-dir DIR` writes one `.metacooler.json` per genome or dataset with its tracks already
-placed, and a hub listing them as `kind: "workspace"` rows. IGV's hg38 becomes its FASTA plus every
+placed, and a store listing them as `kind: "workspace"` rows. IGV's hg38 becomes its FASTA plus every
 track IGV publishes for hg38; a 4DN experiment set becomes its richest contact map with the
 bigWigs and peak files of the same set on it. One click and it is on screen, which is what three
 rows in a table is not — and the viewer needed no new code for it, because a workspace row is a
@@ -194,13 +197,13 @@ Three rules the generator follows:
 
 At most 24 tracks are placed per session — a 4DN set can carry two hundred processed files, and a
 session that opened all of them would be unreadable when it had finished drawing. The cap is on the
-session; every one of those files still has its own row in the data hub.
+session; every one of those files still has its own row in the data store.
 
-## The hubs the app ships
+## The stores the app ships
 
-`.github/workflows/hubs.yml` — **Actions → Hubs** — runs all three front ends every Monday and on
-demand, uploads everything as a timestamped workflow artifact (`hubs-<date>`, kept ninety days),
-and publishes to the `hubs` branch:
+`.github/workflows/stores.yml` — **Actions → Stores** — runs all three front ends every Monday and on
+demand, uploads everything as a timestamped workflow artifact (`stores-<date>`, kept ninety days),
+and publishes to the `stores` branch:
 
 ```
 igv.json  4dn.json  encode-<assembly>-<category>.json ×12
@@ -208,12 +211,12 @@ igv-sessions.json  4dn-sessions.json  encode-sessions.json
 sessions/*.metacooler.json
 index.json        what is there, how many rows each has, how big, and when
 fingerprint.json  each file's hash with its timestamps removed
-archive/          dated copies of index.json and of every hub under 2 MB, last 26 runs
+archive/          dated copies of index.json and of every store under 2 MB, last 26 runs
 ```
 
 The branch is the store, not the door: the deploy (`.github/workflows/deploy.yml`) copies the
-current files into `hubs/` beside the app on every deploy, and the hubs workflow asks for a deploy
-as soon as it has published something new. The picker's shelves read `<site>/hubs/<name>.json` —
+current files into `stores/` beside the app on every deploy, and the stores workflow asks for a deploy
+as soon as it has published something new. The drawer's pages read `<site>/stores/<name>.json` —
 the same origin as the page, so no CORS is involved and a private repository changes nothing; the
 desktop build reads the deployed site by the `homepage` in `package.json`.
 
@@ -225,12 +228,12 @@ written, so the comparison is made on `fingerprint.json` — each file hashed wi
 `createdAt` removed — rather than on the bytes. A second run over unchanged portals commits
 nothing, pushes nothing and asks for no deploy.
 
-Until the workflow has run once on a fork, those menu entries answer *not generated yet* and name
-the workflow to run. On the first run, check the "Generate every hub" step's counts (about 75 IGV
+Until the workflow has run once on a fork, those pages answer *not generated yet* and name
+the workflow to run. On the first run, check the "Generate every store" step's counts (about 75 IGV
 rows and 41 sessions; about 25,700 4DN rows; about 210,000 ENCODE rows across twelve shards), that
 `--check` passed on everything, that the deploy it asked for has finished, and that
-`<site>/hubs/4dn.json` answers `200`. A second run must publish nothing when the three sources
+`<site>/stores/4dn.json` answers `200`. A second run must publish nothing when the three sources
 answered the same thing.
 
-A fork that would rather publish its hubs elsewhere changes `hubsBase()` in `src/ui/examples.ts`
+A fork that would rather publish its stores elsewhere changes `storesBase()` in `src/ui/stores/registry.ts`
 and the branch name in the two workflows; nothing else knows where they live.

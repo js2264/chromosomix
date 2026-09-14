@@ -22,7 +22,7 @@ import { alignNames, type Alignment, type NamedSequence } from '../genome/naming
 
 import { button, el, fmt } from './dom'
 import { cardTitle, iconButton } from './icons'
-import { bucketBrowseButton } from './browseButton'
+import { folderPickButton } from './pickFromFolders'
 import type { OpenResult } from '../worker/protocol'
 import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from './labels'
@@ -112,7 +112,13 @@ export class CompareCard {
           { class: 'ann-url-row' },
           this.urlInput,
           button('add', () => this.openUrl(), { class: 'btn' }),
-          bucketBrowseButton((url) => this.props.onOpen({ kind: 'remote', url })),
+          folderPickButton((picked) =>
+            this.props.onOpen(
+              picked.source.kind === 'local'
+                ? { kind: 'local', file: picked.source.file }
+                : { kind: 'remote', url: picked.uri },
+            ),
+          ),
         ),
       ),
     )
