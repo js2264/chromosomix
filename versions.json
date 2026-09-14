@@ -1,6 +1,13 @@
 {
-  "latest": "d167162",
+  "latest": "4190181",
   "versions": [
+    {
+      "commit": "4190181",
+      "version": "0.12.0",
+      "date": "2026-09-14T09:52:45+02:00",
+      "subject": "Rename hubs to stores and redesign store interface (#53)",
+      "tag": ""
+    },
     {
       "commit": "d167162",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "48eb4bd",
-      "version": "0.11.0",
-      "date": "2026-09-09T17:15:30+02:00",
-      "subject": "An embed with a bar of its own, and a copy of the viewer on npm (#38)",
-      "tag": ""
-    },
-    {
       "commit": "815b0ad",
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
@@ -198,13 +198,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 53,
-      "commit": "2faacad",
-      "title": "Rename hubs to stores and redesign store interface",
-      "branch": "claude/unified-file-store-access-i658sf",
-      "date": "2026-09-14T06:57:24Z"
-    }
-  ]
+  "pulls": []
 }
