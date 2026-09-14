@@ -14,6 +14,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Opening a 4DN BAM as a genome fetched the whole file.** 4DN's open-data bucket exposes `ETag`
+  and nothing else to a page, so the browser could not see the `Content-Range` the file handle
+  reads a size off, and the handle reported nought bytes. The bounded header read was then a read
+  of nought bytes, "not a BAM", and the alignment file was fetched whole — gigabytes, behind
+  *Reading 4DNFIV9TCZVO.bam* — to find out what its first block said. A size the handle cannot
+  give is now asked for with a `HEAD`, whose `Content-Length` every page may read; a size nothing
+  states is unknown rather than empty and the header is still read within its bound; and the
+  browser opens from the header in three small requests, with the index's download drawn as a
+  bar on the row while it is already on screen (SPECS §8.8).
+
 - **A merged pull request's preview stayed in the About dialog's version picker.** Merging fires
   `pull_request: closed` — the run that deletes the preview — and `push` to `main` in the same
   instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
@@ -56,6 +66,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   off response that started this.
 
 ### Added
+
+- **A lane says what it is waiting for.** A sequence lane read by range sat blank while its window
+  was on its way, and a BAM's row said *reading…* for as long as its thirty-megabyte index took.
+  The worker now reports how far a read has got — a whole file downloading for a row, a window of
+  an indexed sequence fetched by range — and the lane draws *fetching 1.2 of 4.0 MB* with a bar
+  where its limits would go, on the browser and beside a map alike; the Tracks card draws the same
+  words and bar under a row whose file is still coming. Where the host would not say how much is
+  coming the bar sits half full rather than at nought.
+
+- **A lane that will not draw at this zoom says so.** An indexed sequence over a window wider than
+  4 Mb answers *GC under 4 Mb, letters at base resolution — zoom in* under its name, instead of
+  nothing. The line is judged over the whole request: a whole-genome view of *bosTau9* is thirty
+  chromosomes over it and two thousand scaffolds under it, and the scaffolds were being read one
+  request apiece — a lane that stayed empty for minutes while it did.
+
+- **ENCODE's genome and file-kind facets are multiple choice.** They were radios, so one shard was on
+  screen at a time and the same dataset on two assemblies, or a dataset's signal beside its peaks,
+  could not be seen in one list. Tick two genomes and both shards are read and shown together, the
+  matrix crosses the union, a link carries the choice as two facets, a shard read once is kept, and
+  a shard not written yet is a sentence beside the rows that were.
 
 - **A large FASTA opens at once, through its index.** Opening IGV's *Galgal6* — a gigabyte of
   sequence — read the whole file into the annotations worker before the browser could appear, or
@@ -702,6 +732,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   keep their indices.
 
 ### Changed
+
+- **A store row is called what the drawer called it.** A 4DN map opened from the shelf was named by
+  its accession — `4DNFI24F7GRY.mcool` — where the reader had picked *Hi-C on HFF cells, protocol
+  variations*. The row's line now goes with the file: onto the map, onto the track, and onto the
+  tab a row opens in a session of its own, through the same road a file named by a Drive folder
+  takes.
+
+- **The lab's figures and IGV's genomes are one shape of card.** The name and the card's one verb on
+  the first line — the new-session mark, icon only — the chips under them, the one-line description
+  where there is one, and *8 files* behind a fold listing every file the session is made of, each a
+  store row with the two verbs. The *Figures* heading and the separate *Files* section are gone:
+  every file is under the figure it belongs to, and the few no figure names sit under the cards in
+  a fold of their own. IGV's cards lose the host line under the name.
 
 - **Every file row carries the same two marks: add it here, or open it in a new session.** A store
   row had *add* as a word and *open* as a grey arrow, a folder row in the Files column had the

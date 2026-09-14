@@ -546,6 +546,15 @@ it, unlike the Google sign-in above: nothing here is registered against an origi
 signs in as well as a website does — the authorize page opens in the machine's real browser
 (`electron/main.cts` sends every `window.open` there), and the code is pasted back into the app.
 
+## A host that hides Content-Range
+
+Expose `Content-Range` and `Content-Length` (above) and the viewer learns a file's size from its
+first ranged read. A bucket that exposes neither — 4DN's open-data bucket exposes `ETag` and
+nothing else — still works, at the cost of one more request: the viewer asks for the size with a
+`HEAD`, whose `Content-Length` every page may read without being told it may, so allow `HEAD` in
+the policy (the `AllowedMethod` list above does). A host that answers neither still gets a bounded
+header read for a BAM, and a sentence rather than a download for the index it cannot address.
+
 ## A FASTA, and its index
 
 A genome's sequence is the one file whose size decides how it is read (SPECS §8.8). Under 64 MB

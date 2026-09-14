@@ -1905,6 +1905,31 @@ whole whatever its size, its `.fai` needing a `.gzi` beside it that this viewer 
 generator writes the index into every IGV genome's row and session (§24.3), and a lane's summary
 says *read by range from its index* so a reader knows which of the two they have.
 
+**A lane says what it is waiting for.** The worker reports how far a read has got — a whole file
+being downloaded for a row, a window of an indexed sequence fetched by range — under the request
+that asked, the same `progress` message an analysis task sends (§18.3), and the two caches on the
+main thread keep the last report beside the request it belongs to. A lane whose window is on its
+way draws *fetching 1.2 of 4.0 MB* and a bar where its limits would go, on both surfaces
+(`render/laneLabel.ts`); a row whose file is still coming draws the same words and bar in the Tracks
+card. Where the host would not say how much is coming the bar is drawn half full, because a bar at
+nought says nothing has happened and something has. And a lane that will not draw at this zoom says
+so in the same place rather than sitting blank: an indexed sequence over a window wider than four
+megabases answers *GC under 4 Mb, letters at base resolution — zoom in*, judged over the whole
+request and not one region at a time — a whole-genome view of a cow is thirty chromosomes over the
+line and two thousand scaffolds under it, and reading the scaffolds one request apiece was a lane
+that stayed empty for minutes while it did.
+
+**A remote file's size is learnt, not assumed.** The handle reads it off the `Content-Range` of its
+first ranged request, which is how every bucket that follows `docs/hosting.md` answers — and how
+4DN's open-data bucket does not: it exposes `ETag` and nothing else, so the browser sees no
+`Content-Range` and the handle reports a size of nought. Taken at its word that was a header read
+of nought bytes, "not a BAM", and the whole alignment file fetched to find out what its first block
+said. A size the handle cannot give is asked for with a `HEAD`, whose `Content-Length` is one of the
+few headers CORS lets every page read unasked; a size nothing will state is *unknown*, never
+*empty*, and a header is still read within its bound. A BAM's browser therefore opens from its
+header alone, in three small requests, and the index — the one download it costs, tens of
+megabytes for a deep file — comes with a bar on its row while the browser is already on screen.
+
 ### 8.9 Four edges, and one gesture in one dimension
 
 A lane may be drawn on **any of the map's four edges**, and the four are peers. `top` and `bottom`
@@ -5658,6 +5683,32 @@ the letters the views are driven by, and at the other edge of the keyboard for t
 other edge of the window — and the command palette has *Open or close the stores*. The header holds
 nothing else on that side: the plug and the `+` that stood there were the Files column's own
 *connect a place…* and the file crumb's *Open a file* said a second time.
+
+**A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
+`4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
+what a reader picked it by. So the row's line goes with the file through the same road a file named
+by a Drive folder takes (`PickedFile.name`, §24.9): onto the map it becomes, onto the track it
+becomes (`addRemote`'s label, and `relabelTrack` for the file that opened a browser and was seated
+under its URL before the name could reach it), and onto the tab a row opens in a session of its own.
+
+**The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
+card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
+chips under them, the line that says what is on screen where there is one, and the files the
+session is made of behind a fold reading *8 files*. Every file is a store row with the two verbs of
+§20.5, so a reader who wants the ATAC bigWig on their own map has it a fold away from the figure
+it appears in; the lab's store lists every file its figures name (`fields.files` on the workspace
+row, the URIs `|`-joined), and the few files no figure names sit under the cards in a fold of their
+own. There is no section of files apart from the figures and no heading over the cards.
+
+**ENCODE's two shard facets are facets like any other.** A genome and a kind of file are choices of
+*which shards to read* (§24.3), and they used to be radios — one shard on screen at a time, so the
+same dataset on two assemblies, or a dataset's signal beside its peaks, could not be seen in one
+list. They are checkboxes now: tick two genomes and both shards are read, their rows shown as one
+list with the two values written on every row under the facets' own keys, so a link carries the
+choice as two ordinary facets and the matrix crosses the union. A shard read once is kept for the
+drawer's life and not read again when unticked and re-ticked; a shard the workflow has not written
+is a sentence beside the rows that were read, not a blank store; and a shard nobody has ticked shows
+*on request* where its count would go, because nothing is read for a value nobody asked for.
 
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
