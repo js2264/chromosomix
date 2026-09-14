@@ -568,7 +568,8 @@ first ranged read. A bucket that exposes neither — 4DN's open-data bucket expo
 nothing else — still works, at the cost of one more request: the viewer asks for the size with a
 `HEAD`, whose `Content-Length` every page may read without being told it may, so allow `HEAD` in
 the policy (the `AllowedMethod` list above does). A host that answers neither still gets a bounded
-header read for a BAM, and a sentence rather than a download for the index it cannot address.
+header read for a BAM; what it loses is the road below, since a search for a window needs to know
+how long the file is.
 
 ## A FASTA, and its index
 
@@ -589,6 +590,41 @@ aws s3 cp genome.fa.fai s3://my-lab/ref/
 FASTA with no index is read whole up to 300 MB and refused past it, by a sentence naming the size
 and the command above. Compress a reference only if you must: a bgzipped FASTA is read whole
 whatever its size, its `.fai` needing a `.gzi` this viewer does not read.
+
+## A BAM, with or without its index
+
+A BAM is read by region — there is no whole-file read of an alignment file that respects the
+viewer's budgets (SPECS §8.13) — so what a window costs depends on how the viewer learns *where in
+the file* its reads are. Two roads, and the host decides which:
+
+**With the index**, which is the road to publish. `samtools index reads.bam` writes `reads.bam.bai`
+(or `.csi` for a reference longer than 512 Mb); put it beside the file under the same prefix and
+the viewer finds it by name, exactly as it finds a `.tbi` or a `.fai`. A window then costs one
+ranged read of the blocks the index names. Where the index cannot sit beside the file — a presigned
+URL, a different bucket — `<url>#index=<url>` on the file's address says where it is.
+
+**Without the index**, the viewer searches. A coordinate-sorted BAM is in (reference, position)
+order, so the first read at or after a position is found by binary search over the file's bytes:
+each probe is a 128 KiB ranged read that the viewer inflates and finds a record boundary in, a
+handful of them bracket a window in a six-gigabyte file (the first guesses come from the
+position's share of the genome), and the probes are kept for the next window. Measured on an
+ENCODE alignment file of 6.5 GB: the first 2 kb window cost a dozen ranged reads and under 2 MB,
+the next window two. The row's summary says *reads located by search* and names the index it did not find. This
+road exists because the two largest public collections publish no index at all — on 2026-09-14 the
+whole of 4DN's open-data bucket held 9,977 BAMs and not one `.bai`, and ENCODE's manifest listed
+144,322 BAM rows and no index rows — and a reader of the published site cannot run samtools against
+a bucket they do not own. It costs what the index would have cost, spread over every window rather
+than paid once; it is exact to a block rather than to a record; and it begins each window 16 kb
+before its start, so a read that begins further before a window than that and still reaches into
+it is not drawn. For a host you control, the index is strictly better, and it is one command.
+
+**What no road reads** is a file that is not coordinate-sorted. Every BAM on 4DN's bucket is a Hi-C
+pipeline's alignment output, written in read-pair order for the pairs step that follows it and
+never sorted, and a search over one would answer with whatever its probes landed on — so the probes
+are held to the order the file claims, and a file that fails is refused with the two places in it
+that disagree, whatever its `@HD` line said and especially when it said nothing. The refusal names
+`samtools sort` and then `samtools index`, and says that the `.pairs` or the contact map beside such
+a file is the file to open.
 
 ## What already works, host by host
 

@@ -67,6 +67,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A BAM with no index opens, and draws its reads.** A BAM was read through its index and
+  nothing else, and a file without one was refused by name with `samtools index` — the right
+  answer for a file on a disk and the wrong one for the two hosts the store drawer offers most:
+  neither 4DN's open-data bucket nor ENCODE's public bucket publishes an index beside *any* of
+  its BAMs, so every BAM opened from either store answered *No index could be read* and drew
+  nothing. A coordinate-sorted file is now searched instead: the first read at or after a
+  position is found by binary search over the file's bytes, each probe a ranged read that inflates
+  a block or two and recovers a record boundary inside, and the probes are kept for the next
+  window. The row's summary says *reads located by search* and names the index it did not find; a
+  window then draws exactly what an indexed file draws, to a block rather than to a record, and
+  from 16 kb before its start (SPECS §8.13, docs/hosting.md). A file dropped from a disk without
+  its `.bai` opens the same way.
+
+- **A BAM whose reads are out of order is refused with the two places that show it.** Every BAM on
+  4DN's bucket is a Hi-C pipeline's alignment output, in read-pair order for the pairs step that
+  follows it, with no `@HD` line to say so. The search holds its probes to the order the file
+  claims, and refuses one that fails — *the reads at byte 43,712,010 are on chr2:1,004,120 while
+  those at byte 306,984,070, later in the file, are on chr1:9,512* — naming `samtools sort` and
+  then `samtools index`, and saying that the `.pairs` or the contact map beside such a file is the
+  one to open.
+
 - **The site signs readers in to their own Drive and Dropbox.** The Google client id, the Google
   API key and the Dropbox app key were three boxes every reader had to fill, from a project of
   their own, before *sign in* would light up. The published site is now built with the lab's

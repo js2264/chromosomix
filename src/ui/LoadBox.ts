@@ -55,7 +55,7 @@ export class LoadBox {
         // and this is the one place it can be corrected before they leave.
         text:
           'or click to choose. A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, ' +
-          'a BED or an indexed BAM opens as a browser over its genome. Drop several at once and ' +
+          'a BED or a BAM opens as a browser over its genome. Drop several at once and ' +
           'they come up together: the first map is the tab, every other map a panel beside it, ' +
           'and everything else a track on top.',
       }),

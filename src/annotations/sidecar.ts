@@ -75,11 +75,13 @@ export function splitBinsFragment(url: string): { address: string; bins?: string
  * can be scoped, without one the file is read whole. `.fai` indexes a FASTA
  * and is opportunistic in a third sense (§8.8): a small genome is read whole
  * with or without one, and a large one is read *by range* with it and refused
- * without. `.bai` and `.csi` index a BAM and are none of these: there is no
- * whole-file fallback at §12's budgets, so the pair is the unit, and a BAM
- * arriving without its index is refused by name (§8.13). One regular
- * expression for all five, because *pairing* is the same gesture whichever it
- * is; what differs is only what happens when the pairing fails.
+ * without. `.bai` and `.csi` index a BAM and are a fourth sense (§8.13): a BAM
+ * has no whole-file fallback at §12's budgets, so with one a window's bytes
+ * are read off the index, and without one they are *found* — by a search over
+ * the file's own order, a dozen probes a window, which is slower and exact to
+ * a block rather than to a record. One regular expression for all five,
+ * because *pairing* is the same gesture whichever it is; what differs is only
+ * what happens when the pairing fails.
  */
 const INDEX_SUFFIX = /\.(tbi|bai|csi|px2|fai)$/i
 

@@ -2154,17 +2154,47 @@ to it (§1). Everything below is that rule and what follows from it.
 per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
 this section, each with its own reason.
 
-**The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
-file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
-gigabytes and the demo yeast one is not the case worth designing for. The index is the only thing
-that makes reading by region bounded, so a BAM without one is refused **by name**, and the refusal
-says `samtools index`. That is the narrow carve-out §1 states positively, and it costs nothing
-anywhere else: §8.11's opportunism is about an index that makes a working read *faster*, and it is
-unchanged for every format it was written about. A `.bai` and a `.csi` are both read, decided by
-their magic bytes rather than their suffix, and both spellings `samtools index` writes are paired
-with the file they belong to. A remote file names its own — `<url>.bai`, guessed and never probed,
-since §12 has no request to spend discovering that a file has no index — and where the guess cannot
-work, a presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+**A BAM is read by region and nothing else**: there is no zoom level in the file, no summary layer,
+and no whole-file read that respects §12 — a human alignment file is tens of gigabytes and the demo
+yeast one is not the case worth designing for. What makes reading by region bounded is knowing
+*where in the file* a window's reads are, and there are two ways to know it. The **index** is the
+first and the one to prefer: a `.bai` and a `.csi` are both read, decided by their magic bytes
+rather than their suffix, and both spellings `samtools index` writes are paired with the file they
+belong to. A remote file names its own — `<url>.bai`, guessed and never probed, since §12 has no
+request to spend discovering that a file has no index — and where the guess cannot work, a
+presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+
+**The search is the second**, for a file that has no index at all, and it exists because the two
+hosts the store drawer offers most publish none: on 2026-09-14 the whole of 4DN's open-data bucket
+held 9,977 BAMs and not one index object, and ENCODE's file manifest listed 144,322 BAM rows and not
+one index row — so a reader of the published site who opened a BAM from either was refused by name
+for something they could not fix. A coordinate-sorted file is its own index, slowly: its records
+are in (reference, position) order, so the first record at or after a position is found by binary
+search over byte offsets, each probe a ranged read of two blocks that inflates them and recovers a
+record boundary inside — a BGZF block from its own length landing on the next block's header, and a
+record from its fields being in range, its name printable and NUL-terminated at the length it
+states, and the record after it passing the same checks (`bam/search.ts`). A handful of probes
+bracket a window in a six-gigabyte file — the first guesses interpolate from the position's share
+of the genome laid end to end, where halving from the middle would take sixteen — and the probes
+are kept, so the next window over the same file starts from them; the two rows a BAM imports as
+share one search, joining a locate in flight rather than running their own. The result is the same byte span an index would give, to the block rather than
+to the record, and everything after it — the read, the inflation, the walk from the record offset —
+is the same code, which is what makes a file without an index draw exactly what one with an index
+draws. The row's summary says which road it is on. Two things the search is not: it is not exact
+below 16 kb — the walk begins that far before the window, the resolution a BAI's linear index has,
+so a read beginning further before the window than that and still reaching into it is not drawn —
+and it is not free, so a searched file answers one window at a time and refuses a whole-genome
+view's window per contig, or any window over four megabases, before a probe is made.
+
+The refusal that remains is **sort order**, and the search sharpens it. A name-sorted file has no
+order to search, and a search over one would answer with whatever the probes landed on — so every
+probe is held to the order the file claims, against both its neighbours, and a file that fails is
+refused with the two offsets that disagree, whatever its `@HD` line said and especially when it said
+nothing. That is how the file this refusal is read on is told apart from one that merely lacks an
+index: every BAM on 4DN's bucket is a Hi-C pipeline's alignment output, written in read-pair order
+for the pairs step that follows it and never sorted, and the refusal says so, and says the `.pairs`
+or the contact map is the file to open. A header that claims `SO:queryname` or `SO:unsorted` is
+refused on the claim alone, as before, and the refusal says `samtools sort`.
 
 The second refusal is **sort order**, and it is not a technicality. Every byte this reader fetches is
 addressed by an index that describes a coordinate-sorted file; a name-sorted one handed to a region
@@ -2214,8 +2244,10 @@ alignment lane differs from every other kind, and it follows from having no summ
 a window is a full read of the reads under it, so a window can be legitimately unanswerable. The
 forecast comes from the index alone — the byte spans a region resolves to, summed before anything is
 fetched — so a window too deep to draw is refused at **zero data requests** rather than discovered
-part-way through a fetch. What the lane then shows is its name, an empty band, and a sentence naming
-the number and the way forward.
+part-way through a fetch; without an index it comes from the search's two locates, which are
+requests, and the four-megabase rule above is what keeps them from being made for a window the cap
+would refuse. What the lane then shows is its name, an empty band, and a sentence naming the number
+and the way forward.
 
 The estimate that would have filled that space was considered and refused. The BAI linear index
 gives compressed **bytes** per 16 kb window, which is not depth: it varies with read length and with
@@ -2857,9 +2889,9 @@ Every refusal names the file's actual state and the concrete fix.
 | Range refers to unknown label | List genomes and contigs, truncated |
 | Coordinate suffix on a genome name | State that genome ranges are whole-genome |
 | Remote: ranges unsupported / CORS blocked | Distinguish the two; name the host |
-| BAM with no index beside it | State that a BAM is read by region and has no whole-file fallback, name the sidecar to drop, and give `samtools index <file>`. Distinct from the row below: "there is no index" and "the index you gave me is not one" have different fixes (§8.13) |
-| BAM whose index cannot be read | Name what went wrong reading it, and give `samtools index <file>` to re-make it |
-| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>` |
+| BAM with no index beside it | Not a refusal: read by search (§8.13), and the row's summary says so and names the index it did not find. Refused only where the file's length cannot be learnt, since a search needs one — and then name the `#index=<url>` convention |
+| BAM whose index cannot be read | Read by search, the summary naming the index that did not read and what went wrong with it |
+| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>`. Where the header claimed otherwise or said nothing and the search found the reads out of order, name the two places that show it, give `samtools sort` then `samtools index`, and say that a Hi-C pipeline's alignment file is in read-pair order and not made for browsing |
 | CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name; a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
 
 ---

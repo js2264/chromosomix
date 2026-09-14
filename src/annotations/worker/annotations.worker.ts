@@ -24,7 +24,8 @@ import {
 } from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
-import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
+import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
+import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
 import { pileOf } from '../bam/reads'
 import {
@@ -340,7 +341,15 @@ const vectors = new Map<string, BinVector>()
 interface OpenBam {
   handle: BlobFile | RemoteFile
   header: BamHeader
-  index: BamIndex
+  /** The index, where the file has one. */
+  index: BamIndex | null
+  /**
+   * What stands in for the index where the file has none (`bam/search.ts`).
+   * Exactly one of the two is set.
+   */
+  search: BamSearch | null
+  /** Why the file is searched rather than indexed, for the row's summary; empty with an index. */
+  searched: string
   /** The file's own length, for bounding the last block of a span. */
   size: number
   /** The map's name for a sequence → this file's reference id. */
@@ -2097,51 +2106,66 @@ async function loadBam(
   }
 
   const indexSource = indexSourceFor(source)
-  if (indexSource === null) {
-    throw new Error(
-      `${source.name} has no index beside it. Unlike every other format here a BAM has no ` +
-        'whole-file fallback — it is read by region, and the index is the only thing that ' +
-        `makes that bounded. Drop \`${source.name}.bai\` alongside it, or run ` +
-        `\`samtools index ${source.name}\`.`,
-    )
-  }
-  const key = fileKey(source, indexSource)
+  // Keyed on the file and its index where there is one, and on the file alone
+  // where a search stands in for it: the two rows then share one search and
+  // its probes, which is the whole reason the probes are kept.
+  const key = indexSource === null ? `${cacheKey(source)}|search` : fileKey(source, indexSource)
   const shared = openFiles.get(key)
-  let index: BamIndex
-  // Read once per file, not once per row. A BAI for a human WGS alignment is
-  // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
-  // the depth and the pile — so paying that twice and throwing the second copy
-  // away is the whole cost of the second row.
-  if (shared !== undefined) index = shared.open.index
-  else
-    try {
-      // The one download a BAM costs, and for a deep alignment file tens of
-      // megabytes of it: reported, so the row says how far it has got.
-      index = await parseBamIndex(await handleFor(indexSource).readFile({ onProgress: report }))
-    } catch (err) {
-      const why = err instanceof Error ? err.message : String(err)
-      // Three different fixes, so three different messages. A reader who has just
-      // dropped a file wants to know which of them happened.
-      //
-      // The remote case is the one worth separating: the sidecar URL there was
-      // **guessed** — `<url>.bai`, never probed, because §12 has no request to
-      // spend finding out that a file has no index — so the commonest failure is
-      // not a corrupt index but no index at that address at all. Saying "could
-      // not be read" would send a reader looking for a broken file that does not
-      // exist, when what they need is the `#index=` convention or a `samtools
-      // index` run on the host.
-      if (source.kind === 'remote') {
+  let index: BamIndex | null = null
+  let search: BamSearch | null = null
+  let searched = ''
+  if (shared !== undefined) {
+    index = shared.open.index
+    search = shared.open.search
+    searched = shared.open.searched
+  } else {
+    // Read once per file, not once per row. A BAI for a human WGS alignment is
+    // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
+    // the depth and the pile — so paying that twice and throwing the second
+    // copy away is the whole cost of the second row.
+    if (indexSource === null) searched = 'no index dropped with it'
+    else
+      try {
+        // The one download a BAM costs, and for a deep alignment file tens of
+        // megabytes of it: reported, so the row says how far it has got.
+        index = await parseBamIndex(await handleFor(indexSource).readFile({ onProgress: report }))
+      } catch (err) {
+        // The sidecar of a remote file was **guessed** — `<url>.bai`, never
+        // probed, because §12 has no request to spend finding out that a file
+        // has no index — and on the two buckets the store drawer offers most
+        // the guess is wrong for every BAM they hold, since neither publishes
+        // an index at all. So an index that is not there is not a refusal any
+        // more: it is the road to `bam/search.ts`, and the row's summary says
+        // which road it is on and why.
+        const why = err instanceof Error ? err.message : String(err)
+        searched =
+          indexSource.kind === 'remote'
+            ? `no ${indexSource.url.split('?')[0].split('/').pop() ?? 'index'} beside it`
+            : `${indexSource.name} could not be read (${why})`
+      }
+    if (index === null) {
+      if (!Number.isFinite(size) || size <= 0) {
         throw new Error(
-          `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
-            'A BAM is read by region and cannot be opened without one. If the index is published ' +
-            `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+          `${source.name} has ${searched}, and its length could not be learnt, so its reads cannot be ` +
+            'located by search either. A BAM is read by region: publish its index beside it, or name ' +
+            `one with \`${source.kind === 'remote' ? source.url : source.name}#index=<url of the .bai>\`.`,
         )
       }
-      throw new Error(
-        `${source.name}'s index could not be read: ${why} ` +
-          `Re-make it with \`samtools index ${source.name}\`.`,
-      )
+      try {
+        // Reported as bytes with no total — the search does not know how many
+        // probes it will take — so the row says it is on its way.
+        search = await BamSearch.open(handle, size, header, (bytes) => report(bytes, 0))
+      } catch (err) {
+        if (err instanceof UnsortedError) throw new Error(unsortedMessage(source.name, header, err))
+        const why = err instanceof Error ? err.message : String(err)
+        throw new Error(
+          `${source.name} has ${searched} and could not be read by search: ${why}. A BAM is read by ` +
+            `region; run \`samtools index ${source.name}\` and publish the index beside it, or name ` +
+            'one with `#index=<url of the .bai>`.',
+        )
+      }
     }
+  }
 
   // Renamed into the map's vocabulary at the door (§5.9), exactly as a bigWig
   // is and for the same reason: the contig list this reports, the overlap it is
@@ -2171,6 +2195,8 @@ async function loadBam(
     handle,
     header,
     index,
+    search,
+    searched,
     size,
     refIdOf,
     refNames: header.refs.map((ref) => ref.name),
@@ -2183,8 +2209,89 @@ async function loadBam(
     format: 'bam',
     contigs,
     overlap: overlapReport(contigs, mapContigs, renaming),
-    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${index.format.toUpperCase()}`,
+    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${
+      index !== null ? index.format.toUpperCase() : `${searched} — reads located by search`
+    }`,
   }
+}
+
+/**
+ * Why a file whose reads are out of order cannot be read by region, with the
+ * two places in it that prove they are, and what to do about it.
+ *
+ * The Hi-C sentence is there because that is the file this message is read
+ * on: every BAM on 4DN's open-data bucket is a pipeline's alignment output,
+ * written in read-pair order for the pairs step that follows it, and a reader
+ * who opened one from the store drawer wanted the reads and was never told
+ * the file is not that kind of file.
+ */
+function unsortedMessage(name: string, header: BamHeader, err: UnsortedError): string {
+  const claim =
+    header.sortOrder === 'coordinate'
+      ? 'its header says SO:coordinate, but'
+      : 'its header has no @HD line to say so, and'
+  return (
+    `${name} is not in coordinate order — ${claim} the reads at byte ${count(err.before.block)} are on ` +
+    `${placeLabel(err.before, header.refs)} while those at byte ${count(err.after.block)}, later in the ` +
+    `file, are on ${placeLabel(err.after, header.refs)}. Reads are drawn by region, which needs the file ` +
+    `sorted and indexed: run \`samtools sort -o sorted.bam ${name}\` and \`samtools index sorted.bam\`. ` +
+    'The alignment file a Hi-C pipeline writes is in read-pair order for its pairs step and is not made ' +
+    'for browsing; its .pairs or its contact map is the file to open.'
+  )
+}
+
+/**
+ * How wide a window a searched file will locate, summed over its regions.
+ *
+ * A search is requests — a dozen ranged reads to bracket one window — so a
+ * whole-genome view's window per contig would be dozens of searches for a
+ * lane the byte cap (§12) would refuse once they had all answered. Refused
+ * here instead, for the price of none: four megabases of any alignment file
+ * deep enough to be worth a BAM is past the cap.
+ */
+const SEARCH_MAX_SPAN = 4_000_000
+
+/** The note a searched file answers a window with instead of searching, or `null` to go ahead. */
+function searchDeclines(open: OpenBam, wanted: readonly Region[]): string | null {
+  if (open.search === null) return null
+  const span = wanted.reduce((sum, region) => sum + (region.end - region.start), 0)
+  if (wanted.length > 1 || span > SEARCH_MAX_SPAN) return `${spanLabel(span)} without an index — zoom in`
+  return null
+}
+
+function spanLabel(bp: number): string {
+  return bp >= 1_000_000 ? `${trim(bp / 1_000_000)} Mb` : `${trim(bp / 1000)} kb`
+}
+
+/**
+ * The byte spans of a window: from the index, or by search where there is none.
+ *
+ * The one seam between the two roads. Everything after it — the read, the
+ * inflation, the walk from `dataFrom` — is the same code over the same shape,
+ * which is what lets a file without an index draw exactly what one with an
+ * index draws.
+ */
+async function spansOf(
+  open: OpenBam,
+  refId: number,
+  region: Region,
+  id: number,
+  /** The caller's byte cap, so a search can stop at *over it* rather than locate an end it will not read to. */
+  cap: number,
+): Promise<BamByteSpan[]> {
+  const start = Math.max(0, Math.floor(region.start))
+  const end = Math.ceil(region.end)
+  if (open.index !== null) return chunksFor(open.index, refId, start, end, open.size)
+  if (open.search === null) return []
+  return open.search.spansFor(
+    refId,
+    start,
+    end,
+    async () => {
+      if (!(await stillWanted(id))) throw abortError()
+    },
+    cap,
+  )
 }
 
 /**
@@ -2267,20 +2374,19 @@ async function alignmentSamples(
   )
   if (wanted.length === 0) return { basesPerPixel, regions: [], extent: null }
 
+  // Without an index the spans come from a search, and a search is requests:
+  // one window at a time, never a window per contig.
+  const declined = searchDeclines(open, wanted)
+  if (declined !== null) return { basesPerPixel, regions: [], extent: null, note: declined }
+
   // The forecast, before a byte of alignment data is read. Every region at
   // once, because a whole-genome view asks for one window per contig and
   // refusing them one at a time would draw a lane that is partly there.
-  const plans = wanted.map((region) => ({
-    region,
-    refId: refIdOf(region.contig) as number,
-    spans: chunksFor(
-      open.index,
-      refIdOf(region.contig) as number,
-      Math.max(0, Math.floor(region.start)),
-      Math.ceil(region.end),
-      open.size,
-    ),
-  }))
+  const plans: Array<{ region: Region; refId: number; spans: BamByteSpan[] }> = []
+  for (const region of wanted) {
+    const refId = refIdOf(region.contig) as number
+    plans.push({ region, refId, spans: await spansOf(open, refId, region, id, WINDOW_BYTE_CAP) })
+  }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > WINDOW_BYTE_CAP) {
     return {
@@ -2459,17 +2565,11 @@ async function readsFor(
     return { ...empty, note: `${trim(span / 1000)} kb — too wide to draw reads` }
   }
 
-  const plans = wanted.map((region) => ({
-    region,
-    refId: refIdOf(region.contig) as number,
-    spans: chunksFor(
-      open.index,
-      refIdOf(region.contig) as number,
-      Math.max(0, Math.floor(region.start)),
-      Math.ceil(region.end),
-      open.size,
-    ),
-  }))
+  const plans: Array<{ region: Region; refId: number; spans: BamByteSpan[] }> = []
+  for (const region of wanted) {
+    const refId = refIdOf(region.contig) as number
+    plans.push({ region, refId, spans: await spansOf(open, refId, region, id, READ_BYTE_CAP) })
+  }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > READ_BYTE_CAP) {
     return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
