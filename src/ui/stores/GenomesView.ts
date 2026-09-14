@@ -17,6 +17,7 @@
  */
 
 import { button, el, fmt } from '../dom'
+import { withNewMark } from '../rowVerbs'
 import { valueOf } from '../../state/facets'
 import { fetchStore, type StoreEntry } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
@@ -156,10 +157,12 @@ export class GenomesView {
         { class: 'gallery-card-actions' },
         session === null
           ? el('span', { class: 'hint', text: 'No session was published for this genome.' })
-          : button('open with its tracks', () => this.props.host.open(session), {
-              class: 'btn btn-primary',
-              title: `${session.label} — the sequence and every track IGV ships for it, in the 1D browser.`,
-            }),
+          : withNewMark(
+              button('open with its tracks', () => this.props.host.open(session), {
+                class: 'btn btn-primary',
+                title: `${session.label} — the sequence and every track IGV ships for it, in the 1D browser.`,
+              }),
+            ),
       ),
       genome.files.length === 0
         ? null

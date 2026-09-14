@@ -10,6 +10,7 @@
  */
 
 import { button, el, fmt } from '../dom'
+import { icon } from '../icons'
 import type { StoreEntry } from '../../state/store'
 import type { StoreHost } from './host'
 
@@ -33,15 +34,31 @@ export class SelectionTray {
     const workspaces = selected.filter((entry) => entry.kind === 'workspace').length
     const tracks = selected.length - maps - workspaces
     this.el.classList.remove('hidden')
+    // The same two verbs a row has (`ui/rowVerbs.ts`), over everything ticked.
+    // *Add* joins each file to the session in front, one after another, which
+    // is what pressing `+` on each row would do; *open together* is the tray's
+    // own verb, a picture in a session of its own.
+    const files = selected.filter((entry) => entry.kind !== 'workspace')
+    const add = button('add to this session', () => files.forEach((entry) => this.props.host.add(entry)), {
+      class: 'btn btn-quiet portal-tray-verb',
+      title:
+        files.length === selected.length
+          ? 'Each file ticked joins the tab in front: a map beside the map, anything else as a track.'
+          : 'Each file ticked joins the tab in front. A session ticked is tabs of its own and stays out of this.',
+    })
+    add.prepend(icon('plus', { size: 14 }))
+    const together = button('open together', () => this.props.host.openTogether(selected), {
+      class: 'btn btn-primary portal-tray-verb',
+      title:
+        maps > 0
+          ? 'In a session of its own: the first map ticked opens as the tab; every other map joins it as a panel and everything else as a track.'
+          : 'In a session of its own: the first file ticked opens as a genome browser; every other one joins it as a track.',
+    })
+    together.prepend(icon('new-session', { size: 14 }))
     this.el.replaceChildren(
       el('span', { class: 'portal-tray-text', text: traySummary(selected.length, maps, tracks, workspaces) }),
-      button('open together', () => this.props.host.openTogether(selected), {
-        class: 'btn btn-primary',
-        title:
-          maps > 0
-            ? 'The first map ticked opens as the tab; every other map joins it as a panel and everything else as a track.'
-            : 'The first file ticked opens as a genome browser; every other one joins it as a track.',
-      }),
+      ...(files.length === 0 ? [] : [add]),
+      together,
       button('clear', this.props.onClear, { class: 'btn btn-quiet', title: 'Untick everything.' }),
     )
   }

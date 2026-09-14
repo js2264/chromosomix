@@ -1880,6 +1880,31 @@ mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarte
 figure, so it must stay inside `VectorPage`'s op list, while anything that is a *control* must stay
 in the DOM layer, which the figure geometry does not build.
 
+**The sequence lane is the one lane whose *picture* changes with the zoom** rather than only its
+resolution: GC content per bin until a base owns a pixel, and then the residues themselves. Both
+come out of the annotations worker, which holds the FASTA and answers a window at a time exactly as
+it answers a bigWig (§8.2), and the FASTA is also the assembly — every sequence and its exact length
+— which is what lets a genome be browsed with nothing else open (§5.8).
+
+**How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
+read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
+and forty, and holding one is what makes every zoom draw GC content, every pan free and the motif
+search (§18) possible. Over it the file is read **by its index**, `samtools faidx`'s five columns
+(`annotations/fai.ts`): the assembly is the index's first two columns, which are a `chrom.sizes`, and
+a window of residues is one ranged read at the byte the index puts it at — so a three-gigabase genome
+is on screen the moment a kilobyte of index has arrived, and nothing of the sequence is fetched until
+a lane asks for a window. The index is the one named on the URL (`<url>#index=<url>`, §8.13) or
+dropped beside the file, and otherwise `<url>.fai`, guessed and never probed on the terms every other
+sidecar is. What an indexed sequence gives up is everything that needed the whole of it in memory:
+its GC lane draws nothing over a window wider than four megabases and its readout says why, the
+motif search declines it in a note naming the line, and an alignment lane colours its mismatches
+only from the slab the sequence lane last drew, never fetching for one (§8.13). Over the line with no
+index that can be found, the file is read whole as it always was, and refused past 300 MB by a
+sentence naming the size, `samtools faidx`, and where to put the result. A bgzipped FASTA is read
+whole whatever its size, its `.fai` needing a `.gzi` beside it that this viewer does not read. The
+generator writes the index into every IGV genome's row and session (§24.3), and a lane's summary
+says *read by range from its index* so a reader knows which of the two they have.
+
 ### 8.9 Four edges, and one gesture in one dimension
 
 A lane may be drawn on **any of the map's four edges**, and the four are peers. `top` and `bottom`
@@ -5010,7 +5035,7 @@ are Chromium's, and another engine may impose more.
 ## 20. Connected folders
 
 Every door to a file the app had asked *which file* once and then closed: the landing page, the
-header's `+`, a URL box. That is the right shape for opening one thing and the
+file crumb's *Open a file*, a URL box. That is the right shape for opening one thing and the
 wrong shape for the way people work with a directory of data, which is to open one, look, open the
 next, and keep going. A **connected folder** is a place the window keeps, browsable in a column, for
 as long as the reader wants it.
@@ -5108,10 +5133,18 @@ which promises to list everything the app can do.
 
 ### 20.5 Two verbs on a row
 
-Clicking a file **loads it into the tab that is open**: a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to — the same routing a dropped
-file takes and the same promise the header's `+` makes. The `→` at the end of the row says it out
-loud.
+Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
+`+` that **adds the file to the session in front** — a second map beside the one that is there,
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
+file takes — and a window with a `+` where its corner was that **opens it in a session of its
+own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
+the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
+tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
+with two marks in one store and one in the next is a row a reader has to think about. A workspace
+row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
+same pair stands on a store's rows (§24.2), on a folder's rows here, and, with words beside the
+marks, on a gallery card and on the tray under a portal. Clicking a folder row's name is the first
+verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks card, onto the content
@@ -5123,8 +5156,8 @@ maps card's, the deck's add row and an empty cell of a deck stands *from a conne
 (`ui/pickFromFolders.ts`): the Files column's own folder view in a dialog, over every place the
 window is connected to — a directory on this machine included — and a row that hands back the
 file, with the credential the listing used. It replaces a browser that could look at buckets and
-nothing else; with nothing connected it says so and names the plug, rather than offering an empty
-listing.
+nothing else; with nothing connected it says so and names the Files column's *connect a place…*,
+rather than offering an empty listing.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
@@ -5603,12 +5636,12 @@ column before a viewer knows it.
 ### 24.2 Where stores are offered: the tiles, the drawer, and the four fronts
 
 **The landing page has two things on it, and they are named.** *Load files* is the drop area and a
-URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* and the header's `+` reuse in a
-dialog with the other verb behind it. *Connect to a store* is a row of tiles — the lab's own
+URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* reuses in a dialog with the other
+verb behind it. *Connect to a store* is a row of tiles — the lab's own
 figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one by
 URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
 picker's URL box, its *browse…* and its *private buckets…* are gone: a bucket is a place and is
-connected from the header's plug (§20), and the *Hubs* dropdown of eighteen shelves was this row
+connected from the Files column (§20), and the *Hubs* dropdown of eighteen shelves was this row
 under another name.
 
 **Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
@@ -5619,8 +5652,12 @@ itself, so a reader can narrow a catalogue beside the map they spent an hour on.
 window** rather than one per tab, on the Files column's argument (§20.4): a store is not a fact
 about the file in front, and a switch of tab must not lose a catalogue somebody was half way
 through narrowing. Its head carries the store's mark and name, the same row of tiles small, for
-switching without closing, and *copy link*. The header has a toggle for it beside the plug and the
-`+`, and the command palette has *Open a store*.
+switching without closing, and *copy link*. The header has a toggle for it beside the Files
+column's, on the backslash key — punctuation, like the console's backtick, so it cannot collide with
+the letters the views are driven by, and at the other edge of the keyboard for the panel at the
+other edge of the window — and the command palette has *Open or close the stores*. The header holds
+nothing else on that side: the plug and the `+` that stood there were the Files column's own
+*connect a place…* and the file crumb's *Open a file* said a second time.
 
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:

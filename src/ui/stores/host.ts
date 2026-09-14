@@ -18,8 +18,7 @@
  * tabs and opens as them, through the road `?config=` takes.
  */
 
-import { button } from '../dom'
-import { iconButton } from '../icons'
+import { rowVerbs } from '../rowVerbs'
 import type { StoreEntry } from '../../state/store'
 
 export interface StoreHost {
@@ -36,37 +35,17 @@ export interface StoreHost {
   tabEmpty(): boolean
 }
 
-/** The word on the primary verb, given where it will land. */
-export function openLabel(host: StoreHost): string {
-  return host.tabEmpty() ? 'open' : 'open in a new tab'
-}
-
 /**
- * The verbs on one row.
- *
- * `open` always; `add` only when there is something to add to, because on an
- * empty tab the two are one gesture and a row with two buttons that do the
- * same thing is a row a reader has to think about. A workspace has `open`
+ * The verbs on one row: the pair every file row in the app carries
+ * (`ui/rowVerbs.ts`), bound to the two roads above. A workspace has the second
  * alone: it is tabs, not a file, and the config road decides where they land.
  */
 export function rowActions(entry: StoreEntry, host: StoreHost): HTMLElement[] {
-  const open = iconButton(
-    'arrow-right',
-    entry.kind === 'workspace'
-      ? `Open ${entry.label} — a saved session, as its own tab`
-      : host.tabEmpty()
-        ? `Open ${entry.label} in this tab`
-        : `Open ${entry.label} in a new tab. The one in front is left as it is.`,
-    () => host.open(entry),
-    { class: 'btn-icon store-row-open', size: 14 },
-  )
-  if (entry.kind === 'workspace' || host.tabEmpty()) return [open]
-  const add = button('add', () => host.add(entry), {
-    class: 'btn btn-quiet store-row-add',
-    title:
-      entry.kind === 'map'
-        ? `Add ${entry.label} beside the map in front, as a panel of the deck`
-        : `Add ${entry.label} to the tab in front, as a track`,
+  return rowVerbs({
+    label: entry.label,
+    kind: entry.kind,
+    tabEmpty: host.tabEmpty(),
+    onAdd: () => host.add(entry),
+    onNew: () => host.open(entry),
   })
-  return [add, open]
 }

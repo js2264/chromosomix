@@ -17,6 +17,7 @@
 
 import { button, el } from '../dom'
 import { icon } from '../icons'
+import { withNewMark } from '../rowVerbs'
 import { valueOf } from '../../state/facets'
 import type { StoreEntry } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
@@ -88,10 +89,12 @@ export class GalleryView {
       el(
         'div',
         { class: 'gallery-card-actions' },
-        button('open', () => this.props.host.open(entry), {
-          class: 'btn btn-primary',
-          title: `Open ${entry.label} as its own tab, with every track it names.`,
-        }),
+        withNewMark(
+          button('open', () => this.props.host.open(entry), {
+            class: 'btn btn-primary',
+            title: `Open ${entry.label} as its own tab, with every track it names.`,
+          }),
+        ),
       ),
     )
   }

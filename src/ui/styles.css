@@ -5424,13 +5424,37 @@ canvas.is-frozen {
   gap: 0.15rem;
 }
 
-.store-row-add {
-  font-size: var(--step--2);
-  padding: 0.15rem 0.4rem;
+/* The two verbs on a row — add here, open in a new session — as one pair of
+   marks wherever a file is offered (`ui/rowVerbs.ts`). Quiet until pointed
+   at, so a list of forty rows is forty names and not eighty buttons, and the
+   same square whichever verb it is: the difference between them is the glyph
+   and nothing else. */
+.row-verb {
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--text-dim);
 }
 
-.store-row-open {
-  padding: 0.25rem;
+.row-verb:hover,
+.row-verb:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* A labelled button carrying the new-session mark before its word. */
+.btn-marked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.portal-tray-verb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* The tray along the bottom: what is ticked, and the one thing to do with it. */
@@ -7488,26 +7512,24 @@ canvas.is-frozen {
   color: var(--danger);
 }
 
-/* The load arrow, on a file row. Held at the end of the row and revealed on
-   hover or focus rather than drawn on every line: forty rows each carrying a
-   permanent arrow is forty marks competing with the names, which are what a
-   reader is actually scanning. It stays visible while focused so the keyboard
-   path is never chasing something that is not there. */
-.folder-entry-load {
-  flex: 0 0 auto;
+/* The two verbs on a file row (`ui/rowVerbs.ts`). Held at the end of the row
+   and revealed on hover or focus rather than drawn on every line: forty rows
+   each carrying two permanent marks is eighty marks competing with the names,
+   which are what a reader is actually scanning. They stay visible while
+   focused so the keyboard path is never chasing something that is not there. */
+.folder-entry .row-verb {
   opacity: 0;
-  padding: 0.1rem;
 }
 
-.folder-entry:hover .folder-entry-load,
-.folder-entry:focus-within .folder-entry-load,
-.folder-entry-load:focus-visible {
+.folder-entry:hover .row-verb,
+.folder-entry:focus-within .row-verb,
+.folder-entry .row-verb:focus-visible {
   opacity: 1;
 }
 
 @media (hover: none) {
-  /* No hover to reveal it with. */
-  .folder-entry-load {
+  /* No hover to reveal them with. */
+  .folder-entry .row-verb {
     opacity: 1;
   }
 }

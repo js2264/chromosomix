@@ -37,17 +37,11 @@ const LUCIDE = [
   'layers',
   'grip-vertical',
   'plus',
-  // The header's own add button. A *file* with a `+` on it rather than the bare
-  // `+` beside it in the tab strip, because that one adds a tab and this one
-  // adds a file to the tab you are in — two marks that must not be the same
-  // mark, standing one row apart.
-  'file-plus',
-  // The Files panel, and the button that fills it. `folder-tree` is what the
-  // panel *holds* — a directory read one level at a time — on the same rule its
-  // four siblings follow: `layers` for the annotation stack, `beaker` for what
-  // can be computed. `plug` is the gesture beside it, because what that button
-  // does is attach a place rather than bring in a file, which is the whole
-  // distinction it has to draw against the `file-plus` standing next to it.
+  // The Files panel. `folder-tree` is what the panel *holds* — a directory read
+  // one level at a time — on the same rule its four siblings follow: `layers`
+  // for the annotation stack, `beaker` for what can be computed. `plug` is the
+  // Connect dialog's own mark, on its tiles and in the palette: what it does is
+  // attach a place rather than bring in a file.
   'folder-tree',
   'plug',
   // Which kind of place a connected folder is, on its own row: a disk on this
@@ -173,6 +167,23 @@ const HAND = {
     ['path', { d: 'M3 6h18' }],
     ['path', { d: 'M3 12h11' }],
     ['path', { d: 'M3 18h5' }],
+  ],
+  /**
+   * Open in a new session: a window with a `+` where its top-right corner was.
+   *
+   * The second exception, and made of the same material as the first. The
+   * frame is Lucide's own — the open-cornered square of
+   * `square-arrow-out-up-right`, copied to the unit — and the `+` in the
+   * corner is `plus` at half its size on the same grid, so the two marks a
+   * row carries (`plus` beside this) are one glyph and a frame around it. The
+   * set has the frame with an *arrow* leaving it, which is *open elsewhere*;
+   * what a store row and a folder row offer is *open as a new thing*, and an
+   * arrow says the wrong half of that.
+   */
+  'new-session': [
+    ['path', { d: 'M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6' }],
+    ['path', { d: 'M18 2v8' }],
+    ['path', { d: 'M14 6h8' }],
   ],
 }
 

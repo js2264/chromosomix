@@ -140,14 +140,6 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M12 5v14"}],
     ],
   },
-  'file-plus': {
-    shapes: [
-    ['path', {"d":"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"}],
-    ['path', {"d":"M14 2v5a1 1 0 0 0 1 1h5"}],
-    ['path', {"d":"M9 15h6"}],
-    ['path', {"d":"M12 18v-6"}],
-    ],
-  },
   'folder-tree': {
     shapes: [
     ['path', {"d":"M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"}],
@@ -623,6 +615,13 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M3 6h18"}],
     ['path', {"d":"M3 12h11"}],
     ['path', {"d":"M3 18h5"}],
+    ],
+  },
+  'new-session': {
+    shapes: [
+    ['path', {"d":"M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"}],
+    ['path', {"d":"M18 2v8"}],
+    ['path', {"d":"M14 6h8"}],
     ],
   },
   'github': {

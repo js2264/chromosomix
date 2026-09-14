@@ -165,17 +165,27 @@ describe('the rows', () => {
     expect(textsOf(first, '.portal-chip')).toEqual(['HFF', 'Hi-C'])
   })
 
-  it('opens a row by its name, and adds it only when there is something to add to', () => {
+  it('opens a row by its name, and carries the same two verbs on every file row', () => {
     const empty = build()
-    expect(buttonNamed(empty.el, 'add')).toBeNull()
     ;(all<HTMLButtonElement>(empty.el, '.portal-name')[0]).click()
     expect(empty.opened.map((entry) => entry.label)).toEqual(['HFF map'])
+    // Both marks whatever the tab holds — on an empty one they land in the same
+    // place, and the tooltips say so rather than one of them vanishing.
+    expect(all(empty.el, '.row-verb-add')).toHaveLength(4)
+    expect(all(empty.el, '.row-verb-new')).toHaveLength(4)
+    expect(all<HTMLButtonElement>(empty.el, '.row-verb-add')[0].title).toContain('which is empty')
 
     const holding = build({ empty: false })
-    const adds = all<HTMLButtonElement>(holding.el, '.store-row-add')
+    const adds = all<HTMLButtonElement>(holding.el, '.row-verb-add')
     expect(adds).toHaveLength(4)
     adds[1].click()
     expect(holding.added.map((entry) => entry.label)).toEqual(['HFF CTCF'])
+    expect(adds[0].title).toContain('as a panel of the deck')
+    expect(adds[1].title).toContain('as a track')
+    all<HTMLButtonElement>(holding.el, '.row-verb-new')[2].click()
+    expect(holding.opened.map((entry) => entry.label)).toEqual(['K562 map'])
+    // Icons only: the words are in the tooltips.
+    expect(adds[0].textContent).toBe('')
   })
 })
 

@@ -48,6 +48,8 @@ import {
 } from '../browse/connected'
 import { writeFileDrag } from './fileDrag'
 import type { ConnectedFolder, FolderEntry, PickedFile } from '../browse/folder'
+import { routeOf } from '../browse/route'
+import { rowVerbs } from './rowVerbs'
 
 /** Where the panel's last-opened folder is remembered, so a reload comes back to it. */
 const LAST_FOLDER = 'metacooler-viewer:files-last'
@@ -87,12 +89,21 @@ export function folderMark(kind: ConnectedFolder['kind']): IconName {
 
 export interface FilesCardProps {
   /**
-   * Load one file into whatever is on screen — the `→`, and a plain click.
+   * Load one file into whatever is on screen — the `+` on the row, and a
+   * plain click.
    *
    * The shell routes it: a map beside the map, anything else on top, an empty
    * tab filled rather than added to.
    */
   onLoad(picked: PickedFile): void
+  /**
+   * Open one file as a session of its own — the second mark on the row
+   * (`ui/rowVerbs.ts`). The shell fills the tab in front if it is empty and
+   * opens a new one otherwise, which is what a store row does.
+   */
+  onOpenNew(picked: PickedFile): void
+  /** Whether the tab in front holds nothing, which is what the two verbs' tooltips say. */
+  tabEmpty(): boolean
   /** Open the Connect dialog. Owned by the shell, because it is a door to a folder. */
   onConnect(): void
 }
@@ -110,14 +121,14 @@ export class FilesCard {
   constructor(private readonly props: FilesCardProps) {
     this.view = new FolderBrowseView({
       onPick: (entry, folder) => void this.load(entry, folder),
-      rowExtras: (entry, folder) => [
-        iconButton(
-          'arrow-right',
-          `Load ${entry.name} into this tab`,
-          () => void this.load(entry, folder),
-          { class: 'btn-icon folder-entry-load', size: 14 },
-        ),
-      ],
+      rowExtras: (entry, folder) =>
+        rowVerbs({
+          label: entry.name,
+          kind: routeOf(entry.name),
+          tabEmpty: this.props.tabEmpty(),
+          onAdd: () => void this.load(entry, folder),
+          onNew: () => void this.openNew(entry, folder),
+        }),
       onDragStart: (event, entry, folder) => {
         writeFileDrag(event, folder.id, entry.path, entry.name)
       },
@@ -230,7 +241,7 @@ export class FilesCard {
           class: 'hint',
           text:
             `${folder.label} is listed with an account this tab is not signed in to. Sign in ` +
-            `under the plug in the header → ${account} and it lists again; nothing about the folder has changed.`,
+            `under *connect a place…* → ${account} and it lists again; nothing about the folder has changed.`,
         }),
         button('retry', () => void this.show(folder), { class: 'btn' }),
       )
@@ -247,9 +258,22 @@ export class FilesCard {
     )
   }
 
-  private async load(entry: FolderEntry, folder: ConnectedFolder): Promise<void> {
+  private load(entry: FolderEntry, folder: ConnectedFolder): Promise<void> {
+    return this.picked(entry, folder, (picked) => this.props.onLoad(picked))
+  }
+
+  private openNew(entry: FolderEntry, folder: ConnectedFolder): Promise<void> {
+    return this.picked(entry, folder, (picked) => this.props.onOpenNew(picked))
+  }
+
+  /** Take the file behind a row and hand it to one of the two verbs. */
+  private async picked(
+    entry: FolderEntry,
+    folder: ConnectedFolder,
+    deliver: (picked: PickedFile) => void,
+  ): Promise<void> {
     try {
-      this.props.onLoad(await folder.pick(entry))
+      deliver(await folder.pick(entry))
     } catch (err) {
       // A local file moved or deleted since the folder was listed, or a bucket
       // that answered the listing and refuses the object. Said where the reader

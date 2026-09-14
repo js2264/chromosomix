@@ -57,6 +57,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A large FASTA opens at once, through its index.** Opening IGV's *Galgal6* — a gigabyte of
+  sequence — read the whole file into the annotations worker before the browser could appear, or
+  refused it past 300 MB, because a FASTA was the one format held whole: every sequence in memory,
+  which is what made every zoom draw GC content and every pan free. Over **64 MB** it is now read
+  by its `.fai` instead (SPECS §8.8, `annotations/fai.ts`): the assembly is the index's first two
+  columns, a window of residues is one ranged read at the byte the index puts it at, and nothing of
+  the sequence is fetched until a lane asks for it — so the browser is on screen the moment a
+  kilobyte of index has arrived, and the sequence loads beside it, a window at a time, in the
+  worker that always held it. The index is `<url>.fai` unless named with `#index=` or dropped
+  beside the file, on the terms every other sidecar already had; under 64 MB nothing changes, and a
+  large FASTA with no index is read whole as before, or refused by a sentence naming
+  `samtools faidx`. What an indexed sequence gives up is what needed the whole of it: its GC lane
+  is blank over a window wider than 4 Mb, the motif search declines it in a note, and an alignment
+  lane colours mismatches only from what the sequence lane has already drawn. `make_store.py`
+  writes the index into every IGV genome's row and session, and a lane's summary says *read by range
+  from its index* so a reader knows which of the two they have.
+
+- **The store drawer is on the backslash key.** A panel at the window's edge on a punctuation key,
+  as the console is on the backtick: `\` folds the stores out and back, is printed on the header
+  button and listed with the command, and stays a backslash inside any box, the drawer's own search
+  field included.
+
 - **This chromosome is circular — and then the map slides round it.** A tickbox in
   the **Map** card, on any view that is a window on one sequence (SPECS §8.15). A `.cool`
   cannot say that a sequence joins its own ends, and nothing can infer it — a bright far
@@ -479,6 +501,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The header's plug and `+`.** *Connect a place* and *Add a file to this tab* stood in the header
+  beside the store drawer's toggle and were the Files column's own *connect a place…* and the file
+  crumb's *Open a file* said a second time, one row up; a header with three doors to a file read as
+  three different things. Both verbs stay in the command palette, and dropping a file still adds
+  it. The hints that pointed at "the plug in the header" now point at the Files column.
+
 - **The Buckets card, the bucket browser and the shelves dropdown.** The plug's *Buckets* card
   listed what the Files panel already lists and edited keys the provider pane now edits; the
   *browse bucket…* dialog behind four URL boxes browsed buckets and nothing else, where the window
@@ -675,6 +703,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Every file row carries the same two marks: add it here, or open it in a new session.** A store
+  row had *add* as a word and *open* as a grey arrow, a folder row in the Files column had the
+  arrow alone and *add* only in the tooltip, and which of the two a row offered depended on whether
+  the tab was empty. Now every row — a store's, a folder's — has a `+` that joins the file to the
+  session in front and a window with a `+` where its corner was that opens it as a session of its
+  own, both icons, both always there, the words in the tooltips (SPECS §20.5, `ui/rowVerbs.ts`).
+  The same mark stands beside *open* on a gallery card and *open with its tracks* on a group, and
+  the tray under a portal gained *add to this session* beside *open together*. A workspace row has
+  the second alone, being tabs and not a file.
+
 - **Two verbs to open anything: load files, or connect to a store.** The landing page had grown a
   URL box, a *browse…*, a *private buckets…*, a dropdown of eighteen shelves and a list of
   examples, and the header a plug, a `+` and a *Buckets* card that overlapped all of them. Every
@@ -694,10 +732,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `?store=4dn&assay=Hi-C&biosource=HFFc6&view=matrix` — so a narrowed store is a link, and
   `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
 
-  Around it, the doors are fewer and each says what it is. **Connect** (the plug) is a row of
-  providers — this machine, a bucket, Google Drive, Dropbox — with each provider's credentials on
-  its own pane rather than a bucket card here and a Drive key there. The header's `+` and the file
-  crumb's *Open a file* open one **Load** dialog with the store tiles behind it. Every URL box that
+  Around it, the doors are fewer and each says what it is. **Connect** (the Files column's
+  *connect a place…*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
+  each provider's credentials on its own pane rather than a bucket card here and a Drive key there.
+  The file crumb's *Open a file* opens one **Load** dialog with the store tiles behind it. Every URL box that
   once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every
   place the window is connected to and not only buckets. The **Files** panel is the one listing of
   connected places. And `scripts/make_store.py` writes a *Group*, *Experiment set* or *Dataset*

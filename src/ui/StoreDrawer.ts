@@ -39,7 +39,7 @@ import { icon, iconButton } from './icons'
 import { resizeHandle } from './resizeHandle'
 import { copyTextToClipboard } from './export'
 import { messageToast } from './toast'
-import { withKey } from './commands'
+import { KEYS, withKey } from './commands'
 import { EMPTY_VIEW, writeStoreView, type StoreView } from '../state/facets'
 import { subscribeStores } from '../state/stores'
 import { CustomView } from './stores/CustomView'
@@ -351,7 +351,7 @@ export class StoreDrawer {
     this.toggle.replaceChildren(icon('library'))
     this.toggle.title = withKey(
       `${this.isOpen ? 'Close' : 'Open'} the stores — the lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected`,
-      undefined,
+      KEYS.stores,
     )
     this.toggle.setAttribute('aria-expanded', String(this.isOpen))
   }

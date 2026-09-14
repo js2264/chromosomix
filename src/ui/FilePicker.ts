@@ -7,8 +7,9 @@
  * genomes, 4DN, ENCODE, and any store the reader connected — each a page of
  * its own in the drawer (`ui/StoreDrawer.ts`). Nothing else is on the page,
  * because everything else that used to be here was one of those two things
- * wearing a different name: a bucket to browse is a place to connect (the plug
- * in the header), a catalogue was a store, and a hub was a store.
+ * wearing a different name: a bucket to browse is a place to connect (the
+ * Files column's *connect a place…*), a catalogue was a store, and a hub was
+ * a store.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed

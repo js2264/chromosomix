@@ -330,6 +330,15 @@ export class App implements SessionHost {
       // top, an empty tab filled rather than added to. A tab has to exist for
       // that, and on the landing page one always does.
       onLoad: (picked) => void this.current?.addPicked(picked),
+      // A session of its own: the empty tab in front, or a new one — the
+      // same choice a store row makes ({@link openStoreEntry}), and through
+      // `addPicked` so that an empty tab is *filled* by the same road a
+      // dropped file takes, index and name included.
+      onOpenNew: (picked) => {
+        const session = this.tabEmpty() ? this.current : this.newSession()
+        void session?.addPicked(picked)
+      },
+      tabEmpty: () => this.tabEmpty(),
       onConnect: () => this.openConnectDialog(),
     })
     this.filesPanel.setContent([this.files.el])
@@ -430,23 +439,16 @@ export class App implements SessionHost {
           // is the one a reader arrives through rather than one they drive
           // the picture with.
           this.filesPanel.toggle,
-          // Then the stores — somebody else's shelf, in a drawer — and the two
-          // ways to bring a file of the reader's own: place before one-off.
-          // Connect attaches somewhere files keep coming from, and a reader
-          // working out of a directory for an afternoon wants that read
-          // before the `+` that costs a click each. Dropping is still the
-          // gesture the app is opened with and the whole content area still
-          // takes it — this is the same gesture for a reader who has no
-          // window to drag from, and the only door to a file that is on
-          // screen in every view. See {@link addFileDialog} for why the `+`
-          // *adds* rather than replaces.
+          // Then the stores — somebody else's shelf, in a drawer. Nothing
+          // else: the two buttons that stood here, a plug that connected a
+          // place and a `+` that added a file, were the Files column's own
+          // *connect a place…* and the file crumb's *Open a file* said a
+          // second time, one row up, and a header with three doors to a file
+          // reads as three different things. Dropping is still the gesture
+          // the app is opened with and the whole content area still takes it
+          // (see {@link addFileDialog} for why a drop *adds* rather than
+          // replaces), and both verbs stay in the palette.
           ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
-          iconButton('plug', `Connect a place. ${CONNECT_HINT}`, () =>
-            this.openConnectDialog(),
-          ),
-          iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
-            this.addFileDialog(),
-          ),
         ),
         // Past a divider, because these four are not about getting a file in —
         // they are controls over the picture of one that is already open.
@@ -468,11 +470,11 @@ export class App implements SessionHost {
         // say different things: a link is *what is being looked at* (§5.5) and
         // there is one of those on screen, while a file is the window.
         //
-        // Nothing here *opens* a file, and the two doors that do are both on
-        // the other side of the row: the `+` adds one to this tab, and the
-        // brand — whose hover says so — goes back to the picker and replaces.
-        // That is the same add-versus-replace line this side draws between a
-        // dropped workspace and the startup offer.
+        // Nothing here *opens* a file, and the doors that do are elsewhere:
+        // the file crumb's *Open a file* adds one to this tab, and the brand —
+        // whose hover says so — goes back to the picker and replaces. That is
+        // the same add-versus-replace line this side draws between a dropped
+        // workspace and the startup offer.
         iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
         iconButton(
           'save',
@@ -1814,12 +1816,13 @@ export class App implements SessionHost {
       {
         id: 'open-store',
         group: 'File',
-        title: 'Open a store',
+        title: 'Open or close the stores',
         hint:
           'The lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected, as a drawer ' +
           'down the left. Nothing is fetched until you open one.',
+        keys: KEYS.stores,
         enabled: this.storeDrawer !== null,
-        run: () => this.storeDrawer?.open(),
+        run: () => this.storeDrawer?.toggle.click(),
       },
       {
         id: 'open-file',

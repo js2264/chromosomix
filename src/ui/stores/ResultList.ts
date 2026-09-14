@@ -21,6 +21,7 @@
 
 import { button, el, fmt } from '../dom'
 import { icon } from '../icons'
+import { withNewMark } from '../rowVerbs'
 import { valueOf } from '../../state/facets'
 import type { StoreColumn, StoreEntry } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
@@ -115,13 +116,15 @@ export class ResultList {
       const session = paint.sessions.get(`${key}|${assembly}`)
       if (session === undefined) return []
       return [
-        button(
-          assemblies.length > 1 ? `open with its tracks · ${assembly}` : 'open with its tracks',
-          () => this.props.host.open(session),
-          {
-            class: 'btn btn-quiet portal-session',
-            title: `${session.label} — a pre-configured session: the map with the tracks published beside it, in one tab`,
-          },
+        withNewMark(
+          button(
+            assemblies.length > 1 ? `open with its tracks · ${assembly}` : 'open with its tracks',
+            () => this.props.host.open(session),
+            {
+              class: 'btn btn-quiet portal-session',
+              title: `${session.label} — a pre-configured session: the map with the tracks published beside it, in one tab`,
+            },
+          ),
         ),
       ]
     })
