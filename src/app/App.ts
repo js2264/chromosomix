@@ -57,9 +57,9 @@ import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
-import { builtinHubs } from '../ui/examples'
-import { hubLabelFor } from '../ui/HubTable'
-import type { HubRef } from '../state/hub'
+import { builtinStores } from '../ui/examples'
+import { storeLabelFor } from '../ui/StoreTable'
+import type { StoreRef } from '../state/store'
 import { downloadBlob, fileStamp } from '../ui/export'
 import {
   applyConfig,
@@ -841,19 +841,19 @@ export class App implements SessionHost {
     // state* in it is what a navigation leaves behind, so it has to beat the
     // `src=` the page was mounted with or a reload would undo the reader's last
     // click; `?config=` is the seed the page itself named, which is exactly
-    // what a window with nothing else to go on should open; and `?hub=` is the
+    // what a window with nothing else to go on should open; and `?store=` is the
     // weakest of the four, because it names a **shelf** rather than a picture
     // (§24.2). It opens the picker *on* somebody's catalogue and lets the
-    // reader choose, so a page that named both a config and a hub meant the
-    // config — a hub loaded underneath a session nobody can see is a request
+    // reader choose, so a page that named both a config and a store meant the
+    // config — a store loaded underneath a session nobody can see is a request
     // made for nothing. A link is a gesture, which is what licenses that fetch
-    // at all: nothing here runs unless somebody clicked a URL naming this hub.
+    // at all: nothing here runs unless somebody clicked a URL naming this store.
     if (shared) void this.openSharedHash()
     else if (linked === null && this.sessions.every((session) => session.state === null)) {
       const seed = mounting().config
-      const shelf = mounting().hub
+      const shelf = mounting().store
       if (seed !== null) void this.current?.openConfigUrl(seed)
-      else if (shelf !== null) this.openHubLink(shelf)
+      else if (shelf !== null) this.openStoreLink(shelf)
     }
     this.current?.activate()
     // Only when session storage had nothing, which is exactly "the browser was
@@ -873,18 +873,18 @@ export class App implements SessionHost {
   }
 
   /**
-   * Land the picker on the hub a `?hub=` link named.
+   * Land the picker on the store a `?store=` link named.
    *
    * The reference is built here rather than stored, and `builtin: false` is the
-   * load-bearing field: a hub reached by link is nobody's shipped catalogue, so
+   * load-bearing field: a store reached by link is nobody's shipped catalogue, so
    * a 404 on it is an honest 404 and the table offers to remember it. The id is
    * a constant because there is at most one of these per page — the address bar
-   * holds one `?hub=` — and `state/hubs.ts` mints the `hub:<n>` that outlives
+   * holds one `?store=` — and `state/stores.ts` mints the `store:<n>` that outlives
    * the page if the reader presses remember.
    */
-  private openHubLink(url: string): void {
-    const ref: HubRef = { id: 'hub:link', label: hubLabelFor(url), url, builtin: false }
-    this.current?.showHub(ref)
+  private openStoreLink(url: string): void {
+    const ref: StoreRef = { id: 'store:link', label: storeLabelFor(url), url, builtin: false }
+    this.current?.showStore(ref)
   }
 
   /**
@@ -1372,13 +1372,13 @@ export class App implements SessionHost {
   openFileDialog(session: Session): void {
     this.pickerDialog({
       title: 'Open a file',
-      // The hubs belong to *this* door and not to the header's. Every row on
+      // The stores belong to *this* door and not to the header's. Every row on
       // one is a whole file or a whole session, so choosing one is the
       // deliberate replacement this dialog is for, and offering it beside
       // "and this too" would be offering to throw the reader's tab away from
       // the one control whose promise is that it will not.
-      hubs: builtinHubs(),
-      // The landing picker's own door, not `open`: it is the same hub list, and
+      stores: builtinStores(),
+      // The landing picker's own door, not `open`: it is the same store list, and
       // a row on one may be a published *session* rather than a file.
       onOpen: (uri, source) => void session.openPicked(uri, source),
       onOpenFiles: (files) => void session.openFiles(files),
@@ -1425,13 +1425,13 @@ export class App implements SessionHost {
    */
   private pickerDialog(props: {
     title: string
-    hubs?: readonly HubRef[]
+    stores?: readonly StoreRef[]
     onOpen(uri: string, source: SourceSpec): void
     onOpenFiles(files: readonly File[]): void
   }): void {
     if (this.modal !== null) return
     // Held, rather than built inline into `body`, because it has something to
-    // release: the hub table subscribes to the remembered list, and a dialog
+    // release: the store table subscribes to the remembered list, and a dialog
     // picker that is thrown away without saying so leaves one live listener per
     // dialog ever opened.
     let picker: FilePicker | null = null
@@ -1448,7 +1448,7 @@ export class App implements SessionHost {
             modal.close()
             props.onOpenFiles(files)
           },
-          hubs: props.hubs,
+          stores: props.stores,
         })
         return picker.el
       },

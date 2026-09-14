@@ -1,14 +1,14 @@
 /**
- * `scripts/make_hub.py`, run for real, against recorded portal responses.
+ * `scripts/make_store.py`, run for real, against recorded portal responses.
  *
- * The generator writes the file `src/state/hub.ts` parses, and the two halves
+ * The generator writes the file `src/state/store.ts` parses, and the two halves
  * are in different languages, in different processes, checked by different
  * suites. Nothing but a test that runs the script and reads its output can
- * catch the failure that matters: a hub that is *valid JSON and wrong* — a
+ * catch the failure that matters: a store that is *valid JSON and wrong* — a
  * column renamed, a size that became a string, a relative name with no base to
  * resolve it against. The viewer's parser is deliberately forgiving (an entry
  * with no label is dropped, an unknown key ignored, SPECS §24.1), which is
- * right for a hub somebody else wrote and is exactly why the generator's own
+ * right for a store somebody else wrote and is exactly why the generator's own
  * output has to be pinned somewhere. This is that somewhere.
  *
  * ## A spine and an enrichment
@@ -23,7 +23,7 @@
  *
  * ## Where the fixtures come from
  *
- * `test/fixtures-hubs/*` are recorded-*shape* responses, not recordings:
+ * `test/fixtures-stores/*` are recorded-*shape* responses, not recordings:
  * neither portal is reachable from a development sandbox or from this suite, so
  * they were built from the portals' own schemas (`file_processed.json` and
  * `types/file.py`'s `open_data_url` and `track_and_facet_info` at 4DN;
@@ -85,14 +85,14 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const REPO = decodeURIComponent(new URL('../../', import.meta.url).pathname)
-const SCRIPT = join(REPO, 'scripts', 'make_hub.py')
-const FIXTURES = join(REPO, 'test', 'fixtures-hubs')
+const SCRIPT = join(REPO, 'scripts', 'make_store.py')
+const FIXTURES = join(REPO, 'test', 'fixtures-stores')
 
 /**
- * A hub as it comes off disk — `unknown`-ish on purpose.
+ * A store as it comes off disk — `unknown`-ish on purpose.
  *
  * The point of the assertions below is that the file has this shape; typing the
- * parse as `Hub` would assume the answer.
+ * parse as `Store` would assume the answer.
  */
 interface RawHub {
   kind?: unknown
@@ -174,23 +174,23 @@ const FROM_ENCODE = [
 /** IGV's, with the probe switched off: a request per row is a network call. */
 const FROM_IGV = ['--from-json', join(FIXTURES, 'igv-genomes.json'), '--probe', 'off']
 
-/** Every entry's absolute URL, resolved the way `resolveHub` will resolve it. */
-function absolute(hub: RawHub): string[] {
-  const base = typeof hub.base === 'string' ? hub.base : undefined
-  return (hub.entries ?? []).map((entry) => {
+/** Every entry's absolute URL, resolved the way `resolveStore` will resolve it. */
+function absolute(store: RawHub): string[] {
+  const base = typeof store.base === 'string' ? store.base : undefined
+  return (store.entries ?? []).map((entry) => {
     const uri = String(entry.uri)
     return base === undefined ? uri : new URL(uri, base).href
   })
 }
 
 /** One entry by the accession in its label, for a test that should not count rows. */
-function row(hub: RawHub, accession: string): Record<string, unknown> | undefined {
-  return (hub.entries ?? []).find((entry) => String(entry.label).includes(accession))
+function row(store: RawHub, accession: string): Record<string, unknown> | undefined {
+  return (store.entries ?? []).find((entry) => String(entry.label).includes(accession))
 }
 
 beforeAll(() => {
   if (!havePython) return
-  out = mkdtempSync(join(tmpdir(), 'metacooler-hub-'))
+  out = mkdtempSync(join(tmpdir(), 'metacooler-store-'))
 })
 
 afterAll(() => {
@@ -198,32 +198,32 @@ afterAll(() => {
 })
 
 describe.skipIf(!havePython)('the 4DN front end', () => {
-  let hub: RawHub
+  let store: RawHub
 
   beforeAll(() => {
-    hub = built('4dn', '4dn.json', ...FROM_4DN, '--check')
+    store = built('4dn', '4dn.json', ...FROM_4DN, '--check')
   })
 
   it('writes the Contract-1 envelope, with both sources in its provenance', () => {
-    expect(hub.kind).toBe('metacooler.hub')
-    expect(hub.version).toBe(1)
-    expect(hub.name).toBe('4DN open data')
-    expect(typeof hub.description).toBe('string')
+    expect(store.kind).toBe('metacooler.store')
+    expect(store.version).toBe(1)
+    expect(store.name).toBe('4DN open data')
+    expect(typeof store.description).toBe('string')
     // A shelf with no provenance is a screenshot (SPECS §24.3): the instant it
     // was written is in the file, and so is *each* of the two places it came
     // from — the bucket that decided which rows exist and the query that
     // decided what is in their cells.
-    expect(hub.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
-    expect(String(hub.source)).toContain('4dn-open-data-public')
-    expect(String(hub.source)).toContain('data.4dnucleome.org/search/')
-    expect(String(hub.source)).toContain('type=ExperimentSetReplicate')
+    expect(store.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+    expect(String(store.source)).toContain('4dn-open-data-public')
+    expect(String(store.source)).toContain('data.4dnucleome.org/search/')
+    expect(String(store.source)).toContain('type=ExperimentSetReplicate')
     // No experiment-type filter, which is the whole difference from igv-data's
     // query and the reason the Micro-C row below survives.
-    expect(String(hub.source)).not.toContain('experiment_type.display_title=')
+    expect(String(store.source)).not.toContain('experiment_type.display_title=')
   })
 
   it('declares its columns in the fixed order, assembly first and format fourth', () => {
-    expect(hub.columns?.map((column) => column.key)).toEqual([
+    expect(store.columns?.map((column) => column.key)).toEqual([
       'assembly',
       'biosource',
       'assay',
@@ -231,8 +231,9 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
       'dataset',
       'lab',
       'project',
+      'set',
     ])
-    expect(hub.columns?.map((column) => column.label)).toEqual([
+    expect(store.columns?.map((column) => column.label)).toEqual([
       'Assembly',
       'Biosource',
       'Assay',
@@ -240,14 +241,15 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
       'Dataset',
       'Lab',
       'Project',
+      'Experiment set',
     ])
   })
 
   it('keeps every object the viewer has a route for, whatever the format', () => {
     // Ten objects in the two listing pages; nine rows. The one that goes is the
     // `.txt.gz`, and the filter that dropped it is `route_of` and nothing else.
-    expect(hub.entries).toHaveLength(9)
-    const text = JSON.stringify(hub)
+    expect(store.entries).toHaveLength(9)
+    const text = JSON.stringify(store)
     expect(text, '4DNFIXZUM5P9.txt.gz has no route').not.toContain('4DNFIXZUM5P9')
     // The four that the Hi-C-only version of this front end dropped, and the
     // reason this change exists: a reader who asked for "any and all the data"
@@ -267,7 +269,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // `4DNFIH8XQ2KM` has one and no assembly. Neither is an object in the
     // listing, and the spine is what decides: a portal record with nothing
     // behind it is not a row.
-    const text = JSON.stringify(hub)
+    const text = JSON.stringify(store)
     expect(text).not.toContain('4DNFI111EI3K')
     expect(text).not.toContain('4DNFIH8XQ2KM')
   })
@@ -277,7 +279,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // here rather than in the set's own `processed_files`, and the version of
     // this generator that read only the set array published a catalogue missing
     // them — silently, which is the failure worth a test.
-    expect(row(hub, '4DNFI24F7GRY')?.fields).toEqual({
+    expect(row(store, '4DNFI24F7GRY')?.fields).toEqual({
       assembly: 'GRCh38',
       biosource: 'HFFc6',
       assay: 'in situ Hi-C (DpnII)',
@@ -285,10 +287,13 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
       dataset: 'Hi-C on HFF cells - protocol variations',
       lab: 'Job Dekker, UMMS',
       project: '4DN',
+      // The set's accession, on the row: the key the viewer groups by and
+      // pairs a session with.
+      set: '4DNESNMAAN97',
     })
     // And a supplementary group, which is the *other* shape: a list of groups,
     // each with its own `files` array.
-    expect(row(hub, '4DNFIYZL5V6A')?.fields).toMatchObject({
+    expect(row(store, '4DNFIYZL5V6A')?.fields).toMatchObject({
       assembly: 'GRCh38',
       format: 'bed.gz',
       dataset: 'Hi-C on RAD21-AID tagged HCT-116',
@@ -299,7 +304,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // A real object on the bucket that no `@graph` record names. The
     // alternative is a catalogue that quietly omits whatever a search API's
     // facets happened to miss, which is the bug the spine exists to prevent.
-    const reference = row(hub, '4DNFIMOUSEREF')
+    const reference = row(store, '4DNFIMOUSEREF')
     expect(reference?.kind).toBe('genome')
     expect(reference?.size).toBe(2731234567)
     // Only the one cell the file name itself answers.
@@ -310,18 +315,18 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // The portal gives no `file_size` for the Micro-C map and the listing gives
     // 412876800. The object is what is about to be fetched, and the two
     // genuinely disagree after a re-upload.
-    expect(row(hub, '4DNFIO2TD17P')?.size).toBe(412876800)
-    expect(row(hub, '4DNFIM7ZVQOQ')?.size).toBe(839405381)
+    expect(row(store, '4DNFIO2TD17P')?.size).toBe(412876800)
+    expect(row(store, '4DNFIM7ZVQOQ')?.size).toBe(839405381)
   })
 
   it('names every entry relative to one base, which rejoins to the object', () => {
     // The base is the *common* prefix of both walked prefixes, so a row under
     // `files/` and a row under `wfoutput/` share it.
-    expect(hub.base).toBe('https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/')
-    for (const entry of hub.entries ?? []) {
+    expect(store.base).toBe('https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/')
+    for (const entry of store.entries ?? []) {
       expect(String(entry.uri)).not.toMatch(/^https?:/)
     }
-    expect(absolute(hub)).toContain(
+    expect(absolute(store)).toContain(
       'https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/' +
         '000789fe-9a22-4280-a71c-7ad228fd4cac/4DNFIM7ZVQOQ.hic',
     )
@@ -329,10 +334,10 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
 
   it('sorts by assembly and then label', () => {
     // Which is the order the table opens in and therefore the order a diff
-    // between two weeks is readable in: a hub sorted by whatever the bucket
+    // between two weeks is readable in: a store sorted by whatever the bucket
     // answered would show four hundred moved rows the week S3 changed its
     // listing order.
-    const keys = (hub.entries ?? []).map((entry): [string, string] => [
+    const keys = (store.entries ?? []).map((entry): [string, string] => [
       (entry.fields as Record<string, string>).assembly ?? '',
       String(entry.label),
     ])
@@ -344,7 +349,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
   })
 
   it('carries the kind, the size and the facets of one row in full', () => {
-    expect(row(hub, '4DNFIM7ZVQOQ')).toEqual({
+    expect(row(store, '4DNFIM7ZVQOQ')).toEqual({
       label: 'Hi-C on RAD21-AID tagged HCT-116 — 4DNFIM7ZVQOQ (hic)',
       uri: 'wfoutput/000789fe-9a22-4280-a71c-7ad228fd4cac/4DNFIM7ZVQOQ.hic',
       kind: 'map',
@@ -356,12 +361,13 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
         assembly: 'GRCh38',
         biosource: 'HCT116 with Crispr generated mClover and AID-tagged RAD21',
         // The experiment type and the enzyme in one cell, which is what a
-        // reader filters on and what the demo hub's hand-written row says.
+        // reader filters on and what the demo store's hand-written row says.
         assay: 'in situ Hi-C (MboI)',
         format: 'hic',
         dataset: 'Hi-C on RAD21-AID tagged HCT-116',
         lab: 'Erez Lieberman Aiden, BCM',
         project: 'External',
+        set: '4DNESD117NVX',
       },
     })
   })
@@ -369,11 +375,11 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
   it('reads the set accession off @id when the field list did not ask for one', () => {
     // `field=` returns only what it names, and the contract fixes that list; a
     // set that carries no `accession` of its own still has to be named.
-    expect(String(row(hub, '4DNFIM7ZVQOQ')?.note)).toContain('4DNESD117NVX')
+    expect(String(row(store, '4DNFIM7ZVQOQ')?.note)).toContain('4DNESD117NVX')
   })
 
   it('falls back to the set when a file has no track_and_facet_info', () => {
-    expect(row(hub, '4DNFIO2TD17P')?.fields).toEqual({
+    expect(row(store, '4DNFIO2TD17P')?.fields).toEqual({
       assembly: 'GRCh38',
       // No `biosource_name` anywhere on this file: the organism the set names
       // is a worse answer than a cell line and a much better one than blank.
@@ -385,6 +391,7 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
       dataset: 'Micro-C on HFF cells',
       lab: 'Job Dekker, UMMS',
       project: '4DN',
+      set: '4DNESJ4CCZAB',
     })
   })
 
@@ -395,10 +402,10 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
 
 describe.skipIf(!havePython)('the 4DN front end, narrowed and unenriched', () => {
   it('keeps only the formats --formats named', () => {
-    const hub = built('4dn', 'hic-only.json', ...FROM_4DN, '--formats', 'hic,mcool')
+    const store = built('4dn', 'hic-only.json', ...FROM_4DN, '--formats', 'hic,mcool')
     // In assembly-then-label order, which is why the two `.mcool` rows are not
     // adjacent: the format is a cell, not the sort key.
-    expect((hub.entries ?? []).map((entry) => (entry.fields as Record<string, string>).format))
+    expect((store.entries ?? []).map((entry) => (entry.fields as Record<string, string>).format))
       .toEqual(['mcool', 'hic', 'mcool', 'hic'])
   })
 
@@ -406,10 +413,10 @@ describe.skipIf(!havePython)('the 4DN front end, narrowed and unenriched', () =>
     // The week a portal is unreachable, and every day on a development machine
     // that can reach an object store and not a search API. Every row is still
     // there; what is missing is what only the portal knows.
-    const hub = built('4dn', 'spine.json', '--from-xml', join(FIXTURES, '4dn-bucket'), '--portal', 'skip')
-    expect(hub.entries).toHaveLength(9)
-    expect(String(hub.source)).toContain('--portal skip')
-    for (const entry of hub.entries ?? []) {
+    const store = built('4dn', 'spine.json', '--from-xml', join(FIXTURES, '4dn-bucket'), '--portal', 'skip')
+    expect(store.entries).toHaveLength(9)
+    expect(String(store.source)).toContain('--portal skip')
+    for (const entry of store.entries ?? []) {
       // The one cell a file name answers by itself, and nothing else.
       expect(Object.keys(entry.fields as Record<string, string>)).toEqual(['format'])
     }
@@ -458,7 +465,7 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
     shards = readdirSync(out).filter((name) => name.startsWith('encode-')).sort()
   })
 
-  it('writes one hub per assembly and output category, and no combined file', () => {
+  it('writes one store per assembly and output category, and no combined file', () => {
     // SPECS §24.3: 1.2 million openable files is a quarter of a gigabyte of
     // JSON and a table nothing can draw, so the shelf is split on the two
     // things a reader arrives already knowing — which genome, and whether they
@@ -490,6 +497,7 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
         'target',
         'output',
         'lab',
+        'dataset',
       ])
     }
   })
@@ -571,6 +579,9 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
         target: 'CTCF',
         output: 'alignments',
         lab: 'Michael Snyder, Stanford',
+        // The experiment's accession, which is the group the viewer draws
+        // the row under and the key its session is paired by.
+        dataset: 'ENCSR000CAC',
       },
     })
   })
@@ -586,6 +597,7 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
       format: 'bigwig',
       output: 'fold change over control',
       lab: 'kevin-white',
+      dataset: 'ENCSRNOTHERE',
     })
     // Contract 1 renders a missing key as empty anyway, so an empty cell is
     // left out rather than written as `""`.
@@ -604,12 +616,12 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
       'off',
     )
     expect(run.status, run.stderr).toBe(0)
-    const hub = read(join('full', 'encode.json'))
+    const store = read(join('full', 'encode.json'))
     // All three bigWigs now, and still no footprints, no .tsv, no archived row.
-    expect(JSON.stringify(hub)).toContain('ENCFF999ZZZ')
-    expect(JSON.stringify(hub)).not.toContain('ENCFF798HAP')
+    expect(JSON.stringify(store)).toContain('ENCFF999ZZZ')
+    expect(JSON.stringify(store)).not.toContain('ENCFF798HAP')
     // And nothing says "1 of 3": a row now stands for itself.
-    expect(JSON.stringify(hub)).not.toContain('1 of 3')
+    expect(JSON.stringify(store)).not.toContain('1 of 3')
   })
 
   it('--breadth all lists the bulk dump too', () => {
@@ -642,17 +654,17 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
 })
 
 describe.skipIf(!havePython)('the IGV front end', () => {
-  let hub: RawHub
+  let store: RawHub
 
   beforeAll(() => {
-    hub = built('igv', 'igv.json', ...FROM_IGV, '--check')
+    store = built('igv', 'igv.json', ...FROM_IGV, '--check')
   })
 
   it('writes the Contract-1 envelope and its own columns', () => {
-    expect(hub.kind).toBe('metacooler.hub')
-    expect(hub.name).toBe('IGV genomes')
-    expect(String(hub.source)).toContain('igv.org.genomes/genomes.json')
-    expect(hub.columns?.map((column) => column.key)).toEqual([
+    expect(store.kind).toBe('metacooler.store')
+    expect(store.name).toBe('IGV genomes')
+    expect(String(store.source)).toContain('igv.org.genomes/genomes.json')
+    expect(store.columns?.map((column) => column.key)).toEqual([
       'assembly',
       'genome',
       'role',
@@ -665,7 +677,7 @@ describe.skipIf(!havePython)('the IGV front end', () => {
     // Both, rather than only the genome: a reader who wants hg38's genes over
     // their own map wants the track on its own, and a reader who wants hg38
     // wants the FASTA. The session below is the third answer.
-    const roles = (hub.entries ?? []).map((entry) => (entry.fields as Record<string, string>).role)
+    const roles = (store.entries ?? []).map((entry) => (entry.fields as Record<string, string>).role)
     expect(roles.filter((role) => role === 'sequence')).toHaveLength(6)
     expect(roles.filter((role) => role === 'annotation')).toHaveLength(9)
   })
@@ -674,12 +686,12 @@ describe.skipIf(!havePython)('the IGV front end', () => {
     // 29 of IGV's 63 tracks are UCSC genePred tables in a `.txt.gz`, which this
     // viewer has no parser for. A row for one would fail when it was clicked,
     // and the count is logged so the gap is known rather than discovered.
-    const text = JSON.stringify(hub)
+    const text = JSON.stringify(store)
     expect(text).not.toContain('ncbiRefSeq.txt.gz')
     expect(text).not.toContain('refGene.sorted.txt.gz')
     // hg38 publishes exactly one track and it is a refgene, so the genome is a
     // row with no tracks at all — which is the honest answer.
-    const hg38 = (hub.entries ?? []).find(
+    const hg38 = (store.entries ?? []).find(
       (entry) => (entry.fields as Record<string, string>).assembly === 'hg38',
     )
     expect(hg38?.tracks).toBeUndefined()
@@ -687,7 +699,7 @@ describe.skipIf(!havePython)('the IGV front end', () => {
   })
 
   it('hangs the genome row’s companions off it, as the demos hang theirs', () => {
-    const hs1 = (hub.entries ?? []).find(
+    const hs1 = (store.entries ?? []).find(
       (entry) =>
         (entry.fields as Record<string, string>).assembly === 'hs1' &&
         (entry.fields as Record<string, string>).role === 'sequence',
@@ -702,7 +714,7 @@ describe.skipIf(!havePython)('the IGV front end', () => {
   })
 
   it('names a sidecar only where the viewer would not have guessed it', () => {
-    const text = JSON.stringify(hub)
+    const text = JSON.stringify(store)
     // IGV names `<url>.tbi` for almost every gzipped track, which is exactly
     // what `annotations/loader.ts` guesses — so writing the fragment would be
     // noise on forty rows.
@@ -714,22 +726,22 @@ describe.skipIf(!havePython)('the IGV front end', () => {
   })
 
   it('names no index for a FASTA, which this viewer reads without one', () => {
-    for (const entry of hub.entries ?? []) {
+    for (const entry of store.entries ?? []) {
       if ((entry.fields as Record<string, string>).role !== 'sequence') continue
       expect(String(entry.uri)).not.toContain('#index=')
     }
   })
 
   it('drops a genome with no sequence and keeps its neighbours', () => {
-    expect(JSON.stringify(hub)).not.toContain('No sequence at all')
-    expect((hub.entries ?? []).length).toBeGreaterThan(10)
+    expect(JSON.stringify(store)).not.toContain('No sequence at all')
+    expect((store.entries ?? []).length).toBeGreaterThan(10)
   })
 
   it('declares no base, because IGV’s rows are on four different hosts', () => {
-    expect(hub.base).toBeUndefined()
-    for (const entry of hub.entries ?? []) expect(String(entry.uri)).toMatch(/^https:\/\//)
+    expect(store.base).toBeUndefined()
+    for (const entry of store.entries ?? []) expect(String(entry.uri)).toMatch(/^https:\/\//)
     const hosts = new Set(
-      (hub.entries ?? []).map((entry) => (entry.fields as Record<string, string>).host),
+      (store.entries ?? []).map((entry) => (entry.fields as Record<string, string>).host),
     )
     expect(hosts.size).toBeGreaterThan(1)
   })
@@ -740,7 +752,7 @@ describe.skipIf(!havePython)('the IGV front end', () => {
 })
 
 describe.skipIf(!havePython)('pre-configured sessions', () => {
-  let hub: RawHub
+  let store: RawHub
 
   function session(name: string): RawSession {
     return JSON.parse(readFileSync(join(out, 'sessions', name), 'utf8')) as RawSession
@@ -760,19 +772,20 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     )
     expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
     expect(run.status, run.stderr).toBe(0)
-    hub = read('igv-sessions.json')
+    store = read('igv-sessions.json')
   })
 
-  it('writes one session per genome, and a hub of its own listing them', () => {
-    expect(hub.name).toBe('IGV genome sessions')
-    expect(hub.entries).toHaveLength(6)
-    expect(hub.columns?.map((column) => column.key)).toEqual([
+  it('writes one session per genome, and a store of its own listing them', () => {
+    expect(store.name).toBe('IGV genome sessions')
+    expect(store.entries).toHaveLength(6)
+    expect(store.columns?.map((column) => column.key)).toEqual([
       'assembly',
       'subject',
       'tracks',
       'source',
+      'dataset',
     ])
-    for (const entry of hub.entries ?? []) {
+    for (const entry of store.entries ?? []) {
       // A workspace row is a pre-configured session, opened through the same
       // road as `?config=` (§24.1) — which is why this needs no viewer change.
       expect(entry.kind).toBe('workspace')
@@ -780,12 +793,12 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     }
   })
 
-  it('names them relative to the hub, with no base, so the pair travels together', () => {
-    // `resolveHub`'s self-contained folder: the hub is published beside the
+  it('names them relative to the store, with no base, so the pair travels together', () => {
+    // `resolveStore`'s self-contained folder: the store is published beside the
     // directory it names, so a preview build serving both from one place
     // resolves them against each other rather than against the deployed site.
-    expect(hub.base).toBeUndefined()
-    for (const entry of hub.entries ?? []) {
+    expect(store.base).toBeUndefined()
+    for (const entry of store.entries ?? []) {
       expect(String(entry.uri)).toMatch(/^sessions\/[a-z0-9._-]+\.metacooler\.json$/)
     }
   })
@@ -894,10 +907,10 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
 })
 
 describe.skipIf(!havePython)('the bucket front end', () => {
-  let hub: RawHub
+  let store: RawHub
 
   beforeAll(() => {
-    hub = built(
+    store = built(
       'bucket',
       'bucket.json',
       'https://lab-hic-public.s3.amazonaws.com/maps/',
@@ -912,13 +925,13 @@ describe.skipIf(!havePython)('the bucket front end', () => {
   it('follows the continuation token across both pages', () => {
     // Six rows out of nine objects, and three of the six are on the second
     // page: a walk that stopped at `IsTruncated` would find three.
-    expect(hub.entries).toHaveLength(6)
-    expect(JSON.stringify(hub)).toContain('Yeast_microC.pairs.gz')
+    expect(store.entries).toHaveLength(6)
+    expect(JSON.stringify(store)).toContain('Yeast_microC.pairs.gz')
   })
 
   it('reads a <Size> that a <ChecksumAlgorithm> was inserted in front of', () => {
     const sizes = Object.fromEntries(
-      (hub.entries ?? []).map((entry) => [entry.label, entry.size]),
+      (store.entries ?? []).map((entry) => [entry.label, entry.size]),
     )
     // All three of these carry <ChecksumAlgorithm>/<ChecksumType> between
     // <ETag> and <Size>. A positional parser reads them as zero, or not at all.
@@ -931,7 +944,7 @@ describe.skipIf(!havePython)('the bucket front end', () => {
 
   it('routes each name to a door, and drops the names with none', () => {
     expect(
-      (hub.entries ?? []).map((entry) => [entry.label, entry.kind, entry.uri]),
+      (store.entries ?? []).map((entry) => [entry.label, entry.kind, entry.uri]),
     ).toEqual([
       ['Yeast_ATAC.bw', 'genome', 'annotations/Yeast_ATAC.bw'],
       ['Yeast_annotations.gtf', 'genome', 'annotations/Yeast_annotations.gtf'],
@@ -940,15 +953,15 @@ describe.skipIf(!havePython)('the bucket front end', () => {
       ['Yeast_microC_G2M_1kb.mcool', 'map', 'Yeast_microC_G2M_1kb.mcool'],
       ['Yeast_tracks.metacooler.json', 'workspace', 'Yeast_tracks.metacooler.json'],
     ])
-    const text = JSON.stringify(hub)
+    const text = JSON.stringify(store)
     // Two pairix indexes and the zero-byte key a console calls a folder.
     expect(text).not.toContain('.px2')
-    expect(hub.base).toBe('https://lab-hic-public.s3.amazonaws.com/maps/yeast/')
+    expect(store.base).toBe('https://lab-hic-public.s3.amazonaws.com/maps/yeast/')
   })
 
   it('has no columns, because a bucket knows a name and a size and nothing else', () => {
-    expect(hub.columns).toEqual([])
-    for (const entry of hub.entries ?? []) expect(entry.fields).toBeUndefined()
+    expect(store.columns).toEqual([])
+    for (const entry of store.entries ?? []) expect(entry.fields).toBeUndefined()
   })
 
   it('accepts its own output', () => {
@@ -957,7 +970,7 @@ describe.skipIf(!havePython)('the bucket front end', () => {
 })
 
 describe.skipIf(!havePython)('a run that found nothing', () => {
-  it('exits 2 and writes no file, so a workflow can leave the good hub alone', () => {
+  it('exits 2 and writes no file, so a workflow can leave the good store alone', () => {
     const target = join(out, 'never-written.json')
     const run = make(
       '4dn',
@@ -977,7 +990,7 @@ describe.skipIf(!havePython)('a run that found nothing', () => {
     // 4DN answers a search matching nothing with HTTP 404 and an
     // `HTTPNotFound` body (SPECS §24.3). `4dn-empty.json` is that body: the
     // enrichment finds nothing and every row the bucket holds is still written.
-    const hub = built(
+    const store = built(
       '4dn',
       'unenriched.json',
       '--from-json',
@@ -985,12 +998,12 @@ describe.skipIf(!havePython)('a run that found nothing', () => {
       '--from-xml',
       join(FIXTURES, '4dn-bucket'),
     )
-    expect(hub.entries).toHaveLength(9)
+    expect(store.entries).toHaveLength(9)
   })
 })
 
 describe.skipIf(!havePython)('--check', () => {
-  it('refuses a hub whose entries lost what the table draws them from', () => {
+  it('refuses a store whose entries lost what the table draws them from', () => {
     const good = read('4dn.json')
     const broken = {
       ...good,
@@ -1011,11 +1024,11 @@ describe.skipIf(!havePython)('--check', () => {
     // The one that would publish silently and resolve against whatever host is
     // serving the page: relative names *mixed with* absolute ones and no base
     // to join either to. All-relative with no base is the self-contained folder
-    // the session hubs use and is not a fault.
+    // the session stores use and is not a fault.
     expect(run.stderr).toMatch(/declares no base/)
   })
 
-  it('accepts an all-relative hub with no base, which is the self-contained folder', () => {
+  it('accepts an all-relative store with no base, which is the self-contained folder', () => {
     expect(make('check', join(out, 'igv-sessions.json')).status).toBe(0)
   })
 
@@ -1059,7 +1072,7 @@ describe.skipIf(!havePython)('a recorded response in pieces', () => {
     )
     writeFileSync(join(pages, 'page-2.json'), JSON.stringify({ '@graph': whole['@graph'].slice(3) }))
 
-    const hub = built(
+    const store = built(
       '4dn',
       'paged.json',
       '--from-json',
@@ -1067,15 +1080,15 @@ describe.skipIf(!havePython)('a recorded response in pieces', () => {
       '--from-xml',
       join(FIXTURES, '4dn-bucket'),
     )
-    expect(hub.entries).toHaveLength(9)
+    expect(store.entries).toHaveLength(9)
     // And the join still happened across the seam: the row described by the
     // record on page 2 has its cells.
-    expect(row(hub, '4DNFIOTPSS3L')?.fields).toMatchObject({ assembly: 'dm6' })
+    expect(row(store, '4DNFIOTPSS3L')?.fields).toMatchObject({ assembly: 'dm6' })
   })
 })
 
 describe.skipIf(!havePython)('--timestamp and --limit', () => {
-  it('writes a dated copy beside the hub, and caps the rows when asked', () => {
+  it('writes a dated copy beside the store, and caps the rows when asked', () => {
     const target = join(out, 'dated.json')
     const run = make(
       '4dn',
@@ -1087,8 +1100,8 @@ describe.skipIf(!havePython)('--timestamp and --limit', () => {
       '--timestamp',
     )
     expect(run.status).toBe(0)
-    const hub = read('dated.json')
-    expect(hub.entries).toHaveLength(2)
+    const store = read('dated.json')
+    expect(store.entries).toHaveLength(2)
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const dated = join(out, `dated-${stamp}.json`)
     expect(existsSync(dated)).toBe(true)
@@ -1259,15 +1272,15 @@ server.listen(0, '127.0.0.1', () => {
     // Six sets at two a page: three pages, and a fourth is not asked for —
     // `total` says where the end is and the walk believes it.
     expect(held.asked()).toEqual(['2 0', '2 2', '2 4'])
-    const hub = read('live.json')
-    expect(hub.entries).toHaveLength(9)
+    const store = read('live.json')
+    expect(store.entries).toHaveLength(9)
     // A file described by the *first* record and one described by the *last*: a
     // walk that stopped after page one would fill the first and leave the
-    // second's cells empty, which is a hub that publishes and looks fine.
-    expect(row(hub, '4DNFIM7ZVQOQ')?.fields).toMatchObject({
+    // second's cells empty, which is a store that publishes and looks fine.
+    expect(row(store, '4DNFIM7ZVQOQ')?.fields).toMatchObject({
       dataset: 'Hi-C on RAD21-AID tagged HCT-116',
     })
-    expect(row(hub, '4DNFIRZ9WSAO')?.fields).toMatchObject({
+    expect(row(store, '4DNFIRZ9WSAO')?.fields).toMatchObject({
       dataset: 'Hi-C on mouse cerebellar granule neurons',
     })
   })
@@ -1303,7 +1316,7 @@ server.listen(0, '127.0.0.1', () => {
   it('refuses to publish when the portal ignores `from`', async () => {
     // Without the guard the walk never ends: every page is full, every page is
     // the same. With it, the run stops — and stops *failing*, because two sets
-    // out of six is a hub that draws with empty cells in most of its rows,
+    // out of six is a store that draws with empty cells in most of its rows,
     // which is what `--portal require` is for.
     const held = await portal('stuck')
     const target = join(out, 'stuck.json')
@@ -1377,9 +1390,9 @@ server.listen(0, '127.0.0.1', () => {
     const run = against(held.base, 'nothing-matched.json')
     expect(run.status, run.stderr).toBe(0)
     expect(run.stderr).toMatch(/zero results/)
-    const hub = read('nothing-matched.json')
-    expect(hub.entries).toHaveLength(9)
-    for (const entry of hub.entries ?? []) {
+    const store = read('nothing-matched.json')
+    expect(store.entries).toHaveLength(9)
+    for (const entry of store.entries ?? []) {
       expect(Object.keys(entry.fields as Record<string, string>)).toEqual(['format'])
     }
   })

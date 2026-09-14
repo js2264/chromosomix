@@ -16,7 +16,7 @@
  * can be made without the network, and makes a missing file a red CI run rather
  * than a broken landing page.
  *
- * The catalogue is now a **hub** whose rows are published sessions rather than
+ * The catalogue is now a **store** whose rows are published sessions rather than
  * a list of data files, which puts one more link in the chain and one more way
  * to break it: a
  * session names a file *and every track around it*, by relative name, and a
@@ -38,13 +38,13 @@ import {
   DEMO_ANNOTATION_FILES,
   DEMO_BUCKET,
   DEMO_FILES,
-  builtinHubs,
+  builtinStores,
   clearShelves,
   demoAnnotationsFor,
   demoAnnotationsToOffer,
   registerShelf,
 } from '../../src/ui/examples'
-import { HUB_KIND, HUB_VERSION, type Hub } from '../../src/state/hub'
+import { STORE_KIND, STORE_VERSION, type StoreFile } from '../../src/state/store'
 import {
   isRefusal,
   refusalMessage,
@@ -341,35 +341,35 @@ describe('the annotations published beside a demo map', () => {
 })
 
 // ---------------------------------------------------------------------------
-// The same catalogue, as the hub the picker actually offers
+// The same catalogue, as the store the picker actually offers
 // ---------------------------------------------------------------------------
 
 /**
- * The Demos hub is the fourth thing that can drift from `demo/`, and the one
+ * The Demos store is the fourth thing that can drift from `demo/`, and the one
  * nothing else here watches.
  *
- * `DEMO_FILES` is checked file by file above, and the hub is built from the
+ * `DEMO_FILES` is checked file by file above, and the store is built from the
  * same list — but it is built into *URIs*, with a base concatenated on the
  * front, and that is a second place for a name to be wrong in a way no `.json`
  * on disk would show. So every workspace row is taken back apart and required
  * to name a file that exists, which is exactly the assertion the rest of this
  * file makes about the list it came from.
  */
-describe('the Demos hub', () => {
-  /** The inline hub, which needs no window and no network to build. */
-  function demos(): Hub {
-    const ref = builtinHubs().find((held) => held.id === 'demos')
+describe('the Demos store', () => {
+  /** The inline store, which needs no window and no network to build. */
+  function demos(): StoreFile {
+    const ref = builtinStores().find((held) => held.id === 'demos')
     expect(ref, 'the built-in list no longer offers the demos').toBeDefined()
-    expect(ref?.hub, 'the demos hub must be inline: it is the one that costs no request').toBeDefined()
-    return ref?.hub as Hub
+    expect(ref?.store, 'the demos store must be inline: it is the one that costs no request').toBeDefined()
+    return ref?.store as StoreFile
   }
 
-  it('is a hub of this format, named, with its columns declared', () => {
-    const hub = demos()
-    expect(hub.kind).toBe(HUB_KIND)
-    expect(hub.version).toBe(HUB_VERSION)
-    expect(hub.name).not.toBe('')
-    expect(hub.columns.map((column) => column.key)).toEqual([
+  it('is a store of this format, named, with its columns declared', () => {
+    const store = demos()
+    expect(store.kind).toBe(STORE_KIND)
+    expect(store.version).toBe(STORE_VERSION)
+    expect(store.name).not.toBe('')
+    expect(store.columns.map((column) => column.key)).toEqual([
       'assembly',
       'biosource',
       'assay',
@@ -401,9 +401,9 @@ describe('the Demos hub', () => {
       const under = entry.uri.split('/demo/').pop() ?? entry.uri
       expect(
         DEMO_FILES.includes(under),
-        `the Demos hub offers ${entry.uri}, which is not one of the published workspaces`,
+        `the Demos store offers ${entry.uri}, which is not one of the published workspaces`,
       ).toBe(true)
-      expect(existsSync(`${DIR}${under}`), `${under} is offered by the hub but not in demo/`).toBe(
+      expect(existsSync(`${DIR}${under}`), `${under} is offered by the store but not in demo/`).toBe(
         true,
       )
     }
@@ -411,8 +411,8 @@ describe('the Demos hub', () => {
 
   it('gives every row an absolute URI under the published prefix', () => {
     for (const entry of demos().entries) {
-      // An inline hub has no URL of its own to be relative to, so its entries
-      // must already be absolute — `resolveHub` has nothing to fix here.
+      // An inline store has no URL of its own to be relative to, so its entries
+      // must already be absolute — `resolveStore` has nothing to fix here.
       expect(entry.uri, `${entry.label} is not absolute`).toMatch(/^https?:\/\//)
     }
     for (const entry of demos().entries) {
@@ -446,34 +446,34 @@ describe('the Demos hub', () => {
     }
   })
 
-  it('points every generated hub at hubs/ on the site the deploy copies them to', () => {
+  it('points every generated store at stores/ on the site the deploy copies them to', () => {
     // Every shelf but the inline Demos, which is the point: whatever the
     // generator grows to — IGV, the twelve ENCODE shards, the three session
-    // hubs — the picker reads all of it from one directory beside the page.
-    const generated = builtinHubs().filter((ref) => ref.id !== 'demos')
+    // stores — the picker reads all of it from one directory beside the page.
+    const generated = builtinStores().filter((ref) => ref.id !== 'demos')
     expect(generated.length).toBeGreaterThan(1)
     for (const ref of generated) {
       expect(ref.builtin).toBe(true)
-      // A URL and no inline hub: nothing is fetched until a reader chooses one.
-      expect(ref.hub).toBeUndefined()
+      // A URL and no inline store: nothing is fetched until a reader chooses one.
+      expect(ref.store).toBeUndefined()
       // No page in this runtime and no homepage defined, so the path is the
-      // bare `hubs/<id>.json`; `test/dom/builtin-hubs.test.ts` holds the
+      // bare `stores/<id>.json`; `test/dom/builtin-stores.test.ts` holds the
       // on-a-page half, where it is the site's own origin.
-      expect(ref.url, `the ${ref.id} hub must be read from the site's hubs/`).toBe(
-        `hubs/${ref.id}.json`,
+      expect(ref.url, `the ${ref.id} store must be read from the site's stores/`).toBe(
+        `stores/${ref.id}.json`,
       )
     }
   })
 })
 
 /**
- * A shelf a hub row brought with it, answered through the same question.
+ * A shelf a store row brought with it, answered through the same question.
  *
- * `registerShelf` exists so that `Session` needs no idea a hub exists: the
+ * `registerShelf` exists so that `Session` needs no idea a store exists: the
  * Tracks card asks one question — what is published beside this map — and a
- * hub's `tracks` and the demo folder's ten files are two answers to it.
+ * store's `tracks` and the demo folder's ten files are two answers to it.
  */
-describe('a shelf registered by a hub row', () => {
+describe('a shelf registered by a store row', () => {
   const map = 'https://4dn.example/maps/a.mcool'
 
   afterEach(() => {
@@ -493,7 +493,7 @@ describe('a shelf registered by a hub row', () => {
 
   it('answers for the same file opened at one of its entries', () => {
     // A collection opened at its root lands on an entry, so the URI the session
-    // ends up on is not the one the hub row carried.
+    // ends up on is not the one the store row carried.
     registerShelf(map, [{ label: 'CTCF', url: 'https://4dn.example/maps/ctcf.bw' }])
     expect(demoAnnotationsFor(`${map}::resolutions/5000`)).toHaveLength(1)
   })

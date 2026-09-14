@@ -12,7 +12,7 @@
  *
  * So an embed says so, and this module is the one place that reads it:
  * `?embed=1` for the chrome-less mount, `?config=<url>` for the session to open
- * on arrival, `?hub=<url>` for the catalogue to land on (§24.2). Everything
+ * on arrival, `?store=<url>` for the catalogue to land on (§24.2). Everything
  * downstream asks {@link mounting} rather than parsing the URL a second time.
  *
  * ## Why the query string and not the hash
@@ -77,10 +77,10 @@ export interface Mounting {
    */
   readonly config: string | null
   /**
-   * A hub to land on, absolute, or `null` (§24.2).
+   * A store to land on, absolute, or `null` (§24.2).
    *
    * The third parameter beside the two above, and the one that names a *shelf*
-   * rather than a picture: `?config=` says "open this figure", `?hub=` says
+   * rather than a picture: `?config=` says "open this figure", `?store=` says
    * "here is our catalogue, choose". A lab sends one link and colleagues land
    * on its own list of maps, with the offer to keep it.
    *
@@ -91,11 +91,11 @@ export interface Mounting {
    * Resolved and scheme-checked exactly as `config` is, and for exactly the
    * same reason: this value is about to be handed to `fetch`.
    */
-  readonly hub: string | null
+  readonly store: string | null
 }
 
 /** The mount of a page that was not asked for anything in particular. */
-const PLAIN: Mounting = { embed: false, config: null, hub: null }
+const PLAIN: Mounting = { embed: false, config: null, store: null }
 
 /**
  * Read a query string as a mount.
@@ -109,8 +109,8 @@ const PLAIN: Mounting = { embed: false, config: null, hub: null }
  * `?embed=true` — and off for the three spellings of "no", because a hand-edited
  * `embed=0` should mean what it says rather than being a truthy string.
  *
- * `config` and `hub` are resolved against `base` so a self-hosted deployment
- * can write `?config=session.json` or `?hub=hub.json` beside its own files, and
+ * `config` and `store` are resolved against `base` so a self-hosted deployment
+ * can write `?config=session.json` or `?store=store.json` beside its own files, and
  * both are kept only when they come out `http:` or `https:`. That check is not
  * ceremony: the value is a URL from outside that this app is about to `fetch`,
  * and the schemes that are not those two are the ones with no server on the
@@ -129,14 +129,14 @@ export function readMounting(search: string, base: string): Mounting {
   return {
     embed,
     config: fetchable(params.get('config'), base),
-    hub: fetchable(params.get('hub'), base),
+    store: fetchable(params.get('store'), base),
   }
 }
 
 /**
  * A query parameter naming something this page may fetch, or `null`.
  *
- * One function for `config` and `hub` rather than the check written twice: they
+ * One function for `config` and `store` rather than the check written twice: they
  * are the same kind of value — an outside URL about to be handed to `fetch` —
  * and the schemes that are not `http(s)` are the ones with no server on the
  * other end and a document of their own to hand back.
@@ -144,7 +144,7 @@ export function readMounting(search: string, base: string): Mounting {
 function fetchable(named: string | null, base: string): string | null {
   if (named === null || named === '') return null
   try {
-    // Canonicalised first (§24.5), so `?hub=gs://…` and `?config=s3://…` are
+    // Canonicalised first (§24.5), so `?store=gs://…` and `?config=s3://…` are
     // the https URLs they stand for by the time the scheme is judged.
     const url = new URL(canonicalUrl(named), base)
     if (url.protocol === 'http:' || url.protocol === 'https:') return url.href

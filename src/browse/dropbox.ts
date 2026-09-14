@@ -236,7 +236,7 @@ async function call(
     response = await globalThis.fetch(
       url,
       // Through `applyAccess` over `accessHeadersFor`, which is the pair every
-      // main-thread request in this app uses (`state/hub.ts`, `app/Session.ts`):
+      // main-thread request in this app uses (`state/store.ts`, `app/Session.ts`):
       // the bearer is read from the registry at the moment of the request
       // (SPECS §24.7) rather than captured when the folder was built, and the
       // `Content-Type` below rides under it rather than over it.

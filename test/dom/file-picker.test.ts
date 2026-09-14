@@ -5,8 +5,8 @@
  * One element serves three screens — the landing page, the file crumb's *open a
  * file*, and the header's `+` — and what separates them is a single optional
  * prop. That is a good arrangement while the difference stays visible, and an
- * invisible one the moment nothing asserts it: every row of a hub is a whole
- * file or a whole saved session, so offering the hubs section from the header's
+ * invisible one the moment nothing asserts it: every row of a store is a whole
+ * file or a whole saved session, so offering the stores section from the header's
  * dialog would offer to throw the reader's tab away from the one control whose
  * whole promise is that it will not.
  *
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { FilePicker } from '@/ui/FilePicker'
 import { icon } from '@/ui/icons'
-import { HUB_KIND, HUB_VERSION, type HubRef } from '@/state/hub'
+import { STORE_KIND, STORE_VERSION, type StoreRef } from '@/state/store'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -40,25 +40,25 @@ interface Built {
   files: File[][]
 }
 
-function build(hubs?: readonly HubRef[]): Built {
+function build(stores?: readonly StoreRef[]): Built {
   const opened: Array<{ uri: string; local: boolean }> = []
   const files: File[][] = []
   const picker = new FilePicker({
     onOpen: (uri, source) => opened.push({ uri, local: source.kind === 'local' }),
     onOpenFiles: (chosen) => files.push([...chosen]),
-    ...(hubs === undefined ? {} : { hubs }),
+    ...(stores === undefined ? {} : { stores }),
   })
   return { picker, el: picker.el, opened, files }
 }
 
-/** One hub, inline, so building the picker fetches nothing (§24.2). */
-const DEMOS: HubRef = {
+/** One store, inline, so building the picker fetches nothing (§24.2). */
+const DEMOS: StoreRef = {
   id: 'demos',
   label: 'Demos',
   builtin: true,
-  hub: {
-    kind: HUB_KIND,
-    version: HUB_VERSION,
+  store: {
+    kind: STORE_KIND,
+    version: STORE_VERSION,
     name: 'Demos',
     columns: [{ key: 'assembly', label: 'Assembly' }],
     entries: [
@@ -119,13 +119,13 @@ describe('the file picker', () => {
     expect(built.opened).toEqual([])
   })
 
-  it('shows the hubs section when it is given hubs', () => {
+  it('shows the stores section when it is given stores', () => {
     const { el } = build([DEMOS])
-    expect(el.querySelector('.hubs-box')).not.toBeNull()
-    expect(textsOf(el, '.hubs-box h3')).toEqual(['Hubs'])
-    const select = el.querySelector('.hub-select') as HTMLSelectElement
+    expect(el.querySelector('.stores-box')).not.toBeNull()
+    expect(textsOf(el, '.stores-box h3')).toEqual(['Stores'])
+    const select = el.querySelector('.store-select') as HTMLSelectElement
     expect(select).not.toBeNull()
-    // The placeholder, then one row per hub on offer. Still one line at any
+    // The placeholder, then one row per store on offer. Still one line at any
     // length, which is what the table under it is not.
     expect(all(select, 'option')).toHaveLength(2)
   })
@@ -135,27 +135,27 @@ describe('the file picker', () => {
    * why the prop is optional: everything a reader came for is still here, and
    * the catalogue of whole sessions is not.
    */
-  it('leaves the hubs out when it is given none, and keeps the rest', () => {
+  it('leaves the stores out when it is given none, and keeps the rest', () => {
     const { el } = build()
-    expect(el.querySelector('.hubs-box')).toBeNull()
-    expect(el.querySelector('.hub-table')).toBeNull()
+    expect(el.querySelector('.stores-box')).toBeNull()
+    expect(el.querySelector('.store-table')).toBeNull()
     expect(all(el, '.dropzone')).toHaveLength(1)
     expect(all(el, '.remote-box')).toHaveLength(1)
   })
 
   /**
-   * What a `?hub=` link lands on.
+   * What a `?store=` link lands on.
    *
    * `App.restore` builds a reference and hands it here, and the table loads it
    * without anybody touching the selector — a link is a gesture (§24.2). The
-   * hub in this case is inline, so the assertion is about the wiring rather
+   * store in this case is inline, so the assertion is about the wiring rather
    * than about a fetch.
    */
-  it('lands on a hub it is handed, without a gesture in the page', () => {
+  it('lands on a store it is handed, without a gesture in the page', () => {
     const built = build([DEMOS])
-    expect(all(built.el, '.hub-name')).toHaveLength(0)
-    built.picker.loadHub(DEMOS)
-    expect(all(built.el, '.hub-name')).toHaveLength(2)
+    expect(all(built.el, '.store-name')).toHaveLength(0)
+    built.picker.loadStore(DEMOS)
+    expect(all(built.el, '.store-name')).toHaveLength(2)
   })
 
   /**
@@ -163,17 +163,17 @@ describe('the file picker', () => {
    *
    * That is the property worth asserting rather than the click: `onOpen` with a
    * remote source is what `Session.openWithConfig` routes — a `.json` to
-   * `openConfigUrl`, anything else to the file path — so a hub row that left by
+   * `openConfigUrl`, anything else to the file path — so a store row that left by
    * some other door would be a second router to keep in step with the first.
    */
-  it('opens a hub row as a remote file, by its absolute URI', () => {
+  it('opens a store row as a remote file, by its absolute URI', () => {
     const built = build([DEMOS])
     // Chosen the way a reader chooses it, through the table's own selector.
-    // The Demos hub is inline, so nothing is fetched (§24.2).
-    const select = built.el.querySelector('.hub-select') as HTMLSelectElement
+    // The Demos store is inline, so nothing is fetched (§24.2).
+    const select = built.el.querySelector('.store-select') as HTMLSelectElement
     select.value = 'demos'
     select.dispatchEvent(new Event('change'))
-    const rows = all<HTMLButtonElement>(built.el, '.hub-name')
+    const rows = all<HTMLButtonElement>(built.el, '.store-name')
     expect(rows.map((row) => row.textContent)).toEqual([
       'A published session',
       'A map on somebody else’s bucket',

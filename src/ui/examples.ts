@@ -56,12 +56,12 @@
  */
 
 import { splitUri } from './labels'
-import type { Hub, HubEntry, HubRef } from '../state/hub'
-import { HUB_KIND, HUB_VERSION } from '../state/hub'
+import type { StoreEntry, StoreFile, StoreRef } from '../state/store'
+import { STORE_KIND, STORE_VERSION } from '../state/store'
 import { HOMEPAGE } from '../version'
 import { SITE_BASE } from '../versions'
 
-export type { HubRef } from '../state/hub'
+export type { StoreRef } from '../state/store'
 
 declare const __DEMO_BASE__: string
 
@@ -109,7 +109,7 @@ const DEMO: Array<{
   file: string
   label: string
   note: string
-  /** The value of the Demos hub's `assembly` column for this entry. */
+  /** The value of the Demos store's `assembly` column for this entry. */
   assembly: string
 }> = [
   {
@@ -218,12 +218,12 @@ export interface DemoAnnotationLink extends DemoAnnotation {
 /**
  * The annotations published beside the map at `uri`, or `[]`.
  *
- * Two sources, asked in this order, and the order is the argument. A hub row
+ * Two sources, asked in this order, and the order is the argument. A store row
  * that carried `tracks` said so **about this exact file** — the catalogue's
  * publisher named them beside the URI the reader just clicked — where the table
  * below matches on a *file name*, which is a guess that happens to be a good
  * one. A specific answer beats a general one, so a registered shelf wins
- * outright rather than being concatenated: a hub naming three bigWigs for a map
+ * outright rather than being concatenated: a store naming three bigWigs for a map
  * that happens to be called `Yeast_microC_G2M_1kb.cool` means three, not
  * thirteen.
  *
@@ -283,7 +283,7 @@ export const DEMO_ANNOTATION_FILES: readonly string[] = Object.values(DEMO_ANNOT
  * The workspace files this module offers, as their paths under `demo/`, for the
  * test that reads every one of them off disk and opens what it names.
  *
- * A separate export rather than a `map` over {@link builtinHubs} because the
+ * A separate export rather than a `map` over {@link builtinStores} because the
  * thing worth checking is the file on disk, which is what the sync uploads, not
  * the URL built around it.
  */
@@ -291,7 +291,7 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder
 
 
 // ---------------------------------------------------------------------------
-// The demos, as a hub — and the two generated ones beside them
+// The demos, as a store — and the two generated ones beside them
 // ---------------------------------------------------------------------------
 
 /**
@@ -302,7 +302,7 @@ export const DEMO_FILES: readonly string[] = DEMO.map((entry) => `${entry.folder
  * *relative* base — `DEMO_BASE=/demo/ npm run build` for a copy served beside
  * the app. The `typeof` guard is for the node test runtime, which has no
  * `window` and in which this is still worth calling: a test that walks the
- * built-in hub is checking the entries, not the origin.
+ * built-in store is checking the entries, not the origin.
  */
 function demoBase(): string {
   const base = DEMO_BASE !== '' ? DEMO_BASE : DEMO_BUCKET
@@ -315,12 +315,12 @@ function demoBase(): string {
 }
 
 /**
- * The columns the Demos hub declares.
+ * The columns the Demos store declares.
  *
  * Four, and three of them are empty on every demo — which is part of why they
- * are there. The Demos hub is the first table a reader ever sees and it is also
- * the shape the 4DN and ENCODE hubs arrive in; a first table with one column
- * would teach that a hub is a list, and the second one would then be a surprise.
+ * are there. The Demos store is the first table a reader ever sees and it is also
+ * the shape the 4DN and ENCODE stores arrive in; a first table with one column
+ * would teach that a store is a list, and the second one would then be a surprise.
  * The two 4DN rows below fill all four, so the header row is honest about what
  * a column is for the moment anybody looks at it.
  */
@@ -341,11 +341,11 @@ const DEMO_COLUMNS = [
  * the one a first-time reader has no way to check from a demo folder this
  * project controls end to end.
  *
- * Sizes are recorded rather than guessed, because a size in a hub is what lets
+ * Sizes are recorded rather than guessed, because a size in a store is what lets
  * the table say what a row costs before it is clicked (§24.1) — and these two
  * are exactly the rows worth saying it about.
  */
-const DEMO_4DN: HubEntry[] = [
+const DEMO_4DN: StoreEntry[] = [
   {
     label: 'Hi-C, HCT116 RAD21-AID (Rao 2017) — 4DN open data (hic)',
     uri:
@@ -373,17 +373,17 @@ const DEMO_4DN: HubEntry[] = [
     fields: { assembly: 'GRCh38' },
     note:
       '4DNFIOKRZ21H · 2.2 GB, 24 chromosomes, 1 kb to 10 Mb · a multi-resolution cooler the ' +
-      '4DN hub will name in full',
+      '4DN store will name in full',
   },
 ]
 
 /**
- * Where the generated hubs are read from: the site's own `hubs/` directory.
+ * Where the generated stores are read from: the site's own `stores/` directory.
  *
- * `.github/workflows/hubs.yml` writes them to the `hubs` branch, and
+ * `.github/workflows/stores.yml` writes them to the `stores` branch, and
  * `.github/workflows/deploy.yml` copies the current three files from that
- * branch into `hubs/` beside the app on every deploy — which the hubs workflow
- * asks for as soon as it has published, so a fresh hub is on the site minutes
+ * branch into `stores/` beside the app on every deploy — which the stores workflow
+ * asks for as soon as it has published, so a fresh store is on the site minutes
  * later with no push to `main` (§24.3). The branch is where the workflow
  * *writes*; the site is where a browser *reads*, and the reason that
  * distinction exists took a private repository to notice: the first design
@@ -391,7 +391,7 @@ const DEMO_4DN: HubEntry[] = [
  * to anyone not logged in when the repository is private — and a Pages site is
  * public whether or not its repository is. Same origin as the page, so no CORS
  * enters into it; an archived build or a preview reaches up to the site root
- * through `SITE_BASE`, since the hubs are published once and not per copy.
+ * through `SITE_BASE`, since the stores are published once and not per copy.
  *
  * A build with no site to be relative to — the desktop's `app://viewer`, a
  * standalone file — reads the deployed site by its absolute address, which is
@@ -400,30 +400,30 @@ const DEMO_4DN: HubEntry[] = [
  * no homepage either, the path is left relative and answers 404, which the
  * table reports as the state it is.
  *
- * **Both 404 until `hubs.yml` has run once and the deploy it asks for has
+ * **Both 404 until `stores.yml` has run once and the deploy it asks for has
  * finished**, which is a state rather than a failure and is the reason
- * `fetchHub` tells 404 apart from every other answer: the table says "not
+ * `fetchStore` tells 404 apart from every other answer: the table says "not
  * generated yet" and names the workflow.
  */
-function hubsBase(): string {
+function storesBase(): string {
   const onSite = typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)
   if (onSite) {
     try {
-      return `${new URL(SITE_BASE, window.location.href).href}hubs/`
+      return `${new URL(SITE_BASE, window.location.href).href}stores/`
     } catch {
       // Fall through to the deployed site: a base that does not resolve is not
       // a site this page is on.
     }
   }
-  return `${HOMEPAGE}hubs/`
+  return `${HOMEPAGE}stores/`
 }
 
-/** The Demos hub: the four published workspaces, and two files that are not ours. */
-function demosHub(): Hub {
+/** The Demos store: the four published workspaces, and two files that are not ours. */
+function demosStore(): StoreFile {
   const base = demoBase()
   return {
-    kind: HUB_KIND,
-    version: HUB_VERSION,
+    kind: STORE_KIND,
+    version: STORE_VERSION,
     name: 'Demos',
     description:
       'Four composed sessions on the lab’s bucket, and two maps on 4DN’s. Every one of them ' +
@@ -432,10 +432,10 @@ function demosHub(): Hub {
     columns: DEMO_COLUMNS,
     entries: [
       ...DEMO.map(
-        (entry): HubEntry => ({
+        (entry): StoreEntry => ({
           label: entry.label,
-          // Absolute already, so `resolveHub` has nothing left to do to them:
-          // an inline hub has no URL of its own to be relative to.
+          // Absolute already, so `resolveStore` has nothing left to do to them:
+          // an inline store has no URL of its own to be relative to.
           uri: `${base}${entry.folder}/${entry.file}`,
           // Every demo is a *workspace*, which is the argument this module's
           // header makes at length: a `.cool` in the list could only offer what
@@ -452,11 +452,11 @@ function demosHub(): Hub {
 }
 
 /**
- * ENCODE's shards, as the generator writes them (`scripts/make_hub.py`).
+ * ENCODE's shards, as the generator writes them (`scripts/make_store.py`).
  *
- * **These two lists have to agree**, and `test/dom/builtin-hubs.test.ts`
+ * **These two lists have to agree**, and `test/dom/builtin-stores.test.ts`
  * checks that they do. ENCODE has 1.2 million released files this viewer can
- * open; one hub of them would be a quarter of a gigabyte and a table nothing
+ * open; one store of them would be a quarter of a gigabyte and a table nothing
  * could draw, so the generator writes one per assembly group and output
  * category and the picker ships a reference to each (§24.3). Enumerated rather
  * than discovered because §24.2 is not negotiable: the picker may not fetch an
@@ -482,7 +482,7 @@ const ENCODE_SHARDS: ReadonlyArray<{ id: string; label: string }> = [
 ]
 
 /** The headings the picker files the shipped shelves under. */
-export const HUB_GROUPS = {
+export const STORE_GROUPS = {
   builtin: 'Built in',
   igv: 'IGV',
   fourdn: '4DN',
@@ -491,7 +491,7 @@ export const HUB_GROUPS = {
 } as const
 
 /**
- * The hubs this build ships a pointer to, in the order they are offered.
+ * The stores this build ships a pointer to, in the order they are offered.
  *
  * Demos first and inline, because it is the only one that costs no request and
  * the only one that is certainly there. Every other one is a URL: nothing is
@@ -501,56 +501,56 @@ export const HUB_GROUPS = {
  *
  * ## Why there are eighteen
  *
- * The first version of this list was Hi-C only, and shipped one hub per portal.
+ * The first version of this list was Hi-C only, and shipped one store per portal.
  * Widening the two portal front ends to *every file this viewer can open* made
  * 4DN four times the size and ENCODE four hundred times it, so ENCODE is
  * sharded (see {@link ENCODE_SHARDS}) and each shard is its own shelf. Grouping
- * them is the other half of that answer: `HubRef.group` is what turns eighteen
+ * them is the other half of that answer: `StoreRef.group` is what turns eighteen
  * options into five headings, and the headings are the sources — which is how a
  * reader thinks about it, since *the 4DN shelf* and *the ENCODE shelf* are
  * different catalogues rather than different filters of one.
  *
  * ## Why sessions are a group and not a column
  *
- * A pre-configured session is a hub row like any other (`kind: 'workspace'`,
- * §24.1) and could simply live in its source's own hub. It does not, because
+ * A pre-configured session is a store row like any other (`kind: 'workspace'`,
+ * §24.1) and could simply live in its source's own store. It does not, because
  * the two are different questions: *which file do I open* and *show me this
  * assembly with everything on it*. A reader arriving with the second question
  * in a table of 126,000 files has no filter that finds the eleven sessions
  * hiding in it — `kind` is a column, but it is one of eight — whereas a heading
  * called *Preconfigured sessions* is the answer to the question as asked.
  */
-export function builtinHubs(): HubRef[] {
-  const base = hubsBase()
+export function builtinStores(): StoreRef[] {
+  const base = storesBase()
   return [
-    { id: 'demos', label: 'Demos', hub: demosHub(), builtin: true, group: HUB_GROUPS.builtin },
+    { id: 'demos', label: 'Demos', store: demosStore(), builtin: true, group: STORE_GROUPS.builtin },
     {
       id: 'igv',
       label: 'IGV genomes',
       url: `${base}igv.json`,
       builtin: true,
-      group: HUB_GROUPS.igv,
+      group: STORE_GROUPS.igv,
     },
     {
       id: '4dn',
       label: '4DN open data',
       url: `${base}4dn.json`,
       builtin: true,
-      group: HUB_GROUPS.fourdn,
+      group: STORE_GROUPS.fourdn,
     },
-    ...ENCODE_SHARDS.map((shard): HubRef => ({
+    ...ENCODE_SHARDS.map((shard): StoreRef => ({
       id: `encode-${shard.id}`,
       label: shard.label,
       url: `${base}encode-${shard.id}.json`,
       builtin: true,
-      group: HUB_GROUPS.encode,
+      group: STORE_GROUPS.encode,
     })),
-    ...(['igv', '4dn', 'encode'] as const).map((front): HubRef => ({
+    ...(['igv', '4dn', 'encode'] as const).map((front): StoreRef => ({
       id: `${front}-sessions`,
       label: SESSION_LABELS[front],
       url: `${base}${front}-sessions.json`,
       builtin: true,
-      group: HUB_GROUPS.sessions,
+      group: STORE_GROUPS.sessions,
     })),
   ]
 }
@@ -563,17 +563,17 @@ const SESSION_LABELS = {
 } as const
 
 // ---------------------------------------------------------------------------
-// Shelves a hub brought with it
+// Shelves a store brought with it
 // ---------------------------------------------------------------------------
 
 /**
- * The tracks a hub row named, held until the file it belongs to is opened.
+ * The tracks a store row named, held until the file it belongs to is opened.
  *
- * A hub entry may carry `tracks` — the bigWigs the same experiment published
+ * A store entry may carry `tracks` — the bigWigs the same experiment published
  * beside the map (§24.1) — and they are the same *offer* the demo map's ten
  * annotations are: here is a set of tracks to look at, for a reader who has
  * none. So they are answered through the same question rather than a second
- * one, and `Session` needs no idea that a hub exists.
+ * one, and `Session` needs no idea that a store exists.
  *
  * In memory and never in storage, deliberately. The offer is about the file
  * being opened right now; a shelf that outlived the tab would be a promise to
@@ -588,9 +588,9 @@ const shelves = new Map<string, DemoAnnotationLink[]>()
  * opened at an entry (`file.mcool::resolutions/1000`) as for the file itself —
  * which is the common case rather than the exotic one, since a collection
  * opened at its root lands on one of its entries and the URI the session ends
- * up on is not the one the hub row carried.
+ * up on is not the one the store row carried.
  *
- * Last registration wins: two hubs naming the same map is not a conflict worth
+ * Last registration wins: two stores naming the same map is not a conflict worth
  * a policy, and the one the reader has just clicked is the one they mean.
  */
 export function registerShelf(
@@ -608,7 +608,7 @@ export function registerShelf(
     tracks.map((track) => ({
       // The file name is what a track row falls back to when it has no label,
       // and what `demo-examples.test.ts` checks the published set against;
-      // derived here rather than asked for, since a hub carries a label and a
+      // derived here rather than asked for, since a store carries a label and a
       // URL and nothing in between.
       file: track.url.split('?')[0].split('#')[0].split('/').pop() ?? track.url,
       label: track.label,

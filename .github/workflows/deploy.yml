@@ -29,7 +29,7 @@ concurrency:
 # Pages source stays "GitHub Actions" and there is no setting to change.
 env:
   ARCHIVE_BRANCH: pages-archive
-  HUBS_BRANCH: hubs
+  STORES_BRANCH: stores
 
 jobs:
   build:
@@ -112,22 +112,22 @@ jobs:
             git -C archive remote add origin "$remote"
           fi
 
-      # The generated hubs, which hubs.yml keeps on a branch of their own and
-      # the viewer reads from the site (docs/hubs.md): the picker's IGV, 4DN,
+      # The generated stores, which stores.yml keeps on a branch of their own and
+      # the viewer reads from the site (docs/stores.md): the picker's IGV, 4DN,
       # ENCODE and session shelves. The same shallow, by-token fetch as the
       # archive; only the current files are copied in below, never the dated
       # copies under `archive/`. Absent until that workflow has run once, and
       # the picker says so.
-      - name: Fetch the published hubs
+      - name: Fetch the published stores
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          if git ls-remote --exit-code --heads "$remote" "$HUBS_BRANCH" >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch "$HUBS_BRANCH" "$remote" hubs
+          if git ls-remote --exit-code --heads "$remote" "$STORES_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$STORES_BRANCH" "$remote" stores
           else
-            echo "No $HUBS_BRANCH branch yet — the picker will say so until the Hubs workflow has run."
+            echo "No $STORES_BRANCH branch yet — the picker will say so until the Stores workflow has run."
           fi
 
       # Previews belong to open pull requests, and preview.yml removes one when
@@ -196,8 +196,8 @@ jobs:
       # cannot disagree about what exists.
       # `pr/` holds the pull-request previews, written by preview.yml into the
       # same branch and listed in the same manifest; absent until the first
-      # pull request has been previewed, hence the test. `hubs/` is the current
-      # files of the hubs branch, fetched above, on the same terms.
+      # pull request has been previewed, hence the test. `stores/` is the current
+      # files of the stores branch, fetched above, on the same terms.
       #
       # Copied by *shape* rather than by name — every `.json` at the root, plus
       # the `sessions/` directory — because the names are the generator's and
@@ -212,13 +212,13 @@ jobs:
           cp -R archive/v dist/v
           if [ -d archive/pr ]; then cp -R archive/pr dist/pr; fi
           cp archive/versions.json dist/versions.json
-          if [ -d hubs ]; then
-            mkdir -p dist/hubs
-            find hubs -maxdepth 1 -name '*.json' -exec cp {} dist/hubs/ \;
-            if [ -d hubs/sessions ]; then cp -R hubs/sessions dist/hubs/sessions; fi
-            echo "Copied $(find dist/hubs -name '*.json' | wc -l) hub and session files."
+          if [ -d stores ]; then
+            mkdir -p dist/stores
+            find stores -maxdepth 1 -name '*.json' -exec cp {} dist/stores/ \;
+            if [ -d stores/sessions ]; then cp -R stores/sessions dist/stores/sessions; fi
+            echo "Copied $(find dist/stores -name '*.json' | wc -l) store and session files."
           fi
-          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr ) $( [ -d dist/hubs ] && echo dist/hubs )
+          du -sh dist dist/v $( [ -d dist/pr ] && echo dist/pr ) $( [ -d dist/stores ] && echo dist/stores )
 
       - uses: actions/upload-pages-artifact@v3
         with:

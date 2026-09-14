@@ -37,7 +37,7 @@ export const COMMIT: string = typeof __APP_COMMIT__ === 'string' ? __APP_COMMIT_
  * The deployed site, absolute, from `package.json`'s `homepage` — or `''`.
  *
  * What a build with no site of its own reaches for when it needs one: the
- * desktop and a standalone file read the generated hubs from here
+ * desktop and a standalone file read the generated stores from here
  * (`ui/examples.ts`), having no origin of their own to publish beside. Empty
  * in the test runtime, which defines nothing, and the code that reads it
  * treats empty as "no site".

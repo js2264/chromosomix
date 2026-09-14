@@ -568,6 +568,6 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 | GitHub Pages, GEO, SRA | no | cannot be fixed by the owner (compression; no ranges; no CORS) |
 | Aiden Lab `hicfiles.s3.amazonaws.com` | no browser can | the bucket refuses every browser user agent |
 
-Publishing a **hub** — a JSON that names the files on a bucket with columns to filter on, so a
-reader can choose without opening any — is `scripts/make_hub.py bucket <prefix>`; SPECS §24 is the
+Publishing a **store** — a JSON that names the files on a bucket with columns to filter on, so a
+reader can choose without opening any — is `scripts/make_store.py bucket <prefix>`; SPECS §24 is the
 format and the picker's side of it.

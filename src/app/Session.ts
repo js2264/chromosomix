@@ -135,7 +135,7 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
-import type { HubRef } from '../state/hub'
+import type { StoreRef } from '../state/store'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
@@ -154,7 +154,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { builtinHubs, demoAnnotationsToOffer } from '../ui/examples'
+import { builtinStores, demoAnnotationsToOffer } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
@@ -848,7 +848,7 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files),
-      hubs: builtinHubs(),
+      stores: builtinStores(),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)
@@ -1913,22 +1913,22 @@ export class Session {
    * The landing page and the Open-a-file dialog hand back the same two things,
    * so they go through the same door: a URL naming a *session* is fetched and
    * applied, anything else is a file. Routing one of them past this was how the
-   * dialog came to answer a row of the demos hub with "this is not a cooler".
+   * dialog came to answer a row of the demos store with "this is not a cooler".
    */
   async openPicked(uri: string, source: SourceSpec): Promise<void> {
     await this.openWithConfig(uri, source)
   }
 
   /**
-   * Land this tab's picker on a hub — what a `?hub=` link asks for (§24.2).
+   * Land this tab's picker on a store — what a `?store=` link asks for (§24.2).
    *
    * Reached only from `App.restore`, and only for a window with nothing else to
    * show, so the picker is the element that is about to be mounted. The load is
    * the table's; this exists so `App` does not have to reach through a session
    * into a view it does not own.
    */
-  showHub(ref: HubRef): void {
-    this.picker.loadHub(ref)
+  showStore(ref: StoreRef): void {
+    this.picker.loadStore(ref)
   }
 
   /**
@@ -1940,7 +1940,7 @@ export class Session {
    */
   private async openWithConfig(uri: string, source: SourceSpec): Promise<void> {
     // A `.json` on a URL is a session, not a file to open: it is the one thing
-    // the picker's box and its hub table can be handed that names a whole tab
+    // the picker's box and its store table can be handed that names a whole tab
     // rather than a byte source. Checked before the pending config is
     // consumed, since this *produces* one — and only when there is none, so a
     // session that somehow named another session is refused as a file rather

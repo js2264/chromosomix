@@ -1,7 +1,7 @@
-name: Hubs
+name: Stores
 
-# The catalogues the picker's Hubs section offers (SPECS §24.3).
-# `scripts/make_hub.py` asks IGV, 4DN and ENCODE for everything they publish
+# The catalogues the picker's Stores section offers (SPECS §24.3).
+# `scripts/make_store.py` asks IGV, 4DN and ENCODE for everything they publish
 # that this viewer can open, joins each file to the genome, cell line, assay and
 # lab that name it, and writes static JSON. This workflow runs that once a week
 # and publishes the result.
@@ -14,16 +14,16 @@ name: Hubs
 # which is every dataset ENCODE has and 210,000 rows — and sharded by assembly
 # and output category into twelve files, none over about 25 MB. Each shard is
 # its own shelf in the picker, and `src/ui/examples.ts` ships a reference to
-# each; `test/dom/builtin-hubs.test.ts` checks the two lists still agree.
+# each; `test/dom/builtin-stores.test.ts` checks the two lists still agree.
 #
-# Three session hubs come with them. A pre-configured session is a hub row of
+# Three session stores come with them. A pre-configured session is a store row of
 # `kind: "workspace"` (§24.1) pointing at a `.metacooler.json` this workflow
 # also writes — IGV's hg38 as its FASTA with its tracks placed, a 4DN
 # experiment set as its map with its bigWigs on it — which is the *one click
 # and it is on screen* answer that three rows in a table is not.
 #
 # **Where the viewer reads it.** Not from this branch. `src/ui/examples.ts`
-# points every built-in hub at `<site>/hubs/<name>.json`, which
+# points every built-in store at `<site>/stores/<name>.json`, which
 # .github/workflows/deploy.yml copies out of this branch into the site on every
 # deploy — and the last step here asks for a deploy as soon as something new is
 # published, so the site is minutes behind the branch and never a push to
@@ -36,7 +36,7 @@ name: Hubs
 # whole thing by running this workflow once.
 #
 # **Why a branch at all, then.** The site is built from `main`; publishing a
-# hub *into the repository* would mean a commit to `main` every week for data
+# store *into the repository* would mean a commit to `main` every week for data
 # about somebody else's data, which changes on their cadence and not ours. An
 # orphan branch is the cheapest mutable place this repository already owns —
 # the same reasoning, and the same technique, as `pages-archive` in deploy.yml
@@ -47,25 +47,25 @@ name: Hubs
 # gigabytes of git objects within a year for a store whose only interesting
 # state is its tip. So the publish below force-pushes a single orphan commit,
 # and what survives between runs is the small part worth citing: `index.json`
-# dated per run, and dated copies of the hubs under 2 MB, pruned to the last
+# dated per run, and dated copies of the stores under 2 MB, pruned to the last
 # 26 runs. The 90-day workflow artifact holds everything, including the large
 # shards, for the reader who needs last Monday's exact shelf.
 #
 # **The first run has to be by hand.** Until it has happened, and the deploy it
-# asks for has finished, the hub URLs answer 404, and the picker says so in
-# those words ("not generated yet; the Hubs workflow publishes it") rather than
-# showing an error. To do it: Actions → Hubs → Run workflow, on `main`. Nothing
+# asks for has finished, the store URLs answer 404, and the picker says so in
+# those words ("not generated yet; the Stores workflow publishes it") rather than
+# showing an error. To do it: Actions → Stores → Run workflow, on `main`. Nothing
 # else needs setting up — no secret, no branch to create, no Pages setting to
 # change.
 #
-# What lands on the `hubs` branch:
+# What lands on the `stores` branch:
 #   igv.json                   IGV's genomes and their tracks
 #   4dn.json                   every openable file on the 4DN open-data bucket
 #   encode-<assembly>-<kind>.json   twelve ENCODE shards
 #   <front>-sessions.json      the three session shelves
 #   sessions/*.metacooler.json the sessions those shelves name
 #   index.json                 what is there, how many rows each has, and when
-#   archive/                   dated copies of index.json and the small hubs
+#   archive/                   dated copies of index.json and the small stores
 on:
   schedule:
     # Mondays at 04:17 UTC. Off the hour on purpose: GitHub queues every cron
@@ -81,11 +81,11 @@ permissions: {}
 # second push would be rejected or would drop the first run's archive entry.
 # Never cancelled in flight: a half-published pair is worse than a stale one.
 concurrency:
-  group: hubs
+  group: stores
   cancel-in-progress: false
 
 env:
-  HUB_BRANCH: hubs
+  STORE_BRANCH: stores
 
 jobs:
   publish:
@@ -113,19 +113,19 @@ jobs:
       # Either failure then fails the job and nothing below runs — which is the
       # whole point of exit 2: the generator answers 2 when a query came back
       # empty, and an empty catalogue must never be published over a good one.
-      # `--check` re-reads what was written and validates it against the hub
-      # contract before this step is allowed to succeed, because a hub that is
+      # `--check` re-reads what was written and validates it against the store
+      # contract before this step is allowed to succeed, because a store that is
       # valid JSON and wrong parses, publishes, and draws an empty table.
       #
       # `out/` is gitignored, so running these two commands locally to inspect
       # the result leaves nothing for a stray `git add -A` to pick up.
-      - name: Generate every hub
+      - name: Generate every store
         run: |
           set -uo pipefail
           failed=''
           for front in igv 4dn encode; do
             echo "::group::$front"
-            python3 scripts/make_hub.py "$front" \
+            python3 scripts/make_store.py "$front" \
               --out "out/$front.json" \
               --sessions-dir out/sessions \
               --sessions-out "out/$front-sessions.json" \
@@ -137,7 +137,7 @@ jobs:
           # thousands of lines of `--check` saying "valid" and the one thing
           # worth reading is which front end did not finish. A run that lost
           # one publishes nothing: the shelves are separate files, but the
-          # publish below replaces the branch wholesale, so a missing hub would
+          # publish below replaces the branch wholesale, so a missing store would
           # *delete* last week's good copy of it rather than leave it alone.
           if [ -n "$failed" ]; then
             echo "::error::These front ends failed:$failed. Nothing is published; the shelves             readers see are last week's."
@@ -161,30 +161,30 @@ jobs:
           import re
 
           out = pathlib.Path("out")
-          hubs = []
+          stores = []
           for path in sorted(out.glob("*.json")):
               if path.name == "index.json" or re.search(r"-\d{8}$", path.stem):
                   # A dated copy is the archive's, not the index's:
                   # `4dn-20260914.json` would be the same shelf listed twice.
                   continue
-              hub = json.loads(path.read_text(encoding="utf-8"))
-              if hub.get("kind") != "metacooler.hub":
+              store = json.loads(path.read_text(encoding="utf-8"))
+              if store.get("kind") != "metacooler.store":
                   continue
-              hubs.append({
+              stores.append({
                   "id": path.stem,
                   "file": path.name,
-                  "name": hub.get("name", ""),
-                  "entries": len(hub["entries"]),
+                  "name": store.get("name", ""),
+                  "entries": len(store["entries"]),
                   "bytes": path.stat().st_size,
-                  "generatedAt": hub["generatedAt"],
+                  "generatedAt": store["generatedAt"],
               })
           sessions = sorted((out / "sessions").glob("*.metacooler.json"))
           now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
           index = {
               "generatedAt": now.isoformat().replace("+00:00", "Z"),
-              "hubs": hubs,
+              "stores": stores,
               "sessions": len(sessions),
-              "entries": sum(hub["entries"] for hub in hubs),
+              "entries": sum(store["entries"] for store in stores),
           }
           (out / "index.json").write_text(
               json.dumps(index, indent=2) + "\n", encoding="utf-8"
@@ -195,7 +195,7 @@ jobs:
       # What "nothing changed" means, written down so it can be compared.
       #
       # Every file this workflow writes carries the instant it was written —
-      # `generatedAt` on a hub, `createdAt` on a session — so byte equality
+      # `generatedAt` on a store, `createdAt` on a session — so byte equality
       # between two runs is impossible and the "nothing changed" shortcut below
       # was, before this, unreachable: every Monday pushed a hundred megabytes
       # and asked for a deploy whether or not a portal had published anything.
@@ -240,7 +240,7 @@ jobs:
       # looked like on a particular Monday.
       - uses: actions/upload-artifact@v4
         with:
-          name: hubs-${{ steps.stamp.outputs.day }}
+          name: stores-${{ steps.stamp.outputs.day }}
           path: out/
           retention-days: 90
 
@@ -257,18 +257,18 @@ jobs:
       # dated copies survive because they are *copied*, not because git
       # remembers them. When the branch does not exist yet the directory is
       # initialised as an orphan and the first push creates it.
-      - name: Fetch the hubs branch
+      - name: Fetch the stores branch
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          if git ls-remote --exit-code --heads "$remote" "$HUB_BRANCH" >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch "$HUB_BRANCH" "$remote" published
+          if git ls-remote --exit-code --heads "$remote" "$STORE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$STORE_BRANCH" "$remote" published
           else
-            echo "No $HUB_BRANCH branch yet — starting one."
+            echo "No $STORE_BRANCH branch yet — starting one."
             mkdir published
-            git -C published init --quiet --initial-branch "$HUB_BRANCH"
+            git -C published init --quiet --initial-branch "$STORE_BRANCH"
             git -C published remote add origin "$remote"
           fi
 
@@ -278,7 +278,7 @@ jobs:
       # the one thing kept, and it is added to below only when something
       # actually changed, so "nothing changed" stays a real answer rather than
       # being defeated by a dated copy written on every run.
-      - name: Publish to the hubs branch
+      - name: Publish to the stores branch
         id: publish
         env:
           DAY: ${{ steps.stamp.outputs.day }}
@@ -291,7 +291,7 @@ jobs:
           # against, and that run is always worth making.
           if [ -f published/fingerprint.json ] &&
              cmp -s out/fingerprint.json published/fingerprint.json; then
-            echo "Nothing changed: every hub and session is what was published last time."
+            echo "Nothing changed: every store and session is what was published last time."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -303,7 +303,7 @@ jobs:
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Dated copies of the small hubs only, and always of the index. A run
+          # Dated copies of the small stores only, and always of the index. A run
           # writes about 100 MB, most of it the four large ENCODE shards, and a
           # weekly dated copy of those would be five gigabytes of branch within
           # a year for a citation nobody has asked for. What is kept is enough
@@ -345,11 +345,11 @@ jobs:
           # Monday, and a shallow clone of it is what the deploy does on every
           # push to `main`.
           git checkout --quiet --orphan republished
-          git commit --quiet -m 'hubs ${{ steps.stamp.outputs.day }}'
-          git push --quiet --force origin "HEAD:refs/heads/$HUB_BRANCH"
+          git commit --quiet -m 'stores ${{ steps.stamp.outputs.day }}'
+          git push --quiet --force origin "HEAD:refs/heads/$STORE_BRANCH"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      # The publisher of the site. The branch above is where the hubs are kept;
+      # The publisher of the site. The branch above is where the stores are kept;
       # the site is where they are read, and only deploy.yml rebuilds the site —
       # so ask it, the way preview.yml does, and only when there is something new
       # for it to copy. A run dispatched by the workflow token is one of the two
