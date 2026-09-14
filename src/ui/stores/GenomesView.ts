@@ -17,7 +17,7 @@
  */
 
 import { button, el, fmt } from '../dom'
-import { withNewMark } from '../rowVerbs'
+import { iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
 import { fetchStore, type StoreEntry } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
@@ -137,40 +137,45 @@ export class GenomesView {
     )
   }
 
+  /**
+   * One genome: its name and the one verb on a line, the chips under them,
+   * and its files behind a fold — the shape the lab's figure cards have
+   * (`GalleryView.ts`). The verb is the session with every track IGV ships,
+   * and a genome with rows but no session says so where the verb would be.
+   */
   private card(genome: Genome): HTMLElement {
     const session = genome.session
     const tracks = session === null ? '' : valueOf(session, 'tracks')
-    const host = session === null ? '' : (session.note ?? '')
     return el(
       'article',
       { class: 'gallery-card genomes-card' },
+      el(
+        'div',
+        { class: 'gallery-card-head' },
+        el('h4', { class: 'gallery-card-title', text: genome.label }),
+        session === null
+          ? null
+          : iconButton(
+              'new-session',
+              `Open ${genome.label} in a new session — the sequence and every track IGV ships for it, in the 1D browser.`,
+              () => this.props.host.open(session),
+              { class: 'btn btn-icon row-verb row-verb-new gallery-card-open', size: 16 },
+            ),
+      ),
       el(
         'div',
         { class: 'gallery-card-chips' },
         el('span', { class: 'portal-chip', text: genome.assembly }),
         tracks === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: `${tracks} ${tracks === '1' ? 'track' : 'tracks'}` }),
       ),
-      el('h4', { class: 'gallery-card-title', text: genome.label }),
-      host === '' ? null : el('p', { class: 'gallery-card-line', text: host }),
-      el(
-        'div',
-        { class: 'gallery-card-actions' },
-        session === null
-          ? el('span', { class: 'hint', text: 'No session was published for this genome.' })
-          : withNewMark(
-              button('open with its tracks', () => this.props.host.open(session), {
-                class: 'btn btn-primary',
-                title: `${session.label} — the sequence and every track IGV ships for it, in the 1D browser.`,
-              }),
-            ),
-      ),
+      session === null ? el('p', { class: 'hint gallery-card-line', text: 'No session was published for this genome.' }) : null,
       genome.files.length === 0
         ? null
         : el(
             'details',
             { class: 'gallery-card-more' },
             el('summary', { text: `${fmt.int(genome.files.length)} ${genome.files.length === 1 ? 'file' : 'files'}` }),
-            el('div', { class: 'genomes-files' }, ...genome.files.map((entry) => this.fileRow(entry))),
+            el('div', { class: 'gallery-card-files' }, ...genome.files.map((entry) => this.fileRow(entry))),
           ),
     )
   }

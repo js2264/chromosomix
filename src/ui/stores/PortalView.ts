@@ -50,7 +50,7 @@ import { MatrixView } from './MatrixView'
 import { ResultList, countLine } from './ResultList'
 import { SelectionTray } from './SelectionTray'
 import type { StoreHost } from './host'
-import type { StoreFront } from './registry'
+import type { ShardFacet, StoreFront } from './registry'
 
 export interface PortalViewProps {
   front: StoreFront
@@ -86,7 +86,20 @@ export class PortalView {
   private readonly statusEl = el('div', { class: 'portal-status hidden' })
 
   private file: StoreFile | null = null
+  /**
+   * The shards read so far, by their id, for a front published in several.
+   *
+   * Kept once read: a reader who ticks *hg19* beside *GRCh38* and unticks it
+   * again has not asked for the same twenty-five megabytes twice. What is on
+   * screen is the union of the ticked ones, stamped with the two values that
+   * chose each (`stampShard`), so the rows say which shard they came from and
+   * a link carries the choice as two ordinary facets.
+   */
+  private readonly shardFiles = new Map<string, StoreFile>()
+  /** Why a shard could not be read, by its id — shown once, not on every paint. */
+  private readonly shardErrors = new Map<string, string>()
   private sessions = new Map<string, StoreEntry>()
+  private sessionsRead = false
   private view: StoreView
   private readonly selected = new Map<string, StoreEntry>()
   /** Bumped on every load, so a slow shard cannot overwrite a fast one. */
@@ -199,6 +212,10 @@ export class PortalView {
       return
     }
 
+    if (front.shards !== undefined) {
+      await this.loadShards(token)
+      return
+    }
     const ref = this.rowsRef()
     if (ref === null) {
       this.showStatus({ kind: 'error', text: 'This store names no rows to read.' })
@@ -237,6 +254,83 @@ export class PortalView {
     this.paint()
   }
 
+  /**
+   * Read every ticked shard that is not in hand, then show the union.
+   *
+   * The ones already read are kept and not asked for again; the ones ticked
+   * and missing are fetched together, each with its own answer, so one shard
+   * the workflow has not generated yet is a sentence in the status line and
+   * not a blank store. Nothing is read for a value nobody ticked (§24.2).
+   */
+  private async loadShards(token: number): Promise<void> {
+    const front = this.props.front
+    const shards = front.shards
+    if (shards === undefined) return
+    const wanted = this.tickedShards()
+    const missing = wanted.filter((shard) => !this.shardFiles.has(shard.id) && !this.shardErrors.has(shard.id))
+    if (missing.length > 0) {
+      this.showStatus({
+        kind: 'loading',
+        text: `Reading ${front.label} — ${missing.map((shard) => shard.label).join(', ')}…`,
+      })
+      this.paintRail()
+      const sessions =
+        front.sessions === undefined || this.sessionsRead ? null : this.loadSessions(front.sessions)
+      const results = await Promise.all(
+        missing.map(async (shard) => ({ shard, result: await fetchStore(shard.url) })),
+      )
+      if (token !== this.pending || this.destroyed) return
+      for (const { shard, result } of results) {
+        if (result.ok) {
+          this.shardFiles.set(shard.id, stampShard(result.store, shards.facets, shard.first, shard.second))
+        } else {
+          this.shardErrors.set(shard.id, storeFailure(result, { id: shard.id, label: shard.label, url: shard.url, builtin: front.builtin }))
+        }
+      }
+      if (sessions !== null) {
+        const read = await sessions
+        if (token !== this.pending || this.destroyed) return
+        this.sessions = read
+        this.sessionsRead = true
+      }
+    }
+    const read = wanted.filter((shard) => this.shardFiles.has(shard.id))
+    if (read.length === 0) {
+      const why = wanted.map((shard) => this.shardErrors.get(shard.id)).find((text) => text !== undefined)
+      this.file = null
+      this.showStatus({ kind: 'error', text: why ?? 'Nothing is ticked, so nothing is read.' })
+      this.paintRail()
+      return
+    }
+    this.file = mergeShards(read.map((shard) => this.shardFiles.get(shard.id) as StoreFile))
+    const failed = wanted.filter((shard) => this.shardErrors.has(shard.id))
+    this.showStatus({ kind: 'none' })
+    this.paint()
+    if (failed.length > 0) {
+      // Under the rows rather than instead of them: what was read is shown,
+      // and what was not says so once.
+      this.countEl.textContent = `${this.countEl.textContent} ${failed.map((shard) => `${shard.label}: ${this.shardErrors.get(shard.id) ?? ''}`).join(' ')}`
+    }
+  }
+
+  /** The shards the view asks for: one per ticked pair, the first of each facet when nothing is. */
+  private tickedShards(): Array<{ id: string; label: string; url: string; first: string; second: string }> {
+    const shards = this.props.front.shards
+    if (shards === undefined) return []
+    const [first, second] = shards.facets
+    const as = tickedValues(this.view.facets, first)
+    const bs = tickedValues(this.view.facets, second)
+    return as.flatMap((a) =>
+      bs.map((b) => ({
+        id: `${a}-${b}`,
+        label: `${first.values.find((v) => v.id === a)?.label ?? a} · ${second.values.find((v) => v.id === b)?.label ?? b}`,
+        url: shards.url(a, b),
+        first: a,
+        second: b,
+      })),
+    )
+  }
+
   /** The sessions beside the rows, keyed by group and assembly. Empty on any failure. */
   private async loadSessions(ref: StoreRef): Promise<Map<string, StoreEntry>> {
     const out = new Map<string, StoreEntry>()
@@ -252,18 +346,9 @@ export class PortalView {
     return out
   }
 
-  /** The reference the rows come from: the front's file, or the chosen shard. */
+  /** The reference the rows come from, for a front published as one file. */
   private rowsRef(): StoreRef | null {
-    const front = this.props.front
-    if (front.shards !== undefined) {
-      const [first, second] = front.shards.facets
-      const a = chosenShard(this.view.facets, first.key)
-      const b = chosenShard(this.view.facets, second.key)
-      if (a === null || b === null) return null
-      const label = `${front.label} — ${first.values.find((v) => v.id === a)?.label ?? a}, ${second.values.find((v) => v.id === b)?.label ?? b}`
-      return { id: `${front.id}-${a}-${b}`, label, url: front.shards.url(a, b), builtin: front.builtin }
-    }
-    return front.rows ?? null
+    return this.props.front.rows ?? null
   }
 
   // -------------------------------------------------------------------------
@@ -271,10 +356,11 @@ export class PortalView {
   // -------------------------------------------------------------------------
 
   private setView(view: StoreView): void {
+    const shards = this.props.front.shards
     const shardChanged =
-      this.props.front.shards !== undefined &&
-      this.props.front.shards.facets.some(
-        (facet) => chosenShard(view.facets, facet.key) !== chosenShard(this.view.facets, facet.key),
+      shards !== undefined &&
+      shards.facets.some(
+        (facet) => tickedValues(view.facets, facet).join('|') !== tickedValues(this.view.facets, facet).join('|'),
       )
     this.view = view
     if (this.search.value !== view.text) this.search.value = view.text
@@ -313,13 +399,11 @@ export class PortalView {
         ? undefined
         : {
             facets: front.shards.facets,
-            chosen: new Map(
-              front.shards.facets.flatMap((facet) => {
-                const value = chosenShard(this.view.facets, facet.key)
-                return value === null ? [] : [[facet.key, value] as const]
-              }),
+            ticked: new Map(
+              front.shards.facets.map((facet) => [facet.key, new Set(tickedValues(this.view.facets, facet))] as const),
             ),
-            onChoose: (key, id) => this.setView({ ...this.view, facets: setFacet(this.view.facets, key, [id]) }),
+            counts: this.shardCounts(),
+            onToggle: (key, id) => this.setView({ ...this.view, facets: toggleFacet(this.view.facets, key, id) }),
           }
     const file = this.file
     this.rail.paint(
@@ -327,6 +411,33 @@ export class PortalView {
       file === null ? new Map() : facetCounts(file.entries, file.columns, this.view),
       shard,
     )
+  }
+
+  /**
+   * Rows behind each shard value, over the shards read: *hg19* counts every
+   * hg19 shard in hand whose other value is ticked, so the number beside a
+   * genome is what ticking it alone would show. A shard not read has no
+   * number, and the rail says so.
+   */
+  private shardCounts(): Map<string, number> {
+    const out = new Map<string, number>()
+    const shards = this.props.front.shards
+    if (shards === undefined) return out
+    const [first, second] = shards.facets
+    const as = tickedValues(this.view.facets, first)
+    const bs = tickedValues(this.view.facets, second)
+    const rows = (a: string, b: string): number | undefined => this.shardFiles.get(`${a}-${b}`)?.entries.length
+    for (const value of first.values) {
+      const partners = bs.length === 0 ? [second.values[0].id] : bs
+      const counts = partners.map((b) => rows(value.id, b))
+      if (counts.every((count) => count !== undefined)) out.set(`${first.key}|${value.id}`, counts.reduce((sum, n) => (sum ?? 0) + (n ?? 0), 0) ?? 0)
+    }
+    for (const value of second.values) {
+      const partners = as.length === 0 ? [first.values[0].id] : as
+      const counts = partners.map((a) => rows(a, value.id))
+      if (counts.every((count) => count !== undefined)) out.set(`${second.key}|${value.id}`, counts.reduce((sum, n) => (sum ?? 0) + (n ?? 0), 0) ?? 0)
+    }
+    return out
   }
 
   private paint(): void {
@@ -377,23 +488,62 @@ export class PortalView {
   }
 }
 
-/** The one value chosen under a shard facet, or `null`. */
-function chosenShard(facets: FacetSelection, key: string): string | null {
-  const values = facets.get(key)
-  if (values === undefined || values.size === 0) return null
-  return [...values][0]
+/** The values ticked under a shard facet that the front knows, in the front's order. */
+function tickedValues(facets: FacetSelection, facet: ShardFacet): string[] {
+  const values = facets.get(facet.key)
+  if (values === undefined) return []
+  return facet.values.filter((value) => values.has(value.id)).map((value) => value.id)
 }
 
-/** The view with a shard chosen wherever the link named none: the first of each. */
+/** The view with a shard ticked wherever the link named none: the first of each. */
 function withShardDefaults(front: StoreFront, view: StoreView): StoreView {
   if (front.shards === undefined) return view
   let facets = view.facets
   for (const facet of front.shards.facets) {
-    const chosen = chosenShard(facets, facet.key)
-    const known = chosen !== null && facet.values.some((value) => value.id === chosen)
-    if (!known) facets = setFacet(facets, facet.key, [facet.values[0].id])
+    if (tickedValues(facets, facet).length === 0) facets = setFacet(facets, facet.key, [facet.values[0].id])
   }
   return { ...view, facets }
+}
+
+/**
+ * A shard's rows with the two values that chose it written on every one, so
+ * the union of several shards still says which genome and which kind of file
+ * each row is — under the shard facets' own keys, which no shard's columns
+ * carry, and which the link carries as two ordinary facets.
+ */
+function stampShard(
+  file: StoreFile,
+  facets: readonly [ShardFacet, ShardFacet],
+  first: string,
+  second: string,
+): StoreFile {
+  const [a, b] = facets
+  return {
+    ...file,
+    entries: file.entries.map((entry) => ({
+      ...entry,
+      fields: { ...(entry.fields ?? {}), [a.key]: first, [b.key]: second },
+    })),
+  }
+}
+
+/** Several shards as one store: the first's name and columns, every column any of them declares, all the rows. */
+function mergeShards(files: readonly StoreFile[]): StoreFile {
+  const [head] = files
+  const columns = [...head.columns]
+  const known = new Set(columns.map((column) => column.key))
+  for (const file of files.slice(1)) {
+    for (const column of file.columns) {
+      if (known.has(column.key)) continue
+      known.add(column.key)
+      columns.push(column)
+    }
+  }
+  return {
+    ...head,
+    columns,
+    entries: files.flatMap((file) => file.entries),
+  }
 }
 
 /** Only the shard choices out of a selection — what *clear filters* keeps. */

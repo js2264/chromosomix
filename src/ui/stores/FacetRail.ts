@@ -39,9 +39,15 @@ const FILTER_FROM = 12
 
 export interface ShardChoice {
   facets: readonly [ShardFacet, ShardFacet]
-  /** The chosen value of each, by key. */
-  chosen: ReadonlyMap<string, string>
-  onChoose(key: string, id: string): void
+  /** The values ticked under each, by key. */
+  ticked: ReadonlyMap<string, ReadonlySet<string>>
+  /**
+   * Rows behind each value, by `key|id` — `undefined` for a shard that is not
+   * read yet, whose count nobody knows without reading it, and which the rail
+   * says is *on request* rather than inventing a nought.
+   */
+  counts: ReadonlyMap<string, number>
+  onToggle(key: string, id: string): void
 }
 
 export interface FacetRailProps {
@@ -176,16 +182,26 @@ export class FacetRail {
   }
 
   private shardGroup(facet: ShardFacet, shard: ShardChoice): HTMLElement {
-    const chosen = shard.chosen.get(facet.key)
+    const ticked = shard.ticked.get(facet.key) ?? new Set<string>()
     const rows = facet.values.map((value) => {
-      const box = el('input', { type: 'radio', class: 'facet-box', attrs: { name: `shard-${facet.key}` } })
-      box.checked = chosen === value.id
-      box.addEventListener('change', () => shard.onChoose(facet.key, value.id))
+      // Checkboxes, as every other facet is: a genome and a kind of file are
+      // choices of *which shards to read*, and two genomes ticked is both
+      // read and their rows shown together — the same OR every facet has.
+      const box = el('input', { type: 'checkbox', class: 'facet-box' })
+      const on = ticked.has(value.id)
+      box.checked = on
+      box.addEventListener('change', () => shard.onToggle(facet.key, value.id))
+      const count = shard.counts.get(`${facet.key}|${value.id}`)
       return el(
         'label',
-        { class: `facet-value${chosen === value.id ? ' is-on' : ''}` },
+        { class: `facet-value${on ? ' is-on' : ''}` },
         box,
-        el('span', { class: 'facet-value-text', text: value.label }),
+        el('span', { class: 'facet-value-text', text: value.label, title: value.label }),
+        el('span', {
+          class: `facet-count${count === undefined ? ' facet-count-unread' : ''}`,
+          text: count === undefined ? 'on request' : fmt.int(count),
+          title: count === undefined ? 'Tick it and this shard is read.' : '',
+        }),
       )
     })
     return el(

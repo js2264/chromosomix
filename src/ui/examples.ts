@@ -102,6 +102,8 @@ const DEMO: Array<{
   assembly: string
   provenance: string
   detail: string
+  /** The data files the session is made of, by name in its folder — its card's *N files* fold. */
+  files: string[]
 }> = [
   {
     folder: 'yeast',
@@ -115,6 +117,16 @@ const DEMO: Array<{
       'XIII-syn40), balanced, opened at IV:1.0–1.4 Mb. The sequence and the gene model run along ' +
       'both edges; ATAC and its peak calls sit under the map, Pol II over input and its peaks ' +
       'beside it, and 1,506 loop calls are drawn on it.',
+    files: [
+      'Yeast_microC_G2M_1kb.cool',
+      'S288c_syn40-XIII.fa',
+      'Yeast_annotations.gtf',
+      'Yeast_ATAC.bw',
+      'Yeast_ATAC.narrowPeak',
+      'Yeast_ChIP_Pol2-vs-input.bw',
+      'Yeast_ChIP_Pol2-vs-input.narrowPeak',
+      'Yeast_microC_loops.tsv',
+    ],
   },
   {
     folder: 'yeast',
@@ -129,6 +141,19 @@ const DEMO: Array<{
       'as an interval lane, the two RNA strands on one shared axis with the reverse read ' +
       'downwards, and the loop calls as arcs. Drop a .cool on it to turn the same session into ' +
       'a map.',
+    files: [
+      'S288c_syn40-XIII.fa',
+      'Yeast_annotations.gtf',
+      'Yeast_MNase.bw',
+      'Yeast_ATAC.bw',
+      'Yeast_ATAC.narrowPeak',
+      'Yeast_microC_anchors.bed',
+      'Yeast_ChIP_Pol2-vs-input.bw',
+      'Yeast_ChIP_Pol2-vs-input.narrowPeak',
+      'Yeast_RNA_fwd.bw',
+      'Yeast_RNA_rev.bw',
+      'Yeast_microC_loops.tsv',
+    ],
   },
   {
     folder: 'yeast',
@@ -142,6 +167,7 @@ const DEMO: Array<{
       'the micro-C .cool on the left and a Juicer .hic on the right, both balanced, both at ' +
       'IV:1.0–1.4 Mb. IV is one of the sequences the two assemblies agree about to the base, ' +
       'which is why the window is there. Panning either panel pans both.',
+    files: ['Yeast_microC_G2M_1kb.cool', 'Yeast_hic.hic', 'Yeast_annotations.gtf', 'Yeast_ATAC.bw'],
   },
   {
     folder: 'metagenomics/mock-community',
@@ -153,17 +179,19 @@ const DEMO: Array<{
     detail:
       'A MetaTOR binning of a mock community profiled by metaHiC: 49 genomes over 20,566 ' +
       'contigs in one 1 kb .metacool (14 MB). Lands on the genomes table, largest MAG first.',
+    files: ['Mock_microbial_community.metacool', 'Mock_microbial_community.mmetacool'],
   },
 ]
 
 /**
  * The data files under the figures, one row each.
  *
- * What the store lists *besides* the figures: the maps and the sequence the
- * sessions are made of, so a reader who wants the `.cool` alone, or the
- * metagenome as an `.mmetacool` ladder, has a row to press. The annotation
- * tracks are not listed here — they are offered beside the map once it is open
- * ({@link demoAnnotationsFor}), which is where a track is wanted.
+ * What the store lists *besides* the figures: every file the figures are made
+ * of, and the two maps no figure uses, so a reader who wants the `.cool`
+ * alone, the ATAC bigWig on their own map, or the metagenome as an
+ * `.mmetacool` ladder, has a row to press. Each figure's card lists its own
+ * rows under a fold (`ui/stores/GalleryView.ts`); the same tracks are also
+ * offered beside the yeast map once it is open ({@link demoAnnotationsFor}).
  */
 const DEMO_DATA: Array<{
   folder: string
@@ -201,6 +229,29 @@ const DEMO_DATA: Array<{
     assembly: 'S288C (syn XIII-40)',
     dataset: 'Yeast',
   },
+  ...(
+    [
+      ['Yeast_annotations.gtf', 'Genes', 'gtf'],
+      ['Yeast_MNase.bw', 'MNase-seq', 'bigwig'],
+      ['Yeast_ATAC.bw', 'ATAC-seq', 'bigwig'],
+      ['Yeast_ATAC.narrowPeak', 'ATAC peaks', 'narrowPeak'],
+      ['Yeast_ChIP_Pol2-vs-input.bw', 'Pol II over input', 'bigwig'],
+      ['Yeast_ChIP_Pol2-vs-input.narrowPeak', 'Pol II peaks', 'narrowPeak'],
+      ['Yeast_RNA_fwd.bw', 'RNA-seq, forward strand', 'bigwig'],
+      ['Yeast_RNA_rev.bw', 'RNA-seq, reverse strand', 'bigwig'],
+      ['Yeast_Shotgun.bw', 'Shotgun coverage', 'bigwig'],
+      ['Yeast_microC_anchors.bed', 'Micro-C anchors', 'bed'],
+      ['Yeast_microC_loops.tsv', 'Micro-C loop calls', 'loops'],
+    ] as const
+  ).map(([file, label, format]) => ({
+    folder: 'yeast',
+    file,
+    label,
+    kind: 'genome' as const,
+    format,
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  })),
   {
     folder: 'yeast-mpneumoniae',
     file: 'Yeast_mpneumoniae_G2M.mcool',
@@ -415,7 +466,15 @@ export function demosStore(): StoreFile {
           uri: `${base}${entry.folder}/${entry.file}`,
           kind: 'workspace',
           note: entry.line,
-          fields: { assembly: entry.assembly, provenance: entry.provenance, detail: entry.detail },
+          fields: {
+            assembly: entry.assembly,
+            provenance: entry.provenance,
+            detail: entry.detail,
+            // The files the figure is made of, as the URIs of the rows below,
+            // so the card lists them under its fold without a second lookup.
+            // `|`-joined because a field is one string; no URI carries a bar.
+            files: entry.files.map((file) => `${base}${entry.folder}/${file}`).join('|'),
+          },
         }),
       ),
       ...DEMO_DATA.map(

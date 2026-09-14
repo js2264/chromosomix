@@ -156,6 +156,8 @@ export class StoreDrawer {
    */
   private readonly left = new Map<string, { view: StoreView; url?: string }>()
   private width: number | null = readStoredWidth()
+  /** The front last opened in this drawer, custom included — see {@link open}. */
+  private lastOpened: string | null = null
 
   constructor(private readonly options: StoreDrawerOptions) {
     this.toggle = el('button', {
@@ -220,7 +222,12 @@ export class StoreDrawer {
    * link arriving does.
    */
   open(id?: string, view?: StoreView, url?: string): void {
-    const wanted = id ?? readLast() ?? 'rsg'
+    // The store this drawer was last in wins over the one the browser
+    // remembers across reloads: a reader who arrived on a store by URL and put
+    // the drawer down expects the same store back, and its URL is still in
+    // `left` for as long as this page lives — which is exactly as long as the
+    // remembered id is worth anything.
+    const wanted = id ?? this.lastOpened ?? readLast() ?? 'rsg'
     const front = frontById(wanted) ?? frontById('rsg')
     if (front === null) return
     if (this.current !== null && this.current.front.id === front.id && view === undefined && url === undefined) {
@@ -237,6 +244,7 @@ export class StoreDrawer {
       target: url ?? (front.builtin ? front.id : (front.rows?.url ?? front.id)),
       page,
     }
+    this.lastOpened = front.id
     if (front.id !== 'custom') writeLast(front.id)
     this.markSlot.replaceChildren(storeMark(front.mark, 30))
     this.titleEl.textContent = front.label

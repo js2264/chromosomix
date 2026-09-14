@@ -2615,6 +2615,25 @@ export class Session {
     }
   }
 
+  /**
+   * Call the track read from `url` by `label`, where one is already seated.
+   *
+   * For the one road on which a name arrives after the row does: a genome
+   * file opened *as* a browser is seated by `openGenome` under the URL's last
+   * segment, and the store row that named it better has nothing to hand the
+   * label to until then. Compared on the address without its `#index=`
+   * fragment, which is what the loader keeps.
+   */
+  relabelTrack(url: string, label: string): void {
+    const held = this.annotations
+    if (held === null) return
+    const { address } = splitIndexFragment(url)
+    for (const entry of held.store.entries) {
+      if (entry.source.kind !== 'remote' || entry.source.url !== address) continue
+      if (entry.label !== label) held.store.update(entry.id, { label })
+    }
+  }
+
   /** `true` when a row for this exact file is already in the store. */
   private alreadyLoaded(source: SourceSpec): boolean {
     const rows = this.annotations?.store.entries ?? []
@@ -3095,12 +3114,14 @@ export class Session {
       this.dropped(picked.source.file, placement, map, picked.index)
       return
     }
-    await this.addRemote(picked.uri, picked.source, placement, map)
+    const name = picked.name !== undefined && picked.name.trim() !== '' ? picked.name : undefined
+    await this.addRemote(picked.uri, picked.source, placement, map, name)
     // A backend that addresses files by id rather than by name says what the
-    // file is called (§24.9), and the map is named with it the way a reader
-    // would name it by hand (§16.10). Tracks keep the label their URL gives.
-    if (picked.name !== undefined && picked.name !== '' && routeOf(picked.uri) === 'map') {
-      this.renameMap(picked.uri, picked.name)
+    // file is called (§24.9), and a store row says what a file *is* (§24.2);
+    // a map is named with it the way a reader would name it by hand (§16.10),
+    // and a track takes it as its label through `addRemote`.
+    if (name !== undefined && routeOf(picked.uri) === 'map') {
+      this.renameMap(picked.uri, name)
     }
   }
 
@@ -3128,6 +3149,13 @@ export class Session {
     source: SourceSpec,
     placement?: Placement,
     map?: string,
+    /**
+     * What to call the track this makes, where the caller knows better than
+     * the URL's last segment does: a store row's own line (§24.2), or the
+     * name a Drive folder gave a file addressed by id (§24.9). A map is not
+     * named here — {@link addPicked} renames one through the map's own road.
+     */
+    label?: string,
   ): Promise<void> {
     const { path } = splitUri(uri)
     // A saved workspace names whole *tabs* rather than a file to put in one, so
@@ -3161,7 +3189,13 @@ export class Session {
     // drawn against. This must not open it instead: the promise of the button
     // this arrives from is that it will not throw the open file away.
     if (this.annotations === null) {
-      if (this.file === null && this.assembly === null) await this.open(uri, source)
+      if (this.file === null && this.assembly === null) {
+        await this.open(uri, source)
+        // The file that opened the browser is its first track, seated by
+        // `openGenome` under the URL's own name; the caller's name goes on it
+        // now, which is the one moment both are known here.
+        if (label !== undefined) this.relabelTrack(path, label)
+      }
       return
     }
     // The same two steps a dropped track takes in {@link dropped}, and they are
@@ -3171,7 +3205,7 @@ export class Session {
     // drop landed on — is the same, and is only reached when a drag said where.
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
-    held.loader.addUrl(path, undefined, placement)
+    held.loader.addUrl(path, label, placement)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue

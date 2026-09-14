@@ -42,6 +42,7 @@ import {
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { hydrateFolders } from '../browse/connected'
+import type { PickedFile } from '../browse/folder'
 import '../browse/backends'
 import { StatusBar } from '../ui/StatusBar'
 import { ConsolePanel } from '../ui/ConsolePanel'
@@ -936,19 +937,43 @@ export class App implements SessionHost {
   private openStoreEntry(entry: StoreEntry): void {
     this.noteShelf(entry)
     const source = { kind: 'remote', url: splitUri(entry.uri).path } as const
-    if (entry.kind === 'workspace' || this.tabEmpty()) {
+    if (entry.kind === 'workspace') {
       void this.current?.openPicked(entry.uri, source)
       return
     }
-    const fresh = this.newSession()
-    if (fresh === null) return
-    void fresh.openPicked(entry.uri, source)
+    const session = this.tabEmpty() ? this.current : this.newSession()
+    if (session === undefined || session === null) return
+    void this.openNamed(session, entry)
+  }
+
+  /**
+   * A store row as a `PickedFile`: the file, and the name the store gave it.
+   *
+   * The name is the whole point (§24.2). A 4DN file is called by its accession
+   * on the bucket — `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol
+   * variations* on the shelf, and the second is what a reader picked it by. So
+   * the row's line goes with the file: onto the map it becomes, onto the track
+   * it becomes, and onto the tab it opens, through the same road a file named
+   * by a Drive folder takes.
+   */
+  private pickedFrom(entry: StoreEntry): PickedFile {
+    return {
+      uri: entry.uri,
+      source: { kind: 'remote', url: splitUri(entry.uri).path },
+      name: entry.label,
+    }
+  }
+
+  /** Open a store row into an empty session, and call the tab what the store called the row. */
+  private async openNamed(session: Session, entry: StoreEntry): Promise<void> {
+    await session.addPicked(this.pickedFrom(entry))
+    if (this.sessions.includes(session) && session.name === null) session.rename(entry.label)
   }
 
   /** The store row's *add*: the routing a dropped file takes, into the tab in front. */
   private addStoreEntry(entry: StoreEntry): void {
     this.noteShelf(entry)
-    void this.current?.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+    void this.current?.addPicked(this.pickedFrom(entry))
   }
 
   /**
@@ -970,11 +995,11 @@ export class App implements SessionHost {
     const session = this.tabEmpty() ? this.current : this.newSession()
     if (session === undefined || session === null) return
     this.noteShelf(lead)
-    await session.openPicked(lead.uri, { kind: 'remote', url: splitUri(lead.uri).path })
+    await this.openNamed(session, lead)
     for (const entry of files) {
       if (entry === lead) continue
       this.noteShelf(entry)
-      await session.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+      await session.addPicked(this.pickedFrom(entry))
     }
   }
 
