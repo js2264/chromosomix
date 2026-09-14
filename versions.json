@@ -198,5 +198,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 53,
+      "commit": "2faacad",
+      "title": "Rename hubs to stores and redesign store interface",
+      "branch": "claude/unified-file-store-access-i658sf",
+      "date": "2026-09-14T06:57:24Z"
+    }
+  ]
 }
