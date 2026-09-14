@@ -23,6 +23,7 @@ import {
   pairIndexes,
   splitIndexFragment,
 } from '@/annotations/loader'
+import { guessedIndexUrl } from '@/annotations/sidecar'
 import { routeOf } from '@/browse/route'
 import { AnnotationStore } from '@/annotations/store'
 import { useMemoryStores } from '@/state/idb'
@@ -46,12 +47,20 @@ beforeEach(() => {
 })
 
 describe('naming a sidecar', () => {
-  it('knows the three suffixes and nothing else', () => {
+  it('knows the four suffixes and nothing else', () => {
     expect(isIndexName('reads.bam.bai')).toBe(true)
     expect(isIndexName('reads.bam.csi')).toBe(true)
     expect(isIndexName('genes.gtf.gz.tbi')).toBe(true)
+    expect(isIndexName('genome.fa.fai')).toBe(true)
     expect(isIndexName('reads.bam')).toBe(false)
+    expect(isIndexName('genome.fa')).toBe(false)
     expect(isIndexName('ATAC.bw')).toBe(false)
+  })
+
+  it('pairs a FASTA index with the FASTA it is named after, and nothing else', () => {
+    // `samtools faidx genome.fa` writes `genome.fa.fai` and no other spelling.
+    expect(basesForIndex('genome.fa.fai')).toEqual(['genome.fa'])
+    expect(basesForIndex('genome.fasta.fai')).toEqual(['genome.fasta'])
   })
 
   it('offers both spellings samtools writes', () => {
@@ -158,6 +167,17 @@ describe('finding a remembered sidecar', () => {
 
   it('offers the tabix name for a bgzipped file', () => {
     expect(indexNamesFor('genes.gtf.gz')).toEqual(['genes.gtf.gz.tbi'])
+  })
+
+  it('offers the faidx name for a FASTA, and guesses the same three suffixes for a URL', () => {
+    expect(indexNamesFor('genome.fa')).toEqual(['genome.fa.fai'])
+    expect(indexNamesFor('genome.fna')).toEqual(['genome.fna.fai'])
+    expect(guessedIndexUrl('https://h/genome.fa')).toBe('https://h/genome.fa.fai')
+    expect(guessedIndexUrl('https://h/genes.gtf.gz')).toBe('https://h/genes.gtf.gz.tbi')
+    expect(guessedIndexUrl('https://h/reads.bam')).toBe('https://h/reads.bam.bai')
+    // A gzipped FASTA has no `.fai` anyone can use, and a bigWig no index at all.
+    expect(guessedIndexUrl('https://h/genome.fa.gz')).toBe('https://h/genome.fa.gz.tbi')
+    expect(guessedIndexUrl('https://h/ATAC.bw')).toBeUndefined()
   })
 
   it('offers nothing for a file that has no sidecar convention', () => {

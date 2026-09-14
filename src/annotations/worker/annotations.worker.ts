@@ -57,6 +57,8 @@ import type { TrackJobContext } from '../../analysis/job'
 import type { TaskResult } from '../../analysis/types'
 import { COMMIT, VERSION } from '../../version'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
+import { byteRange, contigsOf as contigsOfIndex, parseFai, residuesIn, type FaiRecord } from '../fai'
+import { FASTA_NAME, guessedIndexUrl } from '../sidecar'
 import {
   decodeAnnotationBytes,
   parseBed,
@@ -175,6 +177,44 @@ function basesOf(store: SequenceStore, name: string): Uint8Array | undefined {
   return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
 }
 
+/** {@link basesOf} for an indexed store: the record, by the same ladder of names. */
+function recordOf(store: IndexedSequences, name: string): FaiRecord | undefined {
+  const direct = store.records.get(name)
+  if (direct !== undefined) return direct
+  const at = contigIndexOf(store.contigs, name)
+  return at < 0 ? undefined : store.records.get(store.contigs[at].name)
+}
+
+/**
+ * The residues `[start, end)` of one sequence of an indexed store, read by
+ * range — or out of the slab the last read left, when that reaches.
+ *
+ * `undefined` for a name the store has not got, exactly as {@link basesOf};
+ * empty for a window that holds no residues. The slab is replaced rather than
+ * grown: a lane asks for a padded window and then for the next padded window,
+ * and keeping both would be keeping the genome, a screen at a time.
+ */
+async function residuesOf(
+  store: IndexedSequences,
+  name: string,
+  start: number,
+  end: number,
+): Promise<Uint8Array | undefined> {
+  const record = recordOf(store, name)
+  if (record === undefined) return undefined
+  const from = Math.max(0, Math.floor(start))
+  const to = Math.min(record.length, Math.ceil(end))
+  if (!(to > from)) return new Uint8Array(0)
+  const held = store.held.get(record.name)
+  if (held !== undefined && held.start <= from && held.start + held.bases.length >= to) {
+    return held.bases.subarray(from - held.start, to - held.start)
+  }
+  const range = byteRange(record, from, to)
+  const bases = residuesIn(await store.handle.read(range.to - range.from, range.from))
+  store.held.set(record.name, { start: from, bases })
+  return bases
+}
+
 /** Just the names, for the two helpers that ask about spelling and not size. */
 function namesOf(sequences: readonly NamedSequence[]): string[] {
   return sequences.map((sequence) => sequence.name)
@@ -216,14 +256,52 @@ const tracks = new Map<string, OpenTrack>()
 const signals = new Map<string, IntervalTrack>()
 
 /**
+ * A FASTA read by its `.fai` rather than held whole (§8.8).
+ *
+ * What the index gives is the assembly — its first two columns are a
+ * `chrom.sizes` — and, for any window of any sequence, the byte range that
+ * holds it (`annotations/fai.ts`). So nothing is read until a lane asks for a
+ * window, and then one ranged read answers it: the shape a bigWig has always
+ * had here, applied to the one format that used to be the exception. What it
+ * costs is everything that needed the whole sequence in memory — GC content
+ * at a zoom where a window is tens of megabases, and the motif search — and
+ * each of those says so where it declines rather than reading a genome to
+ * answer.
+ */
+interface IndexedSequences {
+  readonly indexed: true
+  /** Names in file order, renamed into the map's vocabulary at load time (§5.9). */
+  contigs: Contig[]
+  /** By the name a sequence goes by *now*, which after a rename is the map's. */
+  records: Map<string, FaiRecord>
+  handle: BlobFile | RemoteFile
+  /** Residues across every sequence, for the one-line summary. */
+  total: number
+  /**
+   * The last slab read per sequence, so a pan that stays inside it and the
+   * second question about one window read nothing twice. One slab per
+   * sequence and never more: this is a cache of what is on screen, not of the
+   * genome.
+   */
+  held: Map<string, { start: number; bases: Uint8Array }>
+}
+
+type Sequences = SequenceStore | IndexedSequences
+
+function isIndexed(store: Sequences): store is IndexedSequences {
+  return (store as IndexedSequences).indexed === true
+}
+
+/**
  * The sequences of every open FASTA, by the entry that owns them.
  *
  * Kept here rather than handed over, exactly as a bigWig's handle is: a lane
  * draws a window at a time, and a chromosome sent to the main thread would be
  * twelve megabytes carried across so that a few thousand bases of it could be
- * read (§8.2).
+ * read (§8.2). Held whole for a small file, and read by range for a large one
+ * that came with its index ({@link IndexedSequences}).
  */
-const sequences = new Map<string, SequenceStore>()
+const sequences = new Map<string, Sequences>()
 
 /**
  * The computed vectors registered against this file, by the entry that owns them.
@@ -319,14 +397,42 @@ function fileKey(source: WireSource, index: WireSource): string {
 const WINDOW_BYTE_CAP = 8 << 20
 
 /**
- * How large a FASTA this reads.
+ * How large a FASTA this reads **whole**.
  *
- * It is read whole and held whole, which is what makes a pan free — and what
- * makes a mammalian genome the wrong thing to open this way. Three gigabases is
- * three gigabytes here, and the honest answer is a refusal naming the number
- * rather than a tab that stops responding while it allocates.
+ * Read whole and held whole is what makes a pan free — and what makes a
+ * mammalian genome the wrong thing to open this way. Three gigabases is three
+ * gigabytes here, and the honest answer for a file this size with no index is
+ * a refusal naming the number and the command that writes the index, rather
+ * than a tab that stops responding while it allocates.
  */
 const FASTA_BYTE_CAP = 300_000_000
+
+/**
+ * Under this many bytes a FASTA is read whole, index or no index.
+ *
+ * The two ways of holding a genome trade against each other (§8.8): whole,
+ * every zoom draws GC content and the motif search has something to search,
+ * at the price of the download and the memory; by range, the browser is on
+ * screen the moment the index is read, and the two things that need the
+ * whole sequence decline. A yeast genome is twelve megabytes and a fly's is a
+ * hundred and forty; the line is drawn where the download stops being a
+ * pause and starts being a wait, and it is drawn on the file's size rather
+ * than on whether an index happens to be beside it, so that a small genome
+ * reads the same whichever bucket it came from.
+ */
+const FASTA_WHOLE_MAX = 64_000_000
+
+/**
+ * The widest window an indexed sequence answers for GC content, in residues.
+ *
+ * A GC lane over an indexed genome reads the residues it draws, so the cost of
+ * a frame is the width of the window, and at a chromosome's width that is a
+ * hundred megabytes for one lane of one frame. Four megabases is about one
+ * second on an ordinary connection and the widest a window can be while its
+ * profile is still a profile rather than a flat line; past it the lane draws
+ * nothing and the readout says why.
+ */
+const INDEXED_GC_WINDOW = 4_000_000
 
 /**
  * The last file read whole, so the same one is not parsed twice.
@@ -348,7 +454,7 @@ let recent: { key: string; format: DetectedFormat; features: FeatureSet | null }
  * transferred, so unlike a `FeatureSet` it cannot be detached out from under the
  * second question.
  */
-let recentFasta: { key: string; store: SequenceStore } | null = null
+let recentFasta: { key: string; store: Sequences } | null = null
 
 /** A local file's identity for {@link recent}; a URL is its own. */
 function cacheKey(source: WireSource): string {
@@ -594,6 +700,18 @@ async function runTask(
     residues: (entry) => {
       const store = sequences.get(entry)
       if (store === undefined) return undefined
+      if (isIndexed(store)) {
+        // Not held, so not searchable here — and reading it whole for the
+        // search would be the download it was indexed to avoid (§8.8).
+        return {
+          contigs: store.contigs,
+          bases: () => undefined,
+          refusal:
+            'This FASTA is read by range from its index rather than held, so its sequences are ' +
+            `not here to search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
+            'and can be searched.',
+        }
+      }
       return {
         contigs: store.contigs,
         // Through `basesOf`, so a FASTA renamed into the map's vocabulary at
@@ -689,7 +807,7 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   // every sequence *and* its exact length, like a `chrom.sizes`, and it is the
   // genome those lengths describe rather than a file asserting them.
   if (looksLikeFasta(head)) {
-    const store = await readFasta(source, handle)
+    const store = await readSequence(source, handle)
     return { format: 'fasta', contigs: store.contigs, origin: 'fasta', exact: true }
   }
 
@@ -1110,7 +1228,7 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
       return loadBam(entry, source, handle, mapContigs, header, size)
     }
   }
-  if (looksLikeFasta(head)) return loadFasta(entry, await readFasta(source, handle), mapContigs)
+  if (looksLikeFasta(head)) return loadFasta(entry, await readSequence(source, handle), mapContigs)
 
   // The parse this file already had, when the browser asked what genome it was
   // on a moment ago. Same bytes, same answer; the overlap report is recomputed
@@ -1243,22 +1361,74 @@ function featureResult(
  * That cache is safe in a way {@link recent} is not: a sequence store is never
  * transferred, so there is no way for the entry to come back detached.
  */
-async function readFasta(
-  source: WireSource,
-  handle: BlobFile | RemoteFile,
-): Promise<SequenceStore> {
+/**
+ * A FASTA, however it is going to be held (§8.8).
+ *
+ * Whole under {@link FASTA_WHOLE_MAX}, whatever sits beside it. Over it, by
+ * its index where one can be found — named on the source, or guessed as
+ * `<url>.fai` for a plain remote FASTA — and whole again where none can be,
+ * which is the read that always worked and is refused past
+ * {@link FASTA_BYTE_CAP} exactly as before. The size is asked for before a
+ * byte of sequence is read: a local file's is free, and a remote one's is one
+ * ranged request the handle keeps.
+ */
+async function readSequence(source: WireSource, handle: BlobFile | RemoteFile): Promise<Sequences> {
   const held = recentFasta
   if (held !== null && held.key === cacheKey(source)) return held.store
-  // Refused before it is read, where the size is known without reading it. A
-  // local file's is free; a remote one is found out the hard way, below.
-  if (source.kind === 'local' && source.file.size > FASTA_BYTE_CAP) {
-    throw tooLarge(source.file.size)
+  const size = source.kind === 'local' ? source.file.size : await sizeOf(handle)
+  const known = size !== null && size > 0
+  if (known && size <= FASTA_WHOLE_MAX) return readWhole(source, handle)
+  const indexed = await readFastaIndex(source, handle)
+  if (indexed !== null) {
+    recentFasta = { key: cacheKey(source), store: indexed }
+    return indexed
   }
+  // Refused before it is read, where the size is known without reading it. A
+  // remote one whose server would not say is found out the hard way, below.
+  if (known && size > FASTA_BYTE_CAP) throw tooLarge(size, source)
+  return readWhole(source, handle)
+}
+
+async function readWhole(source: WireSource, handle: BlobFile | RemoteFile): Promise<SequenceStore> {
   return keepFasta(source, await decodeAnnotationBytes(await handle.readFile()))
 }
 
+/**
+ * The `.fai` beside a FASTA, read into an {@link IndexedSequences} — or `null`
+ * where there is none, none that answers, or none that parses. Every failure
+ * is "this index did not work", and the answer to that is the read that
+ * always worked, on the terms `tryIndexedText` gives for a tabix sidecar.
+ */
+async function readFastaIndex(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+): Promise<IndexedSequences | null> {
+  const named =
+    source.index !== undefined
+      ? source
+      : source.kind === 'remote' && FASTA_NAME.test(source.url)
+        ? { ...source, index: guessedIndexUrl(source.url) }
+        : null
+  const indexSource = named === null ? null : indexSourceFor(named)
+  if (indexSource === null) return null
+  try {
+    const records = parseFai(new TextDecoder().decode(await handleFor(indexSource).readFile()))
+    if (records.length === 0) return null
+    return {
+      indexed: true,
+      contigs: contigsOfIndex(records),
+      records: new Map(records.map((record) => [record.name, record])),
+      handle,
+      total: records.reduce((sum, record) => sum + record.length, 0),
+      held: new Map(),
+    }
+  } catch {
+    return null
+  }
+}
+
 function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
-  if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length)
+  if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length, source)
   const store = parseFasta(bytes)
   if (store.contigs.length === 0) {
     throw new Error('This looks like a FASTA but holds no sequences.')
@@ -1267,17 +1437,22 @@ function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
   return store
 }
 
-function tooLarge(size: number): Error {
+function tooLarge(size: number, source: WireSource): Error {
+  const name = source.name.replace(/[#?].*$/, '') || 'genome.fa'
   return new Error(
-    `This FASTA is ${count(Math.round(size / 1e6))} MB. It would be read whole and held whole — ` +
-      `which is what makes panning free — so anything over ${count(FASTA_BYTE_CAP / 1e6)} MB is ` +
-      'refused rather than allowed to take the tab with it. A chrom.sizes declares the same ' +
-      'genome for a few kilobytes.',
+    `This FASTA is ${count(Math.round(size / 1e6))} MB and has no index. It would be read whole ` +
+      `and held whole — which is what makes panning free — so anything over ` +
+      `${count(FASTA_BYTE_CAP / 1e6)} MB is refused rather than allowed to take the tab with it. ` +
+      `Index it (\`samtools faidx ${name}\`) and ${
+        source.kind === 'local'
+          ? 'drop the .fai with it'
+          : 'publish the .fai beside it, or name it with #index=<url>'
+      }: an indexed FASTA opens at once and is read by range.`,
   )
 }
 
 /** A FASTA as a row: the sequences stay here, the summary goes back. */
-function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequence[]): LoadResult {
+function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[]): LoadResult {
   const renaming = renameSequences(store, mapContigs)
   sequences.set(entry, store)
   const names = store.contigs.map((contig) => contig.name)
@@ -1285,7 +1460,9 @@ function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequenc
     format: 'fasta',
     contigs: names,
     overlap: overlapReport(names, mapContigs, renaming),
-    summary: `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp`,
+    summary:
+      `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp` +
+      (isIndexed(store) ? ' · read by range from its index' : ''),
   }
 }
 
@@ -1298,9 +1475,20 @@ function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequenc
  * asked about — which is the map's. A rename of one and not the other would
  * leave a sequence lane that draws its ruler and no residues.
  */
-function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Renaming {
+function renameSequences(store: Sequences, mapContigs: NamedSequence[]): Renaming {
   const renaming = renameInto(store.contigs, mapContigs)
   if (renaming.renamed === 0) return renaming
+  if (isIndexed(store)) {
+    const records = new Map<string, FaiRecord>()
+    store.contigs.forEach((contig, at) => {
+      const record = store.records.get(contig.name)
+      contig.name = renaming.names[at]
+      if (record !== undefined) records.set(contig.name, { ...record, name: contig.name })
+    })
+    store.records = records
+    store.held.clear()
+    return renaming
+  }
   const bases = new Map<string, Uint8Array>()
   store.contigs.forEach((contig, at) => {
     const held = store.bases.get(contig.name)
@@ -1324,18 +1512,35 @@ function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Ren
  * bigWig's zoom level is — the flag is what tells the readout that the number
  * under the pointer describes a window rather than a position.
  */
-function gcSamples(
-  store: SequenceStore,
+async function gcSamples(
+  store: Sequences,
   regions: Region[],
   basesPerPixel: number,
-): TrackSampleSet {
+): Promise<TrackSampleSet> {
   const out: TrackSamples[] = []
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const region of regions) {
-    const seq = basesOf(store, region.contig)
-    if (seq === undefined || !(region.end > region.start)) continue
-    const bins = gcBins(seq, region.start, region.end, basesPerPixel)
+    if (!(region.end > region.start)) continue
+    let bins
+    if (isIndexed(store)) {
+      // A window wider than the read it would take draws nothing: the lane is
+      // blank at that zoom rather than a hundred megabytes behind (§8.8).
+      if (region.end - region.start > INDEXED_GC_WINDOW) continue
+      const from = Math.max(0, Math.floor(region.start))
+      const window = await residuesOf(store, region.contig, from, region.end)
+      if (window === undefined || window.length === 0) continue
+      bins = gcBins(window, 0, window.length, basesPerPixel)
+      // The window's own coordinates, put back on the sequence's.
+      for (let i = 0; i < bins.starts.length; i++) {
+        bins.starts[i] += from
+        bins.ends[i] += from
+      }
+    } else {
+      const seq = basesOf(store, region.contig)
+      if (seq === undefined) continue
+      bins = gcBins(seq, region.start, region.end, basesPerPixel)
+    }
     if (bins.values.length === 0) continue
     for (const value of bins.values) {
       if (!Number.isFinite(value)) continue
@@ -1368,7 +1573,7 @@ function gcSamples(
 const BASES_PER_REQUEST = 400_000
 
 /** The residues of each visible window, for a view drawing them one by one. */
-function bases(entry: string, regions: Region[]): BaseResult {
+async function bases(entry: string, regions: Region[]): Promise<BaseResult> {
   const store = sequences.get(entry)
   if (store === undefined) {
     throw new Error('This sequence is no longer open. Drop the file again.')
@@ -1376,9 +1581,18 @@ function bases(entry: string, regions: Region[]): BaseResult {
   const out: BaseRegion[] = []
   let budget = BASES_PER_REQUEST
   for (const region of regions) {
+    const start = Math.max(0, Math.floor(region.start))
+    if (isIndexed(store)) {
+      const window = await residuesOf(store, region.contig, start, Math.min(Math.ceil(region.end), start + budget))
+      if (window === undefined || window.length === 0) continue
+      budget -= window.length
+      // `slice` here too: the slab behind `window` is the store's cache.
+      out.push({ contig: region.contig, start, end: start + window.length, bases: window.slice() })
+      if (budget <= 0) break
+      continue
+    }
     const seq = basesOf(store, region.contig)
     if (seq === undefined) continue
-    const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(seq.length, Math.ceil(region.end), start + budget)
     if (!(end > start)) continue
     budget -= end - start
@@ -2242,10 +2456,20 @@ const VARIANT_BELOW = 16
  * this runs once per fetched window rather than per frame.
  */
 function residuesFor(region: Region): { start: number; bases: Uint8Array } | undefined {
+  const start = Math.max(0, Math.floor(region.start))
   for (const store of sequences.values()) {
+    if (isIndexed(store)) {
+      // Never fetched for (§8.13): what an indexed sequence has is the slab
+      // its own lane last drew, and the pile reads that or nothing.
+      const record = recordOf(store, region.contig)
+      const slab = record === undefined ? undefined : store.held.get(record.name)
+      if (slab === undefined) continue
+      const end = Math.min(slab.start + slab.bases.length, Math.ceil(region.end))
+      if (slab.start > start || end <= start) continue
+      return { start, bases: slab.bases.subarray(start - slab.start, end - slab.start) }
+    }
     const held = basesOf(store, region.contig)
     if (held === undefined) continue
-    const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(held.length, Math.ceil(region.end))
     if (end <= start) continue
     return { start, bases: held.subarray(start, end) }

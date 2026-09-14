@@ -1748,18 +1748,37 @@ IGV_UNREADABLE = ("refgene", "genepred", "2bit", "cytoband", "alias", "chromsize
 def _igv_index(url: str, index: str) -> str:
     """``#index=<url>`` for a sidecar this viewer would not have guessed.
 
-    `annotations/loader.ts` already guesses ``<url>.tbi`` for anything gzipped
-    and ``<url>.bai`` for a BAM, and IGV names exactly that in almost every
-    case. Writing the fragment anyway would be forty rows of noise in the
-    published file; writing it when the name differs is the difference between
-    a track that opens indexed and one that does not open at all (§8.13).
+    `annotations/sidecar.ts` already guesses ``<url>.tbi`` for anything
+    gzipped, ``<url>.bai`` for a BAM and ``<url>.fai`` for a FASTA, and IGV
+    names exactly that in almost every case. Writing the fragment anyway would
+    be forty rows of noise in the published file; writing it when the name
+    differs is the difference between a track that opens indexed and one that
+    does not open at all (§8.13) — and, for a genome's sequence, between a
+    browser that appears at once and one that first reads a gigabyte (§8.8).
     """
     if index == "":
         return ""
-    guess = f"{url}.tbi" if url.lower().endswith(".gz") else ""
-    if url.lower().endswith(".bam"):
+    lowered = url.lower()
+    guess = f"{url}.tbi" if lowered.endswith(".gz") else ""
+    if lowered.endswith(".bam"):
         guess = f"{url}.bai"
+    if lowered.endswith((".fa", ".fasta", ".fna", ".fas")):
+        guess = f"{url}.fai"
     return "" if index == guess else f"#index={urllib.parse.quote(index, safe=':/?=&%')}"
+
+
+def _fasta_index(fasta: str, index: str) -> str:
+    """The ``.fai`` this viewer can use beside a genome's sequence, or nothing.
+
+    A plain FASTA's index is what lets the viewer open the genome at once and
+    read residues by range (§8.8). A bgzipped one — IGV ships a few, each with
+    a ``.fai`` *and* a ``.gzi`` — needs the second file to seek in, which this
+    viewer does not read, so naming the first would be a promise the loader
+    does not keep: such a genome is read whole, as it always was.
+    """
+    if index == "" or fasta.lower().endswith(".gz"):
+        return ""
+    return index
 
 
 def igv_tracks(genome: dict) -> list[dict]:
@@ -1832,6 +1851,7 @@ def entries_igv(genomes: list, limit: Optional[int], *, probing: bool) -> list[d
         fasta = text(genome.get("fastaURL"))
         if assembly == "" or fasta == "":
             continue
+        fai = text(genome.get("indexURL"))
         skipped += len(listed(genome.get("tracks"))) - len(igv_tracks(genome))
         sequence = readable(fasta)
         if not sequence.ok:
@@ -1845,10 +1865,11 @@ def entries_igv(genomes: list, limit: Optional[int], *, probing: bool) -> list[d
         entries.append(
             {
                 "label": f"{name} — {assembly} ({suffix})",
-                # No `#index=` for a FASTA: this viewer reads sequence by range
-                # off the file itself and has no `.fai` reader, so naming one
-                # would be a promise the loader does not keep.
-                "url": fasta,
+                # The `.fai` is what lets a mammalian genome open at once: the
+                # viewer reads the assembly from it and the residues by range
+                # (§8.8). Named only where IGV keeps it somewhere other than
+                # `<fasta>.fai`, which the viewer guesses on its own.
+                "url": f"{fasta}{_igv_index(fasta, _fasta_index(fasta, fai))}",
                 "kind": route_of(fasta.rsplit("/", 1)[-1]) or "genome",
                 "size": sequence.size,
                 "note": joined_note(
@@ -2114,7 +2135,12 @@ def sessions_igv(genomes: list, entries: list[dict], created: str) -> list[dict]
         tracks = [track for track in igv_tracks(genome) if track["url"] in published]
         # The sequence first, so the lane order reads outward from the genome —
         # and by URL, so a session and the row beside it name the same bytes.
-        placed = [{"label": "sequence", "url": fasta}] + [
+        # Its `.fai` goes with it as the lane's `source.index`, the field the
+        # loader reads (§8.8); the row beside it names the same index only
+        # where the viewer would not have guessed it.
+        placed = [
+            {"label": "sequence", "url": fasta, "index": _fasta_index(fasta, text(genome.get("indexURL")))}
+        ] + [
             {"label": track["label"], "url": track["url"], "index": track["index"]}
             for track in tracks
         ]

@@ -97,7 +97,7 @@ import type {
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeOf, type FileRoute } from '../browse/route'
-import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
+import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import {
   assemblyOf,
@@ -271,9 +271,23 @@ export interface OpenFile {
  * and the one place they meet is a file whose *kind* is not yet known.
  */
 function toWire(source: SourceSpec): WireSource {
+  // The sidecar goes with the file on both roads. For a FASTA the *assembly*
+  // question is answered from its `.fai` when there is one (§8.8), and a
+  // question asked without the index would read a gigabyte to learn what the
+  // index says in a kilobyte.
   return source.kind === 'local'
-    ? { kind: 'local', file: source.file, name: source.file.name }
-    : { kind: 'remote', url: source.url, name: source.url.split('/').pop() ?? source.url }
+    ? {
+        kind: 'local',
+        file: source.file,
+        name: source.file.name,
+        ...(source.index === undefined ? {} : { index: source.index }),
+      }
+    : {
+        kind: 'remote',
+        url: source.url,
+        name: source.url.split('/').pop() ?? source.url,
+        ...(source.index === undefined ? {} : { index: source.index }),
+      }
 }
 
 /**
@@ -2487,6 +2501,18 @@ export class Session {
      */
     index?: File,
   ): Promise<void> {
+    // `<url>#index=<url>` names the sidecar for a remote file at the one door
+    // a URL comes through, and it is split here for the genome road exactly
+    // as `AnnotationLoader.addUrl` splits it for a track: the fragment is
+    // never sent to a server, and it is the *assembly* question below that a
+    // FASTA's `.fai` answers (§8.8). The session goes on under the address.
+    if (source.kind === 'remote' && source.index === undefined) {
+      const split = splitIndexFragment(source.url)
+      if (split.index !== undefined) {
+        source = { ...source, url: split.address, index: split.index }
+        uri = uri.replace(/#index=.*$/, '')
+      }
+    }
     if (this.opening === uri) return
     this.opening = uri
     this.noteGrant(uri, source)
@@ -2562,7 +2588,15 @@ export class Session {
           this.annotations.loader.addFiles(
             index === undefined ? [source.file] : [source.file, index],
           )
-        } else this.annotations.loader.addUrl(source.url)
+        } else {
+          // …and the named sidecar goes back on as the fragment `addUrl`
+          // splits, so the lane reads the same index the assembly did.
+          this.annotations.loader.addUrl(
+            source.index === undefined
+              ? source.url
+              : `${source.url}#index=${encodeURIComponent(source.index)}`,
+          )
+        }
       }
       const target: ViewState = {
         uri,

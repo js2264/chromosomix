@@ -725,11 +725,26 @@ describe.skipIf(!havePython)('the IGV front end', () => {
     expect(text).toContain('genes.bed.gz#index=https://s3.amazonaws.com/igv.org.genomes/sacCer3/index/genes.tbi')
   })
 
-  it('names no index for a FASTA, which this viewer reads without one', () => {
-    for (const entry of store.entries ?? []) {
-      if ((entry.fields as Record<string, string>).role !== 'sequence') continue
-      expect(String(entry.uri)).not.toContain('#index=')
+  it('names a FASTA’s index only where it is not the `<fasta>.fai` the viewer guesses', () => {
+    // The index is what lets a mammalian genome open at once (§8.8), and IGV
+    // keeps it beside the sequence under the name `samtools faidx` writes —
+    // which the viewer guesses on its own, so the fragment would be noise.
+    const sequences = (store.entries ?? []).filter(
+      (entry) => (entry.fields as Record<string, string>).role === 'sequence',
+    )
+    expect(sequences.length).toBeGreaterThan(0)
+    for (const entry of sequences) {
+      const uri = String(entry.uri)
+      // A bgzipped FASTA's `.fai` needs a `.gzi` beside it that this viewer
+      // does not read, so none is named and the genome is read whole.
+      if (/\.gz(#|$)/.test(uri)) expect(uri).not.toContain('#index=')
+      if (!uri.includes('#index=')) continue
+      // Where it is named, it is not the guess.
+      const [address, index] = uri.split('#index=')
+      expect(decodeURIComponent(index)).not.toBe(`${address}.fai`)
     }
+    // The fixture keeps every index where `samtools faidx` writes it, so none is named.
+    expect(sequences.some((entry) => String(entry.uri).includes('#index='))).toBe(false)
   })
 
   it('drops a genome with no sequence and keeps its neighbours', () => {
@@ -862,6 +877,19 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
   it('writes a session for a genome with no drawable track, holding just its sequence', () => {
     const hg38 = session('igv-hg38.metacooler.json')
     expect((hg38.tabs?.[0]?.tracks ?? []).map((track) => track.kind)).toEqual(['sequence'])
+  })
+
+  it('carries the sequence’s .fai as the lane’s source.index, so the browser opens on it', () => {
+    // A session names its sidecar in the field the loader reads; for the
+    // sequence that index is what the assembly is answered from (§8.8) —
+    // without it a mammalian genome is read whole before the browser appears.
+    for (const name of ['igv-asm294v2.metacooler.json', 'igv-hg38.metacooler.json']) {
+      const sequence = session(name).tabs?.[0]?.tracks?.[0]
+      expect(sequence?.kind).toBe('sequence')
+      const source = sequence?.source as Record<string, unknown>
+      expect(String(source.url)).toMatch(/\.(fa|fasta|fna)$/)
+      expect(String(source.index)).toBe(`${String(source.url)}.fai`)
+    }
   })
 
   it('opens a 4DN session on its map, and never mixes two assemblies into one', () => {

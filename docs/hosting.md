@@ -546,6 +546,26 @@ it, unlike the Google sign-in above: nothing here is registered against an origi
 signs in as well as a website does — the authorize page opens in the machine's real browser
 (`electron/main.cts` sends every `window.open` there), and the code is pasted back into the app.
 
+## A FASTA, and its index
+
+A genome's sequence is the one file whose size decides how it is read (SPECS §8.8). Under 64 MB
+the viewer reads it whole — one request, every zoom draws GC content, the motif search can run.
+Over it, the viewer reads the **`.fai`** beside it and then the sequence by range, a window at a
+time, so a mammalian genome is on screen the moment the index has arrived and nothing of the
+sequence is fetched until a lane asks for it. So publish the index with the file:
+
+```bash
+samtools faidx genome.fa          # writes genome.fa.fai
+aws s3 cp genome.fa     s3://my-lab/ref/
+aws s3 cp genome.fa.fai s3://my-lab/ref/
+```
+
+`<url>.fai` is guessed, never probed; an index published under another name is given as
+`https://…/genome.fa#index=https://…/other.fai`, the same fragment a BAM's `.bai` takes. A large
+FASTA with no index is read whole up to 300 MB and refused past it, by a sentence naming the size
+and the command above. Compress a reference only if you must: a bgzipped FASTA is read whole
+whatever its size, its `.fai` needing a `.gzi` this viewer does not read.
+
 ## What already works, host by host
 
 "Supports S3" undersells it: what the reader supports is *object storage*, and the only two things
