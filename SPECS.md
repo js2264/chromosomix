@@ -4973,8 +4973,8 @@ written, and each is absolute rather than a degradation:
    refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
 
 **The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
-URL box, the published examples and the version picker, and the file picker says in one sentence
-that this copy opens local files only and where to go for the rest. A build that offered a URL field
+URL box, the store tiles and the version picker, and the landing page says in one sentence that
+this copy opens local files only and where to go for the rest. A build that offered a URL field
 which could never succeed would be a worse artefact than one that does not offer it.
 
 **It is about 11 MB and four fifths of that is h5wasm.** The runtime ships its wasm base64-inlined
@@ -5009,21 +5009,35 @@ are Chromium's, and another engine may impose more.
 
 ## 20. Connected folders
 
-Every door to a file the app had asked *which file* once and then closed: the picker, the header's
-`+`, the modal bucket browser, a URL box. That is the right shape for opening one thing and the
+Every door to a file the app had asked *which file* once and then closed: the landing page, the
+header's `+`, a URL box. That is the right shape for opening one thing and the
 wrong shape for the way people work with a directory of data, which is to open one, look, open the
 next, and keep going. A **connected folder** is a place the window keeps, browsable in a column, for
 as long as the reader wants it.
 
-Two things are folders, and the whole point is that they are the same thing here:
+Four things are folders, and the whole point is that they are the same thing here:
 
-- a **directory on the machine**, and
-- a **key prefix on a bucket**, public or private.
+- a **directory on the machine**,
+- a **key prefix on a bucket**, public or private,
+- a **Google Drive folder**, and
+- a **Dropbox** (§24.9).
 
 `browse/folder.ts` is the interface — given a path, the sub-folders and the files; given a file, how
-to open it — and the two backends are the whole of the difference. Nothing above that layer asks
-which kind it is holding, so "a local folder or an S3 bucket, read the same way" is a property of
-that file being small rather than a feature written twice.
+to open it — and the backends are the whole of the difference. Nothing above that layer asks which
+kind it is holding, so "a local folder or an S3 bucket, read the same way" is a property of that
+file being small rather than a feature written twice.
+
+**They are connected from one dialog, drawn as providers** (`ui/ConnectCard.ts`): a row of four
+tiles — this machine, a bucket, Google Drive, Dropbox — and the form of the one pressed under it.
+The dialog used to stack six sections down one scroll, and two of the six were not places: a Google
+API key and a Google account are settings of *one provider*, and a reader meeting them between a
+bucket and a Drive folder had to work out which they belonged to. They sit under Google Drive now,
+which is the only tile that needs them, in the order a reader meets them — the key, because a
+public Drive link fails without it; the account, because a private one fails afterwards with a key
+in place; the folder, because it needs the account. The Dropbox app key sits under Dropbox. A build
+that cannot offer a provider does not draw its tile (§8.5): the standalone build offers this
+machine alone, and the desktop build's Drive tile carries the key and says why there is no
+sign-in. The plug in the header and the Files column's *connect a place…* both open it.
 
 ### 20.1 One level, never a walk
 
@@ -5031,7 +5045,7 @@ that file being small rather than a feature written twice.
 rather than an omission: on a bucket a recursive listing is one signed request per prefix against a
 key that may be allowed some of them and not others, and on a disk it is an unbounded walk of
 somebody's home directory to draw a sidebar. The folder view is the folder, not an index of it —
-the same rule the bucket browser's filter already stated about itself.
+the same rule its own filter states about itself.
 
 Both backends stop at **1,000 entries** and say so. S3's own page is a thousand; a local directory
 had no limit at all, which is the wrong asymmetry to leave in, since a `fastq/` directory of forty
@@ -5104,6 +5118,14 @@ stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks 
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 
+**Every box that takes a URL has the same second door.** Beside the Tracks card's box, the Contact
+maps card's, the deck's add row and an empty cell of a deck stands *from a connected place…*
+(`ui/pickFromFolders.ts`): the Files column's own folder view in a dialog, over every place the
+window is connected to — a directory on this machine included — and a row that hands back the
+file, with the credential the listing used. It replaces a browser that could look at buckets and
+nothing else; with nothing connected it says so and names the plug, rather than offering an empty
+listing.
+
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
 are connected. Everything ends at `Session.addPicked`, which decides nothing — it hands a local file
@@ -5175,6 +5197,10 @@ read by one parser.
 
 A relative `?config=` resolves against the page it was named on. Only `http:` and `https:` are kept:
 the value is about to be fetched, and the other schemes are the ones with no server on the other end.
+
+`?store=` is the third mounting parameter and is not a seed: it opens the store drawer over
+whatever the window shows (§24.2), carrying the store's view in the rest of the address, and an
+embed — which has no drawer — ignores it.
 
 ### 21.2 What it keeps and what it drops, and why each one
 
@@ -5485,7 +5511,7 @@ reader's own browser, and read by nobody else.
 
 ---
 
-## 24. Hubs, and remote sources beyond a bucket
+## 24. Stores, and remote sources beyond a bucket
 
 The byte layer reaches any host that serves HTTPS, byte ranges and CORS without transfer
 compression (§11), and that turned out to include the two portals a Hi-C reader is most likely to
@@ -5494,25 +5520,32 @@ buckets (`docs/remote-sources.md` §2 has the measurements). What it could not d
 The only catalogue was the four demos; a connected 4DN bucket is forty thousand UUID-named folders
 under one prefix, capped at 1,000 by §20.1. So the gap juicebox.js had on this app was never
 access. It was a shelf in front of the files — and juicebox's shelf is three static files a script
-regenerates, not a live connection to anything. This section is that shelf, and the four smaller
-things around it: URLs that are not yet the file, links that expire, credentials that are not a
-bucket key, and a search box over a portal for the reader who has none of the above.
+regenerates, not a live connection to anything. This section is that shelf, called a **store**,
+and the four smaller things around it: URLs that are not yet the file, links that expire,
+credentials that are not a bucket key, and a search box over a portal for the reader who has none
+of the above.
 
-Nothing here relaxes §1. Every hub is a static document on somebody's bucket (C1, C5); a map with
-no hub opens exactly as before (C3); a hub is fetched on a gesture and never on load (§11); the
+Two words, and the line between them is the landing page's (§24.2). A reader **loads** files: bytes
+they have, or the address of some. A reader **connects to a store**: somebody's shelf of data,
+drawn as a page of its own. Everything else that used to stand between the two — a bucket to
+browse, a hub, a catalogue, an examples list — was one of those two things under another name, and
+is now called by it: a bucket is a *place* the window connects to (§20), and the rest are stores.
+
+Nothing here relaxes §1. Every store is a static document on somebody's bucket (C1, C5); a map with
+no store opens exactly as before (C3); a store is fetched on a gesture and never on load (§11); the
 one thing on this road that would need a server — a CORS proxy for a portal that refuses browsers
-— is refused, and such a portal gets a generated hub instead.
+— is refused, and such a portal gets a generated store instead.
 
-### 24.1 What a hub is
+### 24.1 What a store is
 
-A **hub** is a JSON file, `kind: "metacooler.hub"`, on any CORS-enabled host: a catalogue of maps,
+A **store** is a JSON file, `kind: "metacooler.store"`, on any CORS-enabled host: a catalogue of maps,
 genome files and workspaces with enough metadata to choose one **without opening any of them**,
 which is what §11 promised under the name "catalog" and GAPS G10 recorded as unbuilt.
-`state/hub.ts` owns the shape, the parser and the resolver.
+`state/store.ts` owns the shape, the parser and the resolver.
 
 ```json
 {
-  "kind": "metacooler.hub", "version": 1,
+  "kind": "metacooler.store", "version": 1,
   "name": "4DN open data", "generatedAt": "…", "source": "…",
   "base": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/",
   "columns": [{ "key": "assembly", "label": "Assembly" }, { "key": "biosource", "label": "Biosource" }],
@@ -5528,79 +5561,134 @@ which is what §11 promised under the name "catalog" and GAPS G10 recorded as un
 
 Four rules carry most of the design:
 
-- **A hub is a table, not a tree.** Six hundred rows are chosen by *filtering* — assembly,
-  biosource, assay, lab — and then sorting, and a folder row has only a name. So a hub declares its
-  `columns` and each entry carries `fields`, and the viewer draws it as a filterable, sortable table
-  rather than pushing it through `ConnectedFolder.list()` (§20), which would draw the flat folder of
-  opaque accessions juicebox deliberately does not show. The two meet only at the exit: a picked row
-  is a URI and a source, the same thing a folder row or the URL box hands over.
+- **A store is narrowed, not walked.** Six hundred rows are chosen by *filtering* — assembly,
+  biosource, assay, lab — and a folder row has only a name. So a store declares its `columns` and
+  each entry carries `fields`, and the viewer draws it as facets over rows (§24.2) rather than
+  pushing it through `ConnectedFolder.list()` (§20), which would draw the flat folder of opaque
+  accessions juicebox deliberately does not show. The two meet only at the exit: a picked row is a
+  URI and a source, the same thing a folder row or the URL box hands over.
 - **A row may be a workspace.** `kind: "workspace"` names a `.metacooler.json`, opened through the
-  road `?config=` already takes (§21.1, `Session.openConfigUrl`), so a hub can offer a *composed
+  road `?config=` already takes (§21.1, `Session.openConfigUrl`), so a store can offer a *composed
   figure* — tracks placed, a group, a colour scale, the window the paper used — and not only a bare
   file. This is the difference between matching juicebox and passing it, and it costs the format one
   string.
-- **Names inside a hub are relative to `base`**, or to the hub's own URL directory when `base` is
+- **Names inside a store are relative to `base`**, or to the store's own URL directory when `base` is
   absent, resolved with the same `::group`- and `#index=`-preserving treatment `resolveConfig`
-  gives a workspace (§21.1). A hub with relative names beside its data is therefore a self-contained
+  gives a workspace (§21.1). A store with relative names beside its data is therefore a self-contained
   folder that can be copied to another bucket, as a demo dataset already is.
 - **A row carries its size** when the generator knew it, so the load gate can ask its question
-  before the first request instead of after the `HEAD`, and the table can say what a five-gigabyte
-  row costs before it is clicked. `tracks` on a row are a shelf: once the row is open, the Tracks
+  before the first request instead of after the `HEAD`, and the row can say what a five-gigabyte
+  file costs before it is clicked. `tracks` on a row are a shelf: once the row is open, the Tracks
   card offers them the way it offers the demo annotations (§8.5).
-- **The table draws a window of a thousand rows**, and filters and sorts over every row the hub
-  has. Six hundred rows is nothing to a `<tbody>`; the ENCODE shelves are 126,000 (§24.3), which is
-  a million cells and a tab that stops for seconds on every keystroke. A cap rather than virtual
-  scrolling, because scrolling a catalogue that size is not what anybody does with it — narrowing
-  is, which is what the filter row is for — and because virtual rows cost the table find-in-page
-  and a `<table>` a screen reader can walk. The cap is on **drawing** only: the rows that appear
-  are the first thousand of the real answer, never a filter of the first thousand, and the line
-  under the table says so when it bites.
+- **A row may name the group it belongs to.** The portal generators write the experiment set a 4DN
+  file belongs to (`set`) and the experiment an ENCODE file belongs to (`dataset`), and every
+  pre-configured session names its group the same way (`dataset`), so a page can fold rows under
+  the set they came from and put *open with its tracks* on the heading (§24.3). A store with no
+  such column is a flat list, which is what a lab's own shelf usually is.
+- **A page draws a window of a thousand rows**, and counts, facets and ticks over every row the
+  store has. Six hundred rows is nothing to a list; the ENCODE shelves are 55,000 (§24.3), which
+  is a quarter of a million elements and a tab that stops for seconds on every keystroke. A cap
+  rather than virtual scrolling, because scrolling a catalogue that size is not what anybody does
+  with it — narrowing is, which is what the rail is for — and because virtual rows cost the page
+  find-in-page. The cap is on **drawing** only: the rows that appear are the first thousand of the
+  real answer, never a filter of the first thousand, and the line over the list says so when it
+  bites.
 
-The parser refuses what it must and tolerates the rest: a JSON that is not a hub, or a hub of a
+The parser refuses what it must and tolerates the rest: a JSON that is not a store, or a store of a
 newer major version, is a `ConfigRefusal` with a message naming which; an entry with no `label` or
 no `uri` is dropped rather than fatal; a missing `kind` is read off the file name (`.json` is a
 workspace, else §20.5's routing); unknown keys are ignored, which is what lets a generator add a
 column before a viewer knows it.
 
-### 24.2 Where hubs are offered, and what is never fetched
+### 24.2 Where stores are offered: the tiles, the drawer, and the four fronts
 
-The picker's **Hubs** section replaces the examples list. It offers the built-in hubs under five
-headings — **Built in** (the *Demos* hub: the four demo workspaces, inline, plus two 4DN open-data
-maps so a first-time reader meets a file that was never on the lab's bucket), **IGV**, **4DN**,
-**ENCODE** (twelve shards) and **Preconfigured sessions** (three), all but the first by URL,
-§24.3 — then every hub the reader has **connected by pasting a URL**, kept in `localStorage` under
-`metacooler-viewer:hubs`, named in the stored-data screen and swept by *forget everything*, exactly
-as a bucket scope is. `?hub=<url>` is the third mounting parameter beside `?embed=` and `?config=`
-(§21.1): a link that lands on a lab's shelf, with the offer to remember it. Only `http:` and
-`https:` are kept, for the reason `?config=` gives.
+**The landing page has two things on it, and they are named.** *Load files* is the drop area and a
+URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* and the header's `+` reuse in a
+dialog with the other verb behind it. *Connect to a store* is a row of tiles — the lab's own
+figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one by
+URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
+picker's URL box, its *browse…* and its *private buckets…* are gone: a bucket is a place and is
+connected from the header's plug (§20), and the *Hubs* dropdown of eighteen shelves was this row
+under another name.
 
-The headings are `HubRef.group`, a field on the reference rather than a shape imposed by the
-table, and they exist because there are eighteen shipped shelves rather than three: eighteen
-unlabelled options in one `<select>` is a list a reader scrolls. The order of the headings is the
-order `ui/examples.ts` lists them in, so what the menu looks like is decided in the one place that
-knows what is on offer; *Hubs you connected* is the one heading the table names itself, because
-`state/hubs.ts` knows a label and a URL and has no business knowing what the picker calls its
-sections. One heading and no remembered rows draws a flat list, which is what the menu was when
-there were three.
+**Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
+Analysis drawer (§18.1) and the console (§23) are, down the *left*, where files come from. It
+floats over the body with a shadow to say so, is dragged by the edge that faces the map, stops at
+the console's roof, puts itself down on Escape and takes neither the keyboard nor a click outside
+itself, so a reader can narrow a catalogue beside the map they spent an hour on. It is **one per
+window** rather than one per tab, on the Files column's argument (§20.4): a store is not a fact
+about the file in front, and a switch of tab must not lose a catalogue somebody was half way
+through narrowing. Its head carries the store's mark and name, the same row of tiles small, for
+switching without closing, and *copy link*. The header has a toggle for it beside the plug and the
+`+`, and the command palette has *Open a store*.
 
-**Nothing is fetched on load.** The demos are inline; the other hubs are read when the reader
-selects one, or when a `?hub=` link names one — a link is a gesture. A reader who never opens the
-shelf makes no third-party request at all, and that sentence is the whole of what §11 has to say
-about a hub: a fetch reveals that somebody opened the viewer, which the demos already did.
+**Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
+why one table for all of them was the wrong shape and is gone:
 
-A built-in hub that answers `404` is not an error but a state — *not generated yet* — because the
-two portal hubs are written by a workflow (§24.3) and a fresh fork has not run it. The table says
-so, and says what runs it. The standalone build (§19) has no hubs section at all, for the reason
-it has no bucket half.
+- **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure with a title, one
+  line, the assembly and the provenance as chips, the paragraph behind a fold, and *open*; the data
+  files under the figures as rows. Inline, so it costs no request.
+- **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
+  pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and
+  whose files are under a fold; a filter over genome and assembly.
+- **4DN open data** and **ENCODE** — *portals* (`PortalView`): a rail of facets down the side, one
+  per column with every value counted, a search box over the names, notes and cells, the rows that
+  survive grouped under the experiment set or experiment they belong to with *open with its tracks*
+  on the heading, a matrix of two facets against each other, and a tray for what is ticked. ENCODE's
+  rows are twelve shards chosen by assembly and kind of file (§24.3), and the choice is two radio
+  groups at the top of its rail; choosing fetches the shard, and everything else ticked survives it.
+- **A store by URL** — the `+` tile: a box, and once a store has been read from it the portal front
+  over it and *remember this store*. A remembered store is a tile of its own, drawn the same way,
+  with *forget this store* on its page. Kept in `localStorage` under `metacooler-viewer:stores`,
+  named in the stored-data screen and swept by *forget everything*, exactly as a bucket entry is.
 
-### 24.3 Where the built-in hubs come from
+**The facets follow two rules** (`state/facets.ts`): within a facet ticked values are OR, across
+facets AND; and a facet's counts are computed against every *other* facet's ticks, so the number
+beside an unticked value is what ticking it would add and a value ticked down to nothing stays,
+at zero, to be unticked. The matrix is the same rule over a pair — a cell counts the rows that
+pass the text and every facet not on an axis — capped by population with the cap said under the
+grid, and a cell is a button that ticks both of its values and hands the reader back to the list.
+The search matches every word against the label, the note and every cell, in any order.
 
-`scripts/make_hub.py` is the generator, with four generating front ends and no dependency beyond
-the standard library. Its shape changed once the answer to *what should a portal hub list* became
+**A row never destroys a tab** (`ui/stores/host.ts`). *Open* fills an empty tab and otherwise
+opens a new one; *add*, offered only when there is something to add to, joins the open tab — a map
+beside the map, anything else as a track — which is the routing a dropped file takes (§20.5). A
+workspace row opens as tabs through the config road. The tray's *open together* opens the first
+map ticked as the tab and joins every other row to it, in the order ticked, which is what dropping
+four files on the window does for files that are somewhere else. Opening folds the drawer away,
+because the reader chose what they came for and it is about to appear behind it; adding keeps it
+up. A store reopened comes back where it was left.
+
+**The view is a link.** `?store=<id or url>` is the third mounting parameter beside `?embed=` and
+`?config=` (§21.1), and it competes with neither: it names a *shelf* rather than a picture, and the
+shelf is a drawer over whatever the window shows, so a link naming both a config and a store gets
+both. Every other parameter in the address is the store's view — `q=` the text, `<column>=<value>`
+per ticked value, `view=matrix`, `axes=` — written by the drawer as the reader narrows, replacing
+rather than pushing so the Back button still walks the map's own history, and taken out again when
+the drawer closes. A reload with a store in the address reopens the drawer where it was; *copy
+link* hands the same address to a colleague. A store id is a short name (`4dn`, `encode`,
+`store:2`) and is kept as written; anything else is resolved and scheme-checked exactly as
+`?config=` is, for the same reason.
+
+**Nothing is fetched on load.** The tiles are descriptions; the lab's store is inline; every other
+store is read when its tile is pressed, or when a `?store=` link names it — a link is a gesture.
+A reader who never opens the drawer makes no third-party request at all, and that sentence is the
+whole of what §11 has to say about a store: a fetch reveals that somebody opened the viewer, which
+the demos already did.
+
+A shipped store that answers `404` is not an error but a state — *not generated yet* — because the
+generated stores are written by a workflow (§24.3) and a fresh fork has not run it. The front says
+so, and says what runs it. The standalone build (§19) has no tiles and no drawer, for the reason it
+has no URL box.
+
+### 24.3 Where the built-in stores come from
+
+`scripts/make_store.py` is the generator, with four generating front ends and no dependency beyond
+the standard library. Its shape changed once the answer to *what should a portal store list* became
 **everything this viewer can open** rather than *the contact maps*, and the change is worth stating
 as a rule, because it is the rule that needs no maintenance: the filter is on whether a file name
 has a route (§20.5), never on an experiment type or a format list, so Micro-C, a bigWig, a peak
-file and whatever a consortium publishes next are in a hub nobody edited.
+file and whatever a consortium publishes next are in a store nobody edited.
 
 **A spine and an enrichment.** The first version asked a portal's search API for both halves of a
 row — which files exist, and what they are of — and that is the wrong shape for a complete
@@ -5612,7 +5700,7 @@ gigabyte of TSV, rewritten daily at the root of `encode-public`, streamed line b
 exists because an object exists. The **enrichment** says what each file is of — biosource, assay,
 target, lab — from one lean search per portal, keyed by accession, never one request per file; a
 file the enrichment does not cover keeps its row and loses cells. `--portal require|optional|skip`
-decides what an unreachable portal means: fail the run (the default, so a hub with columns is
+decides what an unreachable portal means: fail the run (the default, so a store with columns is
 never replaced by one without), publish the spine with its metadata columns empty, or never ask.
 
 The old arrangement's failure was the silent one: 4DN's `ExperimentSetReplicate` search embeds the
@@ -5660,23 +5748,25 @@ has**, and each row says how many files it stands for, so what was collapsed is 
 than in this paragraph.
 
 **Shards, because 210,000 rows is still four shelves too many.** The `encode` front end writes one
-hub per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
+store per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
 `annotation`, `alignment`) — twelve files, the largest about 25 MB and 55,000 rows, which is a
 3 MB fetch once Pages has gzipped it. The two dimensions are the two things a reader arrives
 already knowing: which genome, and whether they want signal, peaks or reads. The shard list is
-fixed and enumerated in the generator, and `src/ui/examples.ts` ships a reference to each;
-`test/dom/builtin-hubs.test.ts` reads both lists and checks they agree, because a name that
-drifted would be a menu entry answering 404 for a file that exists under another name — and the
-picker would report it as *not generated yet*, which is the one failure that looks like a normal
-state. An unnamed assembly lands in `other`: a new assembly appearing at a portal must widen a
+fixed and enumerated in the generator, and `src/ui/stores/registry.ts` names the two facets that choose among them;
+`test/dom/builtin-stores.test.ts` reads both lists and checks they agree, because a name that
+drifted would be a shelf answering 404 for a file that exists under another name — and the front
+would report it as *not generated yet*, which is the one failure that looks like a normal state. An unnamed assembly lands in `other`: a new assembly appearing at a portal must widen a
 shard, never vanish.
 
 **Pre-configured sessions.** A front end may also write session files — one `.metacooler.json` per
-genome or per dataset, with the tracks placed — and a hub of its own listing them as
-`kind: "workspace"` rows (§24.1). IGV's hg38 is a FASTA and a gene track, and offering those as two
-rows asks the reader to assemble what IGV had already assembled; a 4DN experiment set is a contact
-map and the bigWigs published beside it. The viewer needs no new code for this, which is the point:
-a workspace row is a road it already has (§21.1). Three rules the generator follows are worth
+genome or per dataset, with the tracks placed — and a store of its own listing them as
+`kind: "workspace"` rows (§24.1), each naming its group (`dataset`). IGV's hg38 is a FASTA and a
+gene track, and offering those as two rows asks the reader to assemble what IGV had already
+assembled; a 4DN experiment set is a contact map and the bigWigs published beside it. The viewer
+opens one through the road a workspace already has (§21.1), and *where* it offers one is decided by
+the group: IGV's sessions are the cards of its front, and a portal's sessions are *open with its
+tracks* on the heading of the group whose rows they were made from (§24.2) — never a shelf of
+their own, which was a menu entry that answered a question nobody asked in that form. Three rules the generator follows are worth
 recording. A session is **one set of coordinates**: sessions are grouped by dataset *and assembly*,
 because ENCODE publishes one experiment against GRCh38 and hg19 both and a session grouped on the
 dataset alone drew hg19 tracks over a GRCh38 map with nothing on screen saying so. The **view
@@ -5700,7 +5790,7 @@ JSON-bodied 404 is zero results and retrying it would turn it into a failure. A 
 what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
 the fix and no status page will suggest it. And the paged walk stops on `total`, on a short page, or
 on a page that adds no record it has not already seen — the last of which is **fatal when the walk
-is short**, since a portal ignoring `from` would otherwise publish a hub whose enrichment covers a
+is short**, since a portal ignoring `from` would otherwise publish a store whose enrichment covers a
 fiftieth of its rows: a catalogue that draws, and has empty cells in nine rows out of ten.
 
 Three more facts the generator has to know are recorded here so they are not rediscovered: a 4DN
@@ -5711,24 +5801,24 @@ bucket, which is how the first census of 4DN came out short; and ENCODE's manife
 column name** for the same reason, since columns have been added to that file before and a reader
 that counted fields would have shifted every cell the week it happened. A run that finds nothing
 exits 2 — distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a
-good hub with an empty one and never has to tell a portal outage from an empty catalogue by reading
+good store with an empty one and never has to tell a portal outage from an empty catalogue by reading
 a log. A run that loses **one** front end publishes nothing at all, because the branch is replaced
-wholesale: a missing hub would delete last week's good copy of that shelf rather than leave it.
+wholesale: a missing store would delete last week's good copy of that shelf rather than leave it.
 
-`.github/workflows/hubs.yml` runs all three portal front ends weekly and on demand, uploads
-everything as a **timestamped workflow artifact** (`hubs-<date>`, kept ninety days) and publishes
-to the `hubs` branch: the hubs, the `sessions/` directory, an `index.json` naming what is there
+`.github/workflows/stores.yml` runs all three portal front ends weekly and on demand, uploads
+everything as a **timestamped workflow artifact** (`stores-<date>`, kept ninety days) and publishes
+to the `stores` branch: the stores, the `sessions/` directory, an `index.json` naming what is there
 with each shelf's row count and size, and a `fingerprint.json`. The branch is where the workflow
 *writes*; where a browser *reads* is the **site**: `.github/workflows/deploy.yml` copies the
-current files from the branch into `hubs/` beside the app on every deploy, and the hubs workflow
-asks for a deploy as soon as it has published, so a fresh hub is on the site minutes later with no
-push to `main`. The viewer reads `<site>/hubs/<name>.json` — same origin, so no CORS enters into
-it, and an archived build or a preview reaches up to the site root for it, since the hubs are
+current files from the branch into `stores/` beside the app on every deploy, and the stores workflow
+asks for a deploy as soon as it has published, so a fresh store is on the site minutes later with no
+push to `main`. The viewer reads `<site>/stores/<name>.json` — same origin, so no CORS enters into
+it, and an archived build or a preview reaches up to the site root for it, since the stores are
 published once and not per copy; a build with no site to be relative to (the desktop, a standalone
 file) reads the deployed site by `package.json`'s `homepage`, which GitHub Pages serves with
 `Access-Control-Allow-Origin: *`. Not `raw.githubusercontent.com`, which was the first design: it
 answers 404 to anyone not logged in when the repository is private, and a Pages site is public
-whether or not its repository is. A branch rather than a commit to `main` because a hub is data
+whether or not its repository is. A branch rather than a commit to `main` because a store is data
 about somebody else's data and changes on their cadence; a branch rather than a bucket because a
 fork gets the whole arrangement with no secret to add.
 
@@ -5736,7 +5826,7 @@ Two things about that branch changed when a run started writing 100 MB. It is **
 appended to** — one orphan commit, force-pushed — because a branch that kept each week as a commit
 would carry five gigabytes of git objects within a year for a store whose only interesting state is
 its tip, and a shallow clone of it is what every deploy does. What survives between runs is the
-small part worth citing: `archive/` keeps dated copies of `index.json` and of every hub under 2 MB,
+small part worth citing: `archive/` keeps dated copies of `index.json` and of every store under 2 MB,
 pruned per shelf to the last 26 runs, and the 90-day artifact holds the large shards for anybody
 who needs last Monday's exact ENCODE shelf. And **"nothing changed" is now a real answer**: every
 file carries the instant it was written, so byte equality between two runs is impossible and the
@@ -5744,12 +5834,12 @@ shortcut was unreachable — every Monday pushed a hundred megabytes and asked f
 or not a portal had published anything. `fingerprint.json` is the map of each file's hash with its
 timestamps removed; a run whose fingerprint matches the published one stops there.
 
-Every generated hub carries `generatedAt` and `source` — *both* of the places it came from, the
+Every generated store carries `generatedAt` and `source` — *both* of the places it came from, the
 store that decided which rows exist and the query that decided what is in their cells — because a
 shelf with no provenance is a screenshot.
 
 The catalogues juicebox.js reads (`igvteam/igv-data`, MIT) were read while designing this and are
-a fine seed for a fixture. They are **not** fetched at runtime: a hub that hot-links another
+a fine seed for a fixture. They are **not** fetched at runtime: a store that hot-links another
 project's file inherits that project's cadence and schema, and the point of the format is that
 this viewer owns what it offers. IGV's `genomes.json` is the one exception and is not an
 exception to that rule: it is read by the *generator*, weekly, and what a browser fetches is this
@@ -5759,20 +5849,20 @@ project's own static file.
 
 Built, and taken out again before release. A form (`ui/PortalSearch.ts`, over `state/portal.ts`)
 asked a portal's own search API from the browser for released Hi-C files matching a free-text
-query and drew one page of hits as a hub in the §24.1 table. ENCODE answered, its CORS being a
+query and drew one page of hits as a store in the §24.1 table. ENCODE answered, its CORS being a
 documented line of its Apache configuration. 4DN's portal, whose CORS could not be verified when
 the form was written, was observed from the deployed preview on 2026-09-11 answering with no
 `Access-Control-Allow-Origin`: the browser discards such a response and hands script no detail,
 and nothing here may proxy (C1). A form that could only ever fail on the portal it was most wanted
-for, and whose hits on the other were files the generated hub already lists, did not earn its
-place on the picker. The generated hubs (§24.3) are the whole answer for both portals — served from a host
-that answers browsers, searched by the table's own filter — and the form is in the history should
+for, and whose hits on the other were files the generated store already lists, did not earn its
+place. The generated stores (§24.3) are the whole answer for both portals — served from a host
+that answers browsers, narrowed by the front's own facets — and the form is in the history should
 a portal start answering cross-origin.
 
 ### 24.5 URLs that are not yet the file
 
-`sources/rewrite.ts`'s `canonicalUrl` is applied wherever a URL becomes a URI — the picker's box,
-the Tracks and Contact maps cards, the deck's add row, a hub row, `#uri=` and `?config=` on
+`sources/rewrite.ts`'s `canonicalUrl` is applied wherever a URL becomes a URI — the load box,
+the Tracks and Contact maps cards, the deck's add row, a store row, `#uri=` and `?config=` on
 arrival — so the address bar carries the form that works and a shared link already is one. Pure,
 idempotent, never throwing, and a table rather than a policy:
 
@@ -5829,7 +5919,7 @@ header on every request — which is why it is a header bag and not a Google int
 
 ### 24.8 Refused, and why
 
-A **CORS proxy** (C1). **Fetching a hub on load** (§11). **Storing a bearer token** — it expires
+A **CORS proxy** (C1). **Fetching a store on load** (§11). **Storing a bearer token** — it expires
 inside a session, and a secret that outlives its use is the one kind the stored-data screen cannot
 make safe. **Hot-linking another project's catalogue** (§24.3). **Rewriting the GCS XML host**
 (§24.5). **A Dropbox refresh token** — the one credential in this section that would make a

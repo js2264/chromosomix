@@ -19,7 +19,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
   run in a group, so whenever something was already deploying, the removal was cancelled about a
   second after it queued and the review copy outlived its review. #49 and #50 were both lost that
-  way, behind a deploy the Hubs workflow had dispatched a minute earlier.
+  way, behind a deploy the Stores workflow had dispatched a minute earlier.
 
   The deploy now reconciles rather than trusting the event: before publishing, it asks GitHub about
   every preview in the manifest and drops the ones whose pull request is no longer open. That also
@@ -31,9 +31,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `IncompleteRead(43378383 bytes read, 39983032 more expected)`: the widened query asks the portal
   for every experiment set with all four of its file arrays embedded, which is an 83 MB response,
   and the socket closed half way through it — as a Python traceback, where every other failure in
-  `make_hub.py` is a sentence saying what to do. IGV and ENCODE published fine; nothing was
+  `make_store.py` is a sentence saying what to do. IGV and ENCODE published fine; nothing was
   published, because a run that loses one front end publishes none of them (the branch is replaced
-  wholesale, so a missing hub would delete last week's good copy of that shelf).
+  wholesale, so a missing store would delete last week's good copy of that shelf).
 
   4DN's search is now paged — 50 records a request, each retried on its own — and **ENCODE's is
   deliberately not**, which the next run proved the hard way: paged uniformly, ENCODE answered
@@ -177,8 +177,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Alongside it, a **point strands** switch for the readers and the figures that want the plain
   rectangles back.
 
-- **Public data hubs: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
-  already on.** The two shipped portal shelves listed contact maps and nothing else — 1,200 rows
+- **Public data stores: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks
+  already on.** The two shipped portal stores listed contact maps and nothing else — 1,200 rows
   of 4DN and 200 of ENCODE — and the filter that did it was on the *experiment*, which needed
   editing every time a consortium published something new. The rule is now on the file: if this
   viewer has a route for the name, it gets a row. So the shelves are:
@@ -202,42 +202,43 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   - **Preconfigured sessions**, three shelves of them. A row is a whole saved session: pick
     *IGV hg38* and the sequence and its gene track are on screen together; pick a 4DN experiment
     set and its richest contact map opens with the bigWigs and peak files of the same set on it.
-    This needed no new code in the viewer — a hub row could already be a workspace (§24.1) — only
-    a generator that writes the files.
+    This needed no new code in the viewer — a store row could already be a workspace (§24.1) —
+    only a generator that writes the files.
 
-  The picker groups the eighteen shipped shelves under five headings (Built in · IGV · 4DN ·
-  ENCODE · Preconfigured sessions), with *Hubs you connected* below them as before, and the table
-  now draws a window of a thousand rows while filtering and sorting over all of them — 126,000
-  rows of eight cells is a million elements and a tab that stops on every keystroke. Nothing is
-  fetched until a shelf is chosen, which is unchanged and is why eighteen references cost what
-  three did.
+  The drawer offers all of it as four tiles rather than eighteen menu entries: the ENCODE shards
+  are the *Genome* and *Files* facets of one ENCODE page, IGV's sessions are the button on each
+  genome's card, and a portal's sessions are an action on a group of rows rather than a shelf of
+  their own. A list draws a window of a thousand rows while the facets count over all of them —
+  126,000 rows of eight cells is a million elements and a tab that stops on every keystroke.
+  Nothing is fetched until a tile is pressed, which is unchanged and is why eighteen files cost
+  what three did.
 
-  `scripts/make_hub.py` grew an `igv` front end and reads **two sources** per portal instead of
+  `scripts/make_store.py` grew an `igv` front end and reads **two sources** per portal instead of
   one: a *spine* that says which files exist, from a place that cannot be incomplete (4DN's bucket
   listing, ENCODE's daily `encode_file_manifest.tsv`), and an *enrichment* that says what each one
   is of, from one lean portal search keyed by accession. The old portal-only 4DN query embedded the
   experiment *set's* processed files and not the per-experiment ones, so it was missing about nine
   files in ten and said nothing about it. `--portal require|optional|skip` decides what an
-  unreachable portal means; `--sessions-dir` writes the sessions. `.github/workflows/hubs.yml`
-  publishes all of it, and two things about the `hubs` branch changed with the volume: it is
+  unreachable portal means; `--sessions-dir` writes the sessions. `.github/workflows/stores.yml`
+  publishes all of it, and two things about the `stores` branch changed with the volume: it is
   force-pushed as one orphan commit (100 MB a week as commits is five gigabytes a year for a store
   whose only interesting state is its tip), and *nothing changed* is finally a real answer —
   compared on a fingerprint of each file with its timestamps removed, rather than on bytes that
-  could never match. SPECS §24.3 has the measurements and the reasoning; `docs/hubs.md` is the
+  could never match. SPECS §24.3 has the measurements and the reasoning; `docs/stores.md` is the
   operator's page.
 
-- **Hubs: a shelf of named datasets in the picker, and any lab can publish one.** A hub is one
-  JSON file beside the data (`kind: "metacooler.hub"`, SPECS §24): maps, genome files and whole
-  workspaces with columns to filter on — assembly, biosource, assay, lab — so a reader chooses
-  without opening anything. The picker draws it as a sortable, filterable table and offers three
-  built-in hubs: the **Demos**, now with two 4DN open-data maps beside the four workspaces;
-  **4DN open data** and **ENCODE Hi-C**, regenerated weekly from the portals by
-  `.github/workflows/hubs.yml` and published beside the app by the deploy. Paste a URL to connect a lab's hub,
-  or arrive on it with `?hub=<url>` beside `?config=` and `?embed=`. A row may be a workspace, which
-  is what a *pre-configured session* is; a row carries its size so the cost is on the table before
-  the click. Nothing is fetched on load: a hub is read when it is chosen.
+- **Stores: a shelf of named datasets, and any lab can publish one.** A store is one JSON file
+  beside the data (`kind: "metacooler.store"`, SPECS §24): maps, genome files and whole workspaces
+  with columns to filter on — assembly, biosource, assay, lab — so a reader chooses without opening
+  anything. The app draws each as a page of its own in the store drawer (under *Changed* below) and
+  ships the lab's own — the four published figures, with the data files under them — beside the
+  public ones, regenerated weekly from the portals by `.github/workflows/stores.yml` and published
+  beside the app by the deploy. Paste a URL under *Your own store* to connect a lab's, or arrive on
+  it with `?store=<url>` beside `?config=` and `?embed=`. A row may be a workspace, which is what a
+  *pre-configured session* is; a row carries its size so the cost is on the table before the
+  click. Nothing is fetched on load: a store is read when it is chosen.
 
-  `scripts/make_hub.py` writes one: `4dn` and `encode` from the portals' own search APIs (every
+  `scripts/make_store.py` writes one: `4dn` and `encode` from the portals' own search APIs (every
   processed file with an open-data URL, no experiment-type filter, so Micro-C is in), and `bucket`
   from a prefix on any S3-compatible store — the catalogue `docs/hosting.md` always promised. The
   motivation, the measurements and the comparison with juicebox.js are in
@@ -478,6 +479,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The Buckets card, the bucket browser and the shelves dropdown.** The plug's *Buckets* card
+  listed what the Files panel already lists and edited keys the provider pane now edits; the
+  *browse bucket…* dialog behind four URL boxes browsed buckets and nothing else, where the window
+  can be connected to a folder, a Drive or a Dropbox too; and the eighteen-entry dropdown of
+  shelves, the landing page's URL box and its *private buckets…* button were the store tiles, the
+  Load box and the plug under other names. The two 4DN maps that sat in the Demos store are on
+  4DN's own page, where every 4DN map is. Earlier unreleased builds called a store a *hub*
+  (`metacooler.hub`, `?hub=`, `make_hub.py`, the `hubs` branch); none of those names is read any
+  more.
+
 - **The `log₂ ratio` combine operation.** It was a scale wearing an operation's
   clothes: it put the same finding in two rows and left only one of them
   exportable as the quantity it measured — a bigWig of log₂ ratios is a file of
@@ -663,6 +674,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   keep their indices.
 
 ### Changed
+
+- **Two verbs to open anything: load files, or connect to a store.** The landing page had grown a
+  URL box, a *browse…*, a *private buckets…*, a dropdown of eighteen shelves and a list of
+  examples, and the header a plug, a `+` and a *Buckets* card that overlapped all of them. Every
+  one was one of two things under another name. The page now says the two (SPECS §24.2):
+  **Load files** is the drop area and the URL box, and **Connect to a store** is a row of tiles —
+  the lab's own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a `+`
+  for one by URL.
+
+  A tile opens the **store drawer**, a panel down the left in the family of the Analysis drawer
+  and the console: resizable, put down by Escape or its header button, and back where it was left
+  when it is reopened. Each store gets the page its data wants. The lab's store and IGV's are
+  **galleries** — one card per figure or per genome, a line of context, one button that opens the
+  whole pre-configured session, the files under a fold. 4DN and ENCODE are **portals**: a rail of
+  facets (assay, biosource, lab, format…) whose counts follow every tick — OR within a facet, AND
+  across them — a search box, a **matrix** that crosses any two facets and opens a cell, and a
+  **tray** that collects rows to open together. What is open is in the address —
+  `?store=4dn&assay=Hi-C&biosource=HFFc6&view=matrix` — so a narrowed store is a link, and
+  `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
+
+  Around it, the doors are fewer and each says what it is. **Connect** (the plug) is a row of
+  providers — this machine, a bucket, Google Drive, Dropbox — with each provider's credentials on
+  its own pane rather than a bucket card here and a Drive key there. The header's `+` and the file
+  crumb's *Open a file* open one **Load** dialog with the store tiles behind it. Every URL box that
+  once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every
+  place the window is connected to and not only buckets. The **Files** panel is the one listing of
+  connected places. And `scripts/make_store.py` writes a *Group*, *Experiment set* or *Dataset*
+  column into what it generates, which is what the galleries and the sessions are grouped by.
 
 - **A map of several ticked genomes is divided and labelled by genome.** Ticking
   four MAGs in the genomes table asks for four blocks — their own maps on the

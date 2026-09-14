@@ -128,13 +128,13 @@ usual chain accepts. It is **not** part of `npm run build` and not part of the d
 data changes on the order of once a year and the app deploys on every push, so coupling them would
 mean re-uploading 250 MB to publish a CSS fix.
 
-None of them is a row of the Demos store. What the store offers is the workspaces below, and those
-name these.
+Each of them is also a row of the lab's store, under the figures, so a reader can open one on its
+own; what the store leads with is the workspaces below, and those name these.
 
 ## The published workspaces
 
-The picker's **Demos** store (`builtinStores()` in `ui/examples.ts`, SPECS §24.2) lists **four
-workspace files**, plus two 4DN open-data maps that live on 4DN's bucket rather than the lab's:
+The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
+`ui/stores/registry.ts`, SPECS §24.2) leads with **four workspace files**, drawn as figures:
 
 | file | opens |
 | --- | --- |
@@ -486,9 +486,9 @@ pushes still costs one directory.
 
 ### The generated stores are published here too
 
-The picker's **4DN open data** and **ENCODE Hi-C** stores are JSON files that
+The drawer's **IGV genomes**, **4DN open data** and **ENCODE** stores are JSON files that
 `.github/workflows/stores.yml` regenerates weekly and commits to the `stores` branch (docs/stores.md).
-The deploy copies the three current files from that branch into `stores/` beside the app, so the
+The deploy copies the current files from that branch into `stores/` beside the app, so the
 viewer reads them from its own origin, and the stores workflow dispatches a deploy as soon as it has
 published something new — the arrangement the previews use, on the same `pages` concurrency group.
 The branch was first meant to be read directly over `raw.githubusercontent.com`; that host answers

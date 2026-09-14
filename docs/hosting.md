@@ -245,8 +245,9 @@ scoped as below.
 fine for pasted URLs and cannot list, and the app says so rather than reporting a broken bucket.
 
 **Browsing is offered wherever a URL is.** Every box in the application that takes a file URL — the
-picker's *open a remote file*, the Tracks card, the Contact maps card, the deck's add row — carries
-a `browse…` button beside its *add*, and all four open the same folder view. That is what the
+Tracks card, the Contact maps card, an empty map cell, the deck's add row — carries a *from a
+connected place…* button beside its *add*, and all four open the same folder view over every place
+the window is connected to, buckets among them. That is what the
 `s3:ListBucket` half of the policy buys: the bigWigs beside a map are keys whose names came off a
 run sheet, and nobody is holding their URLs. A file chosen from a listing is opened with the key
 that listed it, rather than by a second lookup that could in principle resolve elsewhere. The filter
@@ -570,4 +571,4 @@ that ever break are CORS and transfer compression. Measured on 2026-09-11 (`docs
 
 Publishing a **store** — a JSON that names the files on a bucket with columns to filter on, so a
 reader can choose without opening any — is `scripts/make_store.py bucket <prefix>`; SPECS §24 is the
-format and the picker's side of it.
+format and the drawer's side of it.

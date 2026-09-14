@@ -1,10 +1,12 @@
 # Publishing a store
 
 A **store** is one JSON file that names the maps, genome files and saved sessions on a bucket, with
-columns to filter on, so a reader can choose one without opening any. The picker draws it as a
-table; a lab connects one by pasting its URL or arrives on it with `?store=<url>`. SPECS §24 is the
-specification; this is the operator's page: how to write one, how to generate one, and how the two
-portal stores the app ships are kept fresh.
+columns to filter on, so a reader can choose one without opening any. The app draws it as a page
+in the store drawer — the lab's and IGV's as cards of pre-configured sessions, 4DN's and ENCODE's
+as a faceted search with a matrix, a lab's own as that search over its rows; a lab connects one by
+pasting its URL under *Your own store* or arrives on it with `?store=<url>`. SPECS §24 is the
+specification; this is the operator's page: how to write one, how to generate one, and how the
+three public stores the app ships are kept fresh.
 
 ## The file
 
@@ -167,10 +169,11 @@ Even at the default, 210,000 rows is too much for one file, so the `encode` fron
 one store per assembly group (`GRCh38`, `hg19`, `mm10`, `other`) and output category (`signal`,
 `annotation`, `alignment`), twelve files, largest about 25 MB. `--out out/encode.json` writes
 `out/encode-GRCh38-signal.json` and its eleven siblings and no `out/encode.json`; `--shards off`
-writes the single file instead. Each shard is its own shelf in the picker, and the shard list is
-fixed in the generator and mirrored in `src/ui/examples.ts` — `test/dom/builtin-stores.test.ts`
-checks the two agree, because a name that drifted would be a menu entry answering 404 for a file
-that exists under another name.
+writes the single file instead. Each shard is one file, and the ENCODE page turns the shard list
+into its first two facets — *Genome* and *Files* — so a reader never meets twelve entries; the list
+is fixed in the generator and mirrored in `src/ui/stores/registry.ts` —
+`test/dom/builtin-stores.test.ts` checks the two agree, because a name that drifted would be a
+facet answering 404 for a file that exists under another name.
 
 ### Pre-configured sessions
 
@@ -213,7 +216,7 @@ archive/          dated copies of index.json and of every store under 2 MB, last
 
 The branch is the store, not the door: the deploy (`.github/workflows/deploy.yml`) copies the
 current files into `stores/` beside the app on every deploy, and the stores workflow asks for a deploy
-as soon as it has published something new. The picker's shelves read `<site>/stores/<name>.json` —
+as soon as it has published something new. The drawer's pages read `<site>/stores/<name>.json` —
 the same origin as the page, so no CORS is involved and a private repository changes nothing; the
 desktop build reads the deployed site by the `homepage` in `package.json`.
 
@@ -225,12 +228,12 @@ written, so the comparison is made on `fingerprint.json` — each file hashed wi
 `createdAt` removed — rather than on the bytes. A second run over unchanged portals commits
 nothing, pushes nothing and asks for no deploy.
 
-Until the workflow has run once on a fork, those menu entries answer *not generated yet* and name
+Until the workflow has run once on a fork, those pages answer *not generated yet* and name
 the workflow to run. On the first run, check the "Generate every store" step's counts (about 75 IGV
 rows and 41 sessions; about 25,700 4DN rows; about 210,000 ENCODE rows across twelve shards), that
 `--check` passed on everything, that the deploy it asked for has finished, and that
 `<site>/stores/4dn.json` answers `200`. A second run must publish nothing when the three sources
 answered the same thing.
 
-A fork that would rather publish its stores elsewhere changes `storesBase()` in `src/ui/examples.ts`
+A fork that would rather publish its stores elsewhere changes `storesBase()` in `src/ui/stores/registry.ts`
 and the branch name in the two workflows; nothing else knows where they live.

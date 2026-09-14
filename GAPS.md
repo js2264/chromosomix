@@ -314,7 +314,9 @@ the natural end of a session spent finding that a binning is wrong.
 ### G10. A catalogue of published files — **built** (SPECS §24)
 
 > **Since:** built as a *store* — a static JSON of maps, genomes and workspaces with columns to filter
-> on, drawn as a table in the picker, connectable by URL and addressable as `?store=`. The generator is
+> on, drawn as a page of its own in the store drawer (cards of sessions for the lab's and IGV's
+> stores, a faceted search with a matrix for 4DN and ENCODE), connectable by URL and addressable as
+> `?store=`. The generator is
 > `scripts/make_store.py`, with a `bucket` front end that is the `make_catalog.py` below and three
 > public-store front ends — `igv`, `4dn` and `encode` — that a weekly workflow runs and publishes
 > to the `stores` branch. Those three list **every file this viewer has a route for**, not the contact
@@ -326,7 +328,7 @@ the natural end of a session spent finding that a binning is wrong.
 > and the `bucket` front end is where it would be computed.
 
 `IMPLEMENTATION.md` M8 specifies `scripts/make_catalog.py` and the README records it as not built.
-`ui/BucketsCard.ts` browses an S3 prefix, which is the folder and not a description of it: a reader
+The Files panel browses an S3 prefix, which is the folder and not a description of it: a reader
 still opens files to find out what is in them. A catalogue — URI, ngenomes, ncontigs, nnz, bin sizes,
 assembly, taxonomy summary, byte size — lets somebody browse a hundred published files without
 opening any, and M8 already notes that referencing each file's `metacooler network --level genome`
