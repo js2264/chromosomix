@@ -32,18 +32,19 @@
 import { button, el, field } from './dom'
 import { icon } from './icons'
 import {
-  DROPBOX_PERMISSIONS,
-  DROPBOX_SIGN_IN_AVAILABLE,
   beginSignIn,
   clearAppKey,
+  DROPBOX_PERMISSIONS,
+  DROPBOX_SIGN_IN_AVAILABLE,
   dropboxState,
   finishSignIn,
-  readAppKey,
+  ownAppKey,
   signOut,
   subscribeDropbox,
   writeAppKey,
 } from '../auth/dropbox'
 import { DROPBOX_FOLDER_ID } from '../browse/dropbox'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 
 /**
  * The section, or `null` where a sign-in cannot work at all.
@@ -91,15 +92,18 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
 
   const show = (): void => {
     const state = dropboxState()
-    const key = readAppKey()
+    const key = ownAppKey()
+    const site = SITE_DEFAULTS.dropboxAppKey
     stored.textContent =
-      key === null
-        ? 'No app key stored. Signing in needs one; it is not a secret, and it is the only part ' +
-          'of this that is kept.'
-        : // Printed rather than withheld, like the Google client id and unlike
+      key !== null
+        ? // Printed rather than withheld, like the Google client id and unlike
           // the bucket secret: what a reader coming back here needs to know is
           // *which app*, and "one is stored" would not tell them.
           `App key stored: ${key}`
+        : site !== null
+          ? `Using this site’s app key (${site}). Paste your own to use a different Dropbox app.`
+          : 'No app key stored. Signing in needs one; it is not a secret, and it is the only part ' +
+            'of this that is kept.'
     account.textContent = accountLine(state)
 
     const label = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Dropbox'
@@ -197,8 +201,10 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
     el('p', {
       class: 'hint',
       text:
-        'Browse a Dropbox in the Files panel. Listing needs your own sign-in and the app key ' +
-        'your lab registered — docs/hosting.md has the four steps.',
+        SITE_DEFAULTS.dropboxAppKey !== null
+          ? 'Browse a Dropbox in the Files panel: sign in with your own Dropbox account.'
+          : 'Browse a Dropbox in the Files panel. Listing needs your own sign-in and the app key ' +
+            'your lab registered — docs/hosting.md has the four steps.',
     }),
     el('p', {
       class: 'hint',

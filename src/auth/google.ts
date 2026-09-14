@@ -71,6 +71,7 @@
 
 import { clearBearer, setBearer } from '../s3/credentials'
 import { TARGET } from '../version'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 
 /** Where the client id is kept. The API key stays in its own row (§24.7). */
 const KEY = 'metacooler-viewer:google'
@@ -170,7 +171,15 @@ function readRaw(): string | null {
 }
 
 /**
- * The client id this browser holds, or `null`.
+ * The client id a sign-in goes to: the reader's own where one is stored, and
+ * the site's otherwise (`config/siteDefaults.ts`), or `null` where neither.
+ */
+export function readClientId(): string | null {
+  return ownClientId() ?? SITE_DEFAULTS.googleClientId
+}
+
+/**
+ * The client id this browser holds, or `null` — the site's not counted.
  *
  * Validated like every other stored value in this app, because stored state
  * outlives the build that wrote it: anything that is not an object with a
@@ -179,7 +188,7 @@ function readRaw(): string | null {
  * `invalid_client` in a popup — a refusal from a third party about a field this
  * app could have checked itself.
  */
-export function readClientId(): string | null {
+export function ownClientId(): string | null {
   const raw = readRaw()
   if (raw === null) return null
   let parsed: unknown

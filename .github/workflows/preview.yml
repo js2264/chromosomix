@@ -101,6 +101,11 @@ jobs:
         run: npm run build:pinned
         env:
           PINNED_BASE: ${{ steps.base.outputs.path }}pr/${{ github.event.number }}/
+          # The site's registrations with Google and Dropbox, as repository
+          # variables (docs/deploy.md). None is a secret; all end up in the page.
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
 
       # Shallow and by token, exactly as deploy.yml fetches it.
       - name: Fetch the archive of published builds

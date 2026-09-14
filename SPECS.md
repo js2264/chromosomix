@@ -5999,6 +5999,20 @@ the two `postMessage` boundaries, independently for a source and its `bins` side
   the offer to sign in again rather than by the CORS explanation. Absent in the standalone build,
   which has no origin to register.
 
+**Where the three values come from.** Each is read in one place — `readApiKey`, `readClientId`,
+and `readAppKey` for the Dropbox key of §20 — and each answers the row this browser stores, or
+failing that the value the page was **built with**: `config/siteDefaults.ts` exports
+`SITE_DEFAULTS`, three strings the build fills from the `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and
+`DROPBOX_APP_KEY` variables of the environment it ran in (`vite.config.ts`; the deploy reads the
+repository's Actions variables of the same names, docs/deploy.md). None of the three is a secret —
+all end up in the page — so the site can carry the lab's own registrations, and a reader of the
+published site signs in to *their* Drive or Dropbox with one press and nothing pasted. The dialog
+says which of the two it is using; a stored value wins over the built-in one wherever both exist,
+so a lab with a project of its own still uses it here; and clearing a stored value falls back to
+the site's rather than to nothing. A build made with the variables unset is the build there was
+before, with every value pasted by hand — the single-file build always, since a `file://` page has
+no origin to register.
+
 The dialog says one thing plainly that a consent screen would bury: `drive.readonly` is read access
 to **all** of the reader's Drive, where a bucket scope is one prefix. And `docs/hosting.md` says the
 other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
@@ -6049,7 +6063,10 @@ and the app key — public by design, no secret — is the one thing kept, besid
 sign-in is **PKCE with the code shown by Dropbox and pasted by the reader**, not a redirect: a
 static page on any origin can do it, the desktop build's `app://` origin included, and there is no
 callback route to add to a viewer that has none. The token lives in this tab's memory and dies
-with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is the whole
+with it; the refresh token Dropbox would also hand over is refused (§24.8). A saved key alone puts
+the folder in the Files panel, usable once signed in; the site's built-in key (§24.7) does not —
+under it the folder is listed only while a sign-in is live, because a row in every reader's panel,
+Dropbox or no Dropbox, would be noise with a × that could not remove it. The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague

@@ -38,12 +38,13 @@ import { Modal } from './Modal'
 import { button, el, field } from './dom'
 import { icon, type IconName } from './icons'
 import { bucketForm } from './bucketForm'
-import { clearApiKey, readApiKey, writeApiKey } from '../s3/credentials'
+import { clearApiKey, ownApiKey, writeApiKey } from '../s3/credentials'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
   GOOGLE_SIGN_IN_AVAILABLE,
   clearClientId,
   googleState,
-  readClientId,
+  ownClientId,
   signIn,
   signOut,
   subscribeGoogle,
@@ -262,9 +263,12 @@ function googleSection(): HTMLElement {
   const status = el('p', { class: 'hint' })
   const show = (): void => {
     status.textContent =
-      readApiKey() === null
-        ? 'No key stored. Google Drive links will not open without one.'
-        : 'A key is stored in this browser. It is listed under About → what is stored.'
+      ownApiKey() !== null
+        ? 'A key is stored in this browser. It is listed under About → what is stored.'
+        : SITE_DEFAULTS.googleApiKey !== null
+          ? 'This site provides a key, so public Google Drive links open. Paste your own to use ' +
+            'a different Google project.'
+          : 'No key stored. Google Drive links will not open without one.'
   }
   show()
 
@@ -350,14 +354,17 @@ function googleAccountSection(): HTMLElement {
 
   const show = (): void => {
     const state = googleState()
-    const id = readClientId()
+    const id = ownClientId()
+    const site = SITE_DEFAULTS.googleClientId
     stored.textContent =
-      id === null
-        ? 'No client id stored. Signing in needs one; it is not a secret.'
-        : // Printed rather than withheld, which is the opposite of the key box
+      id !== null
+        ? // Printed rather than withheld, which is the opposite of the key box
           // above and is the right answer for a value that is public: what a
           // reader coming back here needs to know is *which project*.
           `Client id stored: ${id}`
+        : site !== null
+          ? `Using this site’s client id (${site}). Paste your own to sign in to a different project.`
+          : 'No client id stored. Signing in needs one; it is not a secret.'
     account.textContent = accountLine(state)
 
     const signInLabel = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Google'
@@ -411,8 +418,11 @@ function googleAccountSection(): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'For a Drive file, a Drive folder or a Cloud Storage object that is not public: your ' +
-        'lab’s client id, then your own sign-in. docs/hosting.md has the four steps.',
+        SITE_DEFAULTS.googleClientId !== null
+          ? 'For a Drive file, a Drive folder or a Cloud Storage object that is not public: sign ' +
+            'in with your own Google account.'
+          : 'For a Drive file, a Drive folder or a Cloud Storage object that is not public: your ' +
+            'lab’s client id, then your own sign-in. docs/hosting.md has the four steps.',
     }),
     // The two sentences §24.7 requires this dialog to say, and it requires them
     // because a consent screen says neither: Google's names the product, and

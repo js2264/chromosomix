@@ -73,6 +73,7 @@
 import { clearBearer, setBearer } from '../s3/credentials'
 import type { StoredItem } from '../state/stored'
 import { IS_STANDALONE } from '../version'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 
 /** Where the app key is kept. One row, like the Google client id next door. */
 const KEY = 'metacooler-viewer:dropbox'
@@ -145,7 +146,15 @@ function readRaw(): string | null {
 }
 
 /**
- * The app key this browser holds, or `null`.
+ * The app key a sign-in uses: the reader's own where one is stored, and the
+ * site's otherwise (`config/siteDefaults.ts`), or `null` where neither.
+ */
+export function readAppKey(): string | null {
+  return ownAppKey() ?? SITE_DEFAULTS.dropboxAppKey
+}
+
+/**
+ * The app key this browser holds, or `null` — the site's not counted.
  *
  * Validated like every other stored value in this app, because stored state
  * outlives the build that wrote it: anything that is not an object with a
@@ -154,7 +163,7 @@ function readRaw(): string | null {
  * from a third party, in a new tab, about a field this app could have checked
  * itself.
  */
-export function readAppKey(): string | null {
+export function ownAppKey(): string | null {
   const raw = readRaw()
   if (raw === null) return null
   let parsed: unknown
@@ -219,9 +228,12 @@ export function clearAppKey(): void {
  * been told to sign in to*, which a count cannot answer. The token is
  * deliberately absent from this screen, because it is held in memory and never
  * written, so there is nothing on this machine for the screen to account for.
+ * So is the site's own key (`config/siteDefaults.ts`): it is in the page, not
+ * in this browser's storage, and a screen listing what *this browser* keeps
+ * must not claim it.
  */
 export function storedLines(): StoredItem[] {
-  const key = readAppKey()
+  const key = ownAppKey()
   if (key === null) return []
   return [
     {

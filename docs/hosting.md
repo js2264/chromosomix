@@ -349,9 +349,13 @@ one even for a file anyone can read — and a public GCS object needs neither. B
 needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §24.7
 is the specification; `src/auth/google.ts` is the implementation.
 
-There is no client id in this repository and there cannot be one. An OAuth client is registered
-against **the origin the page is served from**, so a fork on another domain needs its own. Making
-one, in a Google Cloud project the lab owns:
+No client id is written into this repository, and a fork could not reuse this site's if one were:
+an OAuth client is registered against **the origin the page is served from**, so a fork on another
+domain needs its own. The published site is built with its own, read by the deploy from the
+`GOOGLE_CLIENT_ID` repository variable ([docs/deploy.md](deploy.md), "The site's Google and Dropbox
+registrations"), so a reader there signs in without pasting anything; a client id pasted into the
+dialog still wins over it, for a lab with a project of its own. Making one, in a Google Cloud
+project the lab owns:
 
 1. In the Google Cloud console, pick (or create) the project, then **APIs & Services → Credentials
    → Create credentials → OAuth client ID**, application type **Web application**.
@@ -368,10 +372,13 @@ one, in a Google Cloud project the lab owns:
    | `https://www.googleapis.com/auth/drive.readonly` | Read access to **all** of the signed-in reader's Drive |
    | `https://www.googleapis.com/auth/devstorage.read_only` | Read access to the Cloud Storage that account can see |
 
-4. Copy the client id — it ends in `.apps.googleusercontent.com` — and paste it into **Connect → A
-   Google account**. It is not a secret: it is served in the page of every site that uses this flow,
-   and it authorises nothing on its own. The client *secret* beside it in the console is for server
-   applications and is never used here; there is no server to keep it in (C1).
+4. Copy the client id — it ends in `.apps.googleusercontent.com` — and put it where the site is
+   built: the `GOOGLE_CLIENT_ID` repository variable, beside `GOOGLE_API_KEY` for a key of the same
+   project (Settings → Secrets and variables → Actions → Variables). The next deploy carries both,
+   and **Connect → A Google account** says so. To try it before that deploy, or from a checkout,
+   paste it into that section instead. It is not a secret: it is served in the page of every site
+   that uses this flow, and it authorises nothing on its own. The client *secret* beside it in the
+   console is for server applications and is never used here; there is no server to keep it in (C1).
 
 **`drive.readonly` is a restricted scope** in Google's own classification, and that is the fact that
 decides everything about how this is offered. An app asking for it has to go through Google's
@@ -379,9 +386,10 @@ verification — which for a restricted scope includes an independent security a
 may be used by anyone outside the project. An **unverified** app, with its publishing status left at
 *Testing*, works immediately for **up to 100 test users**, each added by address on the consent
 screen. That is the realistic arrangement for a lab: a handful of named colleagues, no verification,
-no assessment. It is also exactly why the lab supplies its own client id rather than this project
-shipping one — a single shared client would be one hundred test users for everybody, or a
-verification submission on behalf of every fork.
+no assessment. It is also why the client id is a variable of each deployment rather than a constant
+of this project — a single client shared by every fork would be one hundred test users for
+everybody, or a verification submission on behalf of all of them — and why a reader whose own lab
+has a client can paste it over the site's: the hundred are the site's, not theirs.
 
 **What the reader is agreeing to**, which the dialog says in two sentences because Google's consent
 screen says neither: `drive.readonly` is read access to *all* of their Drive, where a bucket key is
@@ -404,7 +412,9 @@ environment has:
 1. Serve the viewer from an origin registered on the client (`npm run dev` on `http://localhost:5173`
    is the quickest), and open it.
 2. **Connect → A Google account**: paste the client id, press *save*. The line under the box should
-   print the id back, and *sign in with Google* should stop being disabled.
+   print the id back, and *sign in with Google* should stop being disabled. On a site built with
+   `GOOGLE_CLIENT_ID` the button is live before anything is pasted and the line names the site's
+   id; pasting one is then the check that a reader's own wins.
 3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The section
    should then say **signed in**, with the time the token is good until, and offer *sign out*.
 4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
@@ -474,9 +484,11 @@ there is no public way to browse a Dropbox the way a public bucket can be browse
 **app key the lab registers**. SPECS §20 and §24.7 are the specification; `src/auth/dropbox.ts` and
 `src/browse/dropbox.ts` are the implementation.
 
-There is no app key in this repository, for the reason there is no Google client id: it names the
-lab's own registration, and a shared one would be everybody's. Making one, in the Dropbox App
-Console:
+No app key is written into this repository: it names one lab's registration, and a key committed
+here would be everybody's. The published site is built with its own, read by the deploy from the
+`DROPBOX_APP_KEY` repository variable ([docs/deploy.md](deploy.md)), so a reader there presses
+*sign in with Dropbox* and nothing else; a key pasted into the dialog wins over it. Making one, in
+the Dropbox App Console:
 
 1. **App Console → Create app → Scoped access.**
 2. Choose the access the app gets: **App folder** or **Full Dropbox**. App folder confines it to a
@@ -489,7 +501,8 @@ Console:
    the dialog says as much rather than printing an address it does not have. A permission added
    *after* somebody has signed in does not apply to the token they are holding — they sign out and
    in again.
-4. **Settings tab:** copy the **App key** and paste it into **Connect → Dropbox**. Leave
+4. **Settings tab:** copy the **App key** into the `DROPBOX_APP_KEY` repository variable, or paste
+   it into **Connect → Dropbox** to use it from this browser alone. Leave
    **Redirect URIs empty.** The viewer asks for a code with no `redirect_uri`, which is what makes
    Dropbox display the code on its own page for the reader to copy — and that is why one app key
    works for the published site, a fork of it on another domain, the desktop build and a local
@@ -523,7 +536,9 @@ has:
 
 1. Register the app as above, serve the viewer (`npm run dev` is the quickest), and open it.
 2. **Connect → Dropbox:** paste the app key, press *save*. The line under the box should print it
-   back, and *sign in with Dropbox* should stop being disabled.
+   back, and *sign in with Dropbox* should stop being disabled. On a site built with the variable
+   the button is live before anything is pasted and the line names the site's key; pasting one is
+   then the check that a reader's own wins.
 3. Press *sign in with Dropbox*. A Dropbox tab opens asking to allow the app; allow it, and Dropbox
    shows a code instead of returning to the viewer. Copy the code into the box that has appeared and
    press *finish*. The section should then say **signed in**, with the time the token is good until,

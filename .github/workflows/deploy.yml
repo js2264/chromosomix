@@ -84,6 +84,11 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: ${{ steps.base.outputs.path }}
+          # The site's registrations with Google and Dropbox, as repository
+          # variables (docs/deploy.md). None is a secret; all end up in the page.
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
 
       # The same source again, for the copy that stays reachable after the next
       # push. No typecheck: the build above already ran one over this tree, and
@@ -92,6 +97,11 @@ jobs:
         run: npm run build:pinned
         env:
           PINNED_BASE: ${{ steps.base.outputs.path }}v/${{ steps.commit.outputs.short }}/
+          # The site's registrations with Google and Dropbox, as repository
+          # variables (docs/deploy.md). None is a secret; all end up in the page.
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
 
       # Shallow, because only the tip of the archive branch is of interest here,
       # and because a full clone of a repository carrying 250 MB of demo data in

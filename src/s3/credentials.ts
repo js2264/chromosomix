@@ -56,6 +56,7 @@
  */
 
 import { forgetSigningKey, type S3Credential } from './sigv4'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 
 const KEY = 'metacooler-viewer:buckets'
 
@@ -382,8 +383,16 @@ function writeAccessRows(rows: readonly AccessRow[]): void {
   }
 }
 
-/** The Google API key this browser holds, or `null`. */
+/**
+ * The Google API key a Drive request carries: the reader's own where one is
+ * stored, and the site's otherwise (`config/siteDefaults.ts`), or `null`.
+ */
 export function readApiKey(): string | null {
+  return ownApiKey() ?? SITE_DEFAULTS.googleApiKey
+}
+
+/** The Google API key this browser holds, or `null` — the site's not counted. */
+export function ownApiKey(): string | null {
   const row = readAccessRows().find((held) => held.kind === 'google-api-key')
   return row === undefined ? null : row.key
 }

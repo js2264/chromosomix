@@ -109,6 +109,13 @@ export default defineConfig({
     // get wrong. `DEMO_BASE` overrides it for a fork with its own bucket, or
     // for a local copy of `demo/` when the network is not available.
     __DEMO_BASE__: JSON.stringify(process.env.DEMO_BASE ?? ''),
+    // The site's own registrations with Google and Dropbox, none of them a
+    // secret, read from the repository's Actions variables by the deploy
+    // (`config/siteDefaults.ts`, docs/deploy.md). Empty is the build there
+    // was before: every value pasted by hand.
+    __GOOGLE_CLIENT_ID__: JSON.stringify(process.env.GOOGLE_CLIENT_ID ?? ''),
+    __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY ?? ''),
+    __DROPBOX_APP_KEY__: JSON.stringify(process.env.DROPBOX_APP_KEY ?? ''),
   },
   plugins: [serviceWorker(process.env.BASE_PATH ?? '/')],
   resolve: {

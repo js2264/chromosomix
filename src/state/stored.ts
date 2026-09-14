@@ -29,7 +29,7 @@
  * the callers in front of them.
  */
 
-import { readClientId } from '../auth/google'
+import { ownClientId } from '../auth/google'
 import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
@@ -235,7 +235,7 @@ export async function storedItems(): Promise<StoredItem[]> {
   // told to sign in to*, which a count cannot answer. Listed even so, because
   // "forget everything" removes it and a screen that claims to list what is kept
   // must not quietly leave one out.
-  const clientId = readClientId()
+  const clientId = ownClientId()
   if (clientId !== null) {
     items.push({
       label: 'Google client id',

@@ -67,6 +67,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The site signs readers in to their own Drive and Dropbox.** The Google client id, the Google
+  API key and the Dropbox app key were three boxes every reader had to fill, from a project of
+  their own, before *sign in* would light up. The published site is now built with the lab's
+  three, read by the deploy from the repository's `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and
+  `DROPBOX_APP_KEY` variables — none a secret, all served in the page — so **Connect → A Google
+  account** and **Connect → Dropbox** offer their sign-in at once, and a reader reaches a private
+  folder of their own with one press. The dialog says whose value it is using; one pasted by hand
+  still wins, for a lab with a project of its own; and a build made without the variables is the
+  build there was before (SPECS §24.7, docs/deploy.md).
+
 - **A lane says what it is waiting for.** A sequence lane read by range sat blank while its window
   was on its way, and a BAM's row said *reading…* for as long as its thirty-megabyte index took.
   The worker now reports how far a read has got — a whole file downloading for a row, a window of
