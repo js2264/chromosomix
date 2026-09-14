@@ -120,9 +120,9 @@ function card(options: { snapshot?: readonly string[] } = {}): {
 describe('with nothing connected', () => {
   it('says so, and offers the one gesture that fixes it', () => {
     const { el } = card()
-    expect(el.textContent).toContain('No folders connected')
+    expect(el.textContent).toContain('Nothing connected')
     const connect = all<HTMLButtonElement>(el, '.files-actions .btn')[0]
-    expect(connect.textContent).toBe('connect a folder…')
+    expect(connect.textContent).toBe('connect a place…')
   })
 })
 
@@ -314,7 +314,7 @@ describe('a bucket added from another screen', () => {
   it('appears in the panel without the panel being told by its host', async () => {
     serve(listing([], []))
     const { el } = card()
-    expect(el.textContent).toContain('No folders connected')
+    expect(el.textContent).toContain('Nothing connected')
 
     const { bucketForm } = await import('@/ui/bucketForm')
     const form = bucketForm({ onSaved: () => {} })
@@ -335,7 +335,7 @@ describe('disconnecting', () => {
     await vi.waitFor(() => expect(all(el, '.folder-entry-file')).toHaveLength(1))
 
     mounted(el, () => all<HTMLButtonElement>(el, '.files-folder .btn-close')[0].click())
-    await vi.waitFor(() => expect(el.textContent).toContain('No folders connected'))
+    await vi.waitFor(() => expect(el.textContent).toContain('Nothing connected'))
     // A tree left on screen would be a view of somewhere this app can no longer
     // read, one click from an error nobody could explain.
     expect(all(el, '.folder-entry')).toHaveLength(0)

@@ -233,13 +233,14 @@ describe('the link', () => {
   })
 
   it('writes nothing for the default view, and clears what a previous view wrote', () => {
-    const params = new URLSearchParams('store=4dn&assay=Hi-C&q=old&view=matrix&config=c.json')
-    writeStoreView(params, EMPTY_VIEW)
-    expect(params.toString()).toBe('store=4dn&config=c.json')
+    const params = new URLSearchParams('store=4dn&assay=Hi-C&q=old&view=matrix&config=c.json&utm=x')
+    writeStoreView(params, EMPTY_VIEW, ['assay'])
+    // The facet it wrote before is gone; a parameter it never wrote is kept.
+    expect(params.toString()).toBe('store=4dn&config=c.json&utm=x')
   })
 
   it('never reads a reserved name as a facet, and refuses reserved axes', () => {
-    const read = readStoreView(new URLSearchParams('store=x&embed=1&config=c&view=list&axes=store,q&lab=Snyder'))
+    const read = readStoreView(new URLSearchParams('store=x&embed=1&config=c&edges=e.tsv&view=list&axes=store,q&lab=Snyder'))
     expect([...read.facets.keys()]).toEqual(['lab'])
     expect(read.axes).toBeUndefined()
     expect(read.mode).toBe('list')

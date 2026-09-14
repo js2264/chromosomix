@@ -4876,190 +4876,920 @@ canvas.is-frozen {
   display: none;
 }
 
-.remote-box {
+.entry-box {
   margin-top: 1.5rem;
 }
 
-.remote-row {
-  display: flex;
-  gap: 0.5rem;
+/* --- the landing page's two things (§5.1) ------------------------------
+   Load files, and connect to a store. Each is a heading and one control: the
+   drop area with its row of a button and a box, and the row of tiles. */
+
+.picker-section {
+  margin-top: 1.6rem;
 }
 
-.entry-box,
-.examples {
-  margin-top: 1.5rem;
+.picker-heading {
+  margin: 0 0 0.5rem;
+  font-size: var(--step-1);
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
-/* --- the stores section (§24.2) -------------------------------------------
-   A table, not the dropdown this replaced: six hundred rows are chosen by
-   filtering on assembly and biosource, which a list of labels cannot be
-   narrowed by. Built out of the folder view's parts wherever they fit — the
-   same bordered, scrolling well, the same one-line count underneath, the same
-   dimmed monospace size — because the two answer the same question from two
-   different kinds of place and a reader should not have to learn both. */
-
-.store-table {
+.load-box {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.6rem;
 }
 
-.store-pick-row {
+.load-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.store-select {
-  min-width: min(16rem, 100%);
+.load-row .input-url {
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
-.store-url {
+.load-or {
+  color: var(--text-dim);
+  font-size: var(--step--1);
+}
+
+.load-standalone {
+  margin: 0;
+}
+
+.dropzone-compact {
+  padding: 1.6rem 1rem;
+}
+
+.load-dialog {
+  padding: 0.8rem;
+}
+
+/* --- the store tiles ------------------------------------------------------
+   One square per store, the mark on it, the name and one line under. Large on
+   the landing page, small along the drawer's head; the same element both
+   times, so a reader who learnt the row once has learnt it. */
+
+.store-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.store-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 10.5rem;
+  padding: 0.85rem 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms, box-shadow 120ms, transform 120ms;
+}
+
+.store-tile:hover,
+.store-tile:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 45%);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.store-tile.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* The add tile is dashed: it is a door, not a store. */
+.store-tile-add {
+  border-style: dashed;
+}
+
+.store-tile-name {
+  font-weight: 600;
+  font-size: var(--step-0);
+  line-height: 1.2;
+}
+
+.store-tile-blurb {
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  line-height: 1.35;
+}
+
+.store-tiles-small {
+  gap: 0.35rem;
+  margin-top: 0;
+}
+
+.store-tiles-small .store-tile {
+  flex-direction: row;
+  width: auto;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem 0.25rem 0.3rem;
+  border-radius: 999px;
+  box-shadow: none;
+  transform: none;
+}
+
+.store-tiles-small .store-tile-name {
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+
+/* The mark: a rounded square in the store's colour, the word in white. */
+.store-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 22%;
+  color: #fff;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  user-select: none;
+}
+
+.store-mark-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+/* --- the store drawer (§24.2) ---------------------------------------------
+   The same kind of panel the Analysis drawer is, down the other side: it
+   floats over the body, is dragged by the edge that faces the map, and stops
+   at the console's roof. */
+
+.store-drawer {
+  position: absolute;
+  top: 0;
+  bottom: var(--console-height, 0px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-sunken);
+  border-right: 1px solid var(--border-strong);
+  box-shadow: 12px 0 24px -18px rgb(0 0 0 / 55%);
+}
+
+.store-drawer.collapsed {
+  display: none;
+}
+
+/* The handle on the right edge — the mirror of the Analysis drawer's. */
+.store-drawer > .panel-column-handle {
+  right: 0;
+  left: auto;
+}
+
+.store-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.store-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.store-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.store-title {
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.store-blurb {
+  margin: 0.1rem 0 0;
+  color: var(--text-dim);
+  font-size: var(--step--1);
+}
+
+.store-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem 0.9rem 1rem;
+}
+
+/* --- a portal store: the rail, the rows, the matrix, the tray --------------- */
+
+.portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 100%;
+}
+
+.portal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.portal-search {
   flex: 1 1 14rem;
   min-width: 0;
 }
 
-/* The status line and whatever is offered beside it — today, "remember this
-   store". One row so the offer sits with the sentence that earned it rather than
-   below the table it is about. */
-.store-status-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.store-status {
+.portal-count {
   margin: 0;
+  flex: 1 1 auto;
 }
 
-.store-status:empty {
-  display: none;
-}
-
-.store-error {
-  color: var(--danger);
-}
-
-/* One box for the name, then one per column the store declares. They wrap rather
-   than shrink: four two-character boxes are not a filter row, they are a
-   puzzle. */
-.store-filters {
+.portal-modes {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.15rem;
 }
 
-.store-filter {
-  flex: 1 1 8rem;
-  min-width: 0;
-}
-
-/* Bounded and scrolling, exactly as a folder listing is, and for the same
-   reason: a store may hold six hundred rows and the picker must not become a
-   page. Sideways too, because a store with six columns is wider than a phone and
-   the alternative is a table with the note column crushed to one word a line. */
-.store-rows {
-  max-height: 22rem;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.store-grid {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--step--1);
-}
-
-/* Sticky, because the columns are what the rows are being read *by*: scrolling
-   past the header in a six-column table leaves five cells of free text with
-   nothing to say which is the assay. */
-.store-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bg-raised);
-  border-bottom: 1px solid var(--border);
-  padding: 0.3rem 0.5rem;
-  text-align: left;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.store-th-on {
+.portal-mode.is-on {
+  border-color: var(--accent);
   color: var(--accent);
-}
-
-.store-sort {
-  font: inherit;
-  font-weight: inherit;
-}
-
-.store-row {
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-}
-
-.store-row:last-child {
-  border-bottom: none;
-}
-
-.store-row:hover {
   background: var(--accent-soft);
 }
 
-.store-cell {
-  padding: 0.3rem 0.5rem;
-  vertical-align: top;
+.portal-body {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  min-height: 0;
 }
 
-.store-cell-name {
-  /* The name is the column that should get the width, so everything else is
-     told not to take any it does not need. */
-  min-width: 14rem;
+.portal-content {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.store-name {
+.portal-status {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+.portal-status-error {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* The rail: one group per column, folded by its heading. Narrow, so the rows
+   keep the room, and its own scroll so a long list of labs does not push the
+   rows off the bottom. */
+.facet-rail {
+  flex: 0 0 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: calc(100vh - 12rem);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.facet-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.facet-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.4rem 0.1rem 0.2rem;
+}
+
+.facet-head {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.2rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 600;
   text-align: left;
+  cursor: pointer;
 }
 
-.store-cell-size {
+.facet-head-static {
+  cursor: default;
+}
+
+.facet-ticked {
+  display: inline-block;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--step--2);
+  text-align: center;
+}
+
+.facet-clear {
+  font-size: var(--step--2);
+}
+
+.facet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.45rem 0.45rem;
+}
+
+.facet-filter {
+  width: 100%;
+}
+
+.facet-values {
+  display: flex;
+  flex-direction: column;
+}
+
+.facet-value {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.1rem;
+  border-radius: 4px;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.facet-value:hover {
+  background: var(--accent-soft);
+}
+
+.facet-value.is-on {
+  color: var(--accent);
+}
+
+.facet-value.is-empty {
+  color: var(--text-faint);
+}
+
+.facet-box {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.facet-value-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facet-count {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+}
+
+.facet-more {
+  align-self: flex-start;
+  font-size: var(--step--2);
+  padding: 0.15rem 0.1rem;
+}
+
+.facet-empty {
+  margin: 0;
+}
+
+/* The rows: grouped under what they belong to, each with its tick, its mark,
+   its name and chips, its size, and its two verbs. */
+.portal-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.portal-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sunken);
+  font-size: var(--step--1);
+}
+
+.portal-group-key {
+  font-weight: 650;
+}
+
+.portal-group-count {
+  color: var(--text-dim);
+  font-size: var(--step--2);
+}
+
+.portal-session {
+  margin-left: auto;
+  font-size: var(--step--2);
+}
+
+.portal-chip {
+  display: inline-block;
+  max-width: 22rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--step--2);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.portal-chip-dim {
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+
+.portal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step--1);
+}
+
+.portal-row:last-child {
+  border-bottom: none;
+}
+
+.portal-row:hover {
+  background: var(--accent-soft);
+}
+
+.portal-row.is-on {
+  background: var(--accent-soft);
+}
+
+.portal-box {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.portal-kind {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.portal-kind-map {
+  color: var(--accent);
+}
+
+.portal-kind-workspace {
+  color: var(--ok);
+}
+
+.portal-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.portal-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-size {
+  flex: 0 0 auto;
   font-family: var(--mono);
   font-size: var(--step--2);
   color: var(--text-dim);
   white-space: nowrap;
-  text-align: right;
 }
 
-.store-cell-note {
-  color: var(--text-dim);
-  max-width: 28rem;
+.portal-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.15rem;
 }
 
-/* What opening the row produces, in one word. A badge rather than a column of
-   the same three strings because it is a *kind* and not a value: it changes
-   which application the reader is about to be in — a map, a browser, or a whole
-   saved session — and that is worth a mark the eye can sort on without reading. */
-.store-badge {
-  display: inline-block;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
+.store-row-add {
   font-size: var(--step--2);
-  color: var(--text-dim);
+  padding: 0.15rem 0.4rem;
+}
+
+.store-row-open {
+  padding: 0.25rem;
+}
+
+/* The tray along the bottom: what is ticked, and the one thing to do with it. */
+.portal-tray {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.portal-tray-text {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+/* The matrix: two axes chosen above, a grid of counts, the note under. */
+.matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.matrix-axes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.matrix-grid {
+  overflow: auto;
+  max-height: calc(100vh - 16rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.matrix-table {
+  border-collapse: collapse;
+  font-size: var(--step--2);
+}
+
+.matrix-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: var(--bg-raised);
+}
+
+.matrix-col {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 7.5rem;
+  padding: 0.2rem 0.15rem;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  vertical-align: bottom;
+  font-weight: 500;
+}
+
+.matrix-col-text {
+  display: inline-block;
+  max-height: 7rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.store-badge-map {
+.matrix-row {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  max-width: 16rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border);
+  text-align: left;
+  font-weight: 500;
+}
+
+.matrix-row-text {
+  display: block;
+  max-width: 15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-col.is-on,
+.matrix-row.is-on {
+  color: var(--accent);
+}
+
+.matrix-cell {
+  padding: 1px;
+  text-align: center;
+}
+
+.matrix-cell-empty {
+  background: var(--bg-sunken);
+}
+
+/* The tint is the count, log-scaled, mixed into the accent: a cell with one
+   file is barely there and the fullest cell is the accent itself. */
+.matrix-cell-button {
+  width: 100%;
+  min-width: 2.2rem;
+  padding: 0.25rem 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) calc(var(--strength, 0) * 100%), var(--bg-sunken));
+  color: color-mix(in srgb, #fff calc(var(--strength, 0) * 100%), var(--text));
+  font: inherit;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.matrix-cell-button:hover,
+.matrix-cell-button.is-on {
+  border-color: var(--text);
+}
+
+.matrix-note {
+  margin: 0;
+}
+
+/* --- a gallery store: cards, then files ----------------------------------- */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.gallery-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gallery-heading {
+  margin: 0;
+  font-size: var(--step-0);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.gallery-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.75rem;
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.85rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+
+.gallery-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.gallery-card-title {
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.gallery-card-line {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.gallery-card-more {
+  font-size: var(--step--1);
+}
+
+.gallery-card-more > summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.gallery-card-more > p {
+  margin: 0.3rem 0 0;
+}
+
+.gallery-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.3rem;
+}
+
+.gallery-files {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.genomes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.genomes-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.75rem;
+}
+
+.genomes-files {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* --- a store by URL ------------------------------------------------------- */
+
+.custom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.custom-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.custom-form > .hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.custom-row {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 0.4rem;
+}
+
+.custom-url {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.custom-address {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.custom-keep:empty {
+  display: none;
+}
+
+/* --- picking from a connected place ---------------------------------------- */
+
+.pick-body {
+  gap: 0.5rem;
+}
+
+.pick-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pick-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pick-place.is-on {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.store-badge-workspace {
-  border-color: var(--ok);
-  color: var(--ok);
+.pick-note:empty {
+  display: none;
+}
+
+/* --- the Connect dialog's providers ---------------------------------------- */
+
+.connect-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.connect-provider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 7rem;
+  padding: 0.6rem 0.8rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.connect-provider:hover,
+.connect-provider:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.connect-provider.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.connect-pane-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.connect-pane > .connect-section:first-child,
+.connect-pane-parts > .connect-section:first-child {
+  padding-top: 0;
+  border-top: none;
 }
 
 /* Last on the page now, so the space belongs above it rather than below. */
@@ -6562,14 +7292,6 @@ canvas.is-frozen {
   text-decoration: underline;
 }
 
-.remote-private {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
 .bucket-body {
   overflow: auto;
   padding: 0.75rem 0.9rem 1rem;
@@ -6665,20 +7387,6 @@ canvas.is-frozen {
   gap: 0.4rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
-}
-
-/* Which bucket, when a reader has more than one key. A row of buttons rather
-   than a select: the labels are short, there are rarely more than three, and
-   the one being browsed has to stay legible while the list under it changes. */
-.bucket-picks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.bucket-pick.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .folder-filter-row {

@@ -135,7 +135,6 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
-import type { StoreRef } from '../state/store'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
@@ -154,7 +153,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { builtinStores, demoAnnotationsToOffer } from '../ui/examples'
+import { demoAnnotationsToOffer } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
@@ -190,6 +189,8 @@ export interface SessionHost {
   panelsChanged(session: Session): void
   /** Ask for a file over the top of whatever is on screen (§11). */
   openFileDialog(session: Session): void
+  /** Open the store drawer on this store — a tile on the landing page was pressed. */
+  openStore(id: string): void
   /**
    * A saved workspace arrived — as a dropped file, or fetched from a URL.
    *
@@ -848,7 +849,9 @@ export class Session {
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
       onOpenFiles: (files) => void this.openFiles(files),
-      stores: builtinStores(),
+      // The tiles are the shell's door: a store is a drawer over the window,
+      // not a fact about this tab (`ui/StoreDrawer.ts`).
+      onStore: (id) => this.host.openStore(id),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)
@@ -1917,18 +1920,6 @@ export class Session {
    */
   async openPicked(uri: string, source: SourceSpec): Promise<void> {
     await this.openWithConfig(uri, source)
-  }
-
-  /**
-   * Land this tab's picker on a store — what a `?store=` link asks for (§24.2).
-   *
-   * Reached only from `App.restore`, and only for a window with nothing else to
-   * show, so the picker is the element that is about to be mounted. The load is
-   * the table's; this exists so `App` does not have to reach through a session
-   * into a view it does not own.
-   */
-  showStore(ref: StoreRef): void {
-    this.picker.loadStore(ref)
   }
 
   /**

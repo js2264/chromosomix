@@ -75,10 +75,10 @@ afterEach(() => {
   document.querySelectorAll('script').forEach((node) => node.remove())
 })
 
-/** The dialog's body, mounted. */
+/** The dialog's body, mounted and opened on the Google Drive provider. */
 async function connectBody(): Promise<HTMLElement> {
   const { openConnect } = await import('@/ui/ConnectCard')
-  openConnect({ onConnected: () => undefined })
+  openConnect({ onConnected: () => undefined, provider: 'drive' })
   const body = document.querySelector<HTMLElement>('.modal-body')
   expect(body).not.toBeNull()
   return body as HTMLElement
@@ -104,12 +104,9 @@ describe('the Google account section', () => {
   it('is offered after the API key, which is the order a reader meets them in', async () => {
     const body = await connectBody()
     expect(textsOf(body, '.connect-section h3')).toEqual([
-      'A folder on this machine',
-      'A bucket',
       'A Google API key',
       'A Google account',
       'A Google Drive folder',
-      'Dropbox',
     ])
   })
 
@@ -298,13 +295,16 @@ describe('where a sign-in cannot work at all', () => {
 
     const body = await connectBody()
 
-    // Dropbox stays: its sign-in is a code pasted from a page Dropbox shows,
-    // not a registration against an origin, so `app://viewer` can do it (§24.9).
-    expect(textsOf(body, '.connect-section h3')).toEqual([
-      'A folder on this machine',
+    // The Drive pane keeps the key and says, where the account would be, why
+    // there is none; Dropbox stays a tile, because its sign-in is a code pasted
+    // from a page Dropbox shows, not a registration against an origin (§24.9).
+    expect(textsOf(body, '.connect-provider')).toEqual([
+      'This machine',
       'A bucket',
-      'A Google API key',
+      'Google Drive',
       'Dropbox',
     ])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google API key', 'A Google account'])
+    expect(body.textContent).toContain('Not on the desktop app')
   })
 })

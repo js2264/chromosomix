@@ -39,7 +39,7 @@
 
 import { FolderBrowseView } from './folderBrowse'
 import { button, el } from './dom'
-import { icon, iconButton } from './icons'
+import { icon, iconButton, type IconName } from './icons'
 import {
   connectedFolders,
   disconnectFolder,
@@ -66,6 +66,23 @@ function writeLast(id: string): void {
   } catch {
     /* a browser refusing storage still browses; it just opens on the first folder */
   }
+}
+
+/**
+ * The mark for a kind of place: a disk on this machine, a bucket, and the two
+ * providers' own marks (`scripts/build-icons.mjs`). The one fact about a folder
+ * that changes what its rows cost to open and whether they are private, so it
+ * is a mark rather than a word — on the row here, and on the tiles of the
+ * dialogs that connect and pick from them.
+ */
+export function folderMark(kind: ConnectedFolder['kind']): IconName {
+  return kind === 'local'
+    ? 'hard-drive'
+    : kind === 'drive'
+      ? 'googledrive'
+      : kind === 'dropbox'
+        ? 'dropbox'
+        : 'cloud'
 }
 
 export interface FilesCardProps {
@@ -113,9 +130,9 @@ export class FilesCard {
       el(
         'div',
         { class: 'files-actions' },
-        button('connect a folder…', () => this.props.onConnect(), {
+        button('connect a place…', () => this.props.onConnect(), {
           class: 'btn btn-primary',
-          title: 'A directory on this machine, or a bucket — browsed the same way',
+          title: 'A directory on this machine, a bucket, a Drive folder or a Dropbox — browsed the same way',
         }),
       ),
       this.lapsedEl,
@@ -213,7 +230,7 @@ export class FilesCard {
           class: 'hint',
           text:
             `${folder.label} is listed with an account this tab is not signed in to. Sign in ` +
-            `under Connect → ${account} and it lists again; nothing about the folder has changed.`,
+            `under the plug in the header → ${account} and it lists again; nothing about the folder has changed.`,
         }),
         button('retry', () => void this.show(folder), { class: 'btn' }),
       )
@@ -262,8 +279,8 @@ export class FilesCard {
         el('p', {
           class: 'hint',
           text:
-            'No folders connected. Connect a directory on this machine or a bucket, and browse ' +
-            'it here without opening anything first.',
+            'Nothing connected. Connect a directory on this machine, a bucket, a Drive folder ' +
+            'or a Dropbox, and browse it here without opening anything first.',
         }),
       )
       this.view.clear()
@@ -282,7 +299,7 @@ export class FilesCard {
               : `${folder.label} — a snapshot, taken when you connected it. This browser cannot ` +
                 'hold a directory, so it does not update and it is gone after a reload.',
           },
-          icon(folder.kind === 'local' ? 'hard-drive' : 'cloud', { size: 13 }),
+          icon(folderMark(folder.kind), { size: 13 }),
           el('span', { class: 'files-folder-label', text: folder.label }),
           // Said on the row, not only in the tooltip. A reader who connects a
           // directory in Firefox and finds it gone tomorrow has been told at the

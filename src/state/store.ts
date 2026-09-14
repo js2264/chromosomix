@@ -122,36 +122,21 @@ export interface StoreFile {
  *
  * Two arms and they are the point: a built-in catalogue that ships inside the
  * bundle costs no request at all, and every other one is a URL that is not
- * touched until a reader asks for it. Nothing in this app fetches a store on load
- * (SPECS C1's neighbour: nothing leaves the machine that the reader did not
- * ask for; §24.2), so a reference is what the picker holds and `fetchStore` is
- * what a gesture runs.
+ * touched until a reader asks for it. Nothing in this app fetches a store on
+ * load (SPECS C1's neighbour: nothing leaves the machine that the reader did
+ * not ask for; §24.2), so a reference is what a front holds and `fetchStore`
+ * is what a gesture runs.
  *
- * It lives here rather than in `ui/examples.ts` because three modules name it —
- * the built-in list, the remembered-rows store, and the table — and the one
- * that owns the *type* of a store should own the type of a pointer to one.
+ * It lives here rather than in `ui/stores/registry.ts` because three modules
+ * name it — the registry, the remembered-rows store, and the fronts — and the
+ * one that owns the *type* of a store should own the type of a pointer to one.
  */
 export interface StoreRef {
-  /** `'demos' | 'igv' | '4dn' | 'encode-GRCh38-signal' | …` for the built-ins, `'store:<n>'` for a remembered one. */
+  /** `'rsg' | 'igv' | '4dn' | 'encode-sessions' | …` for the built-ins, `'store:<n>'` for a remembered one. */
   id: string
   label: string
-  /**
-   * Which heading the picker files this under — `'IGV'`, `'ENCODE'`,
-   * `'Preconfigured sessions'` — or absent for the shipped shelves that are
-   * nobody's in particular.
-   *
-   * A field on the reference rather than a `Map<string, StoreRef[]>` handed to
-   * the table, because the list is assembled from two places that do not know
-   * about each other: `ui/examples.ts` owns the built-ins and `state/stores.ts`
-   * the remembered ones, and every remembered store belongs under one heading
-   * whatever the built-ins did. It exists because there are now eighteen
-   * shipped shelves rather than three — ENCODE alone is twelve, one per
-   * assembly and output category (§24.3) — and eighteen unlabelled options in
-   * one `<select>` is a list a reader scrolls rather than reads.
-   */
-  group?: string
-  /** Inline store (the demos), already absolute. */
-  store?: StoreFile
+  /** Inline file (the lab's own demos), already absolute. */
+  inline?: StoreFile
   /** Or a URL to fetch on the reader's gesture. */
   url?: string
   builtin: boolean

@@ -376,9 +376,9 @@ export function pivot(
  * The parameter names a page uses for itself, which a facet may not be called.
  *
  * `store` names the store, `q` the text, `view` and `axes` the presentation,
- * and `embed` and `config` are the page's own mounting parameters (§21.1). A
- * store whose column happens to be called `view` cannot be linked on that
- * column; it can still be ticked.
+ * and `embed`, `config` and `edges` are the page's own mounting parameters
+ * (§21.1, §7.3). A store whose column happens to be called `view` cannot be
+ * linked on that column; it can still be ticked.
  */
 export const RESERVED_PARAMS: ReadonlySet<string> = new Set([
   'store',
@@ -387,6 +387,7 @@ export const RESERVED_PARAMS: ReadonlySet<string> = new Set([
   'axes',
   'embed',
   'config',
+  'edges',
 ])
 
 /**
@@ -421,20 +422,22 @@ export function readStoreView(params: URLSearchParams): StoreView {
 }
 
 /**
- * Write a view into `params`, replacing whatever view was there.
+ * Write a view into `params`, replacing the view that was there.
  *
- * Every facet parameter is cleared first, so unticking a value takes it out of
- * the link; the reserved names that are not this view's — `store`, `embed`,
- * `config` — are left exactly as they were. Nothing is written for the parts
- * of a view that are the default, so an untouched store links as `?store=x`
- * and nothing more.
+ * `q`, `view`, `axes` and every key in `stale` — the facets the previous write
+ * put there, which the caller remembers — are cleared first, so unticking a
+ * value takes it out of the link. Everything else is left exactly as it was:
+ * `store`, the page's own mounting parameters, and any parameter somebody
+ * else's deployment put in the address. Nothing is written for the parts of a
+ * view that are the default, so an untouched store links as `?store=x` and
+ * nothing more.
  */
-export function writeStoreView(params: URLSearchParams, view: StoreView): void {
-  for (const key of [...params.keys()]) {
-    if (key === 'q' || key === 'view' || key === 'axes' || !RESERVED_PARAMS.has(key)) {
-      params.delete(key)
-    }
-  }
+export function writeStoreView(
+  params: URLSearchParams,
+  view: StoreView,
+  stale: Iterable<string> = [],
+): void {
+  for (const key of ['q', 'view', 'axes', ...stale]) params.delete(key)
   const text = view.text.trim()
   if (text !== '') params.set('q', text)
   for (const [key, values] of view.facets) {

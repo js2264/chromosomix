@@ -62,7 +62,7 @@ import {
 } from '../ui/MatrixPanel'
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
-import { bucketBrowseButton } from '../ui/browseButton'
+import { folderPickButton } from '../ui/pickFromFolders'
 import { button, el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
@@ -1586,11 +1586,15 @@ export class VacantPanel {
         { class: 'ann-url-row' },
         url,
         button('add', submit, { class: 'btn' }),
-        // The fifth box that asks for a file URL, and it gets the same answer
-        // the other four do (`ui/browseButton.ts`): a reader repairing a shared
-        // deck is exactly the one who does not have the URL in their hand, since
-        // what the link left here is a `~` where somebody else's file was.
-        bucketBrowseButton((picked) => props.onOpenUrl(picked)),
+        // The fourth box that asks for a file URL, and it gets the same answer
+        // the other three do (`ui/pickFromFolders.ts`): a reader repairing a
+        // shared deck is exactly the one who does not have the URL in their
+        // hand, since what the link left here is a `~` where somebody else's
+        // file was.
+        folderPickButton((picked) => {
+          if (picked.source.kind === 'local') props.onOpen(picked.source.file)
+          else props.onOpenUrl(picked.uri)
+        }),
       ),
     )
     // **Inside** the zone rather than under it, so the empty cell stays the size

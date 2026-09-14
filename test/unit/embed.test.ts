@@ -15,14 +15,16 @@ import { describe, expect, it } from 'vitest'
 
 import { mergeState } from '@/app/EmbedChannel'
 import { readMounting } from '@/embed'
+import { EMPTY_VIEW } from '@/state/facets'
 import type { ViewState } from '@/types'
 
 const AT = 'https://viewer.example/app/'
 
 describe('reading a mount', () => {
   it('is a plain window when nothing is asked for', () => {
-    expect(readMounting('', AT)).toEqual({ embed: false, config: null, store: null })
-    expect(readMounting('?other=1', AT)).toEqual({ embed: false, config: null, store: null })
+    const plain = { embed: false, config: null, store: null, storeView: EMPTY_VIEW }
+    expect(readMounting('', AT)).toEqual(plain)
+    expect(readMounting('?other=1', AT)).toEqual(plain)
   })
 
   it('takes the key being present as the answer', () => {
@@ -66,11 +68,20 @@ describe('reading a mount', () => {
   })
 
   it('reads every key off one query string', () => {
-    expect(readMounting('?embed=1&config=s.json&store=h.json&edges=e.tsv', AT)).toEqual({
-      embed: true,
-      config: 'https://viewer.example/app/s.json',
-      store: 'https://viewer.example/app/h.json',
-    })
+    const read = readMounting('?embed=1&config=s.json&store=h.json&edges=e.tsv&assay=Hi-C', AT)
+    expect(read.embed).toBe(true)
+    expect(read.config).toBe('https://viewer.example/app/s.json')
+    expect(read.store).toBe('https://viewer.example/app/h.json')
+    // The rest of the address is the store's view: the facets, and none of the
+    // page's own parameters read as one.
+    expect([...read.storeView.facets.keys()]).toEqual(['assay'])
+  })
+
+  it('keeps a shipped store’s id as written, and reads no view without a store', () => {
+    expect(readMounting('?store=4dn', AT).store).toBe('4dn')
+    expect(readMounting('?store=encode&group=GRCh38&view=matrix', AT).storeView.mode).toBe('matrix')
+    expect(readMounting('?store=store:2', AT).store).toBe('store:2')
+    expect(readMounting('?assay=Hi-C', AT).storeView).toEqual(EMPTY_VIEW)
   })
 
   /**

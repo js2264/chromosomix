@@ -23,8 +23,12 @@ import { parseViewState, serialiseViewState, viewStateEquals } from '../state/Vi
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
-import { FilePicker } from '../ui/FilePicker'
+import { LoadBox } from '../ui/LoadBox'
 import { Modal } from '../ui/Modal'
+import { StoreDrawer } from '../ui/StoreDrawer'
+import { registerShelf } from '../ui/examples'
+import type { StoreEntry } from '../state/store'
+import { splitUri } from '../ui/labels'
 import {
   AESTHETICS_PANEL,
   ANALYSIS_PANEL,
@@ -57,9 +61,6 @@ import { openAbout, openShortcuts } from '../ui/dialogs'
 import { button, dragHasFiles, el } from '../ui/dom'
 import { filesFrom } from '../ui/chooseFiles'
 import { icon, iconButton } from '../ui/icons'
-import { builtinStores } from '../ui/examples'
-import { storeLabelFor } from '../ui/StoreTable'
-import type { StoreRef } from '../state/store'
 import { downloadBlob, fileStamp } from '../ui/export'
 import {
   applyConfig,
@@ -134,8 +135,8 @@ const ADD_FILE_HINT =
  * true of the code rather than a slogan (`browse/folder.ts`).
  */
 const CONNECT_HINT =
-  'A directory on this machine or a bucket, browsed in the Files panel and still there when you ' +
-  'come back. Both are read the same way.'
+  'A directory on this machine, a bucket, a Drive folder or a Dropbox, browsed in the Files ' +
+  'panel and still there when you come back. All four are read the same way.'
 
 /**
  * How many sessions may be open at once.
@@ -241,6 +242,16 @@ export class App implements SessionHost {
    * taking Escape inside somebody else's page (§21.2).
    */
   private readonly consolePanel: ConsolePanel | null
+  /**
+   * The stores, as a drawer down the left (§24.2).
+   *
+   * Window-level like the console rather than per session like the Analysis
+   * drawer, on the Files column's argument: a store is not a fact about the
+   * file in front, and a catalogue somebody was half way through narrowing
+   * should survive a switch of tab. `null` in an embed, which has no header to
+   * open it from and no business fetching a catalogue into somebody's figure.
+   */
+  private readonly storeDrawer: StoreDrawer | null
   private readonly theme: ThemeToggle
   /**
    * The footer, or `null` in an embed.
@@ -291,7 +302,10 @@ export class App implements SessionHost {
     // the plot is usually sized by the window's *height*, so widening its column
     // changes no box the observer watches while still moving where the plot
     // should sit. Telling the mounted view directly is the reliable half.
-    const relayout = (): void => this.current?.relayout()
+    const relayout = (): void => {
+      this.current?.relayout()
+      this.storeDrawer?.relayout()
+    }
     // The shape of the columns is part of a saved workspace, so a fold or a
     // finished drag is worth recording — and only *finished*, because
     // `rememberDurably` gathers a config per tab out of session storage and
@@ -334,6 +348,26 @@ export class App implements SessionHost {
           // A third of the window's height is a change the mounted view has to
           // be told about, for the reason the columns are: a plot sized by the
           // window's height moves and no box a `ResizeObserver` watches does.
+          onLayout: relayout,
+        })
+    this.storeDrawer = this.embed
+      ? null
+      : new StoreDrawer({
+          host: {
+            // Opening folds the drawer away, because the reader chose what
+            // they came for and it is about to appear behind it; adding keeps
+            // it up, because a reader adding one track is likely adding three.
+            open: (entry) => {
+              this.openStoreEntry(entry)
+              this.storeDrawer?.close()
+            },
+            add: (entry) => this.addStoreEntry(entry),
+            openTogether: (entries) => {
+              void this.openStoreEntries(entries)
+              this.storeDrawer?.close()
+            },
+            tabEmpty: () => this.tabEmpty(),
+          },
           onLayout: relayout,
         })
     this.theme = new ThemeToggle()
@@ -396,7 +430,8 @@ export class App implements SessionHost {
           // is the one a reader arrives through rather than one they drive
           // the picture with.
           this.filesPanel.toggle,
-          // Then the two ways to bring a file to it, place before one-off:
+          // Then the stores — somebody else's shelf, in a drawer — and the two
+          // ways to bring a file of the reader's own: place before one-off.
           // Connect attaches somewhere files keep coming from, and a reader
           // working out of a directory for an afternoon wants that read
           // before the `+` that costs a click each. Dropping is still the
@@ -405,7 +440,8 @@ export class App implements SessionHost {
           // window to drag from, and the only door to a file that is on
           // screen in every view. See {@link addFileDialog} for why the `+`
           // *adds* rather than replaces.
-          iconButton('plug', `Connect a folder. ${CONNECT_HINT}`, () =>
+          ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
+          iconButton('plug', `Connect a place. ${CONNECT_HINT}`, () =>
             this.openConnectDialog(),
           ),
           iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
@@ -498,6 +534,10 @@ export class App implements SessionHost {
             this.analysisPanel.el,
           ]),
       this.drawerSlot,
+      // The stores, down the left, over the Files column: the same kind of
+      // surface as the Analysis drawer on the right, and it stops at the
+      // console's roof for the same reason.
+      ...(this.storeDrawer === null ? [] : [this.storeDrawer.el]),
       // Under everything, across the whole body: the drawer is beside the map
       // and this is below it, so the two can be up at once — the drawer stops at
       // the console's roof rather than running under it (§23, and the
@@ -835,27 +875,27 @@ export class App implements SessionHost {
     this.active = target >= 0 ? target : 0
     this.paintTabs()
     this.mountActive()
-    // The four seeds, in the order they override one another, and each one is
+    // The three seeds, in the order they override one another, and each one is
     // only reached because the ones above it said nothing. A **payload** in the
     // fragment is the most specific thing anybody can hand this window; a *view
     // state* in it is what a navigation leaves behind, so it has to beat the
     // `src=` the page was mounted with or a reload would undo the reader's last
-    // click; `?config=` is the seed the page itself named, which is exactly
-    // what a window with nothing else to go on should open; and `?store=` is the
-    // weakest of the four, because it names a **shelf** rather than a picture
-    // (§24.2). It opens the picker *on* somebody's catalogue and lets the
-    // reader choose, so a page that named both a config and a store meant the
-    // config — a store loaded underneath a session nobody can see is a request
-    // made for nothing. A link is a gesture, which is what licenses that fetch
-    // at all: nothing here runs unless somebody clicked a URL naming this store.
+    // click; and `?config=` is the seed the page itself named, which is exactly
+    // what a window with nothing else to go on should open.
     if (shared) void this.openSharedHash()
     else if (linked === null && this.sessions.every((session) => session.state === null)) {
       const seed = mounting().config
-      const shelf = mounting().store
       if (seed !== null) void this.current?.openConfigUrl(seed)
-      else if (shelf !== null) this.openStoreLink(shelf)
     }
     this.current?.activate()
+    // `?store=` is not a seed and competes with none of them: it names a
+    // **shelf** rather than a picture (§24.2), and the shelf is a drawer over
+    // whatever the window shows, so a link naming both a config and a store
+    // gets both — the figure in the tab and the catalogue beside it. A link is
+    // a gesture, which is what licenses the fetch: nothing here runs unless
+    // somebody clicked a URL naming this store.
+    const shelf = mounting().store
+    if (shelf !== null) this.storeDrawer?.openLink(shelf, mounting().storeView)
     // Only when session storage had nothing, which is exactly "the browser was
     // closed" — a reload has its own, fresher answer above and must not be
     // asked a question it already knows. Last, and asynchronous, so a database
@@ -872,19 +912,80 @@ export class App implements SessionHost {
     else void this.offerWorkspace()
   }
 
+  /** A tile on a landing page was pressed: open the drawer on that store. */
+  openStore(id: string): void {
+    this.storeDrawer?.open(id)
+  }
+
+  /** Whether the tab in front holds nothing — which decides what a store row's verbs say. */
+  private tabEmpty(): boolean {
+    const session = this.current
+    return session === undefined || (!session.hasFile && !session.isBrowsing)
+  }
+
   /**
-   * Land the picker on the store a `?store=` link named.
+   * The store row's *open*: fill an empty tab, or open a new one.
    *
-   * The reference is built here rather than stored, and `builtin: false` is the
-   * load-bearing field: a store reached by link is nobody's shipped catalogue, so
-   * a 404 on it is an honest 404 and the table offers to remember it. The id is
-   * a constant because there is at most one of these per page — the address bar
-   * holds one `?store=` — and `state/stores.ts` mints the `store:<n>` that outlives
-   * the page if the reader presses remember.
+   * Never the tab in front when it holds something — `ui/stores/host.ts` says
+   * why a row never destroys a tab. A workspace row goes through the config
+   * road whatever the tab holds, because `openWorkspaceFile` already appends
+   * its tabs beside what is open and consumes only an empty one.
    */
-  private openStoreLink(url: string): void {
-    const ref: StoreRef = { id: 'store:link', label: storeLabelFor(url), url, builtin: false }
-    this.current?.showStore(ref)
+  private openStoreEntry(entry: StoreEntry): void {
+    this.noteShelf(entry)
+    const source = { kind: 'remote', url: splitUri(entry.uri).path } as const
+    if (entry.kind === 'workspace' || this.tabEmpty()) {
+      void this.current?.openPicked(entry.uri, source)
+      return
+    }
+    const fresh = this.newSession()
+    if (fresh === null) return
+    void fresh.openPicked(entry.uri, source)
+  }
+
+  /** The store row's *add*: the routing a dropped file takes, into the tab in front. */
+  private addStoreEntry(entry: StoreEntry): void {
+    this.noteShelf(entry)
+    void this.current?.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+  }
+
+  /**
+   * Several store rows as one picture: the lead opens, the rest join it.
+   *
+   * The first map is the lead; with no map, the first row is, which opens a
+   * genome browser the rest become tracks on. `Session.openFiles` makes the same
+   * choice for a handful of dropped local files. The lead is awaited before the
+   * rest are added, because a track joins the tab that is *open*, and a
+   * collection at its root redirects to an entry on the way.
+   */
+  private async openStoreEntries(entries: readonly StoreEntry[]): Promise<void> {
+    const files = entries.filter((entry) => entry.kind !== 'workspace')
+    if (files.length === 0) {
+      for (const entry of entries) this.openStoreEntry(entry)
+      return
+    }
+    const lead = files.find((entry) => entry.kind === 'map') ?? files[0]
+    const session = this.tabEmpty() ? this.current : this.newSession()
+    if (session === undefined || session === null) return
+    this.noteShelf(lead)
+    await session.openPicked(lead.uri, { kind: 'remote', url: splitUri(lead.uri).path })
+    for (const entry of files) {
+      if (entry === lead) continue
+      this.noteShelf(entry)
+      await session.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+    }
+  }
+
+  /**
+   * The shelf a store row brought with it, answered later through the same
+   * question the demo map's annotations are (`ui/examples.ts`). Registered
+   * before the open, because the Tracks card is built while the file is
+   * opening.
+   */
+  private noteShelf(entry: StoreEntry): void {
+    if (entry.tracks !== undefined && entry.tracks.length > 0) {
+      registerShelf(splitUri(entry.uri).path, entry.tracks)
+    }
   }
 
   /**
@@ -1365,21 +1466,15 @@ export class App implements SessionHost {
    * everything exactly as it was, and choosing a file replaces it deliberately.
    *
    * *Replaces* is what separates this door from {@link addFileDialog}, which is
-   * the same picker with the other verb behind it. Both go through
-   * {@link pickerDialog}, so the two dialogs cannot drift apart in anything but
-   * the thing they differ in.
+   * the same box with the other verb behind it. Both go through
+   * {@link loadDialog}, so the two dialogs cannot drift apart in anything but
+   * the thing they differ in. Neither offers the stores: a store is a drawer
+   * over the window, one press away in the header, and every row on one opens
+   * without destroying the tab in front.
    */
   openFileDialog(session: Session): void {
-    this.pickerDialog({
+    this.loadDialog({
       title: 'Open a file',
-      // The stores belong to *this* door and not to the header's. Every row on
-      // one is a whole file or a whole session, so choosing one is the
-      // deliberate replacement this dialog is for, and offering it beside
-      // "and this too" would be offering to throw the reader's tab away from
-      // the one control whose promise is that it will not.
-      stores: builtinStores(),
-      // The landing picker's own door, not `open`: it is the same store list, and
-      // a row on one may be a published *session* rather than a file.
       onOpen: (uri, source) => void session.openPicked(uri, source),
       onOpenFiles: (files) => void session.openFiles(files),
     })
@@ -1388,26 +1483,19 @@ export class App implements SessionHost {
   /**
    * The header's `+`: one more file *in* this tab, from wherever the reader is.
    *
-   * The gesture existed and had no button. Dropping onto the content area adds
-   * rather than replaces in every case it can (`Session.dropFiles`) — a second
-   * cooler comes up beside the first, a bigWig joins the tracks — but a drop
-   * needs somewhere to drag from, and every click-sized door to a file in this
-   * app went the other way: the crumb, the brand, `Open a different file` and a
-   * new tab all *replace*. So the commonest thing a reader wants to do with a
-   * second file was reachable only by dragging, and the buttons that looked like
-   * they would do it did the one thing that loses work.
-   *
-   * On an empty tab the distinction does not exist — there is nothing to add to,
-   * and `dropFiles` would take a lone bigWig, find no annotation store to put it
-   * in and drop it on the floor. It opens there instead, which is the same
-   * answer the landing page gives.
+   * Dropping onto the content area adds rather than replaces in every case it
+   * can (`Session.dropFiles`) — a second cooler comes up beside the first, a
+   * bigWig joins the tracks — but a drop needs somewhere to drag from, and this
+   * is the click-sized door to the same thing. On an empty tab the distinction
+   * does not exist — there is nothing to add to — so it opens there instead,
+   * which is the same answer the landing page gives.
    */
   private addFileDialog(): void {
     const session = this.current
     if (session === undefined) return
     const empty = !session.hasFile && !session.isBrowsing
-    this.pickerDialog({
-      title: empty ? 'Open a file' : 'Add a file',
+    this.loadDialog({
+      title: empty ? 'Open a file' : 'Add a file to this tab',
       onOpen: (uri, source) =>
         void (empty ? session.openPicked(uri, source) : session.addRemote(uri, source)),
       onOpenFiles: (files) => void (empty ? session.openFiles(files) : session.dropFiles(files)),
@@ -1415,46 +1503,40 @@ export class App implements SessionHost {
   }
 
   /**
-   * The picker, over whatever is on screen, however it was asked for.
+   * The load box, over whatever is on screen, however it was asked for.
    *
-   * Its own {@link FilePicker}, not the one mounted in the content area: that
-   * element is the landing view and moving it into a dialog would empty the page
-   * behind it. What differs between the two callers is the *verb* — replace this
-   * tab's file, or add one to it — so that is all this takes: one picker, one
-   * modal, two sets of doors out of it.
+   * A `LoadBox` of its own, not the landing page: that element is the landing
+   * view and moving it into a dialog would empty the page behind it. What
+   * differs between the two callers is the *verb* — replace this tab's file, or
+   * add one to it — so that is all this takes: one box, one modal, two sets of
+   * doors out of it.
    */
-  private pickerDialog(props: {
+  private loadDialog(props: {
     title: string
-    stores?: readonly StoreRef[]
     onOpen(uri: string, source: SourceSpec): void
     onOpenFiles(files: readonly File[]): void
   }): void {
     if (this.modal !== null) return
-    // Held, rather than built inline into `body`, because it has something to
-    // release: the store table subscribes to the remembered list, and a dialog
-    // picker that is thrown away without saying so leaves one live listener per
-    // dialog ever opened.
-    let picker: FilePicker | null = null
     const modal: Modal = new Modal({
       title: props.title,
       variant: 'modal-wide',
-      body: () => {
-        picker = new FilePicker({
-          onOpen: (uri, source) => {
-            modal.close()
-            props.onOpen(uri, source)
-          },
-          onOpenFiles: (files) => {
-            modal.close()
-            props.onOpenFiles(files)
-          },
-          stores: props.stores,
-        })
-        return picker.el
-      },
+      body: () =>
+        el(
+          'div',
+          { class: 'modal-body load-dialog' },
+          new LoadBox({
+            compact: true,
+            onOpen: (uri, source) => {
+              modal.close()
+              props.onOpen(uri, source)
+            },
+            onOpenFiles: (files) => {
+              modal.close()
+              props.onOpenFiles(files)
+            },
+          }).el,
+        ),
       onClose: () => {
-        picker?.destroy()
-        picker = null
         this.modal = null
       },
     })
@@ -1725,9 +1807,19 @@ export class App implements SessionHost {
       {
         id: 'connect-folder',
         group: 'File',
-        title: 'Connect a folder',
+        title: 'Connect a place',
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
+      },
+      {
+        id: 'open-store',
+        group: 'File',
+        title: 'Open a store',
+        hint:
+          'The lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected, as a drawer ' +
+          'down the left. Nothing is fetched until you open one.',
+        enabled: this.storeDrawer !== null,
+        run: () => this.storeDrawer?.open(),
       },
       {
         id: 'open-file',

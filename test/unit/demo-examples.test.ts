@@ -37,14 +37,15 @@ import { existsSync, readFileSync } from 'node:fs'
 import {
   DEMO_ANNOTATION_FILES,
   DEMO_BUCKET,
+  DEMO_DATA_FILES,
   DEMO_FILES,
-  builtinStores,
   clearShelves,
   demoAnnotationsFor,
   demoAnnotationsToOffer,
+  demosStore,
   registerShelf,
 } from '../../src/ui/examples'
-import { STORE_KIND, STORE_VERSION, type StoreFile } from '../../src/state/store'
+import { STORE_KIND, STORE_VERSION } from '../../src/state/store'
 import {
   isRefusal,
   refusalMessage,
@@ -341,67 +342,62 @@ describe('the annotations published beside a demo map', () => {
 })
 
 // ---------------------------------------------------------------------------
-// The same catalogue, as the store the picker actually offers
+// The same catalogue, as the store the drawer actually offers
 // ---------------------------------------------------------------------------
 
 /**
- * The Demos store is the fourth thing that can drift from `demo/`, and the one
+ * The lab's store is the fourth thing that can drift from `demo/`, and the one
  * nothing else here watches.
  *
  * `DEMO_FILES` is checked file by file above, and the store is built from the
  * same list — but it is built into *URIs*, with a base concatenated on the
  * front, and that is a second place for a name to be wrong in a way no `.json`
- * on disk would show. So every workspace row is taken back apart and required
- * to name a file that exists, which is exactly the assertion the rest of this
- * file makes about the list it came from.
+ * on disk would show. So every row is taken back apart and required to name a
+ * file that exists, which is exactly the assertion the rest of this file makes
+ * about the list it came from.
  */
-describe('the Demos store', () => {
-  /** The inline store, which needs no window and no network to build. */
-  function demos(): StoreFile {
-    const ref = builtinStores().find((held) => held.id === 'demos')
-    expect(ref, 'the built-in list no longer offers the demos').toBeDefined()
-    expect(ref?.store, 'the demos store must be inline: it is the one that costs no request').toBeDefined()
-    return ref?.store as StoreFile
-  }
-
-  it('is a store of this format, named, with its columns declared', () => {
-    const store = demos()
+describe('the lab’s store', () => {
+  it('is a store of this format, named, with the columns the gallery reads', () => {
+    const store = demosStore()
     expect(store.kind).toBe(STORE_KIND)
     expect(store.version).toBe(STORE_VERSION)
     expect(store.name).not.toBe('')
     expect(store.columns.map((column) => column.key)).toEqual([
       'assembly',
-      'biosource',
-      'assay',
-      'lab',
+      'dataset',
+      'format',
+      'provenance',
+      'detail',
     ])
   })
 
-  it('offers every published workspace, and nothing that is not one', () => {
-    const workspaces = demos().entries.filter((entry) => entry.kind === 'workspace')
+  it('offers every published workspace as a figure, and every data file as a row', () => {
+    const workspaces = demosStore().entries.filter((entry) => entry.kind === 'workspace')
     expect(workspaces).toHaveLength(DEMO_FILES.length)
     for (const entry of workspaces) {
       expect(entry.uri, `${entry.label} is a workspace row that does not name a .json`).toMatch(
         /\.metacooler\.json$/,
       )
     }
+    const files = demosStore().entries.filter((entry) => entry.kind !== 'workspace')
+    expect(files).toHaveLength(DEMO_DATA_FILES.length)
   })
 
   /**
    * The assertion this whole block exists for: a row names a file that is here.
    *
-   * A renamed demo is a landing page whose first table 404s on click, and the
+   * A renamed demo is a landing page whose first card 404s on click, and the
    * bucket is somewhere no test can reach — so "the file is on disk" is the
    * strongest true statement available, and it is the same one
    * `scripts/publish-demo.sh` makes true of the bucket.
    */
-  it('names a file that is in demo/ for every workspace row', () => {
-    for (const entry of demos().entries) {
-      if (entry.kind !== 'workspace') continue
+  it('names a file that is in demo/ for every row', () => {
+    for (const entry of demosStore().entries) {
       const under = entry.uri.split('/demo/').pop() ?? entry.uri
+      const listed = entry.kind === 'workspace' ? DEMO_FILES : DEMO_DATA_FILES
       expect(
-        DEMO_FILES.includes(under),
-        `the Demos store offers ${entry.uri}, which is not one of the published workspaces`,
+        listed.includes(under),
+        `the store offers ${entry.uri}, which is not one of the published files`,
       ).toBe(true)
       expect(existsSync(`${DIR}${under}`), `${under} is offered by the store but not in demo/`).toBe(
         true,
@@ -410,58 +406,21 @@ describe('the Demos store', () => {
   })
 
   it('gives every row an absolute URI under the published prefix', () => {
-    for (const entry of demos().entries) {
+    for (const entry of demosStore().entries) {
       // An inline store has no URL of its own to be relative to, so its entries
       // must already be absolute — `resolveStore` has nothing to fix here.
       expect(entry.uri, `${entry.label} is not absolute`).toMatch(/^https?:\/\//)
-    }
-    for (const entry of demos().entries) {
-      if (entry.kind !== 'workspace') continue
       expect(entry.uri.startsWith(DEMO_BUCKET)).toBe(true)
     }
   })
 
-  it('fills the assembly column on every row it ships, and a note', () => {
-    for (const entry of demos().entries) {
+  it('says, on every figure, what is on screen, on which assembly, and where the data came from', () => {
+    for (const entry of demosStore().entries) {
       expect(entry.fields?.['assembly'], `${entry.label} says nothing about its assembly`).toBeTruthy()
-      expect(entry.note, `${entry.label} has no provenance`).toBeTruthy()
-    }
-  })
-
-  /**
-   * Two rows that are not on the lab's bucket, which is what they are for.
-   *
-   * A demo folder this project controls end to end cannot show that a reader's
-   * *next* file needs nobody's permission. These two can, and a size on each is
-   * what lets the table say what the 2.2 GB row costs before it is clicked.
-   */
-  it('offers two 4DN open-data maps beside the lab’s own', () => {
-    const foreign = demos().entries.filter((entry) => !entry.uri.startsWith(DEMO_BUCKET))
-    expect(foreign).toHaveLength(2)
-    for (const entry of foreign) {
-      expect(entry.kind).toBe('map')
-      expect(entry.uri).toContain('4dn-open-data-public')
-      expect(entry.size).toBeGreaterThan(0)
-      expect(entry.fields?.['assembly']).toBe('GRCh38')
-    }
-  })
-
-  it('points every generated store at stores/ on the site the deploy copies them to', () => {
-    // Every shelf but the inline Demos, which is the point: whatever the
-    // generator grows to — IGV, the twelve ENCODE shards, the three session
-    // stores — the picker reads all of it from one directory beside the page.
-    const generated = builtinStores().filter((ref) => ref.id !== 'demos')
-    expect(generated.length).toBeGreaterThan(1)
-    for (const ref of generated) {
-      expect(ref.builtin).toBe(true)
-      // A URL and no inline store: nothing is fetched until a reader chooses one.
-      expect(ref.store).toBeUndefined()
-      // No page in this runtime and no homepage defined, so the path is the
-      // bare `stores/<id>.json`; `test/dom/builtin-stores.test.ts` holds the
-      // on-a-page half, where it is the site's own origin.
-      expect(ref.url, `the ${ref.id} store must be read from the site's stores/`).toBe(
-        `stores/${ref.id}.json`,
-      )
+      if (entry.kind !== 'workspace') continue
+      expect(entry.note, `${entry.label} has no line`).toBeTruthy()
+      expect(entry.fields?.['provenance'], `${entry.label} has no provenance`).toBeTruthy()
+      expect(entry.fields?.['detail'], `${entry.label} has no detail`).toBeTruthy()
     }
   })
 })
