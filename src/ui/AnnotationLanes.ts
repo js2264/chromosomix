@@ -70,6 +70,7 @@ import {
   type LaneLabelStyle,
   type LimitBox,
   type NameBox,
+  progressDetail,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import { VARIANT_MIN_WIDTH } from '../render/variants'
@@ -271,6 +272,8 @@ interface Lane {
   frame: LaneFrame
   /** One per value track in the lane; empty for the feature kinds. */
   profiles: Array<{ entry: AnnotationEntry; profile: PixelProfile }>
+  /** The read a member is waiting on, if any — see `BrowserView`'s `Lane.pending`. */
+  pending: { done: number; total: number } | null
   /**
    * The categories to paint, for a qualitative metadata lane (§8.12).
    *
@@ -1023,6 +1026,7 @@ export class AnnotationLanes {
     return this.slotsFor(edge).map((slot) => {
       const frame = this.frameOf(edge, slot, geometry)
       const profiles: Lane['profiles'] = []
+      let pending: { done: number; total: number } | null = null
       let categories: Lane['categories'] = null
       for (const member of [slot.entry, ...slot.overlaid]) {
         // A quantitative metadata column is a profile like any other from here
@@ -1061,6 +1065,8 @@ export class AnnotationLanes {
             scaleOf(member.style),
           ),
         })
+        pending =
+          this.cache?.pendingOf(member.id, laneIsHorizontal(edge) ? 'cols' : 'rows') ?? pending
       }
       return {
         entry: slot.entry,
@@ -1069,6 +1075,7 @@ export class AnnotationLanes {
         border: this.nearEdgeOf(edge, slot) + laneOutward(edge) * slot.thickness,
         profiles,
         categories,
+        pending,
       }
     })
   }
@@ -1248,7 +1255,10 @@ export class AnnotationLanes {
             // at its own copy of this: it is only ever set where the lane drew
             // nothing, and limits under an empty lane read as "there is nothing
             // here" rather than "there is too much here to draw" (§8.13).
-            detail: laneNote(profiles) ?? { kind: 'limits', ...shown },
+            detail:
+              lane.pending !== null
+                ? progressDetail(lane.pending)
+                : (laneNote(profiles) ?? { kind: 'limits', ...shown }),
             at: labelEndFor(frame, shown, first.entry.style.flip),
           }
         }
@@ -1984,6 +1994,9 @@ function laneTick(
 
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */
 const LANE_FONT = '9px system-ui, sans-serif'
+/** The bar under a lane's name while its read is on its way, and its thickness. */
+const PROGRESS_WIDTH = 40
+const PROGRESS_THICKNESS = 2
 
 /**
  * How strongly a handle nobody is pointing at is drawn.
@@ -2018,6 +2031,8 @@ function laneLabelStyle(): LaneLabelStyle {
   return {
     nameFont: scaleFont(LANE_FONT),
     rangeFont: scaleFont(LANE_FONT),
+    progressWidth: scaleLength(PROGRESS_WIDTH),
+    progressThickness: scaleLength(PROGRESS_THICKNESS),
     // Every length here but the grip is in the same units as the text it is
     // spacing — see the browser's own style factory for why, and why the grip
     // is not: a border does not get easier to hit because the writing grew.

@@ -36,13 +36,20 @@ beforeAll(async () => {
 let nextId = 1
 type Unsent<T> = T extends { id: number } ? Omit<T, 'id'> : never
 
+/** The answer to a request — the result or the error, never a progress report on the way. */
+function settled(id: number): AnnotationResponse | undefined {
+  return posted.find(
+    (message) => 'id' in message && message.id === id && message.type !== 'progress',
+  )
+}
+
 async function ask(request: Unsent<AnnotationRequest>): Promise<AnnotationResponse> {
   const id = nextId++
   deliver({ ...request, id } as AnnotationRequest)
   await vi.waitFor(() => {
-    expect(posted.some((message) => 'id' in message && message.id === id)).toBe(true)
+    expect(settled(id)).toBeDefined()
   })
-  return posted.find((message) => 'id' in message && message.id === id) as AnnotationResponse
+  return settled(id) as AnnotationResponse
 }
 
 /** A FASTA of two sequences, long enough that a window spans several lines. */
@@ -215,7 +222,45 @@ describe('a large FASTA with its index', () => {
       regions: [{ contig: 'chrI', start: 0, end: 5_000_000 }],
       basesPerPixel: 10_000,
     })
+    const refused = (wide as { payload: TrackSampleSet }).payload
+    expect(refused.regions).toEqual([])
+    // …and says so under the lane's name, rather than sitting blank.
+    expect(refused.note).toContain('zoom in')
+    expect(refused.note).toContain('4 Mb')
+  })
+
+  it('judges the cap over the whole request, so a genome of small scaffolds is one refusal and not a read each', async () => {
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-many', source: source('big.fa'), mapContigs: [] })
+    const before = log.filter((line) => /big\.fa bytes=/.test(line)).length
+    // Two regions each under the cap and together over it — the whole-genome
+    // view of a cow, in miniature.
+    const wide = await ask({
+      kind: 'sample',
+      entry: 'e-many',
+      regions: [
+        { contig: 'chrI', start: 0, end: 3_000_000 },
+        { contig: 'chrII', start: 0, end: 3_000_000 },
+      ],
+      basesPerPixel: 10_000,
+    })
     expect((wide as { payload: TrackSampleSet }).payload.regions).toEqual([])
+    expect(log.filter((line) => /big\.fa bytes=/.test(line)).length).toBe(before)
+  })
+
+  it('reports how far a ranged read has got, under the request that asked', async () => {
+    serve({ size: LARGE, index: true })
+    await ask({ kind: 'load', entry: 'e-progress', source: source('big.fa'), mapContigs: [] })
+    const seen = posted.length
+    const id = nextId
+    await ask({ kind: 'bases', entry: 'e-progress', regions: [{ contig: 'chrI', start: 300, end: 420 }] })
+    const reports = posted
+      .slice(seen)
+      .filter((message) => message.type === 'progress' && 'id' in message && message.id === id)
+    expect(reports.length).toBeGreaterThan(0)
+    const last = reports[reports.length - 1] as { done: number; total: number }
+    expect(last.done).toBeGreaterThan(0)
+    expect(last.total).toBe(last.done)
   })
 
   it('reads a window once, and a pan that stays inside it not at all', async () => {

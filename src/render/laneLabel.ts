@@ -50,6 +50,10 @@ export interface LaneLabelName {
 export interface LaneLabelStyle {
   nameFont: string
   rangeFont: string
+  /** How long the bar under a name is while its read is on its way, in pixels. */
+  progressWidth: number
+  /** …and how thick. */
+  progressThickness: number
   /** The colour chip before a name, in CSS pixels. `0` draws none. */
   swatch: number
   /** Where the first name's line sits, measured from the label's own end. */
@@ -227,7 +231,17 @@ export interface LaneLabelSpec {
    * comes back as a box — which is the whole difference between a range you read
    * and a range you edit.
    */
-  detail: { kind: 'text'; text: string } | { kind: 'limits'; min: number; max: number } | null
+  detail:
+    | { kind: 'text'; text: string }
+    | { kind: 'limits'; min: number; max: number }
+    /**
+     * A read on its way: a phrase and a bar. `total` is `0` where the host
+     * would not say how much is coming, and the bar is then drawn half full
+     * rather than empty — a bar at nought says nothing has happened, and
+     * something has.
+     */
+    | { kind: 'progress'; text: string; done: number; total: number }
+    | null
   /**
    * Which end of the lane the block sits at, across.
    *
@@ -285,6 +299,35 @@ export interface NameBox {
    * thing measuring here rather than in the caller exists to prevent.
    */
   font: string
+}
+
+/**
+ * The detail line for a lane whose read is on its way.
+ *
+ * "fetching 1.2 of 4.0 MB" where the host said how much, "fetching…" where it
+ * did not, and the bar beside it either way. One function, so the browser
+ * and the lanes beside a map cannot phrase the same wait two ways.
+ */
+export function progressDetail(pending: { done: number; total: number }): {
+  kind: 'progress'
+  text: string
+  done: number
+  total: number
+} {
+  const text =
+    pending.total > 0
+      ? `fetching ${bytesLabel(pending.done)} of ${bytesLabel(pending.total)}`
+      : pending.done > 0
+        ? `fetching… ${bytesLabel(pending.done)}`
+        : 'fetching…'
+  return { kind: 'progress', text, done: pending.done, total: pending.total }
+}
+
+function bytesLabel(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`
+  if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} kB`
+  return `${Math.round(bytes)} B`
 }
 
 export interface LaneLabelBoxes {
@@ -535,6 +578,33 @@ export function drawLaneLabel(
       if (column !== null && stacked) want(width + column.pad)
       laneText(ctx, frame, text, at, across, { halo: palette.halo })
     }
+    ctx.restore()
+    return out
+  }
+
+  if (spec.detail.kind === 'progress') {
+    // The phrase where a note goes, and the bar after it along the lane: a
+    // short rule in the lane's own text colour, filled to the fraction read.
+    const text = spec.detail.text
+    const textWidth = text === '' ? 0 : ctx.measureText(text).width
+    const bar = style.progressWidth
+    const gap = text === '' ? 0 : NAME_GAP
+    const whole = textWidth + gap + bar
+    const at = column !== null && stacked ? Math.max(column.start, column.end - whole) : along
+    if (column !== null && stacked) want(whole + column.pad)
+    if (text !== '') laneText(ctx, frame, text, at, across, { halo: palette.halo })
+    const fraction =
+      spec.detail.total > 0 ? Math.max(0, Math.min(1, spec.detail.done / spec.detail.total)) : 0.5
+    const barFrom = at + dir * (textWidth + gap)
+    const barTo = barFrom + dir * bar
+    const thick = Math.max(2, style.progressThickness)
+    // Centred on the text's baseline band: the bar sits where the letters'
+    // x-height is, so it reads as part of the same line.
+    const top = across - thick - 1
+    ctx.fillStyle = palette.halo
+    ctx.fillRect(...laneRect(frame, barFrom, barTo, top, top + thick))
+    ctx.fillStyle = palette.text
+    ctx.fillRect(...laneRect(frame, barFrom, barFrom + dir * bar * fraction, top, top + thick))
     ctx.restore()
     return out
   }

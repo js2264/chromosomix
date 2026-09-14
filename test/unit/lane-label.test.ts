@@ -52,6 +52,8 @@ function stubContext(): CanvasRenderingContext2D {
 const STYLE: LaneLabelStyle = {
   nameFont: '10px sans-serif',
   rangeFont: '10px sans-serif',
+  progressWidth: 40,
+  progressThickness: 2,
   swatch: 9,
   nameTop: 8,
   nameLine: 11,

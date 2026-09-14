@@ -578,12 +578,19 @@ export class AnnotationLoader {
       // own load is still in flight must still be released, and the reply may
       // never come.
       this.held.add(id)
-      const result = await this.client.request<'load'>({
-        kind: 'load',
-        entry: id,
-        source,
-        mapContigs: this.mapContigs,
-      })
+      const result = await this.client.request<'load'>(
+        {
+          kind: 'load',
+          entry: id,
+          source,
+          mapContigs: this.mapContigs,
+        },
+        // Onto the row, so a thirty-megabyte index reads as a bar and not as
+        // a row that says *reading…* for as long as it takes.
+        (done, total) => {
+          if (this.store.byId(id)?.status === 'loading') this.store.update(id, { progress: { done, total } })
+        },
+      )
       const card = cardFor(result.format)
       // What a *file* of this format is, which for a BAM is its depth — and the
       // row's own kind wins where the row is the second one over that file. A
@@ -598,7 +605,7 @@ export class AnnotationLoader {
             ? 'reads'
             : kindFor(card, result.format)
       if (card === null || kind === null) {
-        this.store.update(id, { status: 'error', error: refusal(result.format) })
+        this.store.update(id, { status: 'error', error: refusal(result.format), progress: undefined })
         this.client.drop(id)
         return
       }
@@ -619,6 +626,7 @@ export class AnnotationLoader {
         kind,
         ...restyle,
         status: 'ready',
+        progress: undefined,
         // A BAM's two rows come back from the same file with the same sentence
         // under them — "2 references · BAI" — and in the Tracks panel their
         // names are one truncated string apart. So each says which picture it

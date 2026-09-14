@@ -129,12 +129,13 @@ import {
 } from '../render/lane'
 import {
   drawLaneLabel,
-  type LaneLabelBoxes,
   labelEndFor,
+  type LaneLabelBoxes,
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
   type NameBox,
+  progressDetail,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
 import { Scale } from '../render/scale'
@@ -237,6 +238,9 @@ const LANE_FONT = '10px system-ui, sans-serif'
  * caret in it was aiming.
  */
 const RANGE_FONT = '11.5px system-ui, sans-serif'
+/** The bar under a lane's name while its read is on its way, and its thickness. */
+const PROGRESS_WIDTH = 56
+const PROGRESS_THICKNESS = 3
 /**
  * The track name, which is the one word on a lane a reader looks for.
  *
@@ -328,6 +332,14 @@ interface Lane {
    * from the frame itself (`basesAreDrawable`).
    */
   residues: Array<{ entry: AnnotationEntry; regions: BaseRegion[] }>
+  /**
+   * The read this lane is waiting on, where it is waiting on one: a window of
+   * samples or of letters still on its way from the worker, with how far it
+   * has got. Drawn as the detail line, over the limits and over a note — the
+   * one thing a reader wants to know about a lane that is blank is whether
+   * something is coming (§8.8).
+   */
+  pending: { done: number; total: number } | null
   /**
    * The reads to draw, for a pile lane zoomed in far enough (§8.13).
    *
@@ -1327,6 +1339,7 @@ export class BrowserView {
       profiles: [],
       residues: [],
       reads: [],
+      pending: null,
     }))
   }
 
@@ -1924,7 +1937,11 @@ export class BrowserView {
       // what the ruler above it already says, and it would say it *through* the
       // letters — the one thing on this lane that is there to be read.
       if (this.text) {
-        label = { entries: lane.residues.map((row) => row.entry), detail: null, at: 'near' }
+        label = {
+          entries: lane.residues.map((row) => row.entry),
+          detail: lane.pending === null ? null : progressDetail(lane.pending),
+          at: 'near',
+        }
       }
     } else if (lane.profiles.length > 0) {
       // While a ceiling is being dragged this lane is drawn twice: once as it
@@ -2001,7 +2018,10 @@ export class BrowserView {
           // this width — and a pair of limits under an empty lane would be
           // describing an axis with no data on it, which reads as "there is
           // nothing here" rather than "there is too much here to draw".
-          detail: laneNote(lane.profiles) ?? { kind: 'limits', ...limits },
+          detail:
+            lane.pending !== null
+              ? progressDetail(lane.pending)
+              : (laneNote(lane.profiles) ?? { kind: 'limits', ...limits }),
           at: labelEndFor(frame, limits, first.entry.style.flip),
         }
       }
@@ -2318,6 +2338,7 @@ export class BrowserView {
           domain: lane.frame.domain,
         })
         lane.residues.push({ entry: member, regions: regions ?? [] })
+        lane.pending = this.bases.pendingOf(member.id, 'browser') ?? lane.pending
         continue
       }
       // A pile lane draws reads or it draws nothing (§8.13) — the depth is the
@@ -2380,6 +2401,7 @@ export class BrowserView {
         entry: member,
         profile: profileOf(lane.frame, this.axis, samples, scaleOf(member.style)),
       })
+      lane.pending = this.cache.pendingOf(member.id, 'browser') ?? lane.pending
     }
   }
 
@@ -3759,6 +3781,8 @@ function browserLabelStyle(): LaneLabelStyle {
   return {
     nameFont: scaleFont(NAME_FONT),
     rangeFont: scaleFont(RANGE_FONT),
+    progressWidth: scaleLength(PROGRESS_WIDTH),
+    progressThickness: scaleLength(PROGRESS_THICKNESS),
     // Everything but the grip is in the same units as the text it spaces: the
     // two line heights keep the name and the range apart, the hit height is the
     // click box a caret opens from, and the autoscale slot is a mark placed
