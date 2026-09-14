@@ -5087,7 +5087,7 @@ public Drive link fails without it; the account, because a private one fails aft
 in place; the folder, because it needs the account. The Dropbox app key sits under Dropbox. A build
 that cannot offer a provider does not draw its tile (§8.5): the standalone build offers this
 machine alone, and the desktop build's Drive tile carries the key and says why there is no
-sign-in. The plug in the header and the Files column's *connect a place…* both open it.
+sign-in. The plug in the header and the Files column's *Open a local/remote folder* both open it.
 
 ### 20.1 One level, never a walk
 
@@ -5181,7 +5181,7 @@ maps card's, the deck's add row and an empty cell of a deck stands *from a conne
 (`ui/pickFromFolders.ts`): the Files column's own folder view in a dialog, over every place the
 window is connected to — a directory on this machine included — and a row that hands back the
 file, with the credential the listing used. It replaces a browser that could look at buckets and
-nothing else; with nothing connected it says so and names the Files column's *connect a place…*,
+nothing else; with nothing connected it says so and names the Files column's *Open a local/remote folder*,
 rather than offering an empty listing.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
@@ -5682,7 +5682,7 @@ column's, on the backslash key — punctuation, like the console's backtick, so 
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette has *Open or close the stores*. The header holds
 nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*connect a place…* and the file crumb's *Open a file* said a second time.
+*Open a local/remote folder* and the file crumb's *Open a file* said a second time.
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
@@ -5694,7 +5694,9 @@ under its URL before the name could reach it), and onto the tab a row opens in a
 **The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
 card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
 chips under them, the line that says what is on screen where there is one, and the files the
-session is made of behind a fold reading *8 files*. Every file is a store row with the two verbs of
+session is made of behind a fold reading *8 files*. IGV's cards are the tighter of the two, four
+across at the drawer's default width, and named without the assembly IGV brackets after the
+genome's name — that is the chip under it. Every file is a store row with the two verbs of
 §20.5, so a reader who wants the ATAC bigWig on their own map has it a fold away from the figure
 it appears in; the lab's store lists every file its figures name (`fields.files` on the workspace
 row, the URIs `|`-joined), and the few files no figure names sit under the cards in a fold of their

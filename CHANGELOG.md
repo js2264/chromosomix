@@ -532,7 +532,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Removed
 
 - **The header's plug and `+`.** *Connect a place* and *Add a file to this tab* stood in the header
-  beside the store drawer's toggle and were the Files column's own *connect a place…* and the file
+  beside the store drawer's toggle and were the Files column's own *Open a local/remote folder* and the file
   crumb's *Open a file* said a second time, one row up; a header with three doors to a file read as
   three different things. Both verbs stay in the command palette, and dropping a file still adds
   it. The hints that pointed at "the plug in the header" now point at the Files column.
@@ -733,6 +733,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The Files column's button says what it does: *Open a local/remote folder*.** It was *connect a
+  place…*, and the dialog behind it — now titled the same — has lost its opening paragraph and
+  most of every pane's: each keeps one line and the two sentences about a grant that §24.7
+  requires. The bucket pane's placeholder is generic, and a prefix may be typed as
+  `s3://bucket/prefix/`, which becomes the bucket's https address on the region given. The header
+  reads stores, Files column, then the four panels.
+
+- **IGV's genome cards are four across, tighter, and named without the bracket.** *Human
+  (GRCh38/hg38)* is *Human* with `hg38` as its chip — the assembly was on the card twice — the
+  whole name staying in the tooltip and in what the filter box searches; the grid is four
+  columns at the drawer's default width, two when it is narrowed.
+
 - **A store row is called what the drawer called it.** A 4DN map opened from the shelf was named by
   its accession — `4DNFI24F7GRY.mcool` — where the reader had picked *Hi-C on HFF cells, protocol
   variations*. The row's line now goes with the file: onto the map, onto the track, and onto the
@@ -776,7 +788,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
 
   Around it, the doors are fewer and each says what it is. **Connect** (the Files column's
-  *connect a place…*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
+  *Open a local/remote folder*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
   each provider's credentials on its own pane rather than a bucket card here and a Drive key there.
   The file crumb's *Open a file* opens one **Load** dialog with the store tiles behind it. Every URL box that
   once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every

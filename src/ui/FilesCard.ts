@@ -141,9 +141,9 @@ export class FilesCard {
       el(
         'div',
         { class: 'files-actions' },
-        button('connect a place…', () => this.props.onConnect(), {
+        button('Open a local/remote folder', () => this.props.onConnect(), {
           class: 'btn btn-primary',
-          title: 'A directory on this machine, a bucket, a Drive folder or a Dropbox — browsed the same way',
+          title: 'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed here.',
         }),
       ),
       this.lapsedEl,
@@ -241,7 +241,7 @@ export class FilesCard {
           class: 'hint',
           text:
             `${folder.label} is listed with an account this tab is not signed in to. Sign in ` +
-            `under *connect a place…* → ${account} and it lists again; nothing about the folder has changed.`,
+            `under *Open a local/remote folder* → ${account} and it lists again; nothing about the folder has changed.`,
         }),
         button('retry', () => void this.show(folder), { class: 'btn' }),
       )

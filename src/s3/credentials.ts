@@ -212,9 +212,21 @@ export function writeScopes(scopes: readonly BucketScope[]): void {
  * request that cannot work, and one refusal at the point of typing beats two
  * different failures much later.
  */
-export function normaliseBase(value: string): string | null {
-  const text = value.trim()
+export function normaliseBase(value: string, options: { region?: string } = {}): string | null {
+  let text = value.trim()
   if (text === '') return null
+  // `s3://bucket/prefix` is how a bucket is written everywhere but a browser —
+  // the AWS CLI, a data availability statement, a colleague's message — and
+  // it names the same prefix as the https form. Rewritten to AWS's
+  // virtual-hosted address, on the region the form was given where it was
+  // given one: that is the bucket's real endpoint, and the global one is what
+  // `s3://` means everywhere else it is written (`sources/rewrite.ts`).
+  const s3 = /^s3:\/\/([^/\s]+)(?:\/(.*))?$/i.exec(text)
+  if (s3 !== null) {
+    const region = (options.region ?? '').trim()
+    const host = region === '' ? `${s3[1]}.s3.amazonaws.com` : `${s3[1]}.s3.${region}.amazonaws.com`
+    text = `https://${host}/${s3[2] ?? ''}`
+  }
   let url: URL
   try {
     url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`)

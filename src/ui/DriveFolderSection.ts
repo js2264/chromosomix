@@ -96,11 +96,10 @@ export function driveFolderSection(done: (id: string) => void): HTMLElement | nu
         el('p', {
           class: 'hint',
           text: state.configured
-            ? 'Not signed in. A Drive folder is listed with your own Google account, so press ' +
-              'sign in with Google in the section above first; this box opens as soon as you are ' +
-              'signed in.'
-            : 'Not signed in, and no client id is stored. A Drive folder needs both: save your ' +
-              'lab’s client id in the section above, sign in with it, and this box opens.',
+            ? 'Press sign in with Google in the section above first; this box opens as soon as ' +
+              'you are signed in.'
+            : 'No client id is stored: save your lab’s client id in the section above and sign ' +
+              'in with it; this box opens then.',
         }),
       )
       return
@@ -110,9 +109,7 @@ export function driveFolderSection(done: (id: string) => void): HTMLElement | nu
       field('folder link or id', linkInput, 'Empty means all of My Drive.'),
       el('p', {
         class: 'hint',
-        text:
-          'Paste the address bar from the folder in Drive, or the id on its own. Leave it empty ' +
-          'for all of My Drive. A folder on a shared drive works the same way.',
+        text: 'The folder’s address bar from Drive, or its id. A folder on a shared drive works the same way.',
       }),
       el('div', { class: 'bucket-actions' }, button('connect this folder', connect, {
         class: 'btn btn-primary',
@@ -128,10 +125,9 @@ export function driveFolderSection(done: (id: string) => void): HTMLElement | nu
     el('p', {
       class: 'hint',
       text:
-        'Browse a folder of your Drive in the Files panel, one level at a time, and open what is ' +
-        'in it. The folder is listed with your own Google account — the same sign-in as above, ' +
-        'read-only — and the token that does it lives only in this tab: nothing here is kept ' +
-        'but the folder’s name and its id.',
+        'A folder of your Drive, browsed in the Files panel. It is listed with your own Google ' +
+        'account — the sign-in above — and the token lives only in this tab; only the folder’s ' +
+        'name and id are kept.',
     }),
     controls,
     error,

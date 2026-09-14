@@ -36,6 +36,12 @@ interface Genome {
   files: StoreEntry[]
 }
 
+/** `Human (GRCh38/hg38)` → `Human`: the name IGV gives a genome, without the assembly it brackets after it. */
+export function shortName(label: string): string {
+  const short = label.replace(/\s*\([^()]*\)\s*$/, '').trim()
+  return short === '' ? label : short
+}
+
 export class GenomesView {
   readonly el: HTMLElement
   private readonly filter: HTMLInputElement
@@ -152,7 +158,11 @@ export class GenomesView {
       el(
         'div',
         { class: 'gallery-card-head' },
-        el('h4', { class: 'gallery-card-title', text: genome.label }),
+        // The name without the assembly in brackets IGV appends to it — *Human
+        // (GRCh38/hg38)* — because the assembly is the chip under it, and a
+        // card that says it twice is a card that reads slowly. The whole name
+        // stays in the tooltip and is what the filter box searches.
+        el('h4', { class: 'gallery-card-title', text: shortName(genome.label), title: genome.label }),
         session === null
           ? null
           : iconButton(

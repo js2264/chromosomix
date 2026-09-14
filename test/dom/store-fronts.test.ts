@@ -148,7 +148,9 @@ describe('IGV’s genomes', () => {
     await vi.waitFor(() => expect(all(view.el, '.genomes-card').length).toBe(2))
     expect(requested.length).toBe(2)
     const cards = all(view.el, '.genomes-card')
-    expect(textsOf(cards[0], '.gallery-card-head .gallery-card-title')).toEqual(['Human (GRCh38/hg38)'])
+    // The name without the assembly IGV brackets after it — that is the chip.
+    expect(textsOf(cards[0], '.gallery-card-head .gallery-card-title')).toEqual(['Human'])
+    expect(cards[0].querySelector('.gallery-card-title')?.getAttribute('title')).toBe('Human (GRCh38/hg38)')
     expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')).toEqual(['hg38', '2 tracks'])
     // The one verb, at the end of the name's line, an icon with the words in its title.
     const open = cards[0].querySelector('.gallery-card-head .gallery-card-open') as HTMLButtonElement

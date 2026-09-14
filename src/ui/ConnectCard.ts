@@ -74,7 +74,7 @@ export interface ConnectProps {
 
 export function openConnect(props: ConnectProps): Modal {
   return new Modal({
-    title: 'Connect a place',
+    title: 'Open a local/remote folder',
     variant: 'modal-wide',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => connectBody(props, close),
@@ -150,20 +150,7 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
   show(props.provider ?? 'local')
   void chosen
 
-  return el(
-    'div',
-    { class: 'modal-body bucket-body connect-body' },
-    el('p', {
-      class: 'hint',
-      text:
-        'A connected place is browsed in the Files column and stays there: open one file, look ' +
-        'at it, open the next. A directory on this machine, a bucket, a Drive folder and a Dropbox ' +
-        'are read the same way once connected — the only difference is where the bytes come from.',
-    }),
-    tiles,
-    paneSlot,
-    privacyNote(),
-  )
+  return el('div', { class: 'modal-body bucket-body connect-body' }, tiles, paneSlot, privacyNote())
 }
 
 /**
@@ -204,13 +191,10 @@ function localSection(done: (id: string) => void): HTMLElement {
     el('p', {
       class: 'hint',
       text: granted
-        ? 'Nothing is uploaded and nothing is copied. This browser keeps permission to list the ' +
-          'folder and read what is in it — not the files themselves — so it is still connected ' +
-          'after a reload, and you can take that permission back at any time.'
-        : 'This browser cannot hold a folder, so what you get is a snapshot of it: the file list ' +
-          'as it is right now, for this visit only. It does not update, and it is gone after a ' +
-          'reload. Nothing is uploaded either way. Chrome and Edge, and the desktop app, keep ' +
-          'the connection properly.',
+        ? 'Read in place, never uploaded. The browser keeps permission to list the folder across ' +
+          'reloads; take it back any time under About → what is stored.'
+        : 'This browser cannot keep a folder, so this is a snapshot of its file list for this ' +
+          'visit only. Nothing is uploaded. Chrome, Edge and the desktop app keep the connection.',
     }),
     el(
       'div',
@@ -232,9 +216,8 @@ function bucketSection(done: (id: string) => void): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'A URL prefix on S3, R2, MinIO, Google Cloud Storage or any store that answers ' +
-        'ListObjectsV2 — public, or with a read-only key kept in this browser. Every bucket ' +
-        'connected here is also listed under About → what is stored.',
+        'An https:// or s3:// prefix on S3, R2, MinIO, Google Cloud Storage or any store that ' +
+        'answers ListObjectsV2 — public, or with a read-only key kept in this browser.',
     }),
     bucketForm({ onSaved: (scope) => done(bucketFolderId(scope.id)) }),
   )
@@ -292,12 +275,8 @@ function googleSection(): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'Needed to open a public Google Drive file: the Drive API refuses a request without a ' +
-        'key, even for a file anyone can read. A public Google Cloud Storage object needs none — ' +
-        'a gs:// link opens as it is. A private file on either needs the account sign-in below ' +
-        'instead, and a key does not stand in for it. Make the key in your own Google Cloud ' +
-        'project and restrict it to the Drive API; it is kept in this browser, exactly as a ' +
-        'bucket key is.',
+        'Opens a public Google Drive file; a public Cloud Storage object needs none. A private ' +
+        'file needs the account sign-in below instead. Kept in this browser, like a bucket key.',
     }),
     field('key', input),
     status,
@@ -354,8 +333,7 @@ function googleAccountSection(): HTMLElement {
         class: 'hint',
         text:
           'Not on the desktop app: a sign-in is registered against a web address, and this ' +
-          'window has none. Public Drive files open with the key above; a private file or a ' +
-          'Drive folder needs the hosted viewer.',
+          'window has none. Public Drive files open with the key above.',
       }),
     )
   }
@@ -375,8 +353,7 @@ function googleAccountSection(): HTMLElement {
     const id = readClientId()
     stored.textContent =
       id === null
-        ? 'No client id stored. Signing in needs one; it is not a secret, and it is the only ' +
-          'part of this that is kept.'
+        ? 'No client id stored. Signing in needs one; it is not a secret.'
         : // Printed rather than withheld, which is the opposite of the key box
           // above and is the right answer for a value that is public: what a
           // reader coming back here needs to know is *which project*.
@@ -434,10 +411,8 @@ function googleAccountSection(): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'For a Drive file or a Cloud Storage object that is not public. Signing in gets this tab ' +
-        'a token, which rides every request to Drive and to the GCS JSON API until it expires. ' +
-        'The client id is your lab’s, registered in its own Google Cloud project against the ' +
-        'exact address this page is served from — docs/hosting.md has the four steps.',
+        'For a Drive file, a Drive folder or a Cloud Storage object that is not public: your ' +
+        'lab’s client id, then your own sign-in. docs/hosting.md has the four steps.',
     }),
     // The two sentences §24.7 requires this dialog to say, and it requires them
     // because a consent screen says neither: Google's names the product, and
@@ -445,18 +420,14 @@ function googleAccountSection(): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'Read what you are granting. drive.readonly is read access to all of your Drive — every ' +
-        'file in it, not the one you are opening — where a bucket key is a grant over one ' +
-        'prefix of one bucket. The other scope, devstorage.read_only, is read access to the ' +
-        'Cloud Storage your account can see.',
+        'drive.readonly is read access to all of your Drive, where a bucket key is a grant over ' +
+        'one prefix; devstorage.read_only is read access to the Cloud Storage your account can see.',
     }),
     el('p', {
       class: 'hint',
       text:
-        'The token lives only in this tab’s memory. It is never written to storage, so it is ' +
-        'not in the list under About → what is stored, it is gone when this tab closes, and it ' +
-        'expires about an hour after you sign in — which is why nothing here can keep you ' +
-        'signed in and nothing claims to.',
+        'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
+        'closes, and expiring about an hour after you sign in.',
     }),
     field('client id', input),
     stored,
@@ -497,15 +468,13 @@ function accountLine(state: { signedIn: boolean; expiresAt: number | null }): st
   const when = (at: number): string => new Date(at).toLocaleTimeString()
   if (state.signedIn && state.expiresAt !== null) {
     // No address, because no `userinfo` scope was asked for (§24.7).
-    return `Signed in. The token is good until ${when(state.expiresAt)}; no address was asked ` +
-      'for, so this page does not know which account it is.'
+    // No address, because no `userinfo` scope was asked for (§24.7).
+    return `Signed in; the token is good until ${when(state.expiresAt)}. No address was asked for, so this page does not know which account it is.`
   }
   if (state.expiresAt !== null) {
-    return `Signed in earlier; the token expired at ${when(state.expiresAt)}. A private file ` +
-      'will answer 401 until you sign in again.'
+    return `Signed in earlier; the token expired at ${when(state.expiresAt)}. Sign in again for a private file.`
   }
-  return 'Not signed in. Public files open without this; a private Drive file or GCS object ' +
-    'will not.'
+  return 'Not signed in. Public files open without this; a private Drive file or GCS object will not.'
 }
 
 /**
@@ -523,14 +492,11 @@ function privacyNote(): HTMLElement {
     el(
       'div',
       {},
-      el('strong', { text: 'Connecting a place still sends nothing anywhere.' }),
+      el('strong', { text: 'Nothing is sent anywhere.' }),
       el('span', {
         text:
-          ' A local folder is read in place by code running on your own computer, a few kilobytes ' +
-          'at a time, exactly as a dropped file is. A bucket is read by your browser, from the ' +
-          'bucket, directly. There is no server in between in either case, because there is no ' +
-          'server. Every place you connect is listed under About → what is stored, with a ' +
-          'button that forgets all of it.',
+          ' A folder is read in place, a bucket by your browser directly; there is no server in ' +
+          'between. Every place you connect is listed under About → what is stored.',
       }),
     ),
   )

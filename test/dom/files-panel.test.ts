@@ -127,7 +127,7 @@ describe('with nothing connected', () => {
     const { el } = card()
     expect(el.textContent).toContain('Nothing connected')
     const connect = all<HTMLButtonElement>(el, '.files-actions .btn')[0]
-    expect(connect.textContent).toBe('connect a place…')
+    expect(connect.textContent).toBe('Open a local/remote folder')
   })
 })
 

@@ -136,8 +136,8 @@ const ADD_FILE_HINT =
  * true of the code rather than a slogan (`browse/folder.ts`).
  */
 const CONNECT_HINT =
-  'A directory on this machine, a bucket, a Drive folder or a Dropbox, browsed in the Files ' +
-  'panel and still there when you come back. All four are read the same way.'
+  'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed in the Files ' +
+  'panel and still there when you come back.'
 
 /**
  * How many sessions may be open at once.
@@ -436,20 +436,19 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-files' },
-          // The column itself, first: it is the outermost on the left, and it
-          // is the one a reader arrives through rather than one they drive
-          // the picture with.
-          this.filesPanel.toggle,
-          // Then the stores — somebody else's shelf, in a drawer. Nothing
-          // else: the two buttons that stood here, a plug that connected a
-          // place and a `+` that added a file, were the Files column's own
-          // *connect a place…* and the file crumb's *Open a file* said a
-          // second time, one row up, and a header with three doors to a file
-          // reads as three different things. Dropping is still the gesture
-          // the app is opened with and the whole content area still takes it
-          // (see {@link addFileDialog} for why a drop *adds* rather than
-          // replaces), and both verbs stay in the palette.
+          // The stores first — somebody else's shelf, in a drawer, and the
+          // door most readers arrive through — then the Files column, the
+          // reader's own places. Nothing else: the two buttons that stood
+          // here, a plug that connected a place and a `+` that added a file,
+          // were the Files column's own *Open a local/remote folder* and the
+          // file crumb's *Open a file* said a second time, one row up, and a
+          // header with three doors to a file reads as three different
+          // things. Dropping is still the gesture the app is opened with and
+          // the whole content area still takes it (see {@link addFileDialog}
+          // for why a drop *adds* rather than replaces), and both verbs stay
+          // in the palette.
           ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
+          this.filesPanel.toggle,
         ),
         // Past a divider, because these four are not about getting a file in —
         // they are controls over the picture of one that is already open.
@@ -1834,7 +1833,7 @@ export class App implements SessionHost {
       {
         id: 'connect-folder',
         group: 'File',
-        title: 'Connect a place',
+        title: 'Open a local/remote folder',
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
       },

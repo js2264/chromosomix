@@ -76,6 +76,17 @@ describe('normalising a prefix', () => {
     )
   })
 
+  it('takes an s3:// prefix, on the bucket’s own endpoint when the region is known', () => {
+    // How a bucket is written everywhere but a browser; the same prefix as the
+    // https form, and the https form is what is stored.
+    expect(normaliseBase('s3://my-lab/hic')).toBe('https://my-lab.s3.amazonaws.com/hic/')
+    expect(normaliseBase('s3://my-lab/hic/', { region: 'eu-west-3' })).toBe(
+      'https://my-lab.s3.eu-west-3.amazonaws.com/hic/',
+    )
+    expect(normaliseBase('s3://my-lab', { region: ' ' })).toBe('https://my-lab.s3.amazonaws.com/')
+    expect(normaliseBase('s3://')).toBeNull()
+  })
+
   it('drops a pasted query string and fragment', () => {
     expect(normaliseBase('https://b.s3.amazonaws.com/x/?versionId=3#frag')).toBe(
       'https://b.s3.amazonaws.com/x/',

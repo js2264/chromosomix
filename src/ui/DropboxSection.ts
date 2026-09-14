@@ -82,10 +82,8 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
       // another tab and handed a code has every reason to think the sign-in has
       // failed.
       text:
-        'Dropbox is showing a code rather than sending you back here: this page has no address ' +
-        'to be sent back to — it is served as a site, as a desktop app and as a single file, ' +
-        'and two of those have no origin to register. Copy the code into the box and press ' +
-        'finish.',
+        'Dropbox shows a code instead of sending you back here, because this page has no address ' +
+        'to be sent back to. Copy the code into the box and press finish.',
     }),
     el('p', { class: 'hint' }, el('span', { text: 'If no tab opened, open ' }), link, el('span', { text: '.' })),
     field('code', code),
@@ -199,27 +197,21 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
     el('p', {
       class: 'hint',
       text:
-        'Browse a Dropbox in the Files panel and open files from it. Listing needs a signed-in ' +
-        'account — there is no public way to browse a Dropbox, the way a public bucket can be ' +
-        'browsed — so this takes two things: the app key your lab registered, and your own ' +
-        'sign-in. docs/hosting.md has the four steps for the key.',
+        'Browse a Dropbox in the Files panel. Listing needs your own sign-in and the app key ' +
+        'your lab registered — docs/hosting.md has the four steps.',
     }),
     el('p', {
       class: 'hint',
       text:
-        `Read what you are granting. The app is given ${DROPBOX_PERMISSIONS.join(' and ')}: ` +
-        'read access to everything in your Dropbox, or to the app’s own folder inside it if ' +
-        'your lab registered it that way — the App Console entry says which, and this page ' +
-        'cannot tell from the outside.',
+        `The app is given ${DROPBOX_PERMISSIONS.join(' and ')}: read access to everything in ` +
+        'your Dropbox, or to the app’s own folder inside it if your lab registered it that way.',
     }),
     el('p', {
       class: 'hint',
       text:
-        'The token lives only in this tab’s memory. It is never written to storage, so it is ' +
-        'not in the list under About → what is stored, it is gone when this tab closes, and it ' +
-        'expires on its own — which is why nothing here can keep you signed in and nothing ' +
-        'claims to. A file you have already opened keeps reading for as long as its download ' +
-        'link lasts, which Dropbox sets at four hours.',
+        'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
+        'closes, expiring on its own. A file already open keeps reading for the four hours its ' +
+        'link lasts.',
     }),
     field('app key', input),
     stored,

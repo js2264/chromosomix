@@ -85,7 +85,7 @@ class PickBody {
           class: 'hint',
           text:
             'Nothing is connected yet. Connect a folder on this machine, a bucket, a Drive folder ' +
-            'or a Dropbox from the Files column’s *connect a place…*, then come back here.',
+            'or a Dropbox from the Files column’s *Open a local/remote folder*, then come back here.',
         }),
       )
       return
@@ -110,7 +110,7 @@ class PickBody {
       this.view.clear()
       this.noteEl.textContent =
         folder.kind === 'drive' || folder.kind === 'dropbox'
-          ? `${folder.label} lists with an account this tab is not signed in to. Sign in from the Files column’s *connect a place…*.`
+          ? `${folder.label} lists with an account this tab is not signed in to. Sign in from the Files column’s *Open a local/remote folder*.`
           : `${folder.label} needs permission again. Press it once more to ask.`
       return
     }
