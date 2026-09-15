@@ -116,6 +116,20 @@ export interface AnnotationCardProps {
 }
 
 export class AnnotationCard {
+  /**
+   * Why the lanes are not on screen, when the map is shown on its own.
+   *
+   * `V` cycles the map with its tracks, the tracks alone, and the map alone,
+   * and the third stop leaves this card listing eight files that are drawn
+   * nowhere — which reads as the tracks having been lost rather than put away.
+   * One line, above the list, saying where they are and the key that brings
+   * them back.
+   */
+  private readonly mapOnlyNote = el('p', {
+    class: 'ann-map-only hidden',
+    text: 'Put away while the map is shown on its own — V brings them back beside it.',
+  })
+
   readonly el: HTMLElement
   private readonly list = el('div', { class: 'ann-list' })
   private readonly unsubscribe: () => void
@@ -186,6 +200,7 @@ export class AnnotationCard {
       'section',
       { class: 'card annotation-card' },
       cardTitle('Tracks', 'chart-area'),
+      this.mapOnlyNote,
       ...load.nodes,
       ...(props.demo === undefined
         ? []
@@ -255,6 +270,11 @@ export class AnnotationCard {
    * screen saying "put it here" was the thing that did not react. Now the zone
    * lights the moment a file crosses the card, wherever on it the pointer is.
    */
+  /** Whether the lanes are put away under the map-only view; see {@link mapOnlyNote}. */
+  setMapOnly(on: boolean): void {
+    this.mapOnlyNote.classList.toggle('hidden', !on)
+  }
+
   private cardDrops(host: HTMLElement, zone: HTMLElement): void {
     host.addEventListener('dragover', (event) => {
       // A row out of the Files panel is the same gesture with the bytes

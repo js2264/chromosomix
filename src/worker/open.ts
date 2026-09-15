@@ -112,6 +112,14 @@ async function openThroughSource(
             ? {}
             : { onProgress: (received, total) => hooks.report?.(received, total, 'downloading') }),
           ...(hooks.cancelled === undefined ? {} : { cancelled: hooks.cancelled }),
+          // The listing in small pieces counts itself out loud — see the
+          // `listing cells` note below for why nothing else about it can.
+          ...(hooks.report === undefined || !looksSingleCell(uri)
+            ? {}
+            : {
+                onRead: (requests: number, bytes: number) =>
+                  hooks.report?.(bytes, 0, `listing cells · ${requests.toLocaleString()} reads`),
+              }),
         })
   // A `reading` on the spec *is* the reader's answer to the §12 gate — the
   // shell only ever sets one by re-issuing this open with what they chose.

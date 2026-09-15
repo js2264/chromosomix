@@ -133,6 +133,17 @@ export const fmt = {
     if (!Number.isFinite(fraction)) return '—'
     return `${(fraction * 100).toFixed(digits)}%`
   },
+  /**
+   * A base-pair coordinate written out in full — `1,224,000`.
+   *
+   * For the readout under the pointer, where {@link bp}'s `1.22 Mb` names a
+   * ten-kilobase neighbourhood of a cell that is one kilobase wide: a reader
+   * comparing two cells three bins apart was shown the same string for both.
+   */
+  pos(value: number): string {
+    if (!Number.isFinite(value)) return '—'
+    return INTEGER.format(Math.round(value))
+  },
   /** Base pairs with a unit, for axis readouts. */
   bp(value: number): string {
     if (!Number.isFinite(value)) return '—'

@@ -18,7 +18,9 @@
  * conflated on purpose — a panel with nothing to show is hidden and its button
  * goes with it, without touching the stored choice, so someone who folded a
  * panel and opened a second file gets it folded again while someone who never
- * folded it gets it back.
+ * folded it gets it back. A column can also start folded
+ * ({@link SidePanelSpec.defaultFolded}): Annotations and Analysis do, so that
+ * a first visit on a laptop shows a map rather than five columns.
  *
  * **Resizable**, by dragging its inner edge. A default width is a guess about a
  * window nobody has measured: three columns and a square plot is a lot to fit,
@@ -135,6 +137,15 @@ export interface SidePanelSpec {
    * "get this out of the way" arrives.
    */
   keys: string
+  /**
+   * Folded until the reader opens it, in a window that has never chosen.
+   *
+   * Five open columns beside a square plot leave the plot a sliver on a laptop,
+   * so the two a reader reaches for least often on arrival — the annotation
+   * stack and the analysis list — start folded. Absent means open by default.
+   * Either way a stored choice wins, and a reader who opens one keeps it open.
+   */
+  defaultFolded?: boolean
 }
 
 /**
@@ -209,6 +220,9 @@ export const ANNOTATION_PANEL: SidePanelSpec = {
   title: 'Annotations',
   side: 'left',
   order: -1,
+  // Folded on arrival: the tracks are drawn on the map whether or not their
+  // list is open, and the list is one keypress away.
+  defaultFolded: true,
   defaultWidth: 320,
   minWidth: 240,
   maxWidth: 560,
@@ -237,6 +251,8 @@ export const ANALYSIS_PANEL: SidePanelSpec = {
   title: 'Analysis',
   side: 'right',
   order: 2,
+  // Folded on arrival, for the same reason it is outermost.
+  defaultFolded: true,
   defaultWidth: 300,
   minWidth: 240,
   maxWidth: 520,
@@ -268,18 +284,28 @@ export const AESTHETICS_PANEL: SidePanelSpec = {
   keys: 'm',
 }
 
-function readFlag(key: string): boolean {
+/**
+ * The stored fold, or `fallback` where the reader has never chosen.
+ *
+ * `'1'` is folded and `'0'` is open. The open state is written rather than
+ * the key removed, because a column that starts folded has to tell a reader
+ * who opened it from one who never touched it — and an absent key is the
+ * second, whatever the default.
+ */
+function readFlag(key: string, fallback: boolean): boolean {
   try {
-    return window.localStorage.getItem(key) === '1'
+    const raw = window.localStorage.getItem(key)
+    if (raw === '1') return true
+    if (raw === '0') return false
+    return fallback
   } catch {
-    return false
+    return fallback
   }
 }
 
 function writeFlag(key: string, on: boolean): void {
   try {
-    if (on) window.localStorage.setItem(key, '1')
-    else window.localStorage.removeItem(key)
+    window.localStorage.setItem(key, on ? '1' : '0')
   } catch {
     /* a browser that refuses storage still folds correctly for this session */
   }
@@ -364,7 +390,7 @@ export class SidePanel {
      */
     private readonly remembers = true,
   ) {
-    this.collapsed = this.remembers ? readFlag(spec.key) : true
+    this.collapsed = this.remembers ? readFlag(spec.key, spec.defaultFolded ?? false) : true
     this.width = (this.remembers ? readWidth(spec) : null) ?? spec.defaultWidth
 
     this.tab = this.spine()
@@ -479,10 +505,10 @@ export class SidePanel {
   }
 
   /** Fold or open, and tell the shell the plot has room to re-measure in. */
-  private fold(collapsed: boolean): void {
+  private fold(collapsed: boolean, persist = true): void {
     if (collapsed === this.collapsed) return
     this.collapsed = collapsed
-    if (this.remembers) writeFlag(this.spec.key, collapsed)
+    if (this.remembers && persist) writeFlag(this.spec.key, collapsed)
     this.paint()
     this.onResize()
     this.onSettle()
@@ -562,6 +588,19 @@ export class SidePanel {
    */
   reveal(): void {
     this.fold(false)
+  }
+
+  /**
+   * Fold this column because what it was for has just happened.
+   *
+   * The mirror of {@link reveal}, and as narrow: a file chosen or dropped on
+   * the landing page has opened, and the Files column — the one column that
+   * page shows — has done its job. It does *not* write the stored preference,
+   * because the reader did not fold it and the landing page they come back to
+   * needs it open; the next reload starts from their own choice, as before.
+   */
+  conceal(): void {
+    this.fold(true, false)
   }
 
   /**

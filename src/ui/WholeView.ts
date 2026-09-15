@@ -32,7 +32,7 @@
  * free.
  */
 
-import { WHOLE_VIEW_GATE_PIXELS } from '../constants'
+import { WHOLE_VIEW_GATE_PIXELS, WHOLE_VIEW_GATE_BINS } from '../constants'
 import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
 import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
@@ -60,6 +60,15 @@ export interface WholeViewProps {
   binsize: number
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
+  /**
+   * Open the file at another rung, by entry name — the gate's second button.
+   *
+   * A whole-genome view pools the fine rung into cells hundreds of bins wide,
+   * and a coarser rung of the same file draws the same cells from a fraction
+   * of the pixels. Absent where the shell cannot switch rung, and the gate
+   * then offers only the read.
+   */
+  onOpenRung?(entry: string): void
   /** A control the session puts on the title line; see `RegionViewProps`. */
   extraControl?: HTMLElement
   /**
@@ -549,7 +558,25 @@ export class WholeView {
   private gated(): boolean {
     const { nnz, wholeFileLevel } = this.props
     if (wholeFileLevel !== undefined) return true
-    return nnz !== null && nnz > WHOLE_VIEW_GATE_PIXELS
+    // A file that states no pixel count is measured by its bins instead — a
+    // `.hic` at 1 kb walks every block of the file whatever it declares.
+    if (nnz === null) return this.props.nBins > WHOLE_VIEW_GATE_BINS
+    return nnz > WHOLE_VIEW_GATE_PIXELS
+  }
+
+  /**
+   * The coarsest rung of this file whose bins still fit in one drawn cell.
+   *
+   * That rung draws the picture this view is about to pool the fine one into,
+   * from far fewer pixels. `null` for a file with no ladder, and for one whose
+   * open rung is already the coarsest that fits.
+   */
+  private cheaperRung(): { name: string; binsize: number } | null {
+    const cell = this.props.binsize * this.plan.binsPerCell
+    const fits = rungsOf(this.props.rungs ?? []).filter(
+      (rung) => rung.binsize > this.props.binsize && rung.binsize <= cell,
+    )
+    return fits.length === 0 ? null : fits[fits.length - 1]
   }
 
   /**
@@ -568,22 +595,48 @@ export class WholeView {
   private renderGate(): void {
     const { nnz } = this.props
     const counted = nnz === null ? '' : ` — ${fmt.int(nnz)} of them —`
-    this.gate.replaceChildren(
-      el('p', {
-        text:
-          `This reads every stored pixel of the file${counted} and sums ` +
-          `them into ${this.resolutionPhrase()}. It runs once: the picture is kept for as long ` +
-          'as the file is open.' +
+    const rung = this.props.onOpenRung === undefined ? null : this.cheaperRung()
+    const lines: HTMLElement[] = [
+      el(
+        'p',
+        {},
+        el('strong', {
+          text: `Whole genome at ${fmt.bp(this.props.binsize)} reads every stored pixel of the file`,
+        }),
+        `${counted} and sums them into ${this.resolutionPhrase()}. Once per file; the picture ` +
+          'is kept while it is open.' +
           // A selection reads the whole file too: the sequences it wants are
           // scattered through the pixels, so there is no smaller span to walk.
-          // Saying so is the difference between a wait that makes sense and one
-          // that looks like a bug.
           (this.props.selection === undefined
             ? ''
-            : ' A selection costs the same pass: its sequences are spread through the file, so ' +
-              'there is no shorter way to find them.'),
-      }),
-      button('compute whole genome', () => this.compute(), { class: 'btn' }),
+            : ' A selection costs the same pass: its sequences are spread through the file.'),
+      ),
+    ]
+    if (rung !== null) {
+      lines.push(
+        el(
+          'p',
+          {},
+          el('strong', { text: `Opening the file at ${fmt.bp(rung.binsize)} draws the same picture` }),
+          ` from far fewer pixels — the cells are ${this.resolutionPhrase().replace(/^cells of /, '')} ` +
+            'either way, and every region after it opens quicker too.',
+        ),
+      )
+    }
+    this.gate.replaceChildren(
+      ...lines,
+      el(
+        'div',
+        { class: 'whole-gate-actions' },
+        ...(rung === null
+          ? []
+          : [
+              button(`open at ${fmt.bp(rung.binsize)} instead`, () => this.props.onOpenRung?.(rung.name), {
+                class: 'btn btn-primary',
+              }),
+            ]),
+        button('compute whole genome', () => this.compute(), { class: 'btn' }),
+      ),
     )
     this.gate.classList.remove('hidden')
     this.panelHost.classList.add('hidden')

@@ -57,6 +57,7 @@ export const DEFAULT_UI_PLOT_OPTIONS: PlotOptions = {
   breaks: true,
   labels: false,
   ticks: true,
+  legend: true,
 }
 
 export type PlotOptionKey = keyof PlotOptions
@@ -98,6 +99,7 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'breaks',
   'labels',
   'ticks',
+  'legend',
   'crosshair',
   'tooltip',
 ]
@@ -123,6 +125,7 @@ export const PLOT_OPTION_ICONS: Record<PlotOptionKey, IconName> = {
   breaks: 'separator-vertical',
   labels: 'tag',
   ticks: 'ruler',
+  legend: 'list',
 }
 
 /** Label and one-line explanation, shared by the view card and the palette. */
@@ -174,6 +177,13 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   ticks: {
     label: 'ticks',
     hint: 'Base-pair coordinates along the axes, inside a block that has a single contig.',
+  },
+  legend: {
+    label: 'legend',
+    hint:
+      'The key in the corner of the map — what the cells hold, the bin size and the two ends ' +
+      'of the colour scale. Off leaves the picture alone, which is what a figure with its own ' +
+      'caption wants; the exported caption still states the range.',
   },
 }
 
@@ -238,6 +248,7 @@ function read(): PlotOptions {
       breaks: pick('breaks'),
       labels: pick('labels'),
       ticks: pick('ticks'),
+      legend: pick('legend'),
     }
   } catch {
     return { ...DEFAULT_UI_PLOT_OPTIONS }

@@ -490,7 +490,14 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     entryGroup: mc.entryGroup,
     cells: mc.cells,
     activeCells: mc.activeCells,
-    cellNnz: mc.cells.length > 0 ? mc.nnz : null,
+    // Not on a remote read in small pieces: the count is one dataset header
+    // per cell, scattered through the file, and on that source it is another
+    // four thousand round trips after the thousand the listing already cost —
+    // a wait with nothing on screen to show for it. Unknown is what it is.
+    cellNnz:
+      mc.cells.length > 0 && !(request.source.kind === 'remote' && request.source.reading === 'fine')
+        ? mc.nnz
+        : null,
     hasGenomes: mc.hasGenomes,
     hasWeights: mc.hasWeights,
     scoreColumns: mc.scoreColumns,

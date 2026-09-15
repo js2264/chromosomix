@@ -44,6 +44,18 @@ import { BALANCE_PARAM } from './shared'
  */
 export const MAX_CORRELATION_BINS = 8192
 
+/**
+ * Past this many bins a sequence the run is *allowed* and not sensible.
+ *
+ * Compartments are called at 250 kb on a mammalian genome, which is under a
+ * thousand bins for its longest chromosome; 100 kb — about two thousand — is
+ * the fine end of what the literature uses, and takes a minute here. The
+ * correlation grows as the cube of the bin count, so 4,600 bins is six
+ * minutes with the CPU meter reading idle, which reads as a hang. The gate
+ * above still decides what runs; this only decides what is said beside Run.
+ */
+export const COMFORTABLE_CORRELATION_BINS = 2000
+
 /** Which contacts enter the correlation; see the `contacts` parameter. */
 function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
   const value = params.contacts
@@ -262,7 +274,47 @@ function readsFor(context: AnalysisContext, chosen: readonly ContextContig[]): n
  * and refused as one correlation, while the same sixteen chromosomes correlated
  * separately are 1,500 bins each and entirely ordinary.
  */
-function estimateCis(chosen: readonly ContextContig[], balance: boolean): CostEstimate {
+/**
+ * The warning beside Run when the resolution is finer than compartments want.
+ *
+ * `''` under {@link COMFORTABLE_CORRELATION_BINS}. Otherwise one sentence
+ * that says why, and the rung of this file — finest first — at which the
+ * widest sequence would fit, so the reader has somewhere to go rather than
+ * an adjective.
+ */
+function tooFineNote(
+  context: AnalysisContext,
+  bins: number,
+  length: number,
+  unit: 'a sequence' | 'in all',
+): string {
+  if (bins <= COMFORTABLE_CORRELATION_BINS) return ''
+  const rung = (context.resolutions ?? []).find(
+    (binsize) => binsize > context.binsize && Math.ceil(length / binsize) <= COMFORTABLE_CORRELATION_BINS,
+  )
+  const advice =
+    rung === undefined
+      ? 'Open the file at a coarser resolution.'
+      : `Open it at ${fmtBp(rung)} (${Math.ceil(length / rung).toLocaleString()} bins) or coarser.`
+  return (
+    `${bins.toLocaleString()} bins ${unit} at ${fmtBp(context.binsize)} is far finer than ` +
+    'compartments need — 250 kb is the usual bin on a mammalian genome, and past about ' +
+    `${COMFORTABLE_CORRELATION_BINS.toLocaleString()} bins the correlation takes minutes. ${advice} `
+  )
+}
+
+/** `1 kb`, `250 kb`, `1 Mb`, `500 bp`. Local, so this module imports nothing from the UI. */
+function fmtBp(bp: number): string {
+  if (bp >= 1e6 && bp % 1e5 === 0) return `${bp / 1e6} Mb`
+  if (bp >= 1e3 && bp % 100 === 0) return `${bp / 1e3} kb`
+  return `${bp.toLocaleString()} bp`
+}
+
+function estimateCis(
+  context: AnalysisContext,
+  chosen: readonly ContextContig[],
+  balance: boolean,
+): CostEstimate {
   const usable = chosen.filter((contig) => contig.bins <= MAX_CORRELATION_BINS)
   const skipped = chosen.length - usable.length
   if (usable.length === 0) {
@@ -276,13 +328,21 @@ function estimateCis(chosen: readonly ContextContig[], balance: boolean): CostEs
         'a correlation matrix. Open the file at a coarser resolution.',
     }
   }
-  const widest = usable.reduce((most, contig) => Math.max(most, contig.bins), 0)
+  const widestContig = usable.reduce<ContextContig | undefined>(
+    (most, contig) => (most === undefined || contig.bins > most.bins ? contig : most),
+    undefined,
+  )
+  const widest = widestContig?.bins ?? 0
   const bytes = widest * widest * 8
+  const tooFine = tooFineNote(context, widest, widestContig?.length ?? 0, 'a sequence')
   return {
-    class: usable.length > 1 ? 'scan' : 'bounded',
+    // A run that will take minutes is coloured as a scan is, whatever its
+    // request count: the colour is the one warning a reader sees before Run.
+    class: usable.length > 1 || tooFine !== '' ? 'scan' : 'bounded',
     requests: usable.length * (balance ? 5 : 4),
     bytes,
     note:
+      tooFine +
       `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
       `correlation each — up to ${(bytes / 1e6).toFixed(0)} MB held at once, over at most ` +
       `${widest.toLocaleString()} bins. ` +
@@ -321,7 +381,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
   // Cis-only is a different shape of run, not a narrower one — see `estimateCis`
   // and the `contacts` parameter.
-  if (contacts === 'cis') return estimateCis(chosen, balance)
+  if (contacts === 'cis') return estimateCis(context, chosen, balance)
 
   const bins = chosen.reduce((total, contig) => total + contig.bins, 0)
   const bytes = bins * bins * 8
@@ -370,12 +430,18 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     return { class: 'free', requests: 0, bytes, note: `${note} Read from the block on screen.` }
   }
   const reads = readsFor(context, chosen)
+  const tooFine = tooFineNote(
+    context,
+    bins,
+    chosen.reduce((total, contig) => total + contig.length, 0),
+    'in all',
+  )
   return {
-    class: reads > 1 ? 'scan' : 'bounded',
+    class: reads > 1 || tooFine !== '' ? 'scan' : 'bounded',
     requests: reads * (balance ? 5 : 4),
     bytes,
     note:
-      `${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build it ` +
+      `${tooFine}${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build it ` +
       'from. Progress is reported as it goes and it can be cancelled at any point.',
   }
 }

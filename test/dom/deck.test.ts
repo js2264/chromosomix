@@ -96,6 +96,7 @@ function leadPanel(
   }
   const panel = {
     setViewportListener: () => {},
+    setDeckExport: () => {},
     setLaneListener: (listener: (geometry: unknown) => void) => {
       state.lanes = listener
     },

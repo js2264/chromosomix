@@ -948,6 +948,14 @@ export interface AnalysisContext {
    */
   selectedCells?: readonly string[]
   /**
+   * The file's resolution ladder in base pairs, finest first.
+   *
+   * Empty for a plain `.cool` and a replicate collection, which have no rungs
+   * to move between. Here so that a task priced past what a resolution can
+   * bear can name the rung that would bear it, rather than say "coarser".
+   */
+  resolutions?: number[]
+  /**
    * The other maps of a deck, for the one task whose unit is a pair of files.
    *
    * Absent in a session with one map, which is what makes that task *waiting*

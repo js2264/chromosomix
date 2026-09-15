@@ -216,6 +216,14 @@ export interface SessionHost {
   notify(message: string): void
   /** A read finished; the status bar's counters are worth another look. */
   activity(session: Session): void
+  /**
+   * A file the reader chose or dropped on the landing page has opened.
+   *
+   * The Files column is the one column that page shows, and it has done its
+   * job: the shell folds it for this window, without writing the preference
+   * (`ui/SidePanel.ts`, `conceal`), so the plot gets the room.
+   */
+  landingFileOpened(session: Session): void
 }
 
 /** What a heatmap view of the whole file at once has to offer the session. */
@@ -793,6 +801,8 @@ export class Session {
    * around the picture rather than any part of what the picture is *of*.
    */
   private mapOnly = false
+  /** The map view's Tracks card, told when the lanes are put away (`V`). */
+  private trackCard: AnnotationCard | null = null
   /**
    * The map/tracks button as it stands on screen, so it can be swapped in place.
    *
@@ -864,7 +874,7 @@ export class Session {
     this.id = id ?? `s${nextSessionId++}`
     this.picker = new FilePicker({
       onOpen: (uri, source) => void this.openWithConfig(uri, source),
-      onOpenFiles: (files) => void this.openFiles(files),
+      onOpenFiles: (files) => void this.openFiles(files, { fromLanding: true }),
       // The tiles are the shell's door: a store is a drawer over the window,
       // not a fact about this tab (`ui/StoreDrawer.ts`).
       onStore: (id) => this.host.openStore(id),
@@ -2009,7 +2019,7 @@ export class Session {
    * selected reads as the application dropping them. The blend is still one
    * click away on the compare card, which is where a claim that strong belongs.
    */
-  async openFiles(files: readonly File[]): Promise<void> {
+  async openFiles(files: readonly File[], options: { fromLanding?: boolean } = {}): Promise<void> {
     if (files.length === 0) return
     const config = files.find((file) => looksLikeConfig(file.name))
     if (config !== undefined) {
@@ -2019,10 +2029,12 @@ export class Session {
       // one gesture.
       await this.openConfigFile(config)
       this.droppedAll(files.filter((file) => file !== config))
+      this.landingOpened(options)
       return
     }
     if (files.length === 1) {
       await this.open(files[0].name, { kind: 'local', file: files[0] })
+      this.landingOpened(options)
       return
     }
     // Paired *before* a lead is chosen, which matters for exactly one gesture
@@ -2048,6 +2060,13 @@ export class Session {
       }
       this.dropped(pair.file, undefined, undefined, pair.index)
     }
+    this.landingOpened(options)
+  }
+
+  /** Tell the shell a landing-page open has produced a view, if it has. */
+  private landingOpened(options: { fromLanding?: boolean }): void {
+    if (!options.fromLanding || this.destroyed || this.state === null) return
+    this.host.landingFileOpened(this)
   }
 
   async open(
@@ -3609,16 +3628,26 @@ export class Session {
       // Coming back from the browser: the map, and only the map.
       this.mapOnly = true
       this.showMap()
+      this.trackCard?.setMapOnly(true)
       return
     }
     if (this.mapOnly) {
       this.mapOnly = false
       this.current?.panel?.showLanes(true)
+      this.trackCard?.setMapOnly(false)
       this.refreshMapToggle()
       this.host.sessionChanged(this)
       return
     }
     this.hideMap()
+  }
+
+  /** The map view's Tracks card, kept so the map-only view can speak through it. */
+  private trackCardFor(props: ConstructorParameters<typeof AnnotationCard>[0]): HTMLElement {
+    const card = new AnnotationCard(props)
+    card.setMapOnly(this.mapOnly)
+    this.trackCard = card
+    return card.el
   }
 
   /** Bring the parked map back, exactly where it was left. */
@@ -4158,7 +4187,7 @@ export class Session {
       ...(this.compareCard === null ? [] : [this.compareCard.el]),
       // Above the Tracks card: see the browser path for why.
       this.syntheticSlot,
-      new AnnotationCard({
+      this.trackCardFor({
         store,
         loader,
         onPickDropped: (event) => this.pickDropped(event),
@@ -4181,7 +4210,7 @@ export class Session {
                 },
               },
             }),
-      }).el,
+      }),
       this.metadataCard.el,
       this.manualCard.el,
       // Under the marks, because the two are the same kind of note made at
@@ -6396,6 +6425,12 @@ export class Session {
             : {}),
           binsize: file.info.binsize ?? 1,
           rungs: file.info.entries,
+          // The gate's other way out: the same picture from a coarser rung of
+          // the same file, through the breadcrumb's own switch.
+          onOpenRung: (entry: string) => {
+            const next = `${splitUri(file.uri).path}::${file.info.entryGroup || 'entries'}/${entry}`
+            void this.open(next, file.source, this.carryAcrossEntries(next))
+          },
           nBins: file.info.nBins,
           nContigs: file.info.nContigs,
           displayExtent: file.info.displayExtent,
@@ -6921,6 +6956,7 @@ export class Session {
     // panel: they are handed a picture to draw, and which furniture goes round
     // it is the session's answer — the same reason the toggle itself lives here.
     view?.panel?.showLanes(!this.mapOnly)
+    this.trackCard?.setMapOnly(this.mapOnly)
     // "Click the map" is only offered while there is a map. A table view has
     // none, and a button that arms a gesture nothing can complete is worse than
     // one that is plainly unavailable.
@@ -7424,6 +7460,7 @@ export class Session {
       ...(info.cells.length > 0 && info.activeCells.length < info.cells.length
         ? { selectedCells: info.activeCells }
         : {}),
+      resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
       // Every map on screen **except the one this context is about**, which is
       // the star. A task that compares two files is offered the others, and a
       // map cannot be a peer of itself.

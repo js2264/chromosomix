@@ -54,6 +54,8 @@ export interface ContextInput {
   selectedCells?: readonly string[]
   /** The other maps of a deck, for a task that compares two files (§16). */
   peers?: Array<{ label: string; uri: string; binsize: number }>
+  /** The resolution ladder in bp, finest first; absent or empty without one. */
+  resolutions?: number[]
 }
 
 function strings(
@@ -120,6 +122,9 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     framing: input.framing,
     blockLoaded: input.blockLoaded,
     blockBytes: input.blockBytes,
+    ...(input.resolutions === undefined || input.resolutions.length === 0
+      ? {}
+      : { resolutions: [...input.resolutions] }),
     // Absent rather than zero on a file with no cells, so that a task asking
     // `(context.cells ?? 0) > 0` reads the same on an old stored context as on a
     // fresh one.

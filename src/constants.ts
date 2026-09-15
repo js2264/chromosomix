@@ -132,6 +132,18 @@ export const MIN_DENSE_BUDGET_GIB = 2
  */
 export const WHOLE_VIEW_GATE_PIXELS = 10_000_000
 
+/**
+ * Above this many bins, a file that declares no pixel count is gated too.
+ *
+ * A `.hic` states no `nnz`, and neither does a `.pairs` import, so the rule
+ * above would let a chicken genome at 1 kb — a million bins, every block of the
+ * file — start reading on its own. The bin count is the one size such a file
+ * does state, and a hundred thousand bins is where a whole-genome pass stops
+ * being an instant: yeast at 1 kb is twelve thousand and never waits, human at
+ * 10 kb is three hundred thousand and does.
+ */
+export const WHOLE_VIEW_GATE_BINS = 100_000
+
 /** `storage-mode` values the reader understands. */
 export const STORAGE_MODES = ['symmetric-upper', 'square'] as const
 export type StorageMode = (typeof STORAGE_MODES)[number]

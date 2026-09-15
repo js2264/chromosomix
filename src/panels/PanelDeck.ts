@@ -59,6 +59,7 @@ import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import type {
   AnnotationContext,
+  DeckExport,
   DerivePresentation,
   MatrixPanel,
   PanelGeometry,
@@ -72,7 +73,10 @@ import {
   downloadBlob,
   fileStamp,
   readPageBackground,
+  scaleForDpi,
+  type ExportFormat,
 } from '../ui/export'
+import { VectorPage } from '../ui/vector'
 import { KEYS, withKey } from '../ui/commands'
 import { iconButton } from '../ui/icons'
 import { folderPickButton } from '../ui/pickFromFolders'
@@ -677,6 +681,7 @@ export class PanelDeck {
    */
   setLead(panel: MatrixPanel | null): void {
     if (this.lead !== null && this.lead !== panel) {
+      this.lead.setDeckExport(null)
       this.lead.setViewportListener(null)
       this.lead.setLaneListener(null)
       this.lead.setHoverListener(null)
@@ -684,6 +689,7 @@ export class PanelDeck {
     }
     this.lead = panel
     this.lock.leave(LEAD)
+    panel?.setDeckExport(this.deckExport)
     panel?.setLaneListener((budget) => this.align(budget))
     panel?.setHoverListener((cell) => this.echoHover(LEAD, panel, cell))
     panel?.setLaneHoverListener((at) => this.echoLaneHover(LEAD, panel, at))
@@ -1002,6 +1008,7 @@ export class PanelDeck {
     // …and the room it was holding for maps that are no longer beside it, or the
     // last panel put down would leave the first one padded out for ever.
     this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
+    this.lead?.setDeckExport(null)
     this.lead = null
   }
 
@@ -2358,13 +2365,50 @@ export class PanelDeck {
    * figure going to two places, and a second composition would be a second thing
    * to keep in step.
    */
-  private async saveDeck(): Promise<void> {
+  private async saveDeck(format: ExportFormat = 'png', dpi = DECK_EXPORT_DPI): Promise<void> {
     const now = new Date()
-    const out = this.composeDeck(now)
+    const out = this.composeDeck(now, dpi)
     if (out === null) return
+    if (format === 'pdf') {
+      // One page carrying the composed raster at the dpi it was drawn at: every
+      // panel's own PDF is vector, but the deck is an arrangement of pictures,
+      // and a page of six pictures is what the reader laid out.
+      const scale = scaleForDpi(dpi)
+      const page = new VectorPage(out.width / scale, out.height / scale)
+      page.ctx.drawImage(out, 0, 0, out.width / scale, out.height / scale)
+      const blob = await page.toBlob({ title: 'deck', created: now })
+      downloadBlob(blob, `deck-${fileStamp(now)}-${dpi}dpi.pdf`)
+      return
+    }
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (blob === null) return
-    downloadBlob(blob, `deck-${fileStamp(now)}-${DECK_EXPORT_DPI}dpi.png`)
+    downloadBlob(blob, `deck-${fileStamp(now)}-${dpi}dpi.png`)
+  }
+
+  /**
+   * The lead panel's Export card, answered by the deck.
+   *
+   * The card and the `S` key belong to the lead, and with maps beside it a
+   * reader pressing either is asking for the arrangement they made — the same
+   * reasoning `copyDeck` gives for ⌘C. A deck of one map declines, and the
+   * panel exports its own figure, vector PDF and all.
+   */
+  private readonly deckExport: DeckExport = {
+    save: async (format, dpi) => {
+      if (!this.hasCompanions()) return false
+      await this.saveDeck(format, dpi)
+      return true
+    },
+    copy: async (dpi) => {
+      if (!this.hasCompanions()) return false
+      await this.copyDeck(dpi)
+      return true
+    },
+  }
+
+  /** Whether any cell beside the lead holds a map. */
+  private hasCompanions(): boolean {
+    return this.slots.some((slot) => slot.panel?.map !== undefined && slot.panel?.map !== null)
   }
 
   /**
@@ -2380,8 +2424,8 @@ export class PanelDeck {
    * PNG, like every other clipboard export here: a clipboard holds an image, and
    * a PDF pasted into a slide arrives as a file attachment instead of a picture.
    */
-  async copyDeck(): Promise<void> {
-    const out = this.composeDeck(new Date())
+  async copyDeck(dpi = DECK_EXPORT_DPI): Promise<void> {
+    const out = this.composeDeck(new Date(), dpi)
     if (out === null) return
     try {
       await copyPngToClipboard(canvasToPng(out))
@@ -2409,11 +2453,11 @@ export class PanelDeck {
    * `null` only where there is no 2d context to draw into, which is a browser
    * that cannot export at all rather than a deck that cannot.
    */
-  private composeDeck(now: Date): HTMLCanvasElement | null {
+  private composeDeck(now: Date, dpi = DECK_EXPORT_DPI): HTMLCanvasElement | null {
     const maps = [this.lead, ...this.slots.map((slot) => slot.panel?.map ?? null)]
     const drawn = maps.map((panel) => {
       try {
-        return panel === null ? null : panel.exportCanvas(DECK_EXPORT_DPI, now)
+        return panel === null ? null : panel.exportCanvas(dpi, now)
       } catch {
         // One panel past what a browser will rasterise must not take the other
         // five with it; the gap says which one, and every other cell is right.

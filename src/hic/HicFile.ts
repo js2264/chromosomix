@@ -90,7 +90,13 @@ export class HicFile {
   /** Cumulative bin offsets, one per chromosome plus a terminator. */
   readonly chromOffset: Float64Array
   readonly nBins: number
-  /** Which normalisation `bins/weight` serves, or `null` when none exists. */
+  /**
+   * Which normalisation `bins/weight` serves, or `null` when none exists.
+   *
+   * The file's best offer, by name; what a chromosome's vector actually comes
+   * from is decided when it is read ({@link normVector}), because a name in
+   * the index is not a promise of numbers behind it.
+   */
   readonly normType: string | null
 
   private readonly source: ByteSource
@@ -100,6 +106,11 @@ export class HicFile {
   private readonly blockCache = new Map<string, BlockRecords>()
   private blockCacheBytes = 0
   private readonly normCache = new Map<number, Float64Array | null>()
+  /**
+   * Chromosomes whose vector came from a normalisation other than
+   * {@link normType}, and which one — see {@link normVector}.
+   */
+  private readonly normFallbacks = new Map<number, string>()
 
   private constructor(source: ByteSource, header: HicHeader, footer: HicFooter, binSize: number) {
     this.source = source
@@ -245,17 +256,56 @@ export class HicFile {
     return out
   }
 
+  /**
+   * The weights for one chromosome, from the first normalisation that has any.
+   *
+   * {@link normType} is chosen by *name*, per file: the best of the preference
+   * list that the index carries an entry for. That is not enough, because
+   * Juicer writes an entry for a balancing that did not converge and fills it
+   * with `NaN` — the 4DN files at 1 kb and 2 kb carry a `KR` vector for every
+   * chromosome and finite values in none of them, while the `VC_SQRT` and `VC`
+   * beside it are whole. Chosen by name, `balanced` drew nothing at those
+   * resolutions and everything at 5 kb, which no reader could account for.
+   *
+   * So the preferred type is tried first and the rest of the list after it,
+   * and the vector a chromosome gets is the first with a finite value in it.
+   * A vector that is all `NaN` is the same as no vector, which is what it is.
+   * The cost is one extra read of a vector nobody can use, on exactly the
+   * chromosomes where the alternative was a blank picture.
+   */
   private normVector(chrom: number): Float64Array | null {
     if (this.normCache.has(chrom)) return this.normCache.get(chrom) ?? null
     let vector: Float64Array | null = null
     if (this.normType !== null) {
-      const key: NormVectorKey | undefined = this.footer.normVectors.get(
-        normKey(this.normType, this.fileIndex[chrom], BP, this.binSize),
-      )
-      if (key !== undefined) vector = readNormVector(this.source, this.header.version, key)
+      const preferred = this.normType
+      const candidates = [preferred, ...NORM_PREFERENCE.filter((type) => type !== preferred)]
+      for (const type of candidates) {
+        const key: NormVectorKey | undefined = this.footer.normVectors.get(
+          normKey(type, this.fileIndex[chrom], BP, this.binSize),
+        )
+        if (key === undefined) continue
+        const read = readNormVector(this.source, this.header.version, key)
+        if (!read.some((weight) => Number.isFinite(weight))) continue
+        vector = read
+        if (type !== preferred) this.normFallbacks.set(chrom, type)
+        break
+      }
     }
     this.normCache.set(chrom, vector)
     return vector
+  }
+
+  /**
+   * Which normalisation a chromosome's weights came from, once read.
+   *
+   * {@link normType} until {@link weights} has been asked for that chromosome
+   * and found the preferred vector empty; `null` where there is none at all.
+   */
+  normTypeFor(chrom: number): string | null {
+    if (this.normType === null) return null
+    if (!this.normCache.has(chrom)) this.normVector(chrom)
+    if ((this.normCache.get(chrom) ?? null) === null) return null
+    return this.normFallbacks.get(chrom) ?? this.normType
   }
 
   /** The matrix record for a `"a_b"` key, read once and kept. */

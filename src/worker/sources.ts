@@ -60,7 +60,12 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
         // `fine` is the other half of the gate's answer: read the scattered
         // metadata in small pieces rather than dragging a megabyte across for
         // every 500-byte record of it.
-        ...(spec.reading === 'fine' ? { chunkSize: FINE_CHUNK_SIZE } : {}),
+        ...(spec.reading === 'fine'
+          ? {
+              chunkSize: FINE_CHUNK_SIZE,
+              ...(watch?.onRead === undefined ? {} : { onRead: watch.onRead.bind(watch) }),
+            }
+          : {}),
       }),
     )
   } catch (err) {
@@ -514,6 +519,8 @@ export async function readWhole(
 export interface ReadWatch {
   onProgress?(received: number, total: number): void
   cancelled?(): boolean
+  /** Every ranged request of a source read in small pieces, as it lands. */
+  onRead?(requests: number, bytes: number): void
 }
 
 /** Raised when the reader calls a download off; the shell reads it as a no-op. */
