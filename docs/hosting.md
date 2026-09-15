@@ -413,11 +413,15 @@ environment has:
 
 1. Serve the viewer from an origin registered on the client (`npm run dev` on `http://localhost:5173`
    is the quickest), and open it.
-2. **Connect → A Google account**: with `GOOGLE_CLIENT_ID` in the build, or in the environment of
-   `npm run dev`, *sign in with Google* is enabled and nothing asks for an id. Without it the
-   section says sign-in is not set up on this site and names the variable.
-3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The section
-   should then say **signed in**, with the time the token is good until, and offer *sign out*.
+2. **Connect → Google Drive**: the pane is one title, *Connect to your Google Drive*, a `?` at the
+   far right of it, and the *sign in with Google* button. With `GOOGLE_CLIENT_ID` in the build, or
+   in the environment of `npm run dev`, the button is enabled and nothing asks for an id. Without
+   it the pane says under the button that sign-in is not set up on this site and names the
+   variable. Hover the `?`: it says what the grant is and where the token lives, and nothing of
+   that is on the pane itself.
+3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The pane
+   should then say **signed in until** the time the token is good until, offer *sign out*, and
+   open the folder box under it (below).
 4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
    one shared with the signed-in account only — and paste it into the URL box. The link
    (`https://drive.google.com/file/d/<id>/view`) is rewritten to the API's media URL and the map
@@ -431,11 +435,12 @@ file, and that nothing was written down that keeps opening it afterwards.
 **A whole Drive folder, browsed in the Files panel** (SPECS §20), needs nothing this section has not
 already set up: the same client id, the same sign-in, the same `drive.readonly` grant. It is not
 the API key — a key opens a public *file* and cannot list anything — so a folder is the one Drive
-feature that does not work at all without an account. **Connect → A Google Drive folder** takes the
-address bar of a folder open in Drive (`https://drive.google.com/drive/folders/<id>`, with or
-without the `/u/0` account segment) or the bare id; an empty box is all of My Drive. What this
-browser then keeps is the folder's name and its id, listed under **About → what is stored**; the
-token is not kept, so the folder survives a reload and the sign-in does not.
+feature that does not work at all without an account. The folder box on the same pane — under the
+sign-in, and not on screen until it has happened — takes the address bar of a folder open in Drive
+(`https://drive.google.com/drive/folders/<id>`, with or without the `/u/0` account segment) or the
+bare id; an empty box is all of My Drive. What this browser then keeps is the folder's name and its
+id, listed under **About → what is stored**; the token is not kept, so the folder survives a reload
+and the sign-in does not.
 
 The listing asks `drive/v3/files` for the files whose `parents` contains that id, one level at a
 time and a thousand entries at most (§20.1), and it sends `supportsAllDrives=true` and
@@ -449,9 +454,9 @@ here than to a pasted link, because browsing is itself requests against the same
 **The manual check for a folder**, on top of the five steps above and for the same reason — it needs
 a real Drive, a real consent screen and a real folder:
 
-1. Signed in as above, open **Connect → A Google Drive folder**. Before the sign-in the section
-   offers nothing to press and says which of the two things is missing; after it, it has a name box
-   and a link box.
+1. Signed in as above, look under the sign-in on **Connect → Google Drive**. Before the sign-in
+   there is no folder box at all — the button is the whole of what the pane offers; after it, a
+   name box, a link box and *connect this folder* have appeared under the same title.
 2. Paste the address bar of a Drive folder holding a `.mcool`, `.cool`, `.metacool` or `.hic`, name
    it, and press *connect this folder*. The Files panel opens on it.
 3. The listing should show sub-folders first, then files with their sizes, and no Docs or Sheets.
@@ -488,8 +493,9 @@ there is no public way to browse a Dropbox the way a public bucket can be browse
 No app key is written into this repository: it names one lab's registration, and a key committed
 here would be everybody's. The published site is built with its own, read by the deploy from the
 `DROPBOX_APP_KEY` repository variable ([docs/deploy.md](deploy.md)), so a reader there presses
-*sign in with Dropbox* and nothing else: the dialog has no box for a key. Making one, in the
-Dropbox App Console:
+*sign in with Dropbox* and nothing else: the dialog has no box for a key, and the pane is one
+title, *Connect to your Dropbox*, a `?` that says what the app is granted and where the token
+lives, and the button. Making an app, in the Dropbox App Console:
 
 1. **App Console → Create app → Scoped access.**
 2. Choose the access the app gets: **App folder** or **Full Dropbox**. App folder confines it to a
@@ -537,11 +543,12 @@ has:
 
 1. Register the app as above, serve the viewer (`npm run dev` is the quickest), and open it.
 2. **Connect → Dropbox:** with `DROPBOX_APP_KEY` in the build, *sign in with Dropbox* is enabled
-   and nothing asks for a key. Without it the section says sign-in is not set up on this site and
-   names the variable.
+   and nothing asks for a key. Without it the pane says under the button that sign-in is not set
+   up on this site and names the variable. Hover the `?` beside the title: it names the two
+   permissions and says where the token lives.
 3. Press *sign in with Dropbox*. A Dropbox tab opens asking to allow the app; allow it, and Dropbox
    shows a code instead of returning to the viewer. Copy the code into the box that has appeared and
-   press *finish*. The section should then say **signed in**, with the time the token is good until,
+   press *finish*. The pane should then say **signed in until** the time the token is good until,
    and offer *browse my Dropbox* and *sign out*.
 4. Press *browse my Dropbox*. The Files panel opens on the root of what the app was granted, folders
    first; walking into a folder lists that folder and nothing below it. Click a `.mcool`, `.cool`,

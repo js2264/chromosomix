@@ -5,11 +5,10 @@
  * Four things can be wrong here while a screenshot of the section looks right:
  *
  * - **The gate.** A sign-in button that is pressable without an app key opens a
- *   Dropbox page saying `invalid_client`, in another tab, about a field this
- *   dialog could have checked. It is disabled with the reason beside it rather
- *   than absent, which is the same deliberate exception to §8.5 the Google
- *   section makes: the control becomes available by filling in the box directly
- *   above it.
+ *   Dropbox page saying `invalid_client`, in another tab, about a registration
+ *   this dialog could have checked. It is disabled with the reason beside it
+ *   rather than absent, which is the same deliberate exception to §8.5 the
+ *   Google pane makes: the sentence names the one thing a reader can do.
  * - **The code box has to appear**, because the reader has just been sent to
  *   another tab and handed a string with nowhere obvious to put it.
  * - **Finishing has to actually sign in**, and the section has to say so — a
@@ -29,7 +28,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dropboxSection } from '@/ui/DropboxSection'
 import { setDropboxFetch, signOut } from '@/auth/dropbox'
 import { bearerFor } from '@/s3/credentials'
-import { all, buttonLabels, buttonNamed, setUpDom, type DomTeardown } from '../support/dom'
+import { all, buttonLabels, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 vi.mock('@/config/siteDefaults', () => ({
   SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
@@ -83,7 +82,7 @@ async function until(ready: () => boolean): Promise<void> {
   await tick()
 }
 
-/** The section, mounted — `isConnected` is what its subscription checks. */
+/** The pane, mounted — `isConnected` is what its subscription checks. */
 function section(done: (id: string) => void = () => undefined): HTMLElement {
   const node = dropboxSection(done)
   expect(node).not.toBeNull()
@@ -91,7 +90,19 @@ function section(done: (id: string) => void = () => undefined): HTMLElement {
   return node as HTMLElement
 }
 
-/** Sign in through the section, the way a reader does. */
+/** What the ? on the pane's title says, on hover. */
+function helpText(node: HTMLElement): string {
+  return node.querySelector('.connect-head .connect-tip')?.textContent ?? ''
+}
+
+/** The pane's text with the tip taken out: what is on the page before any hover. */
+function visibleText(node: HTMLElement): string {
+  const copy = node.cloneNode(true) as HTMLElement
+  copy.querySelector('.connect-tip')?.remove()
+  return copy.textContent ?? ''
+}
+
+/** Sign in through the pane, the way a reader does. */
 async function signInThrough(node: HTMLElement): Promise<void> {
   serve({ access_token: 'sl.TOKEN', expires_in: 14_400 })
   buttonNamed(node, 'sign in with Dropbox')?.click()
@@ -181,9 +192,11 @@ describe('signing in', () => {
     await signInThrough(node)
 
     expect(bearerFor(LIST)).toBe('sl.TOKEN')
-    expect(node.textContent).toMatch(/Signed in\./)
-    // No address, because nothing here asks Dropbox who the reader is.
-    expect(node.textContent).toMatch(/does not know whose Dropbox it is/)
+    expect(visibleText(node)).toMatch(/Signed in until/)
+    // No address, because nothing here asks Dropbox who the reader is — said
+    // behind the ?, not on the pane.
+    expect(helpText(node)).toMatch(/does not know whose Dropbox it is/)
+    expect(visibleText(node)).not.toMatch(/does not know whose Dropbox it is/)
     // The box is put away once the code has been spent: pressing finish again
     // could only send a request that fails.
     expect(node.querySelector('.connect-code')?.className).toContain('hidden')
@@ -235,22 +248,41 @@ describe('the way in, and the way out', () => {
     buttonNamed(node, 'sign out')?.click()
 
     expect(bearerFor(LIST)).toBeNull()
-    expect(node.textContent).toMatch(/expired at|Not signed in/)
+    // Back to the first state: the sign-in, and nothing that needs one.
+    expect(buttonLabels(node)).toContain('sign in with Dropbox')
     expect(buttonLabels(node)).not.toContain('browse my Dropbox')
     expect(buttonLabels(node)).not.toContain('sign out')
   })
 })
 
-describe('what the section says before anything is pressed', () => {
-  it('names the grant and where the token lives', () => {
-    const text = section().textContent ?? ''
-    expect(text).toMatch(/files\.metadata\.read and files\.content\.read/)
-    expect(text).toMatch(/everything in your Dropbox/i)
-    expect(text).toMatch(/app’s own folder inside it/i)
-    expect(text).toMatch(/token lives only in this tab’s memory/i)
-    expect(text).toMatch(/never written to storage/i)
-    // The four hours a temporary link lasts, said where a reader can act on it.
-    expect(text).toMatch(/four hours/i)
+describe('the pane, before anything is pressed', () => {
+  it('is one title with a ? at its right, and the sign-in under it', () => {
+    const node = section()
+    expect(textsOf(node, 'h3')).toEqual(['Connect to your Dropbox'])
+    const head = node.querySelector('.connect-head') as HTMLElement
+    const help = head.querySelector<HTMLButtonElement>('.connect-help')
+    expect(help?.textContent).toBe('?')
+    expect(help?.getAttribute('aria-describedby')).toBe(head.querySelector('.connect-tip')?.id)
+    expect(head.querySelector('.connect-tip')?.getAttribute('role')).toBe('tooltip')
+    // The ?, the sign-in, and the finish button of the code box that is not
+    // yet on screen; nothing else.
+    expect(buttonLabels(node)).toEqual(['?', 'sign in with Dropbox', 'finish'])
+    expect(buttonNamed(node, 'sign in with Dropbox')?.className).toContain('btn-signin')
+  })
+
+  it('names the grant and where the token lives, behind the ?', () => {
+    const node = section()
+    const tip = helpText(node)
+    expect(tip).toMatch(/files\.metadata\.read and files\.content\.read/)
+    expect(tip).toMatch(/everything in your Dropbox/i)
+    expect(tip).toMatch(/app’s own folder inside it/i)
+    expect(tip).toMatch(/token lives only in this tab’s memory/i)
+    expect(tip).toMatch(/never written to storage/i)
+    // The four hours a temporary link lasts, said where a reader can find it.
+    expect(tip).toMatch(/four hours/i)
+    // And none of it on the pane itself, where it stood between the title and
+    // the button.
+    expect(visibleText(node)).not.toMatch(/files\.metadata\.read|token lives/i)
   })
 
   it('contacts nobody when it is built', async () => {

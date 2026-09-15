@@ -231,7 +231,7 @@ export class FilesCard {
     // is the same one click, under a different name, in the Connect dialog.
     const account =
       folder.kind === 'drive'
-        ? 'A Google account'
+        ? 'Google Drive'
         : folder.kind === 'dropbox'
           ? 'Dropbox'
           : null

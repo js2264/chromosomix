@@ -66,7 +66,7 @@ in the page of any site that uses it and authorises nothing by itself — so the
 
 | Variable | What it holds | What a reader of the site gets |
 |---|---|---|
-| `GOOGLE_CLIENT_ID` | the OAuth client id, `…apps.googleusercontent.com`, registered for `https://<owner>.github.io` | **Connect → A Google account** offers *sign in with Google* at once |
+| `GOOGLE_CLIENT_ID` | the OAuth client id, `…apps.googleusercontent.com`, registered for `https://<owner>.github.io` | **Connect → Google Drive** offers *sign in with Google* at once |
 | `GOOGLE_API_KEY` | an API key of the same project, restricted to the site's referrer | a public Drive link opens with nothing pasted |
 | `DROPBOX_APP_KEY` | the scoped-access app's key | **Connect → Dropbox** offers *sign in with Dropbox* at once |
 

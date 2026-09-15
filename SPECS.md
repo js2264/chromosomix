@@ -5117,11 +5117,19 @@ bucket and a Drive folder had to work out which they belonged to. They sit under
 which is the only tile that needs them, in the order a reader meets them — the key, because a
 public Drive link fails without it; the account, because a private one fails afterwards with a key
 in place; the folder, because it needs the account. Since then the key and the client id have
-become the site's (§24.7), and the Drive pane is the account and the folder: a sign-in, and the
-box that needs it. Dropbox is the same shape, a sign-in and a way in. A build that cannot offer a
-provider does not draw its tile (§8.5): the standalone build offers this machine alone, and the
-desktop build's Drive tile says why there is no sign-in. The Files column's *Open a local/remote
-folder* opens it.
+become the site's (§24.7), and each of the two panes that sign a reader in is **one title, a
+`?` and a button** (`ui/connectHead.ts`): *Connect to your Google Drive* or *Connect to your
+Dropbox* on the left of a line, a `?` at its far right, and one large sign-in button under it.
+Everything the pane has to say about the service — what the grant is, where the token lives,
+what is kept — is behind the `?`, shown on hover, on focus, or pinned by a click for a screen
+with no hover; what is on the pane itself is what a reader acts on: the button, the reason it is
+disabled on a site built without the registration, the code box a Dropbox sign-in opens, an
+error. On the Drive pane the folder box — a name, a link or id, *connect this folder* — is not on
+screen until the sign-in has happened, and appears under the button the moment it has, on the
+same pane, under the same title; there is no second heading. A build that cannot offer a provider
+does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
+build's Drive pane keeps its title and its `?` and says under them why there is no button. The
+Files column's *Open a local/remote folder* opens the dialog.
 
 ### 20.1 One level, never a walk
 
@@ -6049,8 +6057,12 @@ button that is disabled rather than absent — the exception to §8.5 this dialo
 sentence beside it names the one thing a reader can do.
 
 The dialog says one thing plainly that a consent screen would bury: `drive.readonly` is read access
-to **all** of the reader's Drive, where a bucket scope is one prefix. And `docs/hosting.md` says the
-other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
+to **all** of the reader's Drive, where a bucket scope is one prefix — and where the token goes,
+which is this tab's memory and nowhere else. It says them behind the `?` on the pane's title
+(§20), not between the title and the button: the sentences are the page's, the page is the one
+that hands over the credential, and a tooltip on that page is still the page saying them — one
+hover away for the reader who wants them and out of the way of the one who came to press *sign
+in*. And `docs/hosting.md` says the other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
 for the dozen requests an open costs and something for the thousands a fine-resolution pan costs, so
 Drive is a host this viewer *reads*, not one it recommends. The same mechanism, with no Google in
 it, is what a token from an institutional portal or a Terra-shaped signed endpoint needs — one

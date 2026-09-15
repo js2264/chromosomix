@@ -30,8 +30,15 @@
  * The standalone build has an opaque origin, so every remote read fails before
  * a byte moves (§19): it offers this machine and nothing else. The desktop
  * build cannot register a Google sign-in against `app://viewer`, so its Drive
- * tile carries the API key alone and says so. Each provider's section decides
- * the rest for itself.
+ * pane says why there is no sign-in. Each provider's section decides the rest
+ * for itself.
+ *
+ * ## The two panes that sign a reader in
+ *
+ * Google Drive and Dropbox are each a title, a `?` at the far right of the
+ * same line, and one large sign-in button under it (`ui/connectHead.ts`):
+ * what the grant is and where the token goes is behind the `?`, and the only
+ * things on the pane itself are the ones a reader acts on.
  */
 
 import { Modal } from './Modal'
@@ -42,7 +49,7 @@ import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
   GOOGLE_SIGN_IN_AVAILABLE,
   googleState,
-  signIn,
+  signIn as googleSignIn,
   signOut,
   subscribeGoogle,
 } from '../auth/google'
@@ -52,6 +59,7 @@ import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from 
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
+import { connectHead, signInButton } from './connectHead'
 import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
 
@@ -221,40 +229,28 @@ function bucketSection(done: (id: string) => void): HTMLElement {
 }
 
 /**
- * Google Drive, in the three parts a reader meets them in.
+ * Google Drive: a title, a `?`, a sign-in, and — once signed in — a folder box.
  *
- * The **API key** first, because a *public* Drive link fails without it and
- * that is the first thing anybody tries; the **account** second, because a
- * private file fails afterwards with a key in place, and because the grant it
- * asks for is far wider than the key's and is worth reading after the cheaper
- * answer has been ruled out; and the **folder** last, because it needs the
- * account. Absent halves say why: the desktop build can send a key and cannot
- * register a sign-in (`auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`).
- */
-function drivePane(done: (id: string) => void): HTMLElement {
-  return el(
-    'div',
-    { class: 'connect-pane-parts' },
-    googleAccountSection(),
-    driveFolderSection(done),
-  )
-}
-
-/**
- * The Google account: sign in, sign out, and what that means.
+ * One section, not two. The account and the folder used to be sections of
+ * their own, each with a heading and a paragraph, and a reader pressing *sign
+ * in* read two consent notices on the way to it. What the pane offers is the
+ * sign-in; what it needs to say about the grant is behind the `?` on the same
+ * line as the title (`ui/connectHead.ts`); and the folder box is what appears
+ * once there is an account to list a folder with (`ui/DriveFolderSection.ts`).
  *
  * Nothing to type. The client id a sign-in goes to is the site's, built in
  * (`config/siteDefaults.ts`), and so is the API key that opens a public Drive
- * link; a site built without the client id says so here rather than offering
- * a box only its maintainer could fill. A reader should not have to wonder
- * what a client id is, and cannot be handed one to paste.
+ * link; a site built without the client id says so under the button rather
+ * than offering a box only its maintainer could fill.
  */
-function googleAccountSection(): HTMLElement {
+function drivePane(done: (id: string) => void): HTMLElement {
+  const head = connectHead('Connect to your Google Drive', 'googledrive', driveHelp())
+
   if (!GOOGLE_SIGN_IN_AVAILABLE) {
     return el(
       'div',
       { class: 'connect-section' },
-      el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
+      head,
       el('p', {
         class: 'hint',
         text:
@@ -267,25 +263,26 @@ function googleAccountSection(): HTMLElement {
     )
   }
 
-  const account = el('p', { class: 'hint' })
+  const actions = el('div', { class: 'connect-signin' })
   const error = el('p', { class: 'hint bucket-error' })
-  const actions = el('div', { class: 'bucket-actions' })
+  const folder = driveFolderSection(done)
 
   const show = (): void => {
     const state = googleState()
-    account.textContent = state.configured
-      ? accountLine(state)
-      : 'Signing in to Google is not set up on this site: it needs a Google client id registered ' +
-        'for its address, which the site’s maintainer provides as GOOGLE_CLIENT_ID ' +
-        '(docs/deploy.md).'
-
-    const signInLabel = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Google'
-    const signInButton = button(
-      signInLabel,
+    if (state.signedIn && state.expiresAt !== null) {
+      actions.replaceChildren(
+        el('span', { class: 'hint', text: `Signed in until ${clock(state.expiresAt)}.` }),
+        button('sign out', () => signOut(), { class: 'btn' }),
+      )
+      return
+    }
+    const signIn = signInButton(
+      state.expiresAt !== null ? 'sign in again' : 'sign in with Google',
+      'googledrive',
       () => {
         error.textContent = ''
-        signInButton.disabled = true
-        void signIn()
+        signIn.disabled = true
+        void googleSignIn()
           .catch((cause: unknown) => {
             error.textContent = cause instanceof Error ? cause.message : String(cause)
           })
@@ -293,25 +290,28 @@ function googleAccountSection(): HTMLElement {
             show()
           })
       },
+      // Disabled rather than absent where the site has no registration: the
+      // sentence under it is the one thing a reader can act on — by asking the
+      // site's maintainer — and hiding the button would hide what the sentence
+      // is about.
       {
-        class: 'btn btn-primary',
-        ...(state.configured
-          ? {}
-          : {
-              title:
-                'This site was built without a Google client id, so there is no project to sign ' +
-                'in to.',
-            }),
+        disabled: !state.configured,
+        reason: 'This site was built without a Google client id, so there is no project to sign in to.',
       },
     )
-    // Disabled rather than absent where the site has no registration: the
-    // sentence beside it is the one thing a reader can act on — by asking the
-    // site's maintainer — and hiding the button would hide what the sentence
-    // is about.
-    signInButton.disabled = !state.configured
     actions.replaceChildren(
-      signInButton,
-      ...(state.signedIn ? [button('sign out', () => signOut(), { class: 'btn' })] : []),
+      signIn,
+      ...(state.configured
+        ? []
+        : [
+            el('p', {
+              class: 'hint',
+              text:
+                'Signing in to Google is not set up on this site: it needs a Google client id ' +
+                'registered for its address, which the site’s maintainer provides as ' +
+                'GOOGLE_CLIENT_ID (docs/deploy.md).',
+            }),
+          ]),
     )
   }
   show()
@@ -320,57 +320,45 @@ function googleAccountSection(): HTMLElement {
     // The dialog is built once and thrown away with the modal, and nothing hands
     // a detached body a teardown. It unsubscribes itself the first time it is
     // spoken to after leaving the document.
-    if (!account.isConnected) {
+    if (!actions.isConnected) {
       off()
       return
     }
     show()
   })
 
-  return el(
-    'div',
-    { class: 'connect-section' },
-    el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
-    el('p', {
-      class: 'hint',
-      text:
-        'For a Drive file, a Drive folder or a Cloud Storage object that is not public: sign in ' +
-        'with your own Google account.' +
-        (SITE_DEFAULTS.googleApiKey !== null ? ' A public Drive link opens without signing in.' : ''),
-    }),
-    // The two sentences §24.7 requires this dialog to say, and it requires them
-    // because a consent screen says neither: Google's names the product, and
-    // nothing anywhere tells the reader where the token ends up.
-    el('p', {
-      class: 'hint',
-      text:
-        'drive.readonly is read access to all of your Drive, where a bucket key is a grant over ' +
-        'one prefix; devstorage.read_only is read access to the Cloud Storage your account can see.',
-    }),
-    el('p', {
-      class: 'hint',
-      text:
-        'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
-        'closes, and expiring about an hour after you sign in.',
-    }),
-    account,
-    actions,
-    error,
-  )
+  return el('div', { class: 'connect-section' }, head, actions, error, ...(folder === null ? [] : [folder]))
 }
 
-/** What this page can honestly say about the account, in one line. */
-function accountLine(state: { signedIn: boolean; expiresAt: number | null }): string {
-  const when = (at: number): string => new Date(at).toLocaleTimeString()
-  if (state.signedIn && state.expiresAt !== null) {
-    // No address, because no `userinfo` scope was asked for (§24.7).
-    // No address, because no `userinfo` scope was asked for (§24.7).
-    return `Signed in; the token is good until ${when(state.expiresAt)}. No address was asked for, so this page does not know which account it is.`
-  }
-  if (state.expiresAt !== null) {
-    return `Signed in earlier; the token expired at ${when(state.expiresAt)}. Sign in again for a private file.`
-  }
-  return 'Not signed in. Public files open without this; a private Drive file or GCS object will not.'
+/**
+ * What the `?` says about a Google sign-in.
+ *
+ * The two sentences §24.7 requires this dialog to say — what `drive.readonly`
+ * actually is, and where the token ends up — and it requires them because a
+ * consent screen says neither: Google's names the product, and nothing
+ * anywhere tells the reader where the token goes. Then what a folder costs in
+ * privacy terms (§20.6), because the folder box is on this same pane.
+ */
+function driveHelp(): string[] {
+  return [
+    'Sign in with your own Google account to open a Drive file, a Drive folder or a Cloud ' +
+      'Storage object that is not public.' +
+      (SITE_DEFAULTS.googleApiKey !== null ? ' A public Drive link opens without signing in.' : ''),
+    'drive.readonly is read access to all of your Drive, where a bucket key is a grant over ' +
+      'one prefix; devstorage.read_only is read access to the Cloud Storage your account can see.',
+    'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
+      'closes, and expiring about an hour after you sign in. No address is asked for, so this ' +
+      'page does not know which account it is.',
+    'A folder is listed with that account, one level at a time, in the Files panel. Paste the ' +
+      'address bar of a folder open in Drive — a shared drive works the same way — or its id; ' +
+      'an empty box is all of My Drive. Only the folder’s name and id are kept, under About → ' +
+      'what is stored.',
+  ]
+}
+
+/** A time of day, the way the pane says until when a token is good. */
+function clock(at: number): string {
+  return new Date(at).toLocaleTimeString()
 }
 
 /**

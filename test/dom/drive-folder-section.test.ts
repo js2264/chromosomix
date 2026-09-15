@@ -2,17 +2,18 @@
 /**
  * Connecting a Google Drive folder from the Connect dialog (SPECS §20, §24.7).
  *
- * The section is small and three things about it are not:
+ * The box is small and three things about it are not:
  *
- * - **It offers nothing to click before there is a token.** §8.5's doctrine —
- *   a control that cannot keep its promise is absent rather than disabled —
- *   applies here rather than the account section's deliberate exception: a
+ * - **It is not on screen before there is a token.** §8.5's doctrine — a
+ *   control that cannot keep its promise is absent rather than disabled —
+ *   applies here rather than the sign-in button's deliberate exception: a
  *   connect button pressed without a sign-in cannot do anything at all, and
  *   would fail with something Google wrote rather than with something this app
- *   can explain.
- * - **It notices the sign-in that happens one section up**, in the same dialog,
- *   while it is on screen. A reader who signs in and finds this box still shut
- *   has to close the dialog and open it again to use the thing they just did.
+ *   can explain. And it is absent rather than a sentence, because the sign-in
+ *   button directly above it is the whole of what a reader can do next.
+ * - **It notices the sign-in that happens above it**, on the same pane, while
+ *   it is on screen. A reader who signs in and finds this box still shut has
+ *   to close the dialog and open it again to use the thing they just did.
  * - **It turns a link into an id.** What the reader has in hand is an address
  *   bar; what the API wants is the id in it, and a box that stored the wrong one
  *   would produce a folder that fails three screens away from the mistake.
@@ -49,7 +50,7 @@ const CLIENT_ID = '123-abc.apps.googleusercontent.com'
 let teardown: DomTeardown
 let connected: string[]
 
-/** The section, mounted — it unsubscribes itself once it is out of the document. */
+/** The box, mounted — it unsubscribes itself once it is out of the document. */
 function section(): HTMLElement {
   const node = driveFolderSection((id) => connected.push(id))
   expect(node).not.toBeNull()
@@ -87,31 +88,21 @@ afterEach(() => {
 })
 
 describe('before anybody has signed in', () => {
-  it('says what it needs and offers nothing to press', async () => {
+  it('is hidden and empty: the sign-in above it is the whole of what a reader can do', async () => {
     const node = section()
-    expect(node.querySelector('h3')?.textContent).toBe('A Google Drive folder')
+    expect(node.className).toContain('hidden')
+    expect(node.querySelector('h3')).toBeNull()
     expect(buttonLabels(node)).toEqual([])
     expect(inputs(node)).toEqual([])
-    expect(node.textContent).toMatch(/not set up on this site/i)
-    expect(node.textContent).toContain('GOOGLE_CLIENT_ID')
+    expect(node.textContent).toBe('')
   })
 
-  it('asks for the sign-in rather than the client id where the site has one', async () => {
+  it('stays so where the site has a client id: what it waits for is the sign-in, not the registration', async () => {
     site.googleClientId = CLIENT_ID
     const node = section()
+    expect(node.className).toContain('hidden')
     expect(buttonLabels(node)).toEqual([])
-    expect(node.textContent).toMatch(/sign in with Google in the section above/i)
-  })
-
-  /**
-   * The sentence §24.7 requires wherever this grant is used, because a consent
-   * screen says neither half: whose account does the listing, and where the
-   * token ends up.
-   */
-  it('says whose account lists the folder, and that the token stays in this tab', async () => {
-    const text = section().textContent ?? ''
-    expect(text).toMatch(/listed with your own Google account/i)
-    expect(text).toMatch(/lives only in this tab/i)
+    expect(inputs(node)).toEqual([])
   })
 })
 
@@ -122,11 +113,26 @@ describe('once this tab is signed in', () => {
 
     await signedIn()
 
-    // The subscription, and it is not decoration: the sign-in is one section up
-    // in the same dialog, and a box that opened only on the next reload would
-    // make the reader close and reopen what they are looking at.
+    // The subscription, and it is not decoration: the sign-in is the button
+    // above this box on the same pane, and a box that opened only on the next
+    // reload would make the reader close and reopen what they are looking at.
+    expect(node.className).not.toContain('hidden')
     expect(buttonLabels(node)).toEqual(['connect this folder'])
     expect(inputs(node)).toHaveLength(2)
+  })
+
+  it('closes again on a sign-out, and takes its error with it', async () => {
+    await signedIn()
+    const node = section()
+    inputs(node)[1].value = 'https://drive.google.com/file/d/1AbCdEf/view'
+    buttonNamed(node, 'connect this folder')?.click()
+    expect(node.textContent).toMatch(/not a Drive folder link/i)
+
+    signOut()
+
+    expect(node.className).toContain('hidden')
+    expect(inputs(node)).toEqual([])
+    expect(node.textContent).toBe('')
   })
 
   it('connects the folder a pasted link names, and hands the panel its id', async () => {

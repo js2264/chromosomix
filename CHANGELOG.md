@@ -105,8 +105,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   API key and the Dropbox app key were three boxes every reader had to fill, from a project of
   their own, before *sign in* would light up. The published site is now built with the lab's
   three, read by the deploy from the repository's `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and
-  `DROPBOX_APP_KEY` variables — none a secret, all served in the page — so **Connect → A Google
-  account** and **Connect → Dropbox** offer their sign-in at once, and a reader reaches a private
+  `DROPBOX_APP_KEY` variables — none a secret, all served in the page — so **Connect → Google
+  Drive** and **Connect → Dropbox** offer their sign-in at once, and a reader reaches a private
   folder of their own with one press. The dialog says whose value it is using; one pasted by hand
   still wins, for a lab with a project of its own; and a build made without the variables is the
   build there was before (SPECS §24.7, docs/deploy.md).
@@ -776,6 +776,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   keep their indices.
 
 ### Changed
+
+- **The Google Drive and Dropbox panes are a title, a `?` and a button.** Each was still two or
+  three paragraphs about the grant and the token between its heading and its button, and the Drive
+  pane had a second heading, *A Google Drive folder*, over a box that said *sign in above* until
+  the reader had. Each is now one line — *Connect to your Google Drive* or *Connect to your
+  Dropbox* on the left, a `?` at the far right — and one large sign-in button under it, with the
+  provider's mark on it. What the grant is, where the token lives and what is kept are behind the
+  `?`: hover it, or press it on a screen with no hover, and the sentences appear; a keyboard
+  reaches them too, and a screen reader reads them as the button's description. Only what a reader
+  acts on is on the pane: the button, the reason it is disabled on a site built without the
+  registration, the code box a Dropbox sign-in opens, an error. On the Drive pane the folder box
+  appears under the button the moment the sign-in has happened, on the same pane, and goes away
+  with a sign-out. The Files panel's *sign in under* line and the listing errors name the tile,
+  **Google Drive**, rather than a section that no longer exists (SPECS §20, §24.7).
 
 - **The Google Drive and Dropbox sections are a sign-in and nothing else.** The boxes for a
   Google API key, a Google client id and a Dropbox app key are gone, and so is the storage behind

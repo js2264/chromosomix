@@ -5853,16 +5853,176 @@ canvas.is-frozen {
   color: var(--accent);
 }
 
-.connect-pane-parts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.connect-pane > .connect-section:first-child,
-.connect-pane-parts > .connect-section:first-child {
+.connect-pane > .connect-section:first-child {
   padding-top: 0;
   border-top: none;
+}
+
+/* --- a sign-in pane's head: the title, and a ? at the far right ----------
+   The Google Drive and Dropbox panes are a title, one large sign-in button,
+   and nothing else on the page: what the grant is and where the token goes
+   (§24.7's sentences) is behind the ? on the title's own line, shown on
+   hover, on focus, or pinned by a click for a screen with no hover. */
+.connect-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.connect-head > h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.connect-help-wrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.connect-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.connect-help:hover,
+.connect-help:focus-visible,
+.connect-help-wrap.is-open > .connect-help {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+/* Opens down and to the left from the ?, which is at the pane's right edge:
+   the pane's own content is what it covers, and it is gone the moment the
+   pointer leaves. Fixed rather than absolute, and placed by `connectHead.ts`
+   from the ?'s rectangle: the dialog's panel clips its overflow, and a tip
+   under a one-button pane is taller than what the panel has left below it.
+   Sized in characters so the sentences wrap as prose. */
+.connect-tip {
+  display: none;
+  position: fixed;
+  z-index: 3;
+  width: min(30rem, calc(100vw - 2rem));
+  /* The gap under the ?, as padding rather than distance: a pointer on its
+     way down into the tip is still over it, so the hover does not end. */
+  padding-top: 6px;
+  cursor: auto;
+}
+
+.connect-tip-box {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  text-align: left;
+  overflow-y: auto;
+}
+
+.connect-tip-box > p {
+  margin: 0;
+}
+
+.connect-tip-box > p + p {
+  margin-top: 0.45rem;
+}
+
+.connect-help-wrap:hover > .connect-tip,
+.connect-help-wrap.is-open > .connect-tip {
+  display: block;
+}
+
+/* Keyboard focus shows it too — `:focus-visible`, not `:focus`, because a mouse
+   click leaves the button focused and the second click that un-pins the tip
+   would then not close it. Its own rule rather than a third selector above: a
+   browser without `:has()` drops a whole list that contains one. */
+.connect-help-wrap:has(> .connect-help:focus-visible) > .connect-tip {
+  display: block;
+}
+
+/* The sign-in row: the one large button, or — signed in — a line and the
+   buttons that follow from it. */
+.connect-signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.connect-signin > .hint {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.connect-signin > span.hint {
+  flex-basis: auto;
+}
+
+/* Larger than the dialog's other buttons, the provider's mark on it: the one
+   thing the pane is for, drawn as the one thing to press. */
+.btn-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: 15rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-size: var(--step-0);
+  font-weight: 600;
+}
+
+.btn-signin > .icon {
+  flex: none;
+}
+
+/* The folder box under a Google sign-in, present only once there is one. */
+.drive-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+}
+
+.drive-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.drive-controls > .field {
+  display: flex;
+}
+
+.drive-controls > .field > .field-label {
+  flex: none;
+  min-width: 8rem;
+}
+
+.drive-controls > .field > .input {
+  flex: 1 1 auto;
 }
 
 /* Last on the page now, so the space belongs above it rather than below. */

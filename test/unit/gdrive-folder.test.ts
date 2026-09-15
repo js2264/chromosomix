@@ -148,7 +148,7 @@ describe('a Drive folder with nobody signed in', () => {
     const error = await refusal(folder.list(folder.root))
     expect(error.code).toBe('remote-cors')
     expect(error.message).toMatch(/not signed in/i)
-    expect(error.message).toMatch(/Connect → A Google account/)
+    expect(error.message).toMatch(/Connect → Google Drive/)
     // The whole point: no round trip was spent finding out what was already known.
     expect(requested).toEqual([])
   })

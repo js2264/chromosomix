@@ -94,13 +94,25 @@ async function connectBody(): Promise<HTMLElement> {
   return body as HTMLElement
 }
 
-/** The section whose heading names the account. */
+/** The Drive pane: one section, whose title names the service. */
 function accountSection(body: HTMLElement): HTMLElement {
   const section = all(body, '.connect-section').find((node) =>
-    (node.querySelector('h3')?.textContent ?? '').includes('Google account'),
+    (node.querySelector('h3')?.textContent ?? '').includes('Connect to your Google Drive'),
   )
   expect(section).toBeDefined()
   return section as HTMLElement
+}
+
+/** What the ? on the pane's title says, on hover. */
+function helpText(section: HTMLElement): string {
+  return section.querySelector('.connect-head .connect-tip')?.textContent ?? ''
+}
+
+/** The pane's text with the tip taken out: what is on the page before any hover. */
+function visibleText(section: HTMLElement): string {
+  const copy = section.cloneNode(true) as HTMLElement
+  copy.querySelector('.connect-tip')?.remove()
+  return copy.textContent ?? ''
 }
 
 /** Every script this page has asked Google for. */
@@ -110,35 +122,66 @@ function googleScripts(): string[] {
     .filter((src) => src.includes('accounts.google.com'))
 }
 
-describe('the Google account section', () => {
-  it('is the first thing on the Drive pane, and there is no key or id box anywhere on it', async () => {
+describe('the Google Drive pane', () => {
+  it('is one title with a ? at its right, and a sign-in under it — no second heading, no box', async () => {
     // The site's registrations — the client id, the API key — are built in
     // (`config/siteDefaults.ts`); a reader is offered the sign-in they make
-    // possible and nothing to type. The Drive folder box below is the one
-    // input on the pane, and it is behind the sign-in.
+    // possible and nothing to type. The folder box is on this same pane, and
+    // it is not on screen until the sign-in has happened.
     const body = await connectBody()
-    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google account', 'A Google Drive folder'])
-    expect(all<HTMLInputElement>(accountSection(body), 'input')).toEqual([])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['Connect to your Google Drive'])
+    const section = accountSection(body)
+    const head = section.querySelector('.connect-head') as HTMLElement
+    expect(head.querySelector('h3')?.textContent).toBe('Connect to your Google Drive')
+    // The ? is a real button on the title's line, and the tip is what it
+    // describes: a keyboard reaches it and a screen reader reads it.
+    const help = head.querySelector<HTMLButtonElement>('.connect-help')
+    expect(help?.textContent).toBe('?')
+    expect(help?.getAttribute('aria-describedby')).toBe(head.querySelector('.connect-tip')?.id)
+    expect(head.querySelector('.connect-tip')?.getAttribute('role')).toBe('tooltip')
+    expect(buttonLabels(section)).toEqual(['?', 'sign in with Google'])
+    expect(all<HTMLInputElement>(section, 'input')).toEqual([])
     expect(body.textContent).not.toMatch(/API key/i)
     expect(body.textContent).not.toMatch(/client id stored/i)
   })
 
-  it('says a public Drive link opens without signing in, where the site has a key', async () => {
-    site.googleApiKey = 'AIzaSite'
-    const text = accountSection(await connectBody()).textContent ?? ''
-    expect(text).toMatch(/public Drive link opens without signing in/i)
-    expect(text).not.toContain('AIzaSite')
-  })
-
-  it('says what the grant actually is, and where the token goes', async () => {
+  it('keeps what the grant actually is, and where the token goes, behind the ?', async () => {
     // The two sentences §24.7 requires of this dialog, and it requires them
     // because a consent screen says neither: Google's names the product, and
-    // nothing anywhere tells the reader where the token ends up.
-    const text = accountSection(await connectBody()).textContent ?? ''
-    expect(text).toMatch(/drive\.readonly is read access to all of your Drive/i)
-    expect(text).toMatch(/where a bucket key is a grant over one prefix/i)
-    expect(text).toMatch(/token lives only in this tab’s memory/i)
-    expect(text).toMatch(/never written to storage/i)
+    // nothing anywhere tells the reader where the token ends up. Behind the ?
+    // rather than on the pane: one hover away for the reader who wants them,
+    // and out of the way of the one pressing the button.
+    const section = accountSection(await connectBody())
+    const tip = helpText(section)
+    expect(tip).toMatch(/drive\.readonly is read access to all of your Drive/i)
+    expect(tip).toMatch(/where a bucket key is a grant over one prefix/i)
+    expect(tip).toMatch(/token lives only in this tab’s memory/i)
+    expect(tip).toMatch(/never written to storage/i)
+    expect(tip).toMatch(/does not know which account/i)
+    expect(visibleText(section)).not.toMatch(/drive\.readonly|token lives/i)
+  })
+
+  it('says, behind the ?, that a public Drive link opens without signing in, where the site has a key', async () => {
+    site.googleApiKey = 'AIzaSite'
+    const section = accountSection(await connectBody())
+    expect(helpText(section)).toMatch(/public Drive link opens without signing in/i)
+    expect(section.textContent).not.toContain('AIzaSite')
+  })
+
+  it('pins the tip on a click of the ?, for a screen that has no hover', async () => {
+    const section = accountSection(await connectBody())
+    const help = section.querySelector<HTMLButtonElement>('.connect-help') as HTMLButtonElement
+    const wrap = help.parentElement as HTMLElement
+    expect(wrap.classList.contains('is-open')).toBe(false)
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+
+    help.click()
+    expect(wrap.classList.contains('is-open')).toBe(true)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+
+    help.click()
+    expect(wrap.classList.contains('is-open')).toBe(false)
+    expect(help.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('fetches nothing from Google at import or when the dialog is built', async () => {
@@ -193,9 +236,28 @@ describe('signing in', () => {
     expect(accessHeadersFor(DRIVE)['Authorization']).toBe('Bearer ya29.TOKEN')
 
     const expiry = new Date(googleState().expiresAt ?? 0).toLocaleTimeString()
-    expect(section.textContent).toContain(expiry)
-    // No address, because no identity scope was asked for.
-    expect(section.textContent).toMatch(/does not know which account/i)
+    expect(visibleText(section)).toContain(`Signed in until ${expiry}`)
+    // No address, because no identity scope was asked for — said behind the ?.
+    expect(helpText(section)).toMatch(/does not know which account/i)
+    expect(visibleText(section)).not.toMatch(/does not know which account/i)
+  })
+
+  it('opens the folder box under the sign-in, on the same pane, once signed in', async () => {
+    site.googleClientId = CLIENT_ID
+    stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
+    const section = accountSection(await connectBody())
+    expect(all<HTMLInputElement>(section, 'input')).toEqual([])
+    expect(buttonLabels(section)).not.toContain('connect this folder')
+
+    buttonNamed(section, 'sign in with Google')?.click()
+    await settled()
+
+    // The big button is gone — there is nothing left for it to do — and the
+    // two boxes and their button have taken its place, under one title still.
+    expect(textsOf(section, 'h3')).toEqual(['Connect to your Google Drive'])
+    expect(buttonLabels(section)).toEqual(['?', 'sign out', 'connect this folder'])
+    expect(all<HTMLInputElement>(section, 'input')).toHaveLength(2)
+    expect(section.querySelector('.drive-folder')?.className).not.toContain('hidden')
   })
 
   it('offers a sign-out only once there is something to sign out of', async () => {
@@ -213,8 +275,9 @@ describe('signing in', () => {
     expect(bearerFor(DRIVE)).toBeNull()
     expect(bearerFor(GCS)).toBeNull()
     expect(accessHeadersFor(DRIVE)['Authorization']).toBeUndefined()
-    expect(section.textContent).toMatch(/Not signed in/)
-    expect(buttonLabels(section)).not.toContain('sign out')
+    // The pane is back to its first state: the sign-in, and no folder box.
+    expect(buttonLabels(section)).toEqual(['?', 'sign in with Google'])
+    expect(all<HTMLInputElement>(section, 'input')).toEqual([])
   })
 
   it('fetches Google’s script on the click, and lets a failed load be pressed again', async () => {
@@ -283,8 +346,8 @@ describe('where a sign-in cannot work at all', () => {
     // `app://viewer` (`electron/protocol.cts`) is not an http(s) origin, and an
     // OAuth client is registered against one. Extending the desktop CSP to admit
     // Google's script would not change that, so §8.5 applies: absent, not
-    // disabled. The API-key section stays, because a key is a string sent to a
-    // host and `app://viewer` can send it.
+    // disabled. The pane keeps its title and its ?, and says under them why
+    // there is no button.
     vi.resetModules()
     vi.doMock('@/version', async () => ({
       ...(await vi.importActual<Record<string, unknown>>('@/version')),
@@ -302,7 +365,9 @@ describe('where a sign-in cannot work at all', () => {
       'Google Drive',
       'Dropbox',
     ])
-    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google account'])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['Connect to your Google Drive'])
+    expect(body.querySelector('.connect-head .connect-help')).not.toBeNull()
+    expect(buttonLabels(body.querySelector('.connect-section') as HTMLElement)).toEqual(['?'])
     expect(body.textContent).toContain('Not on the desktop app')
   })
 })
