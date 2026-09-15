@@ -51,6 +51,17 @@ export function storeMark(mark: StoreMark, size: number): HTMLElement {
     const image = el('img', { class: 'store-mark-image', attrs: { src: mark.image, alt: '' } })
     // The letters stay underneath; an image that will not load leaves them.
     image.addEventListener('error', () => image.remove())
+    // And the colour goes once one has, because otherwise it shows *through*
+    // the image. Both boxes are rounded by the same radius and both corners
+    // are antialiased, so along each of the four arcs the image covers its
+    // pixel only partly and the square underneath is what fills the rest — a
+    // thin band of the store's colour round every corner, which on the three
+    // marks with pale corners reads as a border the tile does not have. The
+    // colour is the fallback, so nothing is lost by dropping it the moment
+    // there is something in front of it.
+    image.addEventListener('load', () => {
+      node.style.background = 'transparent'
+    })
     node.appendChild(image)
   }
   return node

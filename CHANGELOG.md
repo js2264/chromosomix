@@ -41,6 +41,30 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   stay underneath as what shows while an image loads and what is left if one fails, which is why they
   are still deliberately nobody's brand.
 
+- **The store row is one row, and the marks have no band round them.** The five tiles wrapped onto a
+  second line at most widths, which made the last of them read as an afterthought rather than as one
+  of five; they share the width instead. The sentence over them is gone — the tiles say what they
+  are. Each mark carried a thin arc of the store's colour at all four corners: the square and the
+  image over it are rounded by the same radius and both corners are antialiased, so along each arc
+  the image covers its pixel only partly and the colour underneath fills the rest. On the three
+  marks with pale corners that read as a border the tile does not have. The colour is the fallback,
+  so it is dropped the moment an image is in front of it. The drawer's head now leads with the row
+  of stores and puts the one it is *on* underneath — a head that opened with the name of the store
+  the reader is already inside told them the one thing they knew — and its pills are rounded near
+  the marks' own 22% instead of to a capsule, which had put a semicircle around a square logo.
+
+- **The Connect dialog stops explaining itself on the pane.** *This machine* is now the shape the
+  two sign-in panes have had since §24.7 — a title, a `?` and one large button — with what *read in
+  place* means, and how long the browser keeps the permission, behind the `?`. The bucket pane keeps
+  a name, a URL and *Additional settings*, and nothing else: the switch that read *public* against
+  *needs a key* asked the reader to classify a prefix before describing it, which is answerable only
+  in terms of the five fields the answer then reveals, so whether a scope is signed now *follows*
+  from whether a key was typed into it — all three of region, key id and secret, or none. Its `?`
+  carries what a bucket needs before any of this reaches it: the CORS policy without which no read
+  starts at all, `Range` and `Content-Range` being the pair a `.mcool` cannot be read without, and
+  the two separate grants that make a prefix readable and listable — as blocks to paste rather than
+  prose to translate back into one.
+
 ### Added
 
 - **Every task in the catalogue runs from the shell, so every run the console records is a real

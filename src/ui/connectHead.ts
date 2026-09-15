@@ -44,6 +44,17 @@
 import { button, el } from './dom'
 import { icon, type IconName } from './icons'
 
+/**
+ * A block of configuration inside a tip, for the reader to copy.
+ *
+ * `white-space: pre` in the stylesheet and nothing else: what goes in here is
+ * JSON somebody has to paste into a console exactly as it is, so it is never
+ * re-wrapped to the tip's width.
+ */
+export function tipCode(text: string): HTMLElement {
+  return el('pre', { class: 'connect-tip-code' }, el('code', { text }))
+}
+
 let tipSerial = 0
 
 /** The space between the ? and the tip's top edge, in CSS pixels — the outer box's padding in `styles.css`. */
@@ -56,17 +67,28 @@ const TIP_MIN_HEIGHT = 140
 /**
  * The head: the title on the left, the `?` on the right, the tip behind it.
  *
- * `lines` are the paragraphs of the tip, in the order they are read. They are
+ * `lines` are the paragraphs of the tip, in the order they are read. A string
+ * becomes a paragraph; an element is placed as it is, which is how a pane whose
+ * subject is a *configuration* rather than a consent gets a code block into its
+ * tip — a CORS policy described in prose is a policy nobody can paste. They are
  * built once; what a state change alters on these panes is the button, never
  * the facts about the service.
  */
-export function connectHead(title: string, mark: IconName, lines: string[]): HTMLElement {
+export function connectHead(
+  title: string,
+  mark: IconName,
+  lines: Array<string | HTMLElement>,
+): HTMLElement {
   const id = `connect-tip-${++tipSerial}`
   // Two boxes: the outer is the tip's place and carries the gap under the ?
   // as padding, so a pointer on its way down into it never leaves the hover;
   // the inner is what is drawn, and what scrolls when there is less room than
   // it needs.
-  const box = el('div', { class: 'connect-tip-box' }, ...lines.map((line) => el('p', { text: line })))
+  const box = el(
+    'div',
+    { class: 'connect-tip-box' },
+    ...lines.map((line) => (typeof line === 'string' ? el('p', { text: line }) : line)),
+  )
   const tip = el('div', { class: 'connect-tip', id, attrs: { role: 'tooltip' } }, box)
   const help = el('button', {
     class: 'connect-help',

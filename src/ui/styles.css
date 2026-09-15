@@ -4942,6 +4942,20 @@ canvas.is-frozen {
   margin-top: 0.6rem;
 }
 
+/* The row of large tiles stays *one* row. There are five of them and the set
+   is the page's whole offer, so a fifth tile dropping onto a second line reads
+   as an afterthought rather than as the last of five. They share the width
+   instead: `flex: 1 1 0` with `min-width: 0` lets each shrink below the basis
+   `width` sets, and the blurb under each takes another line as they narrow. */
+.store-tiles-large {
+  flex-wrap: nowrap;
+}
+
+.store-tiles-large .store-tile {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .store-tile {
   display: flex;
   flex-direction: column;
@@ -4999,7 +5013,10 @@ canvas.is-frozen {
   width: auto;
   gap: 0.35rem;
   padding: 0.25rem 0.55rem 0.25rem 0.3rem;
-  border-radius: 999px;
+  /* Near the mark's own 22%, and nowhere near a capsule. A pill rounded to
+     999px puts a semicircle around a square logo, and the two curves disagree
+     by enough at that size to read as a mistake rather than as a style. */
+  border-radius: 8px;
   box-shadow: none;
   transform: none;
 }
@@ -5072,6 +5089,23 @@ canvas.is-frozen {
 }
 
 .store-head-row {
+  display: flex;
+  /* Top, not centre. The row leads with the stores now, and that row wraps
+     when the drawer is narrow or the reader has connected a few of their own —
+     against two lines of pills a centred close button floats halfway down the
+     head, which is not where anyone looks for one. */
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+/* The row of stores takes the line, and the two buttons keep their corner. */
+.store-head-row > .store-tiles {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.store-head-current {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -5944,6 +5978,25 @@ canvas.is-frozen {
 
 .connect-tip-box > p + p {
   margin-top: 0.45rem;
+}
+
+/* A policy to paste, inside a tip. `white-space: pre` and its own scrollbar
+   rather than wrapping: JSON re-flowed to the tip's width is JSON that no
+   longer says where its brackets close, and this is copied rather than read. */
+.connect-tip-code {
+  margin: 0.45rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overflow-x: auto;
+}
+
+.connect-tip-code > code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  line-height: 1.45;
+  white-space: pre;
 }
 
 .connect-help-wrap:hover > .connect-tip,
@@ -7612,6 +7665,32 @@ canvas.is-frozen {
   margin: 0;
 }
 
+/* One column for the labels and one for the boxes. `.field` is an inline row,
+   which starts each box wherever its own label happened to end — and with the
+   prose gone from this pane, six boxes on six different left edges *is* what
+   the pane looks like. The labels differ by a lot (`URL` against `access key
+   ID`), so they are set against the column rather than away from it. */
+.bucket-add .field {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bucket-add .field-label {
+  text-align: right;
+}
+
+.bucket-add .input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The disclosure starts where the boxes it opens do. */
+.bucket-add .bucket-more-row {
+  padding-left: calc(7rem + 0.5rem);
+}
+
 .bucket-actions {
   display: flex;
   justify-content: flex-end;
@@ -7904,14 +7983,27 @@ canvas.is-frozen {
 /* Public or needs-a-key, as two buttons rather than a checkbox: what it chooses
    is which of two ordinary arrangements this is, and a checkbox would make one
    of them the exception. */
-.bucket-kind {
+/* The disclosure that opens the signing fields. Left, where the fields it
+   opens begin, against `save` on the right: one reveals more of the form and
+   the other ends it, so they are not the same kind of thing and do not sit in
+   the same corner. */
+.bucket-more-row {
   display: flex;
-  gap: 0.35rem;
+  justify-content: flex-start;
 }
 
-.bucket-kind .btn.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
+.bucket-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-color: transparent;
+  background: none;
+  color: var(--text-dim);
+}
+
+.bucket-more:hover,
+.bucket-more.is-on {
+  color: var(--text);
 }
 
 .bucket-keys {

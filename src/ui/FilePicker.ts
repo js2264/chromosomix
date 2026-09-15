@@ -110,12 +110,6 @@ export class FilePicker {
             'section',
             { class: 'picker-section' },
             el('h2', { class: 'picker-heading', text: 'Connect to a store' }),
-            el('p', {
-              class: 'hint',
-              text:
-                'Somebody’s shelf of data, read over the network exactly as a file on your own bucket ' +
-                'would be. Nothing is fetched until you open one.',
-            }),
             this.tilesSlot,
           ),
       this.entryBox,

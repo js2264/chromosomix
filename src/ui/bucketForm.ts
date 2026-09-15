@@ -12,14 +12,22 @@
  *
  * The public case is the one a reader arrives with — a link somebody put in a
  * paper — and it needs nothing but that link, so it is what the form opens on.
- * The five signing fields are behind a switch rather than below the URL, because
- * a form that shows six boxes to someone who has one is a form that reads as
- * *you need six things*, and the commonest outcome of that is the reader
- * deciding this is not for them.
+ * The five signing fields are behind *Additional settings* rather than below the
+ * URL, because a form that shows six boxes to someone who has one is a form that
+ * reads as *you need six things*, and the commonest outcome of that is the
+ * reader deciding this is not for them.
  *
- * The switch is two buttons and not a checkbox, because what it chooses is which
- * of two arrangements this is — public data, or a key — and both are ordinary.
- * A checkbox called "private" would make one of them the exception.
+ * A disclosure, and not a switch declaring which kind of bucket this is. That
+ * switch read *public* against *needs a key*, and it asked the reader to
+ * classify the prefix before describing it — a question answerable only in terms
+ * of the five fields the answer then reveals, which is backwards. Whether a
+ * scope is signed now *follows* from whether a key was typed into it: all three
+ * of region, key id and secret, or none of them, which is the one rule `save`
+ * still has to enforce.
+ *
+ * What the form no longer explains, the pane's `?` does (`ui/ConnectCard.ts` on
+ * `bucketHelp`): where a key is kept and what that costs, and the two policies a
+ * bucket needs before any of this reaches it.
  *
  * ## What it does not do
  *
@@ -31,6 +39,7 @@
  */
 
 import { button, el, field } from './dom'
+import { icon } from './icons'
 import { announce } from '../browse/connected'
 import {
   normaliseBase,
@@ -73,8 +82,10 @@ export interface BucketFormProps {
  * stored, `writeScopes` is the whole of storing it, and a host that had to
  * remember to would be the one place a bucket is added and not kept.
  */
+let formSerial = 0
+
 export function bucketForm(props: BucketFormProps): HTMLElement {
-  const label = el('input', { class: 'input', type: 'text', placeholder: 'lab collections' })
+  const label = el('input', { class: 'input', type: 'text', placeholder: 'optional' })
   const base = el('input', {
     class: 'input',
     type: 'text',
@@ -95,45 +106,36 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
 
   const keyFields = el(
     'div',
-    { class: 'bucket-keys hidden' },
+    { class: 'bucket-keys hidden', id: `bucket-keys-${++formSerial}` },
     field('region', region, "The bucket's region. Part of the signature, so a wrong one is a 403."),
     field('access key ID', keyId),
     field('secret key', secret),
     field('session token', token, 'Only for STS or SSO credentials.'),
-    el('p', {
-      class: 'hint',
-      text:
-        'The key is kept in this browser and signs requests from this page, so anything able to ' +
-        'run script on this origin can read it. There is no server to hide it behind — that is ' +
-        'the same property that makes a dropped file never leave your machine. Create an IAM ' +
-        'user with s3:GetObject and s3:ListBucket on this prefix and nothing else, and never ' +
-        'paste an administrator key here.',
-    }),
   )
 
-  let signed = false
-  const publicButton = button('public', () => setSigned(false), {
-    class: 'btn',
-    title: 'Anything under this URL is readable without a key',
-  })
-  const privateButton = button('needs a key', () => setSigned(true), {
-    class: 'btn',
-    title: 'Requests under this URL are signed with the key below',
-  })
-  const note = el('p', { class: 'hint' })
-  function setSigned(next: boolean): void {
-    signed = next
-    publicButton.classList.toggle('is-on', !next)
-    privateButton.classList.toggle('is-on', next)
+  // Open the fields, rather than declare which of two kinds this is. The
+  // switch here used to be *public* against *needs a key*, and it asked the
+  // reader to classify the bucket before describing it — a question they can
+  // only answer in terms of the five fields it governs. A disclosure asks
+  // nothing: the common case is a URL and the box stays shut, and whether the
+  // scope is signed follows from whether a key was actually typed into it.
+  let open = false
+  const more = button('Additional settings', () => setOpen(!open), { class: 'btn bucket-more' })
+  more.setAttribute('aria-controls', keyFields.id)
+  more.prepend(icon('chevron-down', { size: 14 }))
+  function setOpen(next: boolean): void {
+    open = next
     keyFields.classList.toggle('hidden', !next)
-    note.textContent = next
-      ? 'Requests under this prefix are signed; everything else — the public demos included — is ' +
-        'fetched unsigned, as before.'
-      : 'Nothing is stored but the URL. Browsing a public prefix also needs the bucket policy to ' +
-        'grant s3:ListBucket to everyone, which is a different grant from the one that makes its ' +
-        'files downloadable — where it is missing, files under it still open by URL.'
+    more.classList.toggle('is-on', next)
+    more.setAttribute('aria-expanded', String(next))
+    more.replaceChildren(icon(next ? 'chevron-up' : 'chevron-down', { size: 14 }))
+    more.append('Additional settings')
   }
-  setSigned(false)
+  setOpen(false)
+
+  /** A key was offered, so the scope is a signed one. */
+  const signedNow = (): boolean =>
+    region.value.trim() !== '' || keyId.value.trim() !== '' || secret.value !== ''
 
   const save = (): void => {
     // With the region, so `s3://bucket/prefix` lands on the bucket's own
@@ -151,8 +153,13 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
         'one at all.'
       return
     }
+    const signed = signedNow()
+    // All three or none: a scope carrying two of them would be saved, and then
+    // fail at the first read with a signature error naming none of this.
     if (signed && (region.value.trim() === '' || keyId.value.trim() === '' || secret.value === '')) {
       error.textContent = 'Region, access key ID and secret key are all part of the signature.'
+      // Shut, the missing box is invisible and the sentence is about nothing.
+      setOpen(true)
       return
     }
     const scopes = readScopes()
@@ -186,10 +193,9 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
     'div',
     { class: 'bucket-add' },
     props.heading === undefined ? null : el('h3', { text: props.heading }),
-    el('div', { class: 'bucket-kind' }, publicButton, privateButton),
-    note,
-    field('name', label, 'What you call it. Never sent anywhere.'),
-    field('URL', base, 'The prefix this entry covers. Everything under it is browsed and read.'),
+    field('name', label),
+    field('URL', base),
+    el('div', { class: 'bucket-more-row' }, more),
     keyFields,
     error,
     el('div', { class: 'bucket-actions' }, button('save', save, { class: 'btn btn-primary' })),

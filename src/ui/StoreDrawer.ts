@@ -177,11 +177,17 @@ export class StoreDrawer {
       el(
         'div',
         { class: 'store-head' },
+        // The row of stores first, and the store it is *on* under it. The two
+        // were the other way round, and the head then opened with a name and a
+        // sentence about the store already chosen — which is the one thing a
+        // reader in this drawer already knows. What they came to the head for
+        // is the row: it is how the drawer switches. The two buttons stay up
+        // here with it, because a close is looked for at the top right corner
+        // of a panel and nowhere else.
         el(
           'div',
           { class: 'store-head-row' },
-          this.markSlot,
-          el('div', { class: 'store-head-text' }, this.titleEl, this.blurbEl),
+          this.tilesSlot,
           iconButton(
             'link',
             'Copy a link to this store, narrowed as it is now.',
@@ -193,7 +199,12 @@ export class StoreDrawer {
             size: 14,
           }),
         ),
-        this.tilesSlot,
+        el(
+          'div',
+          { class: 'store-head-current' },
+          this.markSlot,
+          el('div', { class: 'store-head-text' }, this.titleEl, this.blurbEl),
+        ),
       ),
       this.body,
       this.handle(),
