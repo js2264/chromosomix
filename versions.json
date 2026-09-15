@@ -1,6 +1,13 @@
 {
-  "latest": "c29abdb",
+  "latest": "2ac4502",
   "versions": [
+    {
+      "commit": "2ac4502",
+      "version": "0.12.0",
+      "date": "2026-09-15T23:41:32+02:00",
+      "subject": "Add DNA Zoo front end and bucket folder naming support (#59)",
+      "tag": ""
+    },
     {
       "commit": "c29abdb",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.12.0",
       "date": "2026-09-10T23:06:20Z",
       "subject": "Write a compared track at the resolution of the tracks, not of the map",
-      "tag": ""
-    },
-    {
-      "commit": "19a568c",
-      "version": "0.12.0",
-      "date": "2026-09-10T18:36:29+02:00",
-      "subject": "Domain pileup APA and multi-scale insulation with heatmap rendering (#42)",
       "tag": ""
     },
     {
