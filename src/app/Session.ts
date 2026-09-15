@@ -137,6 +137,7 @@ import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
 import { ContigsTable } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
+import type { ProviderId } from '../ui/connectFronts'
 import { openPairsDialog } from '../ui/PairsDialog'
 import { progressToast } from '../ui/toast'
 import { askLoadCost, isLoadGate } from '../ui/LoadGate'
@@ -193,6 +194,10 @@ export interface SessionHost {
   openFileDialog(session: Session): void
   /** Open the store drawer on this store — a tile on the landing page was pressed. */
   openStore(id: string): void
+  /** Open the Connect dialog on this place — a button on the landing page was pressed. */
+  openConnect(provider: ProviderId): void
+  /** A folder was connected — from the landing page's picker, or from the dialog. Show it. */
+  folderConnected(id: string): void
   /**
    * A saved workspace arrived — as a dropped file, or fetched from a URL.
    *
@@ -878,6 +883,12 @@ export class Session {
       // The tiles are the shell's door: a store is a drawer over the window,
       // not a fact about this tab (`ui/StoreDrawer.ts`).
       onStore: (id) => this.host.openStore(id),
+      // And so is a place: a connected folder belongs to the window's Files
+      // column, which every tab shares (§20.4). Two callbacks because two
+      // things can happen — a dialog opens on the place, or *choose a folder…*
+      // has already been through the picker and has one.
+      onConnect: (provider) => this.host.openConnect(provider),
+      onConnected: (id) => this.host.folderConnected(id),
     })
     this.store.subscribe((state, change) => {
       this.host.stateChanged(this, change)

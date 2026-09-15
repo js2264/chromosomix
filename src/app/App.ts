@@ -24,6 +24,7 @@ import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
 import { LoadBox } from '../ui/LoadBox'
+import type { ProviderId } from '../ui/connectFronts'
 import { Modal } from '../ui/Modal'
 import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
@@ -41,7 +42,7 @@ import {
 } from '../ui/SidePanel'
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
-import { hydrateFolders } from '../browse/connected'
+import { connectedFolders, hydrateFolders, subscribeFolders } from '../browse/connected'
 import type { PickedFile } from '../browse/folder'
 import '../browse/backends'
 import { StatusBar } from '../ui/StatusBar'
@@ -342,11 +343,11 @@ export class App implements SessionHost {
       onConnect: () => this.openConnectDialog(),
     })
     this.filesPanel.setContent([this.files.el])
-    // Available from the first paint and never withdrawn: the landing page is
-    // exactly where a reader with a folder of coolers starts, and a column that
-    // appeared only once something was open would be missing when it is most
-    // useful. See `ui/SidePanel.ts`.
-    this.filesPanel.setAvailable(true)
+    this.refreshFilesPanel()
+    // The list this column is of can change from four other screens, and two of
+    // them — the landing page's *choose a folder…* and the Connect dialog — are
+    // how it comes into existence in the first place.
+    subscribeFolders(() => this.refreshFilesPanel())
 
     this.status = this.embed
       ? null
@@ -756,7 +757,13 @@ export class App implements SessionHost {
     // picker. Unlike the file grants, this one has something to do when it
     // lands — the panel is already on screen, empty — so it is chained rather
     // than dropped.
-    void hydrateFolders().then(() => this.files.showFirst())
+    void hydrateFolders().then(() => {
+      // Nothing announces a hydration — it is the store being read rather than
+      // written — so the column is told here that it may now have something to
+      // be, before it is asked to open on it.
+      this.refreshFilesPanel()
+      this.files.showFirst()
+    })
 
     // Built before the tabs are seated so that a view state settling during the
     // boot has somewhere to be reported to, and **started after**, because
@@ -784,22 +791,26 @@ export class App implements SessionHost {
    *
    * A dynamic import for `ui/FilePicker.ts`'s reason and with the same
    * honesty about what it buys: the dialog pulls in the bucket form and the
-   * directory pickers, which a session opening a public demo never touches. It
+   * two sign-in panes, which a session opening a public demo never touches. It
    * does not keep the *browsing* out of the entry chunk and was never going to
-   * — the Files panel is built with the shell and holds the folder view — so
-   * the split is worth having for the form and nothing more is claimed for it.
+   * — the Files panel is built with the shell and holds the folder view, and
+   * the directory pickers are reached from the landing page without this
+   * dialog at all — so the split is worth having for the form and the panes,
+   * and nothing more is claimed for it.
+   *
+   * `provider` is which pane to land on, and it is what the landing page's
+   * *mount a folder* buttons carry: a reader who pressed *sign in to Dropbox*
+   * on a page with four buttons on it has already chosen, and a dialog that
+   * opened on this machine would ask them to choose again. Absent from the
+   * header's plug and the palette, which name no place, so those still open on
+   * the one that needs no account (`ui/connectFronts.ts`).
    */
-  private openConnectDialog(): void {
+  private openConnectDialog(provider?: ProviderId): void {
     if (this.modal !== null) return
     void import('../ui/ConnectCard').then(({ openConnect }) => {
       const modal = openConnect({
-        onConnected: (id) => {
-          // Straight into the folder that was just connected, which is the only
-          // thing a reader who has connected one wants next — and the panel is
-          // opened for them, because a column they cannot see is not an answer.
-          this.filesPanel.reveal()
-          this.files.showConnected(id)
-        },
+        ...(provider === undefined ? {} : { provider }),
+        onConnected: (id) => this.folderConnected(id),
         onClose: () => {
           this.modal = null
         },
@@ -916,6 +927,26 @@ export class App implements SessionHost {
   /** A tile on a landing page was pressed: open the drawer on that store. */
   openStore(id: string): void {
     this.storeDrawer?.open(id)
+  }
+
+  /** A place on a landing page was pressed: open the Connect dialog on it. */
+  openConnect(provider: ProviderId): void {
+    this.openConnectDialog(provider)
+  }
+
+  /**
+   * A folder was connected — by the dialog, or by the landing page's own
+   * *choose a folder…* — so show it.
+   *
+   * Straight into the folder that was just connected, which is the only thing
+   * a reader who has connected one wants next, and the column is opened for
+   * them because a column they cannot see is not an answer. The two doors call
+   * this rather than each deciding what happens next: whatever a connected
+   * folder is worth on screen, it is worth the same from both.
+   */
+  folderConnected(id: string): void {
+    this.filesPanel.reveal()
+    this.files.showConnected(id)
   }
 
   /** Whether the tab in front holds nothing — which decides what a store row's verbs say. */
@@ -1291,6 +1322,31 @@ export class App implements SessionHost {
     this.annotationsPanel.setAvailable(panels.annotations)
     this.aestheticsPanel.setAvailable(panels.aesthetics)
     this.analysisPanel.setAvailable(panels.analysis)
+  }
+
+  /**
+   * Whether the Files column has anything to be, which is now a question.
+   *
+   * It used to be available from the first paint and never withdrawn, and the
+   * reason was a good one: its own *Open a local/remote folder* was the only
+   * door to a folder, and a door nobody can see is not a door. The landing
+   * page now offers the four places itself (§24.2), so that argument has moved
+   * out of this column — and what is left on the first screen without it is an
+   * empty column beside a row of buttons that say the same thing. §8.5's rule
+   * then applies as it does to the four columns beside it: a panel with
+   * nothing to show leaves altogether.
+   *
+   * So the column exists **exactly when this window has a place connected**,
+   * on every screen and not only the first. The doors are elsewhere and stay
+   * elsewhere: the landing page, which a new tab is, and *Open a local/remote
+   * folder* in the command palette.
+   *
+   * Connecting one *reveals* it as well ({@link folderConnected}), so the
+   * column a reader has just earned is open rather than a tab they have to
+   * find.
+   */
+  private refreshFilesPanel(): void {
+    this.filesPanel.setAvailable(connectedFolders().length > 0)
   }
 
   private paintTabs(): void {

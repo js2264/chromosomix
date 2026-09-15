@@ -7,6 +7,20 @@
  * area that also takes a click, and a box for a URL. What differs, *replace or
  * add*, is decided by whoever mounts it, in the two callbacks.
  *
+ * ## Two ways in, not three
+ *
+ * The drop area **is** the file picker: a click on it opens the same dialog a
+ * *choose files…* button would, so a button beside it is the same action drawn
+ * twice, and a reader deciding between two controls that do one thing is a
+ * reader given a choice that does not exist. There is one target, it says both
+ * things it does — drop, or click — and the URL box is under it behind a rule
+ * reading *or a URL*, which is the one genuinely different way in.
+ *
+ * The paragraph about what opens as what is inside the target, where it has
+ * always been. It is the one place a reader holding a bigWig and no contact
+ * map can be told this application is for them too, and the target is what
+ * they are looking at while they decide.
+ *
  * The privacy claim is on the landing page rather than here, because it is
  * about the application and not about this control; and the stores are not
  * here at all, because a store is not a way to load a file the reader has —
@@ -19,6 +33,7 @@
 
 import { IS_STANDALONE } from '../version'
 import { button, el } from './dom'
+import { icon } from './icons'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { canonicalUrl } from '../sources/rewrite'
@@ -47,17 +62,19 @@ export class LoadBox {
     this.drop = el(
       'div',
       { class: `dropzone${props.compact === true ? ' dropzone-compact' : ''}`, attrs: { tabindex: '0', role: 'button' } },
+      icon('file', { size: 22, class: 'dropzone-mark' }),
       el('div', { class: 'dropzone-title', text: 'Drop files here' }),
+      el('div', { class: 'dropzone-sub', text: 'or click to choose' }),
+      // What opens as what, said where the reader is already looking: a
+      // contact map is not the only thing this application is for, and a
+      // reader who thinks it is leaves without trying.
       el('div', {
-        class: 'dropzone-sub',
-        // One sentence on what opens as what, because to a reader with a
-        // bigWig and no map "this app is not for me" is the wrong conclusion
-        // and this is the one place it can be corrected before they leave.
+        class: 'dropzone-note',
         text:
-          'or click to choose. A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, ' +
-          'a BED or a BAM opens as a browser over its genome. Drop several at once and ' +
-          'they come up together: the first map is the tab, every other map a panel beside it, ' +
-          'and everything else a track on top.',
+          'A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, a BED or a BAM opens ' +
+          'as a browser over its genome. Drop several at once and they come up together: the ' +
+          'first map is the tab, every other map a panel beside it, and everything else a track ' +
+          'on top.',
       }),
     )
     const choose = async (): Promise<void> => {
@@ -120,21 +137,20 @@ export class LoadBox {
       'div',
       { class: 'load-box' },
       this.drop,
+      // A rule with the word set into it, rather than a line of grey text: the
+      // box under it is an alternative to the target above it and not a step
+      // after it, and only the rule says which.
+      el('span', { class: 'load-or', text: 'or a URL' }),
       el(
         'div',
         { class: 'load-row' },
-        button('choose files…', () => void choose(), {
-          class: 'btn',
-          title: 'Pick one or more files on this machine.',
-        }),
-        el('span', { class: 'load-or', text: 'or a URL' }),
         this.urlInput,
         button('open', () => this.openRemote(), {
-          class: 'btn',
+          class: 'btn btn-primary',
           title:
-            'Open a file by its address. The host must serve byte ranges and allow a cross-origin ' +
-            'GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the form that works. ' +
-            'Add ::entries/<name> to address one entry of a collection.',
+            'Open a file by its address. The host must serve byte ranges and allow a ' +
+            'cross-origin GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the ' +
+            'form that works. Add ::entries/<name> to address one entry of a collection.',
         }),
       ),
     )
@@ -154,3 +170,4 @@ export class LoadBox {
     this.props.onOpen(url, { kind: 'remote', url: path })
   }
 }
+

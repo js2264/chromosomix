@@ -2,18 +2,25 @@
 /**
  * The landing page, and the load box the two dialogs are made of.
  *
- * Two things are on the page and they are named: **Load files** and **Connect
- * to a store**. What the tests below pin is that each is exactly one thing —
- * one drop area, one URL box, one row of tiles — and that the tiles cost no
- * request: a tile is a description, and pressing it is the gesture that opens
- * the drawer (§24.2). The rest is what the box owes a reader whatever door they
- * came through: a drop target that also takes a click, and a box for a URL.
+ * Three things are on the page and they are named: **Load files**, **Mount a
+ * local or remote folder** and **Connect to a data store**. What the tests
+ * below pin is that each is exactly one thing — one drop area with one URL
+ * box, one row of place buttons, one row of tiles — and that neither row costs
+ * a request: both are descriptions, and pressing one is a gesture rather than
+ * a fetch (§24.2). Where those gestures go is the other half: *choose a
+ * folder…* is the directory picker itself, because it is one gesture and the
+ * browser draws it, while the three that need a form or a sign-in are doors to
+ * the Connect dialog. The rest is what the box owes a reader whatever door
+ * they came through: a drop target that also takes a click, and a box for a
+ * URL.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FilePicker } from '@/ui/FilePicker'
 import { LoadBox } from '@/ui/LoadBox'
+import type { ProviderId } from '@/ui/connectFronts'
+import { connectedFolders, disconnectFolder } from '@/browse/connected'
 import { icon } from '@/ui/icons'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -22,6 +29,9 @@ let teardown: DomTeardown
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  // A browser that can hold a directory, which is what decides the first
+  // button's wording; the test below takes it away again to check the other.
+  vi.stubGlobal('showDirectoryPicker', async () => null)
 })
 
 afterEach(() => {
@@ -35,18 +45,33 @@ interface Built {
   opened: Array<{ uri: string; local: boolean }>
   files: File[][]
   stores: string[]
+  places: string[]
+  connected: string[]
 }
 
-function build(withStores = true): Built {
+function build(withDoors = true): Built {
   const opened: Array<{ uri: string; local: boolean }> = []
   const files: File[][] = []
   const stores: string[] = []
+  const places: string[] = []
+  const connected: string[] = []
   const picker = new FilePicker({
     onOpen: (uri, source) => opened.push({ uri, local: source.kind === 'local' }),
     onOpenFiles: (chosen) => files.push([...chosen]),
-    ...(withStores ? { onStore: (id: string) => stores.push(id) } : {}),
+    ...(withDoors
+      ? {
+          onStore: (id: string) => stores.push(id),
+          onConnect: (provider: ProviderId) => places.push(provider),
+          onConnected: (id: string) => connected.push(id),
+        }
+      : {}),
   })
-  return { picker, el: picker.el, opened, files, stores }
+  return { picker, el: picker.el, opened, files, stores, places, connected }
+}
+
+/** Let the picker's promise and the callback behind it settle. */
+function settled(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 /** A `drop`, with files on it, as jsdom will not build a real `DataTransfer`. */
@@ -57,17 +82,117 @@ function dropOn(node: HTMLElement, ...files: File[]): void {
 }
 
 describe('the landing page', () => {
-  it('names its two things, and offers one drop area and one URL box', () => {
+  it('names its three things, and offers one drop area and one URL box', () => {
     const { el } = build()
-    expect(textsOf(el, '.picker-heading')).toEqual(['Load files', 'Connect to a store'])
+    expect(textsOf(el, '.picker-heading')).toEqual([
+      'Load files',
+      'Mount a local or remote folder',
+      'Connect to a data store',
+    ])
     expect(all(el, '.dropzone')).toHaveLength(1)
     expect(all(el, '.input-url')).toHaveLength(1)
-    expect(buttonNamed(el, 'choose files…')).not.toBeNull()
     expect(buttonNamed(el, 'open')).not.toBeNull()
-    // The doors that used to stand beside the box are gone: a bucket is a
-    // place, connected from the header, and a catalogue is a store.
+    // No *choose files* button: clicking the drop area opens the same dialog,
+    // and the same action drawn twice is a choice that does not exist.
+    expect(buttonNamed(el, 'choose files…')).toBeNull()
+    // The catalogue that used to stand beside the box is gone: it was a store.
     expect(buttonNamed(el, 'browse…')).toBeNull()
     expect(buttonNamed(el, 'private buckets…')).toBeNull()
+  })
+
+  it('is one target with the URL box under it, and says inside what opens as what', () => {
+    const { el } = build()
+    const drop = el.querySelector('.dropzone') as HTMLElement
+    expect(drop).not.toBeNull()
+    // Both things the target does are written on it, because it is the only
+    // control here: a click opens the file dialog a *choose files* button used
+    // to, and that button is gone rather than duplicating it.
+    expect(textsOf(drop, '.dropzone-title')).toEqual(['Drop files here'])
+    expect(textsOf(drop, '.dropzone-sub')).toEqual(['or click to choose'])
+    // The sentence a reader holding a bigWig and no contact map needs, inside
+    // the target they are looking at while they decide.
+    expect(textsOf(drop, '.dropzone-note')[0]).toMatch(/opens as a browser over its genome/)
+    // The URL box is the other way in, under the rule that says so.
+    const box = el.querySelector('.load-box') as HTMLElement
+    const parts = [...box.children].map((node) => node.className)
+    expect(parts).toEqual(['dropzone', 'load-or', 'load-row'])
+    expect(textsOf(box, '.load-or')).toEqual(['or a URL'])
+  })
+
+  it('carries the marked button the Connect dialog’s panes are pressed by', () => {
+    // "The buttons should be styled the same way the ones in the modal": one
+    // shape for one gesture, wherever a reader meets it (`ui/icons.ts`).
+    const { el } = build()
+    expect(all(el, '.picker-provider')).toHaveLength(4)
+    expect(all(el, '.picker-provider').every((node) => node.classList.contains('btn-mark'))).toBe(true)
+  })
+
+  it('offers the four places as buttons, and sends the three with a form to the dialog', () => {
+    const built = build()
+    expect(textsOf(built.el, '.picker-provider')).toEqual([
+      'choose a folder…',
+      'connect a bucket…',
+      'sign in to Google…',
+      'sign in to Dropbox…',
+    ])
+    const buttons = all<HTMLButtonElement>(built.el, '.picker-provider')
+    buttons[1].click()
+    buttons[3].click()
+    // The id, not the form: what follows a press there is a bucket's two
+    // policies or a sign-in with a code to paste, and both are the dialog's.
+    expect(built.places).toEqual(['bucket', 'dropbox'])
+  })
+
+  it('opens the directory picker on *choose a folder…* rather than a dialog about one', () => {
+    // One gesture, drawn by the browser: a dialog in front of it would be
+    // asking the reader to press the same words twice.
+    const handle = { kind: 'directory', name: 'maps' }
+    const asked = vi.fn(async (options: unknown) => {
+      void options
+      return handle
+    })
+    vi.stubGlobal('showDirectoryPicker', asked)
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    expect(asked).toHaveBeenCalledTimes(1)
+    // Asked for read access and nothing wider (§13).
+    expect(asked.mock.calls[0][0]).toEqual({ mode: 'read' })
+    // Nothing went to the dialog: this place is not one of its errands.
+    expect(built.places).toEqual([])
+  })
+
+  it('hands the connected folder up, because a folder is the window’s and not this tab’s', async () => {
+    const handle = { kind: 'directory', name: 'maps' }
+    vi.stubGlobal('showDirectoryPicker', async () => handle)
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    await settled()
+    expect(built.connected).toHaveLength(1)
+    const [id] = built.connected
+    // The id names a folder the window is now connected to — the same thing
+    // the Connect dialog's own panes answer with.
+    expect(connectedFolders().map((folder) => folder.id)).toContain(id)
+    await disconnectFolder(id)
+  })
+
+  it('says nothing happened when the picker is cancelled', async () => {
+    vi.stubGlobal('showDirectoryPicker', async () => {
+      throw new DOMException('cancelled', 'AbortError')
+    })
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    await settled()
+    expect(built.connected).toEqual([])
+    expect(built.places).toEqual([])
+  })
+
+  it('says *this visit* on the button where a browser cannot keep the folder', () => {
+    // Firefox and Safari have no picker; what they give is a snapshot of the
+    // file list that does not survive a reload, and the label is the only
+    // place a reader is told so before pressing (§20).
+    vi.unstubAllGlobals()
+    const { el } = build()
+    expect(textsOf(el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
   })
 
   it('offers the five shipped stores as tiles, then the one that adds a store', () => {
@@ -101,10 +226,11 @@ describe('the landing page', () => {
     expect(built.stores).toEqual(['4dn', 'custom'])
   })
 
-  it('leaves the stores out when it is given no door to them, and keeps the rest', () => {
+  it('leaves the two rows out when it is given no door to them, and keeps the rest', () => {
     const { el } = build(false)
     expect(textsOf(el, '.picker-heading')).toEqual(['Load files'])
     expect(all(el, '.store-tile')).toHaveLength(0)
+    expect(all(el, '.picker-provider')).toHaveLength(0)
     expect(all(el, '.dropzone')).toHaveLength(1)
   })
 
@@ -149,6 +275,13 @@ describe('the load box on its own', () => {
     expect(box.el.querySelector('.dropzone-compact')).not.toBeNull()
     expect(all(box.el, '.input-url')).toHaveLength(1)
     expect(all(box.el, '.store-tile')).toHaveLength(0)
+    // The dialogs get the same two ways in, and the same sentence about what
+    // opens as what: it is the box's, so every door a file is asked for
+    // carries it.
+    expect(box.el.querySelector('.dropzone > .dropzone-note')).not.toBeNull()
+    expect(textsOf(box.el, '.load-or')).toEqual(['or a URL'])
+    // No places and no stores here: this box is the *load* half alone.
+    expect(all(box.el, '.picker-provider')).toHaveLength(0)
   })
 })
 

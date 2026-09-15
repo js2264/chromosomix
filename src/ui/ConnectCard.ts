@@ -27,11 +27,14 @@
  *
  * ## Which providers are offered
  *
- * The standalone build has an opaque origin, so every remote read fails before
- * a byte moves (§19): it offers this machine and nothing else. The desktop
- * build cannot register a Google sign-in against `app://viewer`, so its Drive
- * pane says why there is no sign-in. Each provider's section decides the rest
- * for itself.
+ * `ui/connectFronts.ts` decides, because the landing page's row of *mount a
+ * folder* buttons offers the same places and the answer must not be able to
+ * differ between the two doors. The standalone build has an opaque origin, so
+ * every remote read fails before a byte moves (§19): it offers this machine
+ * and nothing else. The desktop build cannot register a Google sign-in against
+ * `app://viewer`, so its Drive pane says why there is no sign-in — a tile the
+ * landing page's buttons therefore leave out and this dialog keeps. Each
+ * provider's section decides the rest for itself.
  *
  * ## The two panes that sign a reader in
  *
@@ -43,7 +46,7 @@
 
 import { Modal } from './Modal'
 import { button, el } from './dom'
-import { icon, type IconName } from './icons'
+import { icon } from './icons'
 import { bucketForm } from './bucketForm'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
@@ -53,18 +56,15 @@ import {
   signOut,
   subscribeGoogle,
 } from '../auth/google'
-import { announce, connectSnapshot } from '../browse/connected'
+import { connectDirectory } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
-import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from '../browse/local'
-import { mintDirectoryId, rememberDirectory } from '../state/directories'
-import { IS_STANDALONE } from '../version'
+import { directoryPickerSupported } from '../browse/local'
+import { localVerb, providerFronts, type ProviderFront, type ProviderId } from './connectFronts'
 import { driveFolderSection } from './DriveFolderSection'
 import { connectHead, signInButton, tipCode } from './connectHead'
-import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
 
-/** The four places, by the id the tiles and the tests name them by. */
-export type ProviderId = 'local' | 'bucket' | 'drive' | 'dropbox'
+export type { ProviderId } from './connectFronts'
 
 export interface ConnectProps {
   /**
@@ -86,35 +86,29 @@ export function openConnect(props: ConnectProps): Modal {
   })
 }
 
-interface Provider {
-  id: ProviderId
-  label: string
-  mark: IconName
+interface Provider extends ProviderFront {
   /** The pane, built when the tile is pressed. */
   pane(done: (id: string) => void): HTMLElement
 }
 
-/** The providers this build can offer, in the order the tiles show them. */
+/**
+ * The providers this build can offer, in the order the tiles show them.
+ *
+ * Which places exist is `ui/connectFronts.ts`'s, because the landing page's
+ * row of buttons asks the same question (§24.2); what a place *is to do* is
+ * here, because that is the dialog. `works` is not consulted: the Drive tile
+ * stays on the desktop build, where its pane is the sentence saying why there
+ * is no sign-in — see that module's header on why the two doors read the same
+ * fact differently.
+ */
 export function providers(): Provider[] {
-  const out: Provider[] = [
-    { id: 'local', label: 'This machine', mark: 'hard-drive', pane: localSection },
-  ]
-  // A single-file page has an opaque origin, so every remote read fails before
-  // a byte moves (§19): a control that cannot keep its promise is absent.
-  if (IS_STANDALONE) return out
-  out.push({ id: 'bucket', label: 'A bucket', mark: 'cloud', pane: bucketSection })
-  out.push({ id: 'drive', label: 'Google Drive', mark: 'googledrive', pane: drivePane })
-  // The one provider with an account and no key (§24.9); its section decides
-  // for itself where it can be offered.
-  if (DROPBOX_SIGN_IN_AVAILABLE) {
-    out.push({
-      id: 'dropbox',
-      label: 'Dropbox',
-      mark: 'dropbox',
-      pane: (done) => dropboxSection(done) ?? el('div'),
-    })
+  const panes: Record<ProviderId, (done: (id: string) => void) => HTMLElement> = {
+    local: localSection,
+    bucket: bucketSection,
+    drive: drivePane,
+    dropbox: (done) => dropboxSection(done) ?? el('div'),
   }
-  return out
+  return providerFronts().map((front) => ({ ...front, pane: panes[front.id] }))
 }
 
 function connectBody(props: ConnectProps, close: () => void): HTMLElement {
@@ -169,24 +163,15 @@ function localSection(done: (id: string) => void): HTMLElement {
   const granted = directoryPickerSupported()
   const error = el('p', { class: 'hint bucket-error' })
 
+  // `browse/connected.ts` runs both shapes of picker and registers whatever
+  // comes back; the landing page's own *choose a folder…* calls the same
+  // function, so the two screens cannot disagree about what a directory is.
+  // A cancelled picker answers `null`, which is not an error and needs no
+  // message.
   const connect = async (): Promise<void> => {
     error.textContent = ''
-    if (granted) {
-      const handle = await chooseDirectory()
-      // A cancelled picker, which is not an error and needs no message.
-      if (handle === null) return
-      const id = mintDirectoryId()
-      await rememberDirectory(id, handle, handle.name)
-      announce()
-      done(id)
-      return
-    }
-    const files = await chooseDirectoryFiles()
-    if (files.length === 0) return
-    // The first segment of `webkitRelativePath` is the directory's own name and
-    // is the only place this path can learn it — there is no handle to ask.
-    const name = (files[0].webkitRelativePath ?? '').split('/')[0]
-    done(connectSnapshot(name === '' ? 'folder' : name, files).id)
+    const id = await connectDirectory()
+    if (id !== null) done(id)
   }
 
   return el(
@@ -195,19 +180,14 @@ function localSection(done: (id: string) => void): HTMLElement {
     connectHead('A folder on this machine', 'hard-drive', localHelp(granted)),
     // The one large button the two sign-in panes have, because this pane is
     // the same shape as theirs: one thing to press, and everything worth
-    // knowing before pressing it behind the `?`. What a browser without the
-    // picker gives is a snapshot rather than a connection, and the difference
-    // is carried by the label — the reader acts on that, so it stays on the
-    // pane where the rest of the sentence no longer is.
+    // knowing before pressing it behind the `?`. The label is the front's, and
+    // it is the front's because what a browser without the picker gives is a
+    // snapshot rather than a connection — a difference the reader acts on, and
+    // one the landing page's button has to state in the same words.
     el(
       'div',
       { class: 'connect-signin' },
-      signInButton(
-        granted ? 'choose a folder…' : 'choose a folder (this visit)…',
-        'hard-drive',
-        () => void connect(),
-        { disabled: false },
-      ),
+      signInButton(localVerb(), 'hard-drive', () => void connect(), { disabled: false }),
     ),
     error,
   )
