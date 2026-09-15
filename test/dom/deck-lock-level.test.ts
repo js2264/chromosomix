@@ -230,6 +230,7 @@ function leadRollUp() {
   }
   const panel = {
     setViewportListener: () => {},
+    setDeckExport: () => {},
     setLaneListener: () => {},
     setHoverListener: (listener: (cell: { row: number; col: number } | null) => void) => {
       state.hover = listener

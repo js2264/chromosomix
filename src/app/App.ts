@@ -1052,7 +1052,14 @@ export class App implements SessionHost {
         savedAt: workspace.savedAt,
         onRestore: () => {
           answered()
-          this.adoptWorkspace(workspace as Workspace)
+          // The banner outlives the picker: a reader who opened a file while it
+          // stood and then presses Restore has two things they want, and
+          // replacing the one they just opened with the one they had would be
+          // throwing away the newer of them. So a window with anything open is
+          // *appended to*, the way a dropped workspace file is; only an empty
+          // one is replaced, which for an empty window is the same thing.
+          const busy = this.sessions.some((session) => session.state !== null)
+          this.adoptWorkspace(workspace as Workspace, busy ? 'append' : 'replace')
         },
         onDismiss: () => {
           answered()
@@ -1474,6 +1481,11 @@ export class App implements SessionHost {
   panelsChanged(session: Session): void {
     if (session !== this.current) return
     this.applyPanels(session)
+  }
+
+  landingFileOpened(session: Session): void {
+    if (session !== this.current) return
+    this.filesPanel.conceal()
   }
 
   activity(session: Session): void {

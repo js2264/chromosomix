@@ -381,6 +381,21 @@ export class MetaCooler {
         {},
       )
     }
+    // And a file that is not HDF5 at all is refused by its first bytes, for
+    // the same reason the gzip above is: a file named `.mcool` that is really
+    // an HTML error page, a text export or a download that stopped short
+    // fails inside h5wasm with `error - name not defined!`, which names
+    // neither the file nor the fact. The superblock may sit behind a user
+    // block at a power-of-two offset, so the first few are looked at.
+    if (!hasHdf5Signature(source)) {
+      throw new ViewerError(
+        'not-hdf5',
+        `${parseUri(uri).path} does not start with the HDF5 signature, so it is not a .cool, ` +
+          '.mcool, .scool or .metacool whatever its name says. A download that stopped ' +
+          'short, an HTML page saved under the file’s name, or a text matrix look like this.',
+        {},
+      )
+    }
     // The group comes from the URI, so `file.mmetacool::entries/rep1` and a
     // plain `file.metacool` reach the handle already resolved (§3.5).
     const handle = await openHdf5(uri, source, parseUri(uri).group)
@@ -389,6 +404,20 @@ export class MetaCooler {
       return MetaCooler.fromHandle(handle)
     } catch (error) {
       handle.close()
+      // h5wasm's own failures are a sentence about nothing — `error - name
+      // not defined!` — and reach the screen as "something went wrong". They
+      // are about *this file*, so they are said about it: which file, which
+      // group, and the library's words after, for whoever reads them.
+      if (!(error instanceof ViewerError) && error instanceof Error) {
+        const group = parseUri(uri).group
+        throw new ViewerError(
+          'format',
+          `${parseUri(uri).path}${group === '' ? '' : `::${group}`} could not be read as a ` +
+            `cooler container. HDF5 said: ${error.message}. The file opens as HDF5, so this is ` +
+            'a group, dataset or attribute the reader expected and did not find.',
+          { hdf5: error.message },
+        )
+      }
       throw error
     }
   }
@@ -1856,4 +1885,25 @@ function fmtMib(bytes: number): string {
   return bytes >= 1 << 30
     ? `${(bytes / (1 << 30)).toFixed(1)} GB`
     : `${Math.round(bytes / (1 << 20))} MB`
+}
+
+/** `\x89HDF\r\n\x1a\n`, the eight bytes every HDF5 file opens with. */
+const HDF5_SIGNATURE = [0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a]
+
+/**
+ * Whether a source carries an HDF5 superblock where the library will look.
+ *
+ * At offset 0 for every file this application writes or reads in practice;
+ * the format also allows a user block, in which case the signature sits at
+ * 512, 1024, 2048… up to the file's size. The first few are enough — a user
+ * block past 8 KiB is a file nobody has met — and on a remote source they are
+ * all inside the chunk the first read already fetched.
+ */
+function hasHdf5Signature(source: ByteSource): boolean {
+  for (const at of [0, 512, 1024, 2048, 4096, 8192]) {
+    if (at + 8 > source.size) return false
+    const head = source.readBytes(at, 8)
+    if (head.length === 8 && HDF5_SIGNATURE.every((byte, i) => head[i] === byte)) return true
+  }
+  return false
 }

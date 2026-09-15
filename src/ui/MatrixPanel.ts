@@ -828,6 +828,17 @@ export interface AnnotationContext {
   pickOnEdge?(event: DragEvent, edge: LaneEdge): void
 }
 
+/**
+ * A deck's answer to its lead panel's export controls.
+ *
+ * Each returns whether it took the gesture: `false` means the deck is one map
+ * and the panel should export its own figure, vector and all.
+ */
+export interface DeckExport {
+  save(format: ExportFormat, dpi: number): Promise<boolean>
+  copy(dpi: number): Promise<boolean>
+}
+
 export class MatrixPanel {
   readonly el: HTMLElement
   /**
@@ -970,6 +981,10 @@ export class MatrixPanel {
   private readonly settingsEl: HTMLElement | null
   /** Whether the window is too narrow for a key over the picture. */
   private narrow = false
+  /** Whether the key is shown — the `legend` overlay; see `ui/plotOptions.ts`. */
+  private legendOn = getPlotOptions().legend
+  /** Where this panel's export goes while it leads a deck; see {@link setDeckExport}. */
+  private deckExport: DeckExport | null = null
   private readonly heatmap: HeatmapView
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
@@ -1742,6 +1757,11 @@ export class MatrixPanel {
     this.unsubscribePlotOptions = subscribePlotOptions((options) => {
       this.heatmap.setPlotOptions(options)
       this.paintPlotOptions(options)
+      // The key is the panel's, not the renderer's, so the renderer's copy of
+      // the option changes nothing on its own: hidden here, and skipped in the
+      // export, which draws what the screen shows.
+      this.legendOn = options.legend
+      this.keySlot.classList.toggle('hidden', this.narrow || !this.legendOn)
       // Put away now, not on the next pointer move: a control that needs the
       // hand to twitch before it takes effect reads as not having worked.
       if (!options.tooltip) this.tooltip.classList.add('hidden')
@@ -2252,7 +2272,7 @@ export class MatrixPanel {
     // draws cannot read a media query.
     this.narrowWatcher = watchMedia(NARROW_QUERY, (narrow) => {
       this.narrow = narrow
-      this.keySlot.classList.toggle('hidden', narrow)
+      this.keySlot.classList.toggle('hidden', narrow || !this.legendOn)
       this.schedule()
     })
 
@@ -2457,7 +2477,30 @@ export class MatrixPanel {
    * export to keep in step with the first.
    */
   savePlot(): void {
-    void this.save(this.exportFormat)
+    void this.saveFigure()
+  }
+
+  /**
+   * With a deck up, the figure is the deck. The hook says whether it took the
+   * export — `false` is a deck of one map, which is this panel's own figure.
+   */
+  private async saveFigure(): Promise<void> {
+    if (this.deckExport !== null && (await this.deckExport.save(this.exportFormat, this.exportDpi))) {
+      this.exportStatus.textContent = 'saved the deck'
+      return
+    }
+    await this.save(this.exportFormat)
+  }
+
+  /**
+   * Route this panel's export to the deck it leads, or back to itself.
+   *
+   * Set by `panels/PanelDeck.ts` on the lead: the Export card and the `S` key
+   * are this panel's, and with five maps beside it a reader pressing either
+   * wants the arrangement they made, not the first cell of it.
+   */
+  setDeckExport(hook: DeckExport | null): void {
+    this.deckExport = hook
   }
 
   /**
@@ -2477,6 +2520,10 @@ export class MatrixPanel {
   private async copy(): Promise<void> {
     this.exportStatus.textContent = 'copying…'
     try {
+      if (this.deckExport !== null && (await this.deckExport.copy(this.exportDpi))) {
+        this.exportStatus.textContent = 'copied the deck'
+        return
+      }
       const now = new Date()
       // The canvas is drawn *before* the clipboard item is built rather than
       // inside the promise handed to it, because drawing is the part that can
@@ -3547,6 +3594,15 @@ export class MatrixPanel {
     if (comparison !== null) parts.push(comparison)
     if (this.derived?.scope != null) parts.push(this.derived.scope)
     parts.push(this.transform === 'none' ? 'linear' : this.transform)
+    // The two ends of the colour scale, as the key states them: a figure whose
+    // key has been switched off, or two figures set side by side, are read
+    // against their ranges, and a caption that left them out left the reader
+    // to guess what the darkest cell was worth.
+    const painted = this.painted
+    if (painted !== null) {
+      const key = this.keyFor(painted)
+      parts.push(`colour ${key.loLabel} to ${key.hiLabel}`)
+    }
     parts.push(captionStamp(now))
     return { title, detail: parts.join(' · ') }
   }
@@ -6113,21 +6169,26 @@ export class MatrixPanel {
     return this.turned?.fold === undefined ? '◣' : '▼'
   }
 
-  private keyFor(scale: ColorScale, prefix = ''): KeyContent {
+  /**
+   * What the cells hold, in one word: the score picker's, else `balanced` or
+   * `count`. The key's title and the readout under the pointer say the same
+   * word, because a tooltip reading `count 0.003` under a key reading
+   * `Balanced` was two names for one number.
+   */
+  private scoreWord(): string {
     const scores = this.options.scores
     const choice = scores?.choices.find((entry) => entry.id === scores.current)
+    const named = choice?.label ?? this.scoreLabel ?? ''
+    if (named !== '') return named
+    return this.options.balance === true ? 'balanced' : 'count'
+  }
+
+  private keyFor(scale: ColorScale, prefix = ''): KeyContent {
     // The picker's word where there is a picker; otherwise the one fact about
     // the read that is always known. A derived field that has taken over the
     // square — a ratio, a difference — names itself and nothing else, because
     // there is no longer one file's score in the cells to name.
-    const base =
-      this.comparisonLabel() !== null
-        ? ''
-        : (choice?.label ?? this.scoreLabel ?? '') !== ''
-          ? (choice?.label ?? this.scoreLabel)
-          : this.options.balance === true
-            ? 'balanced'
-            : 'count'
+    const base = this.comparisonLabel() !== null ? '' : this.scoreWord()
     const title = keyTitle([base, this.units], scale.transform, prefix)
     return { ...keyContent(scale, title, (value) => trimNumber(value, 3)), ...this.keyNote() }
   }
@@ -6171,7 +6232,7 @@ export class MatrixPanel {
     scale: number,
     origin: { x: number; y: number },
   ): void {
-    if (this.narrow) return
+    if (this.narrow || !this.legendOn) return
     const painted = this.painted
     if (painted === null) return
     const palette = readCanvasPalette(this.canvas)
@@ -7626,7 +7687,7 @@ export class MatrixPanel {
     const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
     const counts =
       this.second === null || compare === undefined
-        ? `count ${count}`
+        ? `${this.scoreWord()} ${count}`
         : `${compare.labels[0]} ${count}   ·   ${compare.labels[1]} ${
             Number.isNaN(this.second.data.values[slot])
               ? 'NaN (unbalanced)'
@@ -8122,7 +8183,7 @@ function describeAxis(
       : `${first.label} + ${fmt.int(rest.length)} more`
   }
   if (level !== 'bin') return group.label
-  return `${group.label}:${fmt.bp(bpWithin(group, offset, blockStart, binsize))}`
+  return `${group.label}:${fmt.pos(bpWithin(group, offset, blockStart, binsize))}`
 }
 
 /**
@@ -8229,7 +8290,7 @@ function positionIn(
   blockStart: number,
 ): string | null {
   if (group === undefined || level !== 'bin') return null
-  return fmt.bp(bpWithin(group, offset, blockStart, binsize))
+  return fmt.pos(bpWithin(group, offset, blockStart, binsize))
 }
 
 /**

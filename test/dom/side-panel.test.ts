@@ -166,6 +166,37 @@ describe('a side panel', () => {
     expect(tabOf(second.panel)?.textContent).toBe('GeneralB')
   })
 
+  it('starts folded where its spec says so, until the reader opens it', () => {
+    // Annotations and Analysis start folded so a first visit shows a map rather
+    // than five columns; the other three start open as they always did.
+    expect(mount(ANNOTATION_PANEL).panel.isCollapsed).toBe(true)
+    expect(mount(ANALYSIS_PANEL).panel.isCollapsed).toBe(true)
+    for (const spec of [FILES_PANEL, GENERAL_PANEL, AESTHETICS_PANEL]) {
+      expect(mount(spec).panel.isCollapsed).toBe(false)
+    }
+    // Opening one is a choice, and it has to be told from never having chosen:
+    // the open state is written, and a second window comes back open.
+    const first = mount(ANALYSIS_PANEL)
+    tabOf(first.panel)?.click()
+    expect(first.panel.isCollapsed).toBe(false)
+    expect(window.localStorage.getItem(ANALYSIS_PANEL.key)).toBe('0')
+    expect(mount(ANALYSIS_PANEL).panel.isCollapsed).toBe(false)
+  })
+
+  it('conceals for this window only, leaving the stored choice alone', () => {
+    // The landing page's Files column has done its job once a file it offered
+    // has opened; folding it then is the shell's doing, not the reader's, so the
+    // next window — and the landing page it starts on — still finds it open.
+    const { panel, resizes } = mount(FILES_PANEL)
+    const before = resizes()
+    panel.conceal()
+    expect(panel.isCollapsed).toBe(true)
+    expect(panel.el.classList.contains('collapsed')).toBe(true)
+    expect(resizes()).toBe(before + 1)
+    expect(window.localStorage.getItem(FILES_PANEL.key)).toBeNull()
+    expect(mount(FILES_PANEL).panel.isCollapsed).toBe(false)
+  })
+
   it('marks itself with what it holds, on both of its states', () => {
     // `file-cog` for the file and what is read off it, as its three siblings are
     // marked by their own contents rather than by a fold arrow.

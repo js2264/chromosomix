@@ -38,6 +38,16 @@ const DEFAULT_CACHE_BYTES = 64 << 20
 export interface RemoteRangeOptions {
   /** Bytes per cached chunk. */
   chunkSize?: number
+  /**
+   * Called after every request, with the running totals.
+   *
+   * For the one read that cannot report itself: listing a single-cell
+   * container's cells is a thousand synchronous requests inside one h5wasm
+   * call, and the thread is not free to say anything until it returns. What
+   * it *can* do is say so from inside each request, which is enough for a
+   * bar to count them.
+   */
+  onRead?(requests: number, bytes: number): void
   /** Upper bound on retained chunk bytes; least-recently-used are dropped. */
   maxCacheBytes?: number
   /** Injected for tests. Defaults to the global `fetch`. */
@@ -77,6 +87,7 @@ export class RemoteRangeSource implements ByteSource {
   readonly url: string
 
   private readonly chunkSize: number
+  private readonly onRead: ((requests: number, bytes: number) => void) | undefined
   private readonly maxCacheBytes: number
   /** Insertion-ordered, so the first key is the least recently used. */
   private readonly cache = new Map<number, Uint8Array>()
@@ -99,6 +110,7 @@ export class RemoteRangeSource implements ByteSource {
     this.credential = options.credential
     this.headers = options.headers
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
+    this.onRead = options.onRead
     const requested = Math.trunc(options.maxCacheBytes ?? DEFAULT_CACHE_BYTES)
     this.maxCacheBytes = Math.max(this.chunkSize, requested)
     this.requests = probeCost.requests
@@ -475,6 +487,7 @@ export class RemoteRangeSource implements ByteSource {
     }
     const body = new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0))
     this.bytesRead += body.byteLength
+    this.onRead?.(this.requests, this.bytesRead)
     return this.windowOf(body, from, to, xhr.getResponseHeader('content-range'))
   }
 

@@ -36,8 +36,82 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   for the cells of an `.scool` that were ticked (§3.8). An imported `.pairs` writes its
   `--bin-size` too, since a contact list declares no resolution and the line died at the open
   without it (README, SPECS §23).
+- **A `legend` overlay.** The key in the corner of the map — the score, the bin size and the two
+  ends of the colour scale — has a toggle of its own in the Map card, on by default, beside the
+  dividers and ticks it stands with. Off is for the figure whose caption already says it, and the
+  caption now does: every export ends its detail line with *colour −3.13 to 0.385*, so a map
+  without its key, or two maps side by side, are still read against their ranges.
+
+- **The whole-genome gate names the cheaper rung.** Pressing *W* on a fine resolution used to read
+  every stored pixel and say so afterwards; the ask-first screen now says in a line what it costs
+  and, on a laddered file, offers *open at 250 kb instead* — the coarsest rung whose bins still fit
+  in one drawn cell, which draws the same picture from a fraction of the pixels. A `.hic` declares
+  no pixel count and was never gated at all; a file that states no count is now gated on its bin
+  count instead (`WHOLE_VIEW_GATE_BINS`), so a chicken genome at 1 kb asks before it walks every
+  block.
+
+- **Compartments say when the resolution is wrong for them.** 4,642 bins on one sequence at 1 kb
+  is under the correlation gate and six minutes of eigenvectors with the CPU meter reading idle.
+  The line beside Run now says so in red, gives the rule of thumb — 250 kb on a mammalian genome,
+  and past about 2,000 bins the correlation takes minutes — and names the rung of this file at
+  which the widest sequence would fit (*open it at 5 kb (929 bins) or coarser*). The analysis
+  context carries the file's resolution ladder for it.
+
+### Changed
+
+- **Annotations and Analysis start folded.** Five open columns beside a square plot left the plot a
+  thirty-pixel sliver on a laptop, with the *whole genome* button clipped off the chromosome table.
+  A window that has never chosen now opens with the two columns a reader reaches for least on
+  arrival folded to their tabs; a stored choice still wins, and the open state is written as one,
+  so a reader who opens a column keeps it open (`ui/SidePanel.ts`, `defaultFolded`). The Files
+  column folds itself, for this window only, once a file chosen or dropped on the landing page has
+  opened — it is the one column that page shows, and it has done its job.
+
+- **Restore adds to what is open.** The banner outlives the picker, so a reader who opened a file
+  while it stood and then pressed *Restore* had the file they just opened replaced by the ones they
+  had, with no message and no undo. A window holding anything now takes the remembered tabs *beside*
+  it, the way a dropped workspace file always did; only an empty window is replaced.
+
+- **The Export card exports the deck.** Its download button and the `S` key called the lead
+  panel's own figure, so a reader with four maps side by side got the first cell of the
+  arrangement — the mismatch ⌘C had already been cured of. Both now go through the deck when there
+  is one: every panel at the card's dpi, laid out as on screen, as a PNG or as a one-page PDF; a deck
+  of one map exports as that map, vector PDF and all.
+
+- **The Tracks card says when the lanes are put away.** `V` cycles the map with its tracks, the
+  tracks alone, and the map alone, and the third stop left the card listing eight files drawn
+  nowhere — which read as the tracks having been lost, and was reported as the square map losing
+  them. One line above the list now says where they are and that `V` brings them back.
+
+- **The readout under the pointer says what and where.** `count 0.003` under a key reading
+  *Balanced* was two names for one number, and `1.22 Mb × 1.23 Mb` named a ten-kilobase
+  neighbourhood of a cell one kilobase wide, so two cells three bins apart printed the same string.
+  The tooltip and the status line now use the score picker's own word and write the coordinate out
+  in full — `NC_000913.3:1,215,000`. The analysis drawers' selects no longer shrink to their first
+  four letters (*Chro*, *ever*, *Prob*).
 
 ### Fixed
+
+- **A 4DN `.hic` drew a blank map as *balanced* at 1 kb and 2 kb.** Juicer writes a `KR` entry for
+  every chromosome whether or not the balancer converged, and where it did not the vector behind
+  the entry is all `NaN` — the chicken maps carry one at 1 kb and 2 kb for every chromosome, beside
+  a `VC_SQRT` and a `VC` that are whole. The reader chose its normalisation by name alone, per file,
+  and never looked behind it, so every cell multiplied by `NaN` and the legend read 0 to 1. A
+  chromosome whose preferred vector has no finite value in it now takes the next normalisation down
+  the preference list (`hic/HicFile.ts`, `normVector`), and `normTypeFor` says which one it got.
+
+- **Reading a single-cell container in small pieces looked hung.** The listing is a thousand
+  synchronous range requests inside one h5wasm call, so the bar said *listing cells…* and nothing
+  else for as long as it took — minutes on a slow link — and the open then went on to probe one
+  dataset header per cell for a pixel count nobody was waiting for, another four thousand round
+  trips. The requests now count themselves out loud (*listing cells · 512 reads — 8.0 MB*), and the
+  per-cell count is skipped on that source: unknown is what it is, and the File card says so.
+
+- **A file that is not HDF5 failed as `error - name not defined!`.** An HTML page saved under a
+  `.mcool` name, a download that stopped short, a text matrix: h5wasm found no superblock and said
+  so in its own words, which reached the screen as *something went wrong*. The container is now
+  refused by its first bytes, in a sentence that names the file, and a failure h5wasm raises on a
+  file that *is* HDF5 is said about that file and group rather than about nothing.
 
 - **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts
   gzip, and Drive takes it up on an unranged `HEAD`: `Content-Encoding: gzip`, chunked, no length.

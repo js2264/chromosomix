@@ -113,6 +113,7 @@ describe('overlay toggles', () => {
       crosshair: false,
       tooltip: true,
       ticks: true,
+      legend: true,
     })
   })
 
@@ -153,6 +154,7 @@ describe('overlay toggles', () => {
       crosshair: true,
       tooltip: true,
       ticks: true,
+      legend: true,
     })
     view.setPlotOptions({ dividers: false })
     expect(view.plotOptions).toEqual({
@@ -167,6 +169,7 @@ describe('overlay toggles', () => {
       crosshair: true,
       tooltip: true,
       ticks: true,
+      legend: true,
     })
   })
 

@@ -824,6 +824,16 @@ export interface PlotOptions {
   tooltip: boolean
   /** Base-pair coordinates along an axis that has a single one (§7.1). */
   ticks: boolean
+  /**
+   * The key in the corner of the map: what the cells hold, the bin size and
+   * the two ends of the colour scale.
+   *
+   * The renderer draws no key of its own — the panel does, on screen and into
+   * every export — so this is carried here for the same reason `text` is: it
+   * is one of the marks a figure is made of, stored and toggled beside the
+   * others. Off is for the figure whose caption already says all of it.
+   */
+  legend: boolean
 }
 
 /**
@@ -858,6 +868,8 @@ export const DEFAULT_PLOT_OPTIONS: PlotOptions = {
   // renderer's defaults are read by views that then hand them to a panel.
   tooltip: true,
   ticks: true,
+  // On: a figure without its key is a picture of colours.
+  legend: true,
 }
 
 // ---------------------------------------------------------------------------

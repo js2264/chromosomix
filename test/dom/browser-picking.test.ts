@@ -120,6 +120,7 @@ const host: SessionHost = {
   applyPanelLayout: () => {},
   notify: () => {},
   activity: () => {},
+  landingFileOpened: () => {},
 }
 
 /** The private doors a browser session comes in through, without a file to read. */
