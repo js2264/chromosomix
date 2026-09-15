@@ -1,6 +1,13 @@
 {
-  "latest": "8f23ade",
+  "latest": "bd146cf",
   "versions": [
+    {
+      "commit": "bd146cf",
+      "version": "0.12.0",
+      "date": "2026-09-15T14:36:56+02:00",
+      "subject": "Enable all analysis tasks to run from CLI by supporting tracks and peer maps (#55)",
+      "tag": ""
+    },
     {
       "commit": "8f23ade",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "d9530e4",
-      "version": "0.11.0",
-      "date": "2026-09-09T19:02:08+02:00",
-      "subject": "Add support for .scool and HiC-Pro formats with progress tracking (#40)",
-      "tag": ""
-    },
-    {
       "commit": "815b0ad",
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
@@ -198,13 +198,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 55,
-      "commit": "b41c540",
-      "title": "Enable all analysis tasks to run from CLI by supporting tracks and peer maps",
-      "branch": "js/clever-edison-i84zwd",
-      "date": "2026-09-15T11:31:27Z"
-    }
-  ]
+  "pulls": []
 }
