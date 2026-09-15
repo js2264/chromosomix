@@ -1,6 +1,13 @@
 {
-  "latest": "2ac4502",
+  "latest": "cca552b",
   "versions": [
+    {
+      "commit": "cca552b",
+      "version": "0.12.0",
+      "date": "2026-09-15T23:54:30+02:00",
+      "subject": "Draw a whole chart inside one feature: barChart and bigBarChart (§8.17) (#60)",
+      "tag": ""
+    },
     {
       "commit": "2ac4502",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.12.0",
       "date": "2026-09-11T00:34:21+02:00",
       "subject": "Add CLI command export and card folding UI features (#43)",
-      "tag": ""
-    },
-    {
-      "commit": "5e97e36",
-      "version": "0.12.0",
-      "date": "2026-09-10T23:06:20Z",
-      "subject": "Write a compared track at the resolution of the tracks, not of the map",
       "tag": ""
     },
     {
