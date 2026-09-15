@@ -198,5 +198,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 55,
+      "commit": "b41c540",
+      "title": "Enable all analysis tasks to run from CLI by supporting tracks and peer maps",
+      "branch": "js/clever-edison-i84zwd",
+      "date": "2026-09-15T11:31:27Z"
+    }
+  ]
 }
