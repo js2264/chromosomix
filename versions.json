@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 61,
+      "commit": "0d3bfbb",
+      "title": "Let a species with no README.json keep its files, as --readme optional says",
+      "branch": "claude/hubs-action-dnazoo-store-pp7yvu",
+      "date": "2026-09-15T22:36:24Z"
+    }
+  ]
 }
