@@ -584,6 +584,18 @@ describe.skipIf(!havePython)('the ENCODE front end', () => {
     }
   })
 
+  it('lists a BAM only where its reads can be drawn: Hi-C alignments go, ChIA-PET stays', () => {
+    // The same exception the 4DN front end makes, narrowed to what ENCODE's
+    // pipelines actually write: its Hi-C alignments are `bwa mem -SP5M` output
+    // in read-pair order (`@HD SO:unknown`), a click the viewer can only
+    // refuse; its ChIA-PET alignments come from ChIA-PIPE and are coordinate-
+    // sorted, so ENCSR000CAC's stays, and so does every BAM the portal did not
+    // describe — the manifest gives those their cells.
+    const text = shards.map((name) => JSON.stringify(read(name))).join('')
+    expect(text, 'ENCFF404HIC, the in situ Hi-C alignments of ENCSR683EDC').not.toContain('ENCFF404HIC')
+    expect(text).toContain('ENCFF317BAM')
+  })
+
   it('fills one row completely from the two sources at once', () => {
     expect(read('encode-GRCh38-alignment.json').entries?.[0]).toEqual({
       label: 'Homo sapiens GM12878 — ENCFF317BAM (bam)',

@@ -799,17 +799,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **The 4DN store lists a BAM only where its reads can be drawn.** A third of the store's rows
-  were BAMs, and most of those were clicks that could only be refused: 2,271 were the alignment
-  files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C, PLAC-seq, DNase
-  Hi-C, ChIA-PET, MARGI, TCC, HiChIP), which a Hi-C pipeline writes in read-pair order and the
-  viewer refuses for want of a sort, and 6,309 were BAMs the portal describes nowhere — no assay,
-  no biosource, no dataset, nothing to filter on. The generator now leaves both out, so *bam* in the
-  Files facet is the 1,397 alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq,
-  which are sorted and draw; the `.pairs` and the contact map of every Hi-C set are the rows that
-  were wanted from it, and they stay. The rule is about what a BAM is — its reads — and not a list of
-  assays: a new member of the family whose name says Hi-C arrives filtered, and a new linear assay
-  arrives listed (SPECS §24.3, docs/stores.md).
+- **The 4DN and ENCODE stores list a BAM only where its reads can be drawn.** A third of the 4DN
+  store's rows were BAMs, and most of those were clicks that could only be refused: 2,271 were the
+  alignment files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C,
+  PLAC-seq, DNase Hi-C, ChIA-PET, MARGI, TCC, HiChIP), every one `bwa mem -SP5M` output in read-pair
+  order with no `@HD` line, which the viewer refuses for want of a sort, and 6,309 were BAMs the
+  portal describes nowhere — no assay, no biosource, no dataset, nothing to filter on. The generator
+  now leaves both out, so *bam* in the Files facet is the 1,397 alignments of RNA-seq, ChIP-seq,
+  CUT&RUN, Repli-seq, DamID and TSA-seq, which are sorted and draw; the `.pairs` and the contact
+  map of every Hi-C set are the rows that were wanted from it, and they stay. ENCODE's alignment
+  shards lose their Hi-C pipeline's files the same way — 471 rows of in situ, dilution and intact
+  Hi-C, `@HD SO:unknown` — and nothing else: ENCODE's ChIA-PET alignments are ChIA-PIPE's and
+  coordinate-sorted, and a BAM the portal did not describe keeps the cells its manifest row has.
+  The rule is about what a BAM is — its reads — and not a list of assays: a new member of the
+  family whose name says Hi-C arrives filtered, and a new linear assay arrives listed (SPECS
+  §24.3, docs/stores.md).
 
 - **The Google Drive and Dropbox panes are a title, a `?` and a button.** Each was still two or
   three paragraphs about the grant and the token between its heading and its button, and the Drive

@@ -5830,8 +5830,13 @@ the words so a new member arrives filtered), and a BAM the portal does not descr
 has no assay to judge by and no cell to filter on. On 2026-09-15 that was 2,271 and 6,309 of the
 store's 9,977 BAM rows, every one a click the viewer could only refuse; the 1,397 alignments of
 RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq stay, and so do every `.pairs` and every
-contact map. It is still a rule about the file — which door it opens, whether it can be drawn — and
-not a list of assays worth showing.
+contact map. The ENCODE front end makes the same exception for its Hi-C pipeline's alignments and
+for those alone (`HIC_ASSAYS_ENCODE`; 471 rows that day): the list is narrower because the
+pipelines are — ENCODE's ChIA-PET alignments come from ChIA-PIPE and are coordinate-sorted, where
+4DN runs every interaction assay through its Hi-C pipeline, and both were measured on the files'
+own `@HD` lines before the words were chosen. An undescribed ENCODE BAM stays, because its manifest
+row still carries an assembly, an output type, a lab and a dataset. It is still a rule about the
+file — which door it opens, whether it can be drawn — and not a list of assays worth showing.
 
 **A spine and an enrichment.** The first version asked a portal's search API for both halves of a
 row — which files exist, and what they are of — and that is the wrong shape for a complete

@@ -356,16 +356,19 @@ ROUTE_GENOME = re.compile(
 )
 
 
-#: The assays whose alignment file is in read-pair order rather than in
-#: coordinate order: the 3C family and its relatives, which 4DN runs through its
-#: Hi-C pipeline (MARGI through its own). The BAM such a pipeline publishes is
-#: the aligner's output in the order the pairs were read, with no ``@HD`` line
-#: claiming otherwise, and the ``.pairs`` and the contact map beside it are the
-#: products. The viewer draws reads from a coordinate-sorted file and refuses
-#: any other (SPECS §8.13), and a row that can only be refused is not a row
-#: (§8.5). Matched on the words of the experiment type, so a new member of the
-#: family whose name says Hi-C or Micro-C arrives filtered and a new linear
-#: assay arrives listed; the words are 4DN's own vocabulary as of 2026-09.
+#: 4DN's assays whose alignment file is in read-pair order rather than in
+#: coordinate order: the 3C family and its relatives, every one of which 4DN
+#: runs through its Hi-C pipeline (MARGI through its own, to the same effect).
+#: Measured 2026-09-15 on one BAM per assay in the published store — in situ,
+#: Dilution, Capture and DNase Hi-C, Micro-C, PLAC-seq, ChIA-PET in both
+#: spellings, HiChIP, TCC, MARGI, TrAC-loop — each is ``bwa mem -SP5M`` output
+#: with no ``@HD`` line at all, while the RNA-seq and ChIP-seq alignments beside
+#: them carry ``@HD SO:coordinate``. The ``.pairs`` and the contact map beside
+#: such a BAM are the products. The viewer draws reads from a coordinate-sorted
+#: file and refuses any other (SPECS §8.13), and a row that can only be refused
+#: is not a row (§8.5). Matched on the words of the experiment type, so a new
+#: member of the family whose name says Hi-C or Micro-C arrives filtered and a
+#: new linear assay arrives listed; the words are 4DN's vocabulary as of 2026-09.
 INTERACTION_ASSAYS = re.compile(
     r"hi-?c\b|micro-?c\b|capture-?c\b|chia-?pet|chia-?drop|plac-?seq|hichip|\btcc\b"
     r"|margi|dip-?c\b|mc-?3c|3c-?seq|\b[45]c-?seq\b|trac-?loop|\bdlo\b",
@@ -373,8 +376,22 @@ INTERACTION_ASSAYS = re.compile(
 )
 
 
+#: ENCODE's alignment files that are in read-pair order: its Hi-C pipeline's,
+#: and only those. Narrower than 4DN's list on purpose — ENCODE processes
+#: ChIA-PET with ChIA-PIPE, whose alignments are coordinate-sorted (measured
+#: 2026-09-15: ENCFF701CKT, ENCFF017GAY and ENCFF802MYF carry ``@HD
+#: SO:coordinate``), while its Hi-C pipeline's in situ, dilution and intact
+#: alignments (ENCFF105HZA, ENCFF054IOG, ENCFF918KPL) carry ``SO:unknown`` from
+#: ``bwa mem -SP5M``. ``assay_title`` spells the assay; ``assay_term_name``
+#: says ``HiC``, and both are matched. An undescribed ENCODE BAM stays: the
+#: manifest still gives it an assembly, an output type, a lab and a dataset,
+#: and the 6,805 of them on 2026-09-15 were sorted alignments of experiments
+#: the enrichment query does not cover.
+HIC_ASSAYS_ENCODE = re.compile(r"hi-?c\b|\bhic\b", re.I)
+
+
 def reads_drawable(suffix: str, assay: str, described: bool) -> bool:
-    """Whether a row of this format and assay is worth a reader's click.
+    """Whether a 4DN row of this format and assay is worth a reader's click.
 
     ``True`` for every format but ``bam``, whose whole use is its reads: a BAM
     of an interaction assay is in read-pair order (see
@@ -1630,6 +1647,7 @@ def entries_encode(
     kept: dict[tuple[str, str, str], dict] = {}
     entries: list[dict] = []
     seen = 0
+    unreadable = 0
     for row in rows:
         if text(row.get("status")).lower() != "released":
             continue
@@ -1653,6 +1671,14 @@ def entries_encode(
         assembly = text(row.get("assembly"))
         dataset = accession_in(row.get("dataset"))
         suffix = format_of(name)
+        # The one exception to "every name with a route", as the 4DN front end
+        # makes it (`reads_drawable`): a Hi-C pipeline's alignment file is in
+        # read-pair order, so a row for it is a click the viewer can only
+        # refuse. ENCODE's other interaction assay, ChIA-PET, stays — see
+        # `HIC_ASSAYS_ENCODE`.
+        if suffix == "bam" and HIC_ASSAYS_ENCODE.search(text(index.get(dataset, {}).get("assay"))):
+            unreadable += 1
+            continue
         candidate = {
             "accession": text(row.get("accession")),
             "url": url,
@@ -1697,6 +1723,8 @@ def entries_encode(
         log.info("%d openable files collapsed to %d rows.", seen, len(entries))
     else:
         log.info("%d openable files, all of them listed.", len(entries))
+    if unreadable:
+        log.info("%d Hi-C alignment files left out: in read-pair order, nothing to draw.", unreadable)
     return entries
 
 

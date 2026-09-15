@@ -126,7 +126,11 @@ could only refuse: the alignment file of a Hi-C-family assay (Hi-C, Micro-C, Cap
 PLAC-seq, HiChIP, TCC, MARGI, …) is in read-pair order, and reads are drawn from a coordinate-sorted
 file, so the 4DN front end leaves those out, along with any BAM the portal does not describe — no
 assay to judge it by, no cell to filter on. The `.pairs` and the contact map of the same set stay,
-and so do the alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq.
+and so do the alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq. The ENCODE
+front end leaves out its Hi-C pipeline's alignments and nothing else: ENCODE's ChIA-PET alignments
+are ChIA-PIPE's and coordinate-sorted (their `@HD` line says so), and a BAM the portal did not
+describe keeps the cells its manifest row carries. Both lists were chosen by reading the files'
+headers, not by assuming what an assay's pipeline writes.
 
 The `igv` front end reads [IGV's own genome table][igv] — the file the IGV desktop app and igv.js
 both load their genome menu from — and **probes every URL** with a ranged GET before writing a row
