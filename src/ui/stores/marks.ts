@@ -1,10 +1,13 @@
 /**
- * A store's mark: a square with a short word in it, in the store's colour.
+ * A store's mark: a square with a short word in it, in the store's colour, and
+ * an image over the word for the stores that have one.
  *
- * Drawn as type rather than as a logo, because the logos are not ours to ship
- * (`ui/stores/registry.ts` on `StoreMark.image`). What a mark has to do is be
- * recognised in a row of five and again, smaller, in the drawer's head — and a
- * coloured square with *4DN* in it does that as well as anything.
+ * All four shipped stores have one — RSG's drawn, the other three their own
+ * projects' (`ui/stores/registry.ts` on `StoreMark.image`) — so on those the
+ * word is what shows while the image loads and what is left if it fails. A
+ * store connected by URL has no image and is the coloured square with its
+ * initials in it, which is all a mark has to do anyway: be recognised in a row
+ * of five, and again smaller in the drawer's head.
  *
  * The word is scaled by its length so *ENCODE* and *IGV* fill the same square:
  * six letters at the size three would take spill over the edge.
@@ -48,6 +51,17 @@ export function storeMark(mark: StoreMark, size: number): HTMLElement {
     const image = el('img', { class: 'store-mark-image', attrs: { src: mark.image, alt: '' } })
     // The letters stay underneath; an image that will not load leaves them.
     image.addEventListener('error', () => image.remove())
+    // And the colour goes once one has, because otherwise it shows *through*
+    // the image. Both boxes are rounded by the same radius and both corners
+    // are antialiased, so along each of the four arcs the image covers its
+    // pixel only partly and the square underneath is what fills the rest — a
+    // thin band of the store's colour round every corner, which on the three
+    // marks with pale corners reads as a border the tile does not have. The
+    // colour is the fallback, so nothing is lost by dropping it the moment
+    // there is something in front of it.
+    image.addEventListener('load', () => {
+      node.style.background = 'transparent'
+    })
     node.appendChild(image)
   }
   return node

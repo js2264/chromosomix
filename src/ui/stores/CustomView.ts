@@ -34,6 +34,8 @@ export interface CustomViewProps {
   onTarget?(url: string): void
   /** The reader remembered or forgot a store; the drawer redraws its tiles. */
   onChanged?(): void
+  /** The catalogue landed, or was cleared; the drawer redraws its download. */
+  onLoaded?(): void
 }
 
 export class CustomView {
@@ -112,10 +114,16 @@ export class CustomView {
     await this.load(url)
   }
 
+  /** Whatever the portal inside is holding — this view reads, it does not keep. */
+  fileNow(): StoreFile | null {
+    return this.portal?.fileNow() ?? null
+  }
+
   private async load(url: string): Promise<void> {
     const token = ++this.pending
     this.portal?.destroy()
     this.portal = null
+    this.props.onLoaded?.()
     this.body.replaceChildren()
     this.keepSlot.replaceChildren()
     this.say(`Reading ${url}…`, false)
@@ -140,6 +148,7 @@ export class CustomView {
       host: this.props.host,
       view: this.props.view,
       onView: (view) => this.props.onView(view),
+      ...(this.props.onLoaded === undefined ? {} : { onLoaded: this.props.onLoaded }),
       file,
     })
     this.body.replaceChildren(this.portal.el)

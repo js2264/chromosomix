@@ -59,7 +59,7 @@ import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from 
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
-import { connectHead, signInButton } from './connectHead'
+import { connectHead, signInButton, tipCode } from './connectHead'
 import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
 
@@ -192,24 +192,39 @@ function localSection(done: (id: string) => void): HTMLElement {
   return el(
     'div',
     { class: 'connect-section' },
-    el('h3', {}, icon('hard-drive', { size: 15 }), el('span', { text: 'A folder on this machine' })),
-    el('p', {
-      class: 'hint',
-      text: granted
-        ? 'Read in place, never uploaded. The browser keeps permission to list the folder across ' +
-          'reloads; take it back any time under About → what is stored.'
-        : 'This browser cannot keep a folder, so this is a snapshot of its file list for this ' +
-          'visit only. Nothing is uploaded. Chrome, Edge and the desktop app keep the connection.',
-    }),
+    connectHead('A folder on this machine', 'hard-drive', localHelp(granted)),
+    // The one large button the two sign-in panes have, because this pane is
+    // the same shape as theirs: one thing to press, and everything worth
+    // knowing before pressing it behind the `?`. What a browser without the
+    // picker gives is a snapshot rather than a connection, and the difference
+    // is carried by the label — the reader acts on that, so it stays on the
+    // pane where the rest of the sentence no longer is.
     el(
       'div',
-      { class: 'bucket-actions' },
-      button(granted ? 'choose a folder…' : 'choose a folder (this visit)…', () => void connect(), {
-        class: 'btn btn-primary',
-      }),
+      { class: 'connect-signin' },
+      signInButton(
+        granted ? 'choose a folder…' : 'choose a folder (this visit)…',
+        'hard-drive',
+        () => void connect(),
+        { disabled: false },
+      ),
     ),
     error,
   )
+}
+
+/** Behind the local pane's `?`: what "read in place" means, and how long it lasts. */
+function localHelp(granted: boolean): string[] {
+  return [
+    'Read in place, never uploaded. The folder is listed one level at a time in the Files panel, ' +
+      'and no byte of it is sent anywhere.',
+    granted
+      ? 'The browser keeps permission to list the folder across reloads; take it back any time ' +
+        'under About → what is stored.'
+      : 'This browser cannot keep that permission, so what you get is a snapshot of the file list ' +
+        'for this visit only — it does not update and it does not survive a reload. Chrome, Edge ' +
+        'and the desktop app keep the connection.',
+  ]
 }
 
 /** The bucket half: the shared form, and nothing of its own. */
@@ -217,15 +232,60 @@ function bucketSection(done: (id: string) => void): HTMLElement {
   return el(
     'div',
     { class: 'connect-section' },
-    el('h3', {}, icon('cloud', { size: 15 }), el('span', { text: 'A bucket' })),
-    el('p', {
-      class: 'hint',
-      text:
-        'An https:// or s3:// prefix on S3, R2, MinIO, Google Cloud Storage or any store that ' +
-        'answers ListObjectsV2 — public, or with a read-only key kept in this browser.',
-    }),
+    connectHead('A bucket', 'cloud', bucketHelp()),
     bucketForm({ onSaved: (scope) => done(bucketFolderId(scope.id)) }),
   )
+}
+
+/**
+ * Behind the bucket pane's `?`: how to make a bucket serve this viewer.
+ *
+ * The only one of the four panes whose subject is a *configuration* somebody
+ * has to go and make, rather than a consent they are about to give — so it is
+ * the one whose tip carries policies to paste rather than sentences to read,
+ * and the reason `tipCode` exists. Both blocks are the whole of what has to be
+ * set: everything a reader gets wrong here is one of the two.
+ */
+function bucketHelp(): Array<string | HTMLElement> {
+  return [
+    'An https:// or s3:// prefix on S3, R2, MinIO, Google Cloud Storage or anything else that ' +
+      'answers ListObjectsV2. Your browser reads it directly, with no server in between, so the ' +
+      'bucket — not this page — decides what may be read. Two things have to be set.',
+    'CORS first, without which no read starts at all. Range and Content-Range are the pair that ' +
+      'matters: a .mcool is read in pieces and never whole, so a bucket that will not expose them ' +
+      'serves files this viewer cannot open. Narrow AllowedOrigins to the site once it works.',
+    tipCode(
+      `[{
+  "AllowedOrigins": ["*"],
+  "AllowedMethods": ["GET", "HEAD"],
+  "AllowedHeaders": ["Range", "Content-Type"],
+  "ExposeHeaders": [
+    "Accept-Ranges", "Content-Range", "Content-Length", "ETag"
+  ]
+}]`,
+    ),
+    'Then the reading. Public data needs s3:GetObject on the objects and s3:ListBucket on the ' +
+      'bucket — two different grants, which is why a prefix whose files open by URL may still ' +
+      'refuse to be browsed.',
+    tipCode(
+      `{
+  "Effect": "Allow",
+  "Principal": "*",
+  "Action": ["s3:GetObject", "s3:ListBucket"],
+  "Resource": [
+    "arn:aws:s3:::BUCKET",
+    "arn:aws:s3:::BUCKET/PREFIX/*"
+  ]
+}`,
+    ),
+    'For private data, leave that policy off and put a key under Additional settings instead: an ' +
+      'IAM user with those same two actions on this prefix and nothing else. The region is part ' +
+      'of the signature, so a wrong one is a 403.',
+    'A key is kept in this browser and signs requests from this page, so anything able to run ' +
+      'script on this origin can read it. There is no server to hide it behind — the same ' +
+      'property that makes a dropped file never leave your machine. Never paste an administrator ' +
+      'key here.',
+  ]
 }
 
 /**

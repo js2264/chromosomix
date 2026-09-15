@@ -77,12 +77,28 @@ export function registerServiceWorker(): void {
     )
   })
 
-  // The other half of the handshake. The new worker has taken over, so the page
-  // it is serving is the old one — reload once, and guard against the loop a
+  // The other half of the handshake, and it is only half a handshake on an
+  // *update*: a worker that replaced another is serving a page built from the
+  // one it replaced, so the page is reloaded once — guarded against the loop a
   // second `controllerchange` would cause.
+  //
+  // **The first install is not that case, and must not reload.** A page with no
+  // controller was served by the network a moment ago and is therefore already
+  // the newest build; there is nothing to swap. `clients.claim()` in `sw.js`'s
+  // activate fires `controllerchange` at it all the same, and a reload there
+  // throws away whatever the first load was in the middle of.
+  //
+  // Which was not theoretical. A shared session is decoded and then *taken out
+  // of the address bar* before the tab it describes has finished opening
+  // (`app/App.ts` on `openSharedHash`), so the reload landed on a bare URL and
+  // the link opened the picker instead of the session. Only ever on the first
+  // visit in a profile — every reload, every second tab, every ordinary visit
+  // already has a controller and behaves — which is why it read as a link that
+  // did not work rather than as a worker that should not have reloaded.
+  const hadController = navigator.serviceWorker.controller !== null
   let reloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return
+    if (!hadController || reloading) return
     reloading = true
     window.location.reload()
   })

@@ -66,6 +66,12 @@ export interface PortalViewProps {
    * a remembered front has a URL of its own and this is absent.
    */
   file?: StoreFile
+  /**
+   * The catalogue this page is showing changed — read, merged across shards, or
+   * lost. The drawer offers a download of it, and that offer cannot exist until
+   * there is something to download.
+   */
+  onLoaded?(): void
 }
 
 /** What the main area shows while there are no rows to draw. */
@@ -86,6 +92,17 @@ export class PortalView {
   private readonly statusEl = el('div', { class: 'portal-status hidden' })
 
   private file: StoreFile | null = null
+
+  /** The catalogue as this page has it: merged across shards, URIs resolved. */
+  fileNow(): StoreFile | null {
+    return this.file
+  }
+
+  /** Hold a catalogue, and say so — see `onLoaded`. */
+  private hold(file: StoreFile | null): void {
+    this.file = file
+    this.props.onLoaded?.()
+  }
   /**
    * The shards read so far, by their id, for a front published in several.
    *
@@ -207,7 +224,7 @@ export class PortalView {
     this.props.onView(this.view)
 
     if (this.props.file !== undefined) {
-      this.file = this.props.file
+      this.hold(this.props.file)
       this.paint()
       return
     }
@@ -222,7 +239,7 @@ export class PortalView {
       return
     }
     if (ref.inline !== undefined) {
-      this.file = ref.inline
+      this.hold(ref.inline)
       this.paint()
       return
     }
@@ -231,7 +248,7 @@ export class PortalView {
       return
     }
 
-    this.file = null
+    this.hold(null)
     this.showStatus({ kind: 'loading', text: `Reading ${ref.label}…` })
     this.paintRail()
     // The sessions ride alongside and are not waited for: a shelf whose session
@@ -244,7 +261,7 @@ export class PortalView {
       this.showStatus({ kind: 'error', text: storeFailure(result, ref) })
       return
     }
-    this.file = result.store
+    this.hold(result.store)
     if (sessions !== null) {
       const read = await sessions
       if (token !== this.pending || this.destroyed) return
@@ -297,12 +314,12 @@ export class PortalView {
     const read = wanted.filter((shard) => this.shardFiles.has(shard.id))
     if (read.length === 0) {
       const why = wanted.map((shard) => this.shardErrors.get(shard.id)).find((text) => text !== undefined)
-      this.file = null
+      this.hold(null)
       this.showStatus({ kind: 'error', text: why ?? 'Nothing is ticked, so nothing is read.' })
       this.paintRail()
       return
     }
-    this.file = mergeShards(read.map((shard) => this.shardFiles.get(shard.id) as StoreFile))
+    this.hold(mergeShards(read.map((shard) => this.shardFiles.get(shard.id) as StoreFile)))
     const failed = wanted.filter((shard) => this.shardErrors.has(shard.id))
     this.showStatus({ kind: 'none' })
     this.paint()
@@ -583,6 +600,19 @@ export function storeFailure(
       'Run it once (Actions → Stores → Run workflow) and this fills in.'
     )
   }
-  if (result.reason === 'refused') return refusalMessage(result.refusal, ref.url ?? ref.label)
+  // `refusalMessage` is the *workspace* reader's wording, and for the one
+  // refusal both formats share it names the wrong kind of file: a store served
+  // as HTML — which is what a dev server answers for a store it has not
+  // generated — read "is not a JSON file, so it is not a saved workspace",
+  // about a thing nobody was trying to open. The other refusals it gives are
+  // about the config format and cannot arise here.
+  if (result.reason === 'refused') {
+    const where = ref.url ?? ref.label
+    return result.refusal.reason === 'not-json'
+      ? `${where} did not answer with JSON, so it is not a store. A host that serves a page ` +
+          'instead of the file — a dev server with no generated stores, or a sign-in wall — ' +
+          'answers exactly like this.'
+      : refusalMessage(result.refusal, where)
+  }
   return result.message
 }

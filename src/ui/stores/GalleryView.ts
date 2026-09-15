@@ -18,7 +18,7 @@
 import { button, el } from '../dom'
 import { icon, iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
-import type { StoreEntry } from '../../state/store'
+import type { StoreEntry, StoreFile } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
 import type { StoreFront } from './registry'
 
@@ -29,6 +29,15 @@ export interface GalleryViewProps {
 
 export class GalleryView {
   readonly el: HTMLElement
+
+  /**
+   * The catalogue, which for this front is inline and therefore never pending:
+   * it ships inside the bundle, so there is nothing to wait for and no
+   * `onLoaded` to raise.
+   */
+  fileNow(): StoreFile | null {
+    return this.props.front.rows?.inline ?? null
+  }
 
   constructor(private readonly props: GalleryViewProps) {
     const file = props.front.rows?.inline ?? null

@@ -49,6 +49,8 @@ import { PortalView } from './stores/PortalView'
 import { storeMark } from './stores/marks'
 import { customStore, frontById, storeFronts, type StoreFront } from './stores/registry'
 import { storeTiles } from './stores/tiles'
+import { downloadBlob } from './export'
+import type { StoreFile } from '../state/store'
 import type { StoreHost } from './stores/host'
 
 /**
@@ -113,10 +115,36 @@ function takesEscape(node: HTMLElement): boolean {
   return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset'].includes(node.type)
 }
 
+/**
+ * What the downloaded catalogue is called.
+ *
+ * A built-in is its own id, which is the name its generator writes and the name
+ * the site serves. A store read from a URL keeps that URL's file name where it
+ * has one, so a reader who downloads what they typed gets back something they
+ * recognise, and falls back to the catalogue's own name.
+ */
+function storeFileName(front: StoreFront, target: string): string {
+  if (front.builtin) return `${front.id}.json`
+  const last = (target.split(/[?#]/)[0].split('/').pop() ?? '').trim()
+  if (last.toLowerCase().endsWith('.json')) return last
+  const slug = front.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return `${slug === '' ? 'store' : slug}.json`
+}
+
 /** A page drawn in the drawer's body. */
 interface StorePage {
   el: HTMLElement
   destroy(): void
+  /**
+   * The catalogue this page is showing, once it has one.
+   *
+   * Every front has a file behind it and not one of them was reachable: a
+   * built-in's URL is never shown (RSG has no URL at all, shipping inline), and
+   * *copy link* copies a `?store=` link carrying an id rather than the JSON. So
+   * the one way to read what a store actually says was to guess the address.
+   * This is what the head's download hands over.
+   */
+  fileNow(): StoreFile | null
 }
 
 export interface StoreDrawerOptions {
@@ -131,6 +159,7 @@ export class StoreDrawer {
   readonly toggle: HTMLButtonElement
 
   private readonly markSlot = el('span', { class: 'store-head-mark' })
+  private readonly downloadSlot = el('span', { class: 'store-head-actions' })
   private readonly titleEl = el('h2', { class: 'store-title' })
   private readonly blurbEl = el('p', { class: 'store-blurb' })
   private readonly tilesSlot = el('div', { class: 'store-head-tiles' })
@@ -177,11 +206,17 @@ export class StoreDrawer {
       el(
         'div',
         { class: 'store-head' },
+        // The row of stores first, and the store it is *on* under it. The two
+        // were the other way round, and the head then opened with a name and a
+        // sentence about the store already chosen — which is the one thing a
+        // reader in this drawer already knows. What they came to the head for
+        // is the row: it is how the drawer switches. The two buttons stay up
+        // here with it, because a close is looked for at the top right corner
+        // of a panel and nowhere else.
         el(
           'div',
           { class: 'store-head-row' },
-          this.markSlot,
-          el('div', { class: 'store-head-text' }, this.titleEl, this.blurbEl),
+          this.tilesSlot,
           iconButton(
             'link',
             'Copy a link to this store, narrowed as it is now.',
@@ -193,7 +228,13 @@ export class StoreDrawer {
             size: 14,
           }),
         ),
-        this.tilesSlot,
+        el(
+          'div',
+          { class: 'store-head-current' },
+          this.markSlot,
+          el('div', { class: 'store-head-text' }, this.titleEl, this.blurbEl),
+          this.downloadSlot,
+        ),
       ),
       this.body,
       this.handle(),
@@ -250,6 +291,7 @@ export class StoreDrawer {
     this.titleEl.textContent = front.label
     this.blurbEl.textContent = front.blurb
     this.body.replaceChildren(page.el)
+    this.paintDownload()
     this.body.scrollTop = 0
     this.el.classList.remove('collapsed')
     this.paintWidth()
@@ -318,9 +360,9 @@ export class StoreDrawer {
       case 'gallery':
         return new GalleryView({ front, host })
       case 'genomes':
-        return new GenomesView({ front, host })
+        return new GenomesView({ front, host, onLoaded: () => this.paintDownload() })
       case 'portal':
-        return new PortalView({ front, host, view, onView })
+        return new PortalView({ front, host, view, onView, onLoaded: () => this.paintDownload() })
       case 'custom':
         return new CustomView({
           front,
@@ -335,6 +377,7 @@ export class StoreDrawer {
             }
           },
           onChanged: () => this.paintTiles(),
+          onLoaded: () => this.paintDownload(),
         })
     }
   }
@@ -342,6 +385,47 @@ export class StoreDrawer {
   // -------------------------------------------------------------------------
   // Chrome
   // -------------------------------------------------------------------------
+
+  /**
+   * The download, or nothing.
+   *
+   * Absent rather than disabled while a store is still being read or could not
+   * be (§8.5): a greyed button on a catalogue that failed to load says the file
+   * exists and this build will not give it to you, which is the one reading
+   * that is false.
+   */
+  private paintDownload(): void {
+    this.downloadSlot.replaceChildren()
+    const current = this.current
+    if (current === null || current.page.fileNow() === null) return
+    this.downloadSlot.appendChild(
+      iconButton(
+        'download',
+        `Download ${storeFileName(current.front, current.target)} — this catalogue as the drawer ` +
+          'has it, which is every row before your filters, with its addresses resolved.',
+        () => this.downloadStore(),
+        { class: 'btn btn-icon', size: 14 },
+      ),
+    )
+  }
+
+  /**
+   * Write the catalogue out.
+   *
+   * What is written is the file *as loaded* and not a copy of the bytes on the
+   * host: shards are merged into the one file the reader is looking at, and
+   * every `uri` is absolute, so what lands opens on its own — which a shard
+   * with a relative `base` would not. RSG has no bytes on a host to copy.
+   */
+  private downloadStore(): void {
+    const current = this.current
+    const file = current?.page.fileNow() ?? null
+    if (current === null || file === null) return
+    downloadBlob(
+      new Blob([`${JSON.stringify(file, null, 2)}\n`], { type: 'application/json' }),
+      storeFileName(current.front, current.target),
+    )
+  }
 
   private paintTiles(): void {
     this.tilesSlot.replaceChildren(

@@ -14,6 +14,92 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A store's catalogue can be taken away with you.** There was no way to read the JSON behind a
+  shipped store: a built-in's URL is never shown on the page, RSG has none at all because it ships
+  inside the bundle, and *copy link* copies a `?store=` link carrying an id rather than the file. A
+  download now sits at the end of the store's own line in the drawer's head, and writes the
+  catalogue **as the drawer has it** — every row before your filters, shards merged into the one
+  file on screen, and every `uri` made absolute, so what lands opens on its own rather than
+  resolving against wherever it was saved. It is absent, not greyed, while a store is still being
+  read or could not be: a disabled button there would say the file exists and this build will not
+  hand it over.
+
+### Fixed
+
+- **A shared link opened the picker on the first visit in a fresh browser profile.** Not on the
+  second, and not in a second tab, which is what made it read as a broken link rather than as what
+  it was. The first load of the site registers the service worker; the worker calls
+  `clients.claim()` as it activates, so it takes over the page that is still running; and the page
+  reloaded, because a worker that has *replaced* another is serving a page built from the one it
+  replaced. A worker installing for the first time has replaced nothing — the page came off the
+  network a moment earlier and is already the newest build — but it fired the same
+  `controllerchange` and got the same reload. `openSharedHash` decodes a session and then takes
+  `#session=…` out of the address bar before the tab it describes has finished opening, so the
+  reload landed on a bare URL and the session was gone. The first claim no longer reloads; an
+  update still does, which is the case the reload was written for.
+
+- **A store that did not answer with a store said it was not a saved workspace.** The store reader
+  borrowed the *workspace* reader's wording for the one refusal both formats share, so a host
+  answering with a page instead of the file — which is what a dev server does for a store the
+  Stores workflow has not generated — produced `… is not a JSON file, so it is not a saved
+  workspace`, naming a kind of file nobody in the drawer was trying to open. It now says it is not
+  a store, and names the case that causes it.
+
+### Changed
+
+- **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores
+  the same way, as a coloured square with the name set in it, and for three of them that is the only
+  honest thing to draw: IGV's logo, 4DN's and ENCODE's are not published under terms a viewer may
+  redistribute, and a redrawn brand mark is wrong in a way that brand's own users can see. The
+  fourth was only sharing their fate. RSG's tile is now a contact map — 100 bins square, in the
+  viewer's own `default` ramp, with domains along the diagonal, A/B compartments, loop peaks and the
+  decay to paper that every Hi-C map has — and where the main diagonal would run, *RSG* is written
+  instead, the letters rasterised onto the matrix so that they are bins like everything else in the
+  picture. `npm run icons:rsg` draws it and commits it as an indexed PNG data URI whose palette *is*
+  that ramp: it costs no request, it needs no `public/` — the standalone build emits none — and a
+  test holds its 256 entries against `applyColormap('default')`, so the logo cannot quietly end up
+  in last year's colours beside maps drawn in this year's. The letters stay behind the image, so a
+  mark that fails to load is a lettermark and not a hole.
+
+- **The other three tiles carry their projects' own logos.** IGV's mark, 4DN's and ENCODE's were set
+  as letters in a coloured square because the logos were not ours to ship. They have since been given
+  to this viewer to carry, so the tiles draw them. Not one is redrawn — the icon pipeline's rule that
+  a brand mark is the published one or nothing holds over these exactly as it does over the icon set.
+  What they needed was fitting. A tile is a square drawn with `object-fit: cover`, and ENCODE's badge
+  is half again as wide as it is tall, so used as it arrived it would have been cropped to the middle
+  of the helix with the word *ENCODE* thrown away. `npm run icons:stores` fits each to a 160-pixel
+  square first — ENCODE letterboxed, 4DN composited on the white its disc is drawn for instead of
+  left transparent over a green square, IGV full bleed — and commits the three as data URIs beside
+  RSG's, for the same reason: `public/` is not emitted by the standalone build. The coloured grounds
+  stay underneath as what shows while an image loads and what is left if one fails, which is why they
+  are still deliberately nobody's brand.
+
+- **The store row is one row, and the marks have no band round them.** The five tiles wrapped onto a
+  second line at most widths, which made the last of them read as an afterthought rather than as one
+  of five; they share the width instead. The sentence over them is gone — the tiles say what they
+  are. Each mark carried a thin arc of the store's colour at all four corners: the square and the
+  image over it are rounded by the same radius and both corners are antialiased, so along each arc
+  the image covers its pixel only partly and the colour underneath fills the rest. On the three
+  marks with pale corners that read as a border the tile does not have. The colour is the fallback,
+  so it is dropped the moment an image is in front of it. The drawer's head now leads with the row
+  of stores and puts the one it is *on* underneath — a head that opened with the name of the store
+  the reader is already inside told them the one thing they knew — and its pills are rounded near
+  the marks' own 22% instead of to a capsule, which had put a semicircle around a square logo.
+
+- **The Connect dialog stops explaining itself on the pane.** *This machine* is now the shape the
+  two sign-in panes have had since §24.7 — a title, a `?` and one large button — with what *read in
+  place* means, and how long the browser keeps the permission, behind the `?`. The bucket pane keeps
+  a name, a URL and *Additional settings*, and nothing else: the switch that read *public* against
+  *needs a key* asked the reader to classify a prefix before describing it, which is answerable only
+  in terms of the five fields the answer then reveals, so whether a scope is signed now *follows*
+  from whether a key was typed into it — all three of region, key id and secret, or none. Its `?`
+  carries what a bucket needs before any of this reaches it: the CORS policy without which no read
+  starts at all, `Range` and `Content-Range` being the pair a `.mcool` cannot be read without, and
+  the two separate grants that make a prefix readable and listable — as blocks to paste rather than
+  prose to translate back into one.
+
+### Added
+
 - **Every task in the catalogue runs from the shell, so every run the console records is a real
   command.** `metacooler-run` refused four of them by name — the 1D metaplot, track correlation and
   FRiP, whose bigWig reader lived in the annotations worker alone, and reproducibility (HiCRep),

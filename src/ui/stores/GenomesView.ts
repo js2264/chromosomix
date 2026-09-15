@@ -19,7 +19,7 @@
 import { button, el, fmt } from '../dom'
 import { iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
-import { fetchStore, type StoreEntry } from '../../state/store'
+import { fetchStore, type StoreEntry, type StoreFile } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
 import { storeFailure } from './PortalView'
 import type { StoreFront } from './registry'
@@ -27,6 +27,8 @@ import type { StoreFront } from './registry'
 export interface GenomesViewProps {
   front: StoreFront
   host: StoreHost
+  /** The catalogue landed; the drawer can offer a download of it. */
+  onLoaded?(): void
 }
 
 interface Genome {
@@ -72,6 +74,13 @@ export class GenomesView {
     this.destroyed = true
   }
 
+  /** The catalogue as read: IGV's rows, not the sessions shelf beside them. */
+  fileNow(): StoreFile | null {
+    return this.rowsFile
+  }
+
+  private rowsFile: StoreFile | null = null
+
   private async load(): Promise<void> {
     const front = this.props.front
     this.say(`Reading ${front.label}…`, false)
@@ -97,6 +106,11 @@ export class GenomesView {
         genome(assembly, valueOf(entry, 'subject') || assembly).session = entry
       }
     }
+    // The rows file *is* this store's catalogue; the sessions beside it are a
+    // separate published file and a separate shelf, so a download of "this
+    // store" is this one.
+    if (rows?.ok === true) this.rowsFile = rows.store
+    this.props.onLoaded?.()
     if (rows?.ok === true) {
       for (const entry of rows.store.entries) {
         const assembly = valueOf(entry, 'assembly')
