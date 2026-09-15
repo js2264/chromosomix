@@ -63,6 +63,7 @@ name: Stores
 # What lands on the `stores` branch:
 #   igv.json                   IGV's genomes and their tracks
 #   4dn.json                   every openable file on the 4DN open-data bucket
+#   dnazoo.json                DNA Zoo's assemblies and maps, a directory a species
 #   encode-<assembly>-<kind>.json   twelve ENCODE shards
 #   <front>-sessions.json      the three session shelves
 #   sessions/*.metacooler.json the sessions those shelves name

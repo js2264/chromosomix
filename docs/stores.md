@@ -6,7 +6,7 @@ in the store drawer — the lab's and IGV's as cards of pre-configured sessions,
 as a faceted search with a matrix, a lab's own as that search over its rows; a lab connects one by
 pasting its URL under *Your own store* or arrives on it with `?store=<url>`. SPECS §24 is the
 specification; this is the operator's page: how to write one, how to generate one, and how the
-three public stores the app ships are kept fresh.
+four public stores the app ships are kept fresh.
 
 ## The file
 
@@ -73,10 +73,12 @@ exactly as its rows will be. Nothing is fetched until a reader chooses the store
 python3 scripts/make_store.py bucket https://my-lab.s3.eu-west-3.amazonaws.com/hic/ \
     --name 'Lab Hi-C' --out store.json
 
-# The three public stores, from their own APIs (this is what the workflow runs).
+# The four public stores (this is what the workflow runs). The first three ask
+# their own APIs; DNA Zoo is a bucket with a README.json in each species' folder.
 python3 scripts/make_store.py igv    --out out/igv.json    --sessions-dir out/sessions
 python3 scripts/make_store.py 4dn    --out out/4dn.json    --sessions-dir out/sessions
 python3 scripts/make_store.py encode --out out/encode.json --sessions-dir out/sessions
+python3 scripts/make_store.py dnazoo --out out/dnazoo.json
 
 # Validate a store — or a session — somebody else wrote.
 python3 scripts/make_store.py check store.json
@@ -210,12 +212,12 @@ session; every one of those files still has its own row in the data store.
 
 ## The stores the app ships
 
-`.github/workflows/stores.yml` — **Actions → Stores** — runs all three front ends every Monday and on
+`.github/workflows/stores.yml` — **Actions → Stores** — runs all four front ends every Monday and on
 demand, uploads everything as a timestamped workflow artifact (`stores-<date>`, kept ninety days),
 and publishes to the `stores` branch:
 
 ```
-igv.json  4dn.json  encode-<assembly>-<category>.json ×12
+igv.json  4dn.json  dnazoo.json  encode-<assembly>-<category>.json ×12
 igv-sessions.json  4dn-sessions.json  encode-sessions.json
 sessions/*.metacooler.json
 index.json        what is there, how many rows each has, how big, and when
@@ -239,10 +241,10 @@ nothing, pushes nothing and asks for no deploy.
 
 Until the workflow has run once on a fork, those pages answer *not generated yet* and name
 the workflow to run. On the first run, check the "Generate every store" step's counts (about 75 IGV
-rows and 41 sessions; about 25,700 4DN rows; about 210,000 ENCODE rows across twelve shards), that
-`--check` passed on everything, that the deploy it asked for has finished, and that
-`<site>/stores/4dn.json` answers `200`. A second run must publish nothing when the three sources
-answered the same thing.
+rows and 41 sessions; about 25,700 4DN rows; about 210,000 ENCODE rows across twelve shards; DNA Zoo
+in the low thousands, one directory a species), that `--check` passed on everything, that the deploy
+it asked for has finished, and that `<site>/stores/4dn.json` answers `200`. A second run must publish
+nothing when the four sources answered the same thing.
 
 A fork that would rather publish its stores elsewhere changes `storesBase()` in `src/ui/stores/registry.ts`
 and the branch name in the two workflows; nothing else knows where they live.
