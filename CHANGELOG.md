@@ -12,6 +12,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores
+  the same way, as a coloured square with the name set in it, and for three of them that is the only
+  honest thing to draw: IGV's logo, 4DN's and ENCODE's are not published under terms a viewer may
+  redistribute, and a redrawn brand mark is wrong in a way that brand's own users can see. The
+  fourth was only sharing their fate. RSG's tile is now a contact map — 100 bins square, in the
+  viewer's own `default` ramp, with domains along the diagonal, A/B compartments, loop peaks and the
+  decay to paper that every Hi-C map has — and where the main diagonal would run, *RSG* is written
+  instead, the letters rasterised onto the matrix so that they are bins like everything else in the
+  picture. `npm run icons:rsg` draws it and commits it as an indexed PNG data URI whose palette *is*
+  that ramp: it costs no request, it needs no `public/` — the standalone build emits none — and a
+  test holds its 256 entries against `applyColormap('default')`, so the logo cannot quietly end up
+  in last year's colours beside maps drawn in this year's. The other three tiles are unchanged, and
+  the letters stay behind the image, so a mark that fails to load is a lettermark and not a hole.
+
 ### Added
 
 - **Every task in the catalogue runs from the shell, so every run the console records is a real
