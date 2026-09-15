@@ -49,9 +49,21 @@ function generatorShards(): string[] {
 }
 
 describe('the shipped stores, on a page', () => {
-  it('are four, in the order the tiles offer them', () => {
-    expect(builtinStores().map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode'])
-    expect(builtinStores().map((front) => front.kind)).toEqual(['gallery', 'genomes', 'portal', 'portal'])
+  it('are five, in the order the tiles offer them', () => {
+    expect(builtinStores().map((front) => front.id)).toEqual([
+      'rsg',
+      'igv',
+      '4dn',
+      'encode',
+      'dnazoo',
+    ])
+    expect(builtinStores().map((front) => front.kind)).toEqual([
+      'gallery',
+      'genomes',
+      'portal',
+      'portal',
+      'portal',
+    ])
   })
 
   it('read the generated files from this site, under stores/', () => {
@@ -64,6 +76,10 @@ describe('the shipped stores, on a page', () => {
       `${site}/stores/encode-GRCh38-signal.json`,
     )
     expect(frontById('encode')?.sessions?.url).toBe(`${site}/stores/encode-sessions.json`)
+    // DNA Zoo is a bucket walk rather than a portal query, and publishes no
+    // sessions — one file, written by the `bucket` front end.
+    expect(frontById('dnazoo')?.rows?.url).toBe(`${site}/stores/dnazoo.json`)
+    expect(frontById('dnazoo')?.sessions).toBeUndefined()
   })
 
   it('offers one ENCODE shard per pair the generator writes, and no others', () => {
@@ -99,7 +115,14 @@ describe('stores the reader connected', () => {
     window.localStorage.clear()
     const row = addStoreRow({ label: 'Lab shelf', url: 'https://lab.example/store.json' })
     const fronts = storeFronts()
-    expect(fronts.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', row.id])
+    expect(fronts.map((front) => front.id)).toEqual([
+      'rsg',
+      'igv',
+      '4dn',
+      'encode',
+      'dnazoo',
+      row.id,
+    ])
     const mine = frontById(row.id)
     expect(mine?.kind).toBe('custom')
     expect(mine?.builtin).toBe(false)

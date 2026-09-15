@@ -1028,6 +1028,61 @@ describe.skipIf(!havePython)('the bucket front end', () => {
     for (const entry of store.entries ?? []) expect(entry.fields).toBeUndefined()
   })
 
+  /**
+   * `--folders` is the exception, and it adds no knowledge: the directories are
+   * already in every key the walk reports, and what was missing was a *word*
+   * for them — which only somebody who knows the bucket can supply. A bucket
+   * laid out one directory per species is a catalogue with a species column in
+   * it, and without this it is a flat list with the species glued to a note.
+   */
+  describe('named folder levels', () => {
+    let foldered: RawHub
+
+    beforeAll(() => {
+      foldered = built(
+        'bucket',
+        'foldered.json',
+        'https://lab-hic-public.s3.amazonaws.com/maps/',
+        '--from-xml',
+        join(FIXTURES, 'bucket-listing'),
+        '--folders',
+        'Species,Kind',
+        '--check',
+      )
+    })
+
+    it('turns the directory levels into columns, outermost first', () => {
+      expect(foldered.columns).toEqual([
+        { key: 'species', label: 'Species' },
+        { key: 'kind', label: 'Kind' },
+      ])
+    })
+
+    it('reads each value off the key’s own path', () => {
+      const fields = Object.fromEntries(
+        (foldered.entries ?? []).map((entry) => [entry.label, entry.fields]),
+      )
+      expect(fields['Yeast_ATAC.bw']).toEqual({ species: 'yeast', kind: 'annotations' })
+      expect(fields['Yeast_microC.pairs.gz']).toEqual({ species: 'yeast', kind: 'reads' })
+    })
+
+    it('leaves a level empty where the key is shallower than the names it was given', () => {
+      // `maps/yeast/Yeast_hic.hic` sits at the species root, so it is in no
+      // `Kind` — and an empty value is what the rail must show it as, rather
+      // than the name of a folder it is not in.
+      const fields = Object.fromEntries(
+        (foldered.entries ?? []).map((entry) => [entry.label, entry.fields]),
+      )
+      expect(fields['Yeast_hic.hic']).toEqual({ species: 'yeast' })
+    })
+
+    it('changes nothing else: the same rows, in the same order', () => {
+      expect((foldered.entries ?? []).map((entry) => entry.uri)).toEqual(
+        (store.entries ?? []).map((entry) => entry.uri),
+      )
+    })
+  })
+
   it('accepts its own output', () => {
     expect(make('check', join(out, 'bucket.json')).status).toBe(0)
   })

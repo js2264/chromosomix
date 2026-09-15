@@ -14,6 +14,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **DNA Zoo is a shipped store.** Its open bucket is walked the way any lab's bucket is — the
+  `bucket` front end, every object this viewer has a route for, read straight from the listing with
+  no portal in between — and published beside the other four by the weekly Stores workflow. The
+  tile is a lettermark for now: DNA Zoo's logo is published under terms nobody here has checked and
+  the file has not been supplied, so it falls back to the coloured square the mark was always
+  designed to fall back to.
+
+- **`make_store.py bucket --folders` names a bucket's directory levels.** A bucket knows a file's
+  name, its size and the directory it sits in, and nothing else — so the `bucket` front end has
+  always written a store with no columns and the folder glued to the note, which on a bucket laid
+  out one directory per species is a flat list of a catalogue that was never flat. `--folders
+  Species,Assembly` turns those levels into columns the rail filters on, taken from each key's own
+  path. It adds no knowledge: the directories were already in every key the walk reported, and what
+  was missing was a word for them, which only somebody who knows the bucket can supply. A key
+  shallower than the names it was given leaves the deeper ones empty rather than guessing. Omitted,
+  nothing changes.
+
+### Added
+
 - **A store's catalogue can be taken away with you.** There was no way to read the JSON behind a
   shipped store: a built-in's URL is never shown on the page, RSG has none at all because it ships
   inside the bundle, and *copy link* copies a `?store=` link carrying an id rather than the file. A

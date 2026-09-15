@@ -57,21 +57,41 @@ describe('the store logos', () => {
     expect(front.mark.image).toBe(STORE_LOGOS[key])
   })
 
-  it('leaves every shipped store a mark of its own', () => {
+  it('leaves every shipped store that has a logo a mark of its own', () => {
     const shipped = builtinStores()
-    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode'])
-    const images = shipped.map((front) => front.mark.image)
-    // All four present, and four different pictures — a copy-paste that gave
-    // two stores the same logo would otherwise look plausible on the page.
+    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', 'dnazoo'])
+    const images = shipped
+      .filter((front) => front.id !== 'dnazoo')
+      .map((front) => front.mark.image)
+    // Four present, and four different pictures — a copy-paste that gave two
+    // stores the same logo would otherwise look plausible on the page.
     expect(images.every((image) => image !== undefined)).toBe(true)
     expect(new Set(images).size).toBe(4)
     expect(images[0]).toBe(RSG_MARK_IMAGE)
+  })
+
+  /**
+   * DNA Zoo is the one shipped store drawn as letters, and this says so out
+   * loud rather than letting it read as an oversight: its logo is published
+   * under terms nobody here has checked and the file has not been supplied, so
+   * the tile is the coloured square the other four fall back to. Nothing about
+   * the store waits on it. When the file arrives this test is the thing that
+   * has to change, which is the point of asserting the absence.
+   */
+  it('draws DNA Zoo as a lettermark until its logo is supplied', () => {
+    const dnazoo = builtinStores().find((front) => front.id === 'dnazoo')!
+    expect(dnazoo.mark.image).toBeUndefined()
+    expect(dnazoo.mark.text).toBe('DNA')
+    // Short enough that the square never needs a shorter form of it.
+    expect(dnazoo.mark.short).toBeUndefined()
   })
 
   it('reaches the tile as an image over the letters', () => {
     for (const front of builtinStores()) {
       for (const size of [72, 26]) {
         const node = storeMark(front.mark, size)
+        // `undefined` on both sides for DNA Zoo: no image element, and no
+        // image to put in one.
         expect(node.querySelector('img')?.getAttribute('src')).toBe(front.mark.image)
       }
     }

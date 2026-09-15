@@ -157,7 +157,7 @@ import urllib.request
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional, Sequence
 
 log = logging.getLogger("make_hub")
 
@@ -1169,12 +1169,30 @@ def object_url(item: dict) -> str:
     return f"{item['root']}/{urllib.parse.quote(item['key'])}"
 
 
-def entries_from_objects(objects: Iterable[dict], prefix: str, limit: Optional[int]) -> list[dict]:
+def folder_columns(names: Sequence[str]) -> list[dict]:
+    """``--folders`` as store columns, in the order the segments appear."""
+    return [{"key": _slug(name), "label": name} for name in names]
+
+
+def entries_from_objects(
+    objects: Iterable[dict],
+    prefix: str,
+    limit: Optional[int],
+    folders: Sequence[str] = (),
+) -> list[dict]:
     """Every routable object under a walked prefix, as entries. The ``bucket`` front end.
 
     No metadata beyond the name, the size and the folder, because that is the
     whole of what a bucket knows — and it is still enough to choose from, which
     is the point GAPS G10 and SPECS §11 were making.
+
+    ``folders`` is the exception, and it is not metadata arriving from anywhere
+    new: it *names* the leading path segments the walk is already reporting, so
+    that they become columns the rail can filter on instead of a folder glued
+    to the note. A bucket laid out one directory per species is a catalogue
+    with a species column in it and always was; what was missing was a word for
+    that column, which only the person who knows the bucket can supply. Absent,
+    nothing changes — no columns, no fields, the note as before.
     """
     # The folder part of the prefix, so that a partial prefix (`…/wfoutput/000`)
     # still reports whole folder names rather than the tail of one.
@@ -1192,6 +1210,15 @@ def entries_from_objects(objects: Iterable[dict], prefix: str, limit: Optional[i
         # thing distinguishing two objects of the same name.
         inside = key[len(prefix_dir):] if key.startswith(prefix_dir) else key
         folder = inside.rsplit("/", 1)[0] if "/" in inside else ""
+        # The directories above the file, named in order. A key shallower than
+        # the names it was given simply has fewer: an object at the top of a
+        # bucket laid out by species belongs to no species, and an empty value
+        # is what the rail shows it as rather than a wrong one.
+        segments = folder.split("/") if folder != "" else []
+        fields = {
+            _slug(name): segments[depth] if depth < len(segments) else ""
+            for depth, name in enumerate(folders)
+        }
         entries.append(
             {
                 "label": name,
@@ -1199,7 +1226,7 @@ def entries_from_objects(objects: Iterable[dict], prefix: str, limit: Optional[i
                 "kind": kind,
                 "size": item["size"],
                 "note": folder,
-                "fields": {},
+                "fields": fields,
             }
         )
         if limit is not None and len(entries) >= limit:
@@ -2983,6 +3010,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=1000,
         help="Objects per listing request (default 1000, S3's maximum).",
     )
+    bucket.add_argument(
+        "--folders",
+        metavar="NAME,NAME",
+        help="Names for the directory levels under the prefix, outermost first — "
+        "'Species,Assembly' on a bucket laid out that way. Each becomes a column the "
+        "rail filters on, taken from the key's own path. Omitted, the store has no "
+        "columns and the folder stays in the note.",
+    )
 
     checker = fronts.add_parser("check", help="Validate stores and sessions against their contracts.")
     checker.add_argument("paths", nargs="+", type=Path)
@@ -3174,8 +3209,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                 prefix.rstrip("/"),
             )
         pages = recorded(args.from_xml, ".xml") if args.from_xml is not None else None
+        folders = [name.strip() for name in (args.folders or "").split(",") if name.strip() != ""]
         entries = entries_from_objects(
-            walk_objects(prefix, max_keys=args.max_keys, pages=pages), prefix, args.limit
+            walk_objects(prefix, max_keys=args.max_keys, pages=pages), prefix, args.limit, folders
         )
         segments = [part for part in urllib.parse.urlsplit(prefix).path.split("/") if part]
         stores.append(
@@ -3185,10 +3221,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                     name=args.name or (segments[-1] if segments else urllib.parse.urlsplit(prefix).netloc),
                     description=f"Every file under {prefix} this viewer has a route for.",
                     source=prefix,
-                    # No columns: a bucket knows a name and a size and nothing
-                    # else, and a table of empty columns is worse than a table
-                    # without them.
-                    columns=[],
+                    # No columns unless `--folders` named some: a bucket knows a
+                    # name and a size and nothing else, and a table of empty
+                    # columns is worse than a table without them. What
+                    # `--folders` adds is not new knowledge — it is a word for
+                    # the directories the walk already reports, which is the
+                    # one thing a bucket cannot tell you about itself.
+                    columns=folder_columns(folders),
                     entries=entries,
                 ),
             )

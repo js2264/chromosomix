@@ -133,6 +133,7 @@ const COLOURS = {
   igv: '#2f6fb5',
   fourdn: '#1f8a70',
   encode: '#5a4fa2',
+  dnazoo: '#a8326a',
   custom: '#5b6169',
 } as const
 
@@ -263,6 +264,33 @@ export function builtinStores(): StoreFront[] {
       group: 'dataset',
       headline: ['biosample', 'assay', 'target'],
       axes: ['assay', 'biosample'],
+    },
+    {
+      id: 'dnazoo',
+      label: 'DNA Zoo',
+      blurb:
+        'Every file on DNA Zoo’s open bucket this viewer has a route for, listed straight from ' +
+        'the bucket.',
+      kind: 'portal',
+      // `DNA` and not `DNAZOO`: the ladder in `ui/stores/marks.ts` is tuned so
+      // that six letters just fill the square, and it was tuned against
+      // *ENCODE* — measured in a browser, `DNAZOO` wants 74 pixels of the 72
+      // there are, because its letters are the wide ones. There is no
+      // conventional short form of this name to reach for instead, so this is
+      // the first of its two words, which is what `initialsOf` does with a
+      // one-word label and what puts this mark in the same family as the three
+      // beside it.
+      mark: { text: 'DNA', colour: COLOURS.dnazoo },
+      builtin: true,
+      rows: { id: 'dnazoo', label: 'DNA Zoo', url: `${base}dnazoo.json`, builtin: true },
+      // No `group`, no `headline`, no `axes`, and their absence is the honest
+      // shape of this one rather than an omission. All three name *columns*,
+      // and a bucket has none to name: it knows a file's name, its size and the
+      // directory it sits in, and nothing else (`scripts/make_store.py` on
+      // `entries_from_objects`). So this shelf is a searchable list until
+      // somebody who knows the layout names its directory levels — which is
+      // what the generator's `--folders` is for, and the one line in
+      // `.github/workflows/stores.yml` that turns this into a faceted shelf.
     },
   ]
 }
