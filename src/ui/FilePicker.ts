@@ -40,6 +40,7 @@ import { button, el } from './dom'
 import { LoadBox } from './LoadBox'
 import { appMark } from './mark'
 import { splitUri } from './labels'
+import { connectDirectory } from '../browse/connected'
 import { providerFronts, type ProviderId } from './connectFronts'
 import { storeFronts } from './stores/registry'
 import { storeTiles } from './stores/tiles'
@@ -82,15 +83,25 @@ export interface FilePickerProps {
    */
   onStore?(id: string): void
   /**
-   * A place was pressed. The shell opens the Connect dialog on it.
+   * A place that needs a form or a sign-in was pressed. The shell opens the
+   * Connect dialog on it.
    *
    * The shell's rather than this page's for the same reason a store tile is:
    * what a reader connects is a fact about the *window* — the Files column
    * holds it and every tab sees it (§20.4) — and not about the tab they
-   * happened to land on. Absent means the section is left out, which is what a
-   * test that wants only the load box asks for.
+   * happened to land on. Absent means the whole row is left out, which is what
+   * a test that wants only the load box asks for.
    */
   onConnect?(provider: ProviderId): void
+  /**
+   * A folder was connected from this page: *choose a folder…* was pressed and
+   * the reader pointed at one.
+   *
+   * The same call the Connect dialog makes when one of its panes finishes, and
+   * it means the same thing — show the Files column and put this folder in
+   * front — because a reader who has just connected a place is looking for it.
+   */
+  onConnected?(id: string): void
 }
 
 export class FilePicker {
@@ -158,14 +169,24 @@ export class FilePicker {
   }
 
   /**
-   * The places: one button per provider, and the Connect dialog behind each.
+   * The places: one button per provider, and what each press leads to.
    *
-   * A door rather than the thing itself, on the same grammar as the store
-   * tiles under it — a tile opens the drawer on that store, a button opens the
-   * dialog on that place — and for the reason that grammar exists: what
-   * follows a press here is a picker, a form to fill or a sign-in with a code
-   * to paste, and all three already live on the dialog's panes with the
-   * sentences §24.7 requires beside them. The ellipsis on every label says so.
+   * **This machine opens the directory picker itself.** It is one gesture and
+   * the browser draws it, so putting a dialog in front of it would be asking
+   * the reader to press *choose a folder…* twice; the call is made from inside
+   * the click for that reason and for a harder one — both pickers need
+   * transient user activation, and anything awaited first can cost it
+   * (`browse/connected.ts`'s `connectDirectory`). What comes back is a folder
+   * id, handed up because a connected folder belongs to the window rather than
+   * to this tab.
+   *
+   * **The other three open the Connect dialog** on their own pane, which is
+   * the same grammar as the store tiles under them — a tile opens the drawer
+   * on that store — and for the reason that grammar exists: what follows a
+   * press there is a form to fill or a sign-in with a code to paste, and both
+   * already live on the dialog's panes with the sentences §24.7 requires
+   * beside them. The ellipsis on every label covers both cases: something is
+   * about to be asked, here or in a dialog.
    *
    * Which places are offered is `ui/connectFronts.ts`'s, and it is the one
    * thing this section decides for itself: a button is only drawn where
@@ -190,14 +211,30 @@ export class FilePicker {
       el(
         'div',
         { class: 'picker-providers' },
-        ...fronts.map((front) =>
-          markButton(front.verb, front.mark, () => onConnect(front.id), {
-            class: 'btn btn-primary btn-mark picker-provider',
-            title: `${front.label}, listed one level at a time in the Files column.`,
-          }),
-        ),
+        ...fronts.map((front) => {
+          const node = markButton(
+            front.verb,
+            front.mark,
+            front.id === 'local' ? () => void this.pickDirectory() : () => onConnect(front.id),
+            {
+              class: 'btn btn-primary btn-mark picker-provider',
+              title: `${front.label}, listed one level at a time in the Files column.`,
+            },
+          )
+          // The same attribute the dialog's tiles carry, for the same reason:
+          // a button is named by a verb that may be reworded, and what says
+          // *which place this is* should not be the wording.
+          node.setAttribute('data-provider', front.id)
+          return node
+        }),
       ),
     )
+  }
+
+  /** The directory picker, and the folder it answers with. `null` is a cancel. */
+  private async pickDirectory(): Promise<void> {
+    const id = await connectDirectory()
+    if (id !== null) this.props.onConnected?.(id)
   }
 
   /**

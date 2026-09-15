@@ -5234,9 +5234,13 @@ screen until the sign-in has happened, and appears under the button the moment i
 same pane, under the same title; there is no second heading. A build that cannot offer a provider
 does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
 build's Drive pane keeps its title and its `?` and says under them why there is no button. The
-Files column's *Open a local/remote folder* opens the dialog, as does each button of the landing
-page's *Mount a local or remote folder* row — those carry the pane to open on, since a reader who
-pressed *sign in to Dropbox* has already chosen and must not be asked again (§24.2).
+The Files column's *Open a local/remote folder* opens the dialog, and so do three of the four
+buttons in the landing page's *Mount a local or remote folder* row — those carry the pane to open
+on, since a reader who pressed *sign in to Dropbox* has already chosen and must not be asked again.
+The fourth, *choose a folder…*, opens **the directory picker itself**: it is one gesture, the
+browser draws it, and a dialog in front of it would be asking the reader to press the same words
+twice (§24.2). Both screens call `connectDirectory` (`browse/connected.ts`) and therefore cannot
+disagree about which of the two shapes this browser gets, nor about the label that says so.
 
 ### 20.1 One level, never a walk
 
@@ -5297,8 +5301,18 @@ bucket that 403s on data the reader believes they have a key for.
 is of. **Files is the exception and is meant to be.** What it holds is the places this window is
 connected to, which are the same in every tab and outlive all of them, exactly as the theme is. It
 is therefore built once, never re-parented on a tab switch, and — alone among the five — **available
-with nothing open at all**, because the landing page is precisely where a reader with a folder of
-coolers starts.
+with nothing open at all**: a reader who has connected a folder and opened nothing yet is exactly
+the reader it is for.
+
+**It is there while a place is connected, and not otherwise** (`App.refreshFilesPanel`), which is
+§8.5's rule as the other four columns already follow it. It used to be there unconditionally,
+because its own *Open a local/remote folder* was the only door to a folder and a column nobody can
+see is not a door. The landing page now offers the four places itself (§24.2), so what that rule
+was buying on the first screen is an empty column beside a row of buttons saying the same thing.
+Connecting one opens the column on it (`reveal`), because the answer to the gesture is in there;
+disconnecting the last one takes it away again. The doors are elsewhere and stay elsewhere: the
+landing page — which is what a new tab is — and *Open a local/remote folder* in the command
+palette.
 
 `f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
 reaches for a list of files, so `f` came from the `fills` overlay — which keeps its toggle, on
@@ -5827,25 +5841,42 @@ column before a viewer knows it.
 the *choose files* button and the URL box **beside** it rather than under it (`ui/LoadBox.ts`),
 which the file crumb's *Open a file* reuses in a dialog with the other verb behind it; the three
 ways in are peers on one row, and the sentence about what opens as what sits under the row rather
-than inside the target. *Mount a local or remote folder* is a row of four buttons — *choose a
-folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to Dropbox…* — each opening the
-Connect dialog (§20) on that place's pane. *Connect to a data store* is a row of tiles — the lab's
+than inside the target. *Mount a local or remote folder* is a row of four buttons, side by side and
+of equal height, wrapping a long label to a second line rather than breaking the row — *choose a
+folder…*, which opens the directory picker itself, and *connect a bucket…*, *sign in to Google…*
+and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a row of tiles — the lab's
 own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one
 by URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
 picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
 plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
 
-**The places are doors, not forms**, which is the same grammar the tiles beside them have: a tile
-opens the drawer on that store, a button opens the dialog on that place. What follows a press is a
-directory picker, a bucket's CORS-and-key form or a sign-in with a code to paste, and all three
-already live on the dialog's panes with the sentences §24.7 requires beside them; a landing page
-that inlined any of them would be a second copy of one. The ellipsis on every label says a dialog
-is coming. Which places are offered is decided once, in `ui/connectFronts.ts`, and read by both
-doors — with one deliberate difference: the desktop build cannot register a Google sign-in against
-`app://viewer`, so the dialog keeps a Drive tile whose pane is the sentence saying why, and the
-landing page, whose buttons are things to press rather than places to read about, leaves that one
-out (§8.5). A button that would open the file picker's own *choose files* is likewise the same
-marked button the panes use, so one gesture looks the same wherever it is met.
+**Three of the four are doors; the fourth is the gesture.** *Choose a folder…* opens the directory
+picker itself, because it is one gesture and the browser draws it — a dialog in front of it would
+be asking the reader to press the same words twice — and because both pickers need transient user
+activation, which is spent by anything awaited first. *Connect a bucket…*, *sign in to Google…* and
+*sign in to Dropbox…* open the Connect dialog on their own pane, which is the same grammar the
+tiles beside them have (a tile opens the drawer on that store): what follows a press there is a
+CORS-and-key form or a sign-in with a code to paste, and both already live on the dialog's panes
+with the sentences §24.7 requires beside them, so a landing page that inlined either would be a
+second copy of one. The ellipsis on every label covers both cases — something is about to be asked,
+here or in a dialog.
+
+Which places are offered, and what each button says, is decided once in `ui/connectFronts.ts` and
+read by both doors. Two things follow from that. A build that cannot make a Google sign-in work —
+the desktop one, whose `app://viewer` is not an origin Google's console will register — keeps its
+Drive **tile**, whose pane is the sentence saying why, and loses its **button**, because a row of
+things to press is not where a reader is sent to read an explanation (§8.5). And *this machine* is
+worded identically on both screens: Chromium and the desktop build hold a directory as a grant that
+survives a reload, while Firefox and Safari hand over a snapshot of the file list that does not
+(§20), so the button reads *choose a folder…* on the first and *choose a folder (this visit)…* on
+the second — wherever it is drawn, since both now run the same picker. *Choose files* is likewise
+the same marked button the panes use, so one gesture looks the same wherever it is met.
+
+**The Files column is no longer on the first screen, and that is what the row buys.** It used to be
+there from the first paint and never withdrawn, because its own *Open a local/remote folder* was
+the only door to a folder; it is now there exactly while a place is connected, like the four
+columns beside it (§16.5, §8.5). Mounting one opens it on the folder, which is the only thing a
+reader who has just connected one wants next.
 
 **Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
 Analysis drawer (§18.1) and the console (§23) are, down the *left*, where files come from. It

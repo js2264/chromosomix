@@ -6,10 +6,13 @@
  * local or remote folder** and **Connect to a data store**. What the tests
  * below pin is that each is exactly one thing — one drop area with one URL
  * box, one row of place buttons, one row of tiles — and that neither row costs
- * a request: both are descriptions, and pressing one is the gesture that opens
- * the drawer or the Connect dialog (§24.2). The rest is what the box owes a
- * reader whatever door they came through: a drop target that also takes a
- * click, and a box for a URL.
+ * a request: both are descriptions, and pressing one is a gesture rather than
+ * a fetch (§24.2). Where those gestures go is the other half: *choose a
+ * folder…* is the directory picker itself, because it is one gesture and the
+ * browser draws it, while the three that need a form or a sign-in are doors to
+ * the Connect dialog. The rest is what the box owes a reader whatever door
+ * they came through: a drop target that also takes a click, and a box for a
+ * URL.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FilePicker } from '@/ui/FilePicker'
 import { LoadBox } from '@/ui/LoadBox'
 import type { ProviderId } from '@/ui/connectFronts'
+import { connectedFolders, disconnectFolder } from '@/browse/connected'
 import { icon } from '@/ui/icons'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -25,6 +29,9 @@ let teardown: DomTeardown
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  // A browser that can hold a directory, which is what decides the first
+  // button's wording; the test below takes it away again to check the other.
+  vi.stubGlobal('showDirectoryPicker', async () => null)
 })
 
 afterEach(() => {
@@ -39,6 +46,7 @@ interface Built {
   files: File[][]
   stores: string[]
   places: string[]
+  connected: string[]
 }
 
 function build(withDoors = true): Built {
@@ -46,6 +54,7 @@ function build(withDoors = true): Built {
   const files: File[][] = []
   const stores: string[] = []
   const places: string[] = []
+  const connected: string[] = []
   const picker = new FilePicker({
     onOpen: (uri, source) => opened.push({ uri, local: source.kind === 'local' }),
     onOpenFiles: (chosen) => files.push([...chosen]),
@@ -53,10 +62,16 @@ function build(withDoors = true): Built {
       ? {
           onStore: (id: string) => stores.push(id),
           onConnect: (provider: ProviderId) => places.push(provider),
+          onConnected: (id: string) => connected.push(id),
         }
       : {}),
   })
-  return { picker, el: picker.el, opened, files, stores, places }
+  return { picker, el: picker.el, opened, files, stores, places, connected }
+}
+
+/** Let the picker's promise and the callback behind it settle. */
+function settled(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 /** A `drop`, with files on it, as jsdom will not build a real `DataTransfer`. */
@@ -109,7 +124,7 @@ describe('the landing page', () => {
     expect(all(el, '.picker-provider').every((node) => node.classList.contains('btn-mark'))).toBe(true)
   })
 
-  it('offers the four places as buttons, each a door to the Connect dialog', () => {
+  it('offers the four places as buttons, and sends the three with a form to the dialog', () => {
     const built = build()
     expect(textsOf(built.el, '.picker-provider')).toEqual([
       'choose a folder…',
@@ -118,11 +133,63 @@ describe('the landing page', () => {
       'sign in to Dropbox…',
     ])
     const buttons = all<HTMLButtonElement>(built.el, '.picker-provider')
-    buttons[0].click()
+    buttons[1].click()
     buttons[3].click()
-    // The id, not the form: what follows a press is a picker, a form or a
-    // sign-in, and all three are the dialog's (§24.2).
-    expect(built.places).toEqual(['local', 'dropbox'])
+    // The id, not the form: what follows a press there is a bucket's two
+    // policies or a sign-in with a code to paste, and both are the dialog's.
+    expect(built.places).toEqual(['bucket', 'dropbox'])
+  })
+
+  it('opens the directory picker on *choose a folder…* rather than a dialog about one', () => {
+    // One gesture, drawn by the browser: a dialog in front of it would be
+    // asking the reader to press the same words twice.
+    const handle = { kind: 'directory', name: 'maps' }
+    const asked = vi.fn(async (options: unknown) => {
+      void options
+      return handle
+    })
+    vi.stubGlobal('showDirectoryPicker', asked)
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    expect(asked).toHaveBeenCalledTimes(1)
+    // Asked for read access and nothing wider (§13).
+    expect(asked.mock.calls[0][0]).toEqual({ mode: 'read' })
+    // Nothing went to the dialog: this place is not one of its errands.
+    expect(built.places).toEqual([])
+  })
+
+  it('hands the connected folder up, because a folder is the window’s and not this tab’s', async () => {
+    const handle = { kind: 'directory', name: 'maps' }
+    vi.stubGlobal('showDirectoryPicker', async () => handle)
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    await settled()
+    expect(built.connected).toHaveLength(1)
+    const [id] = built.connected
+    // The id names a folder the window is now connected to — the same thing
+    // the Connect dialog's own panes answer with.
+    expect(connectedFolders().map((folder) => folder.id)).toContain(id)
+    await disconnectFolder(id)
+  })
+
+  it('says nothing happened when the picker is cancelled', async () => {
+    vi.stubGlobal('showDirectoryPicker', async () => {
+      throw new DOMException('cancelled', 'AbortError')
+    })
+    const built = build()
+    ;(all<HTMLButtonElement>(built.el, '.picker-provider')[0]).click()
+    await settled()
+    expect(built.connected).toEqual([])
+    expect(built.places).toEqual([])
+  })
+
+  it('says *this visit* on the button where a browser cannot keep the folder', () => {
+    // Firefox and Safari have no picker; what they give is a snapshot of the
+    // file list that does not survive a reload, and the label is the only
+    // place a reader is told so before pressing (§20).
+    vi.unstubAllGlobals()
+    const { el } = build()
+    expect(textsOf(el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
   })
 
   it('offers the five shipped stores as tiles, then the one that adds a store', () => {

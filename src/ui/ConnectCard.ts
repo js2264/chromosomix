@@ -56,11 +56,10 @@ import {
   signOut,
   subscribeGoogle,
 } from '../auth/google'
-import { announce, connectSnapshot } from '../browse/connected'
+import { connectDirectory } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
-import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from '../browse/local'
-import { providerFronts, type ProviderFront, type ProviderId } from './connectFronts'
-import { mintDirectoryId, rememberDirectory } from '../state/directories'
+import { directoryPickerSupported } from '../browse/local'
+import { localVerb, providerFronts, type ProviderFront, type ProviderId } from './connectFronts'
 import { driveFolderSection } from './DriveFolderSection'
 import { connectHead, signInButton, tipCode } from './connectHead'
 import { dropboxSection } from './DropboxSection'
@@ -164,24 +163,15 @@ function localSection(done: (id: string) => void): HTMLElement {
   const granted = directoryPickerSupported()
   const error = el('p', { class: 'hint bucket-error' })
 
+  // `browse/connected.ts` runs both shapes of picker and registers whatever
+  // comes back; the landing page's own *choose a folder…* calls the same
+  // function, so the two screens cannot disagree about what a directory is.
+  // A cancelled picker answers `null`, which is not an error and needs no
+  // message.
   const connect = async (): Promise<void> => {
     error.textContent = ''
-    if (granted) {
-      const handle = await chooseDirectory()
-      // A cancelled picker, which is not an error and needs no message.
-      if (handle === null) return
-      const id = mintDirectoryId()
-      await rememberDirectory(id, handle, handle.name)
-      announce()
-      done(id)
-      return
-    }
-    const files = await chooseDirectoryFiles()
-    if (files.length === 0) return
-    // The first segment of `webkitRelativePath` is the directory's own name and
-    // is the only place this path can learn it — there is no handle to ask.
-    const name = (files[0].webkitRelativePath ?? '').split('/')[0]
-    done(connectSnapshot(name === '' ? 'folder' : name, files).id)
+    const id = await connectDirectory()
+    if (id !== null) done(id)
   }
 
   return el(
@@ -190,19 +180,14 @@ function localSection(done: (id: string) => void): HTMLElement {
     connectHead('A folder on this machine', 'hard-drive', localHelp(granted)),
     // The one large button the two sign-in panes have, because this pane is
     // the same shape as theirs: one thing to press, and everything worth
-    // knowing before pressing it behind the `?`. What a browser without the
-    // picker gives is a snapshot rather than a connection, and the difference
-    // is carried by the label — the reader acts on that, so it stays on the
-    // pane where the rest of the sentence no longer is.
+    // knowing before pressing it behind the `?`. The label is the front's, and
+    // it is the front's because what a browser without the picker gives is a
+    // snapshot rather than a connection — a difference the reader acts on, and
+    // one the landing page's button has to state in the same words.
     el(
       'div',
       { class: 'connect-signin' },
-      signInButton(
-        granted ? 'choose a folder…' : 'choose a folder (this visit)…',
-        'hard-drive',
-        () => void connect(),
-        { disabled: false },
-      ),
+      signInButton(localVerb(), 'hard-drive', () => void connect(), { disabled: false }),
     ),
     error,
   )

@@ -71,10 +71,17 @@
  * It is a column rather than a dialog because of what a reader does with it —
  * they work out of a folder for an afternoon, opening a file, looking, opening
  * the next — and a door you pass through fifty times should not be a door. That
- * also makes it the one panel that is available with **nothing open at all**:
- * the landing page is precisely where a reader with a folder full of coolers
- * starts, and a column that appears only once you have opened something would be
- * missing at the moment it is most useful.
+ * also makes it the one panel available with **nothing open at all**: a reader
+ * who has connected a folder and not yet opened anything is exactly the reader
+ * it is for, so what it follows is the *list of places*, not the file.
+ *
+ * It is also the one panel whose availability is not the session's to decide
+ * (`App.refreshFilesPanel`): a place is connected for as long as the window
+ * lives, so the column is there while there is one and gone while there is
+ * not. It used to be there unconditionally, because its own *Open a
+ * local/remote folder* was the only door to a folder and a door nobody can see
+ * is not a door; the landing page now offers the four places itself (§24.2),
+ * which is what lets this column obey the same rule as the four beside it.
  */
 
 import { icon, type IconName } from './icons'

@@ -14,6 +14,16 @@
  * is deliberately light enough for the landing page to hold at load: three
  * constants and a list.
  *
+ * ## Why the verb is here and not on the button
+ *
+ * *This machine* is the one place whose gesture differs between browsers:
+ * Chromium and the desktop build hold a directory as a **grant** that survives
+ * a reload, and Firefox and Safari hand over a **snapshot** of the file list
+ * that does not (`browse/local.ts`). §8.5 does not hide the gesture there — it
+ * works — so what carries the difference is the label, and the label is now on
+ * two screens. Reading it off one list is what keeps the landing page's button
+ * and the dialog's pane from promising different things about the same click.
+ *
  * ## What `works` is for
  *
  * §8.5's doctrine is that a control which cannot keep its promise is absent
@@ -28,6 +38,7 @@
 
 import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { GOOGLE_SIGN_IN_AVAILABLE } from '../auth/google'
+import { directoryPickerSupported } from '../browse/local'
 import { IS_STANDALONE } from '../version'
 import type { IconName } from './icons'
 
@@ -46,6 +57,19 @@ export interface ProviderFront {
 }
 
 /**
+ * What *this machine*'s button says, wherever it is drawn.
+ *
+ * See the header: a browser with no picker gives a snapshot of the file list
+ * for this visit, and this is where a reader is told so — before pressing, on
+ * whichever of the two screens they are on. Exported as well as used below,
+ * because the dialog's pane draws its button from the label rather than from
+ * the front.
+ */
+export function localVerb(): string {
+  return directoryPickerSupported() ? 'choose a folder…' : 'choose a folder (this visit)…'
+}
+
+/**
  * The places this build can offer, in the order both doors show them.
  *
  * The standalone build is one HTML file with an opaque origin, so every remote
@@ -53,7 +77,13 @@ export interface ProviderFront {
  */
 export function providerFronts(): ProviderFront[] {
   const out: ProviderFront[] = [
-    { id: 'local', label: 'This machine', verb: 'choose a folder…', mark: 'hard-drive', works: true },
+    {
+      id: 'local',
+      label: 'This machine',
+      verb: localVerb(),
+      mark: 'hard-drive',
+      works: true,
+    },
   ]
   if (IS_STANDALONE) return out
   out.push({ id: 'bucket', label: 'A bucket', verb: 'connect a bucket…', mark: 'cloud', works: true })

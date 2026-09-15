@@ -116,6 +116,7 @@ const host: SessionHost = {
   openFileDialog: () => {},
   openStore: () => {},
   openConnect: () => {},
+  folderConnected: () => {},
   openWorkspaceFile: () => {},
   panelLayout: () => ({}) as never,
   applyPanelLayout: () => {},

@@ -29,9 +29,17 @@ import {
   directoryUsable,
   forgetDirectory,
   hydrateDirectories,
+  mintDirectoryId,
+  rememberDirectory,
 } from '../state/directories'
 import { bucketFolder } from './bucket'
-import { handleFolder, snapshotFolder } from './local'
+import {
+  chooseDirectory,
+  chooseDirectoryFiles,
+  directoryPickerSupported,
+  handleFolder,
+  snapshotFolder,
+} from './local'
 import type { ConnectedFolder } from './folder'
 
 /**
@@ -126,6 +134,45 @@ export function connectSnapshot(label: string, files: readonly File[]): Connecte
   snapshots.set(id, folder)
   announce()
   return folder
+}
+
+/**
+ * Ask the reader for a directory and connect whatever they point at.
+ *
+ * The one door to a directory on this machine, and it is here rather than in
+ * the Connect dialog because two screens now open it — the dialog's *this
+ * machine* pane and the landing page's *choose a folder…* — and the thing they
+ * must not disagree about is which of the two shapes this browser gets.
+ * Chromium and the desktop build hold a **grant**, which is written to
+ * IndexedDB and is still connected after a reload; Firefox and Safari hand
+ * over a **snapshot** of the file list, which is not (`browse/local.ts` has the
+ * argument in full). Both end as a folder in the Files column, which is why one
+ * function can answer both with an id.
+ *
+ * `null` when the reader cancels, which is not an error and wants no message:
+ * neither picker rejects, so a caller has nothing to catch.
+ *
+ * **Call it from the click itself.** Both pickers need transient user
+ * activation, so a caller that awaits anything first — a dynamic import, a
+ * confirmation — is a caller whose picker may never open.
+ */
+export async function connectDirectory(): Promise<string | null> {
+  if (directoryPickerSupported()) {
+    const handle = await chooseDirectory()
+    if (handle === null) return null
+    const id = mintDirectoryId()
+    await rememberDirectory(id, handle, handle.name)
+    // `state/directories.ts` writes the row; this list is rebuilt on demand and
+    // has to be told that something it reads from has changed.
+    announce()
+    return id
+  }
+  const files = await chooseDirectoryFiles()
+  if (files.length === 0) return null
+  // The first segment of `webkitRelativePath` is the directory's own name and
+  // is the only place this path can learn it — there is no handle to ask.
+  const name = (files[0].webkitRelativePath ?? '').split('/')[0]
+  return connectSnapshot(name === '' ? 'folder' : name, files).id
 }
 
 /**

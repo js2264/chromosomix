@@ -111,15 +111,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **The landing page names three things instead of two, and one of them is new.** *Load files* and
-  *Connect to a data store* have been joined by **Mount a local or remote folder**: four buttons —
-  *choose a folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to Dropbox…* — each
-  opening the Connect dialog on that place's own pane. The places were reachable only from the plug
-  in the Files column, which is to say from a page a reader arriving with a directory of coolers
-  had not looked at yet; a reader with a folder rather than a file now has a door on the first
-  screen, and one that goes straight to the pane they chose rather than to the dialog's first tile.
-  The desktop build shows three of the four: a Google sign-in cannot be registered against
+  *Connect to a data store* have been joined by **Mount a local or remote folder**: four buttons,
+  side by side — *choose a folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to
+  Dropbox…*. The places were reachable only from the plug in the Files column, which is to say from
+  a page a reader arriving with a directory of coolers had not looked at yet; a reader with a folder
+  rather than a file now has a door on the first screen. *Choose a folder…* **is** the directory
+  picker — one gesture, drawn by the browser, with no dialog in front of it asking the reader to
+  press the same words twice — and it says *choose a folder (this visit)…* in a browser that can
+  only hand over a snapshot of the file list, which is the wording the dialog's own pane already
+  used and now shares with it. The other three open the Connect dialog on the pane they name,
+  rather than on its first tile, because a reader who pressed *sign in to Dropbox* has already
+  chosen. The desktop build shows three of the four: a Google sign-in cannot be registered against
   `app://viewer`, so the button that could not keep its promise is absent there rather than
   disabled, and the dialog's own tile still carries the sentence saying why.
+
+- **The Files column is no longer on the first screen, and is no longer permanent.** It is there
+  exactly while this window has a place connected — mount a folder and it appears, open, on that
+  folder; disconnect the last one and it goes — which is the rule the four columns beside it have
+  always followed and is what the row of buttons above buys. It was unconditional because its own
+  *Open a local/remote folder* was the only door to a folder, and a column nobody can see is not a
+  door; with the landing page offering the four places itself, what that bought on arrival was an
+  empty column beside a row of buttons saying the same thing. The doors that remain are the landing
+  page, which is what a new tab is, and *Open a local/remote folder* in the command palette.
 
 - **The drop area is one of three ways in rather than the page itself.** It was a target deep enough
   to be the whole screen with the *choose files* button and the URL box stacked underneath, which

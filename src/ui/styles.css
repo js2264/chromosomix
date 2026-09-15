@@ -5059,24 +5059,49 @@ canvas.is-frozen {
    button the dialog's sign-ins are, because it is the same gesture met one
    screen earlier. */
 
-/* Two across, which is a decision rather than a default: the four at their own
-   widths come to a little more than this page's 52rem, so a wrapping row puts
-   three up and strands the fourth, and a set of four doors that reads as 3 + 1
-   reads as one of them being different. Two and two is the only arrangement
-   that stays square at the width the page is tuned for, and it is what a phone
-   gets as well until the labels no longer fit (the 34rem block). */
+/* One row of four, which is what the set is: four places, offered at once, none
+   of them the recommended one. A wrapping flex row would not do it — at this
+   page's 52rem their natural widths put three up and strand the fourth — so
+   the row is a grid of four equal columns, and what gives instead is the
+   label: it wraps to a second line rather than the row breaking. */
 .picker-providers {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
-/* Wider than its label, like the pane's sign-in, but by the grid rather than a
-   `min-width`: four buttons sharing a page cannot each claim 15rem, and a grid
-   item whose `min-width` is `auto` refuses to be narrower than its label and
-   pushes the column out instead of wrapping. */
+/* A column narrower than its label, on purpose. `min-width: 0` because a grid
+   item defaults to `auto` and would push the column out rather than wrap;
+   `white-space: normal` because a button's label does not wrap by default; and
+   the buttons are all the height of the tallest, which the grid does for free
+   and is what keeps a two-line label from looking like a mistake.
+
+   The padding and the gap are under the row's own selector rather than beside
+   these, so they beat `.btn-mark`'s wherever the two end up in the file:
+   tighter here buys the shorter labels a single line at this page's width, and
+   *sign in to Dropbox…*, which no honest padding fits, takes its second. It is
+   close enough to the edge that a wider font puts more of them on two lines,
+   which is why the grid is what holds the row together rather than the labels:
+   four buttons of equal height read as a set whichever way each one breaks. */
 .picker-provider {
   min-width: 0;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.picker-providers > .picker-provider {
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+}
+
+/* Two across once four columns would be narrower than the words in them —
+   *sign in to Dropbox…* is the long one, and three lines of it in a 8rem
+   column is a paragraph with a border. */
+@media (max-width: 46rem) {
+  .picker-providers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .load-dialog {
@@ -6860,9 +6885,9 @@ canvas.is-frozen {
     gap: 0.5rem;
   }
 
-  /* One door per row. Half of this width is narrower than *sign in to
-     Dropbox…* is long, and a button whose label is clipped is a button whose
-     promise cannot be read. */
+  /* One door per row. Half of this width is little more than the longest label
+     needs, and a two-line button beside a one-line button beside a phone's
+     other troubles is not worth the column it saves. */
   .picker-providers {
     grid-template-columns: minmax(0, 1fr);
   }

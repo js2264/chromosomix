@@ -36,37 +36,42 @@ beforeEach(() => {
   teardown = setUpDom()
   googleSignIn = true
   window.localStorage.clear()
+  // A browser that can hold a directory, so the local place is worded the way
+  // Chromium and the desktop build word it on both screens.
+  vi.stubGlobal('showDirectoryPicker', async () => null)
 })
 
 afterEach(() => {
   teardown()
+  vi.unstubAllGlobals()
   document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove())
   window.localStorage.clear()
 })
 
-/** The landing page's row of places, by the id each button hands up. */
+/** The landing page's row of places, by the id each button carries. */
 async function landingPlaces(): Promise<{ labels: string[]; ids: string[] }> {
   const { FilePicker } = await import('@/ui/FilePicker')
-  const ids: string[] = []
   const picker = new FilePicker({
     onOpen: () => undefined,
     onOpenFiles: () => undefined,
     onStore: () => undefined,
-    onConnect: (provider) => ids.push(provider),
+    onConnect: () => undefined,
   })
-  const buttons = all<HTMLButtonElement>(picker.el, '.picker-provider')
-  for (const button of buttons) button.click()
-  return { labels: textsOf(picker.el, '.picker-provider'), ids }
+  return {
+    labels: textsOf(picker.el, '.picker-provider'),
+    ids: all(picker.el, '.picker-provider').map((node) => node.getAttribute('data-provider') ?? ''),
+  }
 }
 
-/** The dialog's row of tiles, by the id each carries. */
-async function dialogTiles(): Promise<{ labels: string[]; ids: string[] }> {
+/** The dialog's row of tiles, by the id each carries, and the pane it opens on. */
+async function dialogTiles(): Promise<{ labels: string[]; ids: string[]; pane: HTMLElement }> {
   const { openConnect } = await import('@/ui/ConnectCard')
   openConnect({ onConnected: () => undefined })
   const body = document.querySelector('.connect-body') as HTMLElement
   return {
     labels: textsOf(body, '.connect-provider'),
     ids: all(body, '.connect-provider').map((node) => node.getAttribute('data-provider') ?? ''),
+    pane: body.querySelector('.connect-pane') as HTMLElement,
   }
 }
 
@@ -85,6 +90,23 @@ describe('the two doors to a place', () => {
       'sign in to Google…',
       'sign in to Dropbox…',
     ])
+  })
+
+  it('word *this machine* identically, because both buttons are now the same click', async () => {
+    // The landing page's button runs the directory picker itself and so does
+    // the pane's, so the two must agree about what the reader is about to get
+    // — a grant that survives a reload, or a snapshot of this visit.
+    const landing = await landingPlaces()
+    const dialog = await dialogTiles()
+    expect(landing.labels[0]).toBe('choose a folder…')
+    expect(textsOf(dialog.pane, '.btn-signin')).toEqual(['choose a folder…'])
+
+    vi.unstubAllGlobals()
+    document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove())
+    const plain = await landingPlaces()
+    const plainDialog = await dialogTiles()
+    expect(plain.labels[0]).toBe('choose a folder (this visit)…')
+    expect(textsOf(plainDialog.pane, '.btn-signin')).toEqual(['choose a folder (this visit)…'])
   })
 
   it('part company over a sign-in this build cannot make: the button goes, the tile stays', async () => {
