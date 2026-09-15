@@ -1,6 +1,13 @@
 {
-  "latest": "4190181",
+  "latest": "8f23ade",
   "versions": [
+    {
+      "commit": "8f23ade",
+      "version": "0.12.0",
+      "date": "2026-09-15T11:46:23+02:00",
+      "subject": "Open files from one door: Drive and Dropbox sign-ins, index-free BAMs, Drive by name and by range, and stores that list only what draws (#54)",
+      "tag": ""
+    },
     {
       "commit": "4190181",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "e96a513",
-      "version": "0.11.0",
-      "date": "2026-09-09T18:18:11+02:00",
-      "subject": "Open .pairs files at a resolution you choose, and write the .mcool back out (#39)",
-      "tag": ""
-    },
-    {
       "commit": "815b0ad",
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
@@ -198,13 +198,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 54,
-      "commit": "d984664",
-      "title": "Two marks on every file row, the stores on backslash, a leaner header, and a FASTA that opens through its index",
-      "branch": "claude/unified-file-store-access-i658sf",
-      "date": "2026-09-15T09:23:55Z"
-    }
-  ]
+  "pulls": []
 }
