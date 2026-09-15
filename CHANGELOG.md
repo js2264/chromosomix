@@ -26,6 +26,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A shared link opened the picker on the first visit in a fresh browser profile.** Not on the
+  second, and not in a second tab, which is what made it read as a broken link rather than as what
+  it was. The first load of the site registers the service worker; the worker calls
+  `clients.claim()` as it activates, so it takes over the page that is still running; and the page
+  reloaded, because a worker that has *replaced* another is serving a page built from the one it
+  replaced. A worker installing for the first time has replaced nothing — the page came off the
+  network a moment earlier and is already the newest build — but it fired the same
+  `controllerchange` and got the same reload. `openSharedHash` decodes a session and then takes
+  `#session=…` out of the address bar before the tab it describes has finished opening, so the
+  reload landed on a bare URL and the session was gone. The first claim no longer reloads; an
+  update still does, which is the case the reload was written for.
+
 - **A store that did not answer with a store said it was not a saved workspace.** The store reader
   borrowed the *workspace* reader's wording for the one refusal both formats share, so a host
   answering with a page instead of the file — which is what a dev server does for a store the
