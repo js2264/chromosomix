@@ -1,6 +1,13 @@
 {
-  "latest": "dc7cbe5",
+  "latest": "c29abdb",
   "versions": [
+    {
+      "commit": "c29abdb",
+      "version": "0.12.0",
+      "date": "2026-09-15T19:31:57+02:00",
+      "subject": "Give the four stores their marks, trim the picker and the Connect dialog, and stop a first visit eating a shared link (#57)",
+      "tag": ""
+    },
     {
       "commit": "dc7cbe5",
       "version": "0.12.0",
@@ -198,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 57,
-      "commit": "5062c30",
-      "title": "Give the four stores their marks, trim the picker and the Connect dialog, and stop a first visit eating a shared link",
-      "branch": "js/dreamy-noether-ijwula",
-      "date": "2026-09-15T17:03:18Z"
-    }
-  ]
+  "pulls": []
 }
