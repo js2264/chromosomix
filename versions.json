@@ -198,5 +198,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 57,
+      "commit": "5062c30",
+      "title": "Give the four stores their marks, trim the picker and the Connect dialog, and stop a first visit eating a shared link",
+      "branch": "js/dreamy-noether-ijwula",
+      "date": "2026-09-15T17:03:18Z"
+    }
+  ]
 }
