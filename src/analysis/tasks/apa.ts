@@ -21,7 +21,21 @@ import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } f
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { CHROMOSIGHT_PRESETS } from '../chromosightPresets'
 import { BALANCE_PARAM } from './shared'
-import { isIntervalSet } from '../../annotations/types'
+import { ANNOTATION_KINDS, isIntervalSet } from '../../annotations/types'
+
+/**
+ * The kinds an anchor option that wants intervals can be filled from.
+ *
+ * Derived rather than listed, and that is the whole point of it being here at
+ * all: this was `['gtf', 'segments', 'variants']` written out twice, which is
+ * the fourth and fifth copies of a rule `isIntervalSet` exists to be the only
+ * one of — and it is the copy the guard in `annotation-kinds.test.ts` could not
+ * see, because an array of literals is not the `kind === 'x' || kind === 'y'`
+ * shape it looks for. A barChart found it: the availability gate below opened
+ * for one and this list then refused the anchors control that gate had just
+ * promised, which is exactly the failure §8.14 describes.
+ */
+const INTERVAL_KINDS = ANNOTATION_KINDS.filter(isIntervalSet)
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
@@ -138,13 +152,13 @@ const PARAMS: readonly ParamSpec[] = [
       {
         value: 'features',
         label: 'Feature set',
-        needsKinds: ['gtf', 'segments', 'variants'],
+        needsKinds: INTERVAL_KINDS,
         hint: 'On the diagonal, at each feature.',
       },
       {
         value: 'allpairs',
         label: 'Every pair of a feature set',
-        needsKinds: ['gtf', 'segments', 'variants'],
+        needsKinds: INTERVAL_KINDS,
         hint:
           'Off the diagonal, between every two features within a separation range — the test of ' +
           'whether a set of places contacts itself.',

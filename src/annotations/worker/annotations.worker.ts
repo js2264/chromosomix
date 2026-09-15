@@ -23,6 +23,7 @@ import {
   type ByteSpan,
 } from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
+import { barChartSummary, isBarChartSchema, parseBarChart, sniffBarChart } from '../barchart'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
 import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
@@ -891,6 +892,17 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'vcf', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
 
+  // Same place in the order as in `load`, and it has to be: this decides which
+  // road a *drop* takes, and a barChart routed as a BED here would open as one
+  // however well the loader knew better (§8.17). Its lengths are the ordinary
+  // "ends at its last feature" lower bound — the format declares no genome.
+  if (sniffBarChart(text, source.name)) {
+    const data = parseBarChart(text, source.name)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'barchart', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   const signal = sniffSignal(text)
   if (signal !== null) {
     const set = signal === 'wig' ? parseWig(text) : parseBedGraph(text)
@@ -1387,6 +1399,14 @@ async function load(
   // so neither can capture the other whichever order they are asked in.
   if (sniffVcf(text)) return loadVcf(text, mapContigs)
 
+  // Third of the three, and stricter than the BED sniffer it precedes for the
+  // same reason the two above are (§8.17): a barChart read as a BED is a lane
+  // of boxes whose ninth column — the whole of what the file is about — was
+  // never mentioned. It cannot capture either of the two above it: a VCF has a
+  // non-integer in column 2 and a bedGraph has four columns, where this needs
+  // nine and an integer count in column 8 that matches its own list.
+  if (sniffBarChart(text, source.name)) return loadBarChart(text, source.name, mapContigs)
+
   const signal = sniffSignal(text)
   if (signal !== null) return loadSignal(entry, signal, text, mapContigs)
 
@@ -1434,6 +1454,31 @@ function loadVcf(text: string, mapContigs: NamedSequence[]): LoadResult {
     summary:
       `${count(data.length)} variant${data.length === 1 ? '' : 's'}` +
       (samples === 0 ? '' : ` · ${count(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * A barChart, text or bigBed, read into intervals with a chart on each (§8.17).
+ *
+ * One function for both roads because there is one parser: a bigBarChart's rows
+ * are re-joined into BED lines by {@link loadBigBed} and handed here, which is
+ * §8.7's arrangement unchanged — one parser, one set of rules, one place where
+ * the format's quirks live. What the bigBed road cannot bring with it is the
+ * `track` line, so its categories are numbered; see `annotations/barchart.ts`.
+ */
+function loadBarChart(
+  text: string,
+  fileName: string,
+  mapContigs: NamedSequence[],
+): LoadResult {
+  const data = parseBarChart(text, fileName)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'barchart',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: barChartSummary(data),
     payload: { kind: 'features', data },
   }
 }
@@ -1792,14 +1837,26 @@ async function loadBigBed(source: WireSource, mapContigs: NamedSequence[]): Prom
       lines.push(`${ref.name}\t${feature.start}\t${feature.end}${rest}`)
     }
   }
-  const data = parseBed(lines.join('\n'), source.name)
+  const text = lines.join('\n')
+  // A bigBarChart is a bigBed whose schema says so, and the schema is the file's
+  // own declaration rather than a guess from its column shapes (§8.17). Asked
+  // of the header, which was already read, so it costs nothing on the bigBeds
+  // that are not one.
+  if (isBarChartSchema(header.autoSql ?? '')) {
+    const result = loadBarChart(text, source.name, mapContigs)
+    return truncated ? { ...result, summary: cutOff(result.summary) } : result
+  }
+  const data = parseBed(text, source.name)
   const result = featureResult('bigbed', data, mapContigs)
   return {
     ...result,
-    summary: truncated
-      ? `${count(data.length)} features · cut off at ${count(BIGBED_FEATURE_CAP)}`
-      : result.summary,
+    summary: truncated ? cutOff(result.summary) : result.summary,
   }
+}
+
+/** What a summary says once {@link BIGBED_FEATURE_CAP} has bitten. */
+function cutOff(summary: string): string {
+  return `${summary} · cut off at ${count(BIGBED_FEATURE_CAP)}`
 }
 
 async function loadBigWig(

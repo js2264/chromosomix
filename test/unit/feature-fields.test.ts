@@ -215,13 +215,27 @@ describe('a stored choice, read back', () => {
     expect(featureStyleOf({ colourBy: 'biotype', arrows: false }, 'gtf')).toEqual({
       colourBy: 'biotype',
       arrows: false,
+      bars: 'file',
     })
     // Untrusted input: a session outlives the build that wrote it.
     expect(featureStyleOf({ colourBy: 42 }, 'segments').colourBy).toBe('strand')
-    expect(featureStyleOf(null, 'segments')).toEqual({ colourBy: 'strand', arrows: true })
+    expect(featureStyleOf(null, 'segments')).toEqual({
+      colourBy: 'strand',
+      arrows: true,
+      bars: 'file',
+    })
     // Absent means on, so a row written before the switch existed comes back
     // pointing rather than blank.
     expect(featureStyleOf({ colourBy: 'strand' }, 'segments').arrows).toBe(true)
+  })
+
+  it('takes only the one string that names the other bar scale (§8.17)', () => {
+    // The comparable reading is the default, so anything but the exact stored
+    // word comes back on it — including a row written before the switch existed.
+    expect(featureStyleOf({ bars: 'feature' }, 'barchart').bars).toBe('feature')
+    expect(featureStyleOf({ bars: 'per-feature' }, 'barchart').bars).toBe('file')
+    expect(featureStyleOf({ bars: true }, 'barchart').bars).toBe('file')
+    expect(featureStyleOf({ colourBy: 'strand' }, 'barchart').bars).toBe('file')
   })
 })
 

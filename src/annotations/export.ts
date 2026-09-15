@@ -17,7 +17,7 @@
  */
 
 import type { ManualArrowhead, ManualLine, ManualMark, ManualRect, ManualSpan } from './manual'
-import type { AnnotationPayload } from './types'
+import type { AnnotationPayload, BarChartBars } from './types'
 
 /** What a set of marks can be written as. */
 export type MarkFormat = 'bed' | 'bedpe'
@@ -155,20 +155,82 @@ export function formatIntervals(
   }
 
   const set = payload.data
+  // A barChart is written back as a barChart (§8.17). BED6 would be a lossy
+  // export that looks like a complete one: the coordinates would all be there
+  // and the thing the file is *about* would not, and nothing in the output
+  // would say so. The `track` line goes with it, so what lands opens as the
+  // same lane here and as the same custom track at UCSC.
+  const bars = set.bars
   const rows: string[] = []
   for (let i = 0; i < set.length; i++) {
-    rows.push(
-      [
-        set.contigs[set.contig[i]] ?? '.',
-        set.start[i],
-        set.end[i],
-        nameOr(set.name[i], i),
-        scoreOf(set.score[i]),
-        strandChar(set.strand[i]),
-      ].join('\t'),
-    )
+    // A row that kept its interval and lost its chart goes out as the BED6 it
+    // now is, rather than as a chart of zeroes it never had.
+    const values = bars === undefined ? null : valuesOf(bars, i)
+    const columns = [
+      set.contigs[set.contig[i]] ?? '.',
+      set.start[i],
+      set.end[i],
+      // Where the row gets a `name2` column, column 4 is the accession and the
+      // symbol goes there — the same split the parser made on the way in
+      // (§8.17). Where it does not, a BED6's one name is the display name, so
+      // the symbol stays in column 4 rather than being dropped for want of a
+      // column to put it in.
+      nameOr(values === null ? set.name[i] : set.id[i] || set.name[i], i),
+      scoreOf(set.score[i]),
+      strandChar(set.strand[i]),
+    ]
+    if (values !== null) columns.push(nameOr(set.name[i], i), values.length, values.join(','))
+    rows.push(columns.join('\t'))
   }
-  return [head, ...rows, ''].join('\n')
+  return [head, ...(bars === undefined ? [] : [trackLineOf(bars)]), ...rows, ''].join('\n')
+}
+
+/** Feature `at`'s whole vector, or `null` where it carries no chart. */
+function valuesOf(bars: BarChartBars, at: number): string[] | null {
+  const width = bars.labels.length
+  const out: string[] = []
+  for (let c = 0; c < width; c++) {
+    const value = bars.values[at * width + c]
+    if (!Number.isFinite(value)) return null
+    out.push(compact(value))
+  }
+  return out
+}
+
+/**
+ * A stored value as the shortest string that reads back as the same number.
+ *
+ * `String(3.2)` on a `Float32Array` cell is `3.200000047683716`, because that is
+ * genuinely the number in the cell — but it is the number a *float* holds, not
+ * the number the file wrote, and a round trip that turned every value in a
+ * GTEx track into seventeen digits would triple the file to say nothing. Seven
+ * significant digits is exactly what a `Float32` carries, so this is the
+ * shortest form that loses nothing.
+ */
+function compact(value: number): string {
+  return String(Number(value.toPrecision(7)))
+}
+
+/**
+ * The `track` line a barChart export carries, naming what the numbers are.
+ *
+ * Without it the categories are positions again on the way back in, which is
+ * the one thing a round trip must not lose — and `barChartBars` is where this
+ * format keeps them, so writing them anywhere else would be inventing a
+ * convention. Only the settings the file actually had: a `barChartUnit=` with
+ * nothing after it is a claim that the unit is the empty string.
+ */
+function trackLineOf(bars: BarChartBars): string {
+  const parts = ['track type=barChart']
+  if (bars.named) parts.push(`barChartBars="${bars.labels.join(' ')}"`)
+  if (bars.colours.length === bars.labels.length) {
+    parts.push(`barChartColors="${bars.colours.join(' ')}"`)
+  }
+  if (bars.label !== '') parts.push(`barChartLabel="${bars.label}"`)
+  if (bars.metric !== '') parts.push(`barChartMetric="${bars.metric}"`)
+  if (bars.unit !== '') parts.push(`barChartUnit="${bars.unit}"`)
+  parts.push(`maxLimit=${compact(bars.max)}`)
+  return parts.join(' ')
 }
 
 function nameOr(name: string | undefined, index: number): string {

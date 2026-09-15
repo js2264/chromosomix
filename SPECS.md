@@ -2806,6 +2806,109 @@ opened against the other half of an experiment should colour by `biotype` again 
 back. Unlike an alignment lane's colouring, none of this refetches anything: a feature set is in
 memory whole and the field is a column of it, so a dozen answers cost one repaint between them.
 
+### 8.17 barChart and bigBarChart
+
+UCSC's `barChart` is BED6+5: the six columns every feature file begins with, then `name2`, then
+`expCount`, then `expScores` — a comma-separated list of that many numbers. A row is therefore not
+an interval with a *value* on it but an interval with a **vector** on it, one number per category,
+and gene expression across fifty-four GTEx tissues is what the format was built for. `bigBarChart`
+is the same thing written as a bigBed, and the two optional trailing columns (`_dataOffset`,
+`_dataLen`) point into a sample matrix this viewer does not read.
+
+**It is a `FeatureSet`**, and that is §8.14's decision restated under more pressure. A vector per
+row is the strongest case there has ever been for a payload of its own, and it is refused for the
+reason a VCF's was: `payload.kind === 'features'` is tested at a dozen sites across the browser, the
+map lanes, the search box, the export and the analysis inputs, and a second feature shape breaks
+none of them — it makes every one of them *skip* the lane, in silence, to be discovered one call
+site at a time. So the vector is one optional field on the set (`FeatureSet.bars`), one flat
+`Float32Array` with a stride rather than an array per feature, and the packing, the hit test, the
+search, the export and a metaplot over its intervals are all the code a peak set already uses. What
+it has of its own is a **kind**, because the glyph, the legend, the card behind a click and the
+height the lane opens at are four questions no other feature kind is asked.
+
+**The categories' names are not in the data.** `barChartBars` lives in the `track` line of a custom
+track and in the trackDb stanza of a hub, so a bigBarChart dropped on its own arrives with the
+numbers and nothing to call them. The `track` line is read where there is one; where there is not,
+the categories are their own positions — `1` to `N` — and the set records **which of the two
+happened**. Nothing is inferred from that but honesty: the legend says what it is naming, and the
+`top` column (the dominant category, which is the one colouring a lane of charts really wants) is
+written only where the categories have names. Numbered, it would be read back as a *number* and
+drawn as a ramp over the order the categories happen to be listed in, which is §8.12's own
+counter-example.
+
+**A bigBarChart is identified by its schema.** bbi hands back the file's `autoSql`, so the question
+is asked of the file's own declaration rather than guessed from its column widths — a tier better
+than anything the text sniffer can manage, and the reason §8.7's "read it as the BED it holds"
+needed no exception before this one. The rows then go through the same parser the text file does.
+
+**The text sniffer has one collision and it is a bad one.** A BED9, a BED12 and a gappedPeak all
+put `thickEnd` in column 8 and `itemRgb` in column 9: an integer followed by three comma-separated
+numbers, which is exactly the agreement this format's meaning rests on, whenever `thickEnd` happens
+to equal 3. What holds it shut is column 7 — `name2` here and `thickStart` there — so a barChart's
+column 7 must not be an integer. That test is waived for a file *named* `.barChart`, the way the
+peak sniffer waives its shape tests for a file named `.narrowPeak`: a reader who has named the
+format has answered the question. The sniffer is asked **before** the BED one, with the VCF and
+signal sniffers, for the reason all three are: `sniffFormat`'s last line is `return 'bed'`, so a
+format it has not been taught is not refused but silently parsed as a BED — and a barChart read as a
+BED is a lane of boxes whose ninth column, the whole of what the file is about, was never mentioned.
+
+**Two pictures, and where the line is.** With room, a feature is `expCount` bars on a common
+baseline, each the height of its value against the ceiling. Below one pixel per bar it is a single
+box in the colour of the category that dominates the row and the height of that category's value —
+so the glyph gives up *which categories* long before it gives up *which one* and *how much*, and a
+lane at chromosome zoom is still a map of where each condition wins. The floor is a pixel and not a
+fudge factor: under one, a bar is not thin, it is gone — rounded away or blended into its neighbour
+— and a chart quietly missing half its categories is a different chart drawn with the same
+confidence. A baseline is drawn under every glyph, because without one a row of short bars and a row
+of tall bars hanging from above are the same picture.
+
+**One colour per category**, and position is the identity: the third bar is the third category in
+every feature on the lane. Where the file names colours (`barChartColors`) those are used, because a
+GTEx track in the tissue colours every other GTEx picture uses is worth more than any palette this
+could impose. Otherwise up to twelve categories take `CATEGORY_PALETTE` — §8.12's twelve, so one
+swatch means one thing across the app — and past twelve they take a `viridis` ramp across their
+positions rather than the palette cycled. A cycle **invents a pattern**: fifty-four tissues through
+twelve colours is a repeating rhythm in every glyph on the lane, which reads as structure in the
+data and is structure in the palette. Because the ink is not a choice, a barChart lane is the one
+feature lane with no `colour by` picker and no arrowheads — a control that silently does nothing is
+worse than an absent one (§8.13) — and what the card carries instead is the **key**, which is where
+the bars get their names.
+
+**The ceiling is one number for the file**, `maxLimit` where the file sets one and the largest value
+otherwise, never fitted to the window: §8.16's rule for a numeric colouring, and it holds harder
+here because a bar is read against its neighbours *and* against the same gene two windows away. A
+track's autoscale is safe because its axis is redrawn beside it; a glyph carries no axis, which is
+also why the ceiling is stated once under the lane's label rather than drawn on every chart.
+
+**…and a switch, because the common case defeats the default.** Expression is heavy-tailed — a
+handful of ribosomal genes run a thousand times the median — so against one ceiling the lane is flat
+except for the genes a reader did not need a chart to find. `scale each chart` measures every chart
+against its own tallest bar instead, and each glyph becomes a **shape**: which category wins, and by
+how much against the rest of that feature. Two readings, both true, neither able to serve for the
+other, and a switch rather than a heuristic on the distribution — a lane that quietly changed what
+its heights meant when a file's tail got longer would be the worst version of both. The collapsed
+glyph keeps the file's ceiling either way, because per feature it would be each feature's peak
+divided by itself: every box full height, a lane saying nothing.
+
+**The rows are never banded by strand**, which is the one place §8.16's layout is overruled. Banding
+divides the lane's height, and a barChart's height *is* its value axis — so a sixty-pixel lane split
+into three bands buys a fact the card already states at the cost of two thirds of every reading on
+it. How many rows fit is asked of the chart rather than of the label under it, and a lane dragged
+very short gets one rough chart rather than a stack of unreadable ones.
+
+**A row whose `expCount` disagrees with the file's** keeps its interval and loses its bars, and is
+counted under the lane's label. The interval is not the part that was wrong, its categories are not
+the file's categories, and there is no honest chart to draw for it — so it is `NaN` rather than a run
+of zeroes, which would be a measurement. That is §8.7's bargain for a truncated bigBed made again: a
+file that says what it dropped is usable, one that does not is a lie about the genome.
+
+**The click opens the whole chart.** The glyph is at most a few dozen pixels wide, so the lane says
+roughly which categories are high and the feature card says which, and how much — one row per
+category with its colour, a bar and its number, in **file order**, so the card reads as the glyph
+does and can be used as its legend. The colours come from the function the renderer itself calls, so
+a bar named there in a colour it is not drawn in would be a bug in the ink rule rather than a second
+palette drifting out of step.
+
 ---
 
 ## 9. cool and mcool

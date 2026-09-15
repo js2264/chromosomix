@@ -56,6 +56,7 @@ import {
   type AnnotationKind,
   type FeatureSet,
 } from '../annotations/types'
+import { barColours } from './barchart'
 import { colormapCss } from './colormaps'
 import { rotateHue } from './hue'
 import { categoryColour } from './meta'
@@ -143,6 +144,23 @@ export function featureColouring(
   }
   if (field.kind === 'lane' || set === undefined) return plain
 
+  // A barChart's ink is not a choice (§8.17). Its glyph is one bar per
+  // category and every bar is its category's colour, so there is no column to
+  // pick and nothing a picker could change — which is why the card offers none
+  // and shows only this key. `colourOf` stays `undefined` because the renderer
+  // never consults it: `drawBarCharts` reads the categories directly, and a
+  // function here would be a second, disagreeing answer to the same question.
+  if (kind === 'barchart' && set.bars !== undefined) {
+    const colours = barColours(set.bars)
+    return {
+      colourOf: undefined,
+      key: { field, levels: barLevels(set.bars.labels, colours), ramp: null },
+      // §8.12's rule again: the name on the row is chipped in a colour that is
+      // in the picture, and on this lane the lane's own colour never is.
+      chip: colours[0] ?? colour,
+    }
+  }
+
   if (field.kind === 'strand') {
     const bands = strandBands(set)
     // A file with no strand in it at all — a peak set, a call set, most BEDs.
@@ -229,6 +247,35 @@ export function featureColouring(
     },
     chip: categoryColour(0),
   }
+}
+
+/**
+ * How many categories a barChart's key names before it stops.
+ *
+ * Far above {@link MAX_LEVELS}, and deliberately: that cap exists because
+ * `CATEGORY_PALETTE` runs out of colours, and these categories carry their own
+ * — the file's, or a ramp across their positions — so there is no thirteenth
+ * colour nobody can name to protect the reader from. What is left is the length
+ * of the list itself, and a GTEx track's fifty-four tissues is a legend a
+ * scrolling card can hold where a lane sixteen pixels tall cannot.
+ *
+ * Bounded at all because a file may declare any number, and a key with four
+ * thousand chips in it is not a key — it is the card, gone.
+ */
+const MAX_BAR_LEVELS = 64
+
+/** A barChart's categories as key chips, with a count where there are too many. */
+function barLevels(labels: readonly string[], colours: readonly string[]): KeyLevel[] {
+  const shown = labels.slice(0, MAX_BAR_LEVELS).map((label, at) => ({
+    label,
+    colour: colours[at],
+  }))
+  if (labels.length > MAX_BAR_LEVELS) {
+    // Named as a count rather than given a chip: there is no one colour these
+    // share, and a swatch beside them would be claiming there is.
+    shown.push({ label: `+ ${labels.length - MAX_BAR_LEVELS} more`, colour: 'transparent' })
+  }
+  return shown
 }
 
 /** Forward, reverse, and the file that does not say. See {@link STRAND_TURN}. */

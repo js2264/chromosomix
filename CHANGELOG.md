@@ -14,6 +14,32 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A whole chart inside one feature: barChart and bigBarChart (§8.17).** UCSC's format puts a
+  *vector* on each row — `expCount` numbers, one per category — and gene expression across fifty-four
+  GTEx tissues is what it was built for. A dropped `.barChart` or a bigBed written with the barChart
+  schema now opens as a lane of charts: one bar per category inside the bases the feature covers,
+  named and coloured from the `track` line where there is one, and numbered where there is not,
+  because the names live in a hub a dropped file arrives without — and the legend says which of the
+  two it is rather than presenting positions as names. It is a `FeatureSet` like a BED and a VCF, so
+  packing, search, export, the feature card and a metaplot over its intervals are the code a peak set
+  already uses.
+
+  Two things needed deciding rather than defaulting. **Where there is no room for bars** — a feature
+  narrower than a pixel per category — the glyph becomes one box in the colour of the category that
+  dominates it, at that category's height, so a lane at chromosome zoom still says *which condition
+  wins here* long after it has stopped being able to say *which ones*. And **what the heights are
+  measured against**: one ceiling for the file makes two glyphs comparable and is the default, but
+  expression is heavy-tailed and against one ceiling the lane is flat except for the genes nobody
+  needed a chart to find — so `scale each chart` in the lane's card measures each chart against its
+  own tallest bar, and every glyph becomes a shape. The ceiling is stated under the lane's label,
+  because a glyph that small carries no axis. A click opens the whole chart, one row per category
+  with its colour, its bar and its number.
+
+  A barChart lane is also the one interval lane with no `colour by` picker and no arrowheads: its ink
+  is its categories' and is not a choice, and a control that silently does nothing is worse than an
+  absent one. The demo folder gains `Yeast_expression.barChart` — real gene coordinates, synthetic
+  numbers, and the file says so on its first line.
+
 - **DNA Zoo is a shipped store, with a front end of its own.** Its open bucket is one directory a
   species, flat inside, and most of what is in a directory is not a file this viewer opens — so the
   generic bucket walk would have published a long list of `.assembly` files, scaffold tracks and

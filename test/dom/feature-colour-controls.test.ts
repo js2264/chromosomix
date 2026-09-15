@@ -111,7 +111,9 @@ describe('colour by, on a lane of intervals', () => {
     // A session from another assembly. Silently moving the reader somewhere
     // else loses the setting the moment the right file comes back.
     const made = make()
-    made.store.restyle(made.entry.id, { features: { colourBy: 'gene_biotype', arrows: true } })
+    made.store.restyle(made.entry.id, {
+      features: { colourBy: 'gene_biotype', arrows: true, bars: 'file' },
+    })
     const field = featureColourField(made.store, now(made))
     document.body.append(field)
     expect(selectIn(field).value).toBe('gene_biotype')

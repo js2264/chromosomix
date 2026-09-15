@@ -59,6 +59,12 @@ export type DetectedFormat =
   // reader means by a row is different — and because `kindFor` sends it to a
   // kind with its own controls and its own card.
   | 'vcf'
+  // A chart per feature (§8.17). Covers the text `.barChart` and the bigBed
+  // written with a barChart schema alike: what a bigBarChart *is* on disk is a
+  // bigBed, but what it holds is not a set of boxes, and the two answers to
+  // "what is this" that matter downstream are the kind it becomes and the
+  // parser that reads it — which are the same for both.
+  | 'barchart'
   | 'sizes'
   | 'hdf5'
   | 'fasta'

@@ -149,20 +149,42 @@ describe('what counts as a set of intervals', () => {
     }
   })
 
+  it('is not written out as a literal array in a task descriptor either', () => {
+    // The fifth copy, and the one the check below could not see. `apa.ts`
+    // carried `needsKinds: ['gtf', 'segments', 'variants']` **twice** — an
+    // array of literals rather than a chain of comparisons — so the barChart
+    // that `isIntervalSet` had just let through the availability gate was then
+    // refused by the anchors control that gate exists to offer. Nothing errored:
+    // the task was available and half of it could not be filled.
+    for (const site of SITES) {
+      const source = readFileSync(join(process.cwd(), site), 'utf8')
+      const listed = /needsKinds:\s*\[[^\]]*'(gtf|segments|variants|barchart)'/
+      expect(listed.test(source), `${site} lists the kinds instead of deriving them`).toBe(false)
+    }
+  })
+
   it('is spelled out as a kind list nowhere', () => {
     // The exact shape that drifted: `kind === 'gtf' || kind === 'segments'`.
     for (const site of SITES) {
       const source = readFileSync(join(process.cwd(), site), 'utf8')
-      const spelled = /kind === '(gtf|segments|variants)'\s*\|\|\s*\w+\.kind === '(gtf|segments|variants)'/
+      const spelled = /kind === '(gtf|segments|variants|barchart)'\s*\|\|\s*\w+\.kind === '(gtf|segments|variants|barchart)'/
       expect(spelled.test(source), `${site} spells the rule out`).toBe(false)
     }
   })
 
   it('holds exactly the kinds that are FeatureSets', () => {
-    // The claim behind the predicate: these three differ in what a reader means
+    // The claim behind the predicate: these four differ in what a reader means
     // by a row, not in what they are. A kind that is not a `FeatureSet` cannot
-    // be aggregated over and must not be offered.
-    expect(KINDS.filter(isIntervalSet).sort()).toEqual(['gtf', 'segments', 'variants'])
+    // be aggregated over and must not be offered — and one that *is* must be,
+    // which is what a barChart added here is about: its rows are intervals
+    // whatever is drawn inside them, and a metaplot over them is a reading
+    // nobody should have to convert a file to ask for (§8.17).
+    expect(KINDS.filter(isIntervalSet).sort()).toEqual([
+      'barchart',
+      'gtf',
+      'segments',
+      'variants',
+    ])
   })
 })
 
@@ -206,6 +228,47 @@ describe('a variant lane', () => {
 })
 
 /**
+ * A barChart is a fourth feature kind, and nothing more than that (§8.17).
+ *
+ * The same design §8.14 settled for a VCF, taken one step further: a row here
+ * carries a whole *vector*, which is the strongest case there has been for a
+ * payload of its own — and it is refused for the same reason, because a second
+ * feature shape does not break `payload.kind === 'features'`, it makes every
+ * one of that test's dozen call sites skip the lane in silence. So the vector
+ * is one optional field on the set and every predicate below answers exactly as
+ * a peak set does.
+ *
+ * The one that is load-bearing rather than merely correct is {@link drawsAProfile}.
+ * A barChart has values and a ceiling, which is most of what a track has, and
+ * `true` here would put it on the sampled road — a `sample` request per frame
+ * for a lane whose values are already in hand, and an autoscale group it would
+ * drag around by numbers that are not in the group's units.
+ */
+describe('a barChart lane', () => {
+  it('is a feature kind and not a value one', () => {
+    expect(drawsAProfile('barchart')).toBe(false)
+    expect(hasAMovableAxis('barchart')).toBe(false)
+    expect(hasTrackControls('barchart')).toBe(false)
+    expect(drawnFromSamples('barchart')).toBe(false)
+    expect(isMetadata('barchart')).toBe(false)
+  })
+
+  it('answers every predicate the way a peak set does', () => {
+    for (const ask of [drawsAProfile, hasAMovableAxis, hasTrackControls, drawnFromSamples, isMetadata]) {
+      expect(ask('barchart'), ask.name).toBe(ask('segments'))
+    }
+  })
+
+  it('is a set of intervals, whatever is drawn inside them', () => {
+    expect(isIntervalSet('barchart')).toBe(true)
+  })
+
+  it('does not read a BAM', () => {
+    expect(readsAlignments('barchart')).toBe(false)
+  })
+})
+
+/**
  * The pile is the other half of a BAM, and it is not a track.
  *
  * A BAM imports as two rows — the depth, which is a coverage profile in every
@@ -245,7 +308,14 @@ describe('a pile lane', () => {
 
 describe('the kinds that draw no profile at all', () => {
   it('leaves the feature kinds out of every axis question', () => {
-    for (const kind of ['gtf', 'segments', 'variants', 'pairs', 'classes'] as AnnotationKind[]) {
+    for (const kind of [
+      'gtf',
+      'segments',
+      'variants',
+      'barchart',
+      'pairs',
+      'classes',
+    ] as AnnotationKind[]) {
       expect(drawsAProfile(kind), kind).toBe(false)
       expect(hasAMovableAxis(kind), kind).toBe(false)
       expect(hasTrackControls(kind), kind).toBe(false)

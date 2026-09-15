@@ -66,6 +66,7 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
+  if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   return { card: 'linear', kind: 'segments' }
 }
@@ -728,6 +729,7 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'gtf':
     case 'bed':
     case 'vcf':
+    case 'barchart':
     case 'fasta':
     case 'bam':
       return 'linear'
@@ -755,6 +757,10 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // Called variants (§8.14). A `FeatureSet` like the two below, and its own
     // kind because a reader means something different by a row of it.
     if (format === 'vcf') return 'variants'
+    // A chart per feature (§8.17), and the one format here whose glyph cannot
+    // be a box — so it is a kind rather than a `segments` with a column nothing
+    // reads.
+    if (format === 'barchart') return 'barchart'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
     if (format === 'bed' || format === 'bigbed') return 'segments'

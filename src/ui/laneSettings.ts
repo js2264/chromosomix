@@ -829,6 +829,46 @@ export function arrowsToggle(store: AnnotationStore, entry: AnnotationEntry): HT
 }
 
 /**
+ * What a barChart's bars are measured against (§8.17).
+ *
+ * The one control a barChart lane has, and it is here because the two readings
+ * it switches between are both right and neither can be guessed from the file.
+ * Against the **file's** ceiling a tall bar means a big number anywhere on the
+ * lane, which is what makes two glyphs comparable and is the default. Against
+ * each feature's **own** top every chart is a shape — which condition wins, and
+ * by how much against the rest of that feature — and that is the only reading
+ * a heavy-tailed file has: expression runs over three orders of magnitude, so
+ * one ceiling draws the whole lane flat except for the handful of genes a
+ * reader did not need a chart to find.
+ *
+ * A switch and not a heuristic on the distribution, because a lane that quietly
+ * changed what its heights meant when a file's tail got longer would be the
+ * worst version of both.
+ */
+export function barScaleToggle(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
+  const per = featuresOf(entry.style, entry.kind).bars === 'feature'
+  const chip = button(
+    'scale each chart',
+    () =>
+      patchFeatures(store, entry, {
+        bars:
+          featuresOf((store.byId(entry.id) ?? entry).style, entry.kind).bars === 'feature'
+            ? 'file'
+            : 'feature',
+      }),
+    {
+      class: `btn btn-chip${per ? ' is-on' : ''}`,
+      title:
+        'Measure every chart against its own tallest bar instead of against one ceiling for the ' +
+        'whole file. Each feature becomes a shape — which category wins, and by how much — at the ' +
+        'cost of being able to compare two features by height.',
+    },
+  )
+  chip.setAttribute('aria-pressed', String(per))
+  return el('div', { class: 'ann-chips' }, chip)
+}
+
+/**
  * Which colour is which value, under the control that decides it.
  *
  * In the card rather than on the canvas, for §8.13's reason and one more of its

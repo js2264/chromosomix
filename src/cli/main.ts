@@ -103,6 +103,7 @@ import {
   parseBedpe,
   sniffFormat,
 } from '../annotations/parse'
+import { parseBarChart, sniffBarChart } from '../annotations/barchart'
 import { formatIntervals } from '../annotations/export'
 import type { StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
@@ -1104,8 +1105,14 @@ async function loadInputs(args: Args): Promise<TaskInputs> {
   for (const path of all(args, 'features')) {
     const text = await decodeAnnotationText(new Uint8Array(await readFile(path)))
     const id = basename(path)
-    const format = sniffFormat(text, path)
-    if (format === 'bedpe') {
+    // Asked before `sniffFormat` for the reason the worker asks it there
+    // (§8.17): the BED sniffer never answers "not one of mine", so a barChart
+    // read here as a BED would reach a task as intervals with no chart on them
+    // — which is fine for a metaplot and silently wrong for anything that reads
+    // the vector.
+    if (sniffBarChart(text, path)) {
+      inputs.features = { ...inputs.features, [id]: parseBarChart(text, path) }
+    } else if (sniffFormat(text, path) === 'bedpe') {
       inputs.pairs = { ...inputs.pairs, [id]: parseBedpe(text) }
     } else {
       inputs.features = { ...inputs.features, [id]: parseBed(text, path) }

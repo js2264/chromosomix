@@ -25,10 +25,20 @@
 import { contigIndexOf } from '../genome/naming'
 
 import { featureRange } from '../annotations/featureset'
-import { strandBands } from '../annotations/fields'
-import type { FeatureSet } from '../annotations/types'
+import { strandBands, type BarScale } from '../annotations/fields'
+import type { AnnotationKind, FeatureSet } from '../annotations/types'
+import {
+  BAR_GAP,
+  BAR_MIN_WIDTH,
+  barChartRows,
+  barColours,
+  dominantOf,
+  peakOf,
+} from './barchart'
+import { VARIANT_MIN_WIDTH } from './variants'
 import {
   canvasToAcross,
+  laneGrowsInward,
   laneIsHorizontal,
   laneLine,
   laneMove,
@@ -116,6 +126,19 @@ export function layoutFeatures(
    * was: a peak that is one pixel wide *is* one pixel of genome.
    */
   leastWidth = 0,
+  /**
+   * Whether the rows may be banded by strand (§8.16).
+   *
+   * `true` for every lane whose glyph is a *box*, which is every lane but one.
+   * A barChart lane says `false`, and the reason is that banding spends the
+   * thing a chart is made of: the rows divide the lane's **height**, and a
+   * barChart's height is its value axis. Splitting a sixty-pixel lane into
+   * three strand bands buys a fact the card already states and costs two thirds
+   * of every reading on the lane — which is the one trade §8.16's argument for
+   * banding, "a colour you have to look up against a place you can see", does
+   * not survive when the place is also the measurement.
+   */
+  banded = true,
 ): FeatureLayout {
   const placements: FeaturePlacement[] = []
   const span = Math.abs(frame.alongTo - frame.alongFrom)
@@ -193,7 +216,7 @@ export function layoutFeatures(
   // stranded BED lands in. A band needs only {@link MIN_BAND_ROW}: a glyph and
   // the gap under it. Where both fit, the bands win and the labels go back
   // inside the features, which is what a lane that short does anyway.
-  const bands = strandBands(set)
+  const bands = banded ? strandBands(set) : [0]
   if (bands.length > 1 && frame.thickness / bands.length >= MIN_BAND_ROW) {
     const rows = Math.max(maxRows, bands.length)
     const shares = shareRows(rows, bands.length)
@@ -345,6 +368,14 @@ export interface FeaturePaint {
    * column comes out in the plain rectangles it always did, whatever this says.
    */
   arrows?: boolean
+  /**
+   * What a barChart's bars are measured against (§8.17).
+   *
+   * Absent is `file` — one ceiling for every chart on the lane, which is the
+   * only setting under which two glyphs can be compared. `FeatureStyle.bars` in
+   * `annotations/fields.ts` says why the other reading exists.
+   */
+  barScale?: BarScale
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -415,6 +446,265 @@ export function drawSegments(
     if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
   }
   ctx.restore()
+}
+
+/**
+ * Everything {@link layoutFeatures} needs that depends on what the lane *is*.
+ *
+ * One function rather than three conditionals repeated on each surface, and the
+ * reason is the reason `annotations/types.ts` gives for its kind predicates: the
+ * map lanes and the 1D browser lay out the same file with the same code, and
+ * every per-kind number spelled at both is a chance for them to drift into two
+ * pictures of one lane. It was already two — the row height and the variant
+ * floor — and a barChart adds a third and a fourth.
+ *
+ * `scale` is the app's font scaling, passed in rather than imported because
+ * this module is free of the DOM and of the settings that decide it.
+ */
+export function featureLayoutFor(
+  kind: AnnotationKind,
+  thickness: number,
+  scale: (length: number) => number,
+): { rows: number; least: number; banded: boolean } {
+  // Taller rows than a bare glyph needs, because each one carries a name under
+  // its features; `labelBandOf` refuses the band on a row too short for both,
+  // so a lane dragged down to sixteen pixels still falls back to names inside
+  // the wide features.
+  const fit = rowsThatFit(thickness, scale(kind === 'gtf' ? 26 : 22))
+  return {
+    // A chart's rows divide its value axis, so how many of them fit is a
+    // question about the *measurement* and not about the label under it.
+    rows: kind === 'barchart' ? barChartRows(thickness, fit) : fit,
+    // A single base is a hairline at every zoom a chromosome is browsed at
+    // (§8.14).
+    least: kind === 'variants' ? scale(VARIANT_MIN_WIDTH) : 0,
+    banded: kind !== 'barchart',
+  }
+}
+
+/**
+ * The renderer a feature lane of this kind is drawn by.
+ *
+ * The same one-place argument {@link featureLayoutFor} makes, for the half of
+ * the decision that follows the layout: a two-armed `if` at two call sites is
+ * how a third arm reaches one surface and not the other, and the way that fails
+ * is a lane that draws charts beside the map and boxes in the browser.
+ */
+export function drawFeatures(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  set: FeatureSet,
+  layout: FeatureLayout,
+  paint: FeaturePaint,
+  kind: AnnotationKind,
+): void {
+  if (kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
+  else if (kind === 'barchart') drawBarCharts(ctx, frame, set, layout, paint)
+  else drawSegments(ctx, frame, set, layout, paint)
+}
+
+/**
+ * A barChart: one chart per feature, drawn inside the bases the feature covers
+ * (§8.17).
+ *
+ * The third renderer over {@link layoutFeatures}' layout, and it is a third one
+ * rather than a flag on {@link drawSegments} because nothing in it is a box:
+ * where that function asks *what colour is this feature and which way does it
+ * point*, this asks *what are its values and is there room to show them*.
+ *
+ * ## The two pictures, and the line between them
+ *
+ * With room, a feature is `expCount` bars standing on a common baseline, each
+ * the height of its own value against the file's ceiling. Without it, it is one
+ * box in the colour of the category that dominates the row and the height of
+ * that category's value — so the glyph gives up *which categories* long before
+ * it gives up *which one* and *how much*, and a lane zoomed out to a chromosome
+ * still reads as a map of where each tissue wins.
+ *
+ * The line is {@link BAR_MIN_WIDTH} per category and no fudge factor, because
+ * under a pixel a bar is not thin, it is gone: the canvas rounds it away or
+ * blends it into its neighbour, and a chart quietly missing half its categories
+ * is a different chart drawn with the same confidence.
+ *
+ * ## Why the bars are painted by category rather than by feature
+ *
+ * One path per *category*, filled once — so a lane of four hundred glyphs over
+ * fifty-four tissues is fifty-four fills rather than twenty-one thousand. The
+ * same argument {@link groupByInk} makes for boxes, and it matters more here
+ * because the number of pieces is the product of two counts rather than one.
+ *
+ * ## What is deliberately not drawn
+ *
+ * An axis. A chart sixteen pixels tall has no room for one, there are as many
+ * of them on the lane as there are features, and the ceiling is the same number
+ * for every one of them — so it is stated once, under the lane's label and in
+ * the card, where it can be read (§8.17). What *is* drawn is the baseline, once
+ * per glyph, because without it a row of short bars and a row of tall bars
+ * hanging from above are the same picture.
+ */
+export function drawBarCharts(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  set: FeatureSet,
+  layout: FeatureLayout,
+  paint: FeaturePaint,
+): void {
+  const bars = set.bars
+  // A file that reached this lane with no categories on it — every row
+  // disagreeing about `expCount`, or a stored session restored against a set
+  // that was re-read as a BED. Boxes are the honest picture of it and are
+  // already written; drawing an empty chart would be an assertion that the
+  // values are all zero.
+  if (bars === undefined) {
+    drawSegments(ctx, frame, set, layout, paint)
+    return
+  }
+  if (layout.dense) {
+    drawDensity(ctx, frame, layout, paint)
+    return
+  }
+  const rowHeight = frame.thickness / layout.rows
+  const band = labelBandOf(paint, rowHeight)
+  const chartHeight = Math.max(3, rowHeight - band - 2)
+  const width = bars.labels.length
+  const colours = barColours(bars)
+  const perFeature = paint.barScale === 'feature'
+  // A file of zeroes would divide every bar by nothing. One is the ceiling that
+  // draws all of them flat on the baseline, which is what that file says.
+  const fileCeiling = bars.max > 0 ? bars.max : 1
+  const inward = laneGrowsInward(frame.orientation)
+  /** What this feature's bars are divided by — see {@link FeaturePaint.barScale}. */
+  const ceilingOf = (index: number): number => {
+    if (!perFeature) return fileCeiling
+    const peak = peakOf(bars, index)
+    return Number.isFinite(peak) && peak > 0 ? peak : fileCeiling
+  }
+
+  const charted: FeaturePlacement[] = []
+  const collapsed: FeaturePlacement[] = []
+  for (const placement of layout.placements) {
+    const room = placement.along1 - placement.along0 >= width * BAR_MIN_WIDTH
+    ;(room ? charted : collapsed).push(placement)
+  }
+
+  ctx.save()
+  ctx.globalAlpha = paint.opacity
+
+  // The baselines first, under everything, so a bar of zero still has a mark
+  // saying the feature is there.
+  ctx.fillStyle = paint.guideColour
+  ctx.globalAlpha = paint.opacity * 0.45
+  ctx.beginPath()
+  for (const placement of layout.placements) {
+    const base = baseOf(placement.row, rowHeight, band, chartHeight, inward)
+    const [x, y, w, h] = laneRect(frame, placement.along0, placement.along1, base, base)
+    ctx.rect(x, y, w, h)
+  }
+  ctx.fill()
+  ctx.globalAlpha = paint.opacity
+
+  for (let category = 0; category < width; category++) {
+    ctx.fillStyle = colours[category]
+    ctx.beginPath()
+    let drawn = false
+    for (const placement of charted) {
+      const value = bars.values[placement.index * width + category]
+      if (!Number.isFinite(value) || value <= 0) continue
+      const span = placement.along1 - placement.along0
+      const slot = span / width
+      // The gap is dropped rather than shrinking the bars below the floor: two
+      // bars touching are still two heights, where two bars half a pixel wide
+      // are one smear.
+      const thickness = slot - BAR_GAP >= BAR_MIN_WIDTH ? slot - BAR_GAP : slot
+      const along0 = placement.along0 + category * slot
+      const [across0, across1] = barAcross(
+        placement.row,
+        rowHeight,
+        band,
+        chartHeight,
+        inward,
+        value / ceilingOf(placement.index),
+      )
+      const [x, y, w, h] = laneRect(frame, along0, along0 + thickness, across0, across1)
+      ctx.rect(x, y, w, h)
+      drawn = true
+    }
+    if (drawn) ctx.fill()
+  }
+
+  // The collapsed glyphs, gathered under the category each is dominated by, so
+  // the fills are bounded by the number of categories here too.
+  const byCategory = new Map<number, FeaturePlacement[]>()
+  for (const placement of collapsed) {
+    const at = dominantOf(bars, placement.index)
+    const held = byCategory.get(at)
+    if (held === undefined) byCategory.set(at, [placement])
+    else held.push(placement)
+  }
+  for (const [category, placements] of byCategory) {
+    // No dominant category is no answer, and takes the lane's own colour —
+    // never a category's, which would name one.
+    ctx.fillStyle = category < 0 ? paint.colour : colours[category]
+    ctx.beginPath()
+    for (const placement of placements) {
+      const value = peakOf(bars, placement.index)
+      // A floor of a twelfth, so a feature whose tallest category is near zero
+      // is still a mark rather than a gap in the lane. Against the *file's*
+      // ceiling whatever the switch says, because per feature this is the
+      // feature's own peak divided by itself — every collapsed glyph full
+      // height, which is a lane saying nothing.
+      const height = Number.isFinite(value) ? Math.max(value / fileCeiling, 1 / 12) : 1
+      const [across0, across1] = barAcross(
+        placement.row,
+        rowHeight,
+        band,
+        chartHeight,
+        inward,
+        height,
+      )
+      const [x, y, w, h] = laneRect(frame, placement.along0, placement.along1, across0, across1)
+      ctx.rect(x, y, w, h)
+    }
+    ctx.fill()
+  }
+
+  if (paint.labels) labelFeatures(ctx, frame, set, layout, paint, rowHeight)
+  ctx.restore()
+}
+
+/**
+ * Where one row's charts stand, in lane across-coordinates.
+ *
+ * The baseline follows {@link laneGrowsInward}, which is the one place this
+ * application decides which way a value grows: up the page on a horizontal lane
+ * and right across a vertical one, whichever edge of the map the lane is on. So
+ * a barChart on a bottom stack stands on its outer edge and grows towards the
+ * matrix, and the one on the top stack stands on its inner edge and grows away
+ * — which is what every profile lane beside them already does.
+ */
+function baseOf(
+  row: number,
+  rowHeight: number,
+  band: number,
+  chartHeight: number,
+  inward: boolean,
+): number {
+  const top = row * rowHeight + (rowHeight - band - chartHeight) / 2
+  return inward ? top + chartHeight : top
+}
+
+/** The across-span of one bar at `height` of the chart, as a `[from, to]` pair. */
+function barAcross(
+  row: number,
+  rowHeight: number,
+  band: number,
+  chartHeight: number,
+  inward: boolean,
+  height: number,
+): [number, number] {
+  const clamped = height < 0 ? 0 : height > 1 ? 1 : height
+  const base = baseOf(row, rowHeight, band, chartHeight, inward)
+  return inward ? [base - clamped * chartHeight, base] : [base, base + clamped * chartHeight]
 }
 
 /**
