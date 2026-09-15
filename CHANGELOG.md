@@ -14,6 +14,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A file picked from Google Drive took a long time to open, under a name that was its id.** A
+  Drive file is addressed by an id, so nothing in its address says what it is, and the session took
+  the contact-map door first: a `HEAD`, then HDF5 hunting for a superblock at doubling offsets — a
+  megabyte chunk at each — through the whole of a bigWig, before the track door read the file's
+  header three times over, four small requests each. Over the Drive API, where a request is the
+  better part of a second, a 56 MB bigWig sat at *Opening 1pq7NDWo…?alt=media…* for most of a
+  minute. The name a folder gives a file now decides the door where its address cannot, a bare
+  address is asked what it is before the map door is tried, and the annotations worker reads a
+  remote file in 256 KiB chunks it keeps, one handle per address — so the same open is three
+  requests and 0.6 MB, and the loading screen and the tab say *ATAC_rep2_WBcel235.bw* (SPECS
+  §24.9). A presigned URL's tab loses its signature the same way: a query string is the request,
+  not the name.
+
 - **Opening a 4DN BAM as a genome fetched the whole file.** 4DN's open-data bucket exposes `ETag`
   and nothing else to a page, so the browser could not see the `Content-Range` the file handle
   reads a size off, and the handle reported nought bytes. The bounded header read was then a read

@@ -398,7 +398,10 @@ only** — never written to storage, gone when the tab closes, and expiring on t
 returns with it, which the dialog shows as a clock time. When it expires, a Drive or GCS read
 answers `401` and the error screen offers *sign in again* rather than the CORS explanation.
 
-**Drive is a host this viewer reads, not one it recommends.** Requests are metered against the
+**Drive is a host this viewer reads, not one it recommends.** The viewer reads it in 256 KiB chunks
+and keeps them, so a bigWig picked from a folder opens in three requests rather than the twenty a
+parser's own reads would make; what it cannot help is that each request is the better part of a
+second. Requests are metered against the
 project that owns the client id, and a fine-resolution pan over a contact map is thousands of ranged
 reads where opening one is a dozen. The current limits and the project's own usage are in the Cloud
 console under **APIs & Services → Quotas**; no number is quoted here because it is Google's to

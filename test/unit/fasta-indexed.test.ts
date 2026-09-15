@@ -59,8 +59,14 @@ function fastaText(): string {
   for (let i = 0; i < 700; i++) chrI += bases[(i * 7 + (i >> 3)) % 4]
   let chrII = ''
   for (let i = 0; i < 130; i++) chrII += 'GC'[(i * 3) % 2]
+  // Long enough to reach past the worker's first cached chunk (256 KiB), so a
+  // window on it is a ranged read of the file rather than a cache hit: the
+  // two tests below that count requests read here.
+  const parts: string[] = []
+  for (let i = 0; i < 900_000; i++) parts.push(bases[(i * 11 + (i >> 5)) % 4])
+  const chrIII = parts.join('')
   const wrap = (seq: string, width: number): string => seq.match(new RegExp(`.{1,${width}}`, 'g'))?.join('\n') ?? ''
-  return `>chrI the first\n${wrap(chrI, 60)}\n>chrII\n${wrap(chrII, 50)}\n`
+  return `>chrI the first\n${wrap(chrI, 60)}\n>chrII\n${wrap(chrII, 50)}\n>chrIII\n${wrap(chrIII, 60)}\n`
 }
 
 /** `samtools faidx`, for a file whose records are wrapped uniformly. */
@@ -163,6 +169,7 @@ describe('a large FASTA with its index', () => {
     expect(payload.contigs).toEqual([
       { name: 'chrI', length: 700 },
       { name: 'chrII', length: 130 },
+      { name: 'chrIII', length: 900_000 },
     ])
     // The sniff, the size and the index — and not the file.
     expect(log.some((line) => line.includes('big.fa.fai'))).toBe(true)
@@ -175,7 +182,7 @@ describe('a large FASTA with its index', () => {
     expect(loaded.type, JSON.stringify(loaded)).toBe('result')
     const summary = (loaded as { payload: { format: string; summary: string } }).payload
     expect(summary.format).toBe('fasta')
-    expect(summary.summary).toContain('2 sequences')
+    expect(summary.summary).toContain('3 sequences')
     expect(summary.summary).toContain('read by range from its index')
 
     for (const [contig, start, end] of [
@@ -250,10 +257,12 @@ describe('a large FASTA with its index', () => {
 
   it('reports how far a ranged read has got, under the request that asked', async () => {
     serve({ size: LARGE, index: true })
-    await ask({ kind: 'load', entry: 'e-progress', source: source('big.fa'), mapContigs: [] })
+    // Its own address: the worker keeps one chunk-caching handle per file, and
+    // a chunk an earlier test fetched would answer this window for nothing.
+    await ask({ kind: 'load', entry: 'e-progress', source: source('progress.fa'), mapContigs: [] })
     const seen = posted.length
     const id = nextId
-    await ask({ kind: 'bases', entry: 'e-progress', regions: [{ contig: 'chrI', start: 300, end: 420 }] })
+    await ask({ kind: 'bases', entry: 'e-progress', regions: [{ contig: 'chrIII', start: 280_000, end: 280_120 }] })
     const reports = posted
       .slice(seen)
       .filter((message) => message.type === 'progress' && 'id' in message && message.id === id)
@@ -265,14 +274,16 @@ describe('a large FASTA with its index', () => {
 
   it('reads a window once, and a pan that stays inside it not at all', async () => {
     serve({ size: LARGE, index: true })
-    await ask({ kind: 'load', entry: 'e-cache', source: source('big.fa'), mapContigs: [] })
-    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrI', start: 100, end: 300 }] })
-    const reads = (): number => log.filter((line) => /big\.fa bytes=/.test(line)).length
+    await ask({ kind: 'load', entry: 'e-cache', source: source('cached.fa'), mapContigs: [] })
+    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrIII', start: 280_000, end: 280_200 }] })
+    const reads = (): number => log.filter((line) => /cached\.fa bytes=/.test(line)).length
     const before = reads()
     expect(before).toBeGreaterThan(0)
-    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrI', start: 150, end: 250 }] })
+    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrIII', start: 280_050, end: 280_150 }] })
     expect(reads()).toBe(before)
-    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrI', start: 250, end: 350 }] })
+    // A window in a stretch nothing has fetched — past the handle's chunk as
+    // well as past the sequence cache's window.
+    await ask({ kind: 'bases', entry: 'e-cache', regions: [{ contig: 'chrIII', start: 600_000, end: 600_100 }] })
     expect(reads()).toBe(before + 1)
   })
 
@@ -295,7 +306,7 @@ describe('the fallbacks', () => {
     serve({ size: BYTES.length, index: true })
     const loaded = await ask({ kind: 'load', entry: 'e-small', source: source('small.fa'), mapContigs: [] })
     const summary = (loaded as { payload: { summary: string } }).payload.summary
-    expect(summary).toContain('2 sequences')
+    expect(summary).toContain('3 sequences')
     expect(summary).not.toContain('read by range')
     expect(log.some((line) => line.includes('.fai'))).toBe(false)
   })

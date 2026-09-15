@@ -6086,8 +6086,19 @@ thousand entries and then *truncated*. A folder is remembered by its id and labe
 `localStorage`, named in the stored-data screen; the listing needs the account, so a remembered
 folder after a reload says *sign in to Google* until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
-beside it. What the row does not carry is a folder tree: `files.list` answers one parent at a time,
-which is §20.1's rule arriving from the other side.
+beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
+what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
+screen and the tab say the name rather than the address. Where no name says either — a bare id
+pasted into the URL box — the bytes are asked *before* the map door is tried, because that door's
+failure is dear: HDF5 hunts for a superblock at doubling offsets, a megabyte chunk at each, through
+the whole of a file that is not one, and over the Drive API that was the better part of a minute for
+a 56 MB bigWig that then opened in three requests. Those three are what the annotations worker's
+remote handle costs now: it reads 256 KiB chunks and keeps them, one handle per address, so the
+assembly question, the load and the first window read a bigWig's header once between them
+(`worker/cachedFile.ts`) — the arrangement `RemoteRangeSource` has always made for a contact map,
+and the one that makes a host where a request is a second rather than a millisecond usable at all.
+What the row does not carry is a folder tree: `files.list` answers one parent at a time, which is
+§20.1's rule arriving from the other side.
 
 **Dropbox** (`auth/dropbox.ts`, `browse/dropbox.ts`) is the one provider here with an account and
 no key: a lab registers a *scoped-access* app with `files.metadata.read` and `files.content.read`,

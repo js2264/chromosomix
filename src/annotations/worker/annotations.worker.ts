@@ -37,6 +37,7 @@ import {
 } from '../signal'
 import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
+import { CachedRemoteFile } from './cachedFile'
 
 import { applyAccess } from '../../sources/access'
 
@@ -1012,23 +1013,52 @@ export function contigsOf(ends: Map<string, number>): Contig[] {
  * A source with neither gets the library's own `fetch` and no wrapper at all,
  * which is every public track.
  */
+/**
+ * The remote handles this worker holds, by address and access, most recently
+ * used last. One per file rather than one per question, because the handle
+ * caches what it reads (`cachedFile.ts`): the three opens on the way to a
+ * browser — the assembly question, the load, the first window — then read the
+ * file's header once. Eight, because a session's worker has a handful of
+ * remote tracks and a bounded map is what keeps a long session from holding
+ * a chunk cache for every file it ever glanced at.
+ */
+const remoteHandles = new Map<string, CachedRemoteFile>()
+const REMOTE_HANDLES_KEPT = 8
+
 function handleFor(source: WireSource): BlobFile | RemoteFile {
   if (source.kind === 'local') return new BlobFile(source.file)
   const { credential, headers } = source
-  if (credential === undefined && headers === undefined) return new RemoteFile(source.url)
-  return new RemoteFile(source.url, {
-    fetch: (input, init) => {
-      const url = typeof input === 'string' ? input : (input as Request).url
-      return fetch(
-        input,
-        applyAccess(init, {
-          url,
-          ...(headers === undefined ? {} : { headers }),
-          ...(credential === undefined ? {} : { credential }),
-        }),
-      )
-    },
-  })
+  const key = `${source.url}|${credential === undefined ? '' : JSON.stringify(credential)}|${
+    headers === undefined ? '' : JSON.stringify(headers)
+  }`
+  const held = remoteHandles.get(key)
+  if (held !== undefined) {
+    remoteHandles.delete(key)
+    remoteHandles.set(key, held)
+    return held
+  }
+  const made =
+    credential === undefined && headers === undefined
+      ? new CachedRemoteFile(source.url)
+      : new CachedRemoteFile(source.url, {
+          fetch: (input, init) => {
+            const url = typeof input === 'string' ? input : (input as Request).url
+            return fetch(
+              input,
+              applyAccess(init, {
+                url,
+                ...(headers === undefined ? {} : { headers }),
+                ...(credential === undefined ? {} : { credential }),
+              }),
+            )
+          },
+        })
+  remoteHandles.set(key, made)
+  while (remoteHandles.size > REMOTE_HANDLES_KEPT) {
+    const oldest = remoteHandles.keys().next().value as string
+    remoteHandles.delete(oldest)
+  }
+  return made
 }
 
 /**
