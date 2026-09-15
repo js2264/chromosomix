@@ -421,7 +421,35 @@ export interface FeatureStyle {
    * for readers who want the plain rectangles this lane always drew.
    */
   arrows: boolean
+  /**
+   * What a barChart's bars are measured against (§8.17).
+   *
+   * `file` is one ceiling for every chart on the lane, and it is the default
+   * because it is the only setting under which two glyphs can be *compared*:
+   * a tall bar means a big number, here and three windows away, and that is
+   * the reading a lane of charts is for.
+   *
+   * `feature` scales each chart to its own tallest bar, and it exists because
+   * the common case defeats the default. Expression is heavy-tailed — a
+   * handful of ribosomal genes run a thousand times the median — so against
+   * one ceiling the whole lane is flat and the picture says only *where the
+   * ribosomal genes are*, which the reader already knew. Per feature, every
+   * chart is a **shape**: which condition wins, and by how much relative to
+   * the rest of that gene. Two readings, both true, and neither is a default
+   * that could serve for the other — so it is a switch rather than a
+   * heuristic that guesses from the distribution.
+   *
+   * Meaningless on every other feature kind, and harmless there: nothing but
+   * `drawBarCharts` reads it.
+   */
+  bars: BarScale
 }
+
+/**
+ * The two things a bar's height can be measured against; see
+ * {@link FeatureStyle.bars}.
+ */
+export type BarScale = 'file' | 'feature'
 
 /**
  * What a feature lane starts on.
@@ -434,7 +462,13 @@ export interface FeatureStyle {
  * makes the lane agree with the sequence and the pile above it.
  */
 export function defaultFeatureStyle(kind: AnnotationKind): FeatureStyle {
-  return { colourBy: kind === 'variants' ? FIELD_BASE : FIELD_STRAND, arrows: true }
+  return {
+    colourBy: kind === 'variants' ? FIELD_BASE : FIELD_STRAND,
+    arrows: true,
+    // Comparable before legible: a lane whose glyphs cannot be compared is a
+    // row of shapes, and a reader who wants the shapes can ask for them.
+    bars: 'file',
+  }
 }
 
 /**
@@ -474,5 +508,9 @@ export function featureStyleOf(value: unknown, kind: AnnotationKind): FeatureSty
     // Absent means *on*: the default is what a row written before this existed
     // should come back as, and `!== false` is the only reading that gives it.
     arrows: row['arrows'] !== false,
+    // …and absent means `file` here, for the same reason: only the one stored
+    // string that names the other reading may move a restored lane off the
+    // default.
+    bars: row['bars'] === 'feature' ? 'feature' : 'file',
   }
 }

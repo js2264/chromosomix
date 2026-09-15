@@ -57,7 +57,7 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import { VARIANT_MIN_WIDTH } from '../render/variants'
+import { barChartCaption } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type {
@@ -106,11 +106,10 @@ import {
 } from './textScale'
 import {
   LABEL_BAND,
+  drawFeatures,
   featureAt,
-  drawGenes,
-  drawSegments,
+  featureLayoutFor,
   layoutFeatures,
-  rowsThatFit,
 } from '../render/features'
 import {
   laneBands,
@@ -2053,12 +2052,17 @@ export class BrowserView {
         }
       }
     } else if (entry.payload?.kind === 'features') {
-      // Taller rows than beside a map, because each one carries a name under
-      // its features. Below that height the band is refused and the names go
-      // back inside, which is what a lane dragged very short should do.
-      const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-      const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
-      const layout = layoutFeatures(frame, this.axis, entry.payload.data, rows, least)
+      // Every per-kind number in one place, so this surface and the map lanes
+      // cannot drift into two pictures of one file (§8.16, §8.17).
+      const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+      const layout = layoutFeatures(
+        frame,
+        this.axis,
+        entry.payload.data,
+        rules.rows,
+        rules.least,
+        rules.banded,
+      )
       this.layouts.set(entry.id, { frame, layout })
       const set = entry.payload.data
       // What the boxes are coloured by, and whether the stranded ones point
@@ -2077,10 +2081,10 @@ export class BrowserView {
         labelsBelow: true,
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,
+        barScale: features.bars,
         colourOf: ink.colourOf,
       }
-      if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
-      else drawSegments(ctx, frame, set, layout, paint)
+      drawFeatures(ctx, frame, set, layout, paint, entry.kind)
       if (this.text) {
         label = {
           // Chipped in a colour that is **in the lane**: §8.12's rule, which a
@@ -2098,7 +2102,11 @@ export class BrowserView {
                 kind: 'text',
                 text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
               }
-            : null,
+            : // What the top of a bar means, which is the one thing a chart
+              // without an axis cannot say for itself (§8.17).
+              set.bars === undefined
+              ? null
+              : { kind: 'text', text: barChartCaption(set.bars, fmt.num, features.bars) },
           at: 'near',
         }
       }

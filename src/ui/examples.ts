@@ -240,6 +240,7 @@ const DEMO_DATA: Array<{
       ['Yeast_RNA_fwd.bw', 'RNA-seq, forward strand', 'bigwig'],
       ['Yeast_RNA_rev.bw', 'RNA-seq, reverse strand', 'bigwig'],
       ['Yeast_Shotgun.bw', 'Shotgun coverage', 'bigwig'],
+      ['Yeast_expression.barChart', 'Expression by condition (synthetic)', 'barChart'],
       ['Yeast_microC_anchors.bed', 'Micro-C anchors', 'bed'],
       ['Yeast_microC_loops.tsv', 'Micro-C loop calls', 'loops'],
     ] as const

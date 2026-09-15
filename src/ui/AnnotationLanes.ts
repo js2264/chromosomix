@@ -37,11 +37,10 @@ import { SampleCache } from '../annotations/samples'
 import type { AnnotationClient } from '../annotations/worker/client'
 import {
   LABEL_BAND,
+  drawFeatures,
   featureAt,
-  drawGenes,
-  drawSegments,
+  featureLayoutFor,
   layoutFeatures,
-  rowsThatFit,
   type FeatureLayout,
 } from '../render/features'
 import {
@@ -73,7 +72,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
-import { VARIANT_MIN_WIDTH } from '../render/variants'
+import { barChartCaption } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type { OverlayAxes } from '../render/overlays'
@@ -1316,15 +1315,19 @@ export class AnnotationLanes {
           }
         }
       } else if (entry.payload?.kind === 'features' && axis !== null) {
-        // The browser's row heights, and for the browser's reason: a name goes
-        // *under* its feature on both surfaces, and the band that holds it has
-        // to be asked for at the point the rows are counted. `labelBandOf`
-        // refuses the band on a row too short to hold both, so a lane dragged
-        // down to sixteen pixels still falls back to names inside the wide
-        // features — the rule is one rule, and the lane's height decides.
-        const rows = rowsThatFit(frame.thickness, scaleLength(entry.kind === 'gtf' ? 26 : 22))
-        const least = entry.kind === 'variants' ? scaleLength(VARIANT_MIN_WIDTH) : 0
-        const layout = layoutFeatures(frame, axis, entry.payload.data, rows, least)
+        // The browser's rules, on the same lane drawn beside a map: one
+        // function decides the rows, the floor and the banding for both
+        // surfaces, because a number spelled at each is a number that drifts
+        // (§8.16, §8.17).
+        const rules = featureLayoutFor(entry.kind, frame.thickness, scaleLength)
+        const layout = layoutFeatures(
+          frame,
+          axis,
+          entry.payload.data,
+          rules.rows,
+          rules.least,
+          rules.banded,
+        )
         this.layouts.set(`${entry.id}:${edge}`, { frame, layout })
         const set = entry.payload.data
         // The same rule as the browser's, on the same lane drawn beside a map
@@ -1343,10 +1346,10 @@ export class AnnotationLanes {
           labelsBelow: true,
           labelBand: scaleLength(LABEL_BAND),
           arrows: features.arrows,
+          barScale: features.bars,
           colourOf: ink.colourOf,
         }
-        if (entry.kind === 'gtf') drawGenes(ctx, frame, set, layout, paint)
-        else drawSegments(ctx, frame, set, layout, paint)
+        drawFeatures(ctx, frame, set, layout, paint, entry.kind)
         if (text) {
           label = {
             // Named with a colour that is in the lane — §8.12's rule, as the
@@ -1361,7 +1364,10 @@ export class AnnotationLanes {
                   kind: 'text',
                   text: `${fmt.int(layout.total)} ${entry.kind === 'variants' ? 'variants' : 'features'} in view`,
                 }
-              : null,
+              : // The browser's caption, on the lane beside the map (§8.17).
+                set.bars === undefined
+                ? null
+                : { kind: 'text', text: barChartCaption(set.bars, fmt.num, features.bars) },
             at: 'near',
           }
         }

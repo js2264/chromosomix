@@ -100,11 +100,13 @@ describe('the lab’s gallery', () => {
       '4 files',
       '2 files',
     ])
-    // …and the files no figure names — two maps and the shotgun coverage —
-    // are still offered, under the cards.
+    // …and the files no figure names — two maps, the shotgun coverage and the
+    // synthetic barChart, which is deliberately in none: every figure here
+    // carries a DOI, and a lane of generated numbers does not belong in one.
+    // They are still offered, under the cards.
     const loose = view.el.querySelector('.gallery-loose') as HTMLElement
-    expect(loose.querySelector('summary')?.textContent).toBe('3 more files, in no figure')
-    expect(all(loose, '.portal-row')).toHaveLength(3)
+    expect(loose.querySelector('summary')?.textContent).toBe('4 more files, in no figure')
+    expect(all(loose, '.portal-row')).toHaveLength(4)
   })
 })
 

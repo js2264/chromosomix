@@ -25,7 +25,13 @@
  */
 
 import type { GroupMode } from '../annotations/groups'
-import type { AnnotationEntry, AnnotationPayload, TrackMode, TrackScale } from '../annotations/types'
+import type {
+  AnnotationEntry,
+  AnnotationKind,
+  AnnotationPayload,
+  TrackMode,
+  TrackScale,
+} from '../annotations/types'
 import type { Extent, LayoutKind } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -166,7 +172,7 @@ export interface ChoiceOption {
    * how the descriptor says which halves of itself this file can run, and
    * `resolveChoiceDefaults` moves the value onto one that is offered.
    */
-  needsKinds?: ReadonlyArray<'gtf' | 'segments' | 'variants' | 'pairs' | 'track' | 'sequence'>
+  needsKinds?: ReadonlyArray<AnnotationKind>
 }
 
 export interface ChoiceParam extends ParamBase {

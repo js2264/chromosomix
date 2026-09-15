@@ -43,6 +43,7 @@ import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
 import {
   arrowsToggle,
+  barScaleToggle,
   colourByField,
   colourLegend,
   featureColourField,
@@ -1083,21 +1084,32 @@ export class AnnotationCard {
     // lane to colour: a control that silently does nothing is worse than an
     // absent one.
     if (entry.card === 'linear' && isIntervalSet(entry.kind)) {
-      // The key is built first and handed to the picker, for the reason the
-      // pile's is: this card defers its own rebuild while a control holds
-      // focus, and the lane does not.
+      // …with one exception, and it is the same rule as the two above rather
+      // than a special case: a control that silently does nothing is worse than
+      // an absent one. A barChart's ink is its categories' and is not a choice
+      // (§8.17), and its glyph is bars rather than a box, so neither the
+      // picker nor the arrowheads have anything to change. The **key** is what
+      // is left, and it is the one of the three this lane needs most: it is
+      // where the bars get their names.
       const key = featureLegend(entry)
-      out.push(
-        el(
-          'div',
-          { class: 'ann-inline' },
-          featureColourField(this.props.store, entry, (by) =>
-            fillFeatureLegend(key, entry, by),
+      if (entry.kind === 'barchart') {
+        out.push(barScaleToggle(this.props.store, entry), key)
+      } else {
+        // The key is built first and handed to the picker, for the reason the
+        // pile's is: this card defers its own rebuild while a control holds
+        // focus, and the lane does not.
+        out.push(
+          el(
+            'div',
+            { class: 'ann-inline' },
+            featureColourField(this.props.store, entry, (by) =>
+              fillFeatureLegend(key, entry, by),
+            ),
+            arrowsToggle(this.props.store, entry),
           ),
-          arrowsToggle(this.props.store, entry),
-        ),
-        key,
-      )
+          key,
+        )
+      }
     }
     // A sequence lane's value axis is GC, and it is worth being able to clip:
     // between 0.3 and 0.5 is where a genome's variation actually lives. No

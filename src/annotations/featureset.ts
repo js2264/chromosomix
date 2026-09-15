@@ -8,7 +8,7 @@
  * — is invisible rather than loud.
  */
 
-import type { FeatureSet, PairSet } from './types'
+import type { BarChartBars, FeatureSet, PairSet } from './types'
 
 /** One feature as the parsers hand it over, before anything is sorted. */
 interface Raw {
@@ -22,6 +22,25 @@ interface Raw {
   detail: string
   exons: number[] | null
   cds: [number, number] | null
+  /** A barChart's per-category values, or `null` on every other format (§8.17). */
+  bars: readonly number[] | null
+}
+
+/**
+ * What a barChart knows about its categories before any row is read (§8.17).
+ *
+ * Everything in {@link BarChartBars} except the numbers themselves, because the
+ * numbers are what {@link FeatureBuilder.finish} is for: the labels, the
+ * colours and the units come from one `track` line and the values come from
+ * every row, and the two meet exactly once — after the sort, where the values
+ * can be laid out in the order they will be drawn in.
+ */
+export type BarChartSchema = Omit<BarChartBars, 'values' | 'max'> & {
+  /**
+   * `maxLimit` from the file, or `NaN` to fit the bars to the file's own
+   * largest value. Never fitted to a window; see {@link BarChartBars.max}.
+   */
+  limit: number
 }
 
 /**
@@ -60,6 +79,15 @@ export class FeatureBuilder {
       /** Flattened `[start, end, start, end, …]`, in file order. */
       exons?: number[]
       cds?: [number, number]
+      /**
+       * One value per category, for a barChart (§8.17).
+       *
+       * Carried through the builder rather than collected beside it, because
+       * {@link finish} **sorts**: a parallel array written in file order and a
+       * set read in genomic order are two orders, and the bug that makes is a
+       * chart drawn on the wrong gene — which looks like data.
+       */
+      bars?: readonly number[]
     } = {},
   ): void {
     // A zero-length feature is legal in BED and unpaintable: give it one base so
@@ -77,6 +105,7 @@ export class FeatureBuilder {
       detail: extra.detail ?? '',
       exons: extra.exons ?? null,
       cds: extra.cds ?? null,
+      bars: extra.bars ?? null,
     })
   }
 
@@ -91,8 +120,14 @@ export class FeatureBuilder {
    * transcript's exons in transcript order, which is descending in genomic
    * coordinates, and a renderer that joined consecutive pairs would draw the
    * introns as overlapping backwards spans.
+   *
+   * `bars` is a barChart's categories (§8.17). Passed to `finish` rather than
+   * set on the result afterwards so that there is one owner of the whole
+   * record: the stride is `labels.length` and the values are laid out against
+   * the sort this method performs, and a caller that attached them later would
+   * have to reproduce that sort to do it.
    */
-  finish(): FeatureSet {
+  finish(bars: BarChartSchema | null = null): FeatureSet {
     const rows = this.rows
     rows.sort((a, b) => (a.contig - b.contig) || (a.start - b.start) || (a.end - b.end))
     const n = rows.length
@@ -121,6 +156,14 @@ export class FeatureBuilder {
     set.exonStart = new Int32Array(exonTotal)
     set.exonEnd = new Int32Array(exonTotal)
 
+    // One flat `Float32Array` with a stride, filled in the sorted order below.
+    // `NaN` throughout to start with, so a row that carried no vector — or one
+    // whose `expCount` disagreed with the file's — is *no value* rather than a
+    // run of zeroes, which would draw as a real measurement of nothing.
+    const stride = bars === null ? 0 : bars.labels.length
+    const values = new Float32Array(stride * n).fill(Number.NaN)
+    let widest = 0
+
     let exonCursor = 0
     for (let i = 0; i < n; i++) {
       const row = rows[i]
@@ -145,6 +188,13 @@ export class FeatureBuilder {
           exonCursor++
         }
       }
+      if (stride > 0 && row.bars !== null && row.bars.length === stride) {
+        for (let c = 0; c < stride; c++) {
+          const value = row.bars[c]
+          values[i * stride + c] = value
+          if (value > widest) widest = value
+        }
+      }
       const span = row.end - row.start
       if (span > set.maxSpan[row.contig]) set.maxSpan[row.contig] = span
     }
@@ -158,6 +208,17 @@ export class FeatureBuilder {
       while (cursor < n && set.contig[cursor] === c) cursor++
     }
     set.contigAt[this.contigs.length] = cursor
+    if (bars !== null) {
+      const { limit, ...rest } = bars
+      set.bars = {
+        ...rest,
+        values,
+        // The file's own ceiling where it declares one, and the tallest bar in
+        // the file where it does not. Zero for a file of zeroes and empties,
+        // which would otherwise divide every bar by nothing.
+        max: Number.isFinite(limit) && limit > 0 ? limit : widest,
+      }
+    }
     return set
   }
 }

@@ -57,6 +57,14 @@ export type AnnotationKind =
   // card behind a click, and the colours the lane is drawn in. A peak has a
   // score; a variant has a REF, an ALT and a thing that happened.
   | 'variants'
+  // A chart per feature (§8.17). A `FeatureSet` for the same reason `variants`
+  // is one, and its own kind for a sharper version of the same argument: what a
+  // reader means by a row here is not an interval that *has* a value but an
+  // interval that has a **vector**, and there is no way to draw one as a box.
+  // The glyph, the legend, the card behind a click and the height the lane
+  // starts at all follow from that, and every one of them is a question no
+  // other feature kind is asked.
+  | 'barchart'
   | 'pairs'
   | 'sequence'
   | 'metadata'
@@ -253,6 +261,7 @@ export const ANNOTATION_KINDS = [
   'track',
   'segments',
   'variants',
+  'barchart',
   'pairs',
   'sequence',
   'metadata',
@@ -264,10 +273,13 @@ export const ANNOTATION_KINDS = [
 /**
  * Whether this kind is a set of intervals a task can aggregate over.
  *
- * A gene model, a peak set and a variant set are one shape and three meanings
- * (§8.1, §8.14): they are all `FeatureSet`s, and which one a file is depends on
- * what the reader means by a row rather than on anything a task cares about.
- * Every task that takes "a BED or a GTF" takes all three.
+ * A gene model, a peak set, a variant set and a barChart are one shape and four
+ * meanings (§8.1, §8.14, §8.17): they are all `FeatureSet`s, and which one a
+ * file is depends on what the reader means by a row rather than on anything a
+ * task cares about. Every task that takes "a BED or a GTF" takes all four — a
+ * barChart included, because its intervals are intervals whatever is drawn
+ * inside them, and a metaplot over the genes a barChart names is a reading
+ * nobody should have to convert a file to ask for.
  *
  * A function rather than a list spelled at each site, for the reason
  * {@link hasTrackControls} is one and in the same words: four literals is not a
@@ -279,7 +291,7 @@ export const ANNOTATION_KINDS = [
  * to *load a BED or a GTF* while a variant set was on screen.
  */
 export function isIntervalSet(kind: AnnotationKind): boolean {
-  return kind === 'gtf' || kind === 'segments' || kind === 'variants'
+  return kind === 'gtf' || kind === 'segments' || kind === 'variants' || kind === 'barchart'
 }
 
 /**
@@ -423,6 +435,86 @@ export interface FeatureSet {
    * every other contig scan from its start.
    */
   maxSpan: Int32Array
+  /**
+   * The categories a barChart draws, or absent on every other format (§8.17).
+   *
+   * Optional on the set rather than a `FeatureSet` of its own, for §8.14's
+   * reason restated: `payload.kind === 'features'` is tested at a dozen sites
+   * across the browser, the map lanes, the search box, the export and the
+   * analysis inputs, and a second feature shape does not *break* any of them —
+   * it makes every one of them skip the lane, silently, to be found one call
+   * site at a time. A barChart row is an interval with a name, a score and a
+   * strand like every other row here; what it has besides is a vector, and a
+   * vector is one field.
+   */
+  bars?: BarChartBars
+}
+
+/**
+ * One value per category per feature, and what the categories are (§8.17).
+ *
+ * The values are **one flat array with a stride**, not an array per feature, for
+ * the reason {@link FeatureSet} is a struct of arrays at all: a GTEx barChart is
+ * twenty thousand genes over fifty-four tissues, and a million small arrays is a
+ * million allocations to draw a picture with at most a few hundred glyphs in it.
+ * Feature `i`'s value for category `c` is `values[i * labels.length + c]`.
+ *
+ * `NaN` is *no value*, and it is drawn as no bar rather than as a zero bar. A
+ * row whose `expCount` disagrees with the file's is the case that produces one
+ * — the format puts the count on every row and the categories are named once
+ * for the file, so a row that disagrees is a row this cannot place — and it
+ * keeps its interval, because the interval is not the part that was wrong.
+ */
+export interface BarChartBars {
+  /** One label per category, in column order. Never empty. */
+  labels: string[]
+  /**
+   * `true` when the labels are the file's own.
+   *
+   * A barChart carries its categories' *values* and not their *names*: the
+   * names live in the `track` line of a custom track, and in the trackDb stanza
+   * of a hub — which a bigBarChart dropped on its own does not come with. So
+   * they may be positions, `1` to `N`, and this is what says so. Nothing is
+   * inferred from it but the honesty of the legend and of the one colouring
+   * that reads a category name (`top`, in the parser) — a ramp over the order
+   * the categories happen to be numbered in is §8.12's own counter-example.
+   */
+  named: boolean
+  /**
+   * A colour per category, from `barChartColors`, or empty where the file names
+   * none — in which case `CATEGORY_PALETTE` supplies them by position.
+   */
+  colours: string[]
+  /** `values[i * labels.length + c]`; `NaN` where the row carried none. */
+  values: Float32Array
+  /**
+   * The height the tallest bar is drawn at: `maxLimit` where the file sets one,
+   * otherwise the largest value in the file.
+   *
+   * Fitted to the **file** and never to the window, which is §8.16's rule for a
+   * numeric colouring and holds here for a stronger reason: a bar is read
+   * against its neighbours *and* against the same gene two windows away, and a
+   * ceiling that moved on every pan would make one tissue's expression double
+   * by scrolling. A track's autoscale is safe because its axis is redrawn
+   * beside it; a glyph carries no axis.
+   */
+  max: number
+  /** `barChartUnit` — what the numbers are (`TPM`, `RPKM`), or `''`. */
+  unit: string
+  /** `barChartLabel` — what the categories are (`Tissues`), or `''`. */
+  label: string
+  /** `barChartMetric` — how they were summarised (`Median`), or `''`. */
+  metric: string
+  /**
+   * How many rows kept their interval and lost their chart.
+   *
+   * Counted at parse time and carried, rather than scanned for later, because
+   * it is a fact about the *read*: afterwards a row that carried no vector and
+   * a row whose vector was all `NaN` are the same array. It is reported under
+   * the lane's label for §8.7's reason — a file that says what it dropped is
+   * usable, one that does not is a lie about the genome.
+   */
+  unplaced: number
 }
 
 /**
@@ -799,43 +891,49 @@ export interface AnnotationStyle {
 }
 
 /**
- * The defaults a freshly dropped file starts with.
+ * The height one lane of each kind opens at, in pixels.
  *
- * The lane height is what a track is *read* at rather than what fits the most
- * of them on a screen: at 44 pixels a coverage profile is a smear with a
- * skyline, and the peaks that matter are three pixels apart. Ninety is about
- * where a yeast ATAC track starts showing the shape of a promoter, and a stack
- * that then runs off the bottom is what "fit tracks into the space" is for.
+ * A lane's height is what its contents are *read* at rather than what fits the
+ * most of them on a screen, and a stack that then runs off the bottom is what
+ * "fit tracks into the space" is for.
+ *
+ * Lifted out of {@link defaultStyle} when the seventh arm went in: a ternary
+ * chain nine deep is one expression where this is nine independent decisions,
+ * and each of them is worth a sentence.
+ */
+function defaultSize(kind: AnnotationKind): number {
+  // A coverage profile at 44 pixels is a smear with a skyline, and the peaks
+  // that matter are three pixels apart. Ninety is about where a yeast ATAC
+  // track starts showing the shape of a promoter.
+  if (kind === 'track') return 90
+  if (kind === 'gtf') return 92
+  if (kind === 'sequence') return 46
+  // A metadata profile is read at a glance beside the map rather than studied,
+  // and there are usually several of them: 56 pixels is enough to tell one
+  // MAG's contamination from its neighbour's without spending a quarter of the
+  // picture on it. A categorical strip needs only enough to see the colour and,
+  // where a run is wide, to write the category in it.
+  if (kind === 'metadata') return 56
+  if (kind === 'classes') return 20
+  // A chart needs height to *be* a chart: at sixteen pixels the tallest bar is
+  // sixteen and every other one is rounding. Sixty is about three packed rows
+  // of a legible chart, or one generous one (§8.17).
+  if (kind === 'barchart') return 60
+  // A depth lane is a bigWig's picture and takes a bigWig's height. The pile
+  // beside it is a stack of rows, and 180 is about a dozen of them — enough
+  // that a heterozygous site shows two alleles rather than a coin flip.
+  if (kind === 'alignments') return 90
+  if (kind === 'reads') return 180
+  return 16
+}
+
+/**
+ * The defaults a freshly dropped file starts with.
  */
 export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationStyle {
   return {
     colour,
-    // A metadata profile is read at a glance beside the map rather than
-    // studied, and there are usually several of them: 56 pixels is enough to
-    // tell one MAG's contamination from its neighbour's without spending a
-    // quarter of the picture on it. A categorical strip needs only enough to
-    // see the colour and, where a run is wide, to write the category in it.
-    size:
-      kind === 'track'
-        ? 90
-        : kind === 'gtf'
-          ? 92
-          : kind === 'sequence'
-            ? 46
-            : kind === 'metadata'
-              ? 56
-              : kind === 'classes'
-                ? 20
-                : // A depth lane is a bigWig's picture and takes a bigWig's
-                  // height. The pile beside it is a stack of rows, and 180 is
-                  // about a dozen of them — enough that a heterozygous site
-                  // shows two alleles rather than a coin flip. Both are what a
-                  // reader *starts* at; a stored session keeps what they set.
-                  kind === 'alignments'
-                  ? 90
-                  : kind === 'reads'
-                    ? 180
-                    : 16,
+    size: defaultSize(kind),
     // Bars, because one cell is one unit: a metadata column has a value per
     // genome, per contig or per bin and nothing in between, so a line drawn
     // through the tops of them would interpolate between two MAGs that have no

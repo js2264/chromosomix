@@ -4116,6 +4116,60 @@ canvas.is-frozen {
   grid-column: 1 / -1;
 }
 
+/* A barChart's categories, read out under the row that names them (§8.17).
+
+   A grid rather than a list of text, because the glyph this card was opened
+   from is a few dozen pixels wide and the numbers in it are the whole point:
+   the name, a track the value fills, and the value itself, with the three
+   columns aligned down the card so fifty-four tissues can be scanned rather
+   than read. The track is what makes it a chart — a column of numbers is the
+   same data and not the same picture, and the shape of a profile is what a
+   reader recognises. */
+.feature-bars {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(2.5rem, 1fr) minmax(0, max-content);
+  gap: 0.15rem 0.5rem;
+  align-items: center;
+  padding: 0.15rem 0 0.35rem;
+  font-size: var(--step--2);
+}
+
+/* `display: contents`, so each category's three cells sit in the grid above
+   rather than in a row of their own: the alignment is the whole point, and a
+   nested flex row would give every name its own width again. */
+.feature-bar {
+  display: contents;
+}
+
+.feature-bar-name {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.feature-bar-track {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.feature-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  /* A minimum that is not zero: a category measured at almost nothing is a
+     different claim from one measured at nothing, and a bar rounded away to no
+     pixels at all says the second. */
+  min-width: 1px;
+}
+
+.feature-bar-value {
+  font-family: var(--mono);
+  color: var(--text);
+  text-align: right;
+  user-select: text;
+}
+
 .feature-foot {
   display: flex;
   justify-content: flex-end;

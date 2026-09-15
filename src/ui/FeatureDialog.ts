@@ -18,7 +18,8 @@
  * would be the application disagreeing with itself.
  */
 
-import { DETAIL_SEP, type FeatureSet } from '../annotations/types'
+import { DETAIL_SEP, type BarChartBars, type FeatureSet } from '../annotations/types'
+import { barColours } from '../render/barchart'
 import { Modal } from './Modal'
 import { el, fmt } from './dom'
 import { icon } from './icons'
@@ -78,7 +79,7 @@ function attributeRows(detail: string): HTMLElement[] {
   // `QUAL 60` and `filter q10` are two facts that read as one run-on string
   // unless they are split here.
   const KEYED =
-    /^(biotype|source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE) (.+)$/
+    /^(biotype|source|score|signal|summit|-log10 [pq]|type|QUAL|filter|AF|DP|SVTYPE|top|total) (.+)$/
   return detail
     .split(DETAIL_SEP)
     .map((part) => part.trim())
@@ -137,6 +138,78 @@ function exonRows(set: FeatureSet, at: number): HTMLElement[] {
   return [row('exons', String(n)), row('', parts.join(', '))]
 }
 
+/**
+ * How many categories the card lists before it stops.
+ *
+ * The same reasoning as {@link EXON_LIMIT} and a much larger number, because
+ * these are the *answer* rather than a supporting detail: a reader who clicked a
+ * barChart clicked it to see the chart, and a card that showed a dozen of
+ * fifty-four tissues would have answered a different question. Sixty-four is
+ * where the list stops being a chart and starts being a file.
+ */
+const BAR_LIMIT = 64
+
+/**
+ * The whole chart, read out (§8.17).
+ *
+ * The one thing on this card that is not a line of text, and the reason is that
+ * the glyph it came from is at most a few dozen pixels wide: the lane says
+ * *roughly which categories are high* and this says *which, and how much*. So
+ * it is the same picture at a size that can be read, in **file order** — the
+ * order the bars are drawn in — so the card reads left-to-right as the glyph
+ * does and can be used as its legend. Sorting by value would answer a question
+ * this card is not being asked and would make two features' cards two different
+ * orders of the same categories.
+ *
+ * The colours are `barColours`, the function the renderer itself calls, so a
+ * bar named here in a colour it is not drawn in would be a bug in the ink rule
+ * rather than a second palette drifting out of step (§8.16).
+ */
+function barRows(bars: BarChartBars, at: number): HTMLElement[] {
+  const width = bars.labels.length
+  const from = at * width
+  // A row that kept its interval and lost its chart (§8.17). It has nothing to
+  // show and must not show zeroes, which would be a measurement.
+  if (!Number.isFinite(bars.values[from])) return []
+  const colours = barColours(bars)
+  const ceiling = bars.max > 0 ? bars.max : 1
+  const shown = Math.min(width, BAR_LIMIT)
+  const rows: HTMLElement[] = []
+  for (let c = 0; c < shown; c++) {
+    const value = bars.values[from + c]
+    rows.push(
+      el(
+        'div',
+        { class: 'feature-bar' },
+        el('span', { class: 'feature-bar-name', text: bars.labels[c] }),
+        el(
+          'span',
+          { class: 'feature-bar-track' },
+          el('span', {
+            class: 'feature-bar-fill',
+            style: {
+              // Clamped rather than trusted: `maxLimit` is the file's own
+              // ceiling and a row may exceed it, and a bar 140% along its track
+              // would run out of the card.
+              width: `${Math.max(0, Math.min(1, value / ceiling)) * 100}%`,
+              background: colours[c],
+            },
+          }),
+        ),
+        el('span', { class: 'feature-bar-value', text: fmt.num(value) }),
+      ),
+    )
+  }
+  const what = bars.label === '' ? 'categories' : bars.label.toLowerCase()
+  const unit = bars.unit === '' ? '' : ` (${bars.unit})`
+  const metric = bars.metric === '' ? '' : `${bars.metric.toLowerCase()} `
+  return [
+    row(what, `${metric}per category${unit}, to ${fmt.num(bars.max)}`),
+    el('div', { class: 'feature-bars' }, ...rows),
+    ...(shown < width ? [row('', `… ${width - shown} more`)] : []),
+  ]
+}
+
 /** Open the card. Returns the modal so the caller can hold and dismiss it. */
 export function openFeatureDialog(props: FeatureDialogProps): Modal {
   const { set, index: at } = props
@@ -162,6 +235,10 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
       if (strand !== 0) rows.push(row('strand', strand === 1 ? 'forward (+)' : 'reverse (−)'))
       if (Number.isFinite(set.score[at])) rows.push(row('score', fmt.num(set.score[at])))
       rows.push(...attributeRows(set.detail[at]))
+      // Before the exons and after the attributes: a barChart has no exons and
+      // the attributes are `top` and `total`, which are this chart summarised —
+      // so the summary reads first and the chart it summarises is under it.
+      if (set.bars !== undefined) rows.push(...barRows(set.bars, at))
       const cdsFrom = set.cdsStart[at]
       const cdsTo = set.cdsEnd[at]
       if (cdsFrom >= 0 && cdsTo > cdsFrom) {
