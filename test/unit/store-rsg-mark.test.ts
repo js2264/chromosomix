@@ -140,12 +140,14 @@ describe('the RSG store mark', () => {
     for (const corner of [px[N - 1], px[(N - 1) * N]]) expect(corner).toBeLessThan(40)
   })
 
-  it('is the mark the RSG store is drawn with, and the only one', () => {
-    const withImages = builtinStores().filter((front) => front.mark.image !== undefined)
-    expect(withImages.map((front) => front.id)).toEqual(['rsg'])
-    expect(withImages[0].mark.image).toBe(RSG_MARK_IMAGE)
+  it('is the mark the RSG store is drawn with', () => {
+    // The other three shipped stores carry their own projects' logos, which
+    // `store-logos.test.ts` covers; the one thing to hold here is that the
+    // drawn mark went to the store it was drawn for.
+    const rsg = builtinStores().find((front) => front.id === 'rsg')!
+    expect(rsg.mark.image).toBe(RSG_MARK_IMAGE)
     // The letters stay behind it, so a mark that fails to load is not a hole.
-    expect(withImages[0].mark.text).toBe('RSG')
+    expect(rsg.mark.text).toBe('RSG')
   })
 
   it('reaches the tile as an image over the letters', () => {

@@ -1,0 +1,85 @@
+// @vitest-environment jsdom
+/**
+ * The three logos the other shipped stores are drawn with, and the one
+ * property the build step exists to give them.
+ *
+ * IGV's mark, 4DN's and ENCODE's are the projects' own, carried rather than
+ * redrawn. They did not arrive in a shape a tile can use: a tile is a square
+ * drawn with `object-fit: cover` (`ui/styles.css`), and ENCODE's badge is half
+ * again as wide as it is tall, so `cover` would crop it to the middle of the
+ * helix and throw the word *ENCODE* away — the one part of a logo nobody can
+ * afford to lose. `scripts/make-store-logos.mjs` fits each to a square ahead of
+ * time so that `cover` has nothing left to crop.
+ *
+ * So what is asserted here is squareness, and that each is opaque. Both are
+ * invariants of the fitting rather than facts about the artwork: a logo that
+ * came out oblong would be silently cropped in the tile, and one that kept its
+ * transparency would show the store's fallback colour through it — which for
+ * 4DN means a blue-green disc on a green square.
+ */
+
+import { describe, expect, it } from 'vitest'
+
+import { STORE_LOGOS } from '@/ui/stores/logos.generated'
+import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
+import { builtinStores } from '@/ui/stores/registry'
+import { storeMark } from '@/ui/stores/marks'
+
+/** The edge `make-store-logos.mjs` fits every mark to. */
+const EDGE = 160
+
+/** `IHDR`, which is always the first chunk, so its offset is fixed. */
+function header(uri: string) {
+  const png = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64')
+  expect(png.readUInt32BE(0)).toBe(0x89504e47)
+  expect(png.toString('ascii', 12, 16)).toBe('IHDR')
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20), colour: png[25] }
+}
+
+/** Which store each logo belongs to. */
+const WIRING = [
+  ['igv', 'igv'],
+  ['fourdn', '4dn'],
+  ['encode', 'encode'],
+] as const
+
+describe('the store logos', () => {
+  it.each(WIRING)('draws %s as an opaque square', (key) => {
+    const { width, height, colour } = header(STORE_LOGOS[key])
+    expect({ width, height }).toEqual({ width: EDGE, height: EDGE })
+    // Colour type 2 is truecolour with no alpha channel: the white ground the
+    // logo was fitted on is in the pixels, not left to whatever is behind.
+    expect(colour).toBe(2)
+  })
+
+  it.each(WIRING)('gives %s to the %s store', (key, id) => {
+    const front = builtinStores().find((store) => store.id === id)!
+    expect(front.mark.image).toBe(STORE_LOGOS[key])
+  })
+
+  it('leaves every shipped store a mark of its own', () => {
+    const shipped = builtinStores()
+    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode'])
+    const images = shipped.map((front) => front.mark.image)
+    // All four present, and four different pictures — a copy-paste that gave
+    // two stores the same logo would otherwise look plausible on the page.
+    expect(images.every((image) => image !== undefined)).toBe(true)
+    expect(new Set(images).size).toBe(4)
+    expect(images[0]).toBe(RSG_MARK_IMAGE)
+  })
+
+  it('reaches the tile as an image over the letters', () => {
+    for (const front of builtinStores()) {
+      for (const size of [72, 26]) {
+        const node = storeMark(front.mark, size)
+        expect(node.querySelector('img')?.getAttribute('src')).toBe(front.mark.image)
+      }
+    }
+    // ENCODE is the one whose word is too long for the small square, so below
+    // 40 it sets its short form — behind the image, but it is what a failed
+    // load falls back to and it must still fit.
+    const encode = builtinStores().find((front) => front.id === 'encode')!
+    expect(storeMark(encode.mark, 26).textContent).toBe('ENC')
+    expect(storeMark(encode.mark, 72).textContent).toBe('ENCODE')
+  })
+})

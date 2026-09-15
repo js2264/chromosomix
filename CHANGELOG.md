@@ -25,8 +25,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   picture. `npm run icons:rsg` draws it and commits it as an indexed PNG data URI whose palette *is*
   that ramp: it costs no request, it needs no `public/` — the standalone build emits none — and a
   test holds its 256 entries against `applyColormap('default')`, so the logo cannot quietly end up
-  in last year's colours beside maps drawn in this year's. The other three tiles are unchanged, and
-  the letters stay behind the image, so a mark that fails to load is a lettermark and not a hole.
+  in last year's colours beside maps drawn in this year's. The letters stay behind the image, so a
+  mark that fails to load is a lettermark and not a hole.
+
+- **The other three tiles carry their projects' own logos.** IGV's mark, 4DN's and ENCODE's were set
+  as letters in a coloured square because the logos were not ours to ship. They have since been given
+  to this viewer to carry, so the tiles draw them. Not one is redrawn — the icon pipeline's rule that
+  a brand mark is the published one or nothing holds over these exactly as it does over the icon set.
+  What they needed was fitting. A tile is a square drawn with `object-fit: cover`, and ENCODE's badge
+  is half again as wide as it is tall, so used as it arrived it would have been cropped to the middle
+  of the helix with the word *ENCODE* thrown away. `npm run icons:stores` fits each to a 160-pixel
+  square first — ENCODE letterboxed, 4DN composited on the white its disc is drawn for instead of
+  left transparent over a green square, IGV full bleed — and commits the three as data URIs beside
+  RSG's, for the same reason: `public/` is not emitted by the standalone build. The coloured grounds
+  stay underneath as what shows while an image loads and what is left if one fails, which is why they
+  are still deliberately nobody's brand.
 
 ### Added
 

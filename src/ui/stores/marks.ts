@@ -1,13 +1,13 @@
 /**
  * A store's mark: a square with a short word in it, in the store's colour, and
- * an image over the word for the store that has one.
+ * an image over the word for the stores that have one.
  *
- * Type rather than a logo for three of the four shipped stores, because their
- * logos are not ours to ship (`ui/stores/registry.ts` on `StoreMark.image`).
- * What a mark has to do is be recognised in a row of five and again, smaller,
- * in the drawer's head — and a coloured square with *4DN* in it does that as
- * well as anything. RSG is the exception, the lab's own mark being the lab's
- * to use: it is a Hi-C map with its letters down the diagonal.
+ * All four shipped stores have one — RSG's drawn, the other three their own
+ * projects' (`ui/stores/registry.ts` on `StoreMark.image`) — so on those the
+ * word is what shows while the image loads and what is left if it fails. A
+ * store connected by URL has no image and is the coloured square with its
+ * initials in it, which is all a mark has to do anyway: be recognised in a row
+ * of five, and again smaller in the drawer's head.
  *
  * The word is scaled by its length so *ENCODE* and *IGV* fill the same square:
  * six letters at the size three would take spill over the edge.
