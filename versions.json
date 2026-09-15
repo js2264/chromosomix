@@ -1,6 +1,13 @@
 {
-  "latest": "bd146cf",
+  "latest": "dc7cbe5",
   "versions": [
+    {
+      "commit": "dc7cbe5",
+      "version": "0.12.0",
+      "date": "2026-09-15T17:16:34+02:00",
+      "subject": "Fold panels by default, balance 4DN .hic files, gate .hic whole-genome reads, and more from the end-user review (#56)",
+      "tag": ""
+    },
     {
       "commit": "bd146cf",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": "v0.12.0"
     },
     {
-      "commit": "bd70292",
-      "version": "0.11.0",
-      "date": "2026-09-10T10:39:32+02:00",
-      "subject": "Add motif search feature and genome minimap card (#41)",
-      "tag": ""
-    },
-    {
       "commit": "815b0ad",
       "version": "0.11.0",
       "date": "2026-08-14T01:14:35+02:00",
@@ -198,13 +198,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 56,
-      "commit": "a9a394a",
-      "title": "Add legend toggle, deck export, and compartments resolution warnings",
-      "branch": "js/elegant-albattani-k07jp9",
-      "date": "2026-09-15T14:58:26Z"
-    }
-  ]
+  "pulls": []
 }
