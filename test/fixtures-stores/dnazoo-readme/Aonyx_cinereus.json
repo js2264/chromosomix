@@ -1,0 +1,20 @@
+{
+  "organism": {
+    "vernacular": "Asian small-clawed otter",
+    "binomial": "Aonyx cinereus",
+    "funFact": "The paws of the Asian small clawed otter are only partially webbed, allowing for increased sensitivity to touch.",
+    "isChromognomes": "FALSE"
+  },
+  "draftAssembly": {
+    "name": "Aonyx_cinereus",
+    "totalScaffoldLength": "2,423,725,632",
+    "scaffoldN50": "103,306"
+  },
+  "chromlengthAssembly": {
+    "type": "de novo",
+    "name": "Aonyx_cinereus_HiC",
+    "karyotype": "2n=38",
+    "totalScaffoldLength": "2,437,875,432",
+    "scaffoldN50": "130,942,447"
+  }
+}

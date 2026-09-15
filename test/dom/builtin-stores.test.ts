@@ -106,6 +106,11 @@ describe('the shipped stores, on a page', () => {
     expect(frontById('encode')?.group).toBe('dataset')
     expect(frontById('igv')?.group).toBe('assembly')
     expect(frontById('4dn')?.axes).toEqual(['assay', 'biosource'])
+    // DNA Zoo folds under the species a directory on its bucket is, and the
+    // heading carries the common name beside it.
+    expect(frontById('dnazoo')?.group).toBe('species')
+    expect(frontById('dnazoo')?.headline).toEqual(['common'])
+    expect(frontById('dnazoo')?.axes).toEqual(['assembly', 'format'])
     expect(frontById('encode')?.axes).toEqual(['assay', 'biosample'])
   })
 })

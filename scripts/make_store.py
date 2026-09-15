@@ -157,7 +157,7 @@ import urllib.request
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Optional, Sequence
+from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 
 log = logging.getLogger("make_hub")
 
@@ -1837,6 +1837,132 @@ def _lab_name(at_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Front end: DNA Zoo
+# ---------------------------------------------------------------------------
+
+
+#: The columns DNA Zoo's shelf is filtered by.
+COLUMNS_DNAZOO = [
+    {"key": "species", "label": "Species"},
+    {"key": "common", "label": "Common name"},
+    {"key": "assembly", "label": "Assembly"},
+    {"key": "format", "label": "Format"},
+]
+
+#: What a file has to be under to be worth a row, unless it is a `.hic`.
+#:
+#: The rule this number serves is about *indexes*, not about taste. A `.hic`
+#: carries its own, so the viewer reads a corner of a 3.6 GB map by asking for
+#: the bytes it needs. Nothing else on this bucket has one: the FASTAs are
+#: plain gzip with no `.fai` beside them and the GFFs have no `.tbi`, so
+#: opening one is a download of the whole thing. `Aonyx_cinereus_HiC.fasta.gz`
+#: is 695 MB and its annotation 589 MB; an insect genome is 88 MB. The cap is
+#: where a row stops being an offer and starts being a trap, and it is a flag
+#: because that line is a judgement rather than a fact.
+MAX_UNINDEXED = 200 * 1024 * 1024
+
+#: Sequence that is not the genome: protein and transcript FASTA, which route
+#: as `genome` on their suffix alone and would open behind the 1D browser's
+#: genome door as something that is not one.
+NOT_GENOME = re.compile(r"(_pep|_trans|\.proteins|\.transcripts)(\.fasta|\.fa|\.fna|\.fas)", re.I)
+
+
+def species_of(key: str) -> str:
+    """The directory a key sits in, which on this bucket is the species."""
+    return key.split("/", 1)[0] if "/" in key else ""
+
+
+def readme_facts(species: str, readme: Any) -> dict:
+    """``{common, binomial, chromlength, draft}`` out of one ``README.json``.
+
+    Read defensively and field by field. These files are hand-maintained across
+    hundreds of species and a missing key is ordinary; what is not ordinary is a
+    run that dies on one, which is why nothing here indexes into a shape it has
+    not checked.
+    """
+    organism = dig(readme, "organism") or {}
+    return {
+        "common": text(organism.get("vernacular")),
+        # The binomial with its space, where the directory has an underscore.
+        "binomial": text(organism.get("binomial")) or species.replace("_", " "),
+        "chromlength": text(dig(readme, "chromlengthAssembly", "name")),
+        "draft": text(dig(readme, "draftAssembly", "name")),
+    }
+
+
+def assembly_role(stem: str, facts: dict) -> str:
+    """``chromosome-length``, ``draft``, or the stem itself.
+
+    The README names both assemblies, so which of the two a file belongs to is
+    a fact this bucket publishes rather than something to read off the name.
+    That matters because the naming is not one convention: the
+    chromosome-length map is `Aonyx_cinereus_HiC.hic` under one species and
+    `wild_pepper_final_14chr_HiC.hic` under another, and a rule built on `_HiC`
+    would be wrong about both ends of that.
+
+    Matched whole, not by prefix. The draft assembly is usually named for the
+    species — `Aonyx_cinereus` — which is the start of nearly every file in the
+    directory, so `startswith` calls the lot of them drafts, including
+    `Aonyx_cinereus.rawchrom.hic`, which is not one. Anything the README does
+    not name is its own stem, which groups a map with the FASTA beside it
+    without claiming to know what either is.
+    """
+    if facts.get("chromlength") and stem == facts["chromlength"]:
+        return "chromosome-length"
+    if facts.get("draft") and stem == facts["draft"]:
+        return "draft"
+    return stem
+
+
+def entries_dnazoo(
+    objects: Iterable[dict],
+    facts_for: Callable[[str], dict],
+    *,
+    max_unindexed: int = MAX_UNINDEXED,
+    limit: Optional[int] = None,
+) -> list[dict]:
+    """Every file on DNA Zoo's bucket worth a row, with its species on it."""
+    entries: list[dict] = []
+    for item in objects:
+        key = item["key"]
+        name = key.rsplit("/", 1)[-1]
+        species = species_of(key)
+        if species == "" or name == "":
+            continue
+        kind = route_of(name)
+        if kind is None:
+            continue
+        fmt = format_of(name)
+        if fmt != "hic":
+            if NOT_GENOME.search(name) is not None:
+                continue
+            size = item.get("size") or 0
+            if max_unindexed > 0 and size > max_unindexed:
+                continue
+        facts = facts_for(species)
+        stem = name[: -len(fmt) - 1] if fmt and name.lower().endswith(fmt) else name
+        entries.append(
+            {
+                "label": name,
+                "url": object_url(item),
+                "kind": kind,
+                "size": item["size"],
+                "note": joined_note(facts.get("common"), facts.get("binomial")),
+                "fields": {
+                    "species": facts.get("binomial") or species.replace("_", " "),
+                    "common": facts.get("common", ""),
+                    "assembly": assembly_role(stem, facts),
+                    "format": fmt,
+                },
+            }
+        )
+        if limit is not None and len(entries) >= limit:
+            log.info("Stopped at the --limit of %d entries.", limit)
+            return entries
+    return entries
+
+
+# ---------------------------------------------------------------------------
 # Front end: IGV's genome table
 # ---------------------------------------------------------------------------
 
@@ -2997,6 +3123,45 @@ def build_parser() -> argparse.ArgumentParser:
         "everything in it.",
     )
 
+    dnazoo = generator("dnazoo", "DNA Zoo's open bucket: one directory per species.")
+    dnazoo.add_argument(
+        "--prefix",
+        default="https://dnazoo.s3.wasabisys.com/",
+        help="The bucket to walk (default: DNA Zoo's).",
+    )
+    dnazoo.add_argument(
+        "--from-xml",
+        type=Path,
+        help="Read a recorded ListObjectsV2 page (or a directory of pages) instead of walking.",
+    )
+    dnazoo.add_argument(
+        "--from-readme",
+        type=Path,
+        help="A directory of recorded README.json files, named <species>.json, instead of fetching.",
+    )
+    dnazoo.add_argument(
+        "--readme",
+        choices=("require", "optional", "skip"),
+        default="optional",
+        help="Read each species' README.json for its common name and which of its two assemblies "
+        "is the chromosome-length one. 'optional' (default) loses those columns for a species "
+        "whose README is missing or unreadable and keeps its files; 'require' fails the run; "
+        "'skip' does not ask.",
+    )
+    dnazoo.add_argument(
+        "--max-unindexed",
+        type=int,
+        default=MAX_UNINDEXED,
+        help="Skip a non-.hic file larger than this many bytes — nothing else on this bucket "
+        "carries an index, so opening one is a download of the whole file. 0 keeps everything.",
+    )
+    dnazoo.add_argument(
+        "--max-keys",
+        type=int,
+        default=1000,
+        help="Objects per listing request (default 1000, S3's maximum).",
+    )
+
     bucket = generator("bucket", "Every routable object under a public bucket prefix.")
     bucket.add_argument("prefix", help="An https bucket URL ending in '/'.")
     bucket.add_argument(
@@ -3194,6 +3359,59 @@ def main(argv: Optional[list[str]] = None) -> int:
             sessions = sessions_from_entries(
                 entries, key="_dataset", prefix="encode", source="ENCODE", created=created
             )
+
+    elif args.front == "dnazoo":
+        prefix = args.prefix
+        pages = recorded(args.from_xml, ".xml") if args.from_xml is not None else None
+        objects = list(walk_objects(prefix, max_keys=args.max_keys, pages=pages))
+        # One README a species, not one a file: the walk is by object and the
+        # facts are by directory, so the species are collected first and each
+        # is asked for once however many files it holds.
+        species = sorted({species_of(item["key"]) for item in objects} - {""})
+        cache: dict[str, dict] = {}
+        for name in species if args.readme != "skip" else []:
+            raw: Any = None
+            if args.from_readme is not None:
+                recorded_path = Path(args.from_readme) / f"{name}.json"
+                if recorded_path.exists():
+                    raw = json.loads(recorded_path.read_text())
+            else:
+                try:
+                    raw = fetch_json(f"{prefix.rstrip('/')}/{urllib.parse.quote(name)}/README.json")
+                except SystemExit:
+                    raise
+                except Exception as err:  # noqa: BLE001 — every failure is the same answer here
+                    log.debug("No README for %s: %s", name, err)
+            if raw is None:
+                if args.readme == "require":
+                    log.error(
+                        "%s has no readable README.json, and --readme require was asked for.", name
+                    )
+                    return 2
+                continue
+            cache[name] = readme_facts(name, raw)
+        log.info("Read %d README.json of %d species.", len(cache), len(species))
+        entries = entries_dnazoo(
+            objects,
+            lambda name: cache.get(name, {"binomial": name.replace("_", " ")}),
+            max_unindexed=args.max_unindexed,
+            limit=args.limit,
+        )
+        stores.append(
+            (
+                args.out,
+                assemble(
+                    name=args.name or "DNA Zoo",
+                    description=(
+                        "DNA Zoo's chromosome-length genome assemblies and the Hi-C maps behind "
+                        "them, one directory a species, read straight from the bucket."
+                    ),
+                    source=prefix,
+                    columns=COLUMNS_DNAZOO,
+                    entries=entries,
+                ),
+            )
+        )
 
     else:  # bucket
         prefix = args.prefix

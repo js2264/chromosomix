@@ -14,6 +14,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **DNA Zoo is a shipped store, with a front end of its own.** Its open bucket is one directory a
+  species, flat inside, and most of what is in a directory is not a file this viewer opens — so the
+  generic bucket walk would have published a long list of `.assembly` files, scaffold tracks and
+  `.maf.gz` with the maps somewhere in it. `make_store.py dnazoo` keeps what has a door and then
+  applies two rules. A `.hic` carries its own index, so a corner of a 3.6 GB map is the bytes it
+  needs and size is no reason to leave one out; nothing else on that bucket has one — the FASTAs
+  are plain gzip with no `.fai`, the GFFs have no `.tbi` — so opening one is a download of the whole
+  file, and past `--max-unindexed` it is a trap rather than an offer. Protein and transcript FASTA
+  go too: they route as `genome` on their suffix alone and are not one.
+
+  Each species' `README.json` supplies the rest, and it is worth the request. *Asian small-clawed
+  otter* is how anybody but its authors looks for `Aonyx_cinereus`, so the shelf folds under the
+  species with the common name in the heading. The README also names both assemblies, which is why
+  the **Assembly** column is read from it rather than off the file name: the chromosome-length map
+  is `Aonyx_cinereus_HiC.hic` under one species and `wild_pepper_final_14chr_HiC.hic` under another,
+  and a rule built on `_HiC` is wrong about both ends of that. A species whose README cannot be read
+  keeps every file it has and loses those two columns.
+
 - **DNA Zoo is a shipped store.** Its open bucket is walked the way any lab's bucket is — the
   `bucket` front end, every object this viewer has a route for, read straight from the listing with
   no portal in between — and published beside the other four by the weekly Stores workflow. The

@@ -268,29 +268,28 @@ export function builtinStores(): StoreFront[] {
     {
       id: 'dnazoo',
       label: 'DNA Zoo',
-      blurb:
-        'Every file on DNA Zoo’s open bucket this viewer has a route for, listed straight from ' +
-        'the bucket.',
+      blurb: 'Chromosome-length genome assemblies and the Hi-C maps behind them, a directory a species.',
       kind: 'portal',
-      // `DNA` and not `DNAZOO`: the ladder in `ui/stores/marks.ts` is tuned so
-      // that six letters just fill the square, and it was tuned against
-      // *ENCODE* — measured in a browser, `DNAZOO` wants 74 pixels of the 72
-      // there are, because its letters are the wide ones. There is no
-      // conventional short form of this name to reach for instead, so this is
-      // the first of its two words, which is what `initialsOf` does with a
-      // one-word label and what puts this mark in the same family as the three
-      // beside it.
-      mark: { text: 'DNA', colour: COLOURS.dnazoo },
+      // `DNA` behind the logo, not `DNAZOO`: the ladder in `ui/stores/marks.ts`
+      // is tuned so that six letters just fill the square, and it was tuned
+      // against *ENCODE* — measured in a browser, `DNAZOO` wants 74 pixels of
+      // the 72 there are, its letters being the wide ones. There is no
+      // conventional short form of this name to reach for instead, so the
+      // fallback is the first of its two words, which is what `initialsOf`
+      // does with a one-word label.
+      mark: { text: 'DNA', colour: COLOURS.dnazoo, image: STORE_LOGOS.dnazoo },
       builtin: true,
       rows: { id: 'dnazoo', label: 'DNA Zoo', url: `${base}dnazoo.json`, builtin: true },
-      // No `group`, no `headline`, no `axes`, and their absence is the honest
-      // shape of this one rather than an omission. All three name *columns*,
-      // and a bucket has none to name: it knows a file's name, its size and the
-      // directory it sits in, and nothing else (`scripts/make_store.py` on
-      // `entries_from_objects`). So this shelf is a searchable list until
-      // somebody who knows the layout names its directory levels — which is
-      // what the generator's `--folders` is for, and the one line in
-      // `.github/workflows/stores.yml` that turns this into a faceted shelf.
+      // A species, which is what a directory on that bucket is — and the
+      // heading carries the common name beside it, because *Asian
+      // small-clawed otter* is how anybody but its authors looks for
+      // `Aonyx_cinereus`.
+      group: 'species',
+      headline: ['common'],
+      // Both of these are short lists where the species column is hundreds
+      // long: which of a species' two assemblies a file belongs to, against
+      // what kind of file it is.
+      axes: ['assembly', 'format'],
     },
   ]
 }

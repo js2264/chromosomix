@@ -1,0 +1,5 @@
+{
+  "organism": { "vernacular": "European lancelet", "binomial": "Branchiostoma lanceolatum" },
+  "draftAssembly": { "name": "Bl71nemr" },
+  "chromlengthAssembly": { "name": "Bl71nemr_HiC", "karyotype": "2n=38" }
+}
