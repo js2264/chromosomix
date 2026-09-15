@@ -9,12 +9,11 @@
  * command in a paper's methods section that does not reproduce the figure beside
  * it.
  *
- * The other half is the run the CLI cannot take at all. `cliCannotRun` refuses
- * the tasks that read a bigWig — the reader for one lives in the annotations
- * worker and nowhere else — and a console that dropped those runs would have
- * holes in it exactly where a reader is least likely to look for them. So the
- * line becomes a sentence, marked as prose rather than as shell, and the refusal
- * is the note saying why there is nothing to paste.
+ * The other half is that **every** run is a line a shell takes. The CLI once
+ * refused the tasks that read a bigWig, and a console that recorded those runs
+ * as a sentence had holes in it exactly where a reader is least likely to look
+ * for them; `cli/main.ts` opens tracks now, so a metaplot is a command like any
+ * other, and this pins that it is recorded as one.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -24,6 +23,7 @@ import { provisionalProvenance, runDraft } from '@/analysis/record'
 import { taskById } from '@/analysis/registry'
 import { defaultParams } from '@/analysis/types'
 import type { AnalysisContext, AnalysisFraming, AnalysisTask, Provenance } from '@/analysis/types'
+import { defaultStyle, emptyPlacement } from '@/annotations/types'
 
 const CONTIGS = [
   { name: 'chrIV', length: 1_531_933, startBin: 0, bins: 1532, genome: -1 },
@@ -131,22 +131,50 @@ describe('a run the shell can take', () => {
   })
 })
 
-describe('a run the shell cannot take', () => {
-  it('is a sentence with the refusal under it, rather than no line at all', () => {
-    // metaplot reads a bigWig, and the bigWig reader lives in the annotations
-    // worker: `cliCannotRun` is the one predicate that decides this, for the
-    // button and for the console alike.
+describe('a run of a task that reads a track', () => {
+  it('is a command, with the track as the flag that loads it', () => {
+    // metaplot reads a bigWig. The reader for one lived in the annotations
+    // worker and nowhere else, and the console recorded a metaplot as a sentence
+    // with the refusal under it; `cli/tracks.ts` opens the file now, so the
+    // line is the command the drawer copies.
     const metaplot = task('metaplot')
     const draft = runDraft({
       task: metaplot,
-      provenance: provenance('metaplot'),
-      context: CONTEXT,
+      provenance: provenance('metaplot', {
+        params: { ...defaultParams(metaplot.params), tracks: ['t1'], features: 'a1' },
+      }),
+      context: {
+        ...CONTEXT,
+        entries: [
+          {
+            id: 't1',
+            card: 'linear',
+            kind: 'track',
+            label: 'ATAC',
+            source: { kind: 'remote', url: 'https://example.org/Yeast_ATAC.bw', name: 'Yeast_ATAC.bw' },
+            status: 'ready',
+            visible: true,
+            placement: emptyPlacement(),
+            style: defaultStyle('track', '#000000'),
+          },
+          {
+            id: 'a1',
+            card: 'linear',
+            kind: 'segments',
+            label: 'peaks',
+            source: { kind: 'remote', url: 'https://example.org/peaks.bed', name: 'peaks.bed' },
+            status: 'ready',
+            visible: true,
+            placement: emptyPlacement(),
+            style: defaultStyle('segments', '#000000'),
+          },
+        ],
+      },
     })
-    expect(draft.shell).toBe(false)
-    expect(draft.line).toContain(metaplot.title)
-    expect(draft.notes?.join(' ')).toContain('annotations worker')
-    // The provenance is still there: the run happened, and what it was asked to
-    // do is exactly what a reader wants back from a task with no command.
+    expect(draft.shell).toBe(true)
+    expect(draft.line.startsWith('metacooler-run metaplot ')).toBe(true)
+    expect(draft.line).toContain('--tracks Yeast_ATAC.bw')
+    expect(draft.line).toContain('--features peaks.bed')
     expect(draft.detail).toContain('# task: metaplot v1')
   })
 })

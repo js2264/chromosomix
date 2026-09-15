@@ -988,11 +988,12 @@ export interface AnalysisTask {
   /**
    * Whether this task reads **another map** beside the one that is mounted.
    *
-   * Declared on the descriptor rather than inferred, for the reason
-   * `cliCannotRun` gives about tracks: the shell has one file and one mount, so
-   * a task whose question is about two must be refused before a file is opened
-   * rather than failing inside a runner afterwards. It is one task (§16, §18.8)
-   * and it is a property of what the task *is*.
+   * Declared on the descriptor rather than inferred: the shell has one file
+   * positional, so a task whose question is about two takes the others under
+   * `--against` (`cli/main.ts`) and is refused before a file is opened when
+   * none is named, rather than failing inside a runner afterwards; and the
+   * command writer (`analysis/cliCommand.ts`) knows to write them. It is one
+   * task (§16, §18.8) and it is a property of what the task *is*.
    */
   needsPeers?: boolean
   /**

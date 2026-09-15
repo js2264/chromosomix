@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { writeBigWig } from '@/analysis/write/bigwig'
 import { main, recordedTasks, stemOf } from '@/cli/main'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
@@ -238,14 +239,15 @@ describe('running a task', () => {
 /**
  * The half of the catalogue that runs in the *other* worker.
  *
- * Four tasks declare `venue: 'annotations'`, and the command used to dispatch
- * through `RUNNERS` alone — so `tasks` listed all sixteen with a flag apiece and
- * `run` died on four of them with *no analysis runner is registered*, after the
- * mount and once per file. Two of the four need only what a shell already has,
- * and these pin that they now run; the two that read a bigWig are refused before
- * anything is opened, and these pin that the refusal is what the listing says
- * too. A batch script is written from `tasks`, so the listing and the dispatch
- * disagreeing is the bug, not a cosmetic one.
+ * Five tasks declare `venue: 'annotations'`, and the command used to dispatch
+ * through `RUNNERS` alone — so `tasks` listed them with a flag apiece and `run`
+ * died on them with *no analysis runner is registered*, after the mount and once
+ * per file. Then the two that read a bigWig were refused by name, which was
+ * honest and was a hole in the console exactly where a reader looks for a line
+ * to paste. `cli/tracks.ts` opens the file now, and these pin that every one of
+ * the five runs — over a map, and with no map at all, which is the 1D browser's
+ * own case. A batch script is written from `tasks`, so the listing and the
+ * dispatch disagreeing is the bug, not a cosmetic one.
  */
 describe('the annotations venue', () => {
   let aBed = ''
@@ -297,35 +299,130 @@ describe('the annotations venue', () => {
     expect(complained()).toMatch(/1 site/)
   })
 
-  it('refuses a task that reads a track before it opens anything', async () => {
+  /**
+   * A bigWig written by this repository's own writer: one value per kilobase
+   * bin over both sequences, the bin's own index on chrI and nothing on chrII,
+   * so a window's average is a number the test can predict.
+   */
+  let bigwig = ''
+  let doubled = ''
+  beforeAll(async () => {
+    const contigs = [
+      { name: 'chrI', length: 120_000 },
+      { name: 'chrII', length: 60_000 },
+    ]
+    const values = new Float32Array(180)
+    for (let bin = 0; bin < 120; bin++) values[bin] = bin
+    const twice = values.map((value) => value * 2)
+    bigwig = join(directory, 'signal.bw')
+    doubled = join(directory, 'twice.bw')
+    for (const [path, held] of [
+      [bigwig, values],
+      [doubled, twice],
+    ] as const) {
+      const blob = await writeBigWig({ contigs, values: held, firstBin: 0, binsize: 1000 })
+      await writeFile(path, new Uint8Array(await blob.arrayBuffer()))
+    }
+  })
+
+  it('runs a metaplot over a bigWig named as the parameter that loads it', async () => {
     reset()
-    // A path that does not exist: reaching the filesystem at all would report
-    // that instead, so the exit code and the sentence together are the proof
-    // that nothing was mounted.
-    expect(await main(['metaplot', join(directory, 'absent.cool'), '--out', out])).toBe(2)
-    expect(complained()).toMatch(/metaplot reads a track \(--tracks\)/)
-    expect(complained()).toMatch(/Run it in the app/)
+    const where = join(directory, 'metaplot')
+    // `--tracks` is both the load and the binding: the task's own parameter is
+    // a path, and the shell opens what it names. No `--track` beside it.
+    expect(
+      await main([
+        'metaplot', sample, '--tracks', bigwig, '--features', aBed, '--features', aBed,
+        '--band', 'none', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('sample.metaplot.metaplot.tsv')
+    expect(files).toContain('sample.metaplot.metaplot-heatmap.tsv')
+    const text = await readFile(join(where, 'sample.metaplot.metaplot.tsv'), 'utf8')
+    expect(text).toMatch(/^# task: metaplot/m)
     expect(complained()).not.toMatch(/failed:/)
   })
 
-  it('lists a task it cannot run without advertising its flags', async () => {
+  it('runs FRiP, and reads the track twice through the same reader', async () => {
+    reset()
+    const where = join(directory, 'frip')
+    expect(
+      await main(['frip', sample, '--tracks', bigwig, '--features', aBed, '--out', where, '--quiet']),
+    ).toBe(0)
+    const text = await readFile(join(where, 'sample.frip.frip.tsv'), 'utf8')
+    expect(text).toMatch(/^# task: frip/m)
+    // One row, named after the file, with a fraction in it: the arithmetic is
+    // goldened in `analysis-golden.test.ts`, and what is pinned here is that a
+    // shell reaches it through the same `sample`.
+    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('correlates two tracks, repeated or comma-separated', async () => {
+    reset()
+    const where = join(directory, 'trackcorr')
+    expect(
+      await main([
+        'trackcorr', sample, '--tracks', `${bigwig},${doubled}`, '--method', 'spearman',
+        '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
+    // A track and twice itself rank identically, so Spearman is exactly 1 —
+    // and the axes are file names, not `a1`.
+    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+  })
+
+  it('runs a track task with no contact map at all', async () => {
+    reset()
+    // The 1D browser's own case (§5.8): tracks and an assembly, no matrix. The
+    // console records such a run with no file positional, and this is the line
+    // it records — the assembly is what the bigWig declares.
+    const where = join(directory, 'mapless')
+    expect(
+      await main(['frip', '--tracks', bigwig, '--features', aBed, '--out', where, '--quiet']),
+    ).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('signal.frip.frip.tsv')
+    const text = await readFile(join(where, 'signal.frip.frip.tsv'), 'utf8')
+    expect(text).toMatch(/^# framing: signal\.bw · loaded tracks, no contact map/m)
+    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+  })
+
+  it('still needs a file for a task that reads the matrix', async () => {
+    reset()
+    expect(await main(['insulation', '--out', out])).toBe(2)
+    expect(complained()).toMatch(/needs at least one file/)
+  })
+
+  it('refuses a track it cannot read, before anything is opened', async () => {
+    reset()
+    const notATrack = join(directory, 'notes.txt')
+    await writeFile(notATrack, 'hello\n')
+    expect(
+      await main(['metaplot', join(directory, 'absent.cool'), '--tracks', notATrack, '--features', aBed]),
+    ).toBe(2)
+    expect(complained()).toMatch(/notes\.txt is not a track/)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('lists every task with its flags, the track tasks included', async () => {
     reset()
     expect(await main(['tasks'])).toBe(0)
     const text = said()
-    // The row stays, so the reader still learns the task exists.
     expect(text).toMatch(/^metaplot$/m)
     expect(text).toMatch(/^trackcorr$/m)
-    expect(text).toMatch(/trackcorr reads a track \(--tracks\)/)
-    // The flags go. `--tracks` in a listing is a flag somebody writes into a
-    // batch script and finds out about after the first file is mounted.
-    expect(text).not.toMatch(/--tracks /)
-    expect(text).not.toMatch(/--heatmap/)
-    // The two that do run keep theirs.
+    expect(text).toMatch(/--tracks {2}Tracks/)
+    expect(text).toMatch(/--heatmap/)
     expect(text).toMatch(/--sequence {2}Reference/)
     expect(text).toMatch(/--minFraction/)
+    // And the one flag a task takes that is not a parameter of its own.
+    expect(text).toMatch(/^hicrep$[^]*?--against <file>/m)
+    expect(text).not.toMatch(/Run it in the app/)
   })
 
-  it('skips a replayed task it cannot run, with the reason', async () => {
+  it('replays a recorded track task, with the files named by --track', async () => {
     reset()
     const path = join(directory, 'trackcorr.metacooler.json')
     await writeFile(
@@ -340,20 +437,137 @@ describe('the annotations venue', () => {
             version: 1,
             createdAt: '2026-08-12T00:00:00.000Z',
             state: { uri: 'sample.hic', view: 'contigs' },
-            tracks: [],
+            // What the app saved: its own ids, and the tab's track list saying
+            // what each one was. `--track` names the files, and each id is
+            // filed against the one of that name.
+            tracks: [
+              { id: 'a1', card: 'linear', kind: 'track', label: 'signal', source: { kind: 'local', name: 'signal.bw' } },
+              { id: 'a2', card: 'linear', kind: 'track', label: 'twice', source: { kind: 'local', name: 'twice.bw' } },
+            ],
             manual: [],
             bookmarks: [],
-            analysis: { trackcorr: { tracks: ['a1'], method: 'spearman' } },
+            analysis: { trackcorr: { tracks: ['a1', 'a2'], method: 'pearson', over: 'bins', binsize: 1000 } },
           },
         ],
       }),
     )
-    // Exit 0, not 1: a workspace that recorded a track correlation recorded
-    // something real, and a replay that cannot run it here has failed at
-    // nothing — it is the venue that is missing, not the tab that is wrong.
-    expect(await main(['replay', path, '--over', sample, '--out', join(directory, 'r4')])).toBe(0)
-    expect(complained()).toMatch(/skipped trackcorr: trackcorr reads a track/)
-    expect(complained()).not.toMatch(/no analysis runner is registered/)
+    const where = join(directory, 'r4')
+    expect(
+      await main([
+        'replay', path, '--over', sample, '--track', bigwig, '--track', doubled, '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/skipped/)
+    expect(complained()).not.toMatch(/failed:/)
+    const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
+    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+  })
+})
+
+/**
+ * Two runs that wrote a command and then quietly answered a smaller question.
+ * Both are inputs a task of the *analysis* venue reads through a channel the
+ * session fills and a shell did not: a per-bin vector, and the records behind
+ * a map. Neither failed; each left a note saying the input was not there, about
+ * a file the command had just read.
+ */
+describe('inputs the session used to fill and the shell did not', () => {
+  it('phases compartments by a reference, rather than noting it could not be read', async () => {
+    reset()
+    // A reference the length of the map's chrI, GC-rich in the first half and
+    // AT-rich in the second — so there is a GC vector to phase against.
+    const reference = join(directory, 'phase.fa')
+    const half = 60_000
+    await writeFile(reference, `>chrI\n${'GC'.repeat(half / 2)}${'AT'.repeat(half / 2)}\n>chrII\n${'AT'.repeat(30_000)}\n`)
+    const where = join(directory, 'phased')
+    expect(
+      await main([
+        'compartments', sample, '--sequence', reference, '--phaseSequence', reference,
+        '--sequences', 'chrI', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/could not be read/)
+    expect(complained()).not.toMatch(/failed:/)
+    const files = await readdir(where)
+    expect(files).toContain('sample.compartments.compartment-e1.tsv')
+  })
+
+  it('reads the orientation curves of a .pairs named beside the map', async () => {
+    reset()
+    // Strand columns and nothing else out of the ordinary; the header is what
+    // `pairs/format.ts` needs and no more.
+    const pairs = join(directory, 'named.pairs')
+    const rows: string[] = ['## pairs format v1.0', '#chromsize: chrI 120000', '#chromsize: chrII 60000',
+      '#columns: readID chrom1 pos1 chrom2 pos2 strand1 strand2']
+    const strands = ['+', '-']
+    for (let i = 0; i < 400; i++) {
+      const pos1 = 1 + ((i * 271) % 110_000)
+      const pos2 = Math.min(120_000, pos1 + 500 + ((i * 37) % 20_000))
+      rows.push(`r${i}\tchrI\t${pos1}\tchrI\t${pos2}\t${strands[i % 2]}\t${strands[(i >> 1) % 2]}`)
+    }
+    await writeFile(pairs, `${rows.join('\n')}\n`)
+    const where = join(directory, 'stranded')
+    expect(
+      await main(['expected', sample, '--stranded', '--pairsUri', pairs, '--out', where, '--quiet']),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/failed:/)
+    expect(complained()).not.toMatch(/not an address this can fetch/)
+    const files = await readdir(where)
+    expect(files).toContain('sample.expected.ps-orientation.tsv')
+  })
+})
+
+/**
+ * The one task whose unit is a pair of files. The deck supplies the second
+ * map in the app; a shell has one file and one mount, and `--against` is the
+ * flag that stands in for the deck — mounted through the same `peer` the
+ * analysis worker answers, so the coefficient is the same coefficient.
+ */
+describe('a task that compares two maps', () => {
+  let other = ''
+
+  beforeAll(async () => {
+    other = join(directory, 'other.hic')
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [
+        { name: 'chrI', length: 120_000 },
+        { name: 'chrII', length: 60_000 },
+      ],
+      resolutions: [1000],
+      records: {
+        '1_1': records(120, 120, true, 4),
+        '2_2': records(60, 60, true, 5),
+        '1_2': records(120, 60, false, 6),
+      },
+      blockBinCount: 32,
+    })
+    await writeFile(other, fixture.bytes)
+  })
+
+  it('refuses to start without the other map, before anything is opened', async () => {
+    reset()
+    expect(await main(['hicrep', join(directory, 'absent.cool'), '--out', out])).toBe(2)
+    expect(complained()).toMatch(/--against/)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('compares the file with every map named by --against', async () => {
+    reset()
+    const where = join(directory, 'hicrep')
+    expect(
+      await main(['hicrep', sample, '--against', other, '--against', sample, '--out', where, '--quiet']),
+    ).toBe(0)
+    const files = await readdir(where)
+    expect(files).toContain('sample.hicrep.hicrep-pairs.tsv')
+    expect(files).toContain('sample.hicrep.hicrep-strata.tsv')
+    const text = await readFile(join(where, 'sample.hicrep.hicrep-pairs.tsv'), 'utf8')
+    // Labelled by file, and a map against itself is exactly 1: the arithmetic
+    // is `analysis/hicrep.ts`'s, and what is pinned is that both peers were
+    // mounted and read on the same grid.
+    expect(text).toMatch(/This map\tother\.hic\t-?[01]\.\d+/)
+    expect(text).toMatch(/This map\tsample\.hic\t1(\.0*)?$/m)
+    expect(complained()).not.toMatch(/failed:/)
   })
 })
 

@@ -22,9 +22,32 @@
  * belongs in (`analysis/job.ts`), and reading only `RUNNERS` is what made this
  * command list sixteen tasks and honour twelve: `motif`, `metaplot`, `trackcorr`
  * and `overlap` were offered with a flag per parameter and then died with *no
- * analysis runner is registered* — after the mount, once per file, exit 1. Two
- * of those need nothing a shell has not got and now run; the other two are
- * refused before anything is opened, and say why. See {@link cliCannotRun}.
+ * analysis runner is registered* — after the mount, once per file, exit 1.
+ *
+ * **Every task, because the console records every run.** For a while the
+ * shell honoured what it could and refused the rest by name: the three tasks
+ * that read a bigWig, the one that reads a second map, and any run made in a
+ * session with no contact map. Each refusal was honest and each was a hole in
+ * the console (§23) exactly where a reader looks for a line to paste — a
+ * metaplot over two hundred files is the run somebody most wants as a command.
+ * So the four capabilities a shell was said not to have are now here, each as
+ * the same code the worker runs:
+ *
+ * - **Tracks.** `--tracks` opens a bigWig, a bedGraph, a wig or a FASTA where it
+ *   lies (`cli/tracks.ts`), and `sample` answers from it in the annotations
+ *   worker's own shape. A FASTA named for `compartments`' phasing becomes the
+ *   per-bin GC vector the session would have shipped.
+ * - **A second map.** `--against` names the files `hicrep` compares this one
+ *   with, and `peer` mounts each one exactly as the analysis worker does.
+ * - **No map at all.** A task of the annotations venue runs with no file
+ *   positional, over the assembly the tracks declare — the 1D browser's own
+ *   framing (§5.8), so a run made there is a run this can repeat.
+ * - **A named `.pairs`.** `expected --stranded --pairsUri` reads a local path
+ *   through `openFile`, and a `.pairs` given as the map carries its own four
+ *   orientation curves into the run, as an import in the app does.
+ *
+ * A composite (`magnetwork` requires `magqc`) runs its requirements first, at
+ * their defaults, exactly as `AnalysisRunner.plan` does.
  *
  * ## And why `replay` is the half that matters
  *
@@ -36,15 +59,7 @@
  * picture and adjusting until it is right; and then applies exactly those, with
  * no retyping and no transcription error, to the other hundred and ninety-nine.
  *
- * ## The three things it cannot do, and why
- *
- * **No tracks.** `metaplot` and `trackcorr` take a bigWig, and the reader for
- * one is `@gmod/bbi` — imported by the annotations worker and by nothing else,
- * which is one of the three layering rules this repository enforces rather than
- * encourages (README). Everything else those two tasks need is already here, so
- * what is missing is a loader and a decision about that rule, not arithmetic;
- * until it is made they are refused before a file is opened rather than
- * advertised with flags that cannot be honoured.
+ * ## The two things it cannot do, and why
  *
  * **No remote files.** `RemoteRangeSource` reads through synchronous
  * `XMLHttpRequest`, which exists in a worker and not in Node. A CLI is on a
@@ -67,12 +82,17 @@ import { yieldToEventLoop } from '../async'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
-// The same predicate the drawer's `copy CLI command` button consults, so the
-// rule that decides whether this command will start is the rule that decides
-// whether the app offers a command line for it (`analysis/cliCommand.ts`).
-import { cliCannotRun } from '../analysis/cliCommand'
 import { abortError } from '../analysis/job'
 import type { JobContext, SequenceReader, TrackJobContext } from '../analysis/job'
+import {
+  gcTrack,
+  lengthsOf,
+  loadTracks,
+  samplerOver,
+  trackFor,
+  vectorOver,
+  type LoadedTrack,
+} from './tracks'
 import { outputToTsv } from '../analysis/write/tsv'
 import { profileToBedGraph, type BedGraphContig } from '../analysis/write/bedgraph'
 import { writeBigWig } from '../analysis/write/bigwig'
@@ -84,6 +104,7 @@ import {
   sniffFormat,
 } from '../annotations/parse'
 import { formatIntervals } from '../annotations/export'
+import type { StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { contigIndexOf } from '../genome/naming'
@@ -91,14 +112,16 @@ import { parseBins } from '../hicpro/parse'
 import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
-import type {
-  AnalysisFraming,
-  AnalysisTask,
-  Params,
-  TaskOutput,
-  TaskResult,
+import {
+  defaultParams,
+  type AnalysisFraming,
+  type AnalysisTask,
+  type Params,
+  type TaskOutput,
+  type TaskResult,
 } from '../analysis/types'
-import type { TaskInputs } from '../analysis/worker/protocol'
+import type { PeerMap, TaskInputs } from '../analysis/worker/protocol'
+import type { OrientationSummary } from '../worker/protocol'
 import { importPairs, probePairs } from '../pairs/import'
 import { ViewerError } from '../errors'
 import { parseUri } from '../uri'
@@ -235,6 +258,15 @@ const RESERVED = new Set([
   'balance',
   'features',
   'pairs',
+  'sequence',
+  // A track to load without a parameter choosing it, for `replay`: a workspace
+  // records the app's entry ids under `tracks`, and this is how the file behind
+  // one is named. A direct run needs no such flag — the task's own `--tracks`
+  // is a path, and loads what it names.
+  'track',
+  // The other maps `hicrep` compares this one with (§16). A shell has one file
+  // and one mount, and this is the flag that stands in for the deck.
+  'against',
   'over',
   'quiet',
   'help',
@@ -300,9 +332,27 @@ interface RunOptions {
    * Here it does not have to: the store and the runner are on one stack.
    */
   sequences: Map<string, SequenceStore>
+  /**
+   * Tracks named with `--tracks` or `--track`, by the string the reader typed.
+   *
+   * Beside `inputs` for the reason `sequences` is: a bigWig handle is the one
+   * thing the annotations worker exists to hold and never ship, and here it
+   * need not be shipped — `sample` is answered on the same stack.
+   */
+  tracks: Map<string, LoadedTrack>
+  /** The other maps a task that compares files is run against (`--against`). */
+  peers: readonly string[]
   quiet: boolean
   /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
   binning?: PairsBinning | undefined
+}
+
+/** A map opened for a run, with the one fact an import carries that a mount does not. */
+interface Opened {
+  mc: MetaCooler
+  source: ByteSource
+  /** The four orientation curves counted while binning a `.pairs`, or `null`. */
+  orientation: OrientationSummary | null
 }
 
 /** `--bin-size` and `--rungs`, the CLI's answer to the browser's dialog. */
@@ -325,10 +375,10 @@ interface PairsBinning {
  * what makes `--out` able to carry a `.mcool` that opens in the app at the same
  * resolutions a session would have had.
  */
-async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<MetaCooler> {
+async function openForTask(uri: string, source: ByteSource, options: RunOptions): Promise<Opened> {
   const path = parseUri(uri).path
   try {
-    return await MetaCooler.open(uri, source)
+    return { mc: await MetaCooler.open(uri, source), source, orientation: null }
   } catch (error) {
     if (!(error instanceof ViewerError) || error.code !== 'pairs-binning-needed') throw error
     const binning = options.binning
@@ -359,14 +409,26 @@ async function openForTask(uri: string, source: ByteSource, options: RunOptions)
           }),
     })
     if (imported === null) throw new Error('the pairs import was interrupted')
-    return MetaCooler.fromPairs({
-      uri: path,
-      header: imported.header,
-      pixels: imported.tables.get(imported.rungs[0])!,
-      rungs: imported.rungs,
-      indexed: imported.indexed,
-      declaredRecords: imported.declaredRecords,
-    })
+    const pixels = imported.tables.get(imported.rungs[0])!
+    // The curves the pass just counted, as `worker/reader.worker.ts` hands them
+    // to the session: the records are gone once the table exists, and the task
+    // that draws them (`expected --stranded`) runs on the table.
+    const counted = pixels.orientation ?? null
+    return {
+      mc: MetaCooler.fromPairs({
+        uri: path,
+        header: imported.header,
+        pixels,
+        rungs: imported.rungs,
+        indexed: imported.indexed,
+        declaredRecords: imported.declaredRecords,
+      }),
+      source,
+      orientation:
+        counted === null
+          ? null
+          : { edges: counted.edges, counts: counted.counts, total: counted.total },
+    }
   }
 }
 
@@ -399,10 +461,7 @@ async function openPairsIndex(path: string): Promise<ByteSource | null> {
  * — but the parse below is the shared one, so a number computed in a shell and
  * a number computed by clicking come out of the same implementation.
  */
-async function openLocal(
-  uri: string,
-  options: RunOptions,
-): Promise<{ mc: MetaCooler; source: ByteSource }> {
+async function openLocal(uri: string, options: RunOptions): Promise<Opened> {
   // **The `::` is addressed to the container, not to the filesystem.** An
   // `.mcool` is a collection of coolers and `detect.ts` refuses one at its root
   // with a sentence naming the resolutions and telling the reader to write
@@ -415,7 +474,7 @@ async function openLocal(
   if (!isHicProMatrix(name)) {
     // The HDF5 road, and the `.pairs` import that hangs off its one refusal.
     const source = await LocalFileSource.fromPath(path)
-    return { mc: await openForTask(uri, source, options), source }
+    return openForTask(uri, source, options)
   }
   const beside = hicProBinsNames(name)
     .map((n) => join(dirname(path), n))
@@ -430,13 +489,14 @@ async function openLocal(
   const binBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(beside)))
   const parsedBins = parseBins(binBytes, basename(beside))
   const matrixBytes = await decodeAnnotationBytes(new Uint8Array(readFileSync(path)))
-  return hicProMap(
+  const opened = await hicProMap(
     path,
     { bytes: matrixBytes, name },
     parsedBins,
     basename(beside),
     binBytes.length,
   )
+  return { ...opened, orientation: null }
 }
 
 /**
@@ -450,7 +510,8 @@ async function openLocal(
  */
 async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedGraphContig[] }> {
   const { task, params, path } = options
-  const { mc } = await openLocal(resolve(path), options)
+  const opened = await openLocal(resolve(path), options)
+  const { mc } = opened
   try {
     const extent =
       options.window === undefined
@@ -471,18 +532,18 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
         `${balance ? ', balanced' : ''}, count`,
     }
+    // The assembly travels with the result rather than being fetched again: a
+    // second open costs a second mount and a second metadata walk to learn
+    // something this one already knows.
+    const contigs: BedGraphContig[] = mc.chromnames.map((name, id) => {
+      const [startBin, endBin] = mc.coords.contigBinExtent(id)
+      return { name, startBin, bins: endBin - startBin, length: mc.coords.contigLengths[id] }
+    })
 
     const notes: string[] = []
     const started = Date.now()
     let lastPercent = -1
-    const job: JobContext = {
-      mc,
-      params,
-      framing,
-      inputs: {
-        ...options.inputs,
-        contigLengths: Object.fromEntries(mc.chromsizes),
-      },
+    const shared = {
       cancelled: () => false,
       throwIfCancelled: () => {
         // Nothing can cancel a CLI run but Ctrl-C, which the process handles.
@@ -492,7 +553,7 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       breathe: async () => {
         await yieldToEventLoop()
       },
-      progress: (done, total) => {
+      progress: (done: number, total: number) => {
         if (options.quiet || total <= 0) return
         const percent = Math.floor((done / total) * 100)
         // Only on a change, and only to stderr: a progress line interleaved with
@@ -501,22 +562,69 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
         lastPercent = percent
         process.stderr.write(`\r  ${task.title}: ${percent}%   `)
       },
-      note: (text) => {
+      note: (text: string) => {
         notes.push(text)
       },
-      toBp: (bins) => bins * mc.binsize,
-      toBins: (bp) => Math.max(1, Math.round(bp / mc.binsize)),
+    }
+    const baseInputs: TaskInputs = {
+      ...options.inputs,
+      contigLengths: Object.fromEntries(mc.chromsizes),
+      ...(opened.orientation === null ? {} : { orientation: opened.orientation }),
+      ...(options.peers.length === 0 ? {} : { peers: peersOf(options.peers) }),
     }
 
-    const outputs = await runFor(task, job, options.sequences)
-    if (!options.quiet) process.stderr.write('\r')
-    // The assembly travels with the result rather than being fetched again: a
-    // second open costs a second mount and a second metadata walk to learn
-    // something this one already knows.
-    const contigs: BedGraphContig[] = mc.chromnames.map((name, id) => {
-      const [startBin, endBin] = mc.coords.contigBinExtent(id)
-      return { name, startBin, bins: endBin - startBin, length: mc.coords.contigLengths[id] }
+    /**
+     * The job for one step of the chain, built as `analysis.worker.ts` builds
+     * its own — with the three capabilities a shell answers differently from a
+     * worker: `peer` and `openFile` read the filesystem, and `vectors` is
+     * computed here rather than asked of another thread.
+     */
+    const jobFor = async (
+      step: AnalysisTask,
+      stepParams: Params,
+      upstream: Record<string, TaskResult>,
+    ): Promise<JobContext> => ({
+      mc,
+      params: stepParams,
+      framing,
+      inputs: {
+        ...baseInputs,
+        ...(await vectorsFor(step, stepParams, options, { contigs, binsize: mc.binsize, nBins: mc.nBins })),
+        ...(Object.keys(upstream).length === 0 ? {} : { upstream: { ...upstream } }),
+      },
+      ...shared,
+      toBp: (bins) => bins * mc.binsize,
+      toBins: (bp) => Math.max(1, Math.round(bp / mc.binsize)),
+      // A second mount for the length of one run, closed by the runner: the
+      // analysis worker's own `peer`, against a filesystem instead of a
+      // `SourceSpec`. Mounted through `openLocal`, so a `.pairs` or a HiC-Pro
+      // pair beside the map opens by the same road the map did.
+      peer: async (map) => {
+        const other = await openLocal(resolve(map.uri), options)
+        return {
+          mc: other.mc,
+          close: () => {
+            other.mc.close()
+            other.source.close()
+          },
+        }
+      },
+      // A file this process can read and does not mount — a `.pairs` named for
+      // its orientation curves. `openBytes` stays unanswered: it is for an
+      // address, and a shell fetches those with `curl`.
+      openFile: async (file) => {
+        // Mounted, because a path-backed source reads through the mount and
+        // refuses a range before one exists — and mounted rather than read
+        // whole, since a contact list is the one input here that is routinely
+        // larger than memory.
+        const source = await LocalFileSource.fromPath(resolve(file))
+        await source.mount()
+        return source
+      },
     })
+
+    const outputs = await runChain(task, params, framing, jobFor, options)
+    if (!options.quiet) process.stderr.write('\r')
     return {
       contigs,
       outputs,
@@ -533,6 +641,215 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
     }
   } finally {
     mc.close()
+  }
+}
+
+/**
+ * The other maps, as the analysis worker is handed them.
+ *
+ * A `PeerMap` carries the reader's own name for a panel and a `SourceSpec` for
+ * the worker's mount cache; here the name is the file's and the spec is the
+ * path spelled as a URL, which `peer` above never reads — it opens `uri`. The
+ * label is what the coefficient matrix's axes say, so it is the base name and
+ * not the whole path a batch script would have expanded.
+ */
+function peersOf(paths: readonly string[]): PeerMap[] {
+  return paths.map((path) => ({
+    label: basename(parseUri(path).path),
+    uri: path,
+    source: { kind: 'remote', url: pathToFileURL(resolve(parseUri(path).path)).href },
+  }))
+}
+
+/**
+ * The per-bin vectors a task of the *analysis* venue reads a track or a
+ * sequence through (§18.6).
+ *
+ * `AnalysisRunner.inputsFor` asks the annotations worker for one vector per
+ * chosen entry of those two kinds and ships it under the parameter's key; the
+ * runner then reads `inputs.vectors[key]` and never learns a file was involved.
+ * A shell that loaded the FASTA under `--sequence` and never did this left
+ * `compartments --phaseSequence` reporting that the sequence *could not be
+ * read*, about a file the command had just parsed. So the same vector is
+ * computed here, from the loaded track or from the reference as a GC track.
+ */
+async function vectorsFor(
+  task: AnalysisTask,
+  params: Params,
+  options: RunOptions,
+  grid: { contigs: readonly BedGraphContig[]; binsize: number; nBins: number },
+): Promise<Pick<TaskInputs, 'vectors'>> {
+  if (task.venue === 'annotations') return {}
+  const vectors: Record<string, Float32Array> = {}
+  for (const spec of task.params) {
+    if (spec.kind !== 'track' && spec.kind !== 'sequence') continue
+    const chosen = params[spec.key]
+    const named = typeof chosen === 'string' && chosen !== '' ? chosen : null
+    if (named === null) continue
+    const track =
+      spec.kind === 'track'
+        ? trackFor(options.tracks, named)
+        : gcTrackFor(options.sequences, named)
+    if (track === undefined) continue
+    vectors[spec.key] = await vectorOver(track, {
+      contigs: grid.contigs.map((contig) => ({
+        name: contig.name,
+        startBin: contig.startBin,
+        length: contig.length,
+      })),
+      binsize: grid.binsize,
+      nBins: grid.nBins,
+    })
+  }
+  return Object.keys(vectors).length === 0 ? {} : { vectors }
+}
+
+/** A loaded reference as the GC track the session would have sampled it as. */
+function gcTrackFor(
+  held: Map<string, SequenceStore>,
+  entry: string,
+): LoadedTrack | undefined {
+  const found = storeFor(held, entry)
+  return found === undefined ? undefined : gcTrack(found[0], basename(found[0]), found[1])
+}
+
+/**
+ * The task and everything it `requires`, required tasks first.
+ *
+ * `AnalysisRunner.plan`, without the cache: depth first, each requirement at
+ * its own defaults — the reader configured the network and not the QC under
+ * it, and inventing parameters for a form they never opened would be putting
+ * numbers in their mouth — and de-duplicated, so two steps wanting one
+ * upstream result compute it once. A cycle is a catalogue mistake and is named
+ * rather than run into.
+ */
+async function runChain(
+  task: AnalysisTask,
+  params: Params,
+  framing: AnalysisFraming,
+  jobFor: (
+    step: AnalysisTask,
+    stepParams: Params,
+    upstream: Record<string, TaskResult>,
+  ) => Promise<JobContext>,
+  options: Pick<RunOptions, 'sequences' | 'tracks'>,
+): Promise<TaskOutput[]> {
+  const upstream: Record<string, TaskResult> = {}
+  const active = new Set<string>()
+  const walk = async (node: AnalysisTask, nodeParams: Params): Promise<TaskOutput[]> => {
+    if (active.has(node.id)) throw new Error(`the analysis task ${node.id} requires itself`)
+    active.add(node.id)
+    for (const id of node.requires ?? []) {
+      if (id in upstream) continue
+      const required = taskById(id)
+      if (required === undefined) {
+        throw new Error(`${node.id} requires the task ${id}, which this build does not have`)
+      }
+      const requiredParams = defaultParams(required.params)
+      const started = Date.now()
+      const outputs = await walk(required, requiredParams)
+      upstream[id] = {
+        outputs,
+        provenance: {
+          task: required.id,
+          taskVersion: required.version ?? 0,
+          params: requiredParams,
+          framing,
+          app: `metacooler-run ${VERSION}`,
+          createdAt: new Date().toISOString(),
+        },
+        notes: [],
+        ms: Date.now() - started,
+      }
+    }
+    active.delete(node.id)
+    return runFor(node, await jobFor(node, nodeParams, upstream), options)
+  }
+  return walk(task, params)
+}
+
+/**
+ * A task of the annotations venue, run with **no contact map** at all.
+ *
+ * The 1D browser (§5.8) is a session with tracks and an assembly and no
+ * matrix, and five tasks run there. `AnalysisRunner.tracksFraming` frames such
+ * a run against the file that declared the assembly, over a zero-wide extent —
+ * and the console recorded it as a sentence, because this command opened its
+ * first argument as a map and there was none to name. Now there need not be:
+ * with no positional, a track task runs over the assembly the loaded files
+ * declare, framed exactly as the session frames it, so the line the console
+ * writes for a browser run is a line this can take.
+ */
+async function runTracksOnly(
+  options: Omit<RunOptions, 'path'>,
+): Promise<TaskResult & { contigs: BedGraphContig[] }> {
+  const { task, params } = options
+  const lengths = lengthsOf(options.tracks, options.sequences)
+  const named = [...options.tracks.values()][0]?.path ?? [...options.sequences.keys()][0] ?? ''
+  const framing: AnalysisFraming = {
+    uri: named,
+    rows: [0, 0],
+    cols: [0, 0],
+    binsize: 0,
+    binsPerCell: 1,
+    balance: false,
+    value: 'count',
+    normalise: null,
+    level: 'bin',
+    label: `${basename(named)} · loaded tracks, no contact map`,
+  }
+  const notes: string[] = []
+  const started = Date.now()
+  let lastPercent = -1
+  const job: TrackJobContext = {
+    params,
+    framing,
+    inputs: { ...options.inputs, contigLengths: lengths },
+    cancelled: () => false,
+    throwIfCancelled: () => {
+      void abortError
+    },
+    progress: (done, total) => {
+      if (options.quiet || total <= 0) return
+      const percent = Math.floor((done / total) * 100)
+      if (percent === lastPercent) return
+      lastPercent = percent
+      process.stderr.write(`\r  ${task.title}: ${percent}%   `)
+    },
+    note: (text) => {
+      notes.push(text)
+    },
+    sample: samplerOver(options.tracks),
+    lengthOf: (contig) => lengths[contig],
+    residues: (entry) => readerFor(options.sequences, entry),
+  }
+  const runner = TRACK_RUNNERS[task.id]
+  if (runner === undefined) {
+    throw new Error(`no analysis runner is registered for the task ${task.id}`)
+  }
+  const outputs = await runner(job)
+  if (!options.quiet) process.stderr.write('\r')
+  // No grid, so no profile can come out of this — but a writer that is handed
+  // the assembly anyway writes a BED against the right names.
+  const contigs: BedGraphContig[] = Object.entries(lengths).map(([name, length]) => ({
+    name,
+    startBin: 0,
+    bins: 0,
+    length,
+  }))
+  return {
+    contigs,
+    outputs,
+    provenance: {
+      task: task.id,
+      taskVersion: task.version ?? 0,
+      params,
+      framing,
+      app: `metacooler-run ${VERSION}`,
+      createdAt: new Date().toISOString(),
+    },
+    notes,
+    ms: Date.now() - started,
   }
 }
 
@@ -559,14 +876,14 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
 async function runFor(
   task: AnalysisTask,
   job: JobContext,
-  sequences: Map<string, SequenceStore>,
+  loaded: Pick<RunOptions, 'sequences' | 'tracks'>,
 ): Promise<TaskOutput[]> {
   if (task.venue === 'annotations') {
     const runner = TRACK_RUNNERS[task.id]
     if (runner === undefined) {
       throw new Error(`no analysis runner is registered for the task ${task.id}`)
     }
-    return runner(trackJobOf(job, sequences))
+    return runner(trackJobOf(job, loaded))
   }
   const runner = RUNNERS[task.id]
   if (runner === undefined) {
@@ -582,13 +899,14 @@ async function runFor(
  * inputs, cancellation, progress and notes — and this is that sentence as code:
  * each of those is the very function the map venue was handed, not a second one
  * built from the same ingredients, so the two cannot come to differ in this
- * file. What is added is the pair of capabilities that venue exists for.
- *
- * Only one of the pair can be answered from a shell, and the asymmetry is the
- * whole of what {@link cliCannotRun} refuses on: residues are a file this
- * process can read, and a track is a bigWig handle this process may not open.
+ * file. What is added is the pair of capabilities that venue exists for:
+ * residues are a reference this process parsed, and a sample is answered from
+ * a track it opened (`cli/tracks.ts`), in the worker's own shape.
  */
-function trackJobOf(job: JobContext, sequences: Map<string, SequenceStore>): TrackJobContext {
+function trackJobOf(
+  job: JobContext,
+  loaded: Pick<RunOptions, 'sequences' | 'tracks'>,
+): TrackJobContext {
   return {
     params: job.params,
     framing: job.framing,
@@ -597,21 +915,11 @@ function trackJobOf(job: JobContext, sequences: Map<string, SequenceStore>): Tra
     throwIfCancelled: job.throwIfCancelled,
     progress: job.progress,
     note: job.note,
-    // Unreachable, and throwing rather than absent for the reason
-    // `analysis/run/index.ts` gives for never stubbing a runner: a `sample`
-    // that answered with an empty set would let a metaplot report a clean
-    // average over nothing, which is the one failure nobody downstream can see.
-    // The capability is not optional in the interface, so it is present and
-    // says what it is; `cliCannotRun` is what stops it ever being called.
-    sample: () => {
-      throw new Error(
-        'Sampling a track needs the bigWig reader, which this command does not have.',
-      )
-    },
+    sample: samplerOver(loaded.tracks),
     // Exactly the annotations worker's own answer: the assembly is what
     // `inputs.contigLengths` carries, because this venue is handed no other.
     lengthOf: (contig) => job.inputs.contigLengths?.[contig],
-    residues: (entry) => readerFor(sequences, entry),
+    residues: (entry) => readerFor(loaded.sequences, entry),
   }
 }
 
@@ -631,10 +939,7 @@ function readerFor(
   held: Map<string, SequenceStore>,
   entry: string,
 ): SequenceReader | undefined {
-  const store =
-    held.get(entry) ??
-    [...held].find(([path]) => basename(path) === basename(entry))?.[1] ??
-    (held.size === 1 ? [...held.values()][0] : undefined)
+  const store = storeFor(held, entry)?.[1]
   if (store === undefined) return undefined
   return {
     contigs: store.contigs,
@@ -648,6 +953,19 @@ function readerFor(
       return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
     },
   }
+}
+
+/** The loaded reference an entry names, with the path it was filed under. */
+function storeFor(
+  held: Map<string, SequenceStore>,
+  entry: string,
+): [string, SequenceStore] | undefined {
+  const direct = held.get(entry)
+  if (direct !== undefined) return [entry, direct]
+  return (
+    [...held].find(([path]) => basename(path) === basename(entry)) ??
+    (held.size === 1 ? [...held][0] : undefined)
+  )
 }
 
 
@@ -791,6 +1109,80 @@ async function loadSequences(args: Args): Promise<Map<string, SequenceStore>> {
 }
 
 /**
+ * Tracks named on the command line, by both roads a name arrives.
+ *
+ * A task's own `--tracks` is the path of a file to open, so a direct run needs
+ * no second flag: what the parameter names is what is loaded, which is the
+ * arrangement `--sequence` and `motif` already have. `--track` is the other
+ * road, for `replay`, where the parameter holds the app's entry id and the file
+ * has to be named beside it. A workspace also records what each id *was* — the
+ * tab's own track list, name and all — so an id is filed against the loaded
+ * file of that name and the recorded parameters resolve without anybody
+ * retyping them, which is the whole point of `replay`.
+ *
+ * Opened before any map, so an unreadable track is exit 2 with a sentence
+ * rather than the same failure once per file — and so is a name that looks like
+ * a path and is not one.
+ */
+async function loadTrackFiles(
+  tasks: readonly { task: AnalysisTask; params: Params }[],
+  args: Args,
+  stored: readonly StoredEntry[] = [],
+): Promise<Map<string, LoadedTrack>> {
+  const paths: string[] = [...all(args, 'track')]
+  const unresolved: string[] = []
+  for (const { task, params } of tasks) {
+    for (const spec of task.params) {
+      if (spec.kind !== 'track') continue
+      const chosen = params[spec.key]
+      const named = Array.isArray(chosen)
+        ? chosen.filter((item): item is string => typeof item === 'string')
+        : typeof chosen === 'string' && chosen !== ''
+          ? [chosen]
+          : []
+      for (const path of named) {
+        if (existsSync(path)) paths.push(path)
+        else unresolved.push(path)
+      }
+    }
+  }
+  const held = await loadTracks(paths)
+  // The app's ids, filed against the files they named: `a1` was `signal.bw`
+  // when the workspace was saved, and `--track signal.bw` is on the line.
+  for (const entry of stored) {
+    if (entry.kind !== 'track' || held.has(entry.id)) continue
+    const name = basename(entry.source.url ?? entry.source.name)
+    const match = [...held.values()].find((track) => track.name === name)
+    if (match !== undefined) held.set(entry.id, match)
+  }
+  for (const name of unresolved) {
+    if (trackFor(held, name) !== undefined) continue
+    throw new Error(
+      /[./\\]/.test(name)
+        ? `--tracks names ${name}, which is not there.`
+        : `${name} is a track the workspace recorded by the app's own id. Name the file ` +
+            'with --track <file>.',
+    )
+  }
+  return held
+}
+
+/**
+ * What each loaded track is **called**, beside the labels the sets carry.
+ *
+ * A figure's axis reads `inputs.labels[entry]` and falls back to the entry
+ * itself, which here is the path as typed — so a correlation matrix's axes
+ * read as `/data/run3/signal.bw` until this says they are `signal.bw`, the
+ * same base name a feature set is filed under.
+ */
+function withTrackLabels(inputs: TaskInputs, tracks: ReadonlyMap<string, LoadedTrack>): TaskInputs {
+  if (tracks.size === 0) return inputs
+  const labels: Record<string, string> = { ...inputs.labels }
+  for (const [key, track] of tracks) labels[key] = track.name
+  return { ...inputs, labels }
+}
+
+/**
  * File each loaded set under the **parameter key** that chose it.
  *
  * {@link TaskInputs} is keyed by parameter key — `analysis/job.ts`'s
@@ -840,18 +1232,29 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       --window <chr:a-b>   a window rather than the whole file
       --balance            force balancing on; --balance=false forces it off
       --features <file>    a BED/narrowPeak/loop table a task needs
-      --sequence <ref.fa>  a reference, for a task that reads residues (motif).
-                           Gzipped or not
+      --sequence <ref.fa>  a reference, for a task that reads residues (motif)
+                           or phases by GC content (compartments). Gzipped or not
       --pairs <file>       a BEDPE, for an off-diagonal pileup. Note this is a
                            *feature* table and not a contact list — a .pairs
                            file to bin is a positional argument, and takes
                            --bin-size below
+      --against <file>     another contact map, for a task that compares two
+                           (hicrep). Repeat it for a third
       --bin-size <bp>      required for a .pairs input, which states no
                            resolution of its own; ignored for every other format
       --rungs <n>          how many ladder resolutions to build from it
                            (1-2-5 series from the base). Default 1
       --quiet              no progress on stderr
-      --<param> <value>    any parameter the task takes; see \`tasks\`
+      --<param> <value>    any parameter the task takes; see \`tasks\`. A task
+                           that reads tracks (metaplot, trackcorr, frip) takes
+                           them as --tracks <file.bw>, repeated or
+                           comma-separated: a bigWig, a bedGraph, a wig, or a
+                           FASTA read as GC content
+
+  metacooler-run <task> --tracks <file.bw> --features <file.bed> [...]
+      A task that reads tracks and no matrix (metaplot, trackcorr, frip, overlap,
+      motif), run with no contact map at all — what a 1D browser session runs.
+      The assembly is what the tracks and references declare.
 
   metacooler-run replay <workspace.metacooler.json> --over <file> [...]
       Re-run every analysis recorded in a saved workspace, with the parameters
@@ -859,6 +1262,9 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
       app's Save button produces: every open tab in one file.
       --tab <n>            which tab to replay, 1-based. Default: the one that
                            was in front when the workspace was saved.
+      --track <file.bw>    the file behind a track the workspace recorded by
+                           the app's own id. Repeat it per track
+      --against <file>     the other maps a recorded hicrep compared against
 
 Remote files are not supported: the reader uses synchronous range requests,
 which exist in a worker and not in Node. Fetch it first.
@@ -867,18 +1273,10 @@ which exist in a worker and not in Node. Fetch it first.
 function listTasks(): void {
   for (const task of TASKS) {
     process.stdout.write(`${task.id}\n    ${task.title}\n`)
-    const refusal = cliCannotRun(task)
-    if (refusal !== null) {
-      // The row stays and its flags go. The panel's rule is the stronger one —
-      // a task that cannot run is absent rather than greyed out
-      // (`analysis/registry.ts`, §8.5) — but the reader of this listing is
-      // asking what the *catalogue* holds as much as what this command will
-      // start, and a task missing from a list of sixteen teaches them it does
-      // not exist. Printing `--tracks` under a task that refuses to start is
-      // the other half: it is what let a batch script be written against a
-      // flag and find out after the first file had been mounted.
-      process.stdout.write(`      ${refusal}\n\n`)
-      continue
+    if (task.needsPeers === true) {
+      // The one flag a task takes that is not a parameter of its own: the deck
+      // it compares against, which a shell spells as files.
+      process.stdout.write('      --against <file>  The other maps to compare with; repeat per map\n')
     }
     for (const param of task.params) {
       const fallback = (param as { default?: unknown }).default
@@ -898,20 +1296,6 @@ async function runCommand(args: Args): Promise<number> {
     process.stderr.write(`Unknown task ${JSON.stringify(args.command)}. Try \`tasks\`.\n`)
     return 2
   }
-  // Ahead of the file check, and well ahead of any mount. A task this command
-  // cannot start is a fault in the command line exactly as an unknown flag is,
-  // and it deserves the same treatment the comment below spells out: one
-  // sentence and exit 2, rather than the same failure two hundred times with a
-  // file opened before each of them.
-  const refusal = cliCannotRun(task)
-  if (refusal !== null) {
-    process.stderr.write(`${refusal}\n`)
-    return 2
-  }
-  if (args.positional.length === 0) {
-    process.stderr.write(`${task.id} needs at least one file.\n`)
-    return 2
-  }
   // Parameters and inputs are resolved *before* any file is opened, and a
   // failure in either is exit 2 with a sentence rather than a stack: they are
   // faults in the command, and a command that is wrong should say so before it
@@ -919,16 +1303,54 @@ async function runCommand(args: Args): Promise<number> {
   let params: Params
   let inputs: TaskInputs
   let sequences: Map<string, SequenceStore>
+  let tracks: Map<string, LoadedTrack>
   try {
     params = paramsFor(task, args)
     inputs = bindInputs(task, params, await loadInputs(args))
     sequences = await loadSequences(args)
+    tracks = await loadTrackFiles([{ task, params }], args)
+    inputs = withTrackLabels(inputs, tracks)
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
+  const peers = all(args, 'against')
+  if (task.needsPeers === true && peers.length === 0) {
+    // The deck, which a shell has not got: the task's whole question is about
+    // two files, and a run with one would note "no second map is open" after
+    // the mount. Said here instead, before anything is opened.
+    process.stderr.write(
+      `${task.id} compares this map with another. Name the other with --against <file>.\n`,
+    )
+    return 2
+  }
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
+
+  if (args.positional.length === 0) {
+    // No map, which is the 1D browser's own case (§5.8) and only makes sense
+    // for a task that reads none: a track task over whatever the loaded files
+    // declare as the assembly. Everything else needs a file to open.
+    if (task.venue !== 'annotations' || (tracks.size === 0 && sequences.size === 0)) {
+      process.stderr.write(`${task.id} needs at least one file.\n`)
+      return 2
+    }
+    try {
+      const result = await runTracksOnly({ task, params, inputs, sequences, tracks, peers, quiet })
+      for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
+      await writeOutputs(
+        result,
+        stemOf(result.provenance.framing.uri),
+        directory,
+        result.contigs,
+        quiet,
+      )
+      return 0
+    } catch (error) {
+      process.stderr.write(`  failed: ${error instanceof Error ? error.message : String(error)}\n`)
+      return 1
+    }
+  }
 
   let failures = 0
   for (const path of args.positional) {
@@ -951,6 +1373,8 @@ async function runCommand(args: Args): Promise<number> {
         balance: args.flags.has('balance') ? flag(args, 'balance') : undefined,
         inputs,
         sequences,
+        tracks,
+        peers,
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
@@ -1015,8 +1439,17 @@ async function replayCommand(args: Args): Promise<number> {
   const files = over.length > 0 ? over : [config.state.uri]
   const directory = one(args, 'out') ?? one(args, 'o') ?? '.'
   const quiet = flag(args, 'quiet')
-  const loaded = await loadInputs(args)
   const sequences = await loadSequences(args)
+  const tracks = await loadTrackFiles(
+    recorded.flatMap((entry) => {
+      const task = taskById(entry.task)
+      return task === undefined ? [] : [{ task, params: entry.params }]
+    }),
+    args,
+    config.tracks,
+  )
+  const loaded = withTrackLabels(await loadInputs(args), tracks)
+  const peers = all(args, 'against')
 
   process.stderr.write(
     `${recorded.length} task${recorded.length === 1 ? '' : 's'} from ${basename(path)}, ` +
@@ -1033,14 +1466,16 @@ async function replayCommand(args: Args): Promise<number> {
         process.stderr.write(`  skipped ${entry.task}: this build has no such task\n`)
         continue
       }
-      const refusal = cliCannotRun(task)
-      if (refusal !== null) {
+      if (task.needsPeers === true && peers.length === 0) {
         // Beside the skip above and for the same reason: the count printed a
         // moment ago said how many tasks would run, and a tab that recorded a
-        // metaplot is owed the reason one of them did not. Skipped rather than
-        // attempted, so it costs no mount and does not turn a replay's exit
-        // code into a failure over something the workspace was right to record.
-        process.stderr.write(`  skipped ${entry.task}: ${refusal}\n`)
+        // reproducibility run is owed the reason one of them did not. Skipped
+        // rather than attempted, so it costs no mount and does not turn a
+        // replay's exit code into a failure over a flag that was not given.
+        process.stderr.write(
+          `  skipped ${entry.task}: it compares this map with another; name the other with ` +
+            '--against <file>\n',
+        )
         continue
       }
       try {
@@ -1055,6 +1490,8 @@ async function replayCommand(args: Args): Promise<number> {
           // different sets under different keys.
           inputs: bindInputs(task, entry.params, loaded),
           sequences,
+          tracks,
+          peers,
           quiet,
         })
         await writeOutputs(result, stemOf(file), directory, result.contigs, quiet)

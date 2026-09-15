@@ -291,7 +291,11 @@ metacooler-run tasks
 ## 
 ## hicrep
 ##     Reproducibility (HiCRep)
-##       hicrep compares the maps open beside each other, and a shell has one file and one mount. Run it in the app, with the maps side by side.
+##       --against <file>  The other maps to compare with; repeat per map
+##       --sequences  Sequences
+##       --maxDistance (default 5000000)  Furthest separation compared
+##       --smooth (default 1)  Smoothing half-width
+##       --balance (default false)  Use balancing weights
 ## 
 ## motif
 ##     Find a sequence
@@ -302,7 +306,24 @@ metacooler-run tasks
 ## 
 ## metaplot
 ##     Metaplot over a feature set
-##       metaplot reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
+##       --tracks  Tracks
+##       --features  Features
+##       --mode (default "reference")  Mode
+##       --at (default "start")  Anchor on
+##       --flank (default 2000)  Flank
+##       --step (default 50)  Resolution
+##       --body (default 100)  Body columns
+##       --stranded (default true)  Respect strand
+##       --rankBy  Rank by
+##       --subset (default "all")  Then
+##       --count (default 500)  N
+##       --groups (default 4)  Groups
+##       --zscore (default false)  Z-score tracks first
+##       --average (default "mean")  Average
+##       --band (default "bootstrap")  Band
+##       --iterations (default 200)  Bootstrap draws
+##       --seed (default 1)  Seed
+##       --heatmap (default true)  Also draw the per-feature heatmap
 ## 
 ## apa
 ##     Aggregate peak analysis
@@ -332,11 +353,18 @@ metacooler-run tasks
 ## 
 ## trackcorr
 ##     Track correlation
-##       trackcorr reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
+##       --tracks  Tracks
+##       --over (default "bins")  Compare over
+##       --binsize (default 100)  Bin size
+##       --features  Features
+##       --method (default "spearman")  Method
 ## 
 ## frip
 ##     Fraction of signal in features
-##       frip reads a track (--tracks); the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.
+##       --tracks  Tracks
+##       --features  Features
+##       --resolution (default 0)  Read features at
+##       --perFeature (default false)  Also score every feature
 ## 
 ## overlap
 ##     Interval set overlap
@@ -391,6 +419,22 @@ metacooler-run apa sample.cool --features domains.bed --anchors features \
 # sites as a BED-shaped table, and their density on the open map's bin grid.
 metacooler-run motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --out results/
 metacooler-run overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
+
+# The tasks that read tracks take them as --tracks: a bigWig, a bedGraph, a
+# wig, or a FASTA read as GC content. Repeat the flag or separate with commas.
+metacooler-run metaplot sample.cool --tracks ATAC.bw --features peaks.narrowPeak --flank 2000 --out results/
+metacooler-run frip sample.cool --tracks ATAC.bw,MNase.bw --features peaks.narrowPeak
+metacooler-run trackcorr sample.cool --tracks ATAC.bw --tracks MNase.bw --over features --features peaks.bed
+
+# ...and with no contact map at all, over the assembly the tracks declare —
+# what a 1D browser session runs.
+metacooler-run metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
+
+# Reproducibility compares the file with every map --against names.
+metacooler-run hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 2000000
+
+# Compartments phased by GC content read the reference under --sequence.
+metacooler-run compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
 
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact
@@ -458,8 +502,10 @@ Three layering rules are enforced rather than encouraged, because breaking any o
 
 - **`h5wasm` is imported only under `src/h5/`.** That is what makes the local and remote paths
   identical everywhere downstream.
-- **`@gmod/bbi` is imported only by the annotations worker.** Same rule, same reason: no file parser
-  belongs in the main-thread bundle, and the demo GTF alone is ~310 ms of parsing.
+- **`@gmod/bbi` is imported only by the annotations worker — and by `src/cli/tracks.ts`, which is
+  a Node program of its own.** Same rule, same reason: no file parser belongs in the main-thread
+  bundle, and the demo GTF alone is ~310 ms of parsing. The CLI has no main thread, so it opens a
+  bigWig for the tasks that read one, and `vite.cli.config.ts` keeps the reader external for it.
 - **No coordinate ever comes from `/bins`.** With fixed bins the entire coordinate model is
   arithmetic over `indexes/chrom_offset` and `contigs/length`, so one of the four large tables in the
   file is never touched — not on open, not per view, not over the network.

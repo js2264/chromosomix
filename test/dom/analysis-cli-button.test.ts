@@ -26,7 +26,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { cliCannotRun } from '@/analysis/cliCommand'
 import { taskById } from '@/analysis/registry'
 import type { AnalysisRunner } from '@/analysis/runner'
 import type {
@@ -37,6 +36,7 @@ import type {
   ProfileOutput,
   TaskResult,
 } from '@/analysis/types'
+import { defaultStyle, emptyPlacement } from '@/annotations/types'
 import { AnalysisDrawer } from '@/ui/AnalysisDrawer'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -114,7 +114,31 @@ const CONTEXT: AnalysisContext = {
   nBins: N_BINS,
   contigs: CONTIGS,
   genomes: null,
-  entries: [],
+  // A track and a feature set, so a task that reads either has a file to name.
+  entries: [
+    {
+      id: 't1',
+      card: 'linear',
+      kind: 'track',
+      label: 'ATAC',
+      source: { kind: 'remote', url: 'https://example.org/Yeast_ATAC.bw', name: 'Yeast_ATAC.bw' },
+      status: 'ready',
+      visible: true,
+      placement: emptyPlacement(),
+      style: defaultStyle('track', '#000000'),
+    },
+    {
+      id: 'a1',
+      card: 'linear',
+      kind: 'segments',
+      label: 'peaks',
+      source: { kind: 'remote', url: 'https://example.org/peaks.bed', name: 'peaks.bed' },
+      status: 'ready',
+      visible: true,
+      placement: emptyPlacement(),
+      style: defaultStyle('segments', '#000000'),
+    },
+  ],
   framing: framing(),
   blockLoaded: false,
   blockBytes: 0,
@@ -276,49 +300,54 @@ describe('the button', () => {
   })
 })
 
-describe('a task the command cannot start', () => {
-  it('is offered, disabled, in the command’s own words', () => {
-    const refusal = cliCannotRun(metaplot)
-    expect(refusal, 'metaplot reads a track and should be refused').not.toBeNull()
-    const view = open(metaplot, result('metaplot', {}))
-    expect(view.button.disabled).toBe(true)
-    expect(view.button.title).toBe(refusal)
-    view.destroy()
-  })
-
-  it('copies nothing when it is pressed anyway', async () => {
-    const view = open(metaplot, result('metaplot', {}))
+describe('a task that reads a track', () => {
+  /**
+   * Offered like any other. The bigWig reader lived in the annotations worker
+   * alone and the button was greyed with a sentence saying so; `cli/tracks.ts`
+   * opens the file for the shell now, so the line is copied and it loads the
+   * track under the parameter that names it.
+   */
+  it('is enabled, and copies the track as the flag that loads it', async () => {
+    const view = open(metaplot, result('metaplot', { tracks: ['t1'], features: 'a1' }))
+    expect(view.button.disabled).toBe(false)
     view.button.click()
     await Promise.resolve()
-    expect(copied).toHaveLength(0)
+    expect(copied).toHaveLength(1)
+    const command = commandOf(copied[0])
+    expect(command.startsWith('metacooler-run metaplot yeast.mcool')).toBe(true)
+    expect(command).toContain('--tracks Yeast_ATAC.bw')
+    expect(command).toContain('--features peaks.bed')
     view.destroy()
   })
 })
 
 describe('a run with no contact map behind it', () => {
   /**
-   * The other half of the refusal, and the half the *descriptor* cannot see.
-   *
    * A 1D browser session (§5.8) has the bigWigs and not the map, so a result
-   * there is framed against the assembly over a zero-wide extent. `overlap` is
-   * perfectly runnable in a shell — it reads two feature sets — but the command
-   * opens a contact map as its first argument and there is none here to name.
-   * Left to the descriptor alone, the button cheerfully handed over
-   * `metacooler-run overlap Yeast_ATAC.bw`, which reads well and dies at the
-   * open.
+   * there is framed against the assembly over a zero-wide extent. The command
+   * used to open a contact map as its first argument and there was none here to
+   * name, so the button was greyed. `metacooler-run` runs a track task with no
+   * positional now, and the line says so by having none.
    */
   const overlap = taskById('overlap') as AnalysisTask
 
-  it('is disabled, in the command’s own words', () => {
+  it('is enabled, and copies a line with no file to open', async () => {
     const view = open(overlap, result('overlap', {}, { rows: [0, 0], cols: [0, 0] }))
-    expect(view.button.disabled).toBe(true)
-    expect(view.button.title).toContain('no contact map')
+    expect(view.button.disabled).toBe(false)
+    view.button.click()
+    await Promise.resolve()
+    expect(copied).toHaveLength(1)
+    const command = commandOf(copied[0])
+    expect(command.startsWith('metacooler-run overlap')).toBe(true)
+    expect(command).not.toContain('yeast.mcool')
     view.destroy()
   })
 
-  it('is offered again for the same task over a map', () => {
+  it('names the file again for the same task over a map', async () => {
     const view = open(overlap, result('overlap', {}))
-    expect(view.button.disabled).toBe(false)
+    view.button.click()
+    await Promise.resolve()
+    expect(commandOf(copied[0])).toContain('yeast.mcool')
     view.destroy()
   })
 })

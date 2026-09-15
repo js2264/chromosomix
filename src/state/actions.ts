@@ -105,10 +105,11 @@ export interface LoggedAction {
    * Whether {@link line} is a command a shell would take.
    *
    * `false` for everything that is a record of something the app did rather than
-   * something `metacooler-run` can be asked to do — an open, a track, an export,
-   * and a run of a task the CLI refuses (`cliCannotRun`). Those lines are copied
-   * out as `#` comments, so a day pasted into a file is a script that runs, with
-   * the rest of the afternoon around it as context.
+   * something `metacooler-run` can be asked to do — an open, a track, an export.
+   * Those lines are copied out as `#` comments, so a day pasted into a file is a
+   * script that runs, with the rest of the afternoon around it as context.
+   * Every run is `true`: the CLI takes every task in the catalogue
+   * (`analysis/cliCommand.ts`).
    */
   readonly shell: boolean
   /**
@@ -120,9 +121,9 @@ export interface LoggedAction {
    *
    * They sit **above a command and below anything else**, which is the same rule
    * read twice: a caveat qualifies a line a reader is about to run, so it comes
-   * first; a refusal explains a line that is not a command at all, so it comes
-   * after the thing it is about. Written the other way round, a run the CLI
-   * cannot repeat opened with a paragraph about a command that was never there.
+   * first; a note on a line that is not a command explains the thing it is
+   * about, so it comes after it. Written the other way round, an open with a
+   * note would open with a paragraph about a command that was never there.
    */
   readonly notes: readonly string[]
   /** The provenance block — what the output toggle shows and hides. */

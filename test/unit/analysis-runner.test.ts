@@ -1100,12 +1100,17 @@ describe('the console record of a job', () => {
     runner.run(tracks, {})
     await settle()
     expect(lines()).toHaveLength(1)
-    expect(lines()[0].line).toContain('Yeast_ATAC.bw · loaded tracks, no contact map')
+    // A command, with no map to open as its first argument: `metacooler-run`
+    // runs a track task with no positional, over what the tracks declare — so
+    // the address is nowhere on the line, and the file's name is where the
+    // framing is recorded.
+    expect(lines()[0].shell).toBe(true)
+    expect(lines()[0].line.startsWith('metacooler-run trackcorr')).toBe(true)
     expect(lines()[0].line).not.toContain('amazonaws.com')
-    // No command, because the reader for a bigWig is not in that shell — said in
-    // the refusal's own words under the line rather than left out.
-    expect(lines()[0].shell).toBe(false)
-    expect(lines()[0].notes.join(' ')).toContain('annotations worker')
+    expect(lines()[0].line).not.toContain('Yeast_ATAC.bw')
+    expect(lines()[0].detail.join('\n')).toContain(
+      '# framing: Yeast_ATAC.bw · loaded tracks, no contact map',
+    )
     runner.destroy()
   })
 
