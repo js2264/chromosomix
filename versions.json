@@ -207,13 +207,6 @@
   ],
   "pulls": [
     {
-      "number": 60,
-      "commit": "c6bf929",
-      "title": "Add barChart and bigBarChart support (§8.17)",
-      "branch": "js/keen-hypatia-ljjzqr",
-      "date": "2026-09-15T21:44:47Z"
-    },
-    {
       "number": 58,
       "commit": "d6272df",
       "title": "Add folder mounting to landing page with new connect doors",
