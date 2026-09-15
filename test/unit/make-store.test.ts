@@ -1083,6 +1083,181 @@ describe.skipIf(!havePython)('the DNA Zoo front end', () => {
   })
 })
 
+/**
+ * The DNA Zoo front end against a bucket that answers over HTTP, rather than
+ * against recorded files — the one path the fixtures above cannot reach, and
+ * the one the weekly run actually takes.
+ *
+ * **The failure this exists for happened.** `--readme optional` promises that a
+ * species whose `README.json` is missing keeps its files and loses two columns,
+ * and against `--from-readme` it did exactly that: a file not in the directory
+ * is `None` and the species is skipped. The *network* path went through
+ * `fetch_json`, whose 404 rule belongs to a portal search — a 404 is "zero
+ * results" only when the body is JSON, which is 4DN's shape — and a bucket
+ * refuses a key that is not there with a 404 and an **XML** body. So the first
+ * directory with no README ended the run: `Preliminary/` on 2026-09-15, which
+ * is not a species at all. Nothing was published and readers kept last week's
+ * store. Recorded fixtures could not have caught it, because the two paths did
+ * not meet; a bucket that says 404 out loud is the only thing that does.
+ */
+describe.skipIf(!havePython)('the DNA Zoo front end, over HTTP', () => {
+  const running: ChildProcess[] = []
+
+  /** A bucket: the two recorded pages, and READMEs that may or may not be there. */
+  const BUCKET = `
+import { createServer } from 'node:http'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+
+const [, , mode, pages, readmes, port] = process.argv
+const listing = [readFileSync(pages + '/page-1.xml'), readFileSync(pages + '/page-2.xml')]
+
+// S3 refuses a key that is not there with an **XML** body, and that is the
+// whole point of this server: a JSON-bodied 404 is the one kind the portal
+// fetcher already forgave, so a fixture answering JSON would pass either way.
+const missing = Buffer.from(
+  '<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code>' +
+    '<Message>The specified key does not exist.</Message></Error>',
+)
+
+const send = (res, code, type, body) => {
+  res.writeHead(code, { 'Content-Type': type, 'Content-Length': String(body.length) })
+  res.end(body)
+}
+
+const server = createServer((req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1')
+  if (url.searchParams.get('list-type') === '2') {
+    send(res, 200, 'application/xml', listing[url.searchParams.has('continuation-token') ? 1 : 0])
+    return
+  }
+  // '<species>/README.json' — the directory is the segment before the file.
+  const species = url.pathname.split('/').at(-2)
+  const recorded = readmes + '/' + species + '.json'
+  if (mode === 'recorded' && existsSync(recorded)) {
+    send(res, 200, 'application/json', readFileSync(recorded))
+    return
+  }
+  send(res, 404, 'application/xml', missing)
+})
+
+server.listen(0, '127.0.0.1', () => {
+  writeFileSync(port, String(server.address().port))
+})
+`
+
+  /**
+   * A bucket at `http://127.0.0.1:<port>/dnazoo/`, path-style — `bucket_address`
+   * reads the first segment as the bucket name on any host that is not
+   * `<bucket>.s3.…`, so a bare host would be refused before a request is made.
+   */
+  async function bucket(mode: string): Promise<string> {
+    const script = join(out, 'bucket.mjs')
+    if (!existsSync(script)) writeFileSync(script, BUCKET, 'utf8')
+    const port = join(out, `dnazoo-port-${mode}.txt`)
+    writeFileSync(port, '', 'utf8')
+    const child = spawn(
+      'node',
+      [
+        script,
+        mode,
+        join(FIXTURES, 'dnazoo-bucket'),
+        join(FIXTURES, 'dnazoo-readme'),
+        port,
+      ],
+      { stdio: 'ignore' },
+    )
+    running.push(child)
+    // Polled through a file, not a pipe: `make()` is `spawnSync` and blocks
+    // this event loop for the whole of the run that follows.
+    for (let tries = 0; tries < 200; tries++) {
+      if (existsSync(port) && readFileSync(port, 'utf8') !== '') break
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    const number = readFileSync(port, 'utf8')
+    expect(number, `the ${mode} bucket did not start`).not.toBe('')
+    return `http://127.0.0.1:${number}/dnazoo/`
+  }
+
+  const fieldsIn = (store: RawHub, label: string): Record<string, string> =>
+    ((store.entries ?? []).find((entry) => entry.label === label)?.fields ?? {}) as Record<
+      string,
+      string
+    >
+
+  const labelsIn = (store: RawHub): string[] =>
+    (store.entries ?? []).map((entry) => String(entry.label))
+
+  afterAll(() => {
+    for (const child of running) child.kill()
+  })
+
+  it('publishes every row when no species has a README at all', async () => {
+    const base = await bucket('none')
+    const run = make('dnazoo', '--out', join(out, 'dnazoo-404.json'), '--prefix', base, '--check')
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    // The assertion the failed run of 2026-09-15 would have made red: a 404 on
+    // a README is an absent document, not an outage, and `optional` means it.
+    expect(run.status, run.stderr).toBe(0)
+
+    const store = read('dnazoo-404.json')
+    // Every file that has a door is still a row — the size and sequence rules
+    // are the only things that removed any.
+    expect(labelsIn(store)).toContain('Aonyx_cinereus_HiC.hic')
+    expect(labelsIn(store)).toContain('wild_pepper_final_14chr_HiC.hic')
+    expect(labelsIn(store)).toContain('APUR_genome_v1.0.fasta.gz')
+    // What is lost is the two columns the README fills, and only those. The
+    // species is still there, because it is the directory and not a fact read
+    // out of a file.
+    expect(fieldsIn(store, 'Aonyx_cinereus_HiC.hic').species).toBe('Aonyx cinereus')
+    expect(fieldsIn(store, 'Aonyx_cinereus_HiC.hic').common ?? '').toBe('')
+    // Said out loud, once: a bucket that answered for its objects and for none
+    // of its READMEs has more likely been rearranged than lost every one.
+    expect(run.stderr).toMatch(/No README\.json was readable for any of the/)
+  }, 60_000)
+
+  it('fills the columns for the species that have one and keeps the rest', async () => {
+    const base = await bucket('recorded')
+    const run = make('dnazoo', '--out', join(out, 'dnazoo-live.json'), '--prefix', base, '--check')
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    expect(run.status, run.stderr).toBe(0)
+
+    const store = read('dnazoo-live.json')
+    // Three of the four directories have a README here, as on the bucket.
+    expect(fieldsIn(store, 'Aonyx_cinereus_HiC.hic')).toMatchObject({
+      species: 'Aonyx cinereus',
+      common: 'Asian small-clawed otter',
+      assembly: 'chromosome-length',
+    })
+    // The fourth is 404ed, and keeps every file it has.
+    expect(labelsIn(store)).toContain('wild_pepper_final_14chr_HiC.hic')
+    expect(fieldsIn(store, 'wild_pepper_final_14chr_HiC.hic').species).toBe('Capsicum rhomboideum')
+    expect(fieldsIn(store, 'wild_pepper_final_14chr_HiC.hic').common ?? '').toBe('')
+    // Not the "nothing at all" case, so not the warning.
+    expect(run.stderr).not.toMatch(/No README\.json was readable for any of the/)
+  }, 60_000)
+
+  it('still fails, with a sentence, when --readme require is asked for', async () => {
+    // The flag that *does* mean "a missing README ends the run" has to go on
+    // meaning it — the fix above is about which of the two is the default, not
+    // about removing the strict one.
+    const base = await bucket('none')
+    const target = join(out, 'dnazoo-require.json')
+    const run = make(
+      'dnazoo',
+      '--out',
+      target,
+      '--prefix',
+      base,
+      '--readme',
+      'require',
+    )
+    expect(run.status).toBe(2)
+    expect(run.stderr).not.toMatch(/Traceback/)
+    expect(run.stderr).toMatch(/--readme require/)
+    expect(existsSync(target)).toBe(false)
+  }, 60_000)
+})
+
 describe.skipIf(!havePython)('the bucket front end', () => {
   let store: RawHub
 

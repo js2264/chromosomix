@@ -741,6 +741,39 @@ def fetch_json(url: str) -> dict:
     return parsed
 
 
+def fetch_optional_json(url: str) -> Optional[dict]:
+    """A document that may simply not be there: the object, or ``None``.
+
+    Not {@link fetch_json}, and the difference is the whole of one failed run.
+    That function's rules are a portal *search's*: a 404 is zero results only
+    when the body is JSON, which is 4DN's way of saying a facet matched nothing,
+    and every other status raises and ends the run before anything is published.
+    A bucket refuses a key that is not there with a 404 and an **XML** body,
+    which lands in that function's "the endpoint has moved" case — so
+    ``--readme optional``, whose whole promise is that a species without a
+    README keeps its files, could never keep one. The first directory on DNA
+    Zoo's bucket with no ``README.json`` failed the weekly run: ``Preliminary/``
+    on 2026-09-15, which is not a species at all.
+
+    **Absence is not an outage, and the two are still told apart.** A host that
+    cannot be reached, or that agrees to answer and then stops part-way three
+    times over, is a ``SystemExit`` from {@link _request} or {@link _read} and
+    stays fatal — a store is only replaced by a run that succeeded. ``None`` is
+    for a host that answered: there is no such object, or what came back is not
+    a JSON object. Both are facts about one document rather than about the run.
+    """
+    try:
+        raw = _read(url, "application/json")
+    except _HttpFailure as failure:
+        log.debug("%s answered HTTP %s %s.", url, failure.code, failure.reason)
+        return None
+    parsed = _json_or_none(raw)
+    if not isinstance(parsed, dict):
+        log.debug("%s answered something that is not a JSON object.", url)
+        return None
+    return parsed
+
+
 def fetch_graph(query: str, page: int) -> list:
     """Every record a portal search matches, a page at a time — or in one answer.
 
@@ -3370,18 +3403,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         species = sorted({species_of(item["key"]) for item in objects} - {""})
         cache: dict[str, dict] = {}
         for name in species if args.readme != "skip" else []:
-            raw: Any = None
+            raw: Optional[dict] = None
             if args.from_readme is not None:
                 recorded_path = Path(args.from_readme) / f"{name}.json"
                 if recorded_path.exists():
-                    raw = json.loads(recorded_path.read_text())
+                    # Read the way the network path reads: a recorded file that
+                    # is not a JSON object is the same "unreadable" this flag
+                    # promises to survive, and must not be a traceback. Named
+                    # `from_file` and not `recorded`, which is the function that
+                    # read the listing pages above: binding that name anywhere
+                    # in `main` would make it local to the whole of it.
+                    from_file = _json_or_none(recorded_path.read_bytes())
+                    raw = from_file if isinstance(from_file, dict) else None
             else:
-                try:
-                    raw = fetch_json(f"{prefix.rstrip('/')}/{urllib.parse.quote(name)}/README.json")
-                except SystemExit:
-                    raise
-                except Exception as err:  # noqa: BLE001 — every failure is the same answer here
-                    log.debug("No README for %s: %s", name, err)
+                raw = fetch_optional_json(
+                    f"{prefix.rstrip('/')}/{urllib.parse.quote(name)}/README.json"
+                )
             if raw is None:
                 if args.readme == "require":
                     log.error(
@@ -3391,6 +3428,19 @@ def main(argv: Optional[list[str]] = None) -> int:
                 continue
             cache[name] = readme_facts(name, raw)
         log.info("Read %d README.json of %d species.", len(cache), len(species))
+        # Not a failure — every row is still there, and the run publishes. But a
+        # bucket that answered for its objects and for *none* of its READMEs has
+        # more likely been laid out differently than lost every one of them at
+        # once, and the difference between the two is two empty columns that
+        # nothing else would say a word about.
+        if species and args.readme == "optional" and not cache:
+            log.warning(
+                "No README.json was readable for any of the %d directories under %s. "
+                "Every file is still published; the Common name and Assembly columns will be "
+                "empty. If the bucket has been rearranged, this is where it shows.",
+                len(species),
+                prefix,
+            )
         entries = entries_dnazoo(
             objects,
             lambda name: cache.get(name, {"binomial": name.replace("_", " ")}),
