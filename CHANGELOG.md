@@ -12,6 +12,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Fixed
+
+- **A species with no `README.json` no longer fails the whole Stores run.** `--readme optional` is
+  the default precisely because those files are hand-maintained across hundreds of species, and it
+  promises that a species without one keeps every file it has and loses two columns. Against
+  recorded fixtures it did exactly that; against the bucket it could not, and the first weekly run
+  of the DNA Zoo store died on `Preliminary/` — a top-level directory that is not a species and
+  never had a README. Nothing was published that week, so the shelves readers saw stayed as they
+  were.
+
+  The cause is one fetcher doing two jobs. A portal search is read by a function that treats `404`
+  as *zero results* only when the body is JSON — 4DN's way of saying a facet matched nothing — and
+  turns every other status into the end of the run. A bucket refuses a key that is not there with a
+  `404` and an **XML** body, which landed in that function's "the endpoint has moved" case. Reading
+  a document that may simply be absent is now its own function, and it answers *no document* to any
+  status and to a body that is not a JSON object. Absence and outage are still told apart: a host
+  that cannot be reached, or that stops talking part-way through three times over, still ends the
+  run, because a store is only ever replaced by a run that succeeded. `--readme require` still fails
+  on the first missing one, which is what it is for.
+
+  A run where *no* directory yielded a README now says so in a line of its own. Every row is still
+  published and the run still succeeds — but a bucket that answered for its objects and for none of
+  its READMEs has more likely been rearranged than lost every one at once, and two silently empty
+  columns are not a thing to find out about from the shelf.
+
 ### Added
 
 - **A whole chart inside one feature: barChart and bigBarChart (§8.17).** UCSC's format puts a
