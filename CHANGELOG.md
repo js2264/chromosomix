@@ -134,13 +134,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   empty column beside a row of buttons saying the same thing. The doors that remain are the landing
   page, which is what a new tab is, and *Open a local/remote folder* in the command palette.
 
-- **The drop area is one of three ways in rather than the page itself.** It was a target deep enough
-  to be the whole screen with the *choose files* button and the URL box stacked underneath, which
-  said the reader's next move was to drag something — wrong for the reader who has a URL, wrong for
-  the one on a laptop with no second window to drag out of, and wrong now that there are two more
-  things to fit above the fold. The three stand side by side: the area on the left, the button and
-  the box beside it, and the sentence about what opens as what under the row rather than set inside
-  a target that is no longer sized by its words. The buttons are the marked, filled ones the Connect
+- **The drop area is shallower, and the *choose files* button beside it is gone.** That button
+  opened the same file dialog a click on the target opens, so the two were one action drawn twice,
+  and a reader deciding between them was being given a choice that does not exist. What is left is
+  one target that says both things it does — drop, or click — with the sentence about what opens as
+  what inside it, and the URL box under it behind a rule reading *or a URL*, which is the way in
+  that is genuinely different. It used to be deep enough to be the whole screen, which said the
+  reader's next move was to drag something: wrong for the reader who has a URL, wrong for the one
+  on a laptop with no second window to drag out of, and wrong now that there are two more sections
+  under it to be seen. The landing page's other buttons are the marked, filled ones the Connect
   dialog's panes are pressed by, so one gesture looks the same wherever it is met.
 
 - **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores

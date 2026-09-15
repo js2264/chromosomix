@@ -5837,11 +5837,15 @@ column before a viewer knows it.
 
 ### 24.2 Where stores are offered: the tiles, the drawer, and the four fronts
 
-**The landing page has three things on it, and they are named.** *Load files* is a drop area with
-the *choose files* button and the URL box **beside** it rather than under it (`ui/LoadBox.ts`),
-which the file crumb's *Open a file* reuses in a dialog with the other verb behind it; the three
-ways in are peers on one row, and the sentence about what opens as what sits under the row rather
-than inside the target. *Mount a local or remote folder* is a row of four buttons, side by side and
+**The landing page has three things on it, and they are named.** *Load files* is one drop area with
+the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which the file crumb's
+*Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
+a click on the target opens the same file dialog, and the same action drawn twice is a choice a
+reader has to make between two controls that do one thing. The target says both things it does —
+drop, or click — and carries inside it the sentence about what opens as what, which is the one
+place a reader holding a bigWig and no contact map is told this application is for them too. It is
+shallower than it was: a box deep enough to be the page said that dragging was the way in, and
+there are two sections under it that have to be seen. *Mount a local or remote folder* is a row of four buttons, side by side and
 of equal height, wrapping a long label to a second line rather than breaking the row — *choose a
 folder…*, which opens the directory picker itself, and *connect a bucket…*, *sign in to Google…*
 and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a row of tiles — the lab's

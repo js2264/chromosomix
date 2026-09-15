@@ -4894,21 +4894,24 @@ canvas.is-frozen {
   background: var(--bg-raised);
 }
 
-/* One of three peers on the row rather than the page itself, so it is sized by
-   what it is — a target big enough to drop on with a hand that is already
-   moving — and not by how much of the screen dragging deserves. `min-height`
-   rather than deep padding: it has to match the column of controls beside it
-   however tall that column happens to be, and padding cannot. */
+/* The one target, and the only control this half of the page has besides the
+   URL box under it: a click on it opens the same file dialog a *choose files*
+   button would, so there is no such button — the same action drawn twice is a
+   choice a reader has to make between two things that do one thing.
+
+   Sized by what it is, a target to let go over, rather than by how much of the
+   screen dragging deserves: the deep box it used to be made the page read as
+   though dragging were the only way in, and there are now two sections under
+   it that also have to be seen (§24.2). */
 .dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
-  min-height: 9.5rem;
   border: 2px dashed var(--border-strong);
   border-radius: 10px;
-  padding: 1.4rem 1rem;
+  padding: 1.5rem 1rem;
   text-align: center;
   cursor: pointer;
   background: var(--bg-sunken);
@@ -4946,6 +4949,17 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
+/* What opens as what, inside the target because that is where the reader is
+   looking. Measured in characters rather than left to the box's width: this is
+   prose, and prose set the width of a landing page is prose nobody finishes. */
+.dropzone-note {
+  max-width: 68ch;
+  margin-top: 0.5rem;
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.45;
+}
+
 .hidden-input {
   display: none;
 }
@@ -4976,36 +4990,6 @@ canvas.is-frozen {
   gap: 0.6rem;
 }
 
-/* The three ways in, side by side: drop, choose, or name a URL. The drop area
-   takes two fifths and the controls the rest — enough for a URL to be read at
-   a glance, which is what it is for — and `wrap` puts them back in a column on
-   a phone, where side by side would be two things too narrow to use. */
-.load-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.75rem;
-}
-
-.load-main > .dropzone {
-  flex: 2 1 15rem;
-}
-
-.load-ways {
-  flex: 3 1 20rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-/* Stretched, because a button that stands alone above a full-width box reads
-   as the smaller of the two gestures and it is not. */
-.load-ways > .btn-mark {
-  align-self: stretch;
-}
-
 .load-row {
   display: flex;
   flex-wrap: wrap;
@@ -5015,13 +4999,13 @@ canvas.is-frozen {
 }
 
 .load-row .input-url {
-  flex: 1 1 12rem;
+  flex: 1 1 16rem;
   min-width: 0;
 }
 
-/* "or a URL" between the button and the box, as a rule across the column: the
+/* "or a URL" between the drop area and the box, as a rule across the page: the
    two are alternatives rather than steps, and a bare line of grey text reads
-   as a caption for whichever it is nearer. */
+   as a caption for whichever of them it is nearer. */
 .load-or {
   display: flex;
   align-items: center;
@@ -5038,16 +5022,12 @@ canvas.is-frozen {
   border-top: 1px solid var(--border);
 }
 
-/* Under the row rather than inside the drop area: what opens as what is read
-   once, and a target is not a place to put a paragraph. */
-.load-note,
 .load-standalone {
   margin: 0;
   max-width: 80ch;
 }
 
 .dropzone-compact {
-  min-height: 7rem;
   padding: 1rem;
 }
 

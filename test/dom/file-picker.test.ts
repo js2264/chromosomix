@@ -91,36 +91,39 @@ describe('the landing page', () => {
     ])
     expect(all(el, '.dropzone')).toHaveLength(1)
     expect(all(el, '.input-url')).toHaveLength(1)
-    expect(buttonNamed(el, 'choose files…')).not.toBeNull()
     expect(buttonNamed(el, 'open')).not.toBeNull()
+    // No *choose files* button: clicking the drop area opens the same dialog,
+    // and the same action drawn twice is a choice that does not exist.
+    expect(buttonNamed(el, 'choose files…')).toBeNull()
     // The catalogue that used to stand beside the box is gone: it was a store.
     expect(buttonNamed(el, 'browse…')).toBeNull()
     expect(buttonNamed(el, 'private buckets…')).toBeNull()
   })
 
-  it('puts the ways in beside the drop area rather than under it', () => {
-    // Three peers on one row: drop, choose, or name a URL. Stacked, the page
-    // said the reader's next move was to drag something, which is wrong for
-    // the reader who has a URL and for the one with no window to drag out of.
+  it('is one target with the URL box under it, and says inside what opens as what', () => {
     const { el } = build()
-    const row = el.querySelector('.load-main') as HTMLElement
-    expect(row).not.toBeNull()
-    expect(row.querySelector('.dropzone')).not.toBeNull()
-    const ways = row.querySelector('.load-ways') as HTMLElement
-    expect(buttonNamed(ways, 'choose files…')).not.toBeNull()
-    expect(ways.querySelector('.input-url')).not.toBeNull()
-    // The paragraph about what opens as what is under the row, not inside the
-    // target: it is read once, and a drop area is not a place for prose.
-    const drop = row.querySelector('.dropzone') as HTMLElement
-    expect(drop.textContent).toBe('Drop files hereor click to choose')
-    expect((el.querySelector('.load-note')?.textContent ?? '')).toMatch(/opens as a browser over its genome/)
+    const drop = el.querySelector('.dropzone') as HTMLElement
+    expect(drop).not.toBeNull()
+    // Both things the target does are written on it, because it is the only
+    // control here: a click opens the file dialog a *choose files* button used
+    // to, and that button is gone rather than duplicating it.
+    expect(textsOf(drop, '.dropzone-title')).toEqual(['Drop files here'])
+    expect(textsOf(drop, '.dropzone-sub')).toEqual(['or click to choose'])
+    // The sentence a reader holding a bigWig and no contact map needs, inside
+    // the target they are looking at while they decide.
+    expect(textsOf(drop, '.dropzone-note')[0]).toMatch(/opens as a browser over its genome/)
+    // The URL box is the other way in, under the rule that says so.
+    const box = el.querySelector('.load-box') as HTMLElement
+    const parts = [...box.children].map((node) => node.className)
+    expect(parts).toEqual(['dropzone', 'load-or', 'load-row'])
+    expect(textsOf(box, '.load-or')).toEqual(['or a URL'])
   })
 
   it('carries the marked button the Connect dialog’s panes are pressed by', () => {
     // "The buttons should be styled the same way the ones in the modal": one
     // shape for one gesture, wherever a reader meets it (`ui/icons.ts`).
     const { el } = build()
-    expect(buttonNamed(el, 'choose files…')?.className).toContain('btn-mark')
+    expect(all(el, '.picker-provider')).toHaveLength(4)
     expect(all(el, '.picker-provider').every((node) => node.classList.contains('btn-mark'))).toBe(true)
   })
 
@@ -272,10 +275,11 @@ describe('the load box on its own', () => {
     expect(box.el.querySelector('.dropzone-compact')).not.toBeNull()
     expect(all(box.el, '.input-url')).toHaveLength(1)
     expect(all(box.el, '.store-tile')).toHaveLength(0)
-    // The dialogs get the row too, and the sentence about what opens as what:
-    // it is the box's, so every door a file is asked for carries it.
-    expect(box.el.querySelector('.load-main > .load-ways')).not.toBeNull()
-    expect(box.el.querySelector('.load-note')).not.toBeNull()
+    // The dialogs get the same two ways in, and the same sentence about what
+    // opens as what: it is the box's, so every door a file is asked for
+    // carries it.
+    expect(box.el.querySelector('.dropzone > .dropzone-note')).not.toBeNull()
+    expect(textsOf(box.el, '.load-or')).toEqual(['or a URL'])
     // No places and no stores here: this box is the *load* half alone.
     expect(all(box.el, '.picker-provider')).toHaveLength(0)
   })
