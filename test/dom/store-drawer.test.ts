@@ -112,6 +112,7 @@ describe('opening', () => {
       'IGV genomes',
       '4DN open data',
       'ENCODE',
+      'DNA Zoo',
       'Your own store',
     ])
     expect(drawer.el.querySelector('.store-tile.is-on .store-tile-name')?.textContent).toBe('4DN open data')

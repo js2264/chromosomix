@@ -133,6 +133,7 @@ const COLOURS = {
   igv: '#2f6fb5',
   fourdn: '#1f8a70',
   encode: '#5a4fa2',
+  dnazoo: '#a8326a',
   custom: '#5b6169',
 } as const
 
@@ -263,6 +264,32 @@ export function builtinStores(): StoreFront[] {
       group: 'dataset',
       headline: ['biosample', 'assay', 'target'],
       axes: ['assay', 'biosample'],
+    },
+    {
+      id: 'dnazoo',
+      label: 'DNA Zoo',
+      blurb: 'Chromosome-length genome assemblies and the Hi-C maps behind them, a directory a species.',
+      kind: 'portal',
+      // `DNA` behind the logo, not `DNAZOO`: the ladder in `ui/stores/marks.ts`
+      // is tuned so that six letters just fill the square, and it was tuned
+      // against *ENCODE* — measured in a browser, `DNAZOO` wants 74 pixels of
+      // the 72 there are, its letters being the wide ones. There is no
+      // conventional short form of this name to reach for instead, so the
+      // fallback is the first of its two words, which is what `initialsOf`
+      // does with a one-word label.
+      mark: { text: 'DNA', colour: COLOURS.dnazoo, image: STORE_LOGOS.dnazoo },
+      builtin: true,
+      rows: { id: 'dnazoo', label: 'DNA Zoo', url: `${base}dnazoo.json`, builtin: true },
+      // A species, which is what a directory on that bucket is — and the
+      // heading carries the common name beside it, because *Asian
+      // small-clawed otter* is how anybody but its authors looks for
+      // `Aonyx_cinereus`.
+      group: 'species',
+      headline: ['common'],
+      // Both of these are short lists where the species column is hundreds
+      // long: which of a species' two assemblies a file belongs to, against
+      // what kind of file it is.
+      axes: ['assembly', 'format'],
     },
   ]
 }

@@ -1,7 +1,9 @@
 name: Stores
 
 # The catalogues the picker's Stores section offers (SPECS §24.3).
-# `scripts/make_store.py` asks IGV, 4DN and ENCODE for everything they publish
+# `scripts/make_store.py` asks IGV, 4DN and ENCODE for everything they publish,
+# and walks DNA Zoo's open bucket, one directory a species, for the maps and
+# assemblies on it this viewer can open;
 # that this viewer can open, joins each file to the genome, cell line, assay and
 # lab that name it, and writes static JSON. This workflow runs that once a week
 # and publishes the result.
@@ -61,6 +63,7 @@ name: Stores
 # What lands on the `stores` branch:
 #   igv.json                   IGV's genomes and their tracks
 #   4dn.json                   every openable file on the 4DN open-data bucket
+#   dnazoo.json                DNA Zoo's assemblies and maps, a directory a species
 #   encode-<assembly>-<kind>.json   twelve ENCODE shards
 #   <front>-sessions.json      the three session shelves
 #   sessions/*.metacooler.json the sessions those shelves name
@@ -133,6 +136,18 @@ jobs:
               || failed="$failed $front"
             echo "::endgroup::"
           done
+          # DNA Zoo is a bucket rather than a portal, so it is not in the loop:
+          # it publishes no sessions, and its metadata is a README.json in each
+          # species' own directory rather than a query. Nothing else about it is
+          # special — it fails the run the same way, for the same reason the
+          # loop does.
+          echo "::group::dnazoo"
+          python3 scripts/make_store.py dnazoo \
+            --out out/dnazoo.json \
+            --check \
+            || failed="$failed dnazoo"
+          echo "::endgroup::"
+
           # Named, and outside the collapsed groups, because the groups are
           # thousands of lines of `--check` saying "valid" and the one thing
           # worth reading is which front end did not finish. A run that lost

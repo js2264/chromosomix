@@ -41,6 +41,7 @@ const WIRING = [
   ['igv', 'igv'],
   ['fourdn', '4dn'],
   ['encode', 'encode'],
+  ['dnazoo', 'dnazoo'],
 ] as const
 
 describe('the store logos', () => {
@@ -59,19 +60,34 @@ describe('the store logos', () => {
 
   it('leaves every shipped store a mark of its own', () => {
     const shipped = builtinStores()
-    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode'])
+    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', 'dnazoo'])
     const images = shipped.map((front) => front.mark.image)
-    // All four present, and four different pictures — a copy-paste that gave
+    // All five present, and five different pictures — a copy-paste that gave
     // two stores the same logo would otherwise look plausible on the page.
     expect(images.every((image) => image !== undefined)).toBe(true)
-    expect(new Set(images).size).toBe(4)
+    expect(new Set(images).size).toBe(5)
     expect(images[0]).toBe(RSG_MARK_IMAGE)
+  })
+
+  /**
+   * The letters behind DNA Zoo's logo, which are what a failed load leaves.
+   * `DNAZOO` was tried first and overflows: the ladder in `marks.ts` is tuned
+   * so six letters just fill the square, against *ENCODE*, whose letters are
+   * the narrow ones.
+   */
+  it('falls back to the first word of DNA Zoo’s name', () => {
+    const dnazoo = builtinStores().find((front) => front.id === 'dnazoo')!
+    expect(dnazoo.mark.text).toBe('DNA')
+    // Short enough that the square never needs a shorter form of it.
+    expect(dnazoo.mark.short).toBeUndefined()
   })
 
   it('reaches the tile as an image over the letters', () => {
     for (const front of builtinStores()) {
       for (const size of [72, 26]) {
         const node = storeMark(front.mark, size)
+        // `undefined` on both sides for DNA Zoo: no image element, and no
+        // image to put in one.
         expect(node.querySelector('img')?.getAttribute('src')).toBe(front.mark.image)
       }
     }

@@ -6,10 +6,14 @@
  *
  * ## What it reads, and why that is not in the repository
  *
- * `IGV.png`, `4DN.png` and `ENCODE.png`, at the root, supplied by hand. They
- * are inputs rather than sources: the file this writes is the artefact of
- * record, and the three are removed once it is written, so a re-run means
- * putting them back. That is deliberate — the marks below are published
+ * The files `LOGOS` names, at the root, supplied by hand. They are inputs
+ * rather than sources: the file this writes is the artefact of record, and
+ * they are removed once it is written, so a re-run means putting them back.
+ *
+ * PNG, and only PNG — `decode` below is not a general image reader and says so
+ * rather than guessing. DNA Zoo's was supplied as a JPEG, and a logo that
+ * arrives in another format is converted once before it is put here; this
+ * script is not the place for a second decoder. That is deliberate — the marks below are published
  * artwork belonging to the projects they name, carried here because this
  * viewer was given them to carry, and the repository holds one copy of each
  * (the fitted mark) rather than two. If a logo changes, replace the file,
@@ -31,6 +35,8 @@
  *   is composited on white, which is the ground the logo is drawn for.
  * - **IGV** is square and opaque, a finished app icon, and comes through at
  *   full bleed with nothing added.
+ * - **DNA Zoo** is ENCODE's case again and wider still, a helix nearly twice
+ *   as wide as it is tall, so it is letterboxed on the same white.
  *
  * White for the other two because these are logos drawn for paper, and because
  * baking it in means the tiles look the same in both themes rather than one of
@@ -67,6 +73,7 @@ const LOGOS = [
   { file: 'IGV.png', key: 'igv', store: 'IGV genomes' },
   { file: '4DN.png', key: 'fourdn', store: '4DN' },
   { file: 'ENCODE.png', key: 'encode', store: 'ENCODE' },
+  { file: 'DnaZoo.png', key: 'dnazoo', store: 'DNA Zoo' },
 ]
 
 // --- reading a PNG ---------------------------------------------------------

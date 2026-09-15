@@ -70,17 +70,18 @@ describe('the landing page', () => {
     expect(buttonNamed(el, 'private buckets…')).toBeNull()
   })
 
-  it('offers the four shipped stores as tiles, then the one that adds a store', () => {
+  it('offers the five shipped stores as tiles, then the one that adds a store', () => {
     const { el } = build()
     expect(textsOf(el, '.store-tile .store-tile-name')).toEqual([
       'RSG lab data',
       'IGV genomes',
       '4DN open data',
       'ENCODE',
+      'DNA Zoo',
       'Your own store',
     ])
     // Every tile is a mark and a line, not a request.
-    expect(all(el, '.store-tile .store-mark')).toHaveLength(5)
+    expect(all(el, '.store-tile .store-mark')).toHaveLength(6)
   })
 
   it('fetches nothing when it is built or when the tiles are drawn', () => {
@@ -93,8 +94,10 @@ describe('the landing page', () => {
   it('hands a pressed tile up by id, which is the gesture that opens the drawer', () => {
     const built = build()
     const tiles = all<HTMLButtonElement>(built.el, '.store-tile')
+    // A shipped one in the middle, and the last tile — which is the one that
+    // adds a store, and stays last however many are shipped in front of it.
     tiles[2].click()
-    tiles[4].click()
+    tiles[tiles.length - 1].click()
     expect(built.stores).toEqual(['4dn', 'custom'])
   })
 

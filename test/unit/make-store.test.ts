@@ -970,6 +970,119 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
   })
 })
 
+describe.skipIf(!havePython)('the DNA Zoo front end', () => {
+  let store: RawHub
+
+  beforeAll(() => {
+    store = built(
+      'dnazoo',
+      'dnazoo.json',
+      '--from-xml',
+      join(FIXTURES, 'dnazoo-bucket'),
+      '--from-readme',
+      join(FIXTURES, 'dnazoo-readme'),
+      '--check',
+    )
+  })
+
+  const fieldsOf = (label: string): Record<string, string> =>
+    Object.fromEntries(
+      (store.entries ?? []).map((entry) => [entry.label, entry.fields ?? {}]),
+    )[label] as Record<string, string>
+
+  const labels = (): string[] => (store.entries ?? []).map((entry) => String(entry.label))
+
+  /**
+   * The bucket is one directory a species and flat inside it, and most of what
+   * is in a directory is not a file this viewer opens: `.assembly`,
+   * `_asm.scaffold_track.txt`, `.maf.gz` and `README.json` have no door, and
+   * are gone before any of the rules below are reached.
+   */
+  it('keeps the files with a door and drops the rest', () => {
+    expect(labels()).not.toContain('Aonyx_cinereus.assembly')
+    expect(labels()).not.toContain('Aonyx_cinereus_asm.scaffold_track.txt')
+    expect(labels()).not.toContain('Aonyx_cinereus_HiC_hg38.maf.gz')
+    expect(labels()).not.toContain('README.json')
+  })
+
+  /**
+   * The size rule, and it is about indexes rather than taste. A `.hic` carries
+   * its own, so a corner of a 3.6 GB map is the bytes it needs; nothing else on
+   * this bucket has one — the FASTAs are plain gzip with no `.fai` and the GFFs
+   * no `.tbi` — so opening one is a download of the whole file.
+   */
+  it('keeps a huge .hic and drops a huge anything else', () => {
+    // 3.6 GB, and read by ranges.
+    expect(labels()).toContain('Aonyx_cinereus.hic')
+    // 695 MB and 589 MB, and read whole or not at all.
+    expect(labels()).not.toContain('Aonyx_cinereus_HiC.fasta.gz')
+    expect(labels()).not.toContain('Aonyx_cinereus_HiC.fasta_v2.functional.gff3.gz')
+    // An insect genome at 88 MB is on the other side of the line.
+    expect(labels()).toContain('APUR_genome_v1.0.fasta.gz')
+  })
+
+  /**
+   * Protein and transcript sequence routes as `genome` on its suffix alone,
+   * and would open behind the 1D browser's genome door as something that is
+   * not a genome. Small enough to pass the size rule, so this is the only
+   * thing standing between them and a row.
+   */
+  it('drops protein and transcript FASTA, which are not the genome', () => {
+    expect(labels()).not.toContain('APUR_OGS_v2.1.0_pep.fasta.gz')
+    expect(labels()).not.toContain('APUR_OGS_v2.1.0_trans.fasta.gz')
+    expect(labels()).not.toContain('Aonyx_cinereus_HiC.fasta_v2.functional.proteins.fasta.gz')
+    expect(labels()).not.toContain('Aonyx_cinereus_HiC.fasta_v2.functional.transcripts.fasta.gz')
+  })
+
+  it('takes the species and its common name from the README', () => {
+    expect(fieldsOf('Aonyx_cinereus_HiC.hic')).toMatchObject({
+      species: 'Aonyx cinereus',
+      common: 'Asian small-clawed otter',
+    })
+  })
+
+  /**
+   * Which of a species' two assemblies a file belongs to is a fact the README
+   * publishes, and the reason not to read it off the name: the
+   * chromosome-length map is `Aonyx_cinereus_HiC.hic` under one species and
+   * `wild_pepper_final_14chr_HiC.hic` under another.
+   */
+  it('names the assembly from the README, and matches it whole', () => {
+    expect(fieldsOf('Aonyx_cinereus_HiC.hic').assembly).toBe('chromosome-length')
+    expect(fieldsOf('Aonyx_cinereus.hic').assembly).toBe('draft')
+    // The FASTA of the chromosome-length assembly lands with its map.
+    expect(fieldsOf('Bl71nemr_HiC.fasta.gz').assembly).toBe('chromosome-length')
+    // `Aonyx_cinereus` is the draft's name *and* the start of nearly every
+    // file in the directory, so a prefix match would call this a draft. It is
+    // not one, and the README does not name it, so it is its own stem.
+    expect(fieldsOf('Aonyx_cinereus.rawchrom.hic').assembly).toBe('Aonyx_cinereus.rawchrom')
+  })
+
+  /**
+   * `--readme optional` is the default because these files are hand-maintained
+   * across hundreds of species. A species without one keeps every file it has;
+   * what it loses is the two columns the README fills.
+   */
+  it('keeps a species whose README it could not read', () => {
+    expect(labels()).toContain('wild_pepper_final_14chr_HiC.hic')
+    expect(fieldsOf('wild_pepper_final_14chr_HiC.hic')).toMatchObject({
+      species: 'Capsicum rhomboideum',
+    })
+    expect(fieldsOf('wild_pepper_final_14chr_HiC.hic').common ?? '').toBe('')
+  })
+
+  it('follows the continuation token across both pages', () => {
+    // Augochlora and Aonyx are on the second page; a walk that stopped at
+    // `IsTruncated` would have neither.
+    expect(labels()).toContain('APUR_genome_v2.1.0.hic')
+    expect(labels()).toContain('Aonyx_cinereus_HiC.hic')
+  })
+
+  it('accepts its own output', () => {
+    expect(make('check', join(out, 'dnazoo.json')).status).toBe(0)
+  })
+})
+
 describe.skipIf(!havePython)('the bucket front end', () => {
   let store: RawHub
 
@@ -1026,6 +1139,61 @@ describe.skipIf(!havePython)('the bucket front end', () => {
   it('has no columns, because a bucket knows a name and a size and nothing else', () => {
     expect(store.columns).toEqual([])
     for (const entry of store.entries ?? []) expect(entry.fields).toBeUndefined()
+  })
+
+  /**
+   * `--folders` is the exception, and it adds no knowledge: the directories are
+   * already in every key the walk reports, and what was missing was a *word*
+   * for them — which only somebody who knows the bucket can supply. A bucket
+   * laid out one directory per species is a catalogue with a species column in
+   * it, and without this it is a flat list with the species glued to a note.
+   */
+  describe('named folder levels', () => {
+    let foldered: RawHub
+
+    beforeAll(() => {
+      foldered = built(
+        'bucket',
+        'foldered.json',
+        'https://lab-hic-public.s3.amazonaws.com/maps/',
+        '--from-xml',
+        join(FIXTURES, 'bucket-listing'),
+        '--folders',
+        'Species,Kind',
+        '--check',
+      )
+    })
+
+    it('turns the directory levels into columns, outermost first', () => {
+      expect(foldered.columns).toEqual([
+        { key: 'species', label: 'Species' },
+        { key: 'kind', label: 'Kind' },
+      ])
+    })
+
+    it('reads each value off the key’s own path', () => {
+      const fields = Object.fromEntries(
+        (foldered.entries ?? []).map((entry) => [entry.label, entry.fields]),
+      )
+      expect(fields['Yeast_ATAC.bw']).toEqual({ species: 'yeast', kind: 'annotations' })
+      expect(fields['Yeast_microC.pairs.gz']).toEqual({ species: 'yeast', kind: 'reads' })
+    })
+
+    it('leaves a level empty where the key is shallower than the names it was given', () => {
+      // `maps/yeast/Yeast_hic.hic` sits at the species root, so it is in no
+      // `Kind` — and an empty value is what the rail must show it as, rather
+      // than the name of a folder it is not in.
+      const fields = Object.fromEntries(
+        (foldered.entries ?? []).map((entry) => [entry.label, entry.fields]),
+      )
+      expect(fields['Yeast_hic.hic']).toEqual({ species: 'yeast' })
+    })
+
+    it('changes nothing else: the same rows, in the same order', () => {
+      expect((foldered.entries ?? []).map((entry) => entry.uri)).toEqual(
+        (store.entries ?? []).map((entry) => entry.uri),
+      )
+    })
   })
 
   it('accepts its own output', () => {
