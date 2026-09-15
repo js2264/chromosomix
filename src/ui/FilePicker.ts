@@ -1,15 +1,29 @@
 /**
- * The landing page: the mark, the two things a reader can do, and the claim.
+ * The landing page: the mark, the three things a reader can do, and the claim.
  *
- * Two things, and they are named on the page. **Load files** is the drop area
- * and the URL box (`ui/LoadBox.ts`): bytes the reader has, or the address of
- * some. **Connect to a store** is a row of tiles: the lab's own figures, IGV's
+ * Three things, and they are named on the page.
+ *
+ * **Load files** is the drop area, the *choose files* button and the URL box
+ * (`ui/LoadBox.ts`): bytes the reader has, or the address of some. One file,
+ * or five.
+ *
+ * **Mount a local or remote folder** is a row of buttons — a folder on this
+ * machine, a bucket, Google Drive, Dropbox — each opening the Connect dialog
+ * on that place (`ui/ConnectCard.ts`), after which it is listed one level at a
+ * time in the Files column (§20). A reader with a directory of maps does not
+ * have *a file* to name; they have a place, and that place was reachable only
+ * from a plug in the header of a page they had not landed on yet.
+ *
+ * **Connect to a data store** is a row of tiles: the lab's own figures, IGV's
  * genomes, 4DN, ENCODE, and any store the reader connected — each a page of
- * its own in the drawer (`ui/StoreDrawer.ts`). Nothing else is on the page,
- * because everything else that used to be here was one of those two things
- * wearing a different name: a bucket to browse is a place to connect (the
- * Files column's *Open a local/remote folder*), a catalogue was a store, and a hub was
- * a store.
+ * its own in the drawer (`ui/StoreDrawer.ts`). For the reader who has no data
+ * of their own at all.
+ *
+ * Nothing else is on the page. The three are in the order a reader is likely
+ * to want them — what you brought, where you keep it, what somebody else
+ * published — and everything that used to be here beside them was one of the
+ * three wearing a different name: a catalogue was a store, and a hub was a
+ * store.
  *
  * The privacy claim is on screen, prominently, because it is a headline claim
  * of the paper and because it is *true of the code*: a dropped `File` is handed
@@ -21,11 +35,12 @@
 
 import { IS_DESKTOP } from '../desktop'
 import { IS_STANDALONE } from '../version'
-import { iconButton } from './icons'
+import { iconButton, markButton } from './icons'
 import { button, el } from './dom'
 import { LoadBox } from './LoadBox'
 import { appMark } from './mark'
 import { splitUri } from './labels'
+import { providerFronts, type ProviderId } from './connectFronts'
 import { storeFronts } from './stores/registry'
 import { storeTiles } from './stores/tiles'
 import { subscribeStores } from '../state/stores'
@@ -66,6 +81,16 @@ export interface FilePickerProps {
    * network to read one over (§19), and a picker in a test that wants none.
    */
   onStore?(id: string): void
+  /**
+   * A place was pressed. The shell opens the Connect dialog on it.
+   *
+   * The shell's rather than this page's for the same reason a store tile is:
+   * what a reader connects is a fact about the *window* — the Files column
+   * holds it and every tab sees it (§20.4) — and not about the tab they
+   * happened to land on. Absent means the section is left out, which is what a
+   * test that wants only the load box asks for.
+   */
+  onConnect?(provider: ProviderId): void
 }
 
 export class FilePicker {
@@ -104,12 +129,13 @@ export class FilePicker {
         el('h2', { class: 'picker-heading', text: 'Load files' }),
         load.el,
       ),
+      this.placesSection(),
       this.tilesSlot === null
         ? null
         : el(
             'section',
             { class: 'picker-section' },
-            el('h2', { class: 'picker-heading', text: 'Connect to a store' }),
+            el('h2', { class: 'picker-heading', text: 'Connect to a data store' }),
             this.tilesSlot,
           ),
       this.entryBox,
@@ -129,6 +155,49 @@ export class FilePicker {
     } else {
       this.unsubscribe = null
     }
+  }
+
+  /**
+   * The places: one button per provider, and the Connect dialog behind each.
+   *
+   * A door rather than the thing itself, on the same grammar as the store
+   * tiles under it — a tile opens the drawer on that store, a button opens the
+   * dialog on that place — and for the reason that grammar exists: what
+   * follows a press here is a picker, a form to fill or a sign-in with a code
+   * to paste, and all three already live on the dialog's panes with the
+   * sentences §24.7 requires beside them. The ellipsis on every label says so.
+   *
+   * Which places are offered is `ui/connectFronts.ts`'s, and it is the one
+   * thing this section decides for itself: a button is only drawn where
+   * pressing it reaches something that can act, which is §8.5 and is why the
+   * desktop build has no Google button here while the dialog still has the
+   * tile that explains.
+   */
+  private placesSection(): HTMLElement | null {
+    const onConnect = this.props.onConnect
+    if (onConnect === undefined) return null
+    const fronts = providerFronts().filter((front) => front.works)
+    if (fronts.length === 0) return null
+    return el(
+      'section',
+      { class: 'picker-section' },
+      el('h2', {
+        class: 'picker-heading',
+        // The standalone build reaches no remote place at all (§19), so it
+        // does not offer a heading naming two kinds and a row holding one.
+        text: IS_STANDALONE ? 'Mount a folder' : 'Mount a local or remote folder',
+      }),
+      el(
+        'div',
+        { class: 'picker-providers' },
+        ...fronts.map((front) =>
+          markButton(front.verb, front.mark, () => onConnect(front.id), {
+            class: 'btn btn-primary btn-mark picker-provider',
+            title: `${front.label}, listed one level at a time in the Files column.`,
+          }),
+        ),
+      ),
+    )
   }
 
   /**

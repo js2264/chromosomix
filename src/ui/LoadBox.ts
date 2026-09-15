@@ -7,6 +7,24 @@
  * area that also takes a click, and a box for a URL. What differs, *replace or
  * add*, is decided by whoever mounts it, in the two callbacks.
  *
+ * ## Why they stand side by side
+ *
+ * The three ways in are one row: the drop area on the left, and on the right
+ * the button that opens the file picker and the box that takes a URL. They
+ * used to be stacked, with a drop target deep enough to be the page and the
+ * other two under it, and that arrangement said the reader's next move was to
+ * drag something — which is wrong for the reader who has a URL, wrong for the
+ * one on a laptop with no second window to drag out of, and wrong for the
+ * landing page now that mounting a folder and connecting to a store are
+ * offered under it (§24.2). Beside each other they are three peers, and the
+ * page has the room to name all three things it can do above the fold.
+ *
+ * The paragraph about what opens as what sits under the row rather than inside
+ * the drop area. It is the one place a reader with a bigWig and no contact map
+ * can be told this app is for them too, so it does not go away; but it is a
+ * sentence to read once, not a label on a target, and a target it was written
+ * inside is a target no longer sized by what it does.
+ *
  * The privacy claim is on the landing page rather than here, because it is
  * about the application and not about this control; and the stores are not
  * here at all, because a store is not a way to load a file the reader has —
@@ -19,6 +37,7 @@
 
 import { IS_STANDALONE } from '../version'
 import { button, el } from './dom'
+import { icon, markButton } from './icons'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { canonicalUrl } from '../sources/rewrite'
@@ -47,18 +66,9 @@ export class LoadBox {
     this.drop = el(
       'div',
       { class: `dropzone${props.compact === true ? ' dropzone-compact' : ''}`, attrs: { tabindex: '0', role: 'button' } },
+      icon('file', { size: 22, class: 'dropzone-mark' }),
       el('div', { class: 'dropzone-title', text: 'Drop files here' }),
-      el('div', {
-        class: 'dropzone-sub',
-        // One sentence on what opens as what, because to a reader with a
-        // bigWig and no map "this app is not for me" is the wrong conclusion
-        // and this is the one place it can be corrected before they leave.
-        text:
-          'or click to choose. A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, ' +
-          'a BED or a BAM opens as a browser over its genome. Drop several at once and ' +
-          'they come up together: the first map is the tab, every other map a panel beside it, ' +
-          'and everything else a track on top.',
-      }),
+      el('div', { class: 'dropzone-sub', text: 'or click to choose' }),
     )
     const choose = async (): Promise<void> => {
       const files = await chooseFiles({ multiple: true })
@@ -87,6 +97,14 @@ export class LoadBox {
       if (files.length > 0) this.props.onOpenFiles(files)
     })
 
+    // The same button the Connect dialog's panes and the landing page's places
+    // are pressed by (`ui/icons.ts`), because *choose files* is the same kind
+    // of gesture as *choose a folder* and a reader who has learnt one of them
+    // has learnt the other.
+    const chooseButton = markButton('choose files…', 'file', () => void choose(), {
+      title: 'Pick one or more files on this machine.',
+    })
+
     // A single-file page has an opaque origin, so every remote read fails
     // before a byte moves. §8.5's doctrine: a control that cannot keep its
     // promise is absent, not disabled, and one sentence says where it exists.
@@ -95,14 +113,24 @@ export class LoadBox {
       this.el = el(
         'div',
         { class: 'load-box' },
-        this.drop,
-        el('p', {
-          class: 'hint load-standalone',
-          text:
-            'This copy opens local files only: it is one HTML file with no server behind it, so ' +
-            'the browser refuses every network read. For remote files and the stores, use the ' +
-            'hosted viewer.',
-        }),
+        el(
+          'div',
+          { class: 'load-main' },
+          this.drop,
+          el(
+            'div',
+            { class: 'load-ways' },
+            chooseButton,
+            el('p', {
+              class: 'hint load-standalone',
+              text:
+                'This copy opens local files only: it is one HTML file with no server behind it, ' +
+                'so the browser refuses every network read. For remote files and the stores, use ' +
+                'the hosted viewer.',
+            }),
+          ),
+        ),
+        openingNote(),
       )
       return
     }
@@ -119,24 +147,30 @@ export class LoadBox {
     this.el = el(
       'div',
       { class: 'load-box' },
-      this.drop,
       el(
         'div',
-        { class: 'load-row' },
-        button('choose files…', () => void choose(), {
-          class: 'btn',
-          title: 'Pick one or more files on this machine.',
-        }),
-        el('span', { class: 'load-or', text: 'or a URL' }),
-        this.urlInput,
-        button('open', () => this.openRemote(), {
-          class: 'btn',
-          title:
-            'Open a file by its address. The host must serve byte ranges and allow a cross-origin ' +
-            'GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the form that works. ' +
-            'Add ::entries/<name> to address one entry of a collection.',
-        }),
+        { class: 'load-main' },
+        this.drop,
+        el(
+          'div',
+          { class: 'load-ways' },
+          chooseButton,
+          el('span', { class: 'load-or', text: 'or a URL' }),
+          el(
+            'div',
+            { class: 'load-row' },
+            this.urlInput,
+            button('open', () => this.openRemote(), {
+              class: 'btn btn-primary',
+              title:
+                'Open a file by its address. The host must serve byte ranges and allow a ' +
+                'cross-origin GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the ' +
+                'form that works. Add ::entries/<name> to address one entry of a collection.',
+            }),
+          ),
+        ),
       ),
+      openingNote(),
     )
   }
 
@@ -153,4 +187,22 @@ export class LoadBox {
     // and re-opened after still picks it up.
     this.props.onOpen(url, { kind: 'remote', url: path })
   }
+}
+
+/**
+ * What opens as what, under the row rather than inside the drop area.
+ *
+ * To a reader holding a bigWig and no contact map, *(meta)cooler* reads as an
+ * app for somebody else; this sentence is the one place that can be corrected
+ * before they leave, so it is on every door a file is asked for and not only
+ * on the landing page.
+ */
+function openingNote(): HTMLElement {
+  return el('p', {
+    class: 'hint load-note',
+    text:
+      'A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, a BED or a BAM opens as a ' +
+      'browser over its genome. Drop several at once and they come up together: the first map is ' +
+      'the tab, every other map a panel beside it, and everything else a track on top.',
+  })
 }

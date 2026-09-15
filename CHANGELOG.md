@@ -110,6 +110,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The landing page names three things instead of two, and one of them is new.** *Load files* and
+  *Connect to a data store* have been joined by **Mount a local or remote folder**: four buttons —
+  *choose a folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to Dropbox…* — each
+  opening the Connect dialog on that place's own pane. The places were reachable only from the plug
+  in the Files column, which is to say from a page a reader arriving with a directory of coolers
+  had not looked at yet; a reader with a folder rather than a file now has a door on the first
+  screen, and one that goes straight to the pane they chose rather than to the dialog's first tile.
+  The desktop build shows three of the four: a Google sign-in cannot be registered against
+  `app://viewer`, so the button that could not keep its promise is absent there rather than
+  disabled, and the dialog's own tile still carries the sentence saying why.
+
+- **The drop area is one of three ways in rather than the page itself.** It was a target deep enough
+  to be the whole screen with the *choose files* button and the URL box stacked underneath, which
+  said the reader's next move was to drag something — wrong for the reader who has a URL, wrong for
+  the one on a laptop with no second window to drag out of, and wrong now that there are two more
+  things to fit above the fold. The three stand side by side: the area on the left, the button and
+  the box beside it, and the sentence about what opens as what under the row rather than set inside
+  a target that is no longer sized by its words. The buttons are the marked, filled ones the Connect
+  dialog's panes are pressed by, so one gesture looks the same wherever it is met.
+
 - **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores
   the same way, as a coloured square with the name set in it, and for three of them that is the only
   honest thing to draw: IGV's logo, 4DN's and ENCODE's are not published under terms a viewer may

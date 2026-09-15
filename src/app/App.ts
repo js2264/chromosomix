@@ -24,6 +24,7 @@ import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
 import { openCommandPalette } from '../ui/CommandPalette'
 import { LoadBox } from '../ui/LoadBox'
+import type { ProviderId } from '../ui/connectFronts'
 import { Modal } from '../ui/Modal'
 import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
@@ -788,11 +789,19 @@ export class App implements SessionHost {
    * does not keep the *browsing* out of the entry chunk and was never going to
    * — the Files panel is built with the shell and holds the folder view — so
    * the split is worth having for the form and nothing more is claimed for it.
+   *
+   * `provider` is which pane to land on, and it is what the landing page's
+   * *mount a folder* buttons carry: a reader who pressed *sign in to Dropbox*
+   * on a page with four buttons on it has already chosen, and a dialog that
+   * opened on this machine would ask them to choose again. Absent from the
+   * header's plug and the palette, which name no place, so those still open on
+   * the one that needs no account (`ui/connectFronts.ts`).
    */
-  private openConnectDialog(): void {
+  private openConnectDialog(provider?: ProviderId): void {
     if (this.modal !== null) return
     void import('../ui/ConnectCard').then(({ openConnect }) => {
       const modal = openConnect({
+        ...(provider === undefined ? {} : { provider }),
         onConnected: (id) => {
           // Straight into the folder that was just connected, which is the only
           // thing a reader who has connected one wants next — and the panel is
@@ -916,6 +925,11 @@ export class App implements SessionHost {
   /** A tile on a landing page was pressed: open the drawer on that store. */
   openStore(id: string): void {
     this.storeDrawer?.open(id)
+  }
+
+  /** A place on a landing page was pressed: open the Connect dialog on it. */
+  openConnect(provider: ProviderId): void {
+    this.openConnectDialog(provider)
   }
 
   /** Whether the tab in front holds nothing — which decides what a store row's verbs say. */

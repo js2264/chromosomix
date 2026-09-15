@@ -196,3 +196,35 @@ export function iconButton(
   node.addEventListener('click', onClick)
   return node
 }
+
+/**
+ * A large button with a mark on it: the one thing a section is *for*.
+ *
+ * The shape the Connect dialog's sign-ins established — a filled accent block,
+ * the provider's mark on the left, a verb set in it — generalised, because the
+ * landing page now offers the same gestures and a door drawn two different
+ * ways in two places is two things to learn (`ui/connectFronts.ts`).
+ *
+ * `reason` is the disabled case the sign-in panes make, and it is the only
+ * place a disabled control is right here: where the sentence beside the button
+ * names the one thing a reader can do about it, hiding the button would hide
+ * what the sentence is about. Everywhere else §8.5 applies and the caller
+ * leaves the button out.
+ */
+export function markButton(
+  label: string,
+  mark: IconName,
+  onClick: () => void,
+  options: { class?: string; title?: string; disabled?: boolean; reason?: string } = {},
+): HTMLButtonElement {
+  const node = document.createElement('button')
+  node.type = 'button'
+  node.className = options.class ?? 'btn btn-primary btn-mark'
+  const title = options.disabled === true ? options.reason ?? options.title : options.title
+  if (title !== undefined) node.title = title
+  node.appendChild(icon(mark, { size: 18 }))
+  node.appendChild(document.createTextNode(label))
+  node.disabled = options.disabled === true
+  node.addEventListener('click', onClick)
+  return node
+}

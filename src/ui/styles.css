@@ -4842,17 +4842,14 @@ canvas.is-frozen {
 }
 
 /* The same picker, opened over a view instead of instead of one: no page
-   margins, its own scrollbar inside the panel, and a shallower drop target so
-   the remote box and the examples are visible without scrolling at all. */
+   margins and its own scrollbar inside the panel. The shallower drop target is
+   the box's own business now — a dialog builds a `LoadBox` with `compact`
+   (`.dropzone-compact`) rather than the whole landing page. */
 .modal-panel .view-picker {
   margin: 0;
   max-width: none;
   padding: 0.8rem;
   overflow: auto;
-}
-
-.modal-panel .dropzone {
-  padding: 1.6rem 1rem;
 }
 
 .privacy {
@@ -4897,10 +4894,21 @@ canvas.is-frozen {
   background: var(--bg-raised);
 }
 
+/* One of three peers on the row rather than the page itself, so it is sized by
+   what it is — a target big enough to drop on with a hand that is already
+   moving — and not by how much of the screen dragging deserves. `min-height`
+   rather than deep padding: it has to match the column of controls beside it
+   however tall that column happens to be, and padding cannot. */
 .dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 9.5rem;
   border: 2px dashed var(--border-strong);
   border-radius: 10px;
-  padding: 3rem 1rem;
+  padding: 1.4rem 1rem;
   text-align: center;
   cursor: pointer;
   background: var(--bg-sunken);
@@ -4915,6 +4923,19 @@ canvas.is-frozen {
   outline: none;
 }
 
+/* The one thing in the area that is not words: a target with nothing in it but
+   two lines of text reads as a caption while the eye is looking for somewhere
+   to let go. Dimmed, and it takes the accent with the border on a drag. */
+.dropzone-mark {
+  color: var(--text-faint);
+  margin-bottom: 0.15rem;
+}
+
+.dropzone:hover > .dropzone-mark,
+.dropzone.over > .dropzone-mark {
+  color: var(--accent);
+}
+
 .dropzone-title {
   font-size: var(--step-1);
   font-weight: 600;
@@ -4923,7 +4944,6 @@ canvas.is-frozen {
 .dropzone-sub {
   color: var(--text-dim);
   font-size: var(--step--1);
-  margin-top: 0.3rem;
 }
 
 .hidden-input {
@@ -4934,9 +4954,10 @@ canvas.is-frozen {
   margin-top: 1.5rem;
 }
 
-/* --- the landing page's two things (§5.1) ------------------------------
-   Load files, and connect to a store. Each is a heading and one control: the
-   drop area with its row of a button and a box, and the row of tiles. */
+/* --- the landing page's three things (§24.2) ---------------------------
+   Load files, mount a folder, connect to a data store. Each is a heading and
+   one control: the drop area with the two other ways in beside it, the row of
+   place buttons, and the row of store tiles. */
 
 .picker-section {
   margin-top: 1.6rem;
@@ -4955,29 +4976,107 @@ canvas.is-frozen {
   gap: 0.6rem;
 }
 
+/* The three ways in, side by side: drop, choose, or name a URL. The drop area
+   takes two fifths and the controls the rest — enough for a URL to be read at
+   a glance, which is what it is for — and `wrap` puts them back in a column on
+   a phone, where side by side would be two things too narrow to use. */
+.load-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.load-main > .dropzone {
+  flex: 2 1 15rem;
+}
+
+.load-ways {
+  flex: 3 1 20rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Stretched, because a button that stands alone above a full-width box reads
+   as the smaller of the two gestures and it is not. */
+.load-ways > .btn-mark {
+  align-self: stretch;
+}
+
 .load-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .load-row .input-url {
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
   min-width: 0;
 }
 
+/* "or a URL" between the button and the box, as a rule across the column: the
+   two are alternatives rather than steps, and a bare line of grey text reads
+   as a caption for whichever it is nearer. */
 .load-or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
   color: var(--text-dim);
   font-size: var(--step--1);
 }
 
+.load-or::before,
+.load-or::after {
+  content: '';
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border);
+}
+
+/* Under the row rather than inside the drop area: what opens as what is read
+   once, and a target is not a place to put a paragraph. */
+.load-note,
 .load-standalone {
   margin: 0;
+  max-width: 80ch;
 }
 
 .dropzone-compact {
-  padding: 1.6rem 1rem;
+  min-height: 7rem;
+  padding: 1rem;
+}
+
+/* --- the landing page's places -----------------------------------------
+   One button per place a window can connect to, each a door to the Connect
+   dialog's pane for it (`ui/connectFronts.ts`). Named for that dialog's own
+   tiles — `.connect-provider` is the tile, this is the button — and not for
+   `.pick-place`, which is a *connected* place in the file picker. The same
+   button the dialog's sign-ins are, because it is the same gesture met one
+   screen earlier. */
+
+/* Two across, which is a decision rather than a default: the four at their own
+   widths come to a little more than this page's 52rem, so a wrapping row puts
+   three up and strands the fourth, and a set of four doors that reads as 3 + 1
+   reads as one of them being different. Two and two is the only arrangement
+   that stays square at the width the page is tuned for, and it is what a phone
+   gets as well until the labels no longer fit (the 34rem block). */
+.picker-providers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+/* Wider than its label, like the pane's sign-in, but by the grid rather than a
+   `min-width`: four buttons sharing a page cannot each claim 15rem, and a grid
+   item whose `min-width` is `auto` refuses to be narrower than its label and
+   pushes the column out instead of wrapping. */
+.picker-provider {
+  min-width: 0;
 }
 
 .load-dialog {
@@ -6093,22 +6192,29 @@ canvas.is-frozen {
   flex-basis: auto;
 }
 
-/* Larger than the dialog's other buttons, the provider's mark on it: the one
-   thing the pane is for, drawn as the one thing to press. */
-.btn-signin {
+/* Larger than the dialog's other buttons, a mark on it: the one thing a pane
+   or a section is for, drawn as the one thing to press. Shared with the
+   landing page's *choose files* and its row of places (`ui/icons.ts`), so the
+   gesture looks the same wherever a reader meets it; `.btn-signin` is the name
+   the two sign-ins keep, being the controls that hand over a credential. */
+.btn-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  min-width: 15rem;
   padding: 0.6rem 1.2rem;
   border-radius: 8px;
   font-size: var(--step-0);
   font-weight: 600;
 }
 
-.btn-signin > .icon {
+.btn-mark > .icon {
   flex: none;
+}
+
+/* Alone on its pane, so it may be as wide as it wants to be. */
+.btn-signin {
+  min-width: 15rem;
 }
 
 /* The folder box under a Google sign-in, present only once there is one. */
@@ -6752,6 +6858,13 @@ canvas.is-frozen {
     grid-template-columns: minmax(0, 1fr) auto;
     padding: 0.5rem 0.6rem;
     gap: 0.5rem;
+  }
+
+  /* One door per row. Half of this width is narrower than *sign in to
+     Dropbox…* is long, and a button whose label is clipped is a button whose
+     promise cannot be read. */
+  .picker-providers {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* The rules the groups after the name are set apart by: on a phone the header

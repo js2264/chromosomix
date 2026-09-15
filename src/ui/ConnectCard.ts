@@ -27,11 +27,14 @@
  *
  * ## Which providers are offered
  *
- * The standalone build has an opaque origin, so every remote read fails before
- * a byte moves (§19): it offers this machine and nothing else. The desktop
- * build cannot register a Google sign-in against `app://viewer`, so its Drive
- * pane says why there is no sign-in. Each provider's section decides the rest
- * for itself.
+ * `ui/connectFronts.ts` decides, because the landing page's row of *mount a
+ * folder* buttons offers the same places and the answer must not be able to
+ * differ between the two doors. The standalone build has an opaque origin, so
+ * every remote read fails before a byte moves (§19): it offers this machine
+ * and nothing else. The desktop build cannot register a Google sign-in against
+ * `app://viewer`, so its Drive pane says why there is no sign-in — a tile the
+ * landing page's buttons therefore leave out and this dialog keeps. Each
+ * provider's section decides the rest for itself.
  *
  * ## The two panes that sign a reader in
  *
@@ -43,7 +46,7 @@
 
 import { Modal } from './Modal'
 import { button, el } from './dom'
-import { icon, type IconName } from './icons'
+import { icon } from './icons'
 import { bucketForm } from './bucketForm'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
@@ -56,15 +59,13 @@ import {
 import { announce, connectSnapshot } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
 import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from '../browse/local'
+import { providerFronts, type ProviderFront, type ProviderId } from './connectFronts'
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
-import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
 import { connectHead, signInButton, tipCode } from './connectHead'
-import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
 
-/** The four places, by the id the tiles and the tests name them by. */
-export type ProviderId = 'local' | 'bucket' | 'drive' | 'dropbox'
+export type { ProviderId } from './connectFronts'
 
 export interface ConnectProps {
   /**
@@ -86,35 +87,29 @@ export function openConnect(props: ConnectProps): Modal {
   })
 }
 
-interface Provider {
-  id: ProviderId
-  label: string
-  mark: IconName
+interface Provider extends ProviderFront {
   /** The pane, built when the tile is pressed. */
   pane(done: (id: string) => void): HTMLElement
 }
 
-/** The providers this build can offer, in the order the tiles show them. */
+/**
+ * The providers this build can offer, in the order the tiles show them.
+ *
+ * Which places exist is `ui/connectFronts.ts`'s, because the landing page's
+ * row of buttons asks the same question (§24.2); what a place *is to do* is
+ * here, because that is the dialog. `works` is not consulted: the Drive tile
+ * stays on the desktop build, where its pane is the sentence saying why there
+ * is no sign-in — see that module's header on why the two doors read the same
+ * fact differently.
+ */
 export function providers(): Provider[] {
-  const out: Provider[] = [
-    { id: 'local', label: 'This machine', mark: 'hard-drive', pane: localSection },
-  ]
-  // A single-file page has an opaque origin, so every remote read fails before
-  // a byte moves (§19): a control that cannot keep its promise is absent.
-  if (IS_STANDALONE) return out
-  out.push({ id: 'bucket', label: 'A bucket', mark: 'cloud', pane: bucketSection })
-  out.push({ id: 'drive', label: 'Google Drive', mark: 'googledrive', pane: drivePane })
-  // The one provider with an account and no key (§24.9); its section decides
-  // for itself where it can be offered.
-  if (DROPBOX_SIGN_IN_AVAILABLE) {
-    out.push({
-      id: 'dropbox',
-      label: 'Dropbox',
-      mark: 'dropbox',
-      pane: (done) => dropboxSection(done) ?? el('div'),
-    })
+  const panes: Record<ProviderId, (done: (id: string) => void) => HTMLElement> = {
+    local: localSection,
+    bucket: bucketSection,
+    drive: drivePane,
+    dropbox: (done) => dropboxSection(done) ?? el('div'),
   }
-  return out
+  return providerFronts().map((front) => ({ ...front, pane: panes[front.id] }))
 }
 
 function connectBody(props: ConnectProps, close: () => void): HTMLElement {

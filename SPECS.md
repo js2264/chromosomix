@@ -5158,8 +5158,10 @@ written, and each is absolute rather than a degradation:
    refusal as "this page has no cache", and the `TARGET !== 'web'` guard excludes this build anyway.
 
 **The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
-URL box, the store tiles and the version picker, and the landing page says in one sentence that
-this copy opens local files only and where to go for the rest. A build that offered a URL field
+URL box, the store tiles and the version picker, leaves the landing page's folder row with the one
+place this build can reach — under *Mount a folder*, since a heading naming two kinds over a row
+holding one is the same false promise in smaller type — and says in one sentence that this copy
+opens local files only and where to go for the rest. A build that offered a URL field
 which could never succeed would be a worse artefact than one that does not offer it.
 
 **It is about 11 MB and four fifths of that is h5wasm.** The runtime ships its wasm base64-inlined
@@ -5232,7 +5234,9 @@ screen until the sign-in has happened, and appears under the button the moment i
 same pane, under the same title; there is no second heading. A build that cannot offer a provider
 does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
 build's Drive pane keeps its title and its `?` and says under them why there is no button. The
-Files column's *Open a local/remote folder* opens the dialog.
+Files column's *Open a local/remote folder* opens the dialog, as does each button of the landing
+page's *Mount a local or remote folder* row — those carry the pane to open on, since a reader who
+pressed *sign in to Dropbox* has already chosen and must not be asked again (§24.2).
 
 ### 20.1 One level, never a walk
 
@@ -5740,11 +5744,13 @@ and the four smaller things around it: URLs that are not yet the file, links tha
 credentials that are not a bucket key, and a search box over a portal for the reader who has none
 of the above.
 
-Two words, and the line between them is the landing page's (§24.2). A reader **loads** files: bytes
-they have, or the address of some. A reader **connects to a store**: somebody's shelf of data,
-drawn as a page of its own. Everything else that used to stand between the two — a bucket to
-browse, a hub, a catalogue, an examples list — was one of those two things under another name, and
-is now called by it: a bucket is a *place* the window connects to (§20), and the rest are stores.
+Three words, and the lines between them are the landing page's (§24.2). A reader **loads** files:
+bytes they have, or the address of some. A reader **mounts** a folder: a place of their own — a
+directory, a bucket, a Drive, a Dropbox — listed one level at a time in the Files column (§20). A
+reader **connects to a data store**: somebody else's shelf, drawn as a page of its own. Everything
+else that used to stand between them — a hub, a catalogue, an examples list — was one of the three
+under another name, and is now called by it: a bucket is a *place* the window mounts (§20), and the
+rest are stores.
 
 Nothing here relaxes §1. Every store is a static document on somebody's bucket (C1, C5); a map with
 no store opens exactly as before (C3); a store is fetched on a gesture and never on load (§11); the
@@ -5817,14 +5823,29 @@ column before a viewer knows it.
 
 ### 24.2 Where stores are offered: the tiles, the drawer, and the four fronts
 
-**The landing page has two things on it, and they are named.** *Load files* is the drop area and a
-URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* reuses in a dialog with the other
-verb behind it. *Connect to a store* is a row of tiles — the lab's own
-figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one by
-URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
-picker's URL box, its *browse…* and its *private buckets…* are gone: a bucket is a place and is
-connected from the Files column (§20), and the *Hubs* dropdown of eighteen shelves was this row
-under another name.
+**The landing page has three things on it, and they are named.** *Load files* is a drop area with
+the *choose files* button and the URL box **beside** it rather than under it (`ui/LoadBox.ts`),
+which the file crumb's *Open a file* reuses in a dialog with the other verb behind it; the three
+ways in are peers on one row, and the sentence about what opens as what sits under the row rather
+than inside the target. *Mount a local or remote folder* is a row of four buttons — *choose a
+folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to Dropbox…* — each opening the
+Connect dialog (§20) on that place's pane. *Connect to a data store* is a row of tiles — the lab's
+own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one
+by URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
+picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
+plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
+
+**The places are doors, not forms**, which is the same grammar the tiles beside them have: a tile
+opens the drawer on that store, a button opens the dialog on that place. What follows a press is a
+directory picker, a bucket's CORS-and-key form or a sign-in with a code to paste, and all three
+already live on the dialog's panes with the sentences §24.7 requires beside them; a landing page
+that inlined any of them would be a second copy of one. The ellipsis on every label says a dialog
+is coming. Which places are offered is decided once, in `ui/connectFronts.ts`, and read by both
+doors — with one deliberate difference: the desktop build cannot register a Google sign-in against
+`app://viewer`, so the dialog keeps a Drive tile whose pane is the sentence saying why, and the
+landing page, whose buttons are things to press rather than places to read about, leaves that one
+out (§8.5). A button that would open the file picker's own *choose files* is likewise the same
+marked button the panes use, so one gesture looks the same wherever it is met.
 
 **Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
 Analysis drawer (§18.1) and the console (§23) are, down the *left*, where files come from. It

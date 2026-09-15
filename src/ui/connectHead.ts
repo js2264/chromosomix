@@ -41,8 +41,8 @@
  * when there is less than it needs.
  */
 
-import { button, el } from './dom'
-import { icon, type IconName } from './icons'
+import { el } from './dom'
+import { icon, markButton, type IconName } from './icons'
 
 /**
  * A block of configuration inside a tip, for the reader to copy.
@@ -130,6 +130,12 @@ export function connectHead(
 /**
  * The sign-in: one large button with the provider's mark on it.
  *
+ * {@link markButton}'s shape, which the landing page's own row of places now
+ * draws too (`ui/FilePicker.ts`): a door to Drive is the same gesture wherever
+ * a reader meets it, so it is the same button. The extra class is what this
+ * pane's sign-in is still called, and the tests that name it are naming the
+ * one control in the app that hands over a credential.
+ *
  * Disabled with its reason as the title where the site has no registration —
  * the exception to §8.5 these panes make, because the sentence beside it names
  * the one thing a reader can do — and pressable everywhere else.
@@ -140,11 +146,9 @@ export function signInButton(
   onClick: () => void,
   options: { disabled: boolean; reason?: string },
 ): HTMLButtonElement {
-  const node = button(label, onClick, {
-    class: 'btn btn-primary btn-signin',
-    ...(options.disabled && options.reason !== undefined ? { title: options.reason } : {}),
+  return markButton(label, mark, onClick, {
+    class: 'btn btn-primary btn-mark btn-signin',
+    disabled: options.disabled,
+    ...(options.reason === undefined ? {} : { reason: options.reason }),
   })
-  node.prepend(icon(mark, { size: 18 }))
-  node.disabled = options.disabled
-  return node
 }
