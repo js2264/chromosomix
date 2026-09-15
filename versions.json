@@ -207,13 +207,6 @@
   ],
   "pulls": [
     {
-      "number": 59,
-      "commit": "e5c2f2a",
-      "title": "Add DNA Zoo front end and bucket folder naming support",
-      "branch": "js/dnazoo-store",
-      "date": "2026-09-15T21:35:38Z"
-    },
-    {
       "number": 58,
       "commit": "d6272df",
       "title": "Add folder mounting to landing page with new connect doors",
