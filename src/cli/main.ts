@@ -109,6 +109,7 @@ import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/f
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
 import { contigIndexOf } from '../genome/naming'
 import { parseBins } from '../hicpro/parse'
+import { DEFAULT_COUNT_COLUMN } from '../metacooler/matrix'
 import { hicProMap } from '../worker/open'
 import { isRefusal, refusalMessage } from '../state/SessionConfig'
 import { parseWorkspaceFile } from '../state/workspace'
@@ -191,6 +192,19 @@ function pairsBinningOf(args: Args): PairsBinning | undefined {
   const rungs = Number(one(args, 'rungs') ?? 1)
   return { base: Math.floor(base), rungs: Number.isFinite(rungs) ? Math.max(1, Math.floor(rungs)) : 1 }
 }
+/**
+ * `--value`, `--circular` and `--cell`: the framing a session sets from the
+ * picture, spelled as flags (see `RESERVED`).
+ */
+function framingFlags(args: Args): Pick<RunOptions, 'value' | 'circular' | 'cells'> {
+  const value = one(args, 'value')
+  return {
+    ...(value === undefined || value === '' ? {} : { value }),
+    circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
+    cells: all(args, 'cell').flatMap((item) => item.split(',')).filter((item) => item !== ''),
+  }
+}
+
 const flag = (args: Args, key: string): boolean => {
   const value = one(args, key)
   return value !== undefined && value !== 'false'
@@ -267,6 +281,14 @@ const RESERVED = new Set([
   // The other maps `hicrep` compares this one with (§16). A shell has one file
   // and one mount, and this is the flag that stands in for the deck.
   'against',
+  // The three facts of a *framing* a session sets from the picture and a shell
+  // has to be told: which score column the map is drawn from (§3.5), which
+  // sequences the reader declared circular (§8.15), and which cells of an
+  // `.scool` are ticked (§3.8). Each is an input to the arithmetic, so a line
+  // without them repeats a different run.
+  'value',
+  'circular',
+  'cell',
   'over',
   'quiet',
   'help',
@@ -342,6 +364,12 @@ interface RunOptions {
   tracks: Map<string, LoadedTrack>
   /** The other maps a task that compares files is run against (`--against`). */
   peers: readonly string[]
+  /** The score column to read, or `undefined` for the count (§3.5). */
+  value?: string | undefined
+  /** Sequences declared circular (§8.15), by this file's names. */
+  circular: readonly string[]
+  /** The cells of an `.scool` to sum; empty is every cell (§3.8). */
+  cells: readonly string[]
   quiet: boolean
   /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
   binning?: PairsBinning | undefined
@@ -513,6 +541,24 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
   const opened = await openLocal(resolve(path), options)
   const { mc } = opened
   try {
+    // The ticked cells, as the analysis worker selects them before any task
+    // runs: an `.scool` sums whichever cells are chosen, and a task over "the
+    // map" is a task over that sum (§3.8).
+    if (options.cells.length > 0) {
+      if (mc.cells.length === 0) {
+        throw new Error(
+          `${basename(parseUri(path).path)} has no cells to choose from; --cell is for an .scool.`,
+        )
+      }
+      mc.selectCells(options.cells)
+    }
+    const value = options.value ?? DEFAULT_COUNT_COLUMN
+    if (value !== DEFAULT_COUNT_COLUMN && !mc.scoreColumns.includes(value)) {
+      throw new Error(
+        `${basename(parseUri(path).path)} has no score column ${JSON.stringify(value)}. It has: ` +
+          `${mc.scoreColumns.join(', ') || DEFAULT_COUNT_COLUMN}.`,
+      )
+    }
     const extent =
       options.window === undefined
         ? ([0, mc.nBins] as [number, number])
@@ -525,12 +571,15 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       binsize: mc.binsize,
       binsPerCell: 1,
       balance,
-      value: 'count',
+      value,
       normalise: null,
       level: 'bin',
       label:
         `${options.window ?? 'whole file'} at ${mc.binsize} bp` +
-        `${balance ? ', balanced' : ''}, count`,
+        `${balance ? ', balanced' : ''}, ${value}` +
+        `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
+        `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}`,
+      ...(options.circular.length === 0 ? {} : { circular: [...options.circular] }),
     }
     // The assembly travels with the result rather than being fetched again: a
     // second open costs a second mount and a second metadata walk to learn
@@ -1240,6 +1289,12 @@ const USAGE = `metacooler-run — the Analysis panel, from a shell
                            --bin-size below
       --against <file>     another contact map, for a task that compares two
                            (hicrep). Repeat it for a third
+      --value <column>     the score column to read, for a file that carries
+                           more than the count (default: count)
+      --circular <name>    a sequence to read as a circle (a plasmid); repeat
+                           or separate with commas
+      --cell <name>        a cell of an .scool to sum into the map; repeat or
+                           separate with commas. Default: every cell
       --bin-size <bp>      required for a .pairs input, which states no
                            resolution of its own; ignored for every other format
       --rungs <n>          how many ladder resolutions to build from it
@@ -1336,7 +1391,16 @@ async function runCommand(args: Args): Promise<number> {
       return 2
     }
     try {
-      const result = await runTracksOnly({ task, params, inputs, sequences, tracks, peers, quiet })
+      const result = await runTracksOnly({
+        task,
+        params,
+        inputs,
+        sequences,
+        tracks,
+        peers,
+        ...framingFlags(args),
+        quiet,
+      })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
       await writeOutputs(
         result,
@@ -1375,6 +1439,7 @@ async function runCommand(args: Args): Promise<number> {
         sequences,
         tracks,
         peers,
+        ...framingFlags(args),
         quiet,
       })
       for (const note of result.notes) process.stderr.write(`  note: ${note}\n`)
@@ -1492,6 +1557,7 @@ async function replayCommand(args: Args): Promise<number> {
           sequences,
           tracks,
           peers,
+          ...framingFlags(args),
           quiet,
         })
         await writeOutputs(result, stemOf(file), directory, result.contigs, quiet)

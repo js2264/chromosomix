@@ -938,6 +938,16 @@ export interface AnalysisContext {
   /** How many of those the reader has ticked; equal to {@link cells} when none is. */
   activeCells?: number
   /**
+   * The ticked cells by name, only when they are **fewer than all of them**.
+   *
+   * What a `metacooler-run` line needs that the two counts above cannot give
+   * it: a task over an `.scool` is a task over the sum of the ticked cells
+   * (§3.8), so a command that named the file and not the cells would repeat a
+   * different run. Absent when every cell is ticked, which is the default a
+   * shell also takes.
+   */
+  selectedCells?: readonly string[]
+  /**
    * The other maps of a deck, for the one task whose unit is a pair of files.
    *
    * Absent in a session with one map, which is what makes that task *waiting*

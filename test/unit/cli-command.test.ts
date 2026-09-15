@@ -559,7 +559,7 @@ describe('every task in the registry', () => {
    */
   const RESERVED = new Set([
     'out', 'o', 'window', 'balance', 'features', 'pairs', 'over', 'quiet', 'help',
-    'bin-size', 'binsize', 'rungs', 'sequence', 'track', 'against',
+    'bin-size', 'binsize', 'rungs', 'sequence', 'track', 'against', 'value', 'circular', 'cell',
   ])
 
   for (const task of TASKS) {
@@ -579,6 +579,82 @@ describe('every task in the registry', () => {
       expect(command.startsWith(`metacooler-run ${task.id} yeast.mcool`)).toBe(true)
     })
   }
+})
+
+describe('the framing a session sets from the picture', () => {
+  /**
+   * Three inputs to the arithmetic that are properties of the *framing* rather
+   * than of any parameter, and that the shell has to be told: a line without
+   * them repeats a different run. Their defaults — the count column, no
+   * circular sequence, every cell — are the shell's own and go unsaid.
+   */
+  it('names the score column the map was drawn from, unless it is the count', () => {
+    const drawn = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { value: 'balanced_by_depth' }),
+      context: context(),
+    })
+    expect(commandOf(drawn.text)).toContain('--value balanced_by_depth')
+    const counted = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { value: 'count' }),
+      context: context(),
+    })
+    expect(commandOf(counted.text)).not.toContain('--value')
+  })
+
+  it('names the sequences declared circular', () => {
+    const built = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { circular: ['pCEN', 'p2u'] }),
+      context: context(),
+    })
+    expect(commandOf(built.text)).toContain('--circular pCEN,p2u')
+  })
+
+  it('names the ticked cells of an .scool, and says so when it cannot', () => {
+    const chosen = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 2, selectedCells: ['c1', 'c3'] },
+    })
+    expect(commandOf(chosen.text)).toContain('--cell c1,c3')
+    // Every cell ticked is the shell's default, so nothing is said.
+    const all = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 3 },
+    })
+    expect(commandOf(all.text)).not.toContain('--cell')
+    // A subset the context counts but does not name: a note, not a guess.
+    const unnamed = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 2 },
+    })
+    expect(commandOf(unnamed.text)).not.toContain('--cell')
+    expect(notesOf(unnamed.text).join(' ')).toContain('--cell <name>')
+  })
+
+  it('writes the bin size an imported .pairs was framed at', () => {
+    // A contact list declares no resolution; the session answered a dialog and
+    // the shell's answer is `--bin-size`. Without it the line dies at the open.
+    const built = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), {
+        uri: 'data/Hum53.pairs.gz',
+        binsize: 5000,
+      }),
+      context: context(),
+    })
+    expect(commandOf(built.text)).toContain('metacooler-run insulation data/Hum53.pairs.gz --bin-size 5000')
+    const cooler = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(commandOf(cooler.text)).not.toContain('--bin-size')
+  })
 })
 
 describe('quoting', () => {

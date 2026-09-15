@@ -436,6 +436,13 @@ metacooler-run hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolut
 # Compartments phased by GC content read the reference under --sequence.
 metacooler-run compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz
 
+# What the session set from the picture, as flags: the score column a
+# .metacool is drawn from, the sequences declared circular, the cells of an
+# .scool that were ticked. The console writes them whenever they differ from
+# the defaults (count, none, every cell).
+metacooler-run insulation sample.metacool --value balanced_by_depth --circular pCEN,p2u
+metacooler-run cellqc cells.scool --cell c01,c02,c07 --cells selected
+
 # A .pairs is binned first, at a resolution you name — the shell's answer to
 # the browser's dialog. `--pairs` above is a BEDPE of features; the contact
 # list is the positional argument.

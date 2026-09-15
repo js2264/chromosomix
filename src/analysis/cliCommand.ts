@@ -130,6 +130,16 @@ export interface CliCommandInput {
 const COMMAND = 'metacooler-run'
 
 /**
+ * The score column a shell reads unless told otherwise.
+ *
+ * `metacooler/matrix.ts`'s `DEFAULT_COUNT_COLUMN`, spelled here rather than
+ * imported: this module runs on the main thread (the drawer and the console
+ * call it) and that one is the pixel reader, which the main-thread bundle is
+ * kept free of by construction (`analysis/registry.ts`).
+ */
+const COUNT_COLUMN = 'count'
+
+/**
  * Write the command.
  *
  * Pure and total: every run produces a command, because a button that
@@ -149,6 +159,12 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
         'This file is remote, and the command reads local files only — the reader uses ' +
           'synchronous range requests, which exist in a worker and not in Node. Fetch it first.',
       )
+    }
+    // A contact list declares no resolution of its own (§3.7): the session
+    // answered the import dialog, and the shell's answer is a flag. The bin
+    // size the run was framed at is that answer.
+    if (isPairsFile(framing.uri) && framing.binsize > 0) {
+      args.push('--bin-size', String(framing.binsize))
     }
   }
 
@@ -189,6 +205,34 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
         `${balance ? 'balanced' : 'unbalanced'}, and --balance sets both together. This follows ` +
         'the task, so the numbers match; only the framing line the run records will differ.',
     )
+  }
+
+  // The three facts of a framing a session sets from the picture and a shell
+  // has to be told — each an input to the arithmetic, so a line without it
+  // repeats a different run. The count column and no circular sequence are the
+  // shell's own defaults and go unsaid, as the defaults of the parameters do
+  // not: they are properties of the file rather than of a build.
+  if (!mapless) {
+    if (framing.value !== '' && framing.value !== COUNT_COLUMN) {
+      args.push('--value', quote(framing.value))
+    }
+    const circular = (framing.circular ?? []).filter((name) => name !== '')
+    if (circular.length > 0) args.push('--circular', quote(circular.join(',')))
+    // The ticked cells of an `.scool` are the session's and not the record's
+    // (§3.8), so they are read off the context, and a command written with no
+    // context to ask is told what it cannot say.
+    const cells = input.context?.selectedCells ?? []
+    if (cells.length > 0) args.push('--cell', quote(cells.join(',')))
+    else if (
+      input.context !== null &&
+      (input.context.cells ?? 0) > 0 &&
+      (input.context.activeCells ?? input.context.cells ?? 0) < (input.context.cells ?? 0)
+    ) {
+      notes.push(
+        'The map was summed from a subset of the file’s cells, and the record does not name ' +
+          'them. Add --cell <name> for each.',
+      )
+    }
   }
 
   // The other maps, for the one task whose unit is a pair of files. They are
@@ -474,4 +518,9 @@ export function quote(value: string): string {
 
 function isRemote(uri: string): boolean {
   return /^https?:\/\//i.test(uri)
+}
+
+/** Whether a URI names a `.pairs` — the one input a shell has to be told a bin size for. */
+function isPairsFile(uri: string): boolean {
+  return /\.pairs(\.gz)?$/i.test(uri.split('::')[0].split(/[?#]/)[0])
 }

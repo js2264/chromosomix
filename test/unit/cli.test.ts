@@ -571,6 +571,41 @@ describe('a task that compares two maps', () => {
   })
 })
 
+/**
+ * The framing a session sets from the picture, as flags. Each is an input to
+ * the arithmetic and none is a parameter of any task, so each is a reserved
+ * flag of the command's own — and each is checked before the run rather than
+ * read as a default that silently repeats a different run.
+ */
+describe('the framing flags', () => {
+  it('reads a sequence as a circle when told to, and records it', async () => {
+    reset()
+    const where = join(directory, 'circular')
+    expect(
+      await main(['insulation', sample, '--circular', 'chrII', '--out', where, '--quiet']),
+    ).toBe(0)
+    // The profile is named after the window it was scored with, so it is found
+    // rather than spelled; the framing line is what is under test.
+    const profile = (await readdir(where)).find((name) => /insulation-w\d+\.tsv$/.test(name))
+    expect(profile).toBeDefined()
+    const text = await readFile(join(where, profile as string), 'utf8')
+    expect(text).toMatch(/^# framing: whole file at 1000 bp, count, circular chrII/m)
+    expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('refuses a score column the file has not got, by name', async () => {
+    reset()
+    expect(await main(['insulation', sample, '--value', 'oe', '--out', out, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/has no score column "oe"/)
+  })
+
+  it('refuses a cell selection on a file with no cells', async () => {
+    reset()
+    expect(await main(['insulation', sample, '--cell', 'c1', '--out', out, '--quiet'])).toBe(1)
+    expect(complained()).toMatch(/has no cells to choose from/)
+  })
+})
+
 describe('replaying a workspace', () => {
   /** A workspace file of one tab — what the save button writes for one tab. */
   const tabOf = (analysis: unknown, uri = 'sample.hic') => ({

@@ -50,6 +50,8 @@ export interface ContextInput {
   cells?: number
   /** How many of them are ticked; absent means all of them. */
   activeCells?: number
+  /** The ticked cells by name, where fewer than all of them are. */
+  selectedCells?: readonly string[]
   /** The other maps of a deck, for a task that compares two files (§16). */
   peers?: Array<{ label: string; uri: string; binsize: number }>
 }
@@ -123,7 +125,13 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
     // fresh one.
     ...(input.cells === undefined || input.cells === 0
       ? {}
-      : { cells: input.cells, activeCells: input.activeCells ?? input.cells }),
+      : {
+          cells: input.cells,
+          activeCells: input.activeCells ?? input.cells,
+          ...(input.selectedCells === undefined || input.selectedCells.length === 0
+            ? {}
+            : { selectedCells: input.selectedCells }),
+        }),
     ...(input.peers === undefined || input.peers.length === 0 ? {} : { peers: input.peers }),
   }
 }

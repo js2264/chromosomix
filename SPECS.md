@@ -5514,6 +5514,16 @@ is no refusal left for `cliCommandFor` to write. What the record does not hold a
 above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
 the result's, so they are read off the session and, with no session to ask, the note says to add them.
 
+**The framing is written, not only the parameters.** Three facts a session sets from the picture are
+inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
+the sequences declared circular (§8.15), and the ticked cells of an `.scool` (§3.8). A line without
+them repeats a different run, so each is a reserved flag of the command's own — `--value`,
+`--circular`, `--cell` — written whenever it differs from the shell's default and refused before the
+run when the file cannot answer it. The window is *not* one of them: no runner reads the framing's
+extent, which decides only whether the block on screen can be reused, so `--window` is written for
+the record's label and the numbers are the same either way. An imported `.pairs` writes the
+`--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
+
 ### 23.2 What else is on it, and what is not
 
 A day is not only its runs, so three more things are recorded — each at the one place every road to

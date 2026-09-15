@@ -29,7 +29,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   be read*, because the per-bin GC vector the session ships was never computed in a shell; and
   `expected --stranded` could not read a named `.pairs` from disk, nor the orientation curves a
   `.pairs` given as the map had just counted. A composite (`magnetwork`) runs what it requires
-  first, at its defaults, as the app does (README, SPECS §23).
+  first, at its defaults, as the app does. And three facts of a *framing* the session sets from
+  the picture, each an input to the arithmetic and none a parameter of any task, are now flags the
+  console writes whenever they differ from the shell's defaults: `--value` for the score column a
+  `.metacool` is drawn from, `--circular` for the sequences declared circular (§8.15), and `--cell`
+  for the cells of an `.scool` that were ticked (§3.8). An imported `.pairs` writes its
+  `--bin-size` too, since a contact list declares no resolution and the line died at the open
+  without it (README, SPECS §23).
 
 ### Fixed
 
