@@ -356,6 +356,41 @@ ROUTE_GENOME = re.compile(
 )
 
 
+#: The assays whose alignment file is in read-pair order rather than in
+#: coordinate order: the 3C family and its relatives, which 4DN runs through its
+#: Hi-C pipeline (MARGI through its own). The BAM such a pipeline publishes is
+#: the aligner's output in the order the pairs were read, with no ``@HD`` line
+#: claiming otherwise, and the ``.pairs`` and the contact map beside it are the
+#: products. The viewer draws reads from a coordinate-sorted file and refuses
+#: any other (SPECS §8.13), and a row that can only be refused is not a row
+#: (§8.5). Matched on the words of the experiment type, so a new member of the
+#: family whose name says Hi-C or Micro-C arrives filtered and a new linear
+#: assay arrives listed; the words are 4DN's own vocabulary as of 2026-09.
+INTERACTION_ASSAYS = re.compile(
+    r"hi-?c\b|micro-?c\b|capture-?c\b|chia-?pet|chia-?drop|plac-?seq|hichip|\btcc\b"
+    r"|margi|dip-?c\b|mc-?3c|3c-?seq|\b[45]c-?seq\b|trac-?loop|\bdlo\b",
+    re.I,
+)
+
+
+def reads_drawable(suffix: str, assay: str, described: bool) -> bool:
+    """Whether a row of this format and assay is worth a reader's click.
+
+    ``True`` for every format but ``bam``, whose whole use is its reads: a BAM
+    of an interaction assay is in read-pair order (see
+    :data:`INTERACTION_ASSAYS`), and one the portal does not describe at all
+    has no assay to judge by, no biosource, no dataset — nothing a reader could
+    filter on, and on 4DN's bucket almost always the same pipeline's
+    intermediate. Both are left out; the ``.pairs``, the contact map and the
+    linear assays' alignments stay.
+    """
+    if suffix != "bam":
+        return True
+    if not described:
+        return False
+    return INTERACTION_ASSAYS.search(assay) is None
+
+
 def route_of(name: str) -> Optional[str]:
     """``'map'``, ``'genome'``, ``'workspace'`` — or ``None`` for a name with no door."""
     bare = name.split("?")[0].split("#")[0].rsplit("/", 1)[-1]
@@ -1299,19 +1334,29 @@ def entries_4dn(
 ) -> list[dict]:
     """One entry per routable object on the 4DN bucket, enriched where the portal knows it.
 
-    The whole filter is *can this viewer open the name*, which is `route_of`
-    and nothing else. That is the rule SPECS §24.3 argues for: a filter on the
+    The filter is *can this viewer open the name*, which is `route_of`, with
+    one exception. That is the rule SPECS §24.3 argues for: a filter on the
     file rather than on the experiment type needs no maintenance when the
     consortium's vocabulary grows, and it is why Micro-C, sn-Hi-C and whatever
     comes next are in a store nobody edited. ``--formats`` narrows it for a dry
     run and is ``None`` — everything — for a publish.
 
+    The exception is a BAM the viewer could only refuse (:func:`reads_drawable`):
+    the alignment file of an interaction assay is in read-pair order, and the
+    reads the viewer draws are drawn from a coordinate-sorted file. Those rows
+    were a third of the store and every one of them a dead click; the
+    ``.pairs`` and the contact map of the same set are the rows a reader wants.
+
     A file the portal did not describe still gets a row: it is a real object on
     an open bucket, its name carries its accession, and the alternative is a
     catalogue that quietly omits what the search API's facets happened to miss.
+    A BAM is the one format that does not, for the reason above: with no
+    assay to judge it by it is unopenable in all likelihood and unfilterable
+    in any case.
     """
     entries: list[dict] = []
     described = 0
+    unreadable = 0
     for item in objects:
         key = item["key"]
         name = key.rsplit("/", 1)[-1]
@@ -1326,6 +1371,9 @@ def entries_4dn(
         # keeps its stem, which is what the label falls back to.
         accession = name.split(".")[0]
         meta = index.get(accession)
+        if not reads_drawable(suffix, text((meta or {}).get("assay")), meta is not None):
+            unreadable += 1
+            continue
         if meta is not None:
             described += 1
         meta = meta or {}
@@ -1373,7 +1421,11 @@ def entries_4dn(
             log.info("Stopped at the --limit of %d entries.", limit)
             break
     log.info(
-        "%d routable objects, %d of them described by the portal.", len(entries), described
+        "%d routable objects, %d of them described by the portal; %d BAMs left out as "
+        "unreadable (an interaction assay's, or undescribed).",
+        len(entries),
+        described,
+        unreadable,
     )
     return entries
 

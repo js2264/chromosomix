@@ -7,7 +7,7 @@
   "clear_filters": "/search/?type=ExperimentSetReplicate",
   "notification": "Success",
   "title": "Search",
-  "total": 6,
+  "total": 7,
   "@graph": [
     {
       "@id": "/experiment-set-replicates/4DNESD117NVX/",
@@ -591,6 +591,72 @@
           "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/c7a3d1b2-8e4f-4c96-ad20-3f5b7c9e1a24/4DNFIH8XQ2KM.mcool"
         }
       ]
+    },
+    {
+      "@id": "/experiment-set-replicates/4DNESRNA0001/",
+      "@type": [
+        "ExperimentSetReplicate",
+        "ExperimentSet",
+        "Item"
+      ],
+      "uuid": "6f1e2d3c-4b5a-4968-8776-655443322110",
+      "accession": "4DNESRNA0001",
+      "display_title": "4DNESRNA0001",
+      "award": {
+        "project": "4DN"
+      },
+      "lab": {
+        "display_title": "Job Dekker, UMMS"
+      },
+      "dataset_label": "RNA-seq on HFF cells",
+      "experiments_in_set": [
+        {
+          "experiment_type": {
+            "display_title": "RNA-seq"
+          },
+          "biosample": {
+            "biosource": [
+              {
+                "organism": {
+                  "name": "human"
+                }
+              }
+            ]
+          },
+          "processed_files": [
+            {
+              "@id": "/files-processed/4DNFIRNA1BAM/",
+              "@type": [
+                "FileProcessed",
+                "File",
+                "Item"
+              ],
+              "uuid": "5e1c9a7b-2f3d-4e6a-8b9c-0d1e2f3a4b5c",
+              "accession": "4DNFIRNA1BAM",
+              "display_title": "4DNFIRNA1BAM.bam",
+              "file_format": {
+                "display_title": "bam",
+                "file_format": "bam"
+              },
+              "file_type": "alignments",
+              "file_size": 123456789,
+              "genome_assembly": "GRCh38",
+              "status": "released",
+              "open_data_url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/5e1c9a7b-2f3d-4e6a-8b9c-0d1e2f3a4b5c/4DNFIRNA1BAM.bam",
+              "track_and_facet_info": {
+                "biosource_name": "HFFc6",
+                "dataset": "RNA-seq on HFF cells",
+                "experiment_bucket": "processed file",
+                "experiment_type": "RNA-seq",
+                "experimental_lab": "Job Dekker, UMMS",
+                "replicate_info": "biological replicate 1, technical replicate 1",
+                "track_title": "alignments for HFFc6 RNA-seq"
+              }
+            }
+          ]
+        }
+      ],
+      "publications_of_set": []
     }
   ]
 }

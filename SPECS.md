@@ -5820,7 +5820,18 @@ the standard library. Its shape changed once the answer to *what should a portal
 **everything this viewer can open** rather than *the contact maps*, and the change is worth stating
 as a rule, because it is the rule that needs no maintenance: the filter is on whether a file name
 has a route (§20.5), never on an experiment type or a format list, so Micro-C, a bigWig, a peak
-file and whatever a consortium publishes next are in a store nobody edited.
+file and whatever a consortium publishes next are in a store nobody edited. It has one exception,
+and the exception is about what the viewer can *draw* rather than what it can open: a **BAM is its
+reads**, the reads are drawn from a coordinate-sorted file (§8.13), and the alignment file an
+interaction assay's pipeline publishes is in read-pair order — so the 4DN front end leaves out a BAM
+whose experiment type is one of the 3C family (Hi-C in every spelling, Micro-C, Capture-C, ChIA-PET,
+PLAC-seq, HiChIP, TCC, MARGI, Dip-C, TrAC-loop; `INTERACTION_ASSAYS` in the generator, matched on
+the words so a new member arrives filtered), and a BAM the portal does not describe at all, which
+has no assay to judge by and no cell to filter on. On 2026-09-15 that was 2,271 and 6,309 of the
+store's 9,977 BAM rows, every one a click the viewer could only refuse; the 1,397 alignments of
+RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq stay, and so do every `.pairs` and every
+contact map. It is still a rule about the file — which door it opens, whether it can be drawn — and
+not a list of assays worth showing.
 
 **A spine and an enrichment.** The first version asked a portal's search API for both halves of a
 row — which files exist, and what they are of — and that is the wrong shape for a complete
@@ -6103,15 +6114,29 @@ folder after a reload says *sign in to Google* until the reader does. A picked f
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
 beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
 what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
-screen and the tab say the name rather than the address. Where no name says either — a bare id
-pasted into the URL box — the bytes are asked *before* the map door is tried, because that door's
-failure is dear: HDF5 hunts for a superblock at doubling offsets, a megabyte chunk at each, through
-the whole of a file that is not one, and over the Drive API that was the better part of a minute for
-a 56 MB bigWig that then opened in three requests. Those three are what the annotations worker's
+screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
+it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
+token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
+with nothing to ask with, a network that did not answer all come back `null` and the open goes
+ahead under the id as it always did. The answer is what the folder listing would have handed
+along: it names the loading screen, becomes an empty tab's name, and routes the file by its
+suffix, so a pasted `.mcool` takes the map door and a pasted `.bw` the genome door without a
+byte read. Where no name says either — an id Drive would not name — the bytes are asked *before*
+the map door is tried, because that door's failure is dear: HDF5 hunts for a superblock at doubling
+offsets, a megabyte chunk at each, through the whole of a file that is not one, and over the Drive
+API that was the better part of a minute for a 56 MB bigWig that then opened in three requests.
+Those three are what the annotations worker's
 remote handle costs now: it reads 256 KiB chunks and keeps them, one handle per address, so the
 assembly question, the load and the first window read a bigWig's header once between them
 (`worker/cachedFile.ts`) — the arrangement `RemoteRangeSource` has always made for a contact map,
 and the one that makes a host where a request is a second rather than a millisecond usable at all.
+The map door reads a Drive file by range as well, although a browser's `HEAD` of one comes back
+`Content-Encoding: gzip` — Drive re-encodes what it is not asked a range of, and a page cannot
+decline gzip — so `RemoteRangeSource` follows a re-encoded `HEAD` with one for `Range: bytes=0-`
+before concluding anything: Drive answers that raw, with the file's length, and a host that
+re-encodes the range too is refused as §15 always has (`docs/hosting.md`). Without it every Drive
+map went down the whole-object road, silently and whatever its size.
 What the row does not carry is a folder tree: `files.list` answers one parent at a time, which is
 §20.1's rule arriving from the other side.
 

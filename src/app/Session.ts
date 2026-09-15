@@ -97,6 +97,7 @@ import type {
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
 import { routeFor, routeOf, type FileRoute } from '../browse/route'
+import { driveFileName } from '../browse/driveName'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
@@ -2071,12 +2072,26 @@ export class Session {
     label?: string,
   ): Promise<void> {
     if (this.opening === uri) return
+    // An empty tab takes the file's name as its own, as {@link addRemote}'s
+    // does. Read before anything below replaces what the tab holds.
+    const wasEmpty = this.file === null && this.assembly === null
+    // A Drive address ends in an id and says nothing else; where nobody gave a
+    // name, Drive is asked for it first (§24.9) — one small request that names
+    // the loading screen and the tab, and decides the door where the bytes
+    // would otherwise have to be asked.
+    const found = label === undefined ? await this.driveName(uri, source) : null
+    if (this.destroyed) return
+    if (found !== null) label = found
+    const named = (): void => {
+      if (wasEmpty && found !== null && !this.destroyed && this.name === null) this.rename(found)
+    }
     // A file that is not a contact map starts a genome browser instead. Decided
     // by name first — the address's, then the given one — and by the bytes
     // when neither says; see {@link routeOf}.
     const route = routeFor(uri, label)
     if (route === 'genome') {
       await this.openGenome(uri, source, carry?.locus, false, index, label)
+      named()
       return
     }
     // A name that says nothing — a Drive id, a `yeast.txt` — is asked what it
@@ -2087,7 +2102,10 @@ export class Session {
     let sniffed = false
     if (route === 'unknown' && binning === undefined) {
       sniffed = true
-      if (await this.openUnknown(uri, source, carry, label)) return
+      if (await this.openUnknown(uri, source, carry, label)) {
+        named()
+        return
+      }
     }
     // A sidecar dropped with the file reaches the *map* door too, and two
     // formats use it there. Both are folded into the spec rather than carried
@@ -2303,6 +2321,7 @@ export class Session {
       // render explicitly in that case — and only in that case, to avoid
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
+      named()
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -2449,6 +2468,18 @@ export class Session {
   }
 
   /**
+   * What Drive calls a file addressed by id, where the caller gave no name.
+   *
+   * One `files.get` on the key or token the read itself carries, memoised by
+   * `browse/driveName.ts`; `null` for any other address, and for a Drive that
+   * will not say — the open then goes ahead under the id, as it always did.
+   */
+  private async driveName(uri: string, source: SourceSpec): Promise<string | null> {
+    if (source.kind !== 'remote') return null
+    return driveFileName(splitUri(uri).path)
+  }
+
+  /**
    * Second-guess a file the reader refused, by its bytes.
    *
    * Returns `true` when it turned out to be a genome and a browser was opened
@@ -2539,6 +2570,10 @@ export class Session {
       }
     }
     if (this.opening === uri) return
+    // Asked again here for the door a `view=browser` link comes through
+    // directly; from {@link open} the answer is already in hand and costs nothing.
+    if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
+    if (this.destroyed || this.opening === uri) return
     this.opening = uri
     this.noteGrant(uri, source)
     this.showContent(loading(`Reading ${label ?? fileLabel(uri)}`))
@@ -3193,6 +3228,9 @@ export class Session {
       await this.openPicked(uri, source)
       return
     }
+    // A Drive address pasted here says only its id; Drive says the rest (§24.9).
+    if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
+    if (this.destroyed) return
     // An empty tab takes the file's name as its own: a tab that read
     // `1pq7NDWo…` for a file the folder called `ATAC_rep2.bw` was the one
     // place in the application the name did not reach.

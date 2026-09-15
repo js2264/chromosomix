@@ -110,6 +110,15 @@ The viewer refuses the case rather than reading corrupt bytes: `RemoteRangeSourc
 to a single whole-object `GET` — a complete encoded stream *does* inflate correctly — at the cost of
 the bounded-read property.
 
+One host re-encodes only what it is not asked a range of. Google Drive's media endpoint answers a
+browser's `HEAD` — which says it accepts gzip, and a page cannot say otherwise — with
+`Content-Encoding: gzip`, chunked and with no length, and answers every ranged request, `HEAD` or
+`GET`, with a 206 of the identity bytes. Refusing on that first `HEAD` sent every Drive map down the
+whole-object road, silently and whatever its size. So a `HEAD` that comes back re-encoded is followed
+by one more, for `Range: bytes=0-`: a 206 that is not re-encoded and states its length is a host the
+ranged reads can use, and the length is the file's; a host that re-encodes that too — Pages — is
+refused exactly as before, one request later.
+
 That fallback is what kept the demo files working while they were published on Pages beside the app,
 and the reason they are not any more: they are on S3 now
 (`scripts/publish-demo.sh`, [deploy.md](deploy.md#the-demo-files)), where
@@ -425,7 +434,8 @@ environment has:
 4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
    one shared with the signed-in account only — and paste it into the URL box. The link
    (`https://drive.google.com/file/d/<id>/view`) is rewritten to the API's media URL and the map
-   opens.
+   opens, under the file's own name: Drive is asked what the id is called before the first byte is
+   read, and the loading screen and the tab say that rather than the id.
 5. Press *sign out*, then reload and open the same link again. It must fail — a `401` or `403` from
    `www.googleapis.com`, with a *sign in* button on the error screen, not a map.
 
@@ -625,13 +635,16 @@ than paid once; it is exact to a block rather than to a record; and it begins ea
 before its start, so a read that begins further before a window than that and still reaches into
 it is not drawn. For a host you control, the index is strictly better, and it is one command.
 
-**What no road reads** is a file that is not coordinate-sorted. Every BAM on 4DN's bucket is a Hi-C
-pipeline's alignment output, written in read-pair order for the pairs step that follows it and
-never sorted, and a search over one would answer with whatever its probes landed on — so the probes
-are held to the order the file claims, and a file that fails is refused with the two places in it
-that disagree, whatever its `@HD` line said and especially when it said nothing. The refusal names
-`samtools sort` and then `samtools index`, and says that the `.pairs` or the contact map beside such
-a file is the file to open.
+**What no road reads** is a file that is not coordinate-sorted. A Hi-C pipeline's alignment output
+is written in read-pair order for the pairs step that follows it and never sorted, and a search over
+one would answer with whatever its probes landed on — so the probes are held to the order the file
+claims, and a file that fails is refused with the two places in it that disagree, whatever its
+`@HD` line said and especially when it said nothing. The refusal names `samtools sort` and then
+`samtools index`, and says that the `.pairs` or the contact map beside such a file is the file to
+open. The 4DN store no longer offers such a file: a BAM of a Hi-C-family assay, or one the portal
+does not describe, is left out of it at generation time ([docs/stores.md](stores.md)), so what the
+store lists under *bam* is the alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and
+TSA-seq, which are sorted and draw.
 
 ## What already works, host by host
 

@@ -91,7 +91,6 @@ import { hydrateHandles } from '../state/handles'
 import { noticeBanner, openStoredData, restoreBanner } from '../ui/RestoreCard'
 import { decodeShare, readShareHash } from '../state/shareLink'
 import { openShareDialog } from '../ui/ShareDialog'
-import { fileLabel } from '../ui/labels'
 import { appMark } from '../ui/mark'
 import {
   PLOT_OPTION_KEYS,
@@ -1274,8 +1273,9 @@ export class App implements SessionHost {
     this.analysisPanel.setContent([session.analysisHost])
     this.drawerSlot.replaceChildren(session.drawerHost)
     this.applyPanels(session)
-    document.title =
-      session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
+    // The tab's own name where it has one (a Drive file's, a store row's), the
+    // file's otherwise — the same line the tab strip shows.
+    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
   }
 
   private applyPanels(session: Session): void {
@@ -1456,8 +1456,9 @@ export class App implements SessionHost {
     // and cheap: it reads session memory rather than the live objects.
     this.rememberDurably()
     if (session !== this.current) return
-    document.title =
-      session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
+    // The tab's own name where it has one (a Drive file's, a store row's), the
+    // file's otherwise — the same line the tab strip shows.
+    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
   }
 
   stateChanged(session: Session, options: { replace: boolean }): void {

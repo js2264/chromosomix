@@ -246,8 +246,9 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
   })
 
   it('keeps every object the viewer has a route for, whatever the format', () => {
-    // Ten objects in the two listing pages; nine rows. The one that goes is the
-    // `.txt.gz`, and the filter that dropped it is `route_of` and nothing else.
+    // Twelve objects in the two listing pages; nine rows. The `.txt.gz` goes
+    // because `route_of` has no door for it, and two BAMs go because the viewer
+    // could only refuse them (the next test); nothing else is filtered.
     expect(store.entries).toHaveLength(9)
     const text = JSON.stringify(store)
     expect(text, '4DNFIXZUM5P9.txt.gz has no route').not.toContain('4DNFIXZUM5P9')
@@ -256,12 +257,31 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // gets the tracks, the peaks, the reads and the pairs too.
     for (const kept of [
       '4DNFIK9NBYGJ', // .bw
-      '4DNFI24F7GRY', // .bam
+      '4DNFIRNA1BAM', // .bam, of a linear assay
       '4DNFIYZL5V6A', // .bed.gz
       '4DNFIRZ9WSAO', // .pairs.gz
     ]) {
       expect(text, `${kept} must now be a row`).toContain(kept)
     }
+  })
+
+  it('lists a BAM only where its reads can be drawn', () => {
+    // The one exception to "every name with a route": a BAM is its reads, and
+    // the viewer draws them from a coordinate-sorted file (SPECS §8.13). The
+    // Hi-C pipeline's alignment file is in read-pair order, so a row for it is
+    // a click that can only be refused — on the day this was written, 2,271 of
+    // the store's 9,977 BAM rows — and the `.pairs` and the `.mcool` beside it
+    // are the rows a reader wants.
+    const text = JSON.stringify(store)
+    expect(text, 'the in situ Hi-C alignments 4DNFI24F7GRY').not.toContain('4DNFI24F7GRY')
+    // Undescribed as well: no assay to judge it by, and no cell to filter on.
+    expect(text, 'the BAM the portal says nothing about').not.toContain('4DNFIORPHAN1')
+    // A linear assay's alignments stay, on the genome door.
+    expect(row(store, '4DNFIRNA1BAM')?.kind).toBe('genome')
+    // The rule is about BAMs and nothing else: the same set's pairs and its
+    // undescribed FASTA are still rows.
+    expect(text).toContain('4DNFIRZ9WSAO')
+    expect(text).toContain('4DNFIMOUSEREF')
   })
 
   it('has no row for a file the portal named and the bucket does not hold', () => {
@@ -279,17 +299,17 @@ describe.skipIf(!havePython)('the 4DN front end', () => {
     // here rather than in the set's own `processed_files`, and the version of
     // this generator that read only the set array published a catalogue missing
     // them — silently, which is the failure worth a test.
-    expect(row(store, '4DNFI24F7GRY')?.fields).toEqual({
+    expect(row(store, '4DNFIRNA1BAM')?.fields).toEqual({
       assembly: 'GRCh38',
       biosource: 'HFFc6',
-      assay: 'in situ Hi-C (DpnII)',
+      assay: 'RNA-seq',
       format: 'bam',
-      dataset: 'Hi-C on HFF cells - protocol variations',
+      dataset: 'RNA-seq on HFF cells',
       lab: 'Job Dekker, UMMS',
       project: '4DN',
       // The set's accession, on the row: the key the viewer groups by and
       // pairs a session with.
-      set: '4DNESNMAAN97',
+      set: '4DNESRNA0001',
     })
     // And a supplementary group, which is the *other* shape: a list of groups,
     // each with its own `files` array.
@@ -414,7 +434,9 @@ describe.skipIf(!havePython)('the 4DN front end, narrowed and unenriched', () =>
     // that can reach an object store and not a search API. Every row is still
     // there; what is missing is what only the portal knows.
     const store = built('4dn', 'spine.json', '--from-xml', join(FIXTURES, '4dn-bucket'), '--portal', 'skip')
-    expect(store.entries).toHaveLength(9)
+    // Eight, not nine: with nothing from the portal, every BAM is undescribed
+    // and an undescribed BAM is not a row (`reads_drawable`); the rest stay.
+    expect(store.entries).toHaveLength(8)
     expect(String(store.source)).toContain('--portal skip')
     for (const entry of store.entries ?? []) {
       // The one cell a file name answers by itself, and nothing else.
@@ -436,7 +458,7 @@ describe.skipIf(!havePython)('the 4DN front end, narrowed and unenriched', () =>
     )
     expect(run.status).toBe(0)
     expect(run.stderr).toMatch(/--portal optional/)
-    expect(read('optional.json').entries).toHaveLength(9)
+    expect(read('optional.json').entries).toHaveLength(8)
   })
 
   it('--portal require fails the run instead, and writes nothing', () => {
@@ -906,9 +928,10 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     )
     expect(run.status, run.stderr).toBe(0)
     const sessions = read('4dn-sessions.json')
-    // Two of the fixture's six sets have both a map and something to draw on
+    // Two of the fixture's seven sets have both a map and something to draw on
     // it; the rest are skipped rather than opened on a track, because a session
-    // whose lead is a bigWig is not what picking an experiment set means.
+    // whose lead is a bigWig — or a BAM, for the RNA-seq set — is not what
+    // picking an experiment set means.
     expect(sessions.entries).toHaveLength(2)
     const held = JSON.parse(
       readFileSync(join(out, 'sessions-4dn', '4dn-4dnesnmaan97-grch38.metacooler.json'), 'utf8'),
@@ -921,9 +944,10 @@ describe.skipIf(!havePython)('pre-configured sessions', () => {
     // a single-resolution one, because the session opens at whatever zoom the
     // reader lands on.
     expect(String(tab?.state?.uri)).toContain('4DNFIQ9FG7RR.mcool')
-    // In the catalogue's own order, which is by label: the `.bam` of this set
-    // comes before its `.bw`.
-    expect((tab?.tracks ?? []).map((track) => track.kind)).toEqual(['alignments', 'track'])
+    // The set's `.bw` and nothing else: its Hi-C alignment file is not a row
+    // (it is in read-pair order and the viewer would refuse it), so it is not
+    // placed on the map as a track that could only fail.
+    expect((tab?.tracks ?? []).map((track) => track.kind)).toEqual(['track'])
     // The assembly is in the id because it is in the key: ENCODE publishes one
     // experiment against GRCh38 and hg19 both, and a session that grouped on
     // the dataset alone drew hg19 tracks over a GRCh38 map with nothing on
@@ -1026,7 +1050,9 @@ describe.skipIf(!havePython)('a run that found nothing', () => {
       '--from-xml',
       join(FIXTURES, '4dn-bucket'),
     )
-    expect(store.entries).toHaveLength(9)
+    // Eight: a portal that answered nothing describes no BAM, and an
+    // undescribed BAM is not a row (`reads_drawable`).
+    expect(store.entries).toHaveLength(8)
   })
 })
 
@@ -1297,9 +1323,9 @@ server.listen(0, '127.0.0.1', () => {
     expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
     expect(run.status, run.stderr).toBe(0)
 
-    // Six sets at two a page: three pages, and a fourth is not asked for —
+    // Seven sets at two a page: four pages, and a fifth is not asked for —
     // `total` says where the end is and the walk believes it.
-    expect(held.asked()).toEqual(['2 0', '2 2', '2 4'])
+    expect(held.asked()).toEqual(['2 0', '2 2', '2 4', '2 6'])
     const store = read('live.json')
     expect(store.entries).toHaveLength(9)
     // A file described by the *first* record and one described by the *last*: a
@@ -1319,7 +1345,7 @@ server.listen(0, '127.0.0.1', () => {
     expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
     expect(run.status, run.stderr).toBe(0)
     // Four requests for three pages: the second was asked for twice.
-    expect(held.asked()).toEqual(['2 0', '2 2', '2 2', '2 4'])
+    expect(held.asked()).toEqual(['2 0', '2 2', '2 2', '2 4', '2 6'])
     // Said once, in the log, naming what happened — not swallowed, because a
     // portal that needs retrying every week is something to know about.
     expect(run.stderr).toMatch(/was cut off/)
@@ -1352,7 +1378,7 @@ server.listen(0, '127.0.0.1', () => {
     expect(run.status).toBe(1)
     expect(run.stderr).not.toMatch(/Traceback/)
     expect(run.stderr).toMatch(/ignoring `from`/)
-    expect(run.stderr).toMatch(/2 of 6 records were collected/)
+    expect(run.stderr).toMatch(/2 of 7 records were collected/)
     expect(existsSync(target)).toBe(false)
     // Two requests: the first page, and the one that proved nothing was moving.
     expect(held.asked()).toEqual(['2 0', '2 2'])
@@ -1419,7 +1445,7 @@ server.listen(0, '127.0.0.1', () => {
     expect(run.status, run.stderr).toBe(0)
     expect(run.stderr).toMatch(/zero results/)
     const store = read('nothing-matched.json')
-    expect(store.entries).toHaveLength(9)
+    expect(store.entries).toHaveLength(8)
     for (const entry of store.entries ?? []) {
       expect(Object.keys(entry.fields as Record<string, string>)).toEqual(['format'])
     }

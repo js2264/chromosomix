@@ -203,6 +203,22 @@ export class RemoteRangeSource implements ByteSource {
     // `worker/sources.ts`), which is why this carries its own code.
     const encoding = reEncoding(head)
     if (encoding !== null) {
+      // A host that re-encodes an *unranged* answer may still serve a range
+      // raw. Google Drive is one: a browser says it accepts gzip, and Drive
+      // gzips the HEAD — `Content-Encoding: gzip`, chunked, no length — while
+      // every ranged request, HEAD or GET, is answered 206 with the identity
+      // bytes. So the range is asked for by HEAD before anything is concluded:
+      // a 206 that is not re-encoded and states its length is a host the reads
+      // below can use, and the length is the file's, since `bytes=0-` is all
+      // of it. A host that re-encodes that too (GitHub Pages) is refused as
+      // before, one request later.
+      const ranged = await rangedHead(url, doFetch, sign, cost)
+      const rangedLength =
+        totalFromContentRange(ranged?.headers.get('content-range') ?? null) ??
+        numberHeader(ranged, 'content-length')
+      if (ranged !== null && ranged.status === 206 && reEncoding(ranged) === null && rangedLength !== null) {
+        return new RemoteRangeSource(url, rangedLength, options, cost)
+      }
       throw new ViewerError(
         'remote-compressed',
         `${host} is serving ${url} with \`Content-Encoding: ${encoding}\`, so byte ranges ` +
@@ -636,6 +652,25 @@ function hostOf(url: string): string {
  * A browser decodes the body transparently and leaves the header in place, so
  * its presence is the signal; it is not asking us to decode anything.
  */
+/**
+ * A `HEAD` for the whole file *as a range*, or `null` where the host would not
+ * answer one. Only ever sent after an unranged `HEAD` came back re-encoded —
+ * see the caller — so a host that never does that never sees it.
+ */
+async function rangedHead(
+  url: string,
+  doFetch: typeof fetch,
+  sign: (method: string) => Record<string, string>,
+  cost: SourceStats,
+): Promise<Response | null> {
+  try {
+    cost.requests += 1
+    return await doFetch(url, { method: 'HEAD', headers: { ...sign('HEAD'), Range: 'bytes=0-' } })
+  } catch {
+    return null
+  }
+}
+
 function reEncoding(response: Response | null): string | null {
   const raw = (response?.headers.get('content-encoding') ?? '').trim().toLowerCase()
   if (raw === '' || raw === 'identity') return null

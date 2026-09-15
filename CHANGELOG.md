@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts
+  gzip, and Drive takes it up on an unranged `HEAD`: `Content-Encoding: gzip`, chunked, no length.
+  The map door read that as a host that re-encodes what it serves — GitHub Pages does, and ranges
+  through a gzip stream are garbage — and took the fallback for such a host, one `GET` of the whole
+  file into memory, silently and whatever the size: 81 MB for the `.mcool` this was found on, and
+  the same road for a 2 GB one. Drive answers every *ranged* request raw, so a `HEAD` that comes
+  back re-encoded is now followed by one more, for `Range: bytes=0-`, and a 206 that is not
+  re-encoded and states its length is read by range from there — the file's length, since the
+  range is all of it. Pages re-encodes that too and is refused exactly as before, one request later
+  (docs/hosting.md, docs/remote-sources.md).
+
 - **A file picked from Google Drive took a long time to open, under a name that was its id.** A
   Drive file is addressed by an id, so nothing in its address says what it is, and the session took
   the contact-map door first: a `HEAD`, then HDF5 hunting for a superblock at doubling offsets — a
@@ -79,6 +90,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   off response that started this.
 
 ### Added
+
+- **A pasted Drive link opens under the file's own name.** A share link becomes the Drive API's
+  media address, which ends in an id and says nothing else, so the loading screen, the tab and the
+  router all saw `1Vs9WgmiQj3CMSaDrXNBzzV3tp72GTLu6` where a folder pick would have said
+  `SB112b^mapped_CalTech4^B0AGU2.mcool`. Drive is now asked what the id is called before the file is
+  opened — one `files.get` with `fields=name`, on the same key or token the read carries, once per
+  file for the page — and the answer names the loading screen, becomes an empty tab's name, and
+  chooses the door by its suffix, so a pasted `.mcool` opens as a map and a pasted `.bw` as a
+  browser without the bytes being asked first. A Drive that will not say — a private file this tab
+  is not signed in for, a site built without a key, a network that did not answer — costs nothing
+  and changes nothing: the open goes ahead under the id, as before (SPECS §24.9).
 
 - **A BAM with no index opens, and draws its reads.** A BAM was read through its index and
   nothing else, and a file without one was refused by name with `samtools index` — the right
@@ -776,6 +798,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   keep their indices.
 
 ### Changed
+
+- **The 4DN store lists a BAM only where its reads can be drawn.** A third of the store's rows
+  were BAMs, and most of those were clicks that could only be refused: 2,271 were the alignment
+  files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C, PLAC-seq, DNase
+  Hi-C, ChIA-PET, MARGI, TCC, HiChIP), which a Hi-C pipeline writes in read-pair order and the
+  viewer refuses for want of a sort, and 6,309 were BAMs the portal describes nowhere — no assay,
+  no biosource, no dataset, nothing to filter on. The generator now leaves both out, so *bam* in the
+  Files facet is the 1,397 alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq,
+  which are sorted and draw; the `.pairs` and the contact map of every Hi-C set are the rows that
+  were wanted from it, and they stay. The rule is about what a BAM is — its reads — and not a list of
+  assays: a new member of the family whose name says Hi-C arrives filtered, and a new linear assay
+  arrives listed (SPECS §24.3, docs/stores.md).
 
 - **The Google Drive and Dropbox panes are a title, a `?` and a button.** Each was still two or
   three paragraphs about the grant and the token between its heading and its button, and the Drive
