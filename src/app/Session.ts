@@ -7419,6 +7419,11 @@ export class Session {
       // offered for whichever one an analysis would be measured against.
       cells: info.cells.length,
       activeCells: info.activeCells.length,
+      // By name where a subset is ticked, so the command line the console and
+      // the drawer write can say which cells the map was summed from.
+      ...(info.cells.length > 0 && info.activeCells.length < info.cells.length
+        ? { selectedCells: info.activeCells }
+        : {}),
       // Every map on screen **except the one this context is about**, which is
       // the star. A task that compares two files is offered the others, and a
       // map cannot be a peer of itself.

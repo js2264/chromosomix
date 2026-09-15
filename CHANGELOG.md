@@ -12,6 +12,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **Every task in the catalogue runs from the shell, so every run the console records is a real
+  command.** `metacooler-run` refused four of them by name — the 1D metaplot, track correlation and
+  FRiP, whose bigWig reader lived in the annotations worker alone, and reproducibility (HiCRep),
+  whose second map the deck supplies — and any run made in a 1D browser session, which has no
+  contact map to open as the first argument. The console (§23) recorded each of those as a sentence
+  with the refusal under it, and the drawer's *copy CLI command* was greyed. Now `--tracks` opens a
+  bigWig, a bedGraph, a wig or a FASTA read as GC content where it lies, and the runners are handed
+  the same `sample` the worker answers; `--against` names the maps HiCRep compares with, mounted as
+  the analysis worker mounts them; a track task with no file positional runs over the assembly the
+  tracks declare, framed as the session frames it; `--track` names the file behind an id a replayed
+  workspace recorded, and the tab's own track list says which is which. Two silent gaps went with
+  them: `compartments --phaseSequence` had parsed the reference and then reported that it *could not
+  be read*, because the per-bin GC vector the session ships was never computed in a shell; and
+  `expected --stranded` could not read a named `.pairs` from disk, nor the orientation curves a
+  `.pairs` given as the map had just counted. A composite (`magnetwork`) runs what it requires
+  first, at its defaults, as the app does. And three facts of a *framing* the session sets from
+  the picture, each an input to the arithmetic and none a parameter of any task, are now flags the
+  console writes whenever they differ from the shell's defaults: `--value` for the score column a
+  `.metacool` is drawn from, `--circular` for the sequences declared circular (§8.15), and `--cell`
+  for the cells of an `.scool` that were ticked (§3.8). An imported `.pairs` writes its
+  `--bin-size` too, since a contact list declares no resolution and the line died at the open
+  without it (README, SPECS §23).
+
 ### Fixed
 
 - **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts

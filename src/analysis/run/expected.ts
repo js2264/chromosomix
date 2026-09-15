@@ -637,26 +637,31 @@ async function strandedCurves(job: JobContext): Promise<TaskOutput | null> {
  * reader is not a thing this application should have two of.
  */
 async function countNamed(job: JobContext, uri: string): Promise<OrientationCounts | null> {
-  if (!/^(https?|s3):\/\//i.test(uri)) {
+  const remote = /^(https?|s3):\/\//i.test(uri)
+  // A path is a shell's whole case and a worker's impossible one, and each
+  // venue says which it is by the capability it answers (`JobContext.openFile`).
+  if (!remote && job.openFile === undefined) {
     job.note(
       `“${uri}” is not an address this can fetch. A local file has none — drop it on the app, ` +
-        'which imports it and counts these curves in the same pass. Only http(s) and s3 URLs can ' +
-        'be named here, and a URL is fetched as it stands — a file behind a store, a share link, ' +
+        'which imports it and counts these curves in the same pass, or name it in a ' +
+        '`metacooler-run` line, which reads it from disk. Only http(s) and s3 URLs can be ' +
+        'named here, and a URL is fetched as it stands — a file behind a store, a share link, ' +
         'Google Drive or Dropbox is authorised by a token this box has no way to carry, so those ' +
         'are opened the usual way and imported.',
     )
     return null
   }
-
-  if (job.openBytes === undefined) {
+  const open = remote ? job.openBytes : job.openFile
+  if (open === undefined) {
     job.note(
-      'Reading a named .pairs needs a venue that can open one, and this is not it. Run it in the app.',
+      `Reading ${uri} needs a venue that can fetch an address, and this one reads local files ` +
+        'only. Fetch it first and name the file, or run it in the app.',
     )
     return null
   }
   let source
   try {
-    source = await job.openBytes(uri)
+    source = await open(uri)
   } catch (error) {
     job.note(`Could not open ${uri}: ${error instanceof Error ? error.message : String(error)}`)
     return null

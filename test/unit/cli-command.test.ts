@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { cliCannotRepeat, cliCannotRun, cliCommandFor, quote } from '@/analysis/cliCommand'
+import { cliCommandFor, quote } from '@/analysis/cliCommand'
 import { TASKS, taskById } from '@/analysis/registry'
 import type {
   AnalysisContext,
@@ -389,41 +389,49 @@ describe('a run with no contact map', () => {
     label: 'Yeast_ATAC.bw · loaded tracks, no contact map',
   }
 
-  it('is refused rather than written against the file that named the assembly', () => {
+  it('is written with no file to open, rather than against the file that named the assembly', () => {
     // `metacooler-run overlap Yeast_ATAC.bw` reads perfectly well and fails at
     // the open: the command takes a contact map as its first argument, and a
-    // browser session has none. That is the one outcome this module exists to
-    // prevent, so it is a refusal and not a line.
+    // browser session has none. So the line has no positional at all — which
+    // is how `cli/main.ts` runs a track task over what the tracks declare.
     const overlap = taskById('overlap') as AnalysisTask
     const built = cliCommandFor({
       task: overlap,
       provenance: provenance('overlap', defaultsOf(overlap), mapless),
       context: context(),
     })
-    expect(built.text).toBe('')
-    expect(built.refusal).toContain('no contact map')
-    expect(built.refusal).toContain('first argument')
+    const command = commandOf(built.text)
+    expect(command.startsWith('metacooler-run overlap --')).toBe(true)
+    expect(command).not.toContain('Yeast_ATAC.bw')
+    // Nothing to balance and nothing to window, so neither is said.
+    expect(command).not.toContain('--balance')
+    expect(command).not.toContain('--window')
   })
 
-  it('is the same predicate the button is greyed by', () => {
-    const overlap = taskById('overlap') as AnalysisTask
-    const record = provenance('overlap', defaultsOf(overlap), mapless)
-    // One rule for both, or the button hands over a line the command rejects.
-    expect(cliCannotRepeat(overlap, record)).toBe(
-      cliCommandFor({ task: overlap, provenance: record, context: context() }).refusal,
-    )
-    // And the descriptor alone cannot see it, which is why there are two.
-    expect(cliCannotRun(overlap)).toBeNull()
+  it('still names the tracks and the sets it read', () => {
+    const metaplot = taskById('metaplot') as AnalysisTask
+    const built = cliCommandFor({
+      task: metaplot,
+      provenance: provenance(
+        'metaplot',
+        { ...defaultsOf(metaplot), tracks: ['t1'], features: 'a1' },
+        mapless,
+      ),
+      context: context([entry('t1', 'ATAC', 'Yeast_ATAC.bw'), entry('a1', 'peaks', 'peaks.bed')]),
+    })
+    const command = commandOf(built.text)
+    expect(command.startsWith('metacooler-run metaplot --')).toBe(true)
+    expect(command).toContain('--tracks Yeast_ATAC.bw')
+    expect(command).toContain('--features peaks.bed')
   })
 
-  it('still writes the line for the same task over a map', () => {
+  it('still writes the file for the same task over a map', () => {
     const overlap = taskById('overlap') as AnalysisTask
     const built = cliCommandFor({
       task: overlap,
       provenance: provenance('overlap', defaultsOf(overlap)),
       context: context(),
     })
-    expect(built.refusal).toBeNull()
     expect(commandOf(built.text).startsWith('metacooler-run overlap yeast.mcool')).toBe(true)
   })
 })
@@ -477,21 +485,67 @@ describe('what a shell cannot be given', () => {
   })
 
   /**
-   * A task that reads a track is refused before anything is opened, by the same
-   * predicate the command itself consults — so the button that would write the
-   * line and the command that would reject it cannot disagree.
+   * A task that reads a track loads it under the parameter's own flag: the
+   * CLI opens whatever `--tracks` names, so the load and the binding are one
+   * token pair per file, and a line with two tracks has two of them.
    */
-  it('refuses a task the command could not start, in the command’s own words', () => {
+  it('writes each track once, as the parameter that loads it', () => {
     const metaplot = taskById('metaplot') as AnalysisTask
-    const refusal = cliCannotRun(metaplot)
-    expect(refusal).not.toBeNull()
     const built = cliCommandFor({
       task: metaplot,
-      provenance: provenance('metaplot', {}),
-      context: context(),
+      provenance: provenance('metaplot', {
+        ...defaultsOf(metaplot),
+        tracks: ['t1', 't2'],
+        features: 'a1',
+      }),
+      context: context([
+        entry('t1', 'ATAC', 'Yeast_ATAC.bw'),
+        entry('t2', 'MNase', 'Yeast_MNase.bw'),
+        entry('a1', 'peaks', 'peaks.bed'),
+      ]),
     })
-    expect(built.refusal).toBe(refusal)
-    expect(built.text).toBe('')
+    const command = commandOf(built.text)
+    expect(command.split('--tracks').length - 1).toBe(2)
+    expect(command).toContain('--tracks Yeast_ATAC.bw')
+    expect(command).toContain('--tracks Yeast_MNase.bw')
+    expect(command).not.toContain('--track ')
+    expect(command).toContain('--features peaks.bed')
+  })
+
+  /**
+   * The other maps of the deck are the session's and not the result's, so
+   * they come from the context — and a command written with none to ask is
+   * told what it is missing rather than handed a line that notes "no second
+   * map" after the mount.
+   */
+  it('names the maps a reproducibility run compared against', () => {
+    const hicrep = taskById('hicrep') as AnalysisTask
+    const built = cliCommandFor({
+      task: hicrep,
+      provenance: provenance('hicrep', defaultsOf(hicrep)),
+      context: {
+        ...context(),
+        peers: [
+          { label: 'rep2', uri: 'rep2.mcool::resolutions/1000', binsize: 1000 },
+          { label: 'rep3', uri: 'https://example.org/rep3.cool', binsize: 1000 },
+        ],
+      },
+    })
+    const command = commandOf(built.text)
+    expect(command).toContain('--against rep2.mcool::resolutions/1000')
+    expect(command).toContain('--against https://example.org/rep3.cool')
+    expect(notesOf(built.text).join(' ')).toContain('rep3 is remote')
+  })
+
+  it('says what to add when the maps compared against are not in the record', () => {
+    const hicrep = taskById('hicrep') as AnalysisTask
+    const built = cliCommandFor({
+      task: hicrep,
+      provenance: provenance('hicrep', defaultsOf(hicrep)),
+      context: null,
+    })
+    expect(commandOf(built.text)).not.toContain('--against')
+    expect(notesOf(built.text).join(' ')).toContain('--against <file>')
   })
 })
 
@@ -505,18 +559,16 @@ describe('every task in the registry', () => {
    */
   const RESERVED = new Set([
     'out', 'o', 'window', 'balance', 'features', 'pairs', 'over', 'quiet', 'help',
-    'bin-size', 'binsize', 'rungs', 'sequence',
+    'bin-size', 'binsize', 'rungs', 'sequence', 'track', 'against', 'value', 'circular', 'cell',
   ])
 
   for (const task of TASKS) {
     it(`writes a line ${task.id} would accept`, () => {
-      if (cliCannotRun(task) !== null) return
       const built = cliCommandFor({
         task,
         provenance: provenance(task.id, defaultsOf(task)),
         context: context(),
       })
-      expect(built.refusal).toBeNull()
       const command = commandOf(built.text)
       const declared = new Set(task.params.map((param) => param.key))
       for (const key of flagsOf(command).keys()) {
@@ -527,6 +579,82 @@ describe('every task in the registry', () => {
       expect(command.startsWith(`metacooler-run ${task.id} yeast.mcool`)).toBe(true)
     })
   }
+})
+
+describe('the framing a session sets from the picture', () => {
+  /**
+   * Three inputs to the arithmetic that are properties of the *framing* rather
+   * than of any parameter, and that the shell has to be told: a line without
+   * them repeats a different run. Their defaults — the count column, no
+   * circular sequence, every cell — are the shell's own and go unsaid.
+   */
+  it('names the score column the map was drawn from, unless it is the count', () => {
+    const drawn = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { value: 'balanced_by_depth' }),
+      context: context(),
+    })
+    expect(commandOf(drawn.text)).toContain('--value balanced_by_depth')
+    const counted = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { value: 'count' }),
+      context: context(),
+    })
+    expect(commandOf(counted.text)).not.toContain('--value')
+  })
+
+  it('names the sequences declared circular', () => {
+    const built = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), { circular: ['pCEN', 'p2u'] }),
+      context: context(),
+    })
+    expect(commandOf(built.text)).toContain('--circular pCEN,p2u')
+  })
+
+  it('names the ticked cells of an .scool, and says so when it cannot', () => {
+    const chosen = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 2, selectedCells: ['c1', 'c3'] },
+    })
+    expect(commandOf(chosen.text)).toContain('--cell c1,c3')
+    // Every cell ticked is the shell's default, so nothing is said.
+    const all = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 3 },
+    })
+    expect(commandOf(all.text)).not.toContain('--cell')
+    // A subset the context counts but does not name: a note, not a guess.
+    const unnamed = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: { ...context(), cells: 3, activeCells: 2 },
+    })
+    expect(commandOf(unnamed.text)).not.toContain('--cell')
+    expect(notesOf(unnamed.text).join(' ')).toContain('--cell <name>')
+  })
+
+  it('writes the bin size an imported .pairs was framed at', () => {
+    // A contact list declares no resolution; the session answered a dialog and
+    // the shell's answer is `--bin-size`. Without it the line dies at the open.
+    const built = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation), {
+        uri: 'data/Hum53.pairs.gz',
+        binsize: 5000,
+      }),
+      context: context(),
+    })
+    expect(commandOf(built.text)).toContain('metacooler-run insulation data/Hum53.pairs.gz --bin-size 5000')
+    const cooler = cliCommandFor({
+      task: insulation,
+      provenance: provenance('insulation', defaultsOf(insulation)),
+      context: context(),
+    })
+    expect(commandOf(cooler.text)).not.toContain('--bin-size')
+  })
 })
 
 describe('quoting', () => {

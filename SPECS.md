@@ -5496,21 +5496,33 @@ the job (`analysis/record.ts`), and the result's own replaces it the moment ther
 beside it, because two accounts of one run is how they come to disagree.
 
 The command itself is `cliCommandFor`, called with the same `Provenance` the drawer's button passes
-it. One function, two callers: a line in the console and a line on the clipboard cannot drift, and a
-run the CLI cannot repeat is recorded as a sentence with the refusal under it rather than dropped,
-because a record with holes in it exactly where the reader is least likely to look is worse than no
-record.
+it. One function, two callers: a line in the console and a line on the clipboard cannot drift.
 
-**What "cannot repeat" means is a property of the run, not only of the task.** `cliCannotRun`
-answers about the descriptor — the three tasks that read a bigWig, whose reader lives in the
-annotations worker — and it is what `cli/main.ts` itself refuses on. It cannot see the other half,
-which is a session with **no contact map**: `metacooler-run` takes a file as its first argument and
-opens it as one, a 1D browser (§5.8) has none, and the framing there names the bigWig that declared
-the assembly. Left to the descriptor alone, a perfectly runnable task came out as `metacooler-run
-overlap Yeast_ATAC.bw` — a line that reads well and dies at the open, which is the one outcome
-`analysis/cliCommand.ts` exists to prevent. `cliCannotRepeat` is both halves, and it is what the
-drawer's button is greyed by as well as what the command refuses on: two copies of that rule is a
-button handing over a line the command rejects.
+**Every run is a command, and the shell takes every task.** For a while the CLI refused by name — the
+three tasks that read a bigWig, whose reader lived in the annotations worker alone; the one that reads
+a second map, which the deck supplies and a shell has no concept of; and any run made in a session
+with **no contact map**, since `metacooler-run` opened its first argument as one and a 1D browser
+(§5.8) has none to name. Each refusal was honest, and each was recorded here as a sentence with the
+refusal under it, which is a record with holes in it exactly where the reader is least likely to
+look. So the shell gained what it was said not to have, each as the code the worker already runs:
+`src/cli/tracks.ts` opens a bigWig, a bedGraph, a wig or a FASTA under `--tracks` and answers `sample`
+in the worker's own shape; `--against` names the maps `hicrep` compares with, mounted through the
+same `peer`; a track task with no positional runs over the assembly the tracks declare, framed exactly
+as the session frames it; a FASTA named for compartment phasing becomes the per-bin GC vector the
+session would have shipped; and a `.pairs` named for its orientation curves is read from disk. There
+is no refusal left for `cliCommandFor` to write. What the record does not hold arrives as a `#` note
+above the line rather than as a silent omission — the maps `hicrep` ran against are the deck's and not
+the result's, so they are read off the session and, with no session to ask, the note says to add them.
+
+**The framing is written, not only the parameters.** Three facts a session sets from the picture are
+inputs to the arithmetic and parameters of no task: the score column the map is drawn from (§3.5),
+the sequences declared circular (§8.15), and the ticked cells of an `.scool` (§3.8). A line without
+them repeats a different run, so each is a reserved flag of the command's own — `--value`,
+`--circular`, `--cell` — written whenever it differs from the shell's default and refused before the
+run when the file cannot answer it. The window is *not* one of them: no runner reads the framing's
+extent, which decides only whether the block on screen can be reused, so `--window` is written for
+the record's label and the numbers are the same either way. An imported `.pairs` writes the
+`--bin-size` it was framed at, since a contact list declares no resolution of its own (§3.7).
 
 ### 23.2 What else is on it, and what is not
 

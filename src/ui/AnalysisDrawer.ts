@@ -81,7 +81,7 @@ import {
   type TaskResult,
 } from '../analysis/types'
 import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
-import { cliCannotRepeat, cliCommandFor } from '../analysis/cliCommand'
+import { cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
 import { profileCurve } from './analysisPlots'
@@ -1419,24 +1419,17 @@ export class AnalysisDrawer {
    * which the reader finds out somewhere else, later, with the app closed.
    */
   private paintCli(provenance: Provenance): void {
-    const task = taskById(provenance.task)
-    // The *run*, not the task: a session with no contact map has no file for the
-    // command's first argument, and the descriptor cannot see that. One
-    // predicate for the button and for the command, which is the arrangement
-    // `analysis/cliCommand.ts` argues for at length.
-    const refusal = task === undefined ? null : cliCannotRepeat(task, provenance)
     // A task this build has never heard of — a result restored from a session
-    // written by a later one. There is nothing to write a command from, since
-    // the flags are the descriptor's, so the button goes quiet rather than
-    // guessing at them.
-    const unknown = task === undefined
-    this.cliButton.disabled = unknown || refusal !== null
-    this.cliButton.title =
-      refusal ??
-      (unknown
-        ? `This build does not have the task ${provenance.task}, so it cannot write its flags.`
-        : 'The same run as a `metacooler-run` line — the file, the window, the balancing and ' +
-          'every parameter — for the other two hundred files.')
+    // written by a later one — is the one run with no command: the flags are
+    // the descriptor's, and there is no descriptor, so the button goes quiet
+    // rather than guessing at them. Every task this build has is one
+    // `metacooler-run` takes (`analysis/cliCommand.ts`).
+    const unknown = taskById(provenance.task) === undefined
+    this.cliButton.disabled = unknown
+    this.cliButton.title = unknown
+      ? `This build does not have the task ${provenance.task}, so it cannot write its flags.`
+      : 'The same run as a `metacooler-run` line — the file, the window, the balancing and ' +
+        'every parameter — for the other two hundred files.'
   }
 
   /**
@@ -1457,10 +1450,6 @@ export class AnalysisDrawer {
       provenance: result.provenance,
       context: this.options.context(),
     })
-    if (command.refusal !== null) {
-      this.setStatus(command.refusal)
-      return
-    }
     const caveats = command.text.split('\n').filter((line) => line.startsWith('#')).length
     void copyTextToClipboard(command.text).then(
       () => {

@@ -51,7 +51,8 @@ export const runHicrep: TaskRunner = async (job) => {
   }
   if (job.peer === undefined) {
     throw new Error(
-      'Reproducibility reads a second file, and this venue cannot open one. Run it in the app.',
+      'Reproducibility reads a second file, and this venue cannot open one. Run it in the app, ' +
+        'or with `metacooler-run hicrep <file> --against <other>`.',
     )
   }
 

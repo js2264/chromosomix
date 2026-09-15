@@ -17,15 +17,17 @@
  * So the drawer copies the command. Same source as `copy provenance` beside it —
  * the {@link Provenance} of the result on screen — because a command built from
  * anything else would be a second account of what was run, and two accounts of
- * one run is how they come to disagree.
+ * one run is how they come to disagree. The console (§23) writes the same line
+ * from the same function when the run starts, which is the other half of that.
  *
  * ## What is in it, and what cannot be
  *
  * Everything the CLI reads: the task, the file, the framing's window and
  * balancing, every parameter the task declares, and the `--features`,
- * `--pairs` and `--sequence` loads that a parameter naming a loaded file
- * implies. The order is the order a person would write it — subject, framing,
- * inputs, parameters — rather than the order the parser happens to accept.
+ * `--pairs`, `--sequence` and `--tracks` loads that a parameter naming a
+ * loaded file implies. The order is the order a person would write it —
+ * subject, framing, inputs, parameters — rather than the order the parser
+ * happens to accept.
  *
  * Three things a browser knows and a shell cannot be told, and each one is a
  * `#` comment line above the command rather than a silent omission, because a
@@ -42,14 +44,23 @@
  * - **A parameter naming something with no file behind it** — a peak set the app
  *   itself called, most often. There is nothing for `--features` to point at.
  *
- * ## And the tasks that cannot run there at all
+ * ## And the runs that used to have no command at all
  *
- * {@link cliCannotRun} moved here from `cli/main.ts` so that one predicate
- * decides both whether the command refuses to start and whether the button that
- * writes it is offered at all. Two copies of that rule would be a button that
- * cheerfully hands over a command line the command rejects — the reader finding
- * out somewhere else, later, with the app closed, which `ui/SyntheticCard.ts`
- * argues at length is the one outcome worse than not offering it.
+ * For a while this file also *refused*: the three tasks that read a bigWig, the
+ * one that reads a second map, and any run made in a session with no contact
+ * map, each with a sentence saying why a shell could not take it. Every one of
+ * those sentences was a hole in the console exactly where a reader looks for a
+ * line to paste. `cli/main.ts` now opens tracks (`cli/tracks.ts`), mounts the
+ * maps `--against` names, and runs a track task with no file positional — so
+ * there is no refusal left to write, and `cliCommandFor` is total: every run
+ * has a command.
+ *
+ * Two of those cases carry a note rather than a refusal, because they name
+ * things the **record** does not hold. The maps `hicrep` compared against are
+ * the deck's, not the result's, so they come from the session's context and are
+ * left to the reader to name when the context is gone; and a session with no
+ * map frames its run against the file that declared the assembly, which is
+ * written as the `--tracks` load it is rather than as a map to open.
  */
 
 import type {
@@ -64,92 +75,36 @@ import type {
 import type { AnnotationEntry } from '../annotations/types'
 import type { Extent } from '../types'
 
-/** The command the drawer copies, or the reason there is none. */
+/** The command the drawer copies. */
 export interface CliCommand {
   /**
    * What goes on the clipboard: any `#` notes, then the command, one line each.
    *
-   * Empty when {@link refusal} is set. Comment lines rather than a separate
-   * field because they are part of what is pasted — a shell reads them as
-   * nothing, and a reader who pastes into a script keeps the caveat next to the
-   * line it is about.
+   * Comment lines rather than a separate field because they are part of what is
+   * pasted — a shell reads them as nothing, and a reader who pastes into a
+   * script keeps the caveat next to the line it is about.
    */
   text: string
-  /** Why this task cannot be run from a shell at all, or `null`. */
-  refusal: string | null
-}
-
-/**
- * Why this task cannot be run from a shell, or `null` when it can.
- *
- * Moved out of `cli/main.ts` unchanged. The rule is about the *descriptor* and
- * nothing else — a task that reads a track needs `@gmod/bbi`, which is imported
- * by the annotations worker and by nothing else, one of the three layering rules
- * this repository enforces rather than encourages.
- */
-export function cliCannotRun(task: AnalysisTask): string | null {
-  // A second map, which a shell has no concept of. The deck is what supplies one
-  // and the deck is a property of a window (§16) — there is no flag that could
-  // stand in for it, because what it carries is not a path but a *view*: which
-  // maps are on screen, at what resolution, navigated where.
-  if (task.needsPeers === true) {
-    return (
-      `${task.id} compares the maps open beside each other, and a shell has one file and one ` +
-      'mount. Run it in the app, with the maps side by side.'
-    )
-  }
-  const tracks = task.params.filter((param) => param.kind === 'track')
-  if (tracks.length === 0) return null
-  return (
-    `${task.id} reads a track (${tracks.map((param) => `--${param.key}`).join(', ')}); ` +
-    'the bigWig reader lives in the annotations worker and not in this shell. Run it in the app.'
-  )
 }
 
 /**
  * Whether a framing describes no matrix at all.
  *
- * `AnalysisRunner`'s `tracksFraming` is the only thing that makes one: the three
+ * `AnalysisRunner`'s `tracksFraming` is the only thing that makes one: the
  * track tasks (§18.3) run in a session that has no contact map — a 1D browser
- * (§5.8) — and a result is still a record of *something*, so what it names there
- * is the assembly. It writes a zero-wide extent on both axes, which no view of a
- * real map can have: a window of no bins is not a window, and `run/blocks.ts`
- * refuses one outright.
+ * (§5.8) — and a result is still a record of *something*, so what it names
+ * there is the assembly. It writes a zero-wide extent on both axes, which no
+ * view of a real map can have: a window of no bins is not a window, and
+ * `run/blocks.ts` refuses one outright.
  *
  * Read rather than flagged because the flag would be a second way of saying the
  * same thing, and the two would eventually disagree about a framing neither of
- * them made.
+ * them made. What it decides here is the **subject** of the line: a map is the
+ * first argument, and a run with no map has none — `metacooler-run` takes a
+ * track task with no positional and runs it over what the tracks declare.
  */
-function coversNoMatrix(framing: AnalysisFraming): boolean {
+export function coversNoMatrix(framing: AnalysisFraming): boolean {
   return framing.rows[1] <= framing.rows[0] && framing.cols[1] <= framing.cols[0]
-}
-
-/**
- * Why this **run** cannot be repeated in a shell, or `null` when it can.
- *
- * {@link cliCannotRun} is about the descriptor and answers before a run exists —
- * it is what `cli/main.ts` refuses on, and it cannot see anything else. This is
- * the whole question, and it is the one a *button* has to ask: one predicate
- * decides both whether a command is written and whether the control that copies
- * it is offered, because two copies of that rule is a button that hands over a
- * line the command rejects.
- *
- * The second half is the session with **no contact map**. `metacooler-run` takes
- * a file as its first argument and opens it as one; a 1D browser has none to
- * name, and the framing there names the bigWig that declared the assembly. Left
- * alone, the command came out as `metacooler-run overlap Yeast_ATAC.bw` — a line
- * that reads perfectly well and fails at the open, which is the one outcome this
- * whole module exists to prevent.
- */
-export function cliCannotRepeat(task: AnalysisTask, provenance: Provenance): string | null {
-  const descriptor = cliCannotRun(task)
-  if (descriptor !== null) return descriptor
-  if (!coversNoMatrix(provenance.framing)) return null
-  return (
-    `${task.id} ran over the loaded tracks in a session with no contact map, and the command ` +
-    'opens one as its first argument — there is no file here for it to name. Open a contact ' +
-    'map and run it again, or run it in the app.'
-  )
 }
 
 /** Everything the command is built from; `context` supplies the names. */
@@ -159,12 +114,14 @@ export interface CliCommandInput {
   /**
    * The session's own facts, or `null`.
    *
-   * Two things come from here and from nowhere else in a {@link Provenance}: the
-   * contig table, which is what turns the framing's absolute bin extent back
-   * into a locus a shell can be given, and the annotation entries, which is what
-   * turns a parameter holding an entry id into the name of a file on a disk.
-   * Absent, both are simply left out — the command is then the task, the file
-   * and the parameters that stand on their own, which still repeats most runs.
+   * Three things come from here and from nowhere else in a {@link Provenance}:
+   * the contig table, which is what turns the framing's absolute bin extent
+   * back into a locus a shell can be given; the annotation entries, which is
+   * what turns a parameter holding an entry id into the name of a file on a
+   * disk; and the other maps of the deck, for the one task that compares
+   * files. Absent, all three are simply left out — the command is then the
+   * task, the file and the parameters that stand on their own, which still
+   * repeats most runs, with a note where it cannot.
    */
   context: AnalysisContext | null
 }
@@ -173,25 +130,42 @@ export interface CliCommandInput {
 const COMMAND = 'metacooler-run'
 
 /**
+ * The score column a shell reads unless told otherwise.
+ *
+ * `metacooler/matrix.ts`'s `DEFAULT_COUNT_COLUMN`, spelled here rather than
+ * imported: this module runs on the main thread (the drawer and the console
+ * call it) and that one is the pixel reader, which the main-thread bundle is
+ * kept free of by construction (`analysis/registry.ts`).
+ */
+const COUNT_COLUMN = 'count'
+
+/**
  * Write the command.
  *
- * Pure and total: every branch produces either a refusal or a command, because
- * a button that sometimes copies nothing is a button a reader presses twice.
+ * Pure and total: every run produces a command, because a button that
+ * sometimes copies nothing is a button a reader presses twice, and a console
+ * row that is a sentence is a hole in a script.
  */
 export function cliCommandFor(input: CliCommandInput): CliCommand {
-  const refusal = cliCannotRepeat(input.task, input.provenance)
-  if (refusal !== null) return { text: '', refusal }
-
   const notes: string[] = []
   const args: string[] = [COMMAND, input.task.id]
   const { framing, params } = input.provenance
+  const mapless = coversNoMatrix(framing)
 
-  args.push(quote(framing.uri))
-  if (isRemote(framing.uri)) {
-    notes.push(
-      'This file is remote, and the command reads local files only — the reader uses ' +
-        'synchronous range requests, which exist in a worker and not in Node. Fetch it first.',
-    )
+  if (!mapless) {
+    args.push(quote(framing.uri))
+    if (isRemote(framing.uri)) {
+      notes.push(
+        'This file is remote, and the command reads local files only — the reader uses ' +
+          'synchronous range requests, which exist in a worker and not in Node. Fetch it first.',
+      )
+    }
+    // A contact list declares no resolution of its own (§3.7): the session
+    // answered the import dialog, and the shell's answer is a flag. The bin
+    // size the run was framed at is that answer.
+    if (isPairsFile(framing.uri) && framing.binsize > 0) {
+      args.push('--bin-size', String(framing.binsize))
+    }
   }
 
   // The framing's window, where the task has not claimed the name for itself.
@@ -199,7 +173,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   // ignores `--window` for it — so writing one here would be a flag the command
   // silently drops and, worse, a locus assigned to a half-width in bins.
   const claimsWindow = input.task.params.some((param) => param.key === 'window')
-  if (!claimsWindow) {
+  if (!mapless && !claimsWindow) {
     const window = windowFor(framing.rows, framing.cols, input.context)
     if (window.locus !== null) args.push('--window', quote(window.locus))
     if (window.note !== null) notes.push(window.note)
@@ -211,14 +185,15 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   // A provenance written without it (an older session, a task that gained the
   // parameter since) would otherwise be read as *unbalanced*, turning a missing
   // field into a positive claim about the numbers; the framing is the better
-  // answer there and is never absent.
+  // answer there and is never absent. A run with no matrix has nothing to
+  // balance, and says nothing.
   const declared = input.task.params.find((param) => param.key === 'balance')
   const balance =
     declared === undefined || typeof params.balance !== 'boolean'
       ? framing.balance
       : params.balance
-  args.push(balance ? '--balance' : '--balance=false')
-  if (declared !== undefined && balance !== framing.balance) {
+  if (!mapless) args.push(balance ? '--balance' : '--balance=false')
+  if (!mapless && declared !== undefined && balance !== framing.balance) {
     // Worth a line, and worth being exact about what it costs. The two are one
     // flag in a shell, so the command cannot say that the *map* was drawn one
     // way while the *task* read it the other — but only the first of those is
@@ -232,9 +207,58 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
     )
   }
 
+  // The three facts of a framing a session sets from the picture and a shell
+  // has to be told — each an input to the arithmetic, so a line without it
+  // repeats a different run. The count column and no circular sequence are the
+  // shell's own defaults and go unsaid, as the defaults of the parameters do
+  // not: they are properties of the file rather than of a build.
+  if (!mapless) {
+    if (framing.value !== '' && framing.value !== COUNT_COLUMN) {
+      args.push('--value', quote(framing.value))
+    }
+    const circular = (framing.circular ?? []).filter((name) => name !== '')
+    if (circular.length > 0) args.push('--circular', quote(circular.join(',')))
+    // The ticked cells of an `.scool` are the session's and not the record's
+    // (§3.8), so they are read off the context, and a command written with no
+    // context to ask is told what it cannot say.
+    const cells = input.context?.selectedCells ?? []
+    if (cells.length > 0) args.push('--cell', quote(cells.join(',')))
+    else if (
+      input.context !== null &&
+      (input.context.cells ?? 0) > 0 &&
+      (input.context.activeCells ?? input.context.cells ?? 0) < (input.context.cells ?? 0)
+    ) {
+      notes.push(
+        'The map was summed from a subset of the file’s cells, and the record does not name ' +
+          'them. Add --cell <name> for each.',
+      )
+    }
+  }
+
+  // The other maps, for the one task whose unit is a pair of files. They are
+  // the deck's and not the result's — a `Provenance` records what was asked of
+  // *this* map — so they are read off the session, and a command written with
+  // no session to ask is told what it is missing.
+  if (input.task.needsPeers === true) {
+    const peers = input.context?.peers ?? []
+    for (const peer of peers) {
+      args.push('--against', quote(peer.uri))
+      if (isRemote(peer.uri)) {
+        notes.push(`${peer.label} is remote; fetch it first, as with the file itself.`)
+      }
+    }
+    if (peers.length === 0) {
+      notes.push(
+        `${input.task.id} compares this map with the others on screen, and the record does not ` +
+          'name them. Add --against <file> for each.',
+      )
+    }
+  }
+
   // The loads a parameter implies, before the parameters that bind them: a
   // reader scanning the line sees which files it needs before it says what to do
-  // with them, and `--features`/`--sequence` is how `cli/main.ts` reads them.
+  // with them, and `--features`/`--sequence`/`--tracks` is how `cli/main.ts`
+  // reads them.
   const entries = input.context?.entries ?? []
   const loads: string[] = []
   /**
@@ -248,6 +272,10 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
    * line said `--sequence ref.fa --sequence ref.fa`, which parses the file
    * twice to arrive at the same answer and reads like a mistake in a command a
    * reader is about to run over two hundred files.
+   *
+   * A **track** parameter is always its own load: `cli/main.ts` opens whatever
+   * `--tracks` names, so the flag is the parameter's own key and there is no
+   * second spelling to reconcile.
    */
   const boundByLoad = new Set<string>()
   for (const spec of input.task.params) {
@@ -261,7 +289,14 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
         )
         continue
       }
-      const flag = spec.kind === 'sequence' ? '--sequence' : spec.kind === 'pairSet' ? '--pairs' : '--features'
+      const flag =
+        spec.kind === 'sequence'
+          ? '--sequence'
+          : spec.kind === 'pairSet'
+            ? '--pairs'
+            : spec.kind === 'track'
+              ? `--${spec.key}`
+              : '--features'
       if (flag === `--${spec.key}`) boundByLoad.add(spec.key)
       const written = `${flag} ${quote(named)}`
       // One load per file, however many parameters chose it: two flags naming
@@ -284,7 +319,7 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
 
   const command = args.join(' ')
   const lines = [...notes.map((note) => `# ${note}`), command]
-  return { text: lines.join('\n'), refusal: null }
+  return { text: lines.join('\n') }
 }
 
 // ---------------------------------------------------------------------------
@@ -483,4 +518,9 @@ export function quote(value: string): string {
 
 function isRemote(uri: string): boolean {
   return /^https?:\/\//i.test(uri)
+}
+
+/** Whether a URI names a `.pairs` — the one input a shell has to be told a bin size for. */
+function isPairsFile(uri: string): boolean {
+  return /\.pairs(\.gz)?$/i.test(uri.split('::')[0].split(/[?#]/)[0])
 }

@@ -11,12 +11,13 @@
  * and the drawer offers one for the result on screen, so the two are usually
  * looking at the same job from an hour apart.
  *
- * **A task the CLI cannot run still gets a line.** `cliCannotRun` refuses the
- * three that read a bigWig — the reader for one lives in the annotations worker
- * and nowhere else — and a console that dropped those runs would be a record
- * with holes in it exactly where a reader is least likely to notice. So the line
- * becomes a sentence, marked as prose rather than as shell, and the refusal
- * rides along as the note saying why there is nothing to paste.
+ * **Every run is a command.** For a while the CLI refused the tasks that read
+ * a bigWig or a second map, and a run of one was recorded as a sentence with
+ * the refusal under it — a record with holes in it exactly where a reader is
+ * least likely to notice. `cli/main.ts` takes every task now, so `cliCommandFor`
+ * is total and the only thing left to keep apart is its caveats: the `#` lines
+ * above a command are what a shell cannot be told, and the console shows them
+ * beside the line rather than folded into it.
  *
  * The provisional provenance below is the other half of recording a run when it
  * starts. A result carries its own, written in the worker at the moment the
@@ -81,16 +82,6 @@ export function runDraft(input: RunDraftInput): ActionDraft {
   const command = cliCommandFor({ task, provenance, context })
   const detail = provenanceLines(provenance)
   const seat = where === undefined ? {} : { where }
-  if (command.refusal !== null) {
-    return {
-      kind: 'run',
-      line: `ran ${task.title} — ${provenance.framing.label}`,
-      shell: false,
-      notes: [`# ${command.refusal}`],
-      detail,
-      ...seat,
-    }
-  }
   // `cliCommandFor` writes its caveats as `#` lines above the command and joins
   // the lot; the console keeps them apart, because one of them is what a shell
   // would take and the others are what it cannot be told.

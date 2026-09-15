@@ -112,6 +112,17 @@ export interface JobContext {
    * imports it and counts the same curves in the same pass.
    */
   openBytes?(url: string): Promise<ByteSource>
+  /**
+   * Open a **path** for its bytes, in a venue that has a filesystem.
+   *
+   * The same question as {@link openBytes} asked of a local file, and a
+   * separate capability rather than a second spelling the other accepts,
+   * because the two venues answer it oppositely: a worker has no path to open
+   * — a local file arrives as a `File` from a drop target — and a shell has
+   * nothing else. A runner that finds neither says so in the words of the
+   * venue it is in (`analysis/run/expected.ts`).
+   */
+  openFile?(path: string): Promise<ByteSource>
 }
 
 /** What a task actually does. Registered in `analysis/run/index.ts`. */

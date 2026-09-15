@@ -938,6 +938,16 @@ export interface AnalysisContext {
   /** How many of those the reader has ticked; equal to {@link cells} when none is. */
   activeCells?: number
   /**
+   * The ticked cells by name, only when they are **fewer than all of them**.
+   *
+   * What a `metacooler-run` line needs that the two counts above cannot give
+   * it: a task over an `.scool` is a task over the sum of the ticked cells
+   * (§3.8), so a command that named the file and not the cells would repeat a
+   * different run. Absent when every cell is ticked, which is the default a
+   * shell also takes.
+   */
+  selectedCells?: readonly string[]
+  /**
    * The other maps of a deck, for the one task whose unit is a pair of files.
    *
    * Absent in a session with one map, which is what makes that task *waiting*
@@ -988,11 +998,12 @@ export interface AnalysisTask {
   /**
    * Whether this task reads **another map** beside the one that is mounted.
    *
-   * Declared on the descriptor rather than inferred, for the reason
-   * `cliCannotRun` gives about tracks: the shell has one file and one mount, so
-   * a task whose question is about two must be refused before a file is opened
-   * rather than failing inside a runner afterwards. It is one task (§16, §18.8)
-   * and it is a property of what the task *is*.
+   * Declared on the descriptor rather than inferred: the shell has one file
+   * positional, so a task whose question is about two takes the others under
+   * `--against` (`cli/main.ts`) and is refused before a file is opened when
+   * none is named, rather than failing inside a runner afterwards; and the
+   * command writer (`analysis/cliCommand.ts`) knows to write them. It is one
+   * task (§16, §18.8) and it is a property of what the task *is*.
    */
   needsPeers?: boolean
   /**
