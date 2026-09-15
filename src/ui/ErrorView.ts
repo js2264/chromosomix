@@ -360,8 +360,9 @@ function googleRefusal(
     return {
       advice: [
         `A ${status} from ${host} means this page was not authorised to read that ${what} ` +
-          'file. If it is private, signing in is what authorises it — and signing in needs the ' +
-          'client id your lab registered for this site, under Connect → A Google account.',
+          'file. If it is private, signing in is what authorises it — and this site was built ' +
+          'without a Google client id, so it cannot sign in; its maintainer provides one as ' +
+          'GOOGLE_CLIENT_ID (docs/deploy.md).',
       ],
       offer: null,
     }

@@ -66,28 +66,45 @@ function serving(bodies: Record<string, string>): string[] {
 }
 
 describe('the lab’s gallery', () => {
-  it('draws one card per figure with its chips and one button, and the files under them', () => {
+  it('draws one card per figure: the name and its one verb, the chips, the line, and its files under a fold', () => {
     const opened: StoreEntry[] = []
     const front = frontById('rsg')
     expect(front).not.toBeNull()
     const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host(opened) })
     document.body.appendChild(view.el)
-    expect(textsOf(view.el, '.gallery-heading')).toEqual(['Figures', 'Files'])
+    // No headings and no section of files apart from the figures: every file
+    // is under the figure it belongs to.
+    expect(all(view.el, '.gallery-heading')).toHaveLength(0)
     const cards = all(view.el, '.gallery-card')
     expect(cards.length).toBe(4)
-    expect(textsOf(cards[0], '.portal-chip')[0]).toBe('S288C (syn XIII-40)')
-    expect(all(cards[0], 'details').length).toBe(1)
-    ;(buttonNamed(cards[0], 'open') as HTMLButtonElement).click()
+    // The first line is the name and the one verb, an icon with the words in its title.
+    const head = cards[0].querySelector('.gallery-card-head') as HTMLElement
+    expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C, G2/M')
+    const open = head.querySelector('.gallery-card-open') as HTMLButtonElement
+    expect(open.textContent).toBe('')
+    expect(open.title).toContain('new session')
+    expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')[0]).toBe('S288C (syn XIII-40)')
+    expect(cards[0].querySelector('.gallery-card-line')?.textContent).toContain('One map, with the sequence')
+    open.click()
     expect(opened[0]?.kind).toBe('workspace')
     expect(opened[0]?.uri).toMatch(/Yeast_microC\.metacooler\.json$/)
-    // The data files, grouped by dataset, each with the store row's verbs.
-    expect(textsOf(view.el, '.gallery-files .portal-group-key')).toEqual([
-      'Yeast',
-      'Yeast and M. pneumoniae',
-      'E. coli',
-      'Mock microbial community',
+    // The figure's own files, each a store row with the two verbs.
+    const fold = cards[0].querySelector('.gallery-card-more') as HTMLElement
+    expect(fold.querySelector('summary')?.textContent).toBe('8 files')
+    expect(all(fold, '.portal-row')).toHaveLength(8)
+    expect(all(fold, '.row-verb-add')).toHaveLength(8)
+    // The deck's four, the tracks-only figure's eleven, the metagenome's two.
+    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 4)).toEqual([
+      '8 files',
+      '11 files',
+      '4 files',
+      '2 files',
     ])
-    expect(all(view.el, '.gallery-files .portal-row').length).toBe(7)
+    // …and the files no figure names — two maps and the shotgun coverage —
+    // are still offered, under the cards.
+    const loose = view.el.querySelector('.gallery-loose') as HTMLElement
+    expect(loose.querySelector('summary')?.textContent).toBe('3 more files, in no figure')
+    expect(all(loose, '.portal-row')).toHaveLength(3)
   })
 })
 
@@ -131,12 +148,20 @@ describe('IGV’s genomes', () => {
     await vi.waitFor(() => expect(all(view.el, '.genomes-card').length).toBe(2))
     expect(requested.length).toBe(2)
     const cards = all(view.el, '.genomes-card')
-    expect(textsOf(cards[0], '.gallery-card-title')).toEqual(['Human (GRCh38/hg38)'])
+    // The name without the assembly IGV brackets after it — that is the chip.
+    expect(textsOf(cards[0], '.gallery-card-head .gallery-card-title')).toEqual(['Human'])
+    expect(cards[0].querySelector('.gallery-card-title')?.getAttribute('title')).toBe('Human (GRCh38/hg38)')
     expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')).toEqual(['hg38', '2 tracks'])
-    ;(buttonNamed(cards[0], 'open with its tracks') as HTMLButtonElement).click()
+    // The one verb, at the end of the name's line, an icon with the words in its title.
+    const open = cards[0].querySelector('.gallery-card-head .gallery-card-open') as HTMLButtonElement
+    expect(open.textContent).toBe('')
+    expect(open.title).toContain('every track IGV ships')
+    open.click()
     expect(opened[0]?.kind).toBe('workspace')
+    expect(cards[0].querySelector('.gallery-card-more > summary')?.textContent).toBe('2 files')
     expect(all(cards[0], '.portal-row').length).toBe(2)
     // A genome with rows and no session says so rather than offering nothing.
+    expect(cards[1].querySelector('.gallery-card-open')).toBeNull()
     expect(cards[1].textContent).toContain('No session was published')
 
     const box = view.el.querySelector('.portal-search') as HTMLInputElement

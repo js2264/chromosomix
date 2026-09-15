@@ -56,6 +56,39 @@ mounts at `/` while the bundle asks for `/<repo>/assets/...`. Its 404 fallback a
 requests with `index.html` and a `200`, so the mismatch shows up as a blank page rather than as a
 missing file.
 
+## The site's Google and Dropbox registrations
+
+Signing in to Google Drive or GCS needs an OAuth client id registered for the site's origin, a
+public Drive link needs an API key, and browsing a Dropbox needs an app key: the three
+registrations [docs/hosting.md](hosting.md) walks through making. None is a secret — each is served
+in the page of any site that uses it and authorises nothing by itself — so they are three
+**repository variables** (Settings → Secrets and variables → Actions → Variables), not secrets:
+
+| Variable | What it holds | What a reader of the site gets |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | the OAuth client id, `…apps.googleusercontent.com`, registered for `https://<owner>.github.io` | **Connect → Google Drive** offers *sign in with Google* at once |
+| `GOOGLE_API_KEY` | an API key of the same project, restricted to the site's referrer | a public Drive link opens with nothing pasted |
+| `DROPBOX_APP_KEY` | the scoped-access app's key | **Connect → Dropbox** offers *sign in with Dropbox* at once |
+
+The deploy, the pull-request preview and the desktop release pass them to the build, which bakes
+them in as `SITE_DEFAULTS` (`src/config/siteDefaults.ts`, SPECS §24.7). They are the only source:
+the dialog has no box for any of them and a reader's browser stores nothing of them. A variable
+left unset builds a page whose dialog says that sign-in is not set up and names the variable. A
+fork on another domain sets its own three: a client id is bound to an origin and a key to a
+referrer, so this site's do nothing there. The single-file build is made without them — a `file://`
+page has no origin to register and no referrer to restrict a key to — and the desktop build carries
+the Dropbox key and the API key, which work from `app://viewer`, while its Google sign-in stays
+absent because Google registers only `http` and `https` origins ([docs/hosting.md](hosting.md)).
+
+Locally, the same names in the environment do the same thing, for a dev server as for a build:
+
+```bash
+GOOGLE_CLIENT_ID=… GOOGLE_API_KEY=… DROPBOX_APP_KEY=… npm run dev
+```
+
+`http://localhost:5173` has to be among the client's authorised JavaScript origins for the Google
+sign-in to work from there; the Dropbox key needs nothing registered per address.
+
 ## The demo files
 
 The five published datasets live on the lab bucket, one folder per dataset under

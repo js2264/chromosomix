@@ -54,6 +54,16 @@ export const KEYS = {
    * mark of punctuation cannot collide with the letters the views are driven by.
    */
   console: '`',
+  /**
+   * The store drawer (§24.2), on the other side of the same key.
+   *
+   * A backslash for the reason the console has a backtick: punctuation, so it
+   * cannot collide with the letters the views are driven by, and the drawer is
+   * the console's sibling — a panel that folds out of the window's edge rather
+   * than a dialog. The two keys sit together on every keyboard the app is used
+   * on, one at each edge, which is where the two panels are.
+   */
+  stores: '\\',
   shortcuts: 'mod+/',
   /**
    * The one box every view has, whatever it is called there.

@@ -176,6 +176,11 @@ export default defineConfig({
     __APP_COMMIT_DATE__: JSON.stringify(git(['log', '-1', '--format=%cs'])),
     __APP_TARGET__: JSON.stringify('standalone'),
     __DEMO_BASE__: JSON.stringify(''),
+    // No registration reaches a `file://` page: it has no origin to register
+    // a client id against and no referrer to restrict a key to.
+    __GOOGLE_CLIENT_ID__: JSON.stringify(''),
+    __GOOGLE_API_KEY__: JSON.stringify(''),
+    __DROPBOX_APP_KEY__: JSON.stringify(''),
     __STANDALONE__: 'true',
     // The mark, inline. `vite.pinned.config.ts` answers the same question by
     // emitting the file beside the build; this target may not emit a second

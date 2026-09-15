@@ -118,10 +118,19 @@ on a page says so in its own message. Every whole read is retried three times wh
 answer and then stops talking. `--portal-base` points the same front end at a mirror or a staging
 instance.
 
-The filter on what gets a row is **whether this viewer can open the file name**, and nothing else.
-There is no experiment-type filter and no format list, which is why Micro-C, bigWigs, peaks, pairs
-and BAMs are all there and why nobody has to edit the query when a consortium publishes something
-new. `--formats hic,mcool` narrows it for a dry run.
+The filter on what gets a row is **whether this viewer can open the file name**, with one
+exception. There is no experiment-type filter and no format list, which is why Micro-C, bigWigs,
+peaks, pairs and BAMs are all there and why nobody has to edit the query when a consortium publishes
+something new. `--formats hic,mcool` narrows it for a dry run. The exception is a BAM the viewer
+could only refuse: the alignment file of a Hi-C-family assay (Hi-C, Micro-C, Capture-C, ChIA-PET,
+PLAC-seq, HiChIP, TCC, MARGI, …) is in read-pair order, and reads are drawn from a coordinate-sorted
+file, so the 4DN front end leaves those out, along with any BAM the portal does not describe — no
+assay to judge it by, no cell to filter on. The `.pairs` and the contact map of the same set stay,
+and so do the alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq. The ENCODE
+front end leaves out its Hi-C pipeline's alignments and nothing else: ENCODE's ChIA-PET alignments
+are ChIA-PIPE's and coordinate-sorted (their `@HD` line says so), and a BAM the portal did not
+describe keeps the cells its manifest row carries. Both lists were chosen by reading the files'
+headers, not by assuming what an assay's pipeline writes.
 
 The `igv` front end reads [IGV's own genome table][igv] — the file the IGV desktop app and igv.js
 both load their genome menu from — and **probes every URL** with a ranged GET before writing a row

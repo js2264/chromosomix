@@ -34,18 +34,22 @@ import {
   DROPBOX_TOKEN_URL,
   beginSignIn,
   challengeOf,
-  clearAppKey,
   dropboxState,
   finishSignIn,
   makeVerifier,
-  readAppKey,
   setDropboxFetch,
   signOut,
-  storedLines,
-  subscribeDropbox,
-  writeAppKey,
 } from '@/auth/dropbox'
 import { bearerFor } from '@/s3/credentials'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const APP_KEY = 'a1b2c3d4e5f6g7h'
 const LIST = 'https://api.dropboxapi.com/2/files/list_folder'
@@ -99,7 +103,7 @@ function form(call: Call): URLSearchParams {
 
 /** Sign in, and answer the calls it made. */
 async function signIn(expiresIn = 14_400): Promise<Call[]> {
-  writeAppKey(APP_KEY)
+  site.dropboxAppKey = APP_KEY
   const calls = serve({ body: { access_token: 'sl.TOKEN', token_type: 'bearer', expires_in: expiresIn } })
   await beginSignIn()
   await finishSignIn('CODE-FROM-THE-PAGE')
@@ -108,6 +112,7 @@ async function signIn(expiresIn = 14_400): Promise<Call[]> {
 
 beforeEach(() => {
   window.localStorage.clear()
+  site.dropboxAppKey = null
   // A token left by the previous test is dropped here, and the revoke that
   // fires goes into a stub rather than at a network this sandbox does not have.
   serve()
@@ -145,7 +150,7 @@ describe('PKCE', () => {
 
 describe('the authorize URL', () => {
   it('asks for a code, with a challenge and no redirect', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const { url } = await beginSignIn()
     const parsed = new URL(url)
 
@@ -171,14 +176,14 @@ describe('the authorize URL', () => {
   })
 
   it('fetches nothing: the reader visits that page, not this one', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const calls = serve()
     await beginSignIn()
     expect(calls).toEqual([])
   })
 
-  it('refuses without an app key, and names where to put one', async () => {
-    await expect(beginSignIn()).rejects.toThrow(/Connect → Dropbox/)
+  it('refuses on a site built without an app key, and says whose it is to provide', async () => {
+    await expect(beginSignIn()).rejects.toThrow(/DROPBOX_APP_KEY/)
   })
 
   it('is available in this build, and is absent only where there is no network', () => {
@@ -191,7 +196,7 @@ describe('the authorize URL', () => {
 
 describe('exchanging the code', () => {
   it('posts the code and the verifier the challenge was made from', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const calls = serve({ body: { access_token: 'sl.TOKEN', expires_in: 14_400 } })
     const { url } = await beginSignIn()
     await finishSignIn('  CODE-FROM-THE-PAGE  ')
@@ -240,7 +245,7 @@ describe('exchanging the code', () => {
     // fails the way every expiry already fails.
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-11T12:00:00Z'))
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     serve({ body: { access_token: 'sl.TOKEN', expires_in: 'soon' } })
     await beginSignIn()
     await finishSignIn('CODE')
@@ -263,7 +268,7 @@ describe('exchanging the code', () => {
   })
 
   it('says what to do about a code that has already been spent', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     serve({ status: 400, text: '{"error": "invalid_grant"}' })
     await beginSignIn()
 
@@ -273,7 +278,7 @@ describe('exchanging the code', () => {
   })
 
   it('asks for the code rather than sending an empty one', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const calls = serve()
     await beginSignIn()
     await expect(finishSignIn('   ')).rejects.toThrow(/Paste the code/)
@@ -284,7 +289,7 @@ describe('exchanging the code', () => {
     // The verifier lives in memory between the two halves, so a tab reloaded in
     // between has the code and no way to prove it is its own. Saying so is the
     // difference between pressing finish forever and pressing sign in again.
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const calls = serve()
     await expect(finishSignIn('CODE')).rejects.toThrow(/no record of starting/)
     expect(calls).toEqual([])
@@ -313,65 +318,6 @@ describe('signing out', () => {
     const calls = serve()
     signOut()
     expect(calls).toEqual([])
-  })
-})
-
-describe('the app key, which is stored', () => {
-  it('keeps it, reads it back, and forgets it on an empty save', () => {
-    const seen: number[] = []
-    const off = subscribeDropbox(() => seen.push(1))
-
-    writeAppKey(`  ${APP_KEY}  `)
-    expect(readAppKey()).toBe(APP_KEY)
-    expect(dropboxState().configured).toBe(true)
-
-    // An empty value forgets, so *save* on an empty box does what it plainly
-    // looks like it does — the rule every other key box in this app follows.
-    writeAppKey('')
-    expect(readAppKey()).toBeNull()
-    expect(seen.length).toBeGreaterThanOrEqual(2)
-    off()
-  })
-
-  it('answers null for a row that is not the shape this module wrote', () => {
-    // Stored state outlives the build that wrote it, so it is validated rather
-    // than repaired: the repair would be an authorize page saying
-    // `invalid_client`, in another tab, about a field this app could have checked.
-    for (const raw of ['not json', '[]', '{}', '{"appKey": 7}', '{"appKey": "  "}']) {
-      window.localStorage.setItem('metacooler-viewer:dropbox', raw)
-      expect(readAppKey()).toBeNull()
-    }
-  })
-
-  it('does not sign out when it is forgotten', async () => {
-    await signIn()
-    clearAppKey()
-    // The grant is the reader’s own and is still opening the file in front of
-    // them. Forgetting which app to sign in to next time is not a reason to
-    // close it.
-    expect(bearerFor(LIST)).toBe('sl.TOKEN')
-    expect(dropboxState().configured).toBe(false)
-  })
-})
-
-describe('what the stored-data screen is told', () => {
-  it('names the app key and prints it, because it is not a secret', () => {
-    writeAppKey(APP_KEY)
-    const lines = storedLines()
-    expect(lines).toHaveLength(1)
-    expect(lines[0].label).toBe('Dropbox app key')
-    expect(lines[0].detail).toContain(APP_KEY)
-    // And it says what is *not* kept, which is the half a reader cannot check.
-    expect(lines[0].detail).toMatch(/never stored/i)
-  })
-
-  it('says nothing at all when nothing is kept', () => {
-    expect(storedLines()).toEqual([])
-  })
-
-  it('never prints a token, whatever else it prints', async () => {
-    await signIn()
-    expect(JSON.stringify(storedLines())).not.toContain('sl.TOKEN')
   })
 })
 

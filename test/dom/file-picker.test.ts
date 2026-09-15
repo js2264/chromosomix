@@ -149,12 +149,15 @@ describe('the load box on its own', () => {
   })
 })
 
-describe('the header’s add-a-file mark', () => {
-  it('is a file with a plus on it, and not the tab strip’s bare plus', () => {
-    // Two marks one row apart: the strip's `+` adds a tab, this adds a file to
-    // the tab you are in. A shared glyph would make them the same button.
-    const add = icon('file-plus')
-    const tab = icon('plus')
-    expect(add.innerHTML).not.toBe(tab.innerHTML)
+describe('the two marks on a file row', () => {
+  it('are a plus, and a window with a plus where its corner was — not one glyph twice', () => {
+    // *Add here* and *open in a new session* stand side by side on every row
+    // (`ui/rowVerbs.ts`); a shared glyph would make them the same button.
+    const add = icon('plus')
+    const fresh = icon('new-session')
+    expect(add.innerHTML).not.toBe(fresh.innerHTML)
+    // The frame is open at its top-right corner and the plus sits there.
+    expect(fresh.innerHTML).toContain('M18 2v8')
+    expect(fresh.innerHTML).toContain('M14 6h8')
   })
 })

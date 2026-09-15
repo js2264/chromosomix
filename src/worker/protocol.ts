@@ -85,6 +85,14 @@ type SourceLocation =
       url: string
       credential?: S3Credential
       /**
+       * The sidecar index named beside the URL — `<url>#index=<url>` split at
+       * the door — for the one question the shell asks the annotations worker
+       * about a remote file before opening it as a genome: a FASTA's assembly
+       * is read from its `.fai` (§8.8), and a name the reader gave must reach
+       * that question and not only the track loaded afterwards.
+       */
+      index?: string
+      /**
        * Static headers put on **every** request for this URL (SPECS §24.7).
        *
        * The other kind of credential, and it travels for the same reason the

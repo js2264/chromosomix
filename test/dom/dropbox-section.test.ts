@@ -5,11 +5,10 @@
  * Four things can be wrong here while a screenshot of the section looks right:
  *
  * - **The gate.** A sign-in button that is pressable without an app key opens a
- *   Dropbox page saying `invalid_client`, in another tab, about a field this
- *   dialog could have checked. It is disabled with the reason beside it rather
- *   than absent, which is the same deliberate exception to §8.5 the Google
- *   section makes: the control becomes available by filling in the box directly
- *   above it.
+ *   Dropbox page saying `invalid_client`, in another tab, about a registration
+ *   this dialog could have checked. It is disabled with the reason beside it
+ *   rather than absent, which is the same deliberate exception to §8.5 the
+ *   Google pane makes: the sentence names the one thing a reader can do.
  * - **The code box has to appear**, because the reader has just been sent to
  *   another tab and handed a string with nowhere obvious to put it.
  * - **Finishing has to actually sign in**, and the section has to say so — a
@@ -27,9 +26,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { dropboxSection } from '@/ui/DropboxSection'
-import { setDropboxFetch, signOut, writeAppKey } from '@/auth/dropbox'
+import { setDropboxFetch, signOut } from '@/auth/dropbox'
 import { bearerFor } from '@/s3/credentials'
-import { all, buttonLabels, buttonNamed, setUpDom, type DomTeardown } from '../support/dom'
+import { all, buttonLabels, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const APP_KEY = 'a1b2c3d4e5f6g7h'
 const LIST = 'https://api.dropboxapi.com/2/files/list_folder'
@@ -74,7 +82,7 @@ async function until(ready: () => boolean): Promise<void> {
   await tick()
 }
 
-/** The section, mounted — `isConnected` is what its subscription checks. */
+/** The pane, mounted — `isConnected` is what its subscription checks. */
 function section(done: (id: string) => void = () => undefined): HTMLElement {
   const node = dropboxSection(done)
   expect(node).not.toBeNull()
@@ -82,12 +90,24 @@ function section(done: (id: string) => void = () => undefined): HTMLElement {
   return node as HTMLElement
 }
 
-/** Sign in through the section, the way a reader does. */
+/** What the ? on the pane's title says, on hover. */
+function helpText(node: HTMLElement): string {
+  return node.querySelector('.connect-head .connect-tip')?.textContent ?? ''
+}
+
+/** The pane's text with the tip taken out: what is on the page before any hover. */
+function visibleText(node: HTMLElement): string {
+  const copy = node.cloneNode(true) as HTMLElement
+  copy.querySelector('.connect-tip')?.remove()
+  return copy.textContent ?? ''
+}
+
+/** Sign in through the pane, the way a reader does. */
 async function signInThrough(node: HTMLElement): Promise<void> {
   serve({ access_token: 'sl.TOKEN', expires_in: 14_400 })
   buttonNamed(node, 'sign in with Dropbox')?.click()
   await until(() => opened.length > 0)
-  const code = all<HTMLInputElement>(node, 'input')[1]
+  const code = all<HTMLInputElement>(node, 'input')[0]
   code.value = 'CODE-FROM-THE-PAGE'
   buttonNamed(node, 'finish')?.click()
   await until(() => bearerFor(LIST) !== null)
@@ -96,6 +116,7 @@ async function signInThrough(node: HTMLElement): Promise<void> {
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  site.dropboxAppKey = APP_KEY
   opened = []
   serve({})
   signOut()
@@ -113,50 +134,34 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-describe('the app key gate', () => {
-  it('refuses to offer a sign-in until one is saved, and says why', () => {
+describe('the site’s registration, which no reader is asked for', () => {
+  it('says so, and offers no sign-in, on a site built without an app key', () => {
+    site.dropboxAppKey = null
     const node = section()
     const signIn = buttonNamed(node, 'sign in with Dropbox')
-    // Disabled rather than absent: hiding it would hide the consequence of the
-    // box above it.
+    // Disabled rather than absent: the sentence beside it names the one thing
+    // a reader can do — ask the site's maintainer.
     expect(signIn?.disabled).toBe(true)
-    expect(signIn?.title).toMatch(/app key/i)
-    expect(node.textContent).toMatch(/No app key stored/)
+    expect(signIn?.title).toMatch(/built without a Dropbox app key/i)
+    expect(node.textContent).toMatch(/not set up on this site/i)
+    expect(node.textContent).toContain('DROPBOX_APP_KEY')
+    // And nothing to type: the one box on the section is the code's, and it is
+    // hidden until a sign-in has begun.
+    expect(all<HTMLInputElement>(node, 'input')).toHaveLength(1)
+    expect(node.textContent).not.toMatch(/app key stored/i)
   })
 
-  it('saves it, prints it back, and enables the sign-in', () => {
+  it('offers the sign-in on a site built with one, without printing it', () => {
     const node = section()
-    const input = all<HTMLInputElement>(node, 'input')[0]
-    // Not a password box: an app key is in the authorize URL, which the reader
-    // can read in their own address bar, and what they need to know coming back
-    // here is *which app*.
-    expect(input.type).toBe('text')
-
-    input.value = APP_KEY
-    buttonNamed(node, 'save')?.click()
-
-    expect(node.textContent).toContain(APP_KEY)
     expect(buttonNamed(node, 'sign in with Dropbox')?.disabled).toBe(false)
-  })
-
-  it('forgets it without signing out', async () => {
-    writeAppKey(APP_KEY)
-    const node = section()
-    await signInThrough(node)
-
-    buttonNamed(node, 'forget')?.click()
-
-    expect(window.localStorage.getItem('metacooler-viewer:dropbox')).toBeNull()
-    expect(node.textContent).toMatch(/No app key stored/)
-    // The grant is the reader’s own and is still opening the file in front of
-    // them.
-    expect(bearerFor(LIST)).toBe('sl.TOKEN')
+    expect(node.textContent).not.toContain(APP_KEY)
+    expect(node.textContent).not.toMatch(/not set up/i)
   })
 })
 
 describe('signing in', () => {
   it('opens the authorize page and reveals the code box', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     expect(node.querySelector('.connect-code')?.className).toContain('hidden')
 
@@ -182,27 +187,29 @@ describe('signing in', () => {
   })
 
   it('finishes with the pasted code, holds the token, and says until when', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     await signInThrough(node)
 
     expect(bearerFor(LIST)).toBe('sl.TOKEN')
-    expect(node.textContent).toMatch(/Signed in\./)
-    // No address, because nothing here asks Dropbox who the reader is.
-    expect(node.textContent).toMatch(/does not know whose Dropbox it is/)
+    expect(visibleText(node)).toMatch(/Signed in until/)
+    // No address, because nothing here asks Dropbox who the reader is — said
+    // behind the ?, not on the pane.
+    expect(helpText(node)).toMatch(/does not know whose Dropbox it is/)
+    expect(visibleText(node)).not.toMatch(/does not know whose Dropbox it is/)
     // The box is put away once the code has been spent: pressing finish again
     // could only send a request that fails.
     expect(node.querySelector('.connect-code')?.className).toContain('hidden')
   })
 
   it('shows what Dropbox refused, and leaves the flow where it was', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     buttonNamed(node, 'sign in with Dropbox')?.click()
     await until(() => opened.length > 0)
 
     serve({ error: 'invalid_grant' }, 400)
-    all<HTMLInputElement>(node, 'input')[1].value = 'STALE'
+    all<HTMLInputElement>(node, 'input')[0].value = 'STALE'
     buttonNamed(node, 'finish')?.click()
     await until(() => (node.textContent ?? '').includes('invalid_grant'))
 
@@ -216,7 +223,7 @@ describe('signing in', () => {
 
 describe('the way in, and the way out', () => {
   it('offers browsing only once it would work, and names the folder', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     let asked: string | null = null
     const node = section((id) => {
       asked = id
@@ -233,7 +240,7 @@ describe('the way in, and the way out', () => {
   })
 
   it('signs out for real, and stops offering the way in', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     await signInThrough(node)
     expect(buttonLabels(node)).toContain('sign out')
@@ -241,22 +248,41 @@ describe('the way in, and the way out', () => {
     buttonNamed(node, 'sign out')?.click()
 
     expect(bearerFor(LIST)).toBeNull()
-    expect(node.textContent).toMatch(/expired at|Not signed in/)
+    // Back to the first state: the sign-in, and nothing that needs one.
+    expect(buttonLabels(node)).toContain('sign in with Dropbox')
     expect(buttonLabels(node)).not.toContain('browse my Dropbox')
     expect(buttonLabels(node)).not.toContain('sign out')
   })
 })
 
-describe('what the section says before anything is pressed', () => {
-  it('names the grant and where the token lives', () => {
-    const text = section().textContent ?? ''
-    expect(text).toMatch(/files\.metadata\.read and files\.content\.read/)
-    expect(text).toMatch(/everything in your Dropbox/i)
-    expect(text).toMatch(/app’s own folder inside it/i)
-    expect(text).toMatch(/token lives only in this tab’s memory/i)
-    expect(text).toMatch(/never written to storage/i)
-    // The four hours a temporary link lasts, said where a reader can act on it.
-    expect(text).toMatch(/four hours/i)
+describe('the pane, before anything is pressed', () => {
+  it('is one title with a ? at its right, and the sign-in under it', () => {
+    const node = section()
+    expect(textsOf(node, 'h3')).toEqual(['Connect to your Dropbox'])
+    const head = node.querySelector('.connect-head') as HTMLElement
+    const help = head.querySelector<HTMLButtonElement>('.connect-help')
+    expect(help?.textContent).toBe('?')
+    expect(help?.getAttribute('aria-describedby')).toBe(head.querySelector('.connect-tip')?.id)
+    expect(head.querySelector('.connect-tip')?.getAttribute('role')).toBe('tooltip')
+    // The ?, the sign-in, and the finish button of the code box that is not
+    // yet on screen; nothing else.
+    expect(buttonLabels(node)).toEqual(['?', 'sign in with Dropbox', 'finish'])
+    expect(buttonNamed(node, 'sign in with Dropbox')?.className).toContain('btn-signin')
+  })
+
+  it('names the grant and where the token lives, behind the ?', () => {
+    const node = section()
+    const tip = helpText(node)
+    expect(tip).toMatch(/files\.metadata\.read and files\.content\.read/)
+    expect(tip).toMatch(/everything in your Dropbox/i)
+    expect(tip).toMatch(/app’s own folder inside it/i)
+    expect(tip).toMatch(/token lives only in this tab’s memory/i)
+    expect(tip).toMatch(/never written to storage/i)
+    // The four hours a temporary link lasts, said where a reader can find it.
+    expect(tip).toMatch(/four hours/i)
+    // And none of it on the pane itself, where it stood between the title and
+    // the button.
+    expect(visibleText(node)).not.toMatch(/files\.metadata\.read|token lives/i)
   })
 
   it('contacts nobody when it is built', async () => {
@@ -267,7 +293,7 @@ describe('what the section says before anything is pressed', () => {
       calls.push(url)
       return Promise.resolve(new Response('{}'))
     })
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     section()
     await tick()
     expect(calls).toEqual([])

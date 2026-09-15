@@ -39,6 +39,22 @@ export type FileRoute = 'map' | 'genome' | 'unknown'
  * name all answer the same — and splits on both separators, because a Windows
  * path reaches this from a dropped file's `name` on that platform.
  */
+/**
+ * The route of a file whose address may not say, with a name that does.
+ *
+ * A Drive file is addressed by an id (`…/files/<id>?alt=media`) and a Dropbox
+ * file by a temporary link, and neither ends in the file's name — so the
+ * backend that listed it hands the name along (§24.9), and the name decides
+ * the door where the address cannot. The address wins where it does say,
+ * because the address is what will be read: a store row labelled *the ATAC
+ * track* whose URL ends in `.mcool` is a map.
+ */
+export function routeFor(uri: string, label?: string): FileRoute {
+  const byAddress = routeOf(uri)
+  if (byAddress !== 'unknown' || label === undefined) return byAddress
+  return routeOf(label)
+}
+
 export function routeOf(uri: string): FileRoute {
   // The last path segment, with the query and the fragment taken off it.
   // Neither is part of a name, and both reach here: a bucket URL carries a

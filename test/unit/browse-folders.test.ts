@@ -33,13 +33,12 @@
  * its rows in `localStorage`.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   setTokenClientFactory,
   signIn,
   signOut,
-  writeClientId,
   type TokenResponse,
 } from '../../src/auth/google'
 import { connectedFolders, disconnectFolder, folderUsable } from '../../src/browse/connected'
@@ -52,12 +51,21 @@ import { routeOf, unroutableNote } from '../../src/browse/route'
 import { addDriveRow } from '../../src/state/drives'
 import { DROPBOX_FOLDER_ID } from '../../src/browse/dropbox'
 import {
+
   beginSignIn,
   finishSignIn,
   setDropboxFetch,
   signOut as dropboxSignOut,
-  writeAppKey,
 } from '../../src/auth/dropbox'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 /** A `File` with the relative path a `webkitdirectory` input would give it. */
 function fileAt(path: string, size = 10): File {
@@ -413,7 +421,7 @@ describe('a backend that registers itself', () => {
     const folder = connectedFolders()[0]
     expect(await folderUsable(folder)).toBe(false)
 
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const response = { access_token: 'ya29.TOKEN', expires_in: 3599 } as TokenResponse
     setTokenClientFactory((config) => ({ requestAccessToken: () => config.callback(response) }))
     await signIn()
@@ -479,32 +487,25 @@ describe('a folder backend that registers itself', () => {
     window.localStorage.clear()
   })
 
-  it('contributes nothing until there is an app to reach it with', () => {
+  it('contributes nothing until somebody is signed in', () => {
+    site.dropboxAppKey = APP_KEY
     expect(dropbox()).toBeUndefined()
   })
 
-  it('appears among the connected folders the moment a key is stored', () => {
-    writeAppKey(APP_KEY)
+  it('appears among the connected folders on signing in, usable, and goes on signing out', async () => {
+    // The site's app key is in every reader's page, and a Dropbox in every
+    // reader's panel would be noise with a × that could not remove it (§24.9):
+    // the folder is the sign-in's, and it lasts exactly as long.
+    site.dropboxAppKey = APP_KEY
+    await signIn()
     const folder = dropbox()
     expect(folder?.id).toBe(DROPBOX_FOLDER_ID)
     expect(folder?.label).toBe('Dropbox')
     expect(folder?.root).toBe('/')
-  })
-
-  it('is listed but not usable until the reader signs in', async () => {
-    writeAppKey(APP_KEY)
-    const folder = dropbox()
-    expect(folder).toBeDefined()
-    // Listed and refused, which is the honest pair: the folder is connected —
-    // the app key says so — and reading it needs a token this page does not
-    // have until somebody signs in.
-    expect(await folderUsable(folder!)).toBe(false)
-
-    await signIn()
     expect(await folderUsable(folder!)).toBe(true)
 
     dropboxSignOut()
-    expect(await folderUsable(folder!)).toBe(false)
+    expect(dropbox()).toBeUndefined()
   })
 })
 
@@ -529,10 +530,22 @@ describe('disconnecting a registered folder', () => {
     expect(connectedFolders().some((folder) => folder.id === row.id)).toBe(false)
   })
 
-  it('forgets the Dropbox app key, so the folder is gone from the list', async () => {
-    writeAppKey('a1b2c3d4e5f6g7h')
+  it('signs out of Dropbox, so the folder is gone from the list', async () => {
+    site.dropboxAppKey = 'a1b2c3d4e5f6g7h'
+    setDropboxFetch(
+      (() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ access_token: 'sl.TOKEN', expires_in: 14_400 }),
+          text: () => Promise.resolve(''),
+        } as unknown as Response)) as unknown as typeof fetch,
+    )
+    await beginSignIn()
+    await finishSignIn('CODE')
     expect(connectedFolders().some((folder) => folder.kind === 'dropbox')).toBe(true)
     await disconnectFolder(DROPBOX_FOLDER_ID)
     expect(connectedFolders().some((folder) => folder.kind === 'dropbox')).toBe(false)
+    setDropboxFetch(null)
   })
 })

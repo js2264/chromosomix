@@ -78,7 +78,7 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
   const base = el('input', {
     class: 'input',
     type: 'text',
-    placeholder: 'https://rsglab-data.s3.eu-west-3.amazonaws.com/collections/',
+    placeholder: 'https://bucket.s3.amazonaws.com/prefix/ or s3://bucket/prefix/',
   })
   const region = el('input', { class: 'input', type: 'text', placeholder: 'eu-west-3' })
   const keyId = el('input', { class: 'input', type: 'text', placeholder: 'AKIA…' })
@@ -136,7 +136,9 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
   setSigned(false)
 
   const save = (): void => {
-    const normalised = normaliseBase(base.value)
+    // With the region, so `s3://bucket/prefix` lands on the bucket's own
+    // endpoint when the reader has said which that is.
+    const normalised = normaliseBase(base.value, { region: region.value })
     if (normalised === null) {
       // The `https:` requirement is a refusal rather than a normalisation: over
       // `http:` a signed request sends its signature in clear, and an unsigned
@@ -144,8 +146,9 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
       // scheme would mean the app deciding on the user's behalf which host they
       // meant.
       error.textContent =
-        'The prefix must be an https:// URL — a bucket reached over http:// would send the ' +
-        'signature in clear, and a page served over https:// cannot read one at all.'
+        'The prefix must be an https:// URL or an s3://bucket/prefix — a bucket reached over ' +
+        'http:// would send the signature in clear, and a page served over https:// cannot read ' +
+        'one at all.'
       return
     }
     if (signed && (region.value.trim() === '' || keyId.value.trim() === '' || secret.value === '')) {

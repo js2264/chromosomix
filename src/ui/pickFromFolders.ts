@@ -66,7 +66,7 @@ class PickBody {
         class: 'hint',
         text:
           'The places this window is connected to, one level at a time. Click a file to take it. ' +
-          'Connect another place from the plug in the header.',
+          'Connect another place from the Files column.',
       }),
       this.placesEl,
       this.noteEl,
@@ -85,7 +85,7 @@ class PickBody {
           class: 'hint',
           text:
             'Nothing is connected yet. Connect a folder on this machine, a bucket, a Drive folder ' +
-            'or a Dropbox from the plug in the header, then come back here.',
+            'or a Dropbox from the Files column’s *Open a local/remote folder*, then come back here.',
         }),
       )
       return
@@ -110,7 +110,7 @@ class PickBody {
       this.view.clear()
       this.noteEl.textContent =
         folder.kind === 'drive' || folder.kind === 'dropbox'
-          ? `${folder.label} lists with an account this tab is not signed in to. Sign in from the plug in the header.`
+          ? `${folder.label} lists with an account this tab is not signed in to. Sign in from the Files column’s *Open a local/remote folder*.`
           : `${folder.label} needs permission again. Press it once more to ask.`
       return
     }
@@ -133,7 +133,7 @@ class PickBody {
  *
  * Always offered, on §8.5's reading that its promise — *find me a file
  * somewhere this window is connected to* — is kept even with nothing
- * connected, by the dialog saying so and naming the plug that fixes it. A
+ * connected, by the dialog saying so and naming the button that fixes it. A
  * button that appeared and disappeared as places were connected in another
  * dialog would be a control that moves, which is worse than one that explains
  * itself.

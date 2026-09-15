@@ -5213,6 +5213,12 @@ canvas.is-frozen {
   cursor: default;
 }
 
+/* A shard nobody has read yet has no count to show; the words say what a tick would do. */
+.facet-count-unread {
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .facet-ticked {
   display: inline-block;
   min-width: 1.2rem;
@@ -5424,13 +5430,37 @@ canvas.is-frozen {
   gap: 0.15rem;
 }
 
-.store-row-add {
-  font-size: var(--step--2);
-  padding: 0.15rem 0.4rem;
+/* The two verbs on a row — add here, open in a new session — as one pair of
+   marks wherever a file is offered (`ui/rowVerbs.ts`). Quiet until pointed
+   at, so a list of forty rows is forty names and not eighty buttons, and the
+   same square whichever verb it is: the difference between them is the glyph
+   and nothing else. */
+.row-verb {
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--text-dim);
 }
 
-.store-row-open {
-  padding: 0.25rem;
+.row-verb:hover,
+.row-verb:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* A labelled button carrying the new-session mark before its word. */
+.btn-marked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.portal-tray-verb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* The tray along the bottom: what is ticked, and the one thing to do with it. */
@@ -5575,21 +5605,6 @@ canvas.is-frozen {
   gap: 1.2rem;
 }
 
-.gallery-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.gallery-heading {
-  margin: 0;
-  font-size: var(--step-0);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-dim);
-}
-
 .gallery-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
@@ -5637,40 +5652,98 @@ canvas.is-frozen {
   margin: 0.3rem 0 0;
 }
 
-.gallery-card-actions {
+/* The first line of a card: the name, and the one verb at the end of it. The
+   verb is the row verb every file row carries, a size up, in the accent — the
+   card's only button, so it need not be quiet. */
+.gallery-card-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 0.5rem;
-  margin-top: auto;
-  padding-top: 0.3rem;
 }
 
-.gallery-files {
+.gallery-card-head .gallery-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gallery-card-open {
+  width: 1.9rem;
+  height: 1.9rem;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.gallery-card-open:hover,
+.gallery-card-open:focus-visible {
+  background: var(--accent-soft);
+}
+
+/* The rows under a card's fold: the store's rows, boxed. */
+.gallery-card-files {
   display: flex;
   flex-direction: column;
+  margin-top: 0.3rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-raised);
+}
+
+.gallery-loose {
+  padding-top: 0.2rem;
 }
 
 .genomes {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  /* The card grid is laid out against the drawer's width, not the window's. */
+  container-type: inline-size;
 }
 
+/* Four across by default — forty-one genomes is a page to scan, not to read
+   — and tighter than the lab's figure cards: a genome card is a name, two
+   chips and a fold, and gets the room those take. */
 .genomes-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
-.genomes-files {
-  display: flex;
-  flex-direction: column;
-  margin-top: 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+@container (max-width: 44rem) {
+  .genomes-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 22rem) {
+  .genomes-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.genomes-card {
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem 0.55rem;
+}
+
+.genomes-card .gallery-card-title {
+  font-size: var(--step-0);
+  overflow-wrap: anywhere;
+}
+
+.genomes-card .gallery-card-open {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.genomes-card .gallery-card-chips {
+  gap: 0.2rem;
+}
+
+.genomes-card .gallery-card-more {
+  font-size: var(--step--2);
 }
 
 /* --- a store by URL ------------------------------------------------------- */
@@ -5780,16 +5853,176 @@ canvas.is-frozen {
   color: var(--accent);
 }
 
-.connect-pane-parts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.connect-pane > .connect-section:first-child,
-.connect-pane-parts > .connect-section:first-child {
+.connect-pane > .connect-section:first-child {
   padding-top: 0;
   border-top: none;
+}
+
+/* --- a sign-in pane's head: the title, and a ? at the far right ----------
+   The Google Drive and Dropbox panes are a title, one large sign-in button,
+   and nothing else on the page: what the grant is and where the token goes
+   (§24.7's sentences) is behind the ? on the title's own line, shown on
+   hover, on focus, or pinned by a click for a screen with no hover. */
+.connect-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.connect-head > h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.connect-help-wrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.connect-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.connect-help:hover,
+.connect-help:focus-visible,
+.connect-help-wrap.is-open > .connect-help {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+/* Opens down and to the left from the ?, which is at the pane's right edge:
+   the pane's own content is what it covers, and it is gone the moment the
+   pointer leaves. Fixed rather than absolute, and placed by `connectHead.ts`
+   from the ?'s rectangle: the dialog's panel clips its overflow, and a tip
+   under a one-button pane is taller than what the panel has left below it.
+   Sized in characters so the sentences wrap as prose. */
+.connect-tip {
+  display: none;
+  position: fixed;
+  z-index: 3;
+  width: min(30rem, calc(100vw - 2rem));
+  /* The gap under the ?, as padding rather than distance: a pointer on its
+     way down into the tip is still over it, so the hover does not end. */
+  padding-top: 6px;
+  cursor: auto;
+}
+
+.connect-tip-box {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  text-align: left;
+  overflow-y: auto;
+}
+
+.connect-tip-box > p {
+  margin: 0;
+}
+
+.connect-tip-box > p + p {
+  margin-top: 0.45rem;
+}
+
+.connect-help-wrap:hover > .connect-tip,
+.connect-help-wrap.is-open > .connect-tip {
+  display: block;
+}
+
+/* Keyboard focus shows it too — `:focus-visible`, not `:focus`, because a mouse
+   click leaves the button focused and the second click that un-pins the tip
+   would then not close it. Its own rule rather than a third selector above: a
+   browser without `:has()` drops a whole list that contains one. */
+.connect-help-wrap:has(> .connect-help:focus-visible) > .connect-tip {
+  display: block;
+}
+
+/* The sign-in row: the one large button, or — signed in — a line and the
+   buttons that follow from it. */
+.connect-signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.connect-signin > .hint {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.connect-signin > span.hint {
+  flex-basis: auto;
+}
+
+/* Larger than the dialog's other buttons, the provider's mark on it: the one
+   thing the pane is for, drawn as the one thing to press. */
+.btn-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: 15rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-size: var(--step-0);
+  font-weight: 600;
+}
+
+.btn-signin > .icon {
+  flex: none;
+}
+
+/* The folder box under a Google sign-in, present only once there is one. */
+.drive-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+}
+
+.drive-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.drive-controls > .field {
+  display: flex;
+}
+
+.drive-controls > .field > .field-label {
+  flex: none;
+  min-width: 8rem;
+}
+
+.drive-controls > .field > .input {
+  flex: 1 1 auto;
 }
 
 /* Last on the page now, so the space belongs above it rather than below. */
@@ -6934,6 +7167,30 @@ canvas.is-frozen {
   line-height: 1.3;
 }
 
+/* A row whose file is still coming: the words, and a bar under them filled to
+   the fraction the worker has read. Thin and in the accent, so a card holding
+   six loading rows is six quiet lines rather than six spinners. */
+.ann-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ann-progress-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.ann-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
 /* An overlap warning is the §8.2 requirement made visible: a file whose contigs
    do not match the map looks exactly like a broken feature, so it must never be
    quiet about it. */
@@ -7488,26 +7745,24 @@ canvas.is-frozen {
   color: var(--danger);
 }
 
-/* The load arrow, on a file row. Held at the end of the row and revealed on
-   hover or focus rather than drawn on every line: forty rows each carrying a
-   permanent arrow is forty marks competing with the names, which are what a
-   reader is actually scanning. It stays visible while focused so the keyboard
-   path is never chasing something that is not there. */
-.folder-entry-load {
-  flex: 0 0 auto;
+/* The two verbs on a file row (`ui/rowVerbs.ts`). Held at the end of the row
+   and revealed on hover or focus rather than drawn on every line: forty rows
+   each carrying two permanent marks is eighty marks competing with the names,
+   which are what a reader is actually scanning. They stay visible while
+   focused so the keyboard path is never chasing something that is not there. */
+.folder-entry .row-verb {
   opacity: 0;
-  padding: 0.1rem;
 }
 
-.folder-entry:hover .folder-entry-load,
-.folder-entry:focus-within .folder-entry-load,
-.folder-entry-load:focus-visible {
+.folder-entry:hover .row-verb,
+.folder-entry:focus-within .row-verb,
+.folder-entry .row-verb:focus-visible {
   opacity: 1;
 }
 
 @media (hover: none) {
-  /* No hover to reveal it with. */
-  .folder-entry-load {
+  /* No hover to reveal them with. */
+  .folder-entry .row-verb {
     opacity: 1;
   }
 }

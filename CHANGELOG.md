@@ -14,6 +14,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts
+  gzip, and Drive takes it up on an unranged `HEAD`: `Content-Encoding: gzip`, chunked, no length.
+  The map door read that as a host that re-encodes what it serves — GitHub Pages does, and ranges
+  through a gzip stream are garbage — and took the fallback for such a host, one `GET` of the whole
+  file into memory, silently and whatever the size: 81 MB for the `.mcool` this was found on, and
+  the same road for a 2 GB one. Drive answers every *ranged* request raw, so a `HEAD` that comes
+  back re-encoded is now followed by one more, for `Range: bytes=0-`, and a 206 that is not
+  re-encoded and states its length is read by range from there — the file's length, since the
+  range is all of it. Pages re-encodes that too and is refused exactly as before, one request later
+  (docs/hosting.md, docs/remote-sources.md).
+
+- **A file picked from Google Drive took a long time to open, under a name that was its id.** A
+  Drive file is addressed by an id, so nothing in its address says what it is, and the session took
+  the contact-map door first: a `HEAD`, then HDF5 hunting for a superblock at doubling offsets — a
+  megabyte chunk at each — through the whole of a bigWig, before the track door read the file's
+  header three times over, four small requests each. Over the Drive API, where a request is the
+  better part of a second, a 56 MB bigWig sat at *Opening 1pq7NDWo…?alt=media…* for most of a
+  minute. The name a folder gives a file now decides the door where its address cannot, a bare
+  address is asked what it is before the map door is tried, and the annotations worker reads a
+  remote file in 256 KiB chunks it keeps, one handle per address — so the same open is three
+  requests and 0.6 MB, and the loading screen and the tab say *ATAC_rep2_WBcel235.bw* (SPECS
+  §24.9). A presigned URL's tab loses its signature the same way: a query string is the request,
+  not the name.
+
+- **Opening a 4DN BAM as a genome fetched the whole file.** 4DN's open-data bucket exposes `ETag`
+  and nothing else to a page, so the browser could not see the `Content-Range` the file handle
+  reads a size off, and the handle reported nought bytes. The bounded header read was then a read
+  of nought bytes, "not a BAM", and the alignment file was fetched whole — gigabytes, behind
+  *Reading 4DNFIV9TCZVO.bam* — to find out what its first block said. A size the handle cannot
+  give is now asked for with a `HEAD`, whose `Content-Length` every page may read; a size nothing
+  states is unknown rather than empty and the header is still read within its bound; and the
+  browser opens from the header in three small requests, with the index's download drawn as a
+  bar on the row while it is already on screen (SPECS §8.8).
+
 - **A merged pull request's preview stayed in the About dialog's version picker.** Merging fires
   `pull_request: closed` — the run that deletes the preview — and `push` to `main` in the same
   instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
@@ -56,6 +90,90 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   off response that started this.
 
 ### Added
+
+- **A pasted Drive link opens under the file's own name.** A share link becomes the Drive API's
+  media address, which ends in an id and says nothing else, so the loading screen, the tab and the
+  router all saw `1Vs9WgmiQj3CMSaDrXNBzzV3tp72GTLu6` where a folder pick would have said
+  `SB112b^mapped_CalTech4^B0AGU2.mcool`. Drive is now asked what the id is called before the file is
+  opened — one `files.get` with `fields=name`, on the same key or token the read carries, once per
+  file for the page — and the answer names the loading screen, becomes an empty tab's name, and
+  chooses the door by its suffix, so a pasted `.mcool` opens as a map and a pasted `.bw` as a
+  browser without the bytes being asked first. A Drive that will not say — a private file this tab
+  is not signed in for, a site built without a key, a network that did not answer — costs nothing
+  and changes nothing: the open goes ahead under the id, as before (SPECS §24.9).
+
+- **A BAM with no index opens, and draws its reads.** A BAM was read through its index and
+  nothing else, and a file without one was refused by name with `samtools index` — the right
+  answer for a file on a disk and the wrong one for the two hosts the store drawer offers most:
+  neither 4DN's open-data bucket nor ENCODE's public bucket publishes an index beside *any* of
+  its BAMs, so every BAM opened from either store answered *No index could be read* and drew
+  nothing. A coordinate-sorted file is now searched instead: the first read at or after a
+  position is found by binary search over the file's bytes, each probe a ranged read that inflates
+  a block or two and recovers a record boundary inside, and the probes are kept for the next
+  window. The row's summary says *reads located by search* and names the index it did not find; a
+  window then draws exactly what an indexed file draws, to a block rather than to a record, and
+  from 16 kb before its start (SPECS §8.13, docs/hosting.md). A file dropped from a disk without
+  its `.bai` opens the same way.
+
+- **A BAM whose reads are out of order is refused with the two places that show it.** Every BAM on
+  4DN's bucket is a Hi-C pipeline's alignment output, in read-pair order for the pairs step that
+  follows it, with no `@HD` line to say so. The search holds its probes to the order the file
+  claims, and refuses one that fails — *the reads at byte 43,712,010 are on chr2:1,004,120 while
+  those at byte 306,984,070, later in the file, are on chr1:9,512* — naming `samtools sort` and
+  then `samtools index`, and saying that the `.pairs` or the contact map beside such a file is the
+  one to open.
+
+- **The site signs readers in to their own Drive and Dropbox.** The Google client id, the Google
+  API key and the Dropbox app key were three boxes every reader had to fill, from a project of
+  their own, before *sign in* would light up. The published site is now built with the lab's
+  three, read by the deploy from the repository's `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and
+  `DROPBOX_APP_KEY` variables — none a secret, all served in the page — so **Connect → Google
+  Drive** and **Connect → Dropbox** offer their sign-in at once, and a reader reaches a private
+  folder of their own with one press. The dialog says whose value it is using; one pasted by hand
+  still wins, for a lab with a project of its own; and a build made without the variables is the
+  build there was before (SPECS §24.7, docs/deploy.md).
+
+- **A lane says what it is waiting for.** A sequence lane read by range sat blank while its window
+  was on its way, and a BAM's row said *reading…* for as long as its thirty-megabyte index took.
+  The worker now reports how far a read has got — a whole file downloading for a row, a window of
+  an indexed sequence fetched by range — and the lane draws *fetching 1.2 of 4.0 MB* with a bar
+  where its limits would go, on the browser and beside a map alike; the Tracks card draws the same
+  words and bar under a row whose file is still coming. Where the host would not say how much is
+  coming the bar sits half full rather than at nought.
+
+- **A lane that will not draw at this zoom says so.** An indexed sequence over a window wider than
+  4 Mb answers *GC under 4 Mb, letters at base resolution — zoom in* under its name, instead of
+  nothing. The line is judged over the whole request: a whole-genome view of *bosTau9* is thirty
+  chromosomes over it and two thousand scaffolds under it, and the scaffolds were being read one
+  request apiece — a lane that stayed empty for minutes while it did.
+
+- **ENCODE's genome and file-kind facets are multiple choice.** They were radios, so one shard was on
+  screen at a time and the same dataset on two assemblies, or a dataset's signal beside its peaks,
+  could not be seen in one list. Tick two genomes and both shards are read and shown together, the
+  matrix crosses the union, a link carries the choice as two facets, a shard read once is kept, and
+  a shard not written yet is a sentence beside the rows that were.
+
+- **A large FASTA opens at once, through its index.** Opening IGV's *Galgal6* — a gigabyte of
+  sequence — read the whole file into the annotations worker before the browser could appear, or
+  refused it past 300 MB, because a FASTA was the one format held whole: every sequence in memory,
+  which is what made every zoom draw GC content and every pan free. Over **64 MB** it is now read
+  by its `.fai` instead (SPECS §8.8, `annotations/fai.ts`): the assembly is the index's first two
+  columns, a window of residues is one ranged read at the byte the index puts it at, and nothing of
+  the sequence is fetched until a lane asks for it — so the browser is on screen the moment a
+  kilobyte of index has arrived, and the sequence loads beside it, a window at a time, in the
+  worker that always held it. The index is `<url>.fai` unless named with `#index=` or dropped
+  beside the file, on the terms every other sidecar already had; under 64 MB nothing changes, and a
+  large FASTA with no index is read whole as before, or refused by a sentence naming
+  `samtools faidx`. What an indexed sequence gives up is what needed the whole of it: its GC lane
+  is blank over a window wider than 4 Mb, the motif search declines it in a note, and an alignment
+  lane colours mismatches only from what the sequence lane has already drawn. `make_store.py`
+  writes the index into every IGV genome's row and session, and a lane's summary says *read by range
+  from its index* so a reader knows which of the two they have.
+
+- **The store drawer is on the backslash key.** A panel at the window's edge on a punctuation key,
+  as the console is on the backtick: `\` folds the stores out and back, is printed on the header
+  button and listed with the command, and stays a backslash inside any box, the drawer's own search
+  field included.
 
 - **This chromosome is circular — and then the map slides round it.** A tickbox in
   the **Map** card, on any view that is a window on one sequence (SPECS §8.15). A `.cool`
@@ -479,6 +597,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The header's plug and `+`.** *Connect a place* and *Add a file to this tab* stood in the header
+  beside the store drawer's toggle and were the Files column's own *Open a local/remote folder* and the file
+  crumb's *Open a file* said a second time, one row up; a header with three doors to a file read as
+  three different things. Both verbs stay in the command palette, and dropping a file still adds
+  it. The hints that pointed at "the plug in the header" now point at the Files column.
+
 - **The Buckets card, the bucket browser and the shelves dropdown.** The plug's *Buckets* card
   listed what the Files panel already lists and edited keys the provider pane now edits; the
   *browse bucket…* dialog behind four URL boxes browsed buckets and nothing else, where the window
@@ -675,6 +799,80 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The 4DN and ENCODE stores list a BAM only where its reads can be drawn.** A third of the 4DN
+  store's rows were BAMs, and most of those were clicks that could only be refused: 2,271 were the
+  alignment files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C,
+  PLAC-seq, DNase Hi-C, ChIA-PET, MARGI, TCC, HiChIP), every one `bwa mem -SP5M` output in read-pair
+  order with no `@HD` line, which the viewer refuses for want of a sort, and 6,309 were BAMs the
+  portal describes nowhere — no assay, no biosource, no dataset, nothing to filter on. The generator
+  now leaves both out, so *bam* in the Files facet is the 1,397 alignments of RNA-seq, ChIP-seq,
+  CUT&RUN, Repli-seq, DamID and TSA-seq, which are sorted and draw; the `.pairs` and the contact
+  map of every Hi-C set are the rows that were wanted from it, and they stay. ENCODE's alignment
+  shards lose their Hi-C pipeline's files the same way — 471 rows of in situ, dilution and intact
+  Hi-C, `@HD SO:unknown` — and nothing else: ENCODE's ChIA-PET alignments are ChIA-PIPE's and
+  coordinate-sorted, and a BAM the portal did not describe keeps the cells its manifest row has.
+  The rule is about what a BAM is — its reads — and not a list of assays: a new member of the
+  family whose name says Hi-C arrives filtered, and a new linear assay arrives listed (SPECS
+  §24.3, docs/stores.md).
+
+- **The Google Drive and Dropbox panes are a title, a `?` and a button.** Each was still two or
+  three paragraphs about the grant and the token between its heading and its button, and the Drive
+  pane had a second heading, *A Google Drive folder*, over a box that said *sign in above* until
+  the reader had. Each is now one line — *Connect to your Google Drive* or *Connect to your
+  Dropbox* on the left, a `?` at the far right — and one large sign-in button under it, with the
+  provider's mark on it. What the grant is, where the token lives and what is kept are behind the
+  `?`: hover it, or press it on a screen with no hover, and the sentences appear; a keyboard
+  reaches them too, and a screen reader reads them as the button's description. Only what a reader
+  acts on is on the pane: the button, the reason it is disabled on a site built without the
+  registration, the code box a Dropbox sign-in opens, an error. On the Drive pane the folder box
+  appears under the button the moment the sign-in has happened, on the same pane, and goes away
+  with a sign-out. The Files panel's *sign in under* line and the listing errors name the tile,
+  **Google Drive**, rather than a section that no longer exists (SPECS §20, §24.7).
+
+- **The Google Drive and Dropbox sections are a sign-in and nothing else.** The boxes for a
+  Google API key, a Google client id and a Dropbox app key are gone, and so is the storage behind
+  them: the three are the site's registrations, built in from `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY`
+  and `DROPBOX_APP_KEY` (docs/deploy.md), and a reader is offered the sign-in they make possible
+  and nothing to wonder about. A site built without one says so where the sign-in would be and
+  names the variable its maintainer sets. The About screen lists nothing for them, because a
+  browser keeps nothing of them; a Dropbox is in the Files panel while a sign-in is live (SPECS
+  §24.7, §24.9).
+
+- **The Files column's button says what it does: *Open a local/remote folder*.** It was *connect a
+  place…*, and the dialog behind it — now titled the same — has lost its opening paragraph and
+  most of every pane's: each keeps one line and the two sentences about a grant that §24.7
+  requires. The bucket pane's placeholder is generic, and a prefix may be typed as
+  `s3://bucket/prefix/`, which becomes the bucket's https address on the region given. The header
+  reads stores, Files column, then the four panels.
+
+- **IGV's genome cards are four across, tighter, and named without the bracket.** *Human
+  (GRCh38/hg38)* is *Human* with `hg38` as its chip — the assembly was on the card twice — the
+  whole name staying in the tooltip and in what the filter box searches; the grid is four
+  columns at the drawer's default width, two when it is narrowed.
+
+- **A store row is called what the drawer called it.** A 4DN map opened from the shelf was named by
+  its accession — `4DNFI24F7GRY.mcool` — where the reader had picked *Hi-C on HFF cells, protocol
+  variations*. The row's line now goes with the file: onto the map, onto the track, and onto the
+  tab a row opens in a session of its own, through the same road a file named by a Drive folder
+  takes.
+
+- **The lab's figures and IGV's genomes are one shape of card.** The name and the card's one verb on
+  the first line — the new-session mark, icon only — the chips under them, the one-line description
+  where there is one, and *8 files* behind a fold listing every file the session is made of, each a
+  store row with the two verbs. The *Figures* heading and the separate *Files* section are gone:
+  every file is under the figure it belongs to, and the few no figure names sit under the cards in
+  a fold of their own. IGV's cards lose the host line under the name.
+
+- **Every file row carries the same two marks: add it here, or open it in a new session.** A store
+  row had *add* as a word and *open* as a grey arrow, a folder row in the Files column had the
+  arrow alone and *add* only in the tooltip, and which of the two a row offered depended on whether
+  the tab was empty. Now every row — a store's, a folder's — has a `+` that joins the file to the
+  session in front and a window with a `+` where its corner was that opens it as a session of its
+  own, both icons, both always there, the words in the tooltips (SPECS §20.5, `ui/rowVerbs.ts`).
+  The same mark stands beside *open* on a gallery card and *open with its tracks* on a group, and
+  the tray under a portal gained *add to this session* beside *open together*. A workspace row has
+  the second alone, being tabs and not a file.
+
 - **Two verbs to open anything: load files, or connect to a store.** The landing page had grown a
   URL box, a *browse…*, a *private buckets…*, a dropdown of eighteen shelves and a list of
   examples, and the header a plug, a `+` and a *Buckets* card that overlapped all of them. Every
@@ -694,10 +892,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `?store=4dn&assay=Hi-C&biosource=HFFc6&view=matrix` — so a narrowed store is a link, and
   `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
 
-  Around it, the doors are fewer and each says what it is. **Connect** (the plug) is a row of
-  providers — this machine, a bucket, Google Drive, Dropbox — with each provider's credentials on
-  its own pane rather than a bucket card here and a Drive key there. The header's `+` and the file
-  crumb's *Open a file* open one **Load** dialog with the store tiles behind it. Every URL box that
+  Around it, the doors are fewer and each says what it is. **Connect** (the Files column's
+  *Open a local/remote folder*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
+  each provider's credentials on its own pane rather than a bucket card here and a Drive key there.
+  The file crumb's *Open a file* opens one **Load** dialog with the store tiles behind it. Every URL box that
   once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every
   place the window is connected to and not only buckets. The **Files** panel is the one listing of
   connected places. And `scripts/make_store.py` writes a *Group*, *Experiment set* or *Dataset*

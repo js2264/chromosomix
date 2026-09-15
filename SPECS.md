@@ -1880,6 +1880,56 @@ mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarte
 figure, so it must stay inside `VectorPage`'s op list, while anything that is a *control* must stay
 in the DOM layer, which the figure geometry does not build.
 
+**The sequence lane is the one lane whose *picture* changes with the zoom** rather than only its
+resolution: GC content per bin until a base owns a pixel, and then the residues themselves. Both
+come out of the annotations worker, which holds the FASTA and answers a window at a time exactly as
+it answers a bigWig (§8.2), and the FASTA is also the assembly — every sequence and its exact length
+— which is what lets a genome be browsed with nothing else open (§5.8).
+
+**How the worker holds a FASTA is decided by its size, and the line is 64 MB.** Under it the file is
+read whole and held whole, `.fai` or no `.fai`: a yeast genome is twelve megabytes, a fly's a hundred
+and forty, and holding one is what makes every zoom draw GC content, every pan free and the motif
+search (§18) possible. Over it the file is read **by its index**, `samtools faidx`'s five columns
+(`annotations/fai.ts`): the assembly is the index's first two columns, which are a `chrom.sizes`, and
+a window of residues is one ranged read at the byte the index puts it at — so a three-gigabase genome
+is on screen the moment a kilobyte of index has arrived, and nothing of the sequence is fetched until
+a lane asks for a window. The index is the one named on the URL (`<url>#index=<url>`, §8.13) or
+dropped beside the file, and otherwise `<url>.fai`, guessed and never probed on the terms every other
+sidecar is. What an indexed sequence gives up is everything that needed the whole of it in memory:
+its GC lane draws nothing over a window wider than four megabases and its readout says why, the
+motif search declines it in a note naming the line, and an alignment lane colours its mismatches
+only from the slab the sequence lane last drew, never fetching for one (§8.13). Over the line with no
+index that can be found, the file is read whole as it always was, and refused past 300 MB by a
+sentence naming the size, `samtools faidx`, and where to put the result. A bgzipped FASTA is read
+whole whatever its size, its `.fai` needing a `.gzi` beside it that this viewer does not read. The
+generator writes the index into every IGV genome's row and session (§24.3), and a lane's summary
+says *read by range from its index* so a reader knows which of the two they have.
+
+**A lane says what it is waiting for.** The worker reports how far a read has got — a whole file
+being downloaded for a row, a window of an indexed sequence fetched by range — under the request
+that asked, the same `progress` message an analysis task sends (§18.3), and the two caches on the
+main thread keep the last report beside the request it belongs to. A lane whose window is on its
+way draws *fetching 1.2 of 4.0 MB* and a bar where its limits would go, on both surfaces
+(`render/laneLabel.ts`); a row whose file is still coming draws the same words and bar in the Tracks
+card. Where the host would not say how much is coming the bar is drawn half full, because a bar at
+nought says nothing has happened and something has. And a lane that will not draw at this zoom says
+so in the same place rather than sitting blank: an indexed sequence over a window wider than four
+megabases answers *GC under 4 Mb, letters at base resolution — zoom in*, judged over the whole
+request and not one region at a time — a whole-genome view of a cow is thirty chromosomes over the
+line and two thousand scaffolds under it, and reading the scaffolds one request apiece was a lane
+that stayed empty for minutes while it did.
+
+**A remote file's size is learnt, not assumed.** The handle reads it off the `Content-Range` of its
+first ranged request, which is how every bucket that follows `docs/hosting.md` answers — and how
+4DN's open-data bucket does not: it exposes `ETag` and nothing else, so the browser sees no
+`Content-Range` and the handle reports a size of nought. Taken at its word that was a header read
+of nought bytes, "not a BAM", and the whole alignment file fetched to find out what its first block
+said. A size the handle cannot give is asked for with a `HEAD`, whose `Content-Length` is one of the
+few headers CORS lets every page read unasked; a size nothing will state is *unknown*, never
+*empty*, and a header is still read within its bound. A BAM's browser therefore opens from its
+header alone, in three small requests, and the index — the one download it costs, tens of
+megabytes for a deep file — comes with a bar on its row while the browser is already on screen.
+
 ### 8.9 Four edges, and one gesture in one dimension
 
 A lane may be drawn on **any of the map's four edges**, and the four are peers. `top` and `bottom`
@@ -2104,17 +2154,47 @@ to it (§1). Everything below is that rule and what follows from it.
 per-read card, and mates and split reads drawn. What is deliberately absent is listed at the end of
 this section, each with its own reason.
 
-**The pair is the unit.** A BAM is read by region and nothing else: there is no zoom level in the
-file, no summary layer, and no whole-file read that respects §12 — a human alignment file is tens of
-gigabytes and the demo yeast one is not the case worth designing for. The index is the only thing
-that makes reading by region bounded, so a BAM without one is refused **by name**, and the refusal
-says `samtools index`. That is the narrow carve-out §1 states positively, and it costs nothing
-anywhere else: §8.11's opportunism is about an index that makes a working read *faster*, and it is
-unchanged for every format it was written about. A `.bai` and a `.csi` are both read, decided by
-their magic bytes rather than their suffix, and both spellings `samtools index` writes are paired
-with the file they belong to. A remote file names its own — `<url>.bai`, guessed and never probed,
-since §12 has no request to spend discovering that a file has no index — and where the guess cannot
-work, a presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+**A BAM is read by region and nothing else**: there is no zoom level in the file, no summary layer,
+and no whole-file read that respects §12 — a human alignment file is tens of gigabytes and the demo
+yeast one is not the case worth designing for. What makes reading by region bounded is knowing
+*where in the file* a window's reads are, and there are two ways to know it. The **index** is the
+first and the one to prefer: a `.bai` and a `.csi` are both read, decided by their magic bytes
+rather than their suffix, and both spellings `samtools index` writes are paired with the file they
+belong to. A remote file names its own — `<url>.bai`, guessed and never probed, since §12 has no
+request to spend discovering that a file has no index — and where the guess cannot work, a
+presigned URL or one carrying a query string, `<url>#index=<url>` says where it really is.
+
+**The search is the second**, for a file that has no index at all, and it exists because the two
+hosts the store drawer offers most publish none: on 2026-09-14 the whole of 4DN's open-data bucket
+held 9,977 BAMs and not one index object, and ENCODE's file manifest listed 144,322 BAM rows and not
+one index row — so a reader of the published site who opened a BAM from either was refused by name
+for something they could not fix. A coordinate-sorted file is its own index, slowly: its records
+are in (reference, position) order, so the first record at or after a position is found by binary
+search over byte offsets, each probe a ranged read of two blocks that inflates them and recovers a
+record boundary inside — a BGZF block from its own length landing on the next block's header, and a
+record from its fields being in range, its name printable and NUL-terminated at the length it
+states, and the record after it passing the same checks (`bam/search.ts`). A handful of probes
+bracket a window in a six-gigabyte file — the first guesses interpolate from the position's share
+of the genome laid end to end, where halving from the middle would take sixteen — and the probes
+are kept, so the next window over the same file starts from them; the two rows a BAM imports as
+share one search, joining a locate in flight rather than running their own. The result is the same byte span an index would give, to the block rather than
+to the record, and everything after it — the read, the inflation, the walk from the record offset —
+is the same code, which is what makes a file without an index draw exactly what one with an index
+draws. The row's summary says which road it is on. Two things the search is not: it is not exact
+below 16 kb — the walk begins that far before the window, the resolution a BAI's linear index has,
+so a read beginning further before the window than that and still reaching into it is not drawn —
+and it is not free, so a searched file answers one window at a time and refuses a whole-genome
+view's window per contig, or any window over four megabases, before a probe is made.
+
+The refusal that remains is **sort order**, and the search sharpens it. A name-sorted file has no
+order to search, and a search over one would answer with whatever the probes landed on — so every
+probe is held to the order the file claims, against both its neighbours, and a file that fails is
+refused with the two offsets that disagree, whatever its `@HD` line said and especially when it said
+nothing. That is how the file this refusal is read on is told apart from one that merely lacks an
+index: every BAM on 4DN's bucket is a Hi-C pipeline's alignment output, written in read-pair order
+for the pairs step that follows it and never sorted, and the refusal says so, and says the `.pairs`
+or the contact map is the file to open. A header that claims `SO:queryname` or `SO:unsorted` is
+refused on the claim alone, as before, and the refusal says `samtools sort`.
 
 The second refusal is **sort order**, and it is not a technicality. Every byte this reader fetches is
 addressed by an index that describes a coordinate-sorted file; a name-sorted one handed to a region
@@ -2164,8 +2244,10 @@ alignment lane differs from every other kind, and it follows from having no summ
 a window is a full read of the reads under it, so a window can be legitimately unanswerable. The
 forecast comes from the index alone — the byte spans a region resolves to, summed before anything is
 fetched — so a window too deep to draw is refused at **zero data requests** rather than discovered
-part-way through a fetch. What the lane then shows is its name, an empty band, and a sentence naming
-the number and the way forward.
+part-way through a fetch; without an index it comes from the search's two locates, which are
+requests, and the four-megabase rule above is what keeps them from being made for a window the cap
+would refuse. What the lane then shows is its name, an empty band, and a sentence naming the number
+and the way forward.
 
 The estimate that would have filled that space was considered and refused. The BAI linear index
 gives compressed **bytes** per 16 kb window, which is not depth: it varies with read length and with
@@ -2807,9 +2889,9 @@ Every refusal names the file's actual state and the concrete fix.
 | Range refers to unknown label | List genomes and contigs, truncated |
 | Coordinate suffix on a genome name | State that genome ranges are whole-genome |
 | Remote: ranges unsupported / CORS blocked | Distinguish the two; name the host |
-| BAM with no index beside it | State that a BAM is read by region and has no whole-file fallback, name the sidecar to drop, and give `samtools index <file>`. Distinct from the row below: "there is no index" and "the index you gave me is not one" have different fixes (§8.13) |
-| BAM whose index cannot be read | Name what went wrong reading it, and give `samtools index <file>` to re-make it |
-| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>` |
+| BAM with no index beside it | Not a refusal: read by search (§8.13), and the row's summary says so and names the index it did not find. Refused only where the file's length cannot be learnt, since a search needs one — and then name the `#index=<url>` convention |
+| BAM whose index cannot be read | Read by search, the summary naming the index that did not read and what went wrong with it |
+| BAM not sorted by coordinate | Name the order it *is* in, state that reads are drawn by region, and give `samtools sort -o sorted.bam <file>`. Where the header claimed otherwise or said nothing and the search found the reads out of order, name the two places that show it, give `samtools sort` then `samtools index`, and say that a Hi-C pipeline's alignment file is in read-pair order and not made for browsing |
 | CRAM | Refused for its own reason, not as collateral: it needs the exact reference its records were compressed against, which this viewer will not fetch from a third party (C1, C5). Give `samtools view -b`. **Today this row is only true of the folder listing**, which routes by name; a dropped `.cram` still falls down the text path and is refused as unreadable bytes |
 
 ---
@@ -5010,7 +5092,7 @@ are Chromium's, and another engine may impose more.
 ## 20. Connected folders
 
 Every door to a file the app had asked *which file* once and then closed: the landing page, the
-header's `+`, a URL box. That is the right shape for opening one thing and the
+file crumb's *Open a file*, a URL box. That is the right shape for opening one thing and the
 wrong shape for the way people work with a directory of data, which is to open one, look, open the
 next, and keep going. A **connected folder** is a place the window keeps, browsable in a column, for
 as long as the reader wants it.
@@ -5034,10 +5116,20 @@ API key and a Google account are settings of *one provider*, and a reader meetin
 bucket and a Drive folder had to work out which they belonged to. They sit under Google Drive now,
 which is the only tile that needs them, in the order a reader meets them — the key, because a
 public Drive link fails without it; the account, because a private one fails afterwards with a key
-in place; the folder, because it needs the account. The Dropbox app key sits under Dropbox. A build
-that cannot offer a provider does not draw its tile (§8.5): the standalone build offers this
-machine alone, and the desktop build's Drive tile carries the key and says why there is no
-sign-in. The plug in the header and the Files column's *connect a place…* both open it.
+in place; the folder, because it needs the account. Since then the key and the client id have
+become the site's (§24.7), and each of the two panes that sign a reader in is **one title, a
+`?` and a button** (`ui/connectHead.ts`): *Connect to your Google Drive* or *Connect to your
+Dropbox* on the left of a line, a `?` at its far right, and one large sign-in button under it.
+Everything the pane has to say about the service — what the grant is, where the token lives,
+what is kept — is behind the `?`, shown on hover, on focus, or pinned by a click for a screen
+with no hover; what is on the pane itself is what a reader acts on: the button, the reason it is
+disabled on a site built without the registration, the code box a Dropbox sign-in opens, an
+error. On the Drive pane the folder box — a name, a link or id, *connect this folder* — is not on
+screen until the sign-in has happened, and appears under the button the moment it has, on the
+same pane, under the same title; there is no second heading. A build that cannot offer a provider
+does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
+build's Drive pane keeps its title and its `?` and says under them why there is no button. The
+Files column's *Open a local/remote folder* opens the dialog.
 
 ### 20.1 One level, never a walk
 
@@ -5108,10 +5200,18 @@ which promises to list everything the app can do.
 
 ### 20.5 Two verbs on a row
 
-Clicking a file **loads it into the tab that is open**: a second map beside the one that is there,
-anything else drawn on top, an empty tab filled rather than added to — the same routing a dropped
-file takes and the same promise the header's `+` makes. The `→` at the end of the row says it out
-loud.
+Every file row in the application carries the same two marks, and only marks (`ui/rowVerbs.ts`): a
+`+` that **adds the file to the session in front** — a second map beside the one that is there,
+anything else drawn on top, an empty tab filled rather than added to, which is the routing a dropped
+file takes — and a window with a `+` where its corner was that **opens it in a session of its
+own**, the empty tab in front or a new one, leaving whatever was open as it is. The words are in
+the tooltips, which also say what *add* means for that kind of file. Both are offered whatever the
+tab holds: on an empty tab the two land in the same place and the tooltips say so, because a row
+with two marks in one store and one in the next is a row a reader has to think about. A workspace
+row has the second alone — it is tabs, not a file, and there is nothing it could be added to. The
+same pair stands on a store's rows (§24.2), on a folder's rows here, and, with words beside the
+marks, on a gallery card and on the tray under a portal. Clicking a folder row's name is the first
+verb.
 
 Dragging a file lets the reader say *where*: onto the map's edge rectangles for a lane in a named
 stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks card, onto the content
@@ -5123,8 +5223,8 @@ maps card's, the deck's add row and an empty cell of a deck stands *from a conne
 (`ui/pickFromFolders.ts`): the Files column's own folder view in a dialog, over every place the
 window is connected to — a directory on this machine included — and a row that hands back the
 file, with the credential the listing used. It replaces a browser that could look at buckets and
-nothing else; with nothing connected it says so and names the plug, rather than offering an empty
-listing.
+nothing else; with nothing connected it says so and names the Files column's *Open a local/remote folder*,
+rather than offering an empty listing.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders
@@ -5603,12 +5703,12 @@ column before a viewer knows it.
 ### 24.2 Where stores are offered: the tiles, the drawer, and the four fronts
 
 **The landing page has two things on it, and they are named.** *Load files* is the drop area and a
-URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* and the header's `+` reuse in a
-dialog with the other verb behind it. *Connect to a store* is a row of tiles — the lab's own
+URL box (`ui/LoadBox.ts`), which the file crumb's *Open a file* reuses in a dialog with the other
+verb behind it. *Connect to a store* is a row of tiles — the lab's own
 figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one by
 URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
 picker's URL box, its *browse…* and its *private buckets…* are gone: a bucket is a place and is
-connected from the header's plug (§20), and the *Hubs* dropdown of eighteen shelves was this row
+connected from the Files column (§20), and the *Hubs* dropdown of eighteen shelves was this row
 under another name.
 
 **Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
@@ -5619,8 +5719,40 @@ itself, so a reader can narrow a catalogue beside the map they spent an hour on.
 window** rather than one per tab, on the Files column's argument (§20.4): a store is not a fact
 about the file in front, and a switch of tab must not lose a catalogue somebody was half way
 through narrowing. Its head carries the store's mark and name, the same row of tiles small, for
-switching without closing, and *copy link*. The header has a toggle for it beside the plug and the
-`+`, and the command palette has *Open a store*.
+switching without closing, and *copy link*. The header has a toggle for it beside the Files
+column's, on the backslash key — punctuation, like the console's backtick, so it cannot collide with
+the letters the views are driven by, and at the other edge of the keyboard for the panel at the
+other edge of the window — and the command palette has *Open or close the stores*. The header holds
+nothing else on that side: the plug and the `+` that stood there were the Files column's own
+*Open a local/remote folder* and the file crumb's *Open a file* said a second time.
+
+**A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
+`4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
+what a reader picked it by. So the row's line goes with the file through the same road a file named
+by a Drive folder takes (`PickedFile.name`, §24.9): onto the map it becomes, onto the track it
+becomes (`addRemote`'s label, and `relabelTrack` for the file that opened a browser and was seated
+under its URL before the name could reach it), and onto the tab a row opens in a session of its own.
+
+**The two galleries are one shape of card** (`GalleryView.ts`, `GenomesView.ts`): the name and the
+card's one verb on the first line — the new-session mark, icon only, its words in the tooltip — the
+chips under them, the line that says what is on screen where there is one, and the files the
+session is made of behind a fold reading *8 files*. IGV's cards are the tighter of the two, four
+across at the drawer's default width, and named without the assembly IGV brackets after the
+genome's name — that is the chip under it. Every file is a store row with the two verbs of
+§20.5, so a reader who wants the ATAC bigWig on their own map has it a fold away from the figure
+it appears in; the lab's store lists every file its figures name (`fields.files` on the workspace
+row, the URIs `|`-joined), and the few files no figure names sit under the cards in a fold of their
+own. There is no section of files apart from the figures and no heading over the cards.
+
+**ENCODE's two shard facets are facets like any other.** A genome and a kind of file are choices of
+*which shards to read* (§24.3), and they used to be radios — one shard on screen at a time, so the
+same dataset on two assemblies, or a dataset's signal beside its peaks, could not be seen in one
+list. They are checkboxes now: tick two genomes and both shards are read, their rows shown as one
+list with the two values written on every row under the facets' own keys, so a link carries the
+choice as two ordinary facets and the matrix crosses the union. A shard read once is kept for the
+drawer's life and not read again when unticked and re-ticked; a shard the workflow has not written
+is a sentence beside the rows that were read, not a blank store; and a shard nobody has ticked shows
+*on request* where its count would go, because nothing is read for a value nobody asked for.
 
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
@@ -5688,7 +5820,23 @@ the standard library. Its shape changed once the answer to *what should a portal
 **everything this viewer can open** rather than *the contact maps*, and the change is worth stating
 as a rule, because it is the rule that needs no maintenance: the filter is on whether a file name
 has a route (§20.5), never on an experiment type or a format list, so Micro-C, a bigWig, a peak
-file and whatever a consortium publishes next are in a store nobody edited.
+file and whatever a consortium publishes next are in a store nobody edited. It has one exception,
+and the exception is about what the viewer can *draw* rather than what it can open: a **BAM is its
+reads**, the reads are drawn from a coordinate-sorted file (§8.13), and the alignment file an
+interaction assay's pipeline publishes is in read-pair order — so the 4DN front end leaves out a BAM
+whose experiment type is one of the 3C family (Hi-C in every spelling, Micro-C, Capture-C, ChIA-PET,
+PLAC-seq, HiChIP, TCC, MARGI, Dip-C, TrAC-loop; `INTERACTION_ASSAYS` in the generator, matched on
+the words so a new member arrives filtered), and a BAM the portal does not describe at all, which
+has no assay to judge by and no cell to filter on. On 2026-09-15 that was 2,271 and 6,309 of the
+store's 9,977 BAM rows, every one a click the viewer could only refuse; the 1,397 alignments of
+RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and TSA-seq stay, and so do every `.pairs` and every
+contact map. The ENCODE front end makes the same exception for its Hi-C pipeline's alignments and
+for those alone (`HIC_ASSAYS_ENCODE`; 471 rows that day): the list is narrower because the
+pipelines are — ENCODE's ChIA-PET alignments come from ChIA-PIPE and are coordinate-sorted, where
+4DN runs every interaction assay through its Hi-C pipeline, and both were measured on the files'
+own `@HD` lines before the words were chosen. An undescribed ENCODE BAM stays, because its manifest
+row still carries an assembly, an output type, a lab and a dataset. It is still a rule about the
+file — which door it opens, whether it can be drawn — and not a list of assays worth showing.
 
 **A spine and an enrichment.** The first version asked a portal's search API for both halves of a
 row — which files exist, and what they are of — and that is the wrong shape for a complete
@@ -5896,22 +6044,41 @@ guesses, and the annotation worker's own fetch — and `s3/attach.ts`'s `withAcc
 the two `postMessage` boundaries, independently for a source and its `bins` sidecar, exactly as
 `withCredential` stamped one. Two kinds of row feed it, and they are kept differently on purpose:
 
-- **A Google API key** (`metacooler-viewer:access`, one row, named in the stored-data screen the
-  way a bucket key is) — sent as `x-goog-api-key` to the Drive and GCS JSON APIs. A *public* Drive
-  file needs it and nothing else; a public GCS object needs nothing. The key is the lab's, made in
-  the lab's own Google project, under the bargain `docs/hosting.md` states for a bucket key: it
-  lives in the browser, and what bounds it is what it was granted.
+- **A Google API key** — the site's, built in (`config/siteDefaults.ts`) — sent as
+  `x-goog-api-key` to the Drive and GCS JSON APIs. A *public* Drive file needs it and nothing else;
+  a public GCS object needs nothing. The key is made in the site's own Google project and
+  restricted to the site's address, which is why it is the deployment's to provide and nobody's to
+  type: nothing about it is in the browser.
 - **A bearer token**, held in memory only and never written to storage, matched to a host pattern
-  and dropped at its expiry. It is what a signed-in Google account produces: the lab supplies a
-  **client id** registered for the app's origin, the reader signs in through Google Identity
-  Services, and the token rides every request to Drive (`drive.readonly`) and GCS
-  (`devstorage.read_only`) until it expires, after which a `401` from a Google host is answered by
-  the offer to sign in again rather than by the CORS explanation. Absent in the standalone build,
-  which has no origin to register.
+  and dropped at its expiry. It is what a signed-in Google account produces: the site supplies a
+  **client id** registered for its origin, the reader signs in through Google Identity Services,
+  and the token rides every request to Drive (`drive.readonly`) and GCS (`devstorage.read_only`)
+  until it expires, after which a `401` from a Google host is answered by the offer to sign in
+  again rather than by the CORS explanation. Absent in the standalone build, which has no origin to
+  register.
+
+**Where the three values come from, and from nowhere else.** Each is read in one place —
+`readApiKey`, `readClientId`, and `readAppKey` for the Dropbox key of §20 — and each answers the
+value the page was **built with**: `config/siteDefaults.ts` exports `SITE_DEFAULTS`, three strings
+the build fills from the `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and `DROPBOX_APP_KEY` variables of the
+environment it ran in (`vite.config.ts`; the deploy reads the repository's Actions variables of the
+same names, docs/deploy.md). None of the three is a secret — all end up in the page — and none is
+anything a reader is asked for: the dialog offers the sign-in the registration makes possible and
+no box for the registration itself, this browser stores nothing of it, and the stored-data screen
+lists nothing for it. A client id is bound to the site's address and a key to its referrer, so a
+value a reader could paste would be one for a *different* site; the boxes that used to take one
+were a question every reader had to wonder about that only a maintainer could answer. A site
+built without a registration says so where the sign-in would be, names the variable, and offers a
+button that is disabled rather than absent — the exception to §8.5 this dialog makes, because the
+sentence beside it names the one thing a reader can do.
 
 The dialog says one thing plainly that a consent screen would bury: `drive.readonly` is read access
-to **all** of the reader's Drive, where a bucket scope is one prefix. And `docs/hosting.md` says the
-other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
+to **all** of the reader's Drive, where a bucket scope is one prefix — and where the token goes,
+which is this tab's memory and nowhere else. It says them behind the `?` on the pane's title
+(§20), not between the title and the button: the sentences are the page's, the page is the one
+that hands over the credential, and a tooltip on that page is still the page saying them — one
+hover away for the reader who wants them and out of the way of the one who came to press *sign
+in*. And `docs/hosting.md` says the other: Drive throttles ranged reads and meters them against the project's quota, which is nothing
 for the dozen requests an open costs and something for the thousands a fine-resolution pan costs, so
 Drive is a host this viewer *reads*, not one it recommends. The same mechanism, with no Google in
 it, is what a token from an institutional portal or a Terra-shaped signed endpoint needs — one
@@ -5950,16 +6117,45 @@ thousand entries and then *truncated*. A folder is remembered by its id and labe
 `localStorage`, named in the stored-data screen; the listing needs the account, so a remembered
 folder after a reload says *sign in to Google* until the reader does. A picked file is the API's
 media URL — the same address `canonicalUrl` gives a pasted share link — with its name carried
-beside it. What the row does not carry is a folder tree: `files.list` answers one parent at a time,
-which is §20.1's rule arriving from the other side.
+beside it, and **the name is what routes it**: the address ends in an id, which says nothing about
+what the file is, so `routeFor` lets the name choose the door the address cannot, and the loading
+screen and the tab say the name rather than the address. Where nobody gave a name — a share link
+pasted into the URL box, a `view=browser` link, a track added by address — **Drive is asked for
+it first** (`browse/driveName.ts`): one `files.get` with `fields=name`, on the same key or
+token the read will carry, memoised by id for the page, and never in the way — a refusal, a site
+with nothing to ask with, a network that did not answer all come back `null` and the open goes
+ahead under the id as it always did. The answer is what the folder listing would have handed
+along: it names the loading screen, becomes an empty tab's name, and routes the file by its
+suffix, so a pasted `.mcool` takes the map door and a pasted `.bw` the genome door without a
+byte read. Where no name says either — an id Drive would not name — the bytes are asked *before*
+the map door is tried, because that door's failure is dear: HDF5 hunts for a superblock at doubling
+offsets, a megabyte chunk at each, through the whole of a file that is not one, and over the Drive
+API that was the better part of a minute for a 56 MB bigWig that then opened in three requests.
+Those three are what the annotations worker's
+remote handle costs now: it reads 256 KiB chunks and keeps them, one handle per address, so the
+assembly question, the load and the first window read a bigWig's header once between them
+(`worker/cachedFile.ts`) — the arrangement `RemoteRangeSource` has always made for a contact map,
+and the one that makes a host where a request is a second rather than a millisecond usable at all.
+The map door reads a Drive file by range as well, although a browser's `HEAD` of one comes back
+`Content-Encoding: gzip` — Drive re-encodes what it is not asked a range of, and a page cannot
+decline gzip — so `RemoteRangeSource` follows a re-encoded `HEAD` with one for `Range: bytes=0-`
+before concluding anything: Drive answers that raw, with the file's length, and a host that
+re-encodes the range too is refused as §15 always has (`docs/hosting.md`). Without it every Drive
+map went down the whole-object road, silently and whatever its size.
+What the row does not carry is a folder tree: `files.list` answers one parent at a time, which is
+§20.1's rule arriving from the other side.
 
 **Dropbox** (`auth/dropbox.ts`, `browse/dropbox.ts`) is the one provider here with an account and
-no key: a lab registers a *scoped-access* app with `files.metadata.read` and `files.content.read`,
-and the app key — public by design, no secret — is the one thing kept, beside the bucket keys. The
+no key: the site registers a *scoped-access* app with `files.metadata.read` and
+`files.content.read`, and the app key — public by design, no secret — is built in (§24.7); nothing
+is kept. The
 sign-in is **PKCE with the code shown by Dropbox and pasted by the reader**, not a redirect: a
 static page on any origin can do it, the desktop build's `app://` origin included, and there is no
 callback route to add to a viewer that has none. The token lives in this tab's memory and dies
-with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is the whole
+with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is in the
+Files panel while a sign-in is live and not otherwise: the site's key is in every reader's page
+(§24.7), and a row in every reader's panel, Dropbox or no Dropbox, would be noise with a × that
+could not remove it. The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague

@@ -27,8 +27,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DROPBOX_FOLDER_ID, dropboxFolder } from '@/browse/dropbox'
-import { beginSignIn, finishSignIn, setDropboxFetch, signOut, writeAppKey } from '@/auth/dropbox'
+import { beginSignIn, finishSignIn, setDropboxFetch, signOut } from '@/auth/dropbox'
 import type { FolderEntry } from '@/browse/folder'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 interface Call {
   url: string
@@ -84,7 +93,7 @@ function folder(path: string): Record<string, unknown> {
 
 /** Sign in for real, through the token exchange, with the response stubbed. */
 async function signIn(): Promise<void> {
-  writeAppKey('a1b2c3d4e5f6g7h')
+  site.dropboxAppKey = 'a1b2c3d4e5f6g7h'
   setDropboxFetch(
     (() =>
       Promise.resolve({
@@ -273,7 +282,7 @@ describe('the four refusals', () => {
   const entry: FolderEntry = { kind: 'file', name: 'rep1.mcool', path: '/rep1.mcool', size: 1 }
 
   it('says to sign in, and contacts nobody, when nobody is signed in', async () => {
-    writeAppKey('a1b2c3d4e5f6g7h')
+    site.dropboxAppKey = 'a1b2c3d4e5f6g7h'
     serve()
     await expect(dropboxFolder().list('/')).rejects.toThrow(/Sign in to Dropbox/)
     await expect(dropboxFolder().pick(entry)).rejects.toThrow(/Connect → Dropbox/)

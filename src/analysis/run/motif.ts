@@ -149,6 +149,10 @@ export const runMotif: TrackTaskRunner = async (job) => {
     job.note('The reference chosen is no longer loaded. Drop the FASTA again, or pick another.')
     return []
   }
+  if (reader.refusal !== undefined) {
+    job.note(reader.refusal)
+    return []
+  }
 
   const pattern = motifPattern(job.params)
   const compiled = compileMotif(pattern)

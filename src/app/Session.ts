@@ -96,8 +96,10 @@ import type {
 } from '../worker/protocol'
 import type { WireSource } from '../annotations/worker/protocol'
 import type { PickedFile } from '../browse/folder'
-import { routeOf, type FileRoute } from '../browse/route'
-import { isHicProMatrix, splitBinsFragment } from '../annotations/sidecar'
+import { routeFor, routeOf, type FileRoute } from '../browse/route'
+import { driveFileName } from '../browse/driveName'
+import type { AssemblyResult } from '../annotations/worker/protocol'
+import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
 import {
   assemblyOf,
@@ -271,9 +273,23 @@ export interface OpenFile {
  * and the one place they meet is a file whose *kind* is not yet known.
  */
 function toWire(source: SourceSpec): WireSource {
+  // The sidecar goes with the file on both roads. For a FASTA the *assembly*
+  // question is answered from its `.fai` when there is one (§8.8), and a
+  // question asked without the index would read a gigabyte to learn what the
+  // index says in a kilobyte.
   return source.kind === 'local'
-    ? { kind: 'local', file: source.file, name: source.file.name }
-    : { kind: 'remote', url: source.url, name: source.url.split('/').pop() ?? source.url }
+    ? {
+        kind: 'local',
+        file: source.file,
+        name: source.file.name,
+        ...(source.index === undefined ? {} : { index: source.index }),
+      }
+    : {
+        kind: 'remote',
+        url: source.url,
+        name: source.url.split('/').pop() ?? source.url,
+        ...(source.index === undefined ? {} : { index: source.index }),
+      }
 }
 
 /**
@@ -2048,15 +2064,48 @@ export class Session {
      * reader's choice. The same two-step an `.mcool` at its root already takes.
      */
     binning?: PairsBinning,
+    /**
+     * What the file is called, where the address does not say — the name a
+     * Drive folder or a store row gave it (§24.9). It decides the door when
+     * the address cannot, and it is what the loading screen and the tab say.
+     */
+    label?: string,
   ): Promise<void> {
     if (this.opening === uri) return
+    // An empty tab takes the file's name as its own, as {@link addRemote}'s
+    // does. Read before anything below replaces what the tab holds.
+    const wasEmpty = this.file === null && this.assembly === null
+    // A Drive address ends in an id and says nothing else; where nobody gave a
+    // name, Drive is asked for it first (§24.9) — one small request that names
+    // the loading screen and the tab, and decides the door where the bytes
+    // would otherwise have to be asked.
+    const found = label === undefined ? await this.driveName(uri, source) : null
+    if (this.destroyed) return
+    if (found !== null) label = found
+    const named = (): void => {
+      if (wasEmpty && found !== null && !this.destroyed && this.name === null) this.rename(found)
+    }
     // A file that is not a contact map starts a genome browser instead. Decided
-    // by name first, and by the bytes when the name does not say — see
-    // {@link routeOf}.
-    const route = this.routeOf(uri)
+    // by name first — the address's, then the given one — and by the bytes
+    // when neither says; see {@link routeOf}.
+    const route = routeFor(uri, label)
     if (route === 'genome') {
-      await this.openGenome(uri, source, carry?.locus, false, index)
+      await this.openGenome(uri, source, carry?.locus, false, index, label)
+      named()
       return
+    }
+    // A name that says nothing — a Drive id, a `yeast.txt` — is asked what it
+    // is *before* the map door is tried, because that door's failure is dear:
+    // HDF5 hunts for a superblock at doubling offsets, a megabyte chunk at
+    // each, through the whole of a file that is not one. The question costs
+    // one small read (`openUnknown`), and a map answers it as a map.
+    let sniffed = false
+    if (route === 'unknown' && binning === undefined) {
+      sniffed = true
+      if (await this.openUnknown(uri, source, carry, label)) {
+        named()
+        return
+      }
     }
     // A sidecar dropped with the file reaches the *map* door too, and two
     // formats use it there. Both are folded into the spec rather than carried
@@ -2093,7 +2142,7 @@ export class Session {
     // so, because the wait is a pass over its records rather than a read.
     let task: Cancellable<OpenResult> | null = null
     const screen = new LoadingView(
-      `${binning === undefined ? 'Opening' : 'Binning'} ${fileLabel(uri)}`,
+      `${binning === undefined ? 'Opening' : 'Binning'} ${label ?? fileLabel(uri)}`,
       () => task?.cancel(),
     )
     this.showContent(screen.el)
@@ -2272,6 +2321,7 @@ export class Session {
       // render explicitly in that case — and only in that case, to avoid
       // mounting the same view twice.
       if (!moved) void this.render(this.store.state)
+      named()
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
       // Making the reader wait for a file after waiting for a picture is the
@@ -2367,7 +2417,7 @@ export class Session {
       // the read that just failed. The two other redirects out of this catch
       // clear it for the same reason.
       this.opening = null
-      if (route === 'unknown' && (await this.openUnknown(uri, source, carry))) return
+      if (route === 'unknown' && !sniffed && (await this.openUnknown(uri, source, carry, label))) return
       this.showError(err, uri, source)
     } finally {
       this.opening = null
@@ -2418,6 +2468,18 @@ export class Session {
   }
 
   /**
+   * What Drive calls a file addressed by id, where the caller gave no name.
+   *
+   * One `files.get` on the key or token the read itself carries, memoised by
+   * `browse/driveName.ts`; `null` for any other address, and for a Drive that
+   * will not say — the open then goes ahead under the id, as it always did.
+   */
+  private async driveName(uri: string, source: SourceSpec): Promise<string | null> {
+    if (source.kind !== 'remote') return null
+    return driveFileName(splitUri(uri).path)
+  }
+
+  /**
    * Second-guess a file the reader refused, by its bytes.
    *
    * Returns `true` when it turned out to be a genome and a browser was opened
@@ -2428,14 +2490,16 @@ export class Session {
     uri: string,
     source: SourceSpec,
     carry?: ViewState,
+    label?: string,
   ): Promise<boolean> {
     // Hoisted above the `try` and released in the `finally`, as `openGenome`
     // does: the request starts a worker lazily and every failure path here is
     // reachable — an empty file, a truncated header, a fetch that 404s — and a
     // worker that is never terminated is a thread for the life of the page.
     const client = new AnnotationClient()
+    let result: AssemblyResult
     try {
-      const result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
+      result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
       if (result.format === null || result.format === 'hdf5' || result.contigs.length === 0) {
         return false
       }
@@ -2445,7 +2509,9 @@ export class Session {
       client.destroy()
     }
     if (this.destroyed) return false
-    await this.openGenome(uri, source, carry?.locus)
+    // The answer travels: the genome door would otherwise ask the same
+    // question of the same bytes a second time, over the same slow host.
+    await this.openGenome(uri, source, carry?.locus, false, undefined, label, result)
     return true
   }
 
@@ -2486,15 +2552,36 @@ export class Session {
      * the BAM's own `@SQ` table and then refused the BAM.
      */
     index?: File,
+    /** What the file is called where its address does not say (§24.9). */
+    label?: string,
+    /** The assembly question, already answered by {@link openUnknown} for the same bytes. */
+    known?: AssemblyResult,
   ): Promise<void> {
+    // `<url>#index=<url>` names the sidecar for a remote file at the one door
+    // a URL comes through, and it is split here for the genome road exactly
+    // as `AnnotationLoader.addUrl` splits it for a track: the fragment is
+    // never sent to a server, and it is the *assembly* question below that a
+    // FASTA's `.fai` answers (§8.8). The session goes on under the address.
+    if (source.kind === 'remote' && source.index === undefined) {
+      const split = splitIndexFragment(source.url)
+      if (split.index !== undefined) {
+        source = { ...source, url: split.address, index: split.index }
+        uri = uri.replace(/#index=.*$/, '')
+      }
+    }
     if (this.opening === uri) return
+    // Asked again here for the door a `view=browser` link comes through
+    // directly; from {@link open} the answer is already in hand and costs nothing.
+    if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
+    if (this.destroyed || this.opening === uri) return
     this.opening = uri
     this.noteGrant(uri, source)
-    this.showContent(loading(`Reading ${fileLabel(uri)}`))
+    this.showContent(loading(`Reading ${label ?? fileLabel(uri)}`))
     this.host.sessionChanged(this)
     const client = new AnnotationClient()
     try {
-      const result = await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) })
+      const result =
+        known ?? (await client.request<'assembly'>({ kind: 'assembly', source: toWire(source) }))
       if (this.destroyed) {
         client.destroy()
         return
@@ -2539,7 +2626,7 @@ export class Session {
       })
       const assembly = assemblyOf({
         uri,
-        name: fileLabel(uri),
+        name: label ?? fileLabel(uri),
         contigs: result.contigs,
         origin: result.origin,
       })
@@ -2562,7 +2649,16 @@ export class Session {
           this.annotations.loader.addFiles(
             index === undefined ? [source.file] : [source.file, index],
           )
-        } else this.annotations.loader.addUrl(source.url)
+        } else {
+          // …and the named sidecar goes back on as the fragment `addUrl`
+          // splits, so the lane reads the same index the assembly did.
+          this.annotations.loader.addUrl(
+            source.index === undefined
+              ? source.url
+              : `${source.url}#index=${encodeURIComponent(source.index)}`,
+            label,
+          )
+        }
       }
       const target: ViewState = {
         uri,
@@ -2578,6 +2674,25 @@ export class Session {
     } finally {
       this.opening = null
       this.host.sessionChanged(this)
+    }
+  }
+
+  /**
+   * Call the track read from `url` by `label`, where one is already seated.
+   *
+   * For the one road on which a name arrives after the row does: a genome
+   * file opened *as* a browser is seated by `openGenome` under the URL's last
+   * segment, and the store row that named it better has nothing to hand the
+   * label to until then. Compared on the address without its `#index=`
+   * fragment, which is what the loader keeps.
+   */
+  relabelTrack(url: string, label: string): void {
+    const held = this.annotations
+    if (held === null) return
+    const { address } = splitIndexFragment(url)
+    for (const entry of held.store.entries) {
+      if (entry.source.kind !== 'remote' || entry.source.url !== address) continue
+      if (entry.label !== label) held.store.update(entry.id, { label })
     }
   }
 
@@ -3061,12 +3176,14 @@ export class Session {
       this.dropped(picked.source.file, placement, map, picked.index)
       return
     }
-    await this.addRemote(picked.uri, picked.source, placement, map)
+    const name = picked.name !== undefined && picked.name.trim() !== '' ? picked.name : undefined
+    await this.addRemote(picked.uri, picked.source, placement, map, name)
     // A backend that addresses files by id rather than by name says what the
-    // file is called (§24.9), and the map is named with it the way a reader
-    // would name it by hand (§16.10). Tracks keep the label their URL gives.
-    if (picked.name !== undefined && picked.name !== '' && routeOf(picked.uri) === 'map') {
-      this.renameMap(picked.uri, picked.name)
+    // file is called (§24.9), and a store row says what a file *is* (§24.2);
+    // a map is named with it the way a reader would name it by hand (§16.10),
+    // and a track takes it as its label through `addRemote`.
+    if (name !== undefined && routeOf(picked.uri) === 'map') {
+      this.renameMap(picked.uri, name)
     }
   }
 
@@ -3094,6 +3211,13 @@ export class Session {
     source: SourceSpec,
     placement?: Placement,
     map?: string,
+    /**
+     * What to call the track this makes, where the caller knows better than
+     * the URL's last segment does: a store row's own line (§24.2), or the
+     * name a Drive folder gave a file addressed by id (§24.9). A map is not
+     * named here — {@link addPicked} renames one through the map's own road.
+     */
+    label?: string,
   ): Promise<void> {
     const { path } = splitUri(uri)
     // A saved workspace names whole *tabs* rather than a file to put in one, so
@@ -3104,7 +3228,14 @@ export class Session {
       await this.openPicked(uri, source)
       return
     }
-    if (this.routeOf(uri) === 'map') {
+    // A Drive address pasted here says only its id; Drive says the rest (§24.9).
+    if (label === undefined) label = (await this.driveName(uri, source)) ?? undefined
+    if (this.destroyed) return
+    // An empty tab takes the file's name as its own: a tab that read
+    // `1pq7NDWo…` for a file the folder called `ATAC_rep2.bw` was the one
+    // place in the application the name did not reach.
+    const wasEmpty = this.file === null && this.assembly === null
+    if (routeFor(uri, label) === 'map') {
       // Beside the map that is open, exactly as {@link addCompanion} puts a
       // dropped one, and on the same two conditions: there has to be a map to
       // put it beside, and it has to be one a deck can hold (§16.8). Failing
@@ -3117,7 +3248,8 @@ export class Session {
         this.ensureDeck().add({ kind: 'remote', uri }, source)
         return
       }
-      await this.open(uri, source)
+      await this.open(uri, source, undefined, undefined, undefined, label)
+      if (wasEmpty && label !== undefined && this.name === null) this.rename(label)
       return
     }
     // Everything else is a track on what is here, and the two tabs with nowhere
@@ -3127,7 +3259,15 @@ export class Session {
     // drawn against. This must not open it instead: the promise of the button
     // this arrives from is that it will not throw the open file away.
     if (this.annotations === null) {
-      if (this.file === null && this.assembly === null) await this.open(uri, source)
+      if (wasEmpty) {
+        await this.open(uri, source, undefined, undefined, undefined, label)
+        // The file that opened the browser is its first track, seated by
+        // `openGenome` under the name it was given; a track seated under the
+        // URL by an earlier road is relabelled here, which is the one moment
+        // both are known.
+        if (label !== undefined) this.relabelTrack(path, label)
+        if (label !== undefined && this.name === null) this.rename(label)
+      }
       return
     }
     // The same two steps a dropped track takes in {@link dropped}, and they are
@@ -3137,7 +3277,7 @@ export class Session {
     // drop landed on — is the same, and is only reached when a drag said where.
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
-    held.loader.addUrl(path, undefined, placement)
+    held.loader.addUrl(path, label, placement)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue

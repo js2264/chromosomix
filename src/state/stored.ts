@@ -29,14 +29,12 @@
  * the callers in front of them.
  */
 
-import { readClientId } from '../auth/google'
 import { clearAll as clearDurableStores } from './idb'
 import { forgetAllDirectories, directoryRows, hydrateDirectories } from './directories'
 import { forgetAllHandles, handleRows, hydrateHandles } from './handles'
 import { forgetWorkspace, readWorkspace, suspendWorkspace } from './workspace'
 import { readStoreRows } from './stores'
 import { storedLines as driveStoredLines } from './drives'
-import { storedLines as dropboxStoredLines } from '../auth/dropbox'
 import { actions, dayOf, forgetActions } from './actions'
 
 /** The one prefix every key this app writes begins with. */
@@ -175,7 +173,6 @@ export async function storedItems(): Promise<StoredItem[]> {
   // Remembered Drive folders (§24.9): named by label, the way folders are.
   items.push(...driveStoredLines())
   // The Dropbox app key (§24.9): a credential, named the way the bucket keys are.
-  items.push(...dropboxStoredLines())
 
   const local = localKeys()
   // The keys that have a line of their own above or below, so none is also
@@ -195,7 +192,6 @@ export async function storedItems(): Promise<StoredItem[]> {
       key === `${PREFIX}dropbox` ||
       key === `${PREFIX}actions`,
   )
-  const access = local.filter((key) => key === `${PREFIX}access`)
   const preferences = local.length - named.length
   if (preferences > 0) {
     items.push({
@@ -210,40 +206,12 @@ export async function storedItems(): Promise<StoredItem[]> {
       detail: 'Access keys for private buckets, stored in this browser in plain text',
     })
   }
-  if (access.length > 0) {
-    items.push({
-      label: 'Google API key',
-      // The second secret, and named for the first one's reason: it is a
-      // credential to the reader's own Google project, it is readable by any
-      // script on this origin, and a reader on a borrowed machine should not
-      // have to press "forget everything" to find out it is there. Its own line
-      // rather than a second sentence under Bucket keys, because a reader who
-      // set one and not the other is owed a screen that says which.
-      //
-      // The bearer token a signed-in account produces is deliberately *not*
-      // here: it is held in memory and never written, so there is nothing on
-      // this machine for this screen to account for (SPECS §24.7).
-      detail: 'Google API key, stored in this browser in plain text',
-    })
-  }
-
-  // The client id, and it is the one row on this screen that is **printed in
-  // full**. Every other named line withholds its value because the value is a
-  // secret; a client id is the opposite — it is published in the page of every
-  // site that uses Google sign-in, it authorises nothing on its own, and the
-  // only question a reader has about it is *which project has this browser been
-  // told to sign in to*, which a count cannot answer. Listed even so, because
-  // "forget everything" removes it and a screen that claims to list what is kept
-  // must not quietly leave one out.
-  const clientId = readClientId()
-  if (clientId !== null) {
-    items.push({
-      label: 'Google client id',
-      detail:
-        `${clientId} — your lab’s OAuth client, not a secret. The token signing in with it ` +
-        'produces is held in memory only and is never stored.',
-    })
-  }
+  // Nothing about Google or Dropbox is on this screen, and that is the fact
+  // worth stating: the site's client id, API key and app key are in the page
+  // rather than in this browser (`config/siteDefaults.ts`), and the tokens a
+  // sign-in produces are held in memory and never written (SPECS §24.7), so
+  // there is nothing on this machine for the screen to account for. The rows
+  // an older build wrote for them are swept by the prefix rule like any other.
 
   return items
 }

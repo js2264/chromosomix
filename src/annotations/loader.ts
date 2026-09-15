@@ -26,6 +26,7 @@ import type { DetectedFormat, WireSource } from './worker/protocol'
 import { hasHandle, rememberHandle, resolveHandle } from '../state/handles'
 import {
   basesForIndex,
+  guessedIndexUrl,
   indexNamesFor,
   isIndexName,
   leadOf,
@@ -577,12 +578,19 @@ export class AnnotationLoader {
       // own load is still in flight must still be released, and the reply may
       // never come.
       this.held.add(id)
-      const result = await this.client.request<'load'>({
-        kind: 'load',
-        entry: id,
-        source,
-        mapContigs: this.mapContigs,
-      })
+      const result = await this.client.request<'load'>(
+        {
+          kind: 'load',
+          entry: id,
+          source,
+          mapContigs: this.mapContigs,
+        },
+        // Onto the row, so a thirty-megabyte index reads as a bar and not as
+        // a row that says *reading…* for as long as it takes.
+        (done, total) => {
+          if (this.store.byId(id)?.status === 'loading') this.store.update(id, { progress: { done, total } })
+        },
+      )
       const card = cardFor(result.format)
       // What a *file* of this format is, which for a BAM is its depth — and the
       // row's own kind wins where the row is the second one over that file. A
@@ -597,7 +605,7 @@ export class AnnotationLoader {
             ? 'reads'
             : kindFor(card, result.format)
       if (card === null || kind === null) {
-        this.store.update(id, { status: 'error', error: refusal(result.format) })
+        this.store.update(id, { status: 'error', error: refusal(result.format), progress: undefined })
         this.client.drop(id)
         return
       }
@@ -618,6 +626,7 @@ export class AnnotationLoader {
         kind,
         ...restyle,
         status: 'ready',
+        progress: undefined,
         // A BAM's two rows come back from the same file with the same sentence
         // under them — "2 references · BAI" — and in the Tracks panel their
         // names are one truncated string apart. So each says which picture it
@@ -689,21 +698,15 @@ function toWire(source: AnnotationSource): WireSource {
  * A given one always wins: a presigned URL, or one carrying a query string,
  * can never usefully have `.bai` appended to it, so `#index=<url>` is the way
  * a reader says where the index really is — and it is the only way, because
- * there is no second place to put it (§8.13).
- *
- * Otherwise it is **guessed optimistically and never probed**. A `HEAD` to find
- * out costs the same round trip the miss does, and §12 does not have a request
- * to spend on finding out that a file has no index. For a `.gz` the guess is
- * free either way — the worker treats every index failure as "read it whole",
- * which is what would have happened anyway. For a `.bam` the guess is the whole
- * of how the pair is found, so both spellings `samtools index` writes are
- * offered, the exact one first.
+ * there is no second place to put it (§8.13). Otherwise it is the guess
+ * `guessedIndexUrl` makes, and never probed. For a `.gz` the guess is free
+ * either way — the worker treats every index failure as "read it whole",
+ * which is what would have happened anyway; for a FASTA it is the same, under
+ * the size the worker reads whole regardless (§8.8). For a `.bam` the guess is
+ * the whole of how the pair is found.
  */
 function remoteIndexFor(source: { url: string; index?: string }): string | undefined {
-  if (source.index !== undefined) return source.index
-  if (/\.gz$/i.test(source.url)) return `${source.url}.tbi`
-  if (/\.bam$/i.test(source.url)) return `${source.url}.bai`
-  return undefined
+  return source.index ?? guessedIndexUrl(source.url)
 }
 
 /**

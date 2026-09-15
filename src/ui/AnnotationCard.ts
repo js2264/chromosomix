@@ -398,7 +398,29 @@ export class AnnotationCard {
     )
 
     if (entry.status === 'loading') {
-      row.appendChild(el('p', { class: 'ann-note', text: 'reading…' }))
+      // A bar where the worker has said how far it has got — a BAM's index, a
+      // whole FASTA, a text track being downloaded — and the word alone where
+      // it has not, which is every read short enough not to be watched.
+      const progress = entry.progress
+      if (progress === undefined) {
+        row.appendChild(el('p', { class: 'ann-note', text: 'reading…' }))
+      } else {
+        const fraction = progress.total > 0 ? Math.min(1, progress.done / progress.total) : 0.5
+        const words =
+          progress.total > 0
+            ? `reading… ${fmt.bytes(progress.done)} of ${fmt.bytes(progress.total)}`
+            : `reading… ${fmt.bytes(progress.done)}`
+        const fill = el('span', { class: 'ann-progress-fill' })
+        fill.style.width = `${Math.round(fraction * 100)}%`
+        row.appendChild(
+          el(
+            'div',
+            { class: 'ann-progress', attrs: { role: 'progressbar', 'aria-valuenow': String(Math.round(fraction * 100)), 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': words } },
+            el('p', { class: 'ann-note', text: words }),
+            el('span', { class: 'ann-progress-bar' }, fill),
+          ),
+        )
+      }
     } else if (entry.status === 'error') {
       row.appendChild(el('p', { class: 'inline-error ann-note', text: entry.error ?? 'failed' }))
     } else if (entry.status === 'detached') {
@@ -1379,7 +1401,7 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', {
       class: 'ann-drop-hint',
       text:
-        'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or an indexed BAM. Click to choose, or drop one anywhere on ' +
+        'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM. Click to choose, or drop one anywhere on ' +
         'this card — what it is and where it is drawn come from the file itself.',
     }),
   )

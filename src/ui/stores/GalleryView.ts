@@ -16,7 +16,7 @@
  */
 
 import { button, el } from '../dom'
-import { icon } from '../icons'
+import { icon, iconButton } from '../icons'
 import { valueOf } from '../../state/facets'
 import type { StoreEntry } from '../../state/store'
 import { rowActions, type StoreHost } from './host'
@@ -41,87 +41,72 @@ export class GalleryView {
     }
     const figures = file.entries.filter((entry) => entry.kind === 'workspace')
     const files = file.entries.filter((entry) => entry.kind !== 'workspace')
-    if (figures.length > 0) {
+    const byUri = new Map(files.map((entry) => [entry.uri, entry] as const))
+    this.el.appendChild(
+      el('div', { class: 'gallery-cards' }, ...figures.map((entry) => this.card(entry, byUri))),
+    )
+    // A file no figure names still has a row, under the cards rather than
+    // nowhere: the two maps published without a session of their own.
+    const named = new Set(figures.flatMap((entry) => filesOf(entry)))
+    const loose = files.filter((entry) => !named.has(entry.uri))
+    if (loose.length > 0) {
       this.el.appendChild(
         el(
-          'section',
-          { class: 'gallery-section' },
-          el('h3', { class: 'gallery-heading', text: 'Figures' }),
-          el('p', {
-            class: 'hint',
-            text: 'Each one is a saved session: a window over the lab’s data with its tracks placed, read over the network exactly as a file on your own bucket would be.',
-          }),
-          el('div', { class: 'gallery-cards' }, ...figures.map((entry) => this.card(entry))),
+          'details',
+          { class: 'gallery-card-more gallery-loose' },
+          el('summary', { text: `${loose.length} more ${loose.length === 1 ? 'file' : 'files'}, in no figure` }),
+          el('div', { class: 'gallery-card-files' }, ...loose.map((entry) => this.fileRow(entry))),
         ),
       )
     }
-    if (files.length > 0) this.el.appendChild(this.files(files))
   }
 
   destroy(): void {
     /* nothing subscribed */
   }
 
-  private card(entry: StoreEntry): HTMLElement {
+  /**
+   * One figure: its name and the one verb on a line, the chips under them, the
+   * line that says what is on screen, and its files behind a fold — the same
+   * shape IGV's genome cards have (`GenomesView.ts`), so the two galleries
+   * read as one kind of thing.
+   */
+  private card(entry: StoreEntry, byUri: ReadonlyMap<string, StoreEntry>): HTMLElement {
     const assembly = valueOf(entry, 'assembly')
     const provenance = valueOf(entry, 'provenance')
     const detail = valueOf(entry, 'detail')
+    const files = filesOf(entry)
+      .map((uri) => byUri.get(uri))
+      .filter((row): row is StoreEntry => row !== undefined)
     return el(
       'article',
       { class: 'gallery-card' },
+      el(
+        'div',
+        { class: 'gallery-card-head' },
+        el('h4', { class: 'gallery-card-title', text: entry.label }),
+        iconButton(
+          'new-session',
+          `Open ${entry.label} in a new session — the figure with every track it names.`,
+          () => this.props.host.open(entry),
+          { class: 'btn btn-icon row-verb row-verb-new gallery-card-open', size: 16 },
+        ),
+      ),
       el(
         'div',
         { class: 'gallery-card-chips' },
         assembly === '' ? null : el('span', { class: 'portal-chip', text: assembly }),
         provenance === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: provenance, title: 'Where the data came from' }),
       ),
-      el('h4', { class: 'gallery-card-title', text: entry.label }),
-      entry.note === undefined ? null : el('p', { class: 'gallery-card-line', text: entry.note }),
-      detail === ''
+      entry.note === undefined ? null : el('p', { class: 'gallery-card-line', text: entry.note, title: detail }),
+      files.length === 0
         ? null
         : el(
             'details',
             { class: 'gallery-card-more' },
-            el('summary', { text: 'what is on screen' }),
-            el('p', { class: 'hint', text: detail }),
+            el('summary', { text: `${files.length} ${files.length === 1 ? 'file' : 'files'}` }),
+            el('div', { class: 'gallery-card-files' }, ...files.map((row) => this.fileRow(row))),
           ),
-      el(
-        'div',
-        { class: 'gallery-card-actions' },
-        button('open', () => this.props.host.open(entry), {
-          class: 'btn btn-primary',
-          title: `Open ${entry.label} as its own tab, with every track it names.`,
-        }),
-      ),
-    )
-  }
-
-  private files(files: readonly StoreEntry[]): HTMLElement {
-    // Grouped by the folder they are published in, which for a gallery is
-    // the dataset: the yeast files together, the mock community's together.
-    const groups = new Map<string, StoreEntry[]>()
-    for (const entry of files) {
-      const key = valueOf(entry, 'dataset') || valueOf(entry, 'assembly')
-      const held = groups.get(key)
-      if (held === undefined) groups.set(key, [entry])
-      else held.push(entry)
-    }
-    return el(
-      'section',
-      { class: 'gallery-section' },
-      el('h3', { class: 'gallery-heading', text: 'Files' }),
-      el('p', {
-        class: 'hint',
-        text: 'The data the figures are made of, one file at a time: a map opens as a map, anything else as a track on what is open.',
-      }),
-      ...[...groups].map(([key, entries]) =>
-        el(
-          'div',
-          { class: 'gallery-files' },
-          key === '' ? null : el('div', { class: 'portal-group' }, el('span', { class: 'portal-group-key', text: key })),
-          ...entries.map((entry) => this.fileRow(entry)),
-        ),
-      ),
     )
   }
 
@@ -144,4 +129,10 @@ export class GalleryView {
       el('div', { class: 'portal-row-actions' }, ...rowActions(entry, this.props.host)),
     )
   }
+}
+
+/** The URIs of the rows a figure is made of, from its `files` field. */
+function filesOf(entry: StoreEntry): string[] {
+  const held = valueOf(entry, 'files')
+  return held === '' ? [] : held.split('|')
 }

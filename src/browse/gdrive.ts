@@ -253,7 +253,7 @@ async function listPage(
     throw new ViewerError(
       'remote-cors',
       `${row.label} is a Google Drive folder and this tab is not signed in to Google, so there ` +
-        'is nothing to list it with. Sign in under Connect → A Google account. The folder is ' +
+        'is nothing to list it with. Sign in under Connect → Google Drive. The folder is ' +
         'listed with your own account, and the token that does it lives only in this tab.',
       { host: HOST, folderId },
     )
@@ -282,8 +282,8 @@ async function listPage(
     throw new ViewerError(
       'bad-uri',
       `Google answered ${response.status} to a listing of ${row.label}. Either the token has ` +
-        'run out — it lasts about an hour, and signing in again under Connect → A Google ' +
-        'account gets a new one — or this folder is not shared with the account that is signed ' +
+        'run out — it lasts about an hour, and signing in again under Connect → Google Drive ' +
+        'gets a new one — or this folder is not shared with the account that is signed ' +
         'in. Opening the folder in Drive with that account is the quickest way to tell which.',
       { host: HOST, folderId, status: response.status },
     )

@@ -55,13 +55,20 @@ let nextId = 1
 type Unsent<T> = T extends { id: number } ? Omit<T, 'id'> : never
 
 /** Send one request and wait for the response that answers it. */
+/** The answer to a request — never one of the progress reports on the way to it. */
+function settled(id: number): AnnotationResponse | undefined {
+  return posted.find(
+    (message) => 'id' in message && message.id === id && message.type !== 'progress',
+  )
+}
+
 async function ask(request: Unsent<AnnotationRequest>): Promise<AnnotationResponse> {
   const id = nextId++
   deliver({ ...request, id } as AnnotationRequest)
   await vi.waitFor(() => {
-    expect(posted.some((message) => 'id' in message && message.id === id)).toBe(true)
+    expect(settled(id)).toBeDefined()
   })
-  return posted.find((message) => 'id' in message && message.id === id) as AnnotationResponse
+  return settled(id) as AnnotationResponse
 }
 
 const REFS = [
@@ -169,20 +176,51 @@ describe('opening a BAM', () => {
   })
 })
 
-describe('the two refusals', () => {
-  it('refuses a BAM with no index, and names the command', async () => {
+describe('the refusal, and the road around the other', () => {
+  const genome = REFS.map((ref) => ({ name: ref.name, length: ref.length }))
+
+  /** Depth over the twenty stacked reads, which is the number an indexed open answers with. */
+  async function depthOver(entry: string): Promise<number> {
+    const samples = await ask({
+      kind: 'sample',
+      entry,
+      regions: [{ contig: 'chrI', start: 1000, end: 1100 }],
+      basesPerPixel: 100,
+    })
+    expect(samples.type, JSON.stringify(samples)).toBe('result')
+    return (samples as { payload: TrackSampleSet }).payload.regions[0].values[0]
+  }
+
+  it('reads a BAM dropped without its index, by search, and says so', async () => {
+    // The carve-out §8.13 used to state — a BAM without an index is refused by
+    // name — is gone: a coordinate-sorted file is searched instead, and the
+    // row's summary says which road it is on.
     const { bam } = await bamFile()
     const response = await ask({
       kind: 'load',
       entry: 'e-noindex',
       source: { kind: 'local', file: bam, name: 'reads.bam' },
-      mapContigs: [],
+      mapContigs: genome,
     })
-    expect(response.type).toBe('error')
-    const message = (response as { message: string }).message
-    expect(message).toContain('samtools index reads.bam')
-    // And says *why* there is no fallback, since every other format here has one.
-    expect(message).toContain('no whole-file fallback')
+    expect(response.type, JSON.stringify(response)).toBe('result')
+    const summary = (response as { payload: { summary: string } }).payload.summary
+    expect(summary).toContain('no index dropped with it')
+    expect(summary).toContain('reads located by search')
+
+    // And it answers with the numbers an indexed open answers with — the same
+    // walk over the same bytes, found a different way.
+    expect(await depthOver('e-noindex')).toBeCloseTo(20, 4)
+    const window = await ask({
+      kind: 'reads',
+      entry: 'e-noindex',
+      regions: [{ contig: 'chrI', start: 900, end: 1200 }],
+      maxRows: 40,
+      basesPerPixel: 0.5,
+      reads: defaultReadStyle(),
+    })
+    expect(window.type, JSON.stringify(window)).toBe('result')
+    const piles = (window as { payload: ReadWindow }).payload.piles ?? []
+    expect(piles.reduce((sum, pile) => sum + pile.length, 0)).toBe(20)
   })
 
   it('refuses a name-sorted BAM, and names a different command', async () => {
@@ -201,15 +239,43 @@ describe('the two refusals', () => {
     expect(message).toContain('samtools sort')
   })
 
-  it('tells a remote miss apart from a broken local index', async () => {
-    // A remote sidecar URL is *guessed* — `<url>.bai`, never probed — so the
-    // commonest remote failure is no index at that address rather than a
-    // corrupt one. Saying "could not be read" would send a reader looking for
-    // a broken file that does not exist.
+  it('refuses a file whose reads are out of order, naming the two places that show it', async () => {
+    // A header with no `@HD` line claims nothing, so the search checks the
+    // order itself before a window is asked for — and this is the file the
+    // check exists for: a Hi-C pipeline's alignments, in read-pair order.
+    const many: TestRecord[] = []
+    for (let i = 0; i < 1500; i++) {
+      many.push({ refId: 1, pos: 1000 + i * 137, cigar: '100M', name: `b${i}`, seq: 'ACGT'.repeat(20 + (i % 17)) })
+    }
+    for (let i = 0; i < 2500; i++) {
+      many.push({ refId: 0, pos: 1000 + i * 137, cigar: '100M', name: `a${i}`, seq: 'ACGT'.repeat(20 + (i % 17)) })
+    }
+    const written = await writeBam(REFS, many, '@CO\tno HD line\n', 1, true)
+    const response = await ask({
+      kind: 'load',
+      entry: 'e-unsorted',
+      source: { kind: 'local', file: new File([written.bam as BlobPart], 'pairs.bam'), name: 'pairs.bam' },
+      mapContigs: genome,
+    })
+    expect(response.type).toBe('error')
+    const message = (response as { message: string }).message
+    expect(message).toContain('not in coordinate order')
+    expect(message).toContain('no @HD line')
+    expect(message).toContain('chrII:')
+    expect(message).toContain('chrI:')
+    expect(message).toContain('samtools sort')
+    expect(message).toContain('Hi-C')
+  })
+
+  it('reads a remote BAM whose guessed index is not there, by search', async () => {
+    // A remote sidecar URL is *guessed* — `<url>.bai`, never probed — and on
+    // the two buckets the store drawer offers most the guess is wrong for every
+    // BAM they hold, because neither publishes an index at all. That used to
+    // be a refusal naming `#index=`; it is now the road to the search, and the
+    // row says so by the name of the index it did not find.
     //
     // Served here rather than pointed at a dead host, because a host that does
-    // not resolve fails at the *file* read and never reaches the branch this
-    // test is named after.
+    // not resolve fails at the *file* read and never reaches this branch.
     const { bam } = await bamFile()
     const bytes = new Uint8Array(await bam.arrayBuffer())
     const previous = globalThis.fetch
@@ -243,23 +309,22 @@ describe('the two refusals', () => {
           name: 'reads.bam',
           index: 'https://host.example/reads.bam.bai',
         },
-        mapContigs: [],
+        mapContigs: genome,
       })
-      expect(response.type).toBe('error')
-      const message = (response as { message: string }).message
-      // The branch the test is named after: the file read fine, the index did
-      // not exist at the guessed address, and the way out is the one convention
-      // there is for saying where it really is.
-      expect(message).toContain('No index could be read')
-      expect(message).toContain('#index=')
-      expect(message).not.toContain('samtools index')
+      expect(response.type, JSON.stringify(response)).toBe('result')
+      const summary = (response as { payload: { summary: string } }).payload.summary
+      expect(summary).toContain('no reads.bam.bai beside it')
+      expect(summary).toContain('reads located by search')
+      expect(await depthOver('e-remote')).toBeCloseTo(20, 4)
     } finally {
       globalThis.fetch = previous
     }
   })
 
-  it('tells a broken index apart from an absent one', async () => {
-    // Different fixes, so they must not share a message.
+  it('steps around an index that cannot be read, and the row says which', async () => {
+    // A broken index and an absent one used to be two refusals with two fixes.
+    // Both are the search now, and the difference is kept where a reader sees
+    // it: the summary names the file that did not read.
     const { bam } = await bamFile()
     const response = await ask({
       kind: 'load',
@@ -270,12 +335,13 @@ describe('the two refusals', () => {
         name: 'reads.bam',
         index: new File(['not an index'], 'reads.bam.bai'),
       },
-      mapContigs: [],
+      mapContigs: genome,
     })
-    expect(response.type).toBe('error')
-    const message = (response as { message: string }).message
-    expect(message).toContain('could not be read')
-    expect(message).not.toContain('no whole-file fallback')
+    expect(response.type, JSON.stringify(response)).toBe('result')
+    const summary = (response as { payload: { summary: string } }).payload.summary
+    expect(summary).toContain('reads.bam.bai could not be read')
+    expect(summary).toContain('reads located by search')
+    expect(await depthOver('e-badindex')).toBeCloseTo(20, 4)
   })
 })
 

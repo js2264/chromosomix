@@ -181,6 +181,13 @@ describe('the address bar', () => {
     expect(drawer.storeId).toBe('custom')
     await vi.waitFor(() => expect(all(drawer.el, '.portal-row').length).toBe(2))
     expect(window.location.search).toBe('?store=https%3A%2F%2Flab.example%2Fstore.json')
+    // Put down and picked up again, it is the same store by URL — not the
+    // shipped one the browser remembers across reloads.
+    drawer.close()
+    drawer.toggle.click()
+    expect(drawer.storeId).toBe('custom')
+    await vi.waitFor(() => expect(all(drawer.el, '.portal-row').length).toBe(2))
+    expect(window.location.search).toBe('?store=https%3A%2F%2Flab.example%2Fstore.json')
     // A name nothing answers to opens nothing.
     drawer.close()
     drawer.openLink('nothing-like-it', EMPTY_VIEW)

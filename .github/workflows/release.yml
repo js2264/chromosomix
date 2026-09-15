@@ -145,6 +145,12 @@ jobs:
       # process and asserts the shape of what came out.
       - name: Build the renderer and the main process
         run: npm run build:desktop
+        env:
+          # The site's registrations with Google and Dropbox, as repository
+          # variables (docs/deploy.md). None is a secret; all end up in the page.
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
+          DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
 
       - name: Package
         run: npx electron-builder ${{ matrix.args }} --config electron-builder.config.cjs --publish never

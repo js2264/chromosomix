@@ -42,6 +42,7 @@ import {
 import { FilesCard } from '../ui/FilesCard'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { hydrateFolders } from '../browse/connected'
+import type { PickedFile } from '../browse/folder'
 import '../browse/backends'
 import { StatusBar } from '../ui/StatusBar'
 import { ConsolePanel } from '../ui/ConsolePanel'
@@ -90,7 +91,6 @@ import { hydrateHandles } from '../state/handles'
 import { noticeBanner, openStoredData, restoreBanner } from '../ui/RestoreCard'
 import { decodeShare, readShareHash } from '../state/shareLink'
 import { openShareDialog } from '../ui/ShareDialog'
-import { fileLabel } from '../ui/labels'
 import { appMark } from '../ui/mark'
 import {
   PLOT_OPTION_KEYS,
@@ -135,8 +135,8 @@ const ADD_FILE_HINT =
  * true of the code rather than a slogan (`browse/folder.ts`).
  */
 const CONNECT_HINT =
-  'A directory on this machine, a bucket, a Drive folder or a Dropbox, browsed in the Files ' +
-  'panel and still there when you come back. All four are read the same way.'
+  'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed in the Files ' +
+  'panel and still there when you come back.'
 
 /**
  * How many sessions may be open at once.
@@ -330,6 +330,15 @@ export class App implements SessionHost {
       // top, an empty tab filled rather than added to. A tab has to exist for
       // that, and on the landing page one always does.
       onLoad: (picked) => void this.current?.addPicked(picked),
+      // A session of its own: the empty tab in front, or a new one — the
+      // same choice a store row makes ({@link openStoreEntry}), and through
+      // `addPicked` so that an empty tab is *filled* by the same road a
+      // dropped file takes, index and name included.
+      onOpenNew: (picked) => {
+        const session = this.tabEmpty() ? this.current : this.newSession()
+        void session?.addPicked(picked)
+      },
+      tabEmpty: () => this.tabEmpty(),
       onConnect: () => this.openConnectDialog(),
     })
     this.filesPanel.setContent([this.files.el])
@@ -426,27 +435,19 @@ export class App implements SessionHost {
         el(
           'div',
           { class: 'head-files' },
-          // The column itself, first: it is the outermost on the left, and it
-          // is the one a reader arrives through rather than one they drive
-          // the picture with.
-          this.filesPanel.toggle,
-          // Then the stores — somebody else's shelf, in a drawer — and the two
-          // ways to bring a file of the reader's own: place before one-off.
-          // Connect attaches somewhere files keep coming from, and a reader
-          // working out of a directory for an afternoon wants that read
-          // before the `+` that costs a click each. Dropping is still the
-          // gesture the app is opened with and the whole content area still
-          // takes it — this is the same gesture for a reader who has no
-          // window to drag from, and the only door to a file that is on
-          // screen in every view. See {@link addFileDialog} for why the `+`
-          // *adds* rather than replaces.
+          // The stores first — somebody else's shelf, in a drawer, and the
+          // door most readers arrive through — then the Files column, the
+          // reader's own places. Nothing else: the two buttons that stood
+          // here, a plug that connected a place and a `+` that added a file,
+          // were the Files column's own *Open a local/remote folder* and the
+          // file crumb's *Open a file* said a second time, one row up, and a
+          // header with three doors to a file reads as three different
+          // things. Dropping is still the gesture the app is opened with and
+          // the whole content area still takes it (see {@link addFileDialog}
+          // for why a drop *adds* rather than replaces), and both verbs stay
+          // in the palette.
           ...(this.storeDrawer === null ? [] : [this.storeDrawer.toggle]),
-          iconButton('plug', `Connect a place. ${CONNECT_HINT}`, () =>
-            this.openConnectDialog(),
-          ),
-          iconButton('file-plus', `Add a file to this tab. ${ADD_FILE_HINT}`, () =>
-            this.addFileDialog(),
-          ),
+          this.filesPanel.toggle,
         ),
         // Past a divider, because these four are not about getting a file in —
         // they are controls over the picture of one that is already open.
@@ -468,11 +469,11 @@ export class App implements SessionHost {
         // say different things: a link is *what is being looked at* (§5.5) and
         // there is one of those on screen, while a file is the window.
         //
-        // Nothing here *opens* a file, and the two doors that do are both on
-        // the other side of the row: the `+` adds one to this tab, and the
-        // brand — whose hover says so — goes back to the picker and replaces.
-        // That is the same add-versus-replace line this side draws between a
-        // dropped workspace and the startup offer.
+        // Nothing here *opens* a file, and the doors that do are elsewhere:
+        // the file crumb's *Open a file* adds one to this tab, and the brand —
+        // whose hover says so — goes back to the picker and replaces. That is
+        // the same add-versus-replace line this side draws between a dropped
+        // workspace and the startup offer.
         iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
         iconButton(
           'save',
@@ -934,19 +935,43 @@ export class App implements SessionHost {
   private openStoreEntry(entry: StoreEntry): void {
     this.noteShelf(entry)
     const source = { kind: 'remote', url: splitUri(entry.uri).path } as const
-    if (entry.kind === 'workspace' || this.tabEmpty()) {
+    if (entry.kind === 'workspace') {
       void this.current?.openPicked(entry.uri, source)
       return
     }
-    const fresh = this.newSession()
-    if (fresh === null) return
-    void fresh.openPicked(entry.uri, source)
+    const session = this.tabEmpty() ? this.current : this.newSession()
+    if (session === undefined || session === null) return
+    void this.openNamed(session, entry)
+  }
+
+  /**
+   * A store row as a `PickedFile`: the file, and the name the store gave it.
+   *
+   * The name is the whole point (§24.2). A 4DN file is called by its accession
+   * on the bucket — `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol
+   * variations* on the shelf, and the second is what a reader picked it by. So
+   * the row's line goes with the file: onto the map it becomes, onto the track
+   * it becomes, and onto the tab it opens, through the same road a file named
+   * by a Drive folder takes.
+   */
+  private pickedFrom(entry: StoreEntry): PickedFile {
+    return {
+      uri: entry.uri,
+      source: { kind: 'remote', url: splitUri(entry.uri).path },
+      name: entry.label,
+    }
+  }
+
+  /** Open a store row into an empty session, and call the tab what the store called the row. */
+  private async openNamed(session: Session, entry: StoreEntry): Promise<void> {
+    await session.addPicked(this.pickedFrom(entry))
+    if (this.sessions.includes(session) && session.name === null) session.rename(entry.label)
   }
 
   /** The store row's *add*: the routing a dropped file takes, into the tab in front. */
   private addStoreEntry(entry: StoreEntry): void {
     this.noteShelf(entry)
-    void this.current?.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+    void this.current?.addPicked(this.pickedFrom(entry))
   }
 
   /**
@@ -968,11 +993,11 @@ export class App implements SessionHost {
     const session = this.tabEmpty() ? this.current : this.newSession()
     if (session === undefined || session === null) return
     this.noteShelf(lead)
-    await session.openPicked(lead.uri, { kind: 'remote', url: splitUri(lead.uri).path })
+    await this.openNamed(session, lead)
     for (const entry of files) {
       if (entry === lead) continue
       this.noteShelf(entry)
-      await session.addRemote(entry.uri, { kind: 'remote', url: splitUri(entry.uri).path })
+      await session.addPicked(this.pickedFrom(entry))
     }
   }
 
@@ -1248,8 +1273,9 @@ export class App implements SessionHost {
     this.analysisPanel.setContent([session.analysisHost])
     this.drawerSlot.replaceChildren(session.drawerHost)
     this.applyPanels(session)
-    document.title =
-      session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
+    // The tab's own name where it has one (a Drive file's, a store row's), the
+    // file's otherwise — the same line the tab strip shows.
+    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
   }
 
   private applyPanels(session: Session): void {
@@ -1430,8 +1456,9 @@ export class App implements SessionHost {
     // and cheap: it reads session memory rather than the live objects.
     this.rememberDurably()
     if (session !== this.current) return
-    document.title =
-      session.state === null ? APP_TITLE : `${fileLabel(session.state.uri)} — ${APP_TITLE}`
+    // The tab's own name where it has one (a Drive file's, a store row's), the
+    // file's otherwise — the same line the tab strip shows.
+    document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
   }
 
   stateChanged(session: Session, options: { replace: boolean }): void {
@@ -1807,19 +1834,20 @@ export class App implements SessionHost {
       {
         id: 'connect-folder',
         group: 'File',
-        title: 'Connect a place',
+        title: 'Open a local/remote folder',
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
       },
       {
         id: 'open-store',
         group: 'File',
-        title: 'Open a store',
+        title: 'Open or close the stores',
         hint:
           'The lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected, as a drawer ' +
           'down the left. Nothing is fetched until you open one.',
+        keys: KEYS.stores,
         enabled: this.storeDrawer !== null,
-        run: () => this.storeDrawer?.open(),
+        run: () => this.storeDrawer?.toggle.click(),
       },
       {
         id: 'open-file',

@@ -29,13 +29,12 @@
  *   say what an id was called leaves the reader a breadcrumb of gibberish.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   setTokenClientFactory,
   signIn,
   signOut,
-  writeClientId,
   type TokenResponse,
 } from '@/auth/google'
 import { driveFolder, driveListUrl, driveMediaUrl } from '@/browse/gdrive'
@@ -43,6 +42,15 @@ import type { FolderEntry } from '@/browse/folder'
 import { ViewerError } from '@/errors'
 import { canonicalUrl } from '@/sources/rewrite'
 import type { DriveRow } from '@/state/drives'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com'
 const FOLDER = 'application/vnd.google-apps.folder'
@@ -83,7 +91,7 @@ function answering(...answers: readonly Answer[]): void {
 
 /** Sign this tab in, through the seam the real flow is driven by. */
 async function signedIn(): Promise<void> {
-  writeClientId(CLIENT_ID)
+  site.googleClientId = CLIENT_ID
   const response: TokenResponse = { access_token: 'ya29.TOKEN', expires_in: 3599 } as TokenResponse
   setTokenClientFactory((config) => ({ requestAccessToken: () => config.callback(response) }))
   await signIn()
@@ -140,7 +148,7 @@ describe('a Drive folder with nobody signed in', () => {
     const error = await refusal(folder.list(folder.root))
     expect(error.code).toBe('remote-cors')
     expect(error.message).toMatch(/not signed in/i)
-    expect(error.message).toMatch(/Connect → A Google account/)
+    expect(error.message).toMatch(/Connect → Google Drive/)
     // The whole point: no round trip was spent finding out what was already known.
     expect(requested).toEqual([])
   })

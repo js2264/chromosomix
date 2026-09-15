@@ -24,7 +24,8 @@ import {
 } from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
-import { chunksFor, forecastBytes, parseBamIndex, type BamIndex } from '../bam/index'
+import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
+import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
 import { coverageOf, DEFAULT_FILTER, type PileFilter } from '../bam/pile'
 import { pileOf } from '../bam/reads'
 import {
@@ -36,6 +37,7 @@ import {
 } from '../signal'
 import type { RefInfo } from '@gmod/bbi'
 import { BlobFile, RemoteFile } from 'generic-filehandle2'
+import { CachedRemoteFile } from './cachedFile'
 
 import { applyAccess } from '../../sources/access'
 
@@ -57,6 +59,8 @@ import type { TrackJobContext } from '../../analysis/job'
 import type { TaskResult } from '../../analysis/types'
 import { COMMIT, VERSION } from '../../version'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
+import { byteRange, contigsOf as contigsOfIndex, parseFai, residuesIn, type FaiRecord } from '../fai'
+import { FASTA_NAME, guessedIndexUrl } from '../sidecar'
 import {
   decodeAnnotationBytes,
   parseBed,
@@ -175,6 +179,47 @@ function basesOf(store: SequenceStore, name: string): Uint8Array | undefined {
   return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
 }
 
+/** {@link basesOf} for an indexed store: the record, by the same ladder of names. */
+function recordOf(store: IndexedSequences, name: string): FaiRecord | undefined {
+  const direct = store.records.get(name)
+  if (direct !== undefined) return direct
+  const at = contigIndexOf(store.contigs, name)
+  return at < 0 ? undefined : store.records.get(store.contigs[at].name)
+}
+
+/**
+ * The residues `[start, end)` of one sequence of an indexed store, read by
+ * range — or out of the slab the last read left, when that reaches.
+ *
+ * `undefined` for a name the store has not got, exactly as {@link basesOf};
+ * empty for a window that holds no residues. The slab is replaced rather than
+ * grown: a lane asks for a padded window and then for the next padded window,
+ * and keeping both would be keeping the genome, a screen at a time.
+ */
+async function residuesOf(
+  store: IndexedSequences,
+  name: string,
+  start: number,
+  end: number,
+  report?: Report,
+): Promise<Uint8Array | undefined> {
+  const record = recordOf(store, name)
+  if (record === undefined) return undefined
+  const from = Math.max(0, Math.floor(start))
+  const to = Math.min(record.length, Math.ceil(end))
+  if (!(to > from)) return new Uint8Array(0)
+  const held = store.held.get(record.name)
+  if (held !== undefined && held.start <= from && held.start + held.bases.length >= to) {
+    return held.bases.subarray(from - held.start, to - held.start)
+  }
+  const range = byteRange(record, from, to)
+  const bases = residuesIn(
+    await store.handle.read(range.to - range.from, range.from, report === undefined ? {} : { onProgress: report }),
+  )
+  store.held.set(record.name, { start: from, bases })
+  return bases
+}
+
 /** Just the names, for the two helpers that ask about spelling and not size. */
 function namesOf(sequences: readonly NamedSequence[]): string[] {
   return sequences.map((sequence) => sequence.name)
@@ -216,14 +261,52 @@ const tracks = new Map<string, OpenTrack>()
 const signals = new Map<string, IntervalTrack>()
 
 /**
+ * A FASTA read by its `.fai` rather than held whole (§8.8).
+ *
+ * What the index gives is the assembly — its first two columns are a
+ * `chrom.sizes` — and, for any window of any sequence, the byte range that
+ * holds it (`annotations/fai.ts`). So nothing is read until a lane asks for a
+ * window, and then one ranged read answers it: the shape a bigWig has always
+ * had here, applied to the one format that used to be the exception. What it
+ * costs is everything that needed the whole sequence in memory — GC content
+ * at a zoom where a window is tens of megabases, and the motif search — and
+ * each of those says so where it declines rather than reading a genome to
+ * answer.
+ */
+interface IndexedSequences {
+  readonly indexed: true
+  /** Names in file order, renamed into the map's vocabulary at load time (§5.9). */
+  contigs: Contig[]
+  /** By the name a sequence goes by *now*, which after a rename is the map's. */
+  records: Map<string, FaiRecord>
+  handle: BlobFile | RemoteFile
+  /** Residues across every sequence, for the one-line summary. */
+  total: number
+  /**
+   * The last slab read per sequence, so a pan that stays inside it and the
+   * second question about one window read nothing twice. One slab per
+   * sequence and never more: this is a cache of what is on screen, not of the
+   * genome.
+   */
+  held: Map<string, { start: number; bases: Uint8Array }>
+}
+
+type Sequences = SequenceStore | IndexedSequences
+
+function isIndexed(store: Sequences): store is IndexedSequences {
+  return (store as IndexedSequences).indexed === true
+}
+
+/**
  * The sequences of every open FASTA, by the entry that owns them.
  *
  * Kept here rather than handed over, exactly as a bigWig's handle is: a lane
  * draws a window at a time, and a chromosome sent to the main thread would be
  * twelve megabytes carried across so that a few thousand bases of it could be
- * read (§8.2).
+ * read (§8.2). Held whole for a small file, and read by range for a large one
+ * that came with its index ({@link IndexedSequences}).
  */
-const sequences = new Map<string, SequenceStore>()
+const sequences = new Map<string, Sequences>()
 
 /**
  * The computed vectors registered against this file, by the entry that owns them.
@@ -259,7 +342,15 @@ const vectors = new Map<string, BinVector>()
 interface OpenBam {
   handle: BlobFile | RemoteFile
   header: BamHeader
-  index: BamIndex
+  /** The index, where the file has one. */
+  index: BamIndex | null
+  /**
+   * What stands in for the index where the file has none (`bam/search.ts`).
+   * Exactly one of the two is set.
+   */
+  search: BamSearch | null
+  /** Why the file is searched rather than indexed, for the row's summary; empty with an index. */
+  searched: string
   /** The file's own length, for bounding the last block of a span. */
   size: number
   /** The map's name for a sequence → this file's reference id. */
@@ -319,14 +410,42 @@ function fileKey(source: WireSource, index: WireSource): string {
 const WINDOW_BYTE_CAP = 8 << 20
 
 /**
- * How large a FASTA this reads.
+ * How large a FASTA this reads **whole**.
  *
- * It is read whole and held whole, which is what makes a pan free — and what
- * makes a mammalian genome the wrong thing to open this way. Three gigabases is
- * three gigabytes here, and the honest answer is a refusal naming the number
- * rather than a tab that stops responding while it allocates.
+ * Read whole and held whole is what makes a pan free — and what makes a
+ * mammalian genome the wrong thing to open this way. Three gigabases is three
+ * gigabytes here, and the honest answer for a file this size with no index is
+ * a refusal naming the number and the command that writes the index, rather
+ * than a tab that stops responding while it allocates.
  */
 const FASTA_BYTE_CAP = 300_000_000
+
+/**
+ * Under this many bytes a FASTA is read whole, index or no index.
+ *
+ * The two ways of holding a genome trade against each other (§8.8): whole,
+ * every zoom draws GC content and the motif search has something to search,
+ * at the price of the download and the memory; by range, the browser is on
+ * screen the moment the index is read, and the two things that need the
+ * whole sequence decline. A yeast genome is twelve megabytes and a fly's is a
+ * hundred and forty; the line is drawn where the download stops being a
+ * pause and starts being a wait, and it is drawn on the file's size rather
+ * than on whether an index happens to be beside it, so that a small genome
+ * reads the same whichever bucket it came from.
+ */
+const FASTA_WHOLE_MAX = 64_000_000
+
+/**
+ * The widest window an indexed sequence answers for GC content, in residues.
+ *
+ * A GC lane over an indexed genome reads the residues it draws, so the cost of
+ * a frame is the width of the window, and at a chromosome's width that is a
+ * hundred megabytes for one lane of one frame. Four megabases is about one
+ * second on an ordinary connection and the widest a window can be while its
+ * profile is still a profile rather than a flat line; past it the lane draws
+ * nothing and the readout says why.
+ */
+const INDEXED_GC_WINDOW = 4_000_000
 
 /**
  * The last file read whole, so the same one is not parsed twice.
@@ -348,7 +467,7 @@ let recent: { key: string; format: DetectedFormat; features: FeatureSet | null }
  * transferred, so unlike a `FeatureSet` it cannot be detached out from under the
  * second question.
  */
-let recentFasta: { key: string; store: SequenceStore } | null = null
+let recentFasta: { key: string; store: Sequences } | null = null
 
 /** A local file's identity for {@link recent}; a URL is its own. */
 function cacheKey(source: WireSource): string {
@@ -450,10 +569,34 @@ async function handle(request: AnnotationRequest): Promise<void> {
   }
 }
 
+/**
+ * How far a read has got, posted under the request that asked for it.
+ *
+ * The same `progress` message an analysis task sends (§18.3), now sent for
+ * the two reads that are slow enough to be watched: a whole file being
+ * downloaded — a FASTA under the line, a BAM's index, a text track — and a
+ * window of an indexed sequence fetched by range (§8.8). Neither happens in
+ * milliseconds on a genome, and a lane that sits blank for ten seconds reads
+ * as a lane that failed. `generic-filehandle2` throttles the ticks to one
+ * every fifty milliseconds and always sends the last, so this is a message
+ * every frame or so and never a flood.
+ */
+type Report = (done: number, total?: number) => void
+
+function reporter(id: number): Report {
+  return (done, total) => {
+    // `total` is what the host declared, and a host that declared nothing
+    // sends `0`: the bar is then drawn as "on its way" rather than at a
+    // fraction of nothing.
+    const response: AnnotationResponse = { type: 'progress', id, done, total: total ?? 0 }
+    ;(self as unknown as Worker).postMessage(response)
+  }
+}
+
 async function dispatch(request: AnnotationRequest): Promise<unknown> {
   switch (request.kind) {
     case 'load':
-      return load(request.entry, request.source, request.mapContigs)
+      return load(request.entry, request.source, request.mapContigs, reporter(request.id))
     case 'sample':
       return sample(
         request.entry,
@@ -469,9 +612,9 @@ async function dispatch(request: AnnotationRequest): Promise<unknown> {
     case 'run':
       return runTask(request)
     case 'bases':
-      return bases(request.entry, request.regions)
+      return bases(request.entry, request.regions, reporter(request.id))
     case 'assembly':
-      return assemblyOf(request.source)
+      return assemblyOf(request.source, reporter(request.id))
     case 'reads':
       return readsFor(
         request.entry,
@@ -594,6 +737,18 @@ async function runTask(
     residues: (entry) => {
       const store = sequences.get(entry)
       if (store === undefined) return undefined
+      if (isIndexed(store)) {
+        // Not held, so not searchable here — and reading it whole for the
+        // search would be the download it was indexed to avoid (§8.8).
+        return {
+          contigs: store.contigs,
+          bases: () => undefined,
+          refusal:
+            'This FASTA is read by range from its index rather than held, so its sequences are ' +
+            `not here to search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
+            'and can be searched.',
+        }
+      }
       return {
         contigs: store.contigs,
         // Through `basesOf`, so a FASTA renamed into the map's vocabulary at
@@ -641,7 +796,7 @@ async function runTask(
  *    end of its last feature. The browser draws it, and says the edges are a
  *    lower bound.
  */
-async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
+async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyResult> {
   const handle = handleFor(source)
   // Sixty-four, for the same reason `load` reads sixty-four: eight settles the
   // HDF5 question and a BGZF member header is longer than that.
@@ -669,7 +824,7 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   // the reader worker. No index is needed to read a header, so this question is
   // answerable for a file that {@link load} would go on to refuse.
   if (isBgzf(head)) {
-    const size = await sizeOf(handle)
+    const size = await sizeOf(handle, source)
     const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
     if (header !== null) {
       return {
@@ -689,11 +844,11 @@ async function assemblyOf(source: WireSource): Promise<AssemblyResult> {
   // every sequence *and* its exact length, like a `chrom.sizes`, and it is the
   // genome those lengths describe rather than a file asserting them.
   if (looksLikeFasta(head)) {
-    const store = await readFasta(source, handle)
+    const store = await readSequence(source, handle, report)
     return { format: 'fasta', contigs: store.contigs, origin: 'fasta', exact: true }
   }
 
-  const raw = await handle.readFile()
+  const raw = await handle.readFile({ onProgress: report })
   const bytes = await decodeAnnotationBytes(raw)
   // …and a gzipped one is only recognisable here, once it has been inflated.
   if (looksLikeFasta(bytes)) {
@@ -858,23 +1013,52 @@ export function contigsOf(ends: Map<string, number>): Contig[] {
  * A source with neither gets the library's own `fetch` and no wrapper at all,
  * which is every public track.
  */
+/**
+ * The remote handles this worker holds, by address and access, most recently
+ * used last. One per file rather than one per question, because the handle
+ * caches what it reads (`cachedFile.ts`): the three opens on the way to a
+ * browser — the assembly question, the load, the first window — then read the
+ * file's header once. Eight, because a session's worker has a handful of
+ * remote tracks and a bounded map is what keeps a long session from holding
+ * a chunk cache for every file it ever glanced at.
+ */
+const remoteHandles = new Map<string, CachedRemoteFile>()
+const REMOTE_HANDLES_KEPT = 8
+
 function handleFor(source: WireSource): BlobFile | RemoteFile {
   if (source.kind === 'local') return new BlobFile(source.file)
   const { credential, headers } = source
-  if (credential === undefined && headers === undefined) return new RemoteFile(source.url)
-  return new RemoteFile(source.url, {
-    fetch: (input, init) => {
-      const url = typeof input === 'string' ? input : (input as Request).url
-      return fetch(
-        input,
-        applyAccess(init, {
-          url,
-          ...(headers === undefined ? {} : { headers }),
-          ...(credential === undefined ? {} : { credential }),
-        }),
-      )
-    },
-  })
+  const key = `${source.url}|${credential === undefined ? '' : JSON.stringify(credential)}|${
+    headers === undefined ? '' : JSON.stringify(headers)
+  }`
+  const held = remoteHandles.get(key)
+  if (held !== undefined) {
+    remoteHandles.delete(key)
+    remoteHandles.set(key, held)
+    return held
+  }
+  const made =
+    credential === undefined && headers === undefined
+      ? new CachedRemoteFile(source.url)
+      : new CachedRemoteFile(source.url, {
+          fetch: (input, init) => {
+            const url = typeof input === 'string' ? input : (input as Request).url
+            return fetch(
+              input,
+              applyAccess(init, {
+                url,
+                ...(headers === undefined ? {} : { headers }),
+                ...(credential === undefined ? {} : { credential }),
+              }),
+            )
+          },
+        })
+  remoteHandles.set(key, made)
+  while (remoteHandles.size > REMOTE_HANDLES_KEPT) {
+    const oldest = remoteHandles.keys().next().value as string
+    remoteHandles.delete(oldest)
+  }
+  return made
 }
 
 /**
@@ -898,7 +1082,7 @@ async function tryIndexedText(
   try {
     const indexBytes = await inflateBgzf(await handleFor(indexSource).readFile())
     const index = parseTabix(indexBytes)
-    const size = await sizeOf(handle)
+    const size = await sizeOf(handle, source)
     if (size === null) return null
     const spans = spansFor(index, matchNames(index, namesOf(mapContigs)), size)
     if (spans.length === 0) return null
@@ -1062,17 +1246,53 @@ function indexSourceFor(source: WireSource): WireSource | null {
   }
 }
 
-/** The file's length, however the handle knows it. */
-async function sizeOf(handle: BlobFile | RemoteFile): Promise<number | null> {
+/**
+ * The file's length, however it can be learnt — or `null`, never zero.
+ *
+ * A local file knows its own. A remote one is read off the `Content-Range`
+ * of the handle's first ranged request, which is how every bucket that
+ * follows `docs/hosting.md` answers — and how 4DN's open-data bucket does
+ * not: it exposes `ETag` and nothing else, so the browser sees no
+ * `Content-Range` and the handle reports a size of nought. Taken at its word
+ * that was a header read of nought bytes, "not a BAM", and the file read
+ * whole — a hundred gigabytes of alignments fetched to find out what its
+ * first block says. So a size the handle cannot give is asked for with a
+ * `HEAD`, whose `Content-Length` is one of the handful of headers CORS lets
+ * every page read without being told it may, and a size nothing will state
+ * is `null`, which every caller already treats as *unknown* rather than
+ * *empty*.
+ */
+async function sizeOf(handle: BlobFile | RemoteFile, source?: WireSource): Promise<number | null> {
   const stat = (handle as { stat?: () => Promise<{ size: number }> }).stat
   if (typeof stat === 'function') {
     try {
-      return (await stat.call(handle)).size
+      const size = (await stat.call(handle)).size
+      if (Number.isFinite(size) && size > 0) return size
     } catch {
-      return null
+      // Fall through to the probe below.
     }
   }
-  return null
+  if (source === undefined || source.kind !== 'remote') return null
+  try {
+    const { credential, headers } = source
+    const response = await fetch(
+      source.url,
+      applyAccess(
+        { method: 'HEAD', mode: 'cors' },
+        {
+          url: source.url,
+          method: 'HEAD',
+          ...(headers === undefined ? {} : { headers }),
+          ...(credential === undefined ? {} : { credential }),
+        },
+      ),
+    )
+    if (!response.ok) return null
+    const declared = Number(response.headers.get('Content-Length') ?? Number.NaN)
+    return Number.isFinite(declared) && declared > 0 ? declared : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -1084,7 +1304,12 @@ async function sizeOf(handle: BlobFile | RemoteFile): Promise<number | null> {
  * matters — decoding 23 MB of bigWig as UTF-8 to discover it is not a BED would
  * be both slow and, for a remote file, a whole-file download.
  */
-async function load(entry: string, source: WireSource, mapContigs: NamedSequence[]): Promise<LoadResult> {
+async function load(
+  entry: string,
+  source: WireSource,
+  mapContigs: NamedSequence[],
+  report: Report,
+): Promise<LoadResult> {
   const handle = handleFor(source)
   // Sixty-four rather than four. A BBI magic number is four bytes and was all
   // this ever needed; recognising a BGZF member takes twelve plus its extra
@@ -1099,18 +1324,23 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   // bgzipped *text* file falls through it and takes the tabix path it always
   // did.
   if (isBgzf(head)) {
-    const size = await sizeOf(handle)
+    const size = await sizeOf(handle, source)
     const header = await readBamFront(handle, size ?? Number.MAX_SAFE_INTEGER)
     // A BGZF file that is not a BAM is a bgzipped text file, and takes the
     // tabix road below exactly as it always did.
     if (header !== null) {
       if (size === null) {
-        throw new Error(`${source.name} cannot be measured, and a BAM is read by byte range.`)
+        throw new Error(
+          `${source.name} cannot be measured — its host states neither Content-Range nor ` +
+            'Content-Length to a page — and a BAM is read by byte range.',
+        )
       }
-      return loadBam(entry, source, handle, mapContigs, header, size)
+      return loadBam(entry, source, handle, mapContigs, header, size, report)
     }
   }
-  if (looksLikeFasta(head)) return loadFasta(entry, await readFasta(source, handle), mapContigs)
+  if (looksLikeFasta(head)) {
+    return loadFasta(entry, await readSequence(source, handle, report), mapContigs)
+  }
 
   // The parse this file already had, when the browser asked what genome it was
   // on a moment ago. Same bytes, same answer; the overlap report is recomputed
@@ -1135,7 +1365,8 @@ async function load(entry: string, source: WireSource, mapContigs: NamedSequence
   // plain `.gz` rather than a BGZF one — every one of which used to be the only
   // path and still is a working one (`annotations/tabix.ts`).
   const indexed = await tryIndexedText(source, handle, head, mapContigs)
-  const bytes = indexed === null ? await decodeAnnotationBytes(await handle.readFile()) : null
+  const bytes =
+    indexed === null ? await decodeAnnotationBytes(await handle.readFile({ onProgress: report })) : null
   if (bytes !== null && looksLikeFasta(bytes)) {
     return loadFasta(entry, keepFasta(source, bytes), mapContigs)
   }
@@ -1243,22 +1474,82 @@ function featureResult(
  * That cache is safe in a way {@link recent} is not: a sequence store is never
  * transferred, so there is no way for the entry to come back detached.
  */
-async function readFasta(
+/**
+ * A FASTA, however it is going to be held (§8.8).
+ *
+ * Whole under {@link FASTA_WHOLE_MAX}, whatever sits beside it. Over it, by
+ * its index where one can be found — named on the source, or guessed as
+ * `<url>.fai` for a plain remote FASTA — and whole again where none can be,
+ * which is the read that always worked and is refused past
+ * {@link FASTA_BYTE_CAP} exactly as before. The size is asked for before a
+ * byte of sequence is read: a local file's is free, and a remote one's is one
+ * ranged request the handle keeps.
+ */
+async function readSequence(
   source: WireSource,
   handle: BlobFile | RemoteFile,
-): Promise<SequenceStore> {
+  report: Report,
+): Promise<Sequences> {
   const held = recentFasta
   if (held !== null && held.key === cacheKey(source)) return held.store
-  // Refused before it is read, where the size is known without reading it. A
-  // local file's is free; a remote one is found out the hard way, below.
-  if (source.kind === 'local' && source.file.size > FASTA_BYTE_CAP) {
-    throw tooLarge(source.file.size)
+  const size = source.kind === 'local' ? source.file.size : await sizeOf(handle, source)
+  const known = size !== null && size > 0
+  if (known && size <= FASTA_WHOLE_MAX) return readWhole(source, handle, report)
+  const indexed = await readFastaIndex(source, handle)
+  if (indexed !== null) {
+    recentFasta = { key: cacheKey(source), store: indexed }
+    return indexed
   }
-  return keepFasta(source, await decodeAnnotationBytes(await handle.readFile()))
+  // Refused before it is read, where the size is known without reading it. A
+  // remote one whose server would not say is found out the hard way, below.
+  if (known && size > FASTA_BYTE_CAP) throw tooLarge(size, source)
+  return readWhole(source, handle, report)
+}
+
+async function readWhole(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+  report: Report,
+): Promise<SequenceStore> {
+  return keepFasta(source, await decodeAnnotationBytes(await handle.readFile({ onProgress: report })))
+}
+
+/**
+ * The `.fai` beside a FASTA, read into an {@link IndexedSequences} — or `null`
+ * where there is none, none that answers, or none that parses. Every failure
+ * is "this index did not work", and the answer to that is the read that
+ * always worked, on the terms `tryIndexedText` gives for a tabix sidecar.
+ */
+async function readFastaIndex(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+): Promise<IndexedSequences | null> {
+  const named =
+    source.index !== undefined
+      ? source
+      : source.kind === 'remote' && FASTA_NAME.test(source.url)
+        ? { ...source, index: guessedIndexUrl(source.url) }
+        : null
+  const indexSource = named === null ? null : indexSourceFor(named)
+  if (indexSource === null) return null
+  try {
+    const records = parseFai(new TextDecoder().decode(await handleFor(indexSource).readFile()))
+    if (records.length === 0) return null
+    return {
+      indexed: true,
+      contigs: contigsOfIndex(records),
+      records: new Map(records.map((record) => [record.name, record])),
+      handle,
+      total: records.reduce((sum, record) => sum + record.length, 0),
+      held: new Map(),
+    }
+  } catch {
+    return null
+  }
 }
 
 function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
-  if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length)
+  if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length, source)
   const store = parseFasta(bytes)
   if (store.contigs.length === 0) {
     throw new Error('This looks like a FASTA but holds no sequences.')
@@ -1267,17 +1558,22 @@ function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
   return store
 }
 
-function tooLarge(size: number): Error {
+function tooLarge(size: number, source: WireSource): Error {
+  const name = source.name.replace(/[#?].*$/, '') || 'genome.fa'
   return new Error(
-    `This FASTA is ${count(Math.round(size / 1e6))} MB. It would be read whole and held whole — ` +
-      `which is what makes panning free — so anything over ${count(FASTA_BYTE_CAP / 1e6)} MB is ` +
-      'refused rather than allowed to take the tab with it. A chrom.sizes declares the same ' +
-      'genome for a few kilobytes.',
+    `This FASTA is ${count(Math.round(size / 1e6))} MB and has no index. It would be read whole ` +
+      `and held whole — which is what makes panning free — so anything over ` +
+      `${count(FASTA_BYTE_CAP / 1e6)} MB is refused rather than allowed to take the tab with it. ` +
+      `Index it (\`samtools faidx ${name}\`) and ${
+        source.kind === 'local'
+          ? 'drop the .fai with it'
+          : 'publish the .fai beside it, or name it with #index=<url>'
+      }: an indexed FASTA opens at once and is read by range.`,
   )
 }
 
 /** A FASTA as a row: the sequences stay here, the summary goes back. */
-function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequence[]): LoadResult {
+function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[]): LoadResult {
   const renaming = renameSequences(store, mapContigs)
   sequences.set(entry, store)
   const names = store.contigs.map((contig) => contig.name)
@@ -1285,7 +1581,9 @@ function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequenc
     format: 'fasta',
     contigs: names,
     overlap: overlapReport(names, mapContigs, renaming),
-    summary: `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp`,
+    summary:
+      `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp` +
+      (isIndexed(store) ? ' · read by range from its index' : ''),
   }
 }
 
@@ -1298,9 +1596,20 @@ function loadFasta(entry: string, store: SequenceStore, mapContigs: NamedSequenc
  * asked about — which is the map's. A rename of one and not the other would
  * leave a sequence lane that draws its ruler and no residues.
  */
-function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Renaming {
+function renameSequences(store: Sequences, mapContigs: NamedSequence[]): Renaming {
   const renaming = renameInto(store.contigs, mapContigs)
   if (renaming.renamed === 0) return renaming
+  if (isIndexed(store)) {
+    const records = new Map<string, FaiRecord>()
+    store.contigs.forEach((contig, at) => {
+      const record = store.records.get(contig.name)
+      contig.name = renaming.names[at]
+      if (record !== undefined) records.set(contig.name, { ...record, name: contig.name })
+    })
+    store.records = records
+    store.held.clear()
+    return renaming
+  }
   const bases = new Map<string, Uint8Array>()
   store.contigs.forEach((contig, at) => {
     const held = store.bases.get(contig.name)
@@ -1324,18 +1633,50 @@ function renameSequences(store: SequenceStore, mapContigs: NamedSequence[]): Ren
  * bigWig's zoom level is — the flag is what tells the readout that the number
  * under the pointer describes a window rather than a position.
  */
-function gcSamples(
-  store: SequenceStore,
+async function gcSamples(
+  store: Sequences,
   regions: Region[],
   basesPerPixel: number,
-): TrackSampleSet {
+  report: Report,
+): Promise<TrackSampleSet> {
   const out: TrackSamples[] = []
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
+  if (isIndexed(store)) {
+    // A window wider than the read it would take draws nothing, and says so
+    // rather than sitting blank (§8.8). Summed over every region of the
+    // request and not judged one region at a time: a whole-genome view of a
+    // cow is thirty chromosomes, each far over the line, and two thousand
+    // scaffolds each under it — and reading the scaffolds one ranged request
+    // apiece was a lane that stayed empty for minutes while it did.
+    const wanted = regions.reduce((sum, region) => sum + Math.max(0, region.end - region.start), 0)
+    if (wanted > INDEXED_GC_WINDOW) {
+      return {
+        basesPerPixel,
+        regions: [],
+        extent: null,
+        note: `GC under ${count(INDEXED_GC_WINDOW / 1e6)} Mb, letters at base resolution — zoom in`,
+      }
+    }
+  }
   for (const region of regions) {
-    const seq = basesOf(store, region.contig)
-    if (seq === undefined || !(region.end > region.start)) continue
-    const bins = gcBins(seq, region.start, region.end, basesPerPixel)
+    if (!(region.end > region.start)) continue
+    let bins
+    if (isIndexed(store)) {
+      const from = Math.max(0, Math.floor(region.start))
+      const window = await residuesOf(store, region.contig, from, region.end, report)
+      if (window === undefined || window.length === 0) continue
+      bins = gcBins(window, 0, window.length, basesPerPixel)
+      // The window's own coordinates, put back on the sequence's.
+      for (let i = 0; i < bins.starts.length; i++) {
+        bins.starts[i] += from
+        bins.ends[i] += from
+      }
+    } else {
+      const seq = basesOf(store, region.contig)
+      if (seq === undefined) continue
+      bins = gcBins(seq, region.start, region.end, basesPerPixel)
+    }
     if (bins.values.length === 0) continue
     for (const value of bins.values) {
       if (!Number.isFinite(value)) continue
@@ -1368,7 +1709,7 @@ function gcSamples(
 const BASES_PER_REQUEST = 400_000
 
 /** The residues of each visible window, for a view drawing them one by one. */
-function bases(entry: string, regions: Region[]): BaseResult {
+async function bases(entry: string, regions: Region[], report: Report): Promise<BaseResult> {
   const store = sequences.get(entry)
   if (store === undefined) {
     throw new Error('This sequence is no longer open. Drop the file again.')
@@ -1376,9 +1717,24 @@ function bases(entry: string, regions: Region[]): BaseResult {
   const out: BaseRegion[] = []
   let budget = BASES_PER_REQUEST
   for (const region of regions) {
+    const start = Math.max(0, Math.floor(region.start))
+    if (isIndexed(store)) {
+      const window = await residuesOf(
+        store,
+        region.contig,
+        start,
+        Math.min(Math.ceil(region.end), start + budget),
+        report,
+      )
+      if (window === undefined || window.length === 0) continue
+      budget -= window.length
+      // `slice` here too: the slab behind `window` is the store's cache.
+      out.push({ contig: region.contig, start, end: start + window.length, bases: window.slice() })
+      if (budget <= 0) break
+      continue
+    }
     const seq = basesOf(store, region.contig)
     if (seq === undefined) continue
-    const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(seq.length, Math.ceil(region.end), start + budget)
     if (!(end > start)) continue
     budget -= end - start
@@ -1599,7 +1955,7 @@ async function sample(
   // is where the two formats part company: one has zoom levels on disk, the
   // other computes its summary from the residues it is holding.
   const sequence = sequences.get(entry)
-  if (sequence !== undefined) return gcSamples(sequence, regions, basesPerPixel)
+  if (sequence !== undefined) return gcSamples(sequence, regions, basesPerPixel, reporter(id))
 
   // A text signal file is the fourth, and the closest of them to a bigWig: the
   // same intervals-and-values answer, summarised here rather than on disk.
@@ -1724,11 +2080,15 @@ async function readBamFront(
   handle: BlobFile | RemoteFile,
   size: number,
 ): Promise<BamHeader | null> {
+  // A size nobody could state is not a size of nought: a ranged read past the
+  // end of a file is a short read, so the bound is only ever a courtesy to a
+  // small file, and an unknown one gets the full first read.
+  const bound = Number.isFinite(size) && size > 0 ? size : Number.MAX_SAFE_INTEGER
   let want = HEADER_FIRST_READ
   for (;;) {
     let inflated: Uint8Array
     try {
-      inflated = await inflateBgzf(await handle.read(Math.min(want, size), 0))
+      inflated = await inflateBgzf(await handle.read(Math.min(want, bound), 0))
     } catch {
       // Not inflatable is not a BAM, and is not this function's error to raise:
       // the road it falls through to reads the file whole and reports properly.
@@ -1739,7 +2099,7 @@ async function readBamFront(
     if (header !== null) return header
     // `null` from `readHeader` means the buffer stopped mid-table — the
     // multi-block header of a co-assembly — and nothing else does.
-    if (want >= size || want >= HEADER_MAX_READ) {
+    if (want >= bound || want >= HEADER_MAX_READ) {
       throw new Error('This BAM\'s header is truncated: its reference table does not end.')
     }
     want = Math.min(want * 4, HEADER_MAX_READ)
@@ -1762,6 +2122,7 @@ async function loadBam(
   /** Already read, by whichever branch decided this was a BAM — never re-read. */
   header: BamHeader,
   size: number,
+  report: Report,
 ): Promise<LoadResult> {
   if (header.sortOrder === 'queryname' || header.sortOrder === 'unsorted') {
     // Not a technicality: every byte this reader fetches is addressed by an
@@ -1775,49 +2136,66 @@ async function loadBam(
   }
 
   const indexSource = indexSourceFor(source)
-  if (indexSource === null) {
-    throw new Error(
-      `${source.name} has no index beside it. Unlike every other format here a BAM has no ` +
-        'whole-file fallback — it is read by region, and the index is the only thing that ' +
-        `makes that bounded. Drop \`${source.name}.bai\` alongside it, or run ` +
-        `\`samtools index ${source.name}\`.`,
-    )
-  }
-  const key = fileKey(source, indexSource)
+  // Keyed on the file and its index where there is one, and on the file alone
+  // where a search stands in for it: the two rows then share one search and
+  // its probes, which is the whole reason the probes are kept.
+  const key = indexSource === null ? `${cacheKey(source)}|search` : fileKey(source, indexSource)
   const shared = openFiles.get(key)
-  let index: BamIndex
-  // Read once per file, not once per row. A BAI for a human WGS alignment is
-  // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
-  // the depth and the pile — so paying that twice and throwing the second copy
-  // away is the whole cost of the second row.
-  if (shared !== undefined) index = shared.open.index
-  else
-    try {
-      index = await parseBamIndex(await handleFor(indexSource).readFile())
-    } catch (err) {
-      const why = err instanceof Error ? err.message : String(err)
-      // Three different fixes, so three different messages. A reader who has just
-      // dropped a file wants to know which of them happened.
-      //
-      // The remote case is the one worth separating: the sidecar URL there was
-      // **guessed** — `<url>.bai`, never probed, because §12 has no request to
-      // spend finding out that a file has no index — so the commonest failure is
-      // not a corrupt index but no index at that address at all. Saying "could
-      // not be read" would send a reader looking for a broken file that does not
-      // exist, when what they need is the `#index=` convention or a `samtools
-      // index` run on the host.
-      if (source.kind === 'remote') {
+  let index: BamIndex | null = null
+  let search: BamSearch | null = null
+  let searched = ''
+  if (shared !== undefined) {
+    index = shared.open.index
+    search = shared.open.search
+    searched = shared.open.searched
+  } else {
+    // Read once per file, not once per row. A BAI for a human WGS alignment is
+    // single-digit megabytes to fetch and to parse, and a BAM makes two rows —
+    // the depth and the pile — so paying that twice and throwing the second
+    // copy away is the whole cost of the second row.
+    if (indexSource === null) searched = 'no index dropped with it'
+    else
+      try {
+        // The one download a BAM costs, and for a deep alignment file tens of
+        // megabytes of it: reported, so the row says how far it has got.
+        index = await parseBamIndex(await handleFor(indexSource).readFile({ onProgress: report }))
+      } catch (err) {
+        // The sidecar of a remote file was **guessed** — `<url>.bai`, never
+        // probed, because §12 has no request to spend finding out that a file
+        // has no index — and on the two buckets the store drawer offers most
+        // the guess is wrong for every BAM they hold, since neither publishes
+        // an index at all. So an index that is not there is not a refusal any
+        // more: it is the road to `bam/search.ts`, and the row's summary says
+        // which road it is on and why.
+        const why = err instanceof Error ? err.message : String(err)
+        searched =
+          indexSource.kind === 'remote'
+            ? `no ${indexSource.url.split('?')[0].split('/').pop() ?? 'index'} beside it`
+            : `${indexSource.name} could not be read (${why})`
+      }
+    if (index === null) {
+      if (!Number.isFinite(size) || size <= 0) {
         throw new Error(
-          `No index could be read for ${source.name} at ${indexSource.kind === 'remote' ? indexSource.url : ''} — ${why} ` +
-            'A BAM is read by region and cannot be opened without one. If the index is published ' +
-            `elsewhere, name it: \`${source.url}#index=<url of the .bai>\`.`,
+          `${source.name} has ${searched}, and its length could not be learnt, so its reads cannot be ` +
+            'located by search either. A BAM is read by region: publish its index beside it, or name ' +
+            `one with \`${source.kind === 'remote' ? source.url : source.name}#index=<url of the .bai>\`.`,
         )
       }
-      throw new Error(
-        `${source.name}'s index could not be read: ${why} ` +
-          `Re-make it with \`samtools index ${source.name}\`.`,
-      )
+      try {
+        // Reported as bytes with no total — the search does not know how many
+        // probes it will take — so the row says it is on its way.
+        search = await BamSearch.open(handle, size, header, (bytes) => report(bytes, 0))
+      } catch (err) {
+        if (err instanceof UnsortedError) throw new Error(unsortedMessage(source.name, header, err))
+        const why = err instanceof Error ? err.message : String(err)
+        throw new Error(
+          `${source.name} has ${searched} and could not be read by search: ${why}. A BAM is read by ` +
+            `region; run \`samtools index ${source.name}\` and publish the index beside it, or name ` +
+            'one with `#index=<url of the .bai>`.',
+        )
+      }
     }
+  }
 
   // Renamed into the map's vocabulary at the door (§5.9), exactly as a bigWig
   // is and for the same reason: the contig list this reports, the overlap it is
@@ -1847,6 +2225,8 @@ async function loadBam(
     handle,
     header,
     index,
+    search,
+    searched,
     size,
     refIdOf,
     refNames: header.refs.map((ref) => ref.name),
@@ -1859,8 +2239,89 @@ async function loadBam(
     format: 'bam',
     contigs,
     overlap: overlapReport(contigs, mapContigs, renaming),
-    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${index.format.toUpperCase()}`,
+    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${
+      index !== null ? index.format.toUpperCase() : `${searched} — reads located by search`
+    }`,
   }
+}
+
+/**
+ * Why a file whose reads are out of order cannot be read by region, with the
+ * two places in it that prove they are, and what to do about it.
+ *
+ * The Hi-C sentence is there because that is the file this message is read
+ * on: every BAM on 4DN's open-data bucket is a pipeline's alignment output,
+ * written in read-pair order for the pairs step that follows it, and a reader
+ * who opened one from the store drawer wanted the reads and was never told
+ * the file is not that kind of file.
+ */
+function unsortedMessage(name: string, header: BamHeader, err: UnsortedError): string {
+  const claim =
+    header.sortOrder === 'coordinate'
+      ? 'its header says SO:coordinate, but'
+      : 'its header has no @HD line to say so, and'
+  return (
+    `${name} is not in coordinate order — ${claim} the reads at byte ${count(err.before.block)} are on ` +
+    `${placeLabel(err.before, header.refs)} while those at byte ${count(err.after.block)}, later in the ` +
+    `file, are on ${placeLabel(err.after, header.refs)}. Reads are drawn by region, which needs the file ` +
+    `sorted and indexed: run \`samtools sort -o sorted.bam ${name}\` and \`samtools index sorted.bam\`. ` +
+    'The alignment file a Hi-C pipeline writes is in read-pair order for its pairs step and is not made ' +
+    'for browsing; its .pairs or its contact map is the file to open.'
+  )
+}
+
+/**
+ * How wide a window a searched file will locate, summed over its regions.
+ *
+ * A search is requests — a dozen ranged reads to bracket one window — so a
+ * whole-genome view's window per contig would be dozens of searches for a
+ * lane the byte cap (§12) would refuse once they had all answered. Refused
+ * here instead, for the price of none: four megabases of any alignment file
+ * deep enough to be worth a BAM is past the cap.
+ */
+const SEARCH_MAX_SPAN = 4_000_000
+
+/** The note a searched file answers a window with instead of searching, or `null` to go ahead. */
+function searchDeclines(open: OpenBam, wanted: readonly Region[]): string | null {
+  if (open.search === null) return null
+  const span = wanted.reduce((sum, region) => sum + (region.end - region.start), 0)
+  if (wanted.length > 1 || span > SEARCH_MAX_SPAN) return `${spanLabel(span)} without an index — zoom in`
+  return null
+}
+
+function spanLabel(bp: number): string {
+  return bp >= 1_000_000 ? `${trim(bp / 1_000_000)} Mb` : `${trim(bp / 1000)} kb`
+}
+
+/**
+ * The byte spans of a window: from the index, or by search where there is none.
+ *
+ * The one seam between the two roads. Everything after it — the read, the
+ * inflation, the walk from `dataFrom` — is the same code over the same shape,
+ * which is what lets a file without an index draw exactly what one with an
+ * index draws.
+ */
+async function spansOf(
+  open: OpenBam,
+  refId: number,
+  region: Region,
+  id: number,
+  /** The caller's byte cap, so a search can stop at *over it* rather than locate an end it will not read to. */
+  cap: number,
+): Promise<BamByteSpan[]> {
+  const start = Math.max(0, Math.floor(region.start))
+  const end = Math.ceil(region.end)
+  if (open.index !== null) return chunksFor(open.index, refId, start, end, open.size)
+  if (open.search === null) return []
+  return open.search.spansFor(
+    refId,
+    start,
+    end,
+    async () => {
+      if (!(await stillWanted(id))) throw abortError()
+    },
+    cap,
+  )
 }
 
 /**
@@ -1943,20 +2404,19 @@ async function alignmentSamples(
   )
   if (wanted.length === 0) return { basesPerPixel, regions: [], extent: null }
 
+  // Without an index the spans come from a search, and a search is requests:
+  // one window at a time, never a window per contig.
+  const declined = searchDeclines(open, wanted)
+  if (declined !== null) return { basesPerPixel, regions: [], extent: null, note: declined }
+
   // The forecast, before a byte of alignment data is read. Every region at
   // once, because a whole-genome view asks for one window per contig and
   // refusing them one at a time would draw a lane that is partly there.
-  const plans = wanted.map((region) => ({
-    region,
-    refId: refIdOf(region.contig) as number,
-    spans: chunksFor(
-      open.index,
-      refIdOf(region.contig) as number,
-      Math.max(0, Math.floor(region.start)),
-      Math.ceil(region.end),
-      open.size,
-    ),
-  }))
+  const plans: Array<{ region: Region; refId: number; spans: BamByteSpan[] }> = []
+  for (const region of wanted) {
+    const refId = refIdOf(region.contig) as number
+    plans.push({ region, refId, spans: await spansOf(open, refId, region, id, WINDOW_BYTE_CAP) })
+  }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > WINDOW_BYTE_CAP) {
     return {
@@ -2135,17 +2595,11 @@ async function readsFor(
     return { ...empty, note: `${trim(span / 1000)} kb — too wide to draw reads` }
   }
 
-  const plans = wanted.map((region) => ({
-    region,
-    refId: refIdOf(region.contig) as number,
-    spans: chunksFor(
-      open.index,
-      refIdOf(region.contig) as number,
-      Math.max(0, Math.floor(region.start)),
-      Math.ceil(region.end),
-      open.size,
-    ),
-  }))
+  const plans: Array<{ region: Region; refId: number; spans: BamByteSpan[] }> = []
+  for (const region of wanted) {
+    const refId = refIdOf(region.contig) as number
+    plans.push({ region, refId, spans: await spansOf(open, refId, region, id, READ_BYTE_CAP) })
+  }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > READ_BYTE_CAP) {
     return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
@@ -2242,10 +2696,20 @@ const VARIANT_BELOW = 16
  * this runs once per fetched window rather than per frame.
  */
 function residuesFor(region: Region): { start: number; bases: Uint8Array } | undefined {
+  const start = Math.max(0, Math.floor(region.start))
   for (const store of sequences.values()) {
+    if (isIndexed(store)) {
+      // Never fetched for (§8.13): what an indexed sequence has is the slab
+      // its own lane last drew, and the pile reads that or nothing.
+      const record = recordOf(store, region.contig)
+      const slab = record === undefined ? undefined : store.held.get(record.name)
+      if (slab === undefined) continue
+      const end = Math.min(slab.start + slab.bases.length, Math.ceil(region.end))
+      if (slab.start > start || end <= start) continue
+      return { start, bases: slab.bases.subarray(start - slab.start, end - slab.start) }
+    }
     const held = basesOf(store, region.contig)
     if (held === undefined) continue
-    const start = Math.max(0, Math.floor(region.start))
     const end = Math.min(held.length, Math.ceil(region.end))
     if (end <= start) continue
     return { start, bases: held.subarray(start, end) }

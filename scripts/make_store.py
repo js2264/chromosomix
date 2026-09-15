@@ -356,6 +356,58 @@ ROUTE_GENOME = re.compile(
 )
 
 
+#: 4DN's assays whose alignment file is in read-pair order rather than in
+#: coordinate order: the 3C family and its relatives, every one of which 4DN
+#: runs through its Hi-C pipeline (MARGI through its own, to the same effect).
+#: Measured 2026-09-15 on one BAM per assay in the published store — in situ,
+#: Dilution, Capture and DNase Hi-C, Micro-C, PLAC-seq, ChIA-PET in both
+#: spellings, HiChIP, TCC, MARGI, TrAC-loop — each is ``bwa mem -SP5M`` output
+#: with no ``@HD`` line at all, while the RNA-seq and ChIP-seq alignments beside
+#: them carry ``@HD SO:coordinate``. The ``.pairs`` and the contact map beside
+#: such a BAM are the products. The viewer draws reads from a coordinate-sorted
+#: file and refuses any other (SPECS §8.13), and a row that can only be refused
+#: is not a row (§8.5). Matched on the words of the experiment type, so a new
+#: member of the family whose name says Hi-C or Micro-C arrives filtered and a
+#: new linear assay arrives listed; the words are 4DN's vocabulary as of 2026-09.
+INTERACTION_ASSAYS = re.compile(
+    r"hi-?c\b|micro-?c\b|capture-?c\b|chia-?pet|chia-?drop|plac-?seq|hichip|\btcc\b"
+    r"|margi|dip-?c\b|mc-?3c|3c-?seq|\b[45]c-?seq\b|trac-?loop|\bdlo\b",
+    re.I,
+)
+
+
+#: ENCODE's alignment files that are in read-pair order: its Hi-C pipeline's,
+#: and only those. Narrower than 4DN's list on purpose — ENCODE processes
+#: ChIA-PET with ChIA-PIPE, whose alignments are coordinate-sorted (measured
+#: 2026-09-15: ENCFF701CKT, ENCFF017GAY and ENCFF802MYF carry ``@HD
+#: SO:coordinate``), while its Hi-C pipeline's in situ, dilution and intact
+#: alignments (ENCFF105HZA, ENCFF054IOG, ENCFF918KPL) carry ``SO:unknown`` from
+#: ``bwa mem -SP5M``. ``assay_title`` spells the assay; ``assay_term_name``
+#: says ``HiC``, and both are matched. An undescribed ENCODE BAM stays: the
+#: manifest still gives it an assembly, an output type, a lab and a dataset,
+#: and the 6,805 of them on 2026-09-15 were sorted alignments of experiments
+#: the enrichment query does not cover.
+HIC_ASSAYS_ENCODE = re.compile(r"hi-?c\b|\bhic\b", re.I)
+
+
+def reads_drawable(suffix: str, assay: str, described: bool) -> bool:
+    """Whether a 4DN row of this format and assay is worth a reader's click.
+
+    ``True`` for every format but ``bam``, whose whole use is its reads: a BAM
+    of an interaction assay is in read-pair order (see
+    :data:`INTERACTION_ASSAYS`), and one the portal does not describe at all
+    has no assay to judge by, no biosource, no dataset — nothing a reader could
+    filter on, and on 4DN's bucket almost always the same pipeline's
+    intermediate. Both are left out; the ``.pairs``, the contact map and the
+    linear assays' alignments stay.
+    """
+    if suffix != "bam":
+        return True
+    if not described:
+        return False
+    return INTERACTION_ASSAYS.search(assay) is None
+
+
 def route_of(name: str) -> Optional[str]:
     """``'map'``, ``'genome'``, ``'workspace'`` — or ``None`` for a name with no door."""
     bare = name.split("?")[0].split("#")[0].rsplit("/", 1)[-1]
@@ -1299,19 +1351,29 @@ def entries_4dn(
 ) -> list[dict]:
     """One entry per routable object on the 4DN bucket, enriched where the portal knows it.
 
-    The whole filter is *can this viewer open the name*, which is `route_of`
-    and nothing else. That is the rule SPECS §24.3 argues for: a filter on the
+    The filter is *can this viewer open the name*, which is `route_of`, with
+    one exception. That is the rule SPECS §24.3 argues for: a filter on the
     file rather than on the experiment type needs no maintenance when the
     consortium's vocabulary grows, and it is why Micro-C, sn-Hi-C and whatever
     comes next are in a store nobody edited. ``--formats`` narrows it for a dry
     run and is ``None`` — everything — for a publish.
 
+    The exception is a BAM the viewer could only refuse (:func:`reads_drawable`):
+    the alignment file of an interaction assay is in read-pair order, and the
+    reads the viewer draws are drawn from a coordinate-sorted file. Those rows
+    were a third of the store and every one of them a dead click; the
+    ``.pairs`` and the contact map of the same set are the rows a reader wants.
+
     A file the portal did not describe still gets a row: it is a real object on
     an open bucket, its name carries its accession, and the alternative is a
     catalogue that quietly omits what the search API's facets happened to miss.
+    A BAM is the one format that does not, for the reason above: with no
+    assay to judge it by it is unopenable in all likelihood and unfilterable
+    in any case.
     """
     entries: list[dict] = []
     described = 0
+    unreadable = 0
     for item in objects:
         key = item["key"]
         name = key.rsplit("/", 1)[-1]
@@ -1326,6 +1388,9 @@ def entries_4dn(
         # keeps its stem, which is what the label falls back to.
         accession = name.split(".")[0]
         meta = index.get(accession)
+        if not reads_drawable(suffix, text((meta or {}).get("assay")), meta is not None):
+            unreadable += 1
+            continue
         if meta is not None:
             described += 1
         meta = meta or {}
@@ -1373,7 +1438,11 @@ def entries_4dn(
             log.info("Stopped at the --limit of %d entries.", limit)
             break
     log.info(
-        "%d routable objects, %d of them described by the portal.", len(entries), described
+        "%d routable objects, %d of them described by the portal; %d BAMs left out as "
+        "unreadable (an interaction assay's, or undescribed).",
+        len(entries),
+        described,
+        unreadable,
     )
     return entries
 
@@ -1578,6 +1647,7 @@ def entries_encode(
     kept: dict[tuple[str, str, str], dict] = {}
     entries: list[dict] = []
     seen = 0
+    unreadable = 0
     for row in rows:
         if text(row.get("status")).lower() != "released":
             continue
@@ -1601,6 +1671,14 @@ def entries_encode(
         assembly = text(row.get("assembly"))
         dataset = accession_in(row.get("dataset"))
         suffix = format_of(name)
+        # The one exception to "every name with a route", as the 4DN front end
+        # makes it (`reads_drawable`): a Hi-C pipeline's alignment file is in
+        # read-pair order, so a row for it is a click the viewer can only
+        # refuse. ENCODE's other interaction assay, ChIA-PET, stays — see
+        # `HIC_ASSAYS_ENCODE`.
+        if suffix == "bam" and HIC_ASSAYS_ENCODE.search(text(index.get(dataset, {}).get("assay"))):
+            unreadable += 1
+            continue
         candidate = {
             "accession": text(row.get("accession")),
             "url": url,
@@ -1645,6 +1723,8 @@ def entries_encode(
         log.info("%d openable files collapsed to %d rows.", seen, len(entries))
     else:
         log.info("%d openable files, all of them listed.", len(entries))
+    if unreadable:
+        log.info("%d Hi-C alignment files left out: in read-pair order, nothing to draw.", unreadable)
     return entries
 
 
@@ -1748,18 +1828,37 @@ IGV_UNREADABLE = ("refgene", "genepred", "2bit", "cytoband", "alias", "chromsize
 def _igv_index(url: str, index: str) -> str:
     """``#index=<url>`` for a sidecar this viewer would not have guessed.
 
-    `annotations/loader.ts` already guesses ``<url>.tbi`` for anything gzipped
-    and ``<url>.bai`` for a BAM, and IGV names exactly that in almost every
-    case. Writing the fragment anyway would be forty rows of noise in the
-    published file; writing it when the name differs is the difference between
-    a track that opens indexed and one that does not open at all (§8.13).
+    `annotations/sidecar.ts` already guesses ``<url>.tbi`` for anything
+    gzipped, ``<url>.bai`` for a BAM and ``<url>.fai`` for a FASTA, and IGV
+    names exactly that in almost every case. Writing the fragment anyway would
+    be forty rows of noise in the published file; writing it when the name
+    differs is the difference between a track that opens indexed and one that
+    does not open at all (§8.13) — and, for a genome's sequence, between a
+    browser that appears at once and one that first reads a gigabyte (§8.8).
     """
     if index == "":
         return ""
-    guess = f"{url}.tbi" if url.lower().endswith(".gz") else ""
-    if url.lower().endswith(".bam"):
+    lowered = url.lower()
+    guess = f"{url}.tbi" if lowered.endswith(".gz") else ""
+    if lowered.endswith(".bam"):
         guess = f"{url}.bai"
+    if lowered.endswith((".fa", ".fasta", ".fna", ".fas")):
+        guess = f"{url}.fai"
     return "" if index == guess else f"#index={urllib.parse.quote(index, safe=':/?=&%')}"
+
+
+def _fasta_index(fasta: str, index: str) -> str:
+    """The ``.fai`` this viewer can use beside a genome's sequence, or nothing.
+
+    A plain FASTA's index is what lets the viewer open the genome at once and
+    read residues by range (§8.8). A bgzipped one — IGV ships a few, each with
+    a ``.fai`` *and* a ``.gzi`` — needs the second file to seek in, which this
+    viewer does not read, so naming the first would be a promise the loader
+    does not keep: such a genome is read whole, as it always was.
+    """
+    if index == "" or fasta.lower().endswith(".gz"):
+        return ""
+    return index
 
 
 def igv_tracks(genome: dict) -> list[dict]:
@@ -1832,6 +1931,7 @@ def entries_igv(genomes: list, limit: Optional[int], *, probing: bool) -> list[d
         fasta = text(genome.get("fastaURL"))
         if assembly == "" or fasta == "":
             continue
+        fai = text(genome.get("indexURL"))
         skipped += len(listed(genome.get("tracks"))) - len(igv_tracks(genome))
         sequence = readable(fasta)
         if not sequence.ok:
@@ -1845,10 +1945,11 @@ def entries_igv(genomes: list, limit: Optional[int], *, probing: bool) -> list[d
         entries.append(
             {
                 "label": f"{name} — {assembly} ({suffix})",
-                # No `#index=` for a FASTA: this viewer reads sequence by range
-                # off the file itself and has no `.fai` reader, so naming one
-                # would be a promise the loader does not keep.
-                "url": fasta,
+                # The `.fai` is what lets a mammalian genome open at once: the
+                # viewer reads the assembly from it and the residues by range
+                # (§8.8). Named only where IGV keeps it somewhere other than
+                # `<fasta>.fai`, which the viewer guesses on its own.
+                "url": f"{fasta}{_igv_index(fasta, _fasta_index(fasta, fai))}",
                 "kind": route_of(fasta.rsplit("/", 1)[-1]) or "genome",
                 "size": sequence.size,
                 "note": joined_note(
@@ -2114,7 +2215,12 @@ def sessions_igv(genomes: list, entries: list[dict], created: str) -> list[dict]
         tracks = [track for track in igv_tracks(genome) if track["url"] in published]
         # The sequence first, so the lane order reads outward from the genome —
         # and by URL, so a session and the row beside it name the same bytes.
-        placed = [{"label": "sequence", "url": fasta}] + [
+        # Its `.fai` goes with it as the lane's `source.index`, the field the
+        # loader reads (§8.8); the row beside it names the same index only
+        # where the viewer would not have guessed it.
+        placed = [
+            {"label": "sequence", "url": fasta, "index": _fasta_index(fasta, text(genome.get("indexURL")))}
+        ] + [
             {"label": track["label"], "url": track["url"], "index": track["index"]}
             for track in tracks
         ]

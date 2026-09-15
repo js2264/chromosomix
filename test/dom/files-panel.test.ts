@@ -92,9 +92,11 @@ function fileAt(path: string): File {
 function card(options: { snapshot?: readonly string[] } = {}): {
   el: HTMLElement
   loaded: PickedFile[]
+  openedNew: PickedFile[]
   connects: number
 } {
   const loaded: PickedFile[] = []
+  const openedNew: PickedFile[] = []
   let connects = 0
   if (options.snapshot !== undefined) {
     const folder = connectSnapshot('run2', options.snapshot.map((path) => fileAt(`run2/${path}`)))
@@ -102,6 +104,8 @@ function card(options: { snapshot?: readonly string[] } = {}): {
   }
   const made = new FilesCard({
     onLoad: (picked) => loaded.push(picked),
+    onOpenNew: (picked) => openedNew.push(picked),
+    tabEmpty: () => false,
     onConnect: () => {
       connects++
     },
@@ -111,6 +115,7 @@ function card(options: { snapshot?: readonly string[] } = {}): {
   return {
     el: made.el,
     loaded,
+    openedNew,
     get connects() {
       return connects
     },
@@ -122,7 +127,7 @@ describe('with nothing connected', () => {
     const { el } = card()
     expect(el.textContent).toContain('Nothing connected')
     const connect = all<HTMLButtonElement>(el, '.files-actions .btn')[0]
-    expect(connect.textContent).toBe('connect a place…')
+    expect(connect.textContent).toBe('Open a local/remote folder')
   })
 })
 
@@ -154,9 +159,9 @@ describe('a connected bucket', () => {
     expect(inert).toHaveLength(1)
     expect(inert[0].textContent).toContain('notes.txt')
     expect(inert[0].getAttribute('title')).toContain('Not a format this viewer opens')
-    // No arrow on a row that cannot be loaded: a verb offered and refused is
+    // No verbs on a row that cannot be loaded: a verb offered and refused is
     // worse than no verb.
-    expect(all(inert[0], '.folder-entry-load')).toHaveLength(0)
+    expect(all(inert[0], '.row-verb')).toHaveLength(0)
   })
 
   it('offers a BAM, and explains the index sitting beside it', async () => {
@@ -202,12 +207,26 @@ describe('the two verbs on a row', () => {
     expect(loaded[0].source).toMatchObject({ kind: 'remote', credential: { region: 'eu-west-3' } })
   })
 
-  it('loads it once — not twice — when the arrow is pressed', async () => {
+  it('loads it once — not twice — when the `+` is pressed', async () => {
     const { el, loaded } = await rows()
-    // The arrow is a button inside a row that is itself clickable. Without the
+    // The verb is a button inside a row that is itself clickable. Without the
     // guard in `folderBrowse.ts` this press would load the file twice.
-    mounted(el, () => all<HTMLButtonElement>(el, '.folder-entry-load')[0].click())
+    mounted(el, () => all<HTMLButtonElement>(el, '.row-verb-add')[0].click())
     await vi.waitFor(() => expect(loaded).toHaveLength(1))
+  })
+
+  it('opens it as a session of its own from the second mark, and says which it is', async () => {
+    const { el, loaded, openedNew } = await rows()
+    const fresh = all<HTMLButtonElement>(el, '.row-verb-new')
+    expect(fresh).toHaveLength(1)
+    expect(fresh[0].title).toContain('new session')
+    // The same pair every store row carries: a `+`, then the new-session mark,
+    // both icons and nothing else.
+    expect(all<HTMLButtonElement>(el, '.row-verb').map((node) => node.textContent)).toEqual(['', ''])
+    mounted(el, () => fresh[0].click())
+    await vi.waitFor(() => expect(openedNew).toHaveLength(1))
+    expect(openedNew[0].uri).toBe(`${BASE}map.mcool`)
+    expect(loaded).toHaveLength(0)
   })
 
   /**
@@ -219,9 +238,9 @@ describe('the two verbs on a row', () => {
    * the file twice for every real press. `App.ts` records the identical mistake
    * costing a deck edge its drop.
    */
-  it('loads it once when the click lands on the arrow’s glyph', async () => {
+  it('loads it once when the click lands on the verb’s glyph', async () => {
     const { el, loaded } = await rows()
-    const glyph = all<HTMLButtonElement>(el, '.folder-entry-load')[0].querySelector('svg')
+    const glyph = all<HTMLButtonElement>(el, '.row-verb-add')[0].querySelector('svg')
     expect(glyph).not.toBeNull()
     mounted(el, () => {
       glyph!.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))

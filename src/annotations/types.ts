@@ -950,6 +950,12 @@ export interface AnnotationEntry {
    */
   derivedFrom?: { a: string; b: string; op: TrackOp }
   status: AnnotationStatus
+  /**
+   * How far the file's read has got while `status === 'loading'`, where the
+   * worker said: a BAM's index, a FASTA under the line, a text track. Drawn
+   * under the row as a bar, and gone with the status.
+   */
+  progress?: { done: number; total: number }
   /** Set when `status === 'error'`; the message is shown in the row. */
   error?: string
   overlap?: ContigOverlap

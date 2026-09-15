@@ -353,6 +353,15 @@ export interface SequenceReader {
   readonly contigs: readonly Contig[]
   /** One sequence's residues, one ASCII byte each; `undefined` for a name it has not got. */
   bases(contig: string): Uint8Array | undefined
+  /**
+   * Why the residues cannot be read here, when they cannot.
+   *
+   * A FASTA read by range from its index (§8.8) is not held anywhere, and a
+   * search over it would be the download it was indexed to avoid — so the
+   * reader answers with a sentence instead of a sequence, and the runner
+   * reports it as a note rather than as a run that found nothing.
+   */
+  readonly refusal?: string
 }
 
 export interface TrackJobContext {

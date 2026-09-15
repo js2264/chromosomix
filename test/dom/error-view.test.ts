@@ -19,13 +19,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ViewerError } from '@/errors'
 import { ErrorView } from '@/ui/ErrorView'
-import { setTokenClientFactory, signIn, signOut, writeClientId } from '@/auth/google'
+import { setTokenClientFactory, signIn, signOut } from '@/auth/google'
 import { bearerFor } from '@/s3/credentials'
 import { all, buttonLabels, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 let teardown: DomTeardown
 
 beforeEach(() => {
+  site.googleClientId = null
   teardown = setUpDom()
   window.localStorage.clear()
   setTokenClientFactory(null)
@@ -233,7 +243,7 @@ describe('a Google host saying “not you”', () => {
   const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
   it('offers the sign-in, and says what a sign-in is for', () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const { view } = build(refusedHead('www.googleapis.com'))
     expect(buttonLabels(view.el)).toEqual(['sign in', 'open another file'])
     const advice = textsOf(view.el, '.advice li').join(' ')
@@ -245,7 +255,7 @@ describe('a Google host saying “not you”', () => {
     // The guard on the change: a private bucket answering 403 must still be told
     // the bucket-key story, with no button suggesting Google has anything to do
     // with it.
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const { view } = build(refusedHead('rsglab-data.s3.eu-west-3.amazonaws.com'))
     expect(buttonLabels(view.el)).toEqual(['open another file'])
     expect(textsOf(view.el, '.advice li')).toEqual([
@@ -254,7 +264,7 @@ describe('a Google host saying “not you”', () => {
   })
 
   it('ignores a status that is not about authorisation', () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const { view } = build(refusedHead('www.googleapis.com', 404))
     expect(buttonLabels(view.el)).toEqual(['open another file'])
   })
@@ -263,7 +273,7 @@ describe('a Google host saying “not you”', () => {
     // A ranged read refuses with `remote-no-ranges` and a detail that names the
     // URL and not the host — which is exactly where an expiring token surfaces,
     // an hour into reading one map.
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const { view } = build(
       new ViewerError('remote-no-ranges', 'storage.googleapis.com returned 401', {
         url: 'https://storage.googleapis.com/storage/v1/b/lab/o/rep1.mcool?alt=media',
@@ -280,7 +290,7 @@ describe('a Google host saying “not you”', () => {
     // already says so. GCS's XML host would take a bearer token as readily as a
     // signature, so this is about what the *reader* has to fix, not about what
     // the host accepts.
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     const { view } = build(
       new ViewerError('bad-uri', 'storage.googleapis.com refused a signed request', {
         url: 'https://storage.googleapis.com/lab/rep1.mcool',
@@ -292,17 +302,18 @@ describe('a Google host saying “not you”', () => {
     expect(buttonLabels(view.el)).toEqual(['open another file'])
   })
 
-  it('explains rather than offers where there is no client id to sign in with', () => {
+  it('explains rather than offers where the site was built without a client id', () => {
+    site.googleClientId = null
     const { view } = build(refusedHead('www.googleapis.com'))
     expect(buttonLabels(view.el)).toEqual(['open another file'])
-    expect(textsOf(view.el, '.advice li').join(' ')).toMatch(/Connect → A Google account/)
+    expect(textsOf(view.el, '.advice li').join(' ')).toMatch(/GOOGLE_CLIENT_ID/)
   })
 
   it('says “sign in again” once a token has expired', async () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(new Date('2026-09-11T10:00:00Z'))
-      writeClientId(CLIENT_ID)
+      site.googleClientId = CLIENT_ID
       stub('ya29.OLD')
       await signIn()
       vi.setSystemTime(new Date('2026-09-11T11:30:00Z'))
@@ -316,7 +327,7 @@ describe('a Google host saying “not you”', () => {
   })
 
   it('stops offering once signed in, because the token is not what is missing', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     stub('ya29.GOOD')
     await signIn()
 
@@ -326,7 +337,7 @@ describe('a Google host saying “not you”', () => {
   })
 
   it('signs in and hands the open back to the caller', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     stub('ya29.NEW')
     const built = build(refusedHead('www.googleapis.com'), { onSignedIn: true })
 
@@ -340,7 +351,7 @@ describe('a Google host saying “not you”', () => {
   })
 
   it('shows what a refused sign-in said, in place of the offer working', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     setTokenClientFactory((config) => ({
       requestAccessToken: () => config.callback({ error: 'access_denied' }),
     }))

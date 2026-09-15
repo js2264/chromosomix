@@ -110,6 +110,15 @@ The viewer refuses the case rather than reading corrupt bytes: `RemoteRangeSourc
 to a single whole-object `GET` — a complete encoded stream *does* inflate correctly — at the cost of
 the bounded-read property.
 
+One host re-encodes only what it is not asked a range of. Google Drive's media endpoint answers a
+browser's `HEAD` — which says it accepts gzip, and a page cannot say otherwise — with
+`Content-Encoding: gzip`, chunked and with no length, and answers every ranged request, `HEAD` or
+`GET`, with a 206 of the identity bytes. Refusing on that first `HEAD` sent every Drive map down the
+whole-object road, silently and whatever its size. So a `HEAD` that comes back re-encoded is followed
+by one more, for `Range: bytes=0-`: a 206 that is not re-encoded and states its length is a host the
+ranged reads can use, and the length is the file's; a host that re-encodes that too — Pages — is
+refused exactly as before, one request later.
+
 That fallback is what kept the demo files working while they were published on Pages beside the app,
 and the reason they are not any more: they are on S3 now
 (`scripts/publish-demo.sh`, [deploy.md](deploy.md#the-demo-files)), where
@@ -344,14 +353,18 @@ probe needs its own, and they expire while a tab is open.
 ### Reading from Google Drive and GCS with an account
 
 A **public** Drive file needs an API key and nothing else — the Drive API refuses a request without
-one even for a file anyone can read — and a public GCS object needs neither. Both are one box in
-**Connect → A Google API key**. This section is the other case: a file that is *not* public, which
-needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §24.7
+one even for a file anyone can read — and a public GCS object needs neither. The key is the site's,
+built in from `GOOGLE_API_KEY` ([docs/deploy.md](deploy.md)); nothing asks a reader for one. This
+section is the other case: a file that is *not* public, which needs the reader's own Google account
+and therefore a **client id the site registers**. SPECS §24.7
 is the specification; `src/auth/google.ts` is the implementation.
 
-There is no client id in this repository and there cannot be one. An OAuth client is registered
-against **the origin the page is served from**, so a fork on another domain needs its own. Making
-one, in a Google Cloud project the lab owns:
+No client id is written into this repository, and a fork could not reuse this site's if one were:
+an OAuth client is registered against **the origin the page is served from**, so a fork on another
+domain needs its own. The published site is built with its own, read by the deploy from the
+`GOOGLE_CLIENT_ID` repository variable ([docs/deploy.md](deploy.md), "The site's Google and Dropbox
+registrations"), so a reader there signs in with nothing to paste: the dialog has no box for it.
+Making one, in a Google Cloud project the lab owns:
 
 1. In the Google Cloud console, pick (or create) the project, then **APIs & Services → Credentials
    → Create credentials → OAuth client ID**, application type **Web application**.
@@ -368,10 +381,13 @@ one, in a Google Cloud project the lab owns:
    | `https://www.googleapis.com/auth/drive.readonly` | Read access to **all** of the signed-in reader's Drive |
    | `https://www.googleapis.com/auth/devstorage.read_only` | Read access to the Cloud Storage that account can see |
 
-4. Copy the client id — it ends in `.apps.googleusercontent.com` — and paste it into **Connect → A
-   Google account**. It is not a secret: it is served in the page of every site that uses this flow,
-   and it authorises nothing on its own. The client *secret* beside it in the console is for server
-   applications and is never used here; there is no server to keep it in (C1).
+4. Copy the client id — it ends in `.apps.googleusercontent.com` — and put it where the site is
+   built: the `GOOGLE_CLIENT_ID` repository variable, beside `GOOGLE_API_KEY` for a key of the same
+   project (Settings → Secrets and variables → Actions → Variables). The next deploy carries both.
+   To try it from a checkout, put the same two names in the environment of `npm run dev`
+   ([docs/deploy.md](deploy.md)). It is not a secret: it is served in the page of every site
+   that uses this flow, and it authorises nothing on its own. The client *secret* beside it in the
+   console is for server applications and is never used here; there is no server to keep it in (C1).
 
 **`drive.readonly` is a restricted scope** in Google's own classification, and that is the fact that
 decides everything about how this is offered. An app asking for it has to go through Google's
@@ -379,9 +395,9 @@ verification — which for a restricted scope includes an independent security a
 may be used by anyone outside the project. An **unverified** app, with its publishing status left at
 *Testing*, works immediately for **up to 100 test users**, each added by address on the consent
 screen. That is the realistic arrangement for a lab: a handful of named colleagues, no verification,
-no assessment. It is also exactly why the lab supplies its own client id rather than this project
-shipping one — a single shared client would be one hundred test users for everybody, or a
-verification submission on behalf of every fork.
+no assessment. It is also why the client id is a variable of each deployment rather than a constant
+of this project — a single client shared by every fork would be one hundred test users for
+everybody, or a verification submission on behalf of all of them.
 
 **What the reader is agreeing to**, which the dialog says in two sentences because Google's consent
 screen says neither: `drive.readonly` is read access to *all* of their Drive, where a bucket key is
@@ -390,7 +406,10 @@ only** — never written to storage, gone when the tab closes, and expiring on t
 returns with it, which the dialog shows as a clock time. When it expires, a Drive or GCS read
 answers `401` and the error screen offers *sign in again* rather than the CORS explanation.
 
-**Drive is a host this viewer reads, not one it recommends.** Requests are metered against the
+**Drive is a host this viewer reads, not one it recommends.** The viewer reads it in 256 KiB chunks
+and keeps them, so a bigWig picked from a folder opens in three requests rather than the twenty a
+parser's own reads would make; what it cannot help is that each request is the better part of a
+second. Requests are metered against the
 project that owns the client id, and a fine-resolution pan over a contact map is thousands of ranged
 reads where opening one is a dozen. The current limits and the project's own usage are in the Cloud
 console under **APIs & Services → Quotas**; no number is quoted here because it is Google's to
@@ -403,14 +422,20 @@ environment has:
 
 1. Serve the viewer from an origin registered on the client (`npm run dev` on `http://localhost:5173`
    is the quickest), and open it.
-2. **Connect → A Google account**: paste the client id, press *save*. The line under the box should
-   print the id back, and *sign in with Google* should stop being disabled.
-3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The section
-   should then say **signed in**, with the time the token is good until, and offer *sign out*.
+2. **Connect → Google Drive**: the pane is one title, *Connect to your Google Drive*, a `?` at the
+   far right of it, and the *sign in with Google* button. With `GOOGLE_CLIENT_ID` in the build, or
+   in the environment of `npm run dev`, the button is enabled and nothing asks for an id. Without
+   it the pane says under the button that sign-in is not set up on this site and names the
+   variable. Hover the `?`: it says what the grant is and where the token lives, and nothing of
+   that is on the pane itself.
+3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The pane
+   should then say **signed in until** the time the token is good until, offer *sign out*, and
+   open the folder box under it (below).
 4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
    one shared with the signed-in account only — and paste it into the URL box. The link
    (`https://drive.google.com/file/d/<id>/view`) is rewritten to the API's media URL and the map
-   opens.
+   opens, under the file's own name: Drive is asked what the id is called before the first byte is
+   read, and the loading screen and the tab say that rather than the id.
 5. Press *sign out*, then reload and open the same link again. It must fail — a `401` or `403` from
    `www.googleapis.com`, with a *sign in* button on the error screen, not a map.
 
@@ -420,11 +445,12 @@ file, and that nothing was written down that keeps opening it afterwards.
 **A whole Drive folder, browsed in the Files panel** (SPECS §20), needs nothing this section has not
 already set up: the same client id, the same sign-in, the same `drive.readonly` grant. It is not
 the API key — a key opens a public *file* and cannot list anything — so a folder is the one Drive
-feature that does not work at all without an account. **Connect → A Google Drive folder** takes the
-address bar of a folder open in Drive (`https://drive.google.com/drive/folders/<id>`, with or
-without the `/u/0` account segment) or the bare id; an empty box is all of My Drive. What this
-browser then keeps is the folder's name and its id, listed under **About → what is stored**; the
-token is not kept, so the folder survives a reload and the sign-in does not.
+feature that does not work at all without an account. The folder box on the same pane — under the
+sign-in, and not on screen until it has happened — takes the address bar of a folder open in Drive
+(`https://drive.google.com/drive/folders/<id>`, with or without the `/u/0` account segment) or the
+bare id; an empty box is all of My Drive. What this browser then keeps is the folder's name and its
+id, listed under **About → what is stored**; the token is not kept, so the folder survives a reload
+and the sign-in does not.
 
 The listing asks `drive/v3/files` for the files whose `parents` contains that id, one level at a
 time and a thousand entries at most (§20.1), and it sends `supportsAllDrives=true` and
@@ -438,9 +464,9 @@ here than to a pasted link, because browsing is itself requests against the same
 **The manual check for a folder**, on top of the five steps above and for the same reason — it needs
 a real Drive, a real consent screen and a real folder:
 
-1. Signed in as above, open **Connect → A Google Drive folder**. Before the sign-in the section
-   offers nothing to press and says which of the two things is missing; after it, it has a name box
-   and a link box.
+1. Signed in as above, look under the sign-in on **Connect → Google Drive**. Before the sign-in
+   there is no folder box at all — the button is the whole of what the pane offers; after it, a
+   name box, a link box and *connect this folder* have appeared under the same title.
 2. Paste the address bar of a Drive folder holding a `.mcool`, `.cool`, `.metacool` or `.hic`, name
    it, and press *connect this folder*. The Files panel opens on it.
 3. The listing should show sub-folders first, then files with their sizes, and no Docs or Sheets.
@@ -474,9 +500,12 @@ there is no public way to browse a Dropbox the way a public bucket can be browse
 **app key the lab registers**. SPECS §20 and §24.7 are the specification; `src/auth/dropbox.ts` and
 `src/browse/dropbox.ts` are the implementation.
 
-There is no app key in this repository, for the reason there is no Google client id: it names the
-lab's own registration, and a shared one would be everybody's. Making one, in the Dropbox App
-Console:
+No app key is written into this repository: it names one lab's registration, and a key committed
+here would be everybody's. The published site is built with its own, read by the deploy from the
+`DROPBOX_APP_KEY` repository variable ([docs/deploy.md](deploy.md)), so a reader there presses
+*sign in with Dropbox* and nothing else: the dialog has no box for a key, and the pane is one
+title, *Connect to your Dropbox*, a `?` that says what the app is granted and where the token
+lives, and the button. Making an app, in the Dropbox App Console:
 
 1. **App Console → Create app → Scoped access.**
 2. Choose the access the app gets: **App folder** or **Full Dropbox**. App folder confines it to a
@@ -489,7 +518,8 @@ Console:
    the dialog says as much rather than printing an address it does not have. A permission added
    *after* somebody has signed in does not apply to the token they are holding — they sign out and
    in again.
-4. **Settings tab:** copy the **App key** and paste it into **Connect → Dropbox**. Leave
+4. **Settings tab:** copy the **App key** into the `DROPBOX_APP_KEY` repository variable, or into
+   the environment of `npm run dev` to try it from a checkout. Leave
    **Redirect URIs empty.** The viewer asks for a code with no `redirect_uri`, which is what makes
    Dropbox display the code on its own page for the reader to copy — and that is why one app key
    works for the published site, a fork of it on another domain, the desktop build and a local
@@ -522,11 +552,13 @@ worth knowing before they happen:
 has:
 
 1. Register the app as above, serve the viewer (`npm run dev` is the quickest), and open it.
-2. **Connect → Dropbox:** paste the app key, press *save*. The line under the box should print it
-   back, and *sign in with Dropbox* should stop being disabled.
+2. **Connect → Dropbox:** with `DROPBOX_APP_KEY` in the build, *sign in with Dropbox* is enabled
+   and nothing asks for a key. Without it the pane says under the button that sign-in is not set
+   up on this site and names the variable. Hover the `?` beside the title: it names the two
+   permissions and says where the token lives.
 3. Press *sign in with Dropbox*. A Dropbox tab opens asking to allow the app; allow it, and Dropbox
    shows a code instead of returning to the viewer. Copy the code into the box that has appeared and
-   press *finish*. The section should then say **signed in**, with the time the token is good until,
+   press *finish*. The pane should then say **signed in until** the time the token is good until,
    and offer *browse my Dropbox* and *sign out*.
 4. Press *browse my Dropbox*. The Files panel opens on the root of what the app was granted, folders
    first; walking into a folder lists that folder and nothing below it. Click a `.mcool`, `.cool`,
@@ -534,8 +566,8 @@ has:
    with the reason in its tooltip — it is not hidden (§20.5).
 5. Press *sign out*, then click a folder in the panel again. It must refuse, in words, with an offer
    to sign in to Dropbox — not list, and not report a CORS problem.
-6. Reload the page. The Dropbox is still in the Files panel, because the app key is stored; it is
-   not usable until you sign in again, because the token never was.
+6. Reload the page. The Dropbox is gone from the Files panel: the token was never stored, and the
+   folder is the sign-in's. Signing in again brings it back.
 
 Steps 5 and 6 are the pair worth doing carefully: together they are the assertion that the token is
 what read the folder, and that nothing was written down that goes on reading it afterwards.
@@ -545,6 +577,74 @@ Dropbox fails before a byte moves and the section is absent from its dialog. The
 it, unlike the Google sign-in above: nothing here is registered against an origin, so `app://viewer`
 signs in as well as a website does — the authorize page opens in the machine's real browser
 (`electron/main.cts` sends every `window.open` there), and the code is pasted back into the app.
+
+## A host that hides Content-Range
+
+Expose `Content-Range` and `Content-Length` (above) and the viewer learns a file's size from its
+first ranged read. A bucket that exposes neither — 4DN's open-data bucket exposes `ETag` and
+nothing else — still works, at the cost of one more request: the viewer asks for the size with a
+`HEAD`, whose `Content-Length` every page may read without being told it may, so allow `HEAD` in
+the policy (the `AllowedMethod` list above does). A host that answers neither still gets a bounded
+header read for a BAM; what it loses is the road below, since a search for a window needs to know
+how long the file is.
+
+## A FASTA, and its index
+
+A genome's sequence is the one file whose size decides how it is read (SPECS §8.8). Under 64 MB
+the viewer reads it whole — one request, every zoom draws GC content, the motif search can run.
+Over it, the viewer reads the **`.fai`** beside it and then the sequence by range, a window at a
+time, so a mammalian genome is on screen the moment the index has arrived and nothing of the
+sequence is fetched until a lane asks for it. So publish the index with the file:
+
+```bash
+samtools faidx genome.fa          # writes genome.fa.fai
+aws s3 cp genome.fa     s3://my-lab/ref/
+aws s3 cp genome.fa.fai s3://my-lab/ref/
+```
+
+`<url>.fai` is guessed, never probed; an index published under another name is given as
+`https://…/genome.fa#index=https://…/other.fai`, the same fragment a BAM's `.bai` takes. A large
+FASTA with no index is read whole up to 300 MB and refused past it, by a sentence naming the size
+and the command above. Compress a reference only if you must: a bgzipped FASTA is read whole
+whatever its size, its `.fai` needing a `.gzi` this viewer does not read.
+
+## A BAM, with or without its index
+
+A BAM is read by region — there is no whole-file read of an alignment file that respects the
+viewer's budgets (SPECS §8.13) — so what a window costs depends on how the viewer learns *where in
+the file* its reads are. Two roads, and the host decides which:
+
+**With the index**, which is the road to publish. `samtools index reads.bam` writes `reads.bam.bai`
+(or `.csi` for a reference longer than 512 Mb); put it beside the file under the same prefix and
+the viewer finds it by name, exactly as it finds a `.tbi` or a `.fai`. A window then costs one
+ranged read of the blocks the index names. Where the index cannot sit beside the file — a presigned
+URL, a different bucket — `<url>#index=<url>` on the file's address says where it is.
+
+**Without the index**, the viewer searches. A coordinate-sorted BAM is in (reference, position)
+order, so the first read at or after a position is found by binary search over the file's bytes:
+each probe is a 128 KiB ranged read that the viewer inflates and finds a record boundary in, a
+handful of them bracket a window in a six-gigabyte file (the first guesses come from the
+position's share of the genome), and the probes are kept for the next window. Measured on an
+ENCODE alignment file of 6.5 GB: the first 2 kb window cost a dozen ranged reads and under 2 MB,
+the next window two. The row's summary says *reads located by search* and names the index it did not find. This
+road exists because the two largest public collections publish no index at all — on 2026-09-14 the
+whole of 4DN's open-data bucket held 9,977 BAMs and not one `.bai`, and ENCODE's manifest listed
+144,322 BAM rows and no index rows — and a reader of the published site cannot run samtools against
+a bucket they do not own. It costs what the index would have cost, spread over every window rather
+than paid once; it is exact to a block rather than to a record; and it begins each window 16 kb
+before its start, so a read that begins further before a window than that and still reaches into
+it is not drawn. For a host you control, the index is strictly better, and it is one command.
+
+**What no road reads** is a file that is not coordinate-sorted. A Hi-C pipeline's alignment output
+is written in read-pair order for the pairs step that follows it and never sorted, and a search over
+one would answer with whatever its probes landed on — so the probes are held to the order the file
+claims, and a file that fails is refused with the two places in it that disagree, whatever its
+`@HD` line said and especially when it said nothing. The refusal names `samtools sort` and then
+`samtools index`, and says that the `.pairs` or the contact map beside such a file is the file to
+open. The 4DN store no longer offers such a file: a BAM of a Hi-C-family assay, or one the portal
+does not describe, is left out of it at generation time ([docs/stores.md](stores.md)), so what the
+store lists under *bam* is the alignments of RNA-seq, ChIP-seq, CUT&RUN, Repli-seq, DamID and
+TSA-seq, which are sorted and draw.
 
 ## What already works, host by host
 

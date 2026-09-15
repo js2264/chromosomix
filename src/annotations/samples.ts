@@ -32,6 +32,18 @@ interface Running {
   cancel: () => void
   /** The filter *this request* carries — not the one already drawn. */
   filter: string
+  /**
+   * How far the worker's read has got, where it said. Absent until the first
+   * report: a request answered from memory never reports, and a lane must
+   * not draw a bar for a fetch that is over before the bar could be seen.
+   */
+  progress?: Progress
+}
+
+/** Bytes read so far and bytes expected; `total` is `0` where the host would not say. */
+export interface Progress {
+  done: number
+  total: number
 }
 
 interface Held {
@@ -216,17 +228,27 @@ export class SampleCache {
     }
 
     const wanted = options.axis.windows(options.domain, FETCH_PAD)
-    const request = this.client.cancellable<'sample'>({
-      kind: 'sample',
-      entry: options.entry,
-      regions: wanted.map((window) => ({
-        contig: window.contig,
-        start: window.start,
-        end: window.end,
-      })),
-      basesPerPixel: bucket,
-      ...(options.reads === undefined ? {} : { reads: options.reads }),
-    })
+    const request = this.client.cancellable<'sample'>(
+      {
+        kind: 'sample',
+        entry: options.entry,
+        regions: wanted.map((window) => ({
+          contig: window.contig,
+          start: window.start,
+          end: window.end,
+        })),
+        basesPerPixel: bucket,
+        ...(options.reads === undefined ? {} : { reads: options.reads }),
+      },
+      (done, total) => {
+        // On the slot that is running, and only while it is the one running:
+        // a report from a request already replaced would move a bar that is
+        // about another read.
+        if (this.disposed || this.inflight.get(key) !== slot) return
+        slot.progress = { done, total }
+        this.onChange()
+      },
+    )
     const slot: Running = { cancel: request.cancel, filter }
     this.inflight.set(key, slot)
     void request.promise
@@ -258,6 +280,19 @@ export class SampleCache {
       })
 
     return cached?.samples ?? null
+  }
+
+  /**
+   * What a lane is waiting for, if it is waiting: the progress of the read in
+   * flight for this entry and scope, or `null` when nothing is on its way.
+   *
+   * `{ done: 0, total: 0 }` for a request that has not reported yet — it is
+   * in flight, and a lane may say so — and the worker's numbers once it has.
+   */
+  pendingOf(entry: string, scope: string): Progress | null {
+    const running = this.inflight.get(`${entry}:${scope}`)
+    if (running === undefined) return null
+    return running.progress ?? { done: 0, total: 0 }
   }
 
   /** What is cached for one track in one scope, without asking for more. */

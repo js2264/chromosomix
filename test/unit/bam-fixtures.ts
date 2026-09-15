@@ -115,6 +115,26 @@ export interface TestRecord {
   tags?: Uint8Array
 }
 
+/**
+ * The record's `bin`, as `samtools` writes it: the smallest bin of the six-level
+ * scheme that holds the reference span. It used to be written as a zero and
+ * never read back; the index-free search (`bam/search.ts`) reads it as the
+ * second witness for a record whose successor is not in hand, so a fixture
+ * has to carry the real one.
+ */
+function binOf(pos: number, cigar: number[]): number {
+  if (pos < 0) return 4680
+  let span = 0
+  for (const op of cigar) if ([0, 2, 3, 7, 8].includes(op & 0xf)) span += op >>> 4
+  const last = Math.max(pos + 1, pos + span) - 1
+  if (pos >> 14 === last >> 14) return 4681 + (pos >> 14)
+  if (pos >> 17 === last >> 17) return 585 + (pos >> 17)
+  if (pos >> 20 === last >> 20) return 73 + (pos >> 20)
+  if (pos >> 23 === last >> 23) return 9 + (pos >> 23)
+  if (pos >> 26 === last >> 26) return 1 + (pos >> 26)
+  return 0
+}
+
 /** One alignment record, length prefix and all. */
 export function recordBytes(record: TestRecord): Uint8Array {
   const name = record.name ?? 'r1'
@@ -132,7 +152,7 @@ export function recordBytes(record: TestRecord): Uint8Array {
   view.setInt32(8, record.pos, true)
   view.setUint8(12, nameBytes.length)
   view.setUint8(13, record.mapq ?? 60)
-  view.setUint16(14, 0, true) // bin; never read back
+  view.setUint16(14, binOf(record.pos, cigar), true)
   view.setUint16(16, cigar.length, true)
   view.setUint16(18, record.flag ?? 0, true)
   view.setInt32(20, seq.length, true)

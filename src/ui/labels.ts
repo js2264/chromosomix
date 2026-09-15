@@ -25,7 +25,13 @@ export function splitUri(raw: string): { path: string; group: string } {
 /** The last path segment of a URI: the file's own name, without any entry. */
 export function fileBaseLabel(uri: string): string {
   const { path } = splitUri(uri)
-  return path.split(/[\\/]/).pop() ?? path
+  const last = path.split(/[\\/]/).pop() ?? path
+  // A query string or a fragment is never part of a name: a presigned URL
+  // carries its signature in the one and a Drive API address its `alt=media`,
+  // a HiC-Pro matrix names its bins in the other. Shown without them, so a
+  // tab reads as the file rather than as the request for it.
+  const bare = last.split(/[?#]/)[0]
+  return bare === '' ? last : bare
 }
 
 /**

@@ -72,14 +72,21 @@ export function splitBinsFragment(url: string): { address: string; bins?: string
  * `.tbi` indexes a bgzipped text file and is opportunistic — the file opens
  * without it (§8.11). `.px2` indexes a `.pairs.gz` and is opportunistic in the
  * same sense (§3.7): with one the import's cost is known before it starts and
- * can be scoped, without one the file is read whole. `.bai` and `.csi` index a
- * BAM and are neither: there is no whole-file fallback at §12's budgets, so the
- * pair is the unit, and a BAM arriving without its index is refused by name
- * (§8.13). One regular expression for all four, because *pairing* is the same
- * gesture whichever it is; what differs is only what happens when the pairing
- * fails.
+ * can be scoped, without one the file is read whole. `.fai` indexes a FASTA
+ * and is opportunistic in a third sense (§8.8): a small genome is read whole
+ * with or without one, and a large one is read *by range* with it and refused
+ * without. `.bai` and `.csi` index a BAM and are a fourth sense (§8.13): a BAM
+ * has no whole-file fallback at §12's budgets, so with one a window's bytes
+ * are read off the index, and without one they are *found* — by a search over
+ * the file's own order, a dozen probes a window, which is slower and exact to
+ * a block rather than to a record. One regular expression for all five,
+ * because *pairing* is the same gesture whichever it is; what differs is only
+ * what happens when the pairing fails.
  */
-const INDEX_SUFFIX = /\.(tbi|bai|csi|px2)$/i
+const INDEX_SUFFIX = /\.(tbi|bai|csi|px2|fai)$/i
+
+/** A FASTA by name: what `samtools faidx` indexes, plain and never gzipped. */
+export const FASTA_NAME = /\.(fa|fasta|fna|fas)$/i
 
 /**
  * The bin file beside a HiC-Pro matrix (§3.9).
@@ -170,7 +177,30 @@ export function indexNamesFor(base: string): string[] {
   // restored row fetching an index that cannot exist.
   if (/\.pairs\.gz$/i.test(base)) return [`${base}.px2`]
   if (/\.gz$/i.test(base)) return [`${base}.tbi`]
+  // `samtools faidx genome.fa` writes `genome.fa.fai`, and nothing else does.
+  if (FASTA_NAME.test(base)) return [`${base}.fai`]
   return []
+}
+
+/**
+ * The sidecar URL for a remote file, guessed from its name.
+ *
+ * `<url>.tbi` for anything gzipped, `<url>.bai` for a BAM and `<url>.fai` for
+ * a FASTA: the spellings `tabix`, `samtools index` and `samtools faidx` write,
+ * which is what every bucket that publishes an index publishes it as. Guessed
+ * optimistically and never probed — a `HEAD` to find out costs the same round
+ * trip the miss does, and §12 does not have a request to spend on finding out
+ * that a file has no index. What a miss costs differs by format, and each
+ * reader says so where it falls back; what is the same for all three is that
+ * `#index=<url>` on the file's own URL always wins over this guess, because a
+ * presigned URL or one carrying a query string can never usefully have a
+ * suffix appended to it (§8.13).
+ */
+export function guessedIndexUrl(url: string): string | undefined {
+  if (/\.gz$/i.test(url)) return `${url}.tbi`
+  if (/\.bam$/i.test(url)) return `${url}.bai`
+  if (FASTA_NAME.test(url)) return `${url}.fai`
+  return undefined
 }
 
 /** A file to open, and the sidecar dropped alongside it if there was one. */

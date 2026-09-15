@@ -34,7 +34,8 @@ interface Held {
 
 export class BaseCache {
   private readonly held = new Map<string, Held>()
-  private readonly inflight = new Set<string>()
+  /** The window on its way per key, with how far its read has got. */
+  private readonly inflight = new Map<string, { done: number; total: number } | null>()
   private disposed = false
 
   constructor(
@@ -77,17 +78,24 @@ export class BaseCache {
     if (this.inflight.has(key)) return cached?.regions ?? null
 
     const wanted = options.axis.windows(options.domain, FETCH_PAD)
-    this.inflight.add(key)
+    this.inflight.set(key, null)
     void this.client
-      .request<'bases'>({
-        kind: 'bases',
-        entry: options.entry,
-        regions: wanted.map((window) => ({
-          contig: window.contig,
-          start: window.start,
-          end: window.end,
-        })),
-      })
+      .request<'bases'>(
+        {
+          kind: 'bases',
+          entry: options.entry,
+          regions: wanted.map((window) => ({
+            contig: window.contig,
+            start: window.start,
+            end: window.end,
+          })),
+        },
+        (done, total) => {
+          if (this.disposed || !this.inflight.has(key)) return
+          this.inflight.set(key, { done, total })
+          this.onChange()
+        },
+      )
       .then((result) => {
         if (this.disposed) return
         const covered = new Map<string, [number, number]>()
@@ -111,6 +119,16 @@ export class BaseCache {
       .finally(() => this.inflight.delete(key))
 
     return cached?.regions ?? null
+  }
+
+  /**
+   * The read in flight for this entry and scope, or `null`: the letters' half
+   * of `SampleCache.pendingOf`, for the same bar under the same name.
+   */
+  pendingOf(entry: string, scope: string): { done: number; total: number } | null {
+    const key = `${entry}:${scope}`
+    if (!this.inflight.has(key)) return null
+    return this.inflight.get(key) ?? { done: 0, total: 0 }
   }
 }
 

@@ -5,8 +5,8 @@
  * The dialog behind the four `from a connected place…` buttons. Three things
  * are worth pinning: it lists every place the window is connected to and not
  * only buckets, a pick hands back the `PickedFile` the Files column would and
- * closes the dialog, and with nothing connected it says so and names the plug
- * rather than offering an empty listing.
+ * closes the dialog, and with nothing connected it says so and names the Files
+ * column's button rather than offering an empty listing.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,10 +70,10 @@ function dialog(): { body: HTMLElement; picked: PickedFile[] } {
 }
 
 describe('with nothing connected', () => {
-  it('says so, and names the plug rather than listing nothing', () => {
+  it('says so, and names the Files column’s button rather than listing nothing', () => {
     const { body } = dialog()
     expect(body.textContent).toContain('Nothing is connected yet')
-    expect(body.textContent).toContain('plug in the header')
+    expect(body.textContent).toContain('Open a local/remote folder')
     expect(all(body, '.pick-place')).toHaveLength(0)
   })
 })

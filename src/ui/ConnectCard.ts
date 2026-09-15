@@ -30,24 +30,28 @@
  * The standalone build has an opaque origin, so every remote read fails before
  * a byte moves (§19): it offers this machine and nothing else. The desktop
  * build cannot register a Google sign-in against `app://viewer`, so its Drive
- * tile carries the API key alone and says so. Each provider's section decides
- * the rest for itself.
+ * pane says why there is no sign-in. Each provider's section decides the rest
+ * for itself.
+ *
+ * ## The two panes that sign a reader in
+ *
+ * Google Drive and Dropbox are each a title, a `?` at the far right of the
+ * same line, and one large sign-in button under it (`ui/connectHead.ts`):
+ * what the grant is and where the token goes is behind the `?`, and the only
+ * things on the pane itself are the ones a reader acts on.
  */
 
 import { Modal } from './Modal'
-import { button, el, field } from './dom'
+import { button, el } from './dom'
 import { icon, type IconName } from './icons'
 import { bucketForm } from './bucketForm'
-import { clearApiKey, readApiKey, writeApiKey } from '../s3/credentials'
+import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
   GOOGLE_SIGN_IN_AVAILABLE,
-  clearClientId,
   googleState,
-  readClientId,
-  signIn,
+  signIn as googleSignIn,
   signOut,
   subscribeGoogle,
-  writeClientId,
 } from '../auth/google'
 import { announce, connectSnapshot } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
@@ -55,6 +59,7 @@ import { chooseDirectory, chooseDirectoryFiles, directoryPickerSupported } from 
 import { mintDirectoryId, rememberDirectory } from '../state/directories'
 import { IS_STANDALONE } from '../version'
 import { driveFolderSection } from './DriveFolderSection'
+import { connectHead, signInButton } from './connectHead'
 import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
 import { dropboxSection } from './DropboxSection'
 
@@ -74,7 +79,7 @@ export interface ConnectProps {
 
 export function openConnect(props: ConnectProps): Modal {
   return new Modal({
-    title: 'Connect a place',
+    title: 'Open a local/remote folder',
     variant: 'modal-wide',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => connectBody(props, close),
@@ -150,20 +155,7 @@ function connectBody(props: ConnectProps, close: () => void): HTMLElement {
   show(props.provider ?? 'local')
   void chosen
 
-  return el(
-    'div',
-    { class: 'modal-body bucket-body connect-body' },
-    el('p', {
-      class: 'hint',
-      text:
-        'A connected place is browsed in the Files column and stays there: open one file, look ' +
-        'at it, open the next. A directory on this machine, a bucket, a Drive folder and a Dropbox ' +
-        'are read the same way once connected — the only difference is where the bytes come from.',
-    }),
-    tiles,
-    paneSlot,
-    privacyNote(),
-  )
+  return el('div', { class: 'modal-body bucket-body connect-body' }, tiles, paneSlot, privacyNote())
 }
 
 /**
@@ -204,13 +196,10 @@ function localSection(done: (id: string) => void): HTMLElement {
     el('p', {
       class: 'hint',
       text: granted
-        ? 'Nothing is uploaded and nothing is copied. This browser keeps permission to list the ' +
-          'folder and read what is in it — not the files themselves — so it is still connected ' +
-          'after a reload, and you can take that permission back at any time.'
-        : 'This browser cannot hold a folder, so what you get is a snapshot of it: the file list ' +
-          'as it is right now, for this visit only. It does not update, and it is gone after a ' +
-          'reload. Nothing is uploaded either way. Chrome and Edge, and the desktop app, keep ' +
-          'the connection properly.',
+        ? 'Read in place, never uploaded. The browser keeps permission to list the folder across ' +
+          'reloads; take it back any time under About → what is stored.'
+        : 'This browser cannot keep a folder, so this is a snapshot of its file list for this ' +
+          'visit only. Nothing is uploaded. Chrome, Edge and the desktop app keep the connection.',
     }),
     el(
       'div',
@@ -232,164 +221,68 @@ function bucketSection(done: (id: string) => void): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        'A URL prefix on S3, R2, MinIO, Google Cloud Storage or any store that answers ' +
-        'ListObjectsV2 — public, or with a read-only key kept in this browser. Every bucket ' +
-        'connected here is also listed under About → what is stored.',
+        'An https:// or s3:// prefix on S3, R2, MinIO, Google Cloud Storage or any store that ' +
+        'answers ListObjectsV2 — public, or with a read-only key kept in this browser.',
     }),
     bucketForm({ onSaved: (scope) => done(bucketFolderId(scope.id)) }),
   )
 }
 
 /**
- * Google Drive, in the three parts a reader meets them in.
+ * Google Drive: a title, a `?`, a sign-in, and — once signed in — a folder box.
  *
- * The **API key** first, because a *public* Drive link fails without it and
- * that is the first thing anybody tries; the **account** second, because a
- * private file fails afterwards with a key in place, and because the grant it
- * asks for is far wider than the key's and is worth reading after the cheaper
- * answer has been ruled out; and the **folder** last, because it needs the
- * account. Absent halves say why: the desktop build can send a key and cannot
- * register a sign-in (`auth/google.ts`'s `GOOGLE_SIGN_IN_AVAILABLE`).
+ * One section, not two. The account and the folder used to be sections of
+ * their own, each with a heading and a paragraph, and a reader pressing *sign
+ * in* read two consent notices on the way to it. What the pane offers is the
+ * sign-in; what it needs to say about the grant is behind the `?` on the same
+ * line as the title (`ui/connectHead.ts`); and the folder box is what appears
+ * once there is an account to list a folder with (`ui/DriveFolderSection.ts`).
+ *
+ * Nothing to type. The client id a sign-in goes to is the site's, built in
+ * (`config/siteDefaults.ts`), and so is the API key that opens a public Drive
+ * link; a site built without the client id says so under the button rather
+ * than offering a box only its maintainer could fill.
  */
 function drivePane(done: (id: string) => void): HTMLElement {
-  return el(
-    'div',
-    { class: 'connect-pane-parts' },
-    googleSection(),
-    googleAccountSection(),
-    driveFolderSection(done),
-  )
-}
+  const head = connectHead('Connect to your Google Drive', 'googledrive', driveHelp())
 
-/**
- * The Google API key: one box, save, forget.
- *
- * Deliberately the smallest section in this dialog, because it is the least
- * interesting thing in it — a string that makes one host answer. It connects no
- * folder and so calls no `done`; what it changes is whether a Drive *link*
- * opens, which the reader finds out by opening one.
- *
- * `type=password`, as the bucket secret is, and for the same reason: this box is
- * opened in front of an audience precisely when somebody is being shown how the
- * feature works. The status line reports presence and never the key — printing
- * it back would make a screenshot of this dialog a leak.
- */
-function googleSection(): HTMLElement {
-  const input = el('input', { class: 'input', type: 'password', placeholder: 'AIza…' })
-  const status = el('p', { class: 'hint' })
-  const show = (): void => {
-    status.textContent =
-      readApiKey() === null
-        ? 'No key stored. Google Drive links will not open without one.'
-        : 'A key is stored in this browser. It is listed under About → what is stored.'
-  }
-  show()
-
-  return el(
-    'div',
-    { class: 'connect-section' },
-    el('h3', {}, icon('link', { size: 15 }), el('span', { text: 'A Google API key' })),
-    el('p', {
-      class: 'hint',
-      text:
-        'Needed to open a public Google Drive file: the Drive API refuses a request without a ' +
-        'key, even for a file anyone can read. A public Google Cloud Storage object needs none — ' +
-        'a gs:// link opens as it is. A private file on either needs the account sign-in below ' +
-        'instead, and a key does not stand in for it. Make the key in your own Google Cloud ' +
-        'project and restrict it to the Drive API; it is kept in this browser, exactly as a ' +
-        'bucket key is.',
-    }),
-    field('key', input),
-    status,
-    el(
-      'div',
-      { class: 'bucket-actions' },
-      button(
-        'save',
-        () => {
-          writeApiKey(input.value)
-          input.value = ''
-          show()
-        },
-        { class: 'btn btn-primary' },
-      ),
-      button(
-        'forget',
-        () => {
-          clearApiKey()
-          input.value = ''
-          show()
-        },
-        { class: 'btn' },
-      ),
-    ),
-  )
-}
-
-/**
- * The Google account: a client id, a sign-in, and what the grant actually is.
- *
- * Two controls that look alike and are not. The **client id** is the lab's, it
- * is public by construction — it ships in the page of every site that uses this
- * flow — and it is stored; saving it changes nothing about what this browser can
- * read, it only names the project a sign-in would go to. The **sign-in** is the
- * reader's, it produces a credential, and it is kept nowhere.
- *
- * §8.5 says a control that cannot keep its promise is absent rather than
- * disabled, and the sign-in button is the deliberate exception: it is *disabled
- * with the reason next to it* because it becomes available by filling in the box
- * directly above it.
- *
- * Where a sign-in cannot work at all — the desktop build, whose `app://viewer`
- * is not an origin Google's console will register — the section is one
- * sentence saying so, so the Drive pane does not silently end at the key.
- */
-function googleAccountSection(): HTMLElement {
   if (!GOOGLE_SIGN_IN_AVAILABLE) {
     return el(
       'div',
       { class: 'connect-section' },
-      el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
+      head,
       el('p', {
         class: 'hint',
         text:
           'Not on the desktop app: a sign-in is registered against a web address, and this ' +
-          'window has none. Public Drive files open with the key above; a private file or a ' +
-          'Drive folder needs the hosted viewer.',
+          'window has none. ' +
+          (SITE_DEFAULTS.googleApiKey !== null
+            ? 'Public Drive files still open.'
+            : 'Public Drive files open on the website.'),
       }),
     )
   }
 
-  const input = el('input', {
-    class: 'input',
-    type: 'text',
-    placeholder: '…apps.googleusercontent.com',
-  })
-  const stored = el('p', { class: 'hint' })
-  const account = el('p', { class: 'hint' })
+  const actions = el('div', { class: 'connect-signin' })
   const error = el('p', { class: 'hint bucket-error' })
-  const actions = el('div', { class: 'bucket-actions' })
+  const folder = driveFolderSection(done)
 
   const show = (): void => {
     const state = googleState()
-    const id = readClientId()
-    stored.textContent =
-      id === null
-        ? 'No client id stored. Signing in needs one; it is not a secret, and it is the only ' +
-          'part of this that is kept.'
-        : // Printed rather than withheld, which is the opposite of the key box
-          // above and is the right answer for a value that is public: what a
-          // reader coming back here needs to know is *which project*.
-          `Client id stored: ${id}`
-    account.textContent = accountLine(state)
-
-    const signInLabel = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Google'
-    const signInButton = button(
-      signInLabel,
+    if (state.signedIn && state.expiresAt !== null) {
+      actions.replaceChildren(
+        el('span', { class: 'hint', text: `Signed in until ${clock(state.expiresAt)}.` }),
+        button('sign out', () => signOut(), { class: 'btn' }),
+      )
+      return
+    }
+    const signIn = signInButton(
+      state.expiresAt !== null ? 'sign in again' : 'sign in with Google',
+      'googledrive',
       () => {
         error.textContent = ''
-        signInButton.disabled = true
-        void signIn()
+        signIn.disabled = true
+        void googleSignIn()
           .catch((cause: unknown) => {
             error.textContent = cause instanceof Error ? cause.message : String(cause)
           })
@@ -397,21 +290,28 @@ function googleAccountSection(): HTMLElement {
             show()
           })
       },
+      // Disabled rather than absent where the site has no registration: the
+      // sentence under it is the one thing a reader can act on — by asking the
+      // site's maintainer — and hiding the button would hide what the sentence
+      // is about.
       {
-        class: 'btn btn-primary',
-        ...(state.configured
-          ? {}
-          : {
-              title:
-                'Save a client id above first: a sign-in is a request from this origin to one ' +
-                'Google project, and the client id is what names the project.',
-            }),
+        disabled: !state.configured,
+        reason: 'This site was built without a Google client id, so there is no project to sign in to.',
       },
     )
-    signInButton.disabled = !state.configured
     actions.replaceChildren(
-      signInButton,
-      ...(state.signedIn ? [button('sign out', () => signOut(), { class: 'btn' })] : []),
+      signIn,
+      ...(state.configured
+        ? []
+        : [
+            el('p', {
+              class: 'hint',
+              text:
+                'Signing in to Google is not set up on this site: it needs a Google client id ' +
+                'registered for its address, which the site’s maintainer provides as ' +
+                'GOOGLE_CLIENT_ID (docs/deploy.md).',
+            }),
+          ]),
     )
   }
   show()
@@ -420,92 +320,45 @@ function googleAccountSection(): HTMLElement {
     // The dialog is built once and thrown away with the modal, and nothing hands
     // a detached body a teardown. It unsubscribes itself the first time it is
     // spoken to after leaving the document.
-    if (!stored.isConnected) {
+    if (!actions.isConnected) {
       off()
       return
     }
     show()
   })
 
-  return el(
-    'div',
-    { class: 'connect-section' },
-    el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'A Google account' })),
-    el('p', {
-      class: 'hint',
-      text:
-        'For a Drive file or a Cloud Storage object that is not public. Signing in gets this tab ' +
-        'a token, which rides every request to Drive and to the GCS JSON API until it expires. ' +
-        'The client id is your lab’s, registered in its own Google Cloud project against the ' +
-        'exact address this page is served from — docs/hosting.md has the four steps.',
-    }),
-    // The two sentences §24.7 requires this dialog to say, and it requires them
-    // because a consent screen says neither: Google's names the product, and
-    // nothing anywhere tells the reader where the token ends up.
-    el('p', {
-      class: 'hint',
-      text:
-        'Read what you are granting. drive.readonly is read access to all of your Drive — every ' +
-        'file in it, not the one you are opening — where a bucket key is a grant over one ' +
-        'prefix of one bucket. The other scope, devstorage.read_only, is read access to the ' +
-        'Cloud Storage your account can see.',
-    }),
-    el('p', {
-      class: 'hint',
-      text:
-        'The token lives only in this tab’s memory. It is never written to storage, so it is ' +
-        'not in the list under About → what is stored, it is gone when this tab closes, and it ' +
-        'expires about an hour after you sign in — which is why nothing here can keep you ' +
-        'signed in and nothing claims to.',
-    }),
-    field('client id', input),
-    stored,
-    el(
-      'div',
-      { class: 'bucket-actions' },
-      button(
-        'save',
-        () => {
-          error.textContent = ''
-          writeClientId(input.value)
-          input.value = ''
-          show()
-        },
-        { class: 'btn btn-primary' },
-      ),
-      button(
-        'forget',
-        () => {
-          error.textContent = ''
-          // The id only. A token already granted is the reader's own and still
-          // opens the file they are reading.
-          clearClientId()
-          input.value = ''
-          show()
-        },
-        { class: 'btn' },
-      ),
-    ),
-    account,
-    actions,
-    error,
-  )
+  return el('div', { class: 'connect-section' }, head, actions, error, ...(folder === null ? [] : [folder]))
 }
 
-/** What this page can honestly say about the account, in one line. */
-function accountLine(state: { signedIn: boolean; expiresAt: number | null }): string {
-  const when = (at: number): string => new Date(at).toLocaleTimeString()
-  if (state.signedIn && state.expiresAt !== null) {
-    // No address, because no `userinfo` scope was asked for (§24.7).
-    return `Signed in. The token is good until ${when(state.expiresAt)}; no address was asked ` +
-      'for, so this page does not know which account it is.'
-  }
-  if (state.expiresAt !== null) {
-    return `Signed in earlier; the token expired at ${when(state.expiresAt)}. A private file ` +
-      'will answer 401 until you sign in again.'
-  }
-  return 'Not signed in. Public files open without this; a private Drive file or GCS object ' +
-    'will not.'
+/**
+ * What the `?` says about a Google sign-in.
+ *
+ * The two sentences §24.7 requires this dialog to say — what `drive.readonly`
+ * actually is, and where the token ends up — and it requires them because a
+ * consent screen says neither: Google's names the product, and nothing
+ * anywhere tells the reader where the token goes. Then what a folder costs in
+ * privacy terms (§20.6), because the folder box is on this same pane.
+ */
+function driveHelp(): string[] {
+  return [
+    'Sign in with your own Google account to open a Drive file, a Drive folder or a Cloud ' +
+      'Storage object that is not public.' +
+      (SITE_DEFAULTS.googleApiKey !== null ? ' A public Drive link opens without signing in.' : ''),
+    'drive.readonly is read access to all of your Drive, where a bucket key is a grant over ' +
+      'one prefix; devstorage.read_only is read access to the Cloud Storage your account can see.',
+    'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
+      'closes, and expiring about an hour after you sign in. No address is asked for, so this ' +
+      'page does not know which account it is.',
+    'A folder is listed with that account, one level at a time, in the Files panel. Paste the ' +
+      'address bar of a folder open in Drive — a shared drive works the same way — or its id; ' +
+      'an empty box is all of My Drive. Only the folder’s name and id are kept, under About → ' +
+      'what is stored.',
+  ]
+}
+
+/** A time of day, the way the pane says until when a token is good. */
+function clock(at: number): string {
+  return new Date(at).toLocaleTimeString()
 }
 
 /**
@@ -523,14 +376,11 @@ function privacyNote(): HTMLElement {
     el(
       'div',
       {},
-      el('strong', { text: 'Connecting a place still sends nothing anywhere.' }),
+      el('strong', { text: 'Nothing is sent anywhere.' }),
       el('span', {
         text:
-          ' A local folder is read in place by code running on your own computer, a few kilobytes ' +
-          'at a time, exactly as a dropped file is. A bucket is read by your browser, from the ' +
-          'bucket, directly. There is no server in between in either case, because there is no ' +
-          'server. Every place you connect is listed under About → what is stored, with a ' +
-          'button that forgets all of it.',
+          ' A folder is read in place, a bucket by your browser directly; there is no server in ' +
+          'between. Every place you connect is listed under About → what is stored.',
       }),
     ),
   )
