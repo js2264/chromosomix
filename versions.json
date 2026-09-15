@@ -201,10 +201,10 @@
   "pulls": [
     {
       "number": 54,
-      "commit": "b3a44a9",
+      "commit": "d984664",
       "title": "Two marks on every file row, the stores on backslash, a leaner header, and a FASTA that opens through its index",
       "branch": "claude/unified-file-store-access-i658sf",
-      "date": "2026-09-15T09:15:06Z"
+      "date": "2026-09-15T09:23:55Z"
     }
   ]
 }
