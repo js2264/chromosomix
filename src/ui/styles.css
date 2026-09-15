@@ -5111,6 +5111,14 @@ canvas.is-frozen {
   gap: 0.6rem;
 }
 
+/* The download, at the far end of the store's own line — beside the name of
+   the thing it writes out, rather than up with the drawer's own two buttons. */
+.store-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
 .store-head-text {
   flex: 1 1 auto;
   min-width: 0;

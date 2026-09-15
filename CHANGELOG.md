@@ -12,6 +12,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **A store's catalogue can be taken away with you.** There was no way to read the JSON behind a
+  shipped store: a built-in's URL is never shown on the page, RSG has none at all because it ships
+  inside the bundle, and *copy link* copies a `?store=` link carrying an id rather than the file. A
+  download now sits at the end of the store's own line in the drawer's head, and writes the
+  catalogue **as the drawer has it** — every row before your filters, shards merged into the one
+  file on screen, and every `uri` made absolute, so what lands opens on its own rather than
+  resolving against wherever it was saved. It is absent, not greyed, while a store is still being
+  read or could not be: a disabled button there would say the file exists and this build will not
+  hand it over.
+
+### Fixed
+
+- **A store that did not answer with a store said it was not a saved workspace.** The store reader
+  borrowed the *workspace* reader's wording for the one refusal both formats share, so a host
+  answering with a page instead of the file — which is what a dev server does for a store the
+  Stores workflow has not generated — produced `… is not a JSON file, so it is not a saved
+  workspace`, naming a kind of file nobody in the drawer was trying to open. It now says it is not
+  a store, and names the case that causes it.
+
 ### Changed
 
 - **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores
