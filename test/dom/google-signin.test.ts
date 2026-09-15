@@ -31,12 +31,20 @@ import {
   googleState,
   setTokenClientFactory,
   signOut,
-  writeClientId,
   type TokenClientConfig,
   type TokenResponse,
 } from '@/auth/google'
 import { accessHeadersFor, bearerFor } from '@/s3/credentials'
 import { all, buttonLabels, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const DRIVE = 'https://www.googleapis.com/drive/v3/files/1Ab?alt=media&supportsAllDrives=true'
 const GCS = 'https://storage.googleapis.com/storage/v1/b/lab/o/rep1.mcool?alt=media'
@@ -62,6 +70,8 @@ beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
   asked = null
+  site.googleClientId = null
+  site.googleApiKey = null
   setTokenClientFactory(null)
   signOut()
 })
@@ -101,13 +111,23 @@ function googleScripts(): string[] {
 }
 
 describe('the Google account section', () => {
-  it('is offered after the API key, which is the order a reader meets them in', async () => {
+  it('is the first thing on the Drive pane, and there is no key or id box anywhere on it', async () => {
+    // The site's registrations — the client id, the API key — are built in
+    // (`config/siteDefaults.ts`); a reader is offered the sign-in they make
+    // possible and nothing to type. The Drive folder box below is the one
+    // input on the pane, and it is behind the sign-in.
     const body = await connectBody()
-    expect(textsOf(body, '.connect-section h3')).toEqual([
-      'A Google API key',
-      'A Google account',
-      'A Google Drive folder',
-    ])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google account', 'A Google Drive folder'])
+    expect(all<HTMLInputElement>(accountSection(body), 'input')).toEqual([])
+    expect(body.textContent).not.toMatch(/API key/i)
+    expect(body.textContent).not.toMatch(/client id stored/i)
+  })
+
+  it('says a public Drive link opens without signing in, where the site has a key', async () => {
+    site.googleApiKey = 'AIzaSite'
+    const text = accountSection(await connectBody()).textContent ?? ''
+    expect(text).toMatch(/public Drive link opens without signing in/i)
+    expect(text).not.toContain('AIzaSite')
   })
 
   it('says what the grant actually is, and where the token goes', async () => {
@@ -130,56 +150,34 @@ describe('the Google account section', () => {
   })
 })
 
-describe('the client id, which is stored and is not a secret', () => {
-  it('refuses to offer a sign-in until one is saved, and says why', async () => {
+describe('the site’s registration, which no reader is asked for', () => {
+  it('says so, and offers no sign-in, on a site built without a client id', async () => {
     const section = accountSection(await connectBody())
     const signIn = buttonNamed(section, 'sign in with Google')
-
-    // Disabled rather than absent, which is the deliberate exception to §8.5:
-    // this control becomes available by filling in the box directly above it,
-    // and hiding it would hide the consequence of that box.
+    // Disabled rather than absent: the sentence beside it names the one thing
+    // a reader can do — ask the site's maintainer — and hiding the button
+    // would hide what the sentence is about.
     expect(signIn?.disabled).toBe(true)
-    expect(signIn?.title).toMatch(/client id/i)
-    expect(section.textContent).toMatch(/No client id stored/)
+    expect(signIn?.title).toMatch(/built without a Google client id/i)
+    expect(section.textContent).toMatch(/not set up on this site/i)
+    expect(section.textContent).toContain('GOOGLE_CLIENT_ID')
+    expect(section.textContent).toContain('docs/deploy.md')
+    expect(googleState().configured).toBe(false)
   })
 
-  it('saves it, prints it back, and enables the sign-in', async () => {
+  it('offers the sign-in on a site built with one, without printing it', async () => {
+    site.googleClientId = CLIENT_ID
     const section = accountSection(await connectBody())
-    const input = all<HTMLInputElement>(section, 'input')[0]
-    // Not a password box, unlike the key above it: a client id is published in
-    // the page of every site that uses this flow, and what a reader coming back
-    // here needs to know is *which project*.
-    expect(input.type).toBe('text')
-
-    input.value = CLIENT_ID
-    buttonNamed(section, 'save')?.click()
-
-    expect(section.textContent).toContain(CLIENT_ID)
     expect(buttonNamed(section, 'sign in with Google')?.disabled).toBe(false)
+    expect(section.textContent).not.toContain(CLIENT_ID)
+    expect(section.textContent).not.toMatch(/not set up/i)
     expect(googleState().configured).toBe(true)
-  })
-
-  it('forgets it for real, and does not sign out doing so', async () => {
-    writeClientId(CLIENT_ID)
-    stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
-    const section = accountSection(await connectBody())
-    buttonNamed(section, 'sign in with Google')?.click()
-    await settled()
-
-    buttonNamed(section, 'forget')?.click()
-
-    expect(window.localStorage.getItem('metacooler-viewer:google')).toBeNull()
-    expect(section.textContent).toMatch(/No client id stored/)
-    // The grant is the reader's own and is still opening the file in front of
-    // them. Forgetting which project to sign in to next time is not a reason to
-    // close it.
-    expect(bearerFor(DRIVE)).toBe('ya29.TOKEN')
   })
 })
 
 describe('signing in', () => {
   it('holds the token for Drive and for Cloud Storage, and says until when', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     const section = accountSection(await connectBody())
 
@@ -201,7 +199,7 @@ describe('signing in', () => {
   })
 
   it('offers a sign-out only once there is something to sign out of', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     const section = accountSection(await connectBody())
     expect(buttonLabels(section)).not.toContain('sign out')
@@ -226,7 +224,7 @@ describe('signing in', () => {
     // gesture and not before (§11), and that a load which fails leaves the
     // reader able to try again rather than stuck behind a promise that will
     // never settle.
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     setTokenClientFactory(null)
     const section = accountSection(await connectBody())
     expect(googleScripts()).toEqual([])
@@ -262,7 +260,7 @@ describe('signing in', () => {
   })
 
   it('shows what Google refused, and leaves the button pressable', async () => {
-    writeClientId(CLIENT_ID)
+    site.googleClientId = CLIENT_ID
     stub({ error: 'access_denied', error_description: 'The user denied the request' })
     const section = accountSection(await connectBody())
 
@@ -295,16 +293,16 @@ describe('where a sign-in cannot work at all', () => {
 
     const body = await connectBody()
 
-    // The Drive pane keeps the key and says, where the account would be, why
-    // there is none; Dropbox stays a tile, because its sign-in is a code pasted
-    // from a page Dropbox shows, not a registration against an origin (§24.9).
+    // The Drive pane says, where the account would be, why there is none;
+    // Dropbox stays a tile, because its sign-in is a code pasted from a page
+    // Dropbox shows, not a registration against an origin (§24.9).
     expect(textsOf(body, '.connect-provider')).toEqual([
       'This machine',
       'A bucket',
       'Google Drive',
       'Dropbox',
     ])
-    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google API key', 'A Google account'])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['A Google account'])
     expect(body.textContent).toContain('Not on the desktop app')
   })
 })

@@ -71,10 +71,9 @@ in the page of any site that uses it and authorises nothing by itself — so the
 | `DROPBOX_APP_KEY` | the scoped-access app's key | **Connect → Dropbox** offers *sign in with Dropbox* at once |
 
 The deploy, the pull-request preview and the desktop release pass them to the build, which bakes
-them in as `SITE_DEFAULTS` (`src/config/siteDefaults.ts`, SPECS §24.7). A variable left unset
-builds the page there was before, where that value is pasted by hand; a value a reader pastes
-still wins over the site's, so a lab with a project of its own uses it on the published site
-without a fork; and clearing a pasted value falls back to the site's rather than to nothing. A
+them in as `SITE_DEFAULTS` (`src/config/siteDefaults.ts`, SPECS §24.7). They are the only source:
+the dialog has no box for any of them and a reader's browser stores nothing of them. A variable
+left unset builds a page whose dialog says that sign-in is not set up and names the variable. A
 fork on another domain sets its own three: a client id is bound to an origin and a key to a
 referrer, so this site's do nothing there. The single-file build is made without them — a `file://`
 page has no origin to register and no referrer to restrict a key to — and the desktop build carries

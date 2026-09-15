@@ -777,6 +777,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The Google Drive and Dropbox sections are a sign-in and nothing else.** The boxes for a
+  Google API key, a Google client id and a Dropbox app key are gone, and so is the storage behind
+  them: the three are the site's registrations, built in from `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY`
+  and `DROPBOX_APP_KEY` (docs/deploy.md), and a reader is offered the sign-in they make possible
+  and nothing to wonder about. A site built without one says so where the sign-in would be and
+  names the variable its maintainer sets. The About screen lists nothing for them, because a
+  browser keeps nothing of them; a Dropbox is in the Files panel while a sign-in is live (SPECS
+  §24.7, §24.9).
+
 - **The Files column's button says what it does: *Open a local/remote folder*.** It was *connect a
   place…*, and the dialog behind it — now titled the same — has lost its opening paragraph and
   most of every pane's: each keeps one line and the two sentences about a grant that §24.7

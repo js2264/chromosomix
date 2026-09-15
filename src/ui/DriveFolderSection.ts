@@ -98,8 +98,8 @@ export function driveFolderSection(done: (id: string) => void): HTMLElement | nu
           text: state.configured
             ? 'Press sign in with Google in the section above first; this box opens as soon as ' +
               'you are signed in.'
-            : 'No client id is stored: save your lab’s client id in the section above and sign ' +
-              'in with it; this box opens then.',
+            : 'Signing in to Google is not set up on this site (it needs GOOGLE_CLIENT_ID, ' +
+              'docs/deploy.md), so a Drive folder cannot be listed here.',
         }),
       )
       return

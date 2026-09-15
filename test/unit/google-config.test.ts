@@ -28,20 +28,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   GOOGLE_HOSTS,
   GOOGLE_SCOPE,
-  clearClientId,
   googleState,
   readClientId,
   setTokenClientFactory,
   signIn,
   signOut,
   subscribeGoogle,
-  writeClientId,
   type TokenClientConfig,
   type TokenResponse,
 } from '@/auth/google'
 import { bearerFor } from '@/s3/credentials'
 
-const KEY = 'metacooler-viewer:google'
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
+
 const DRIVE = 'https://www.googleapis.com/drive/v3/files/1Ab?alt=media&supportsAllDrives=true'
 const GCS = 'https://storage.googleapis.com/storage/v1/b/lab/o/rep1.mcool?alt=media'
 
@@ -67,6 +73,7 @@ function stub(response: TokenResponse): void {
 
 beforeEach(() => {
   window.localStorage.clear()
+  site.googleClientId = null
   asked = null
   setTokenClientFactory(null)
   signOut()
@@ -79,67 +86,21 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('the client id', () => {
-  it('round-trips, under the app’s own prefix', () => {
-    expect(readClientId()).toBeNull()
-    writeClientId('123-abc.apps.googleusercontent.com')
-    expect(readClientId()).toBe('123-abc.apps.googleusercontent.com')
-    // Under the prefix `state/stored.ts` sweeps, and as JSON rather than a bare
-    // string, so a second field can join it without a migration.
-    expect(JSON.parse(window.localStorage.getItem(KEY) ?? '{}')).toEqual({
-      clientId: '123-abc.apps.googleusercontent.com',
-    })
-  })
-
-  it('trims, and treats an empty box as forgetting', () => {
-    writeClientId('  123-abc.apps.googleusercontent.com  ')
-    expect(readClientId()).toBe('123-abc.apps.googleusercontent.com')
-    writeClientId('   ')
-    expect(readClientId()).toBeNull()
-    expect(window.localStorage.getItem(KEY)).toBeNull()
-  })
-
-  it('reads anything it did not write as no id at all', () => {
-    // Stored state outlives the build that wrote it, and the repair for a
-    // malformed row would be a button that is offered, pressed, and answered by
-    // Google with `invalid_client` in a popup — a refusal from a third party
-    // about a field this app could have checked itself.
-    for (const junk of ['', 'not json', '[]', 'null', '{}', '{"clientId":42}', '{"clientId":"  "}']) {
-      window.localStorage.setItem(KEY, junk)
-      expect(readClientId()).toBeNull()
-    }
-  })
-
-  it('is forgotten without signing out', async () => {
-    // Two separate acts. The grant is the reader's own and is still opening the
-    // file in front of them; revoking it because the *id* was forgotten would
-    // close a file nobody asked to close.
-    writeClientId('123-abc.apps.googleusercontent.com')
-    stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
-    await signIn()
-
-    clearClientId()
-
-    expect(readClientId()).toBeNull()
-    expect(googleState().configured).toBe(false)
-    expect(googleState().signedIn).toBe(true)
-    expect(bearerFor(DRIVE)).toBe('ya29.TOKEN')
-  })
-})
-
 describe('what the page can say about the account', () => {
-  it('starts with nothing stored, nothing held and no expiry', () => {
+  it('starts unconfigured, with nothing held and no expiry, on a site built without a client id', () => {
+    expect(readClientId()).toBeNull()
     expect(googleState()).toEqual({ configured: false, signedIn: false, expiresAt: null })
   })
 
-  it('is configured by the id alone, which authorises nothing', () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+  it('is configured by the site’s id alone, which authorises nothing', () => {
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
+    expect(readClientId()).toBe('123-abc.apps.googleusercontent.com')
     expect(googleState()).toEqual({ configured: true, signedIn: false, expiresAt: null })
     expect(bearerFor(DRIVE)).toBeNull()
   })
 
   it('asks for exactly the two read scopes, and for no identity', async () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     await signIn()
 
@@ -157,7 +118,7 @@ describe('what the page can say about the account', () => {
   it('holds the token for both Google hosts, until the expiry Google gave', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-11T10:00:00Z'))
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
 
     await signIn()
@@ -175,7 +136,7 @@ describe('what the page can say about the account', () => {
   it('lets go of the token at its expiry, and remembers that it had one', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-11T10:00:00Z'))
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     await signIn()
     const at = Date.parse('2026-09-11T10:00:00Z') + 3599 * 1000
@@ -193,7 +154,7 @@ describe('what the page can say about the account', () => {
   it('defaults to an hour when Google sends no usable lifetime', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-11T10:00:00Z'))
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN' })
 
     await signIn()
@@ -206,7 +167,7 @@ describe('what the page can say about the account', () => {
   })
 
   it('drops everything on sign-out, expiry included', async () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     await signIn()
 
@@ -219,16 +180,16 @@ describe('what the page can say about the account', () => {
 })
 
 describe('what a sign-in refuses to do', () => {
-  it('will not start without a client id, and says where one comes from', async () => {
+  it('will not start on a site built without a client id, and says whose it is to provide', async () => {
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
-    await expect(signIn()).rejects.toThrow(/client id/i)
+    await expect(signIn()).rejects.toThrow(/GOOGLE_CLIENT_ID/)
     // Refused before Google is reached, which is the point: an empty
     // `client_id` is a popup showing Google's own `invalid_client`.
     expect(asked).toBeNull()
   })
 
   it('reports Google’s own refusal rather than pretending it signed in', async () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ error: 'access_denied', error_description: 'The user denied the request' })
 
     await expect(signIn()).rejects.toThrow(/access_denied/)
@@ -237,7 +198,7 @@ describe('what a sign-in refuses to do', () => {
   })
 
   it('treats an answer with no token as a failure', async () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ expires_in: 3599 })
 
     await expect(signIn()).rejects.toThrow(/without a token/i)
@@ -245,7 +206,7 @@ describe('what a sign-in refuses to do', () => {
   })
 
   it('surfaces a blocked popup through the error callback', async () => {
-    writeClientId('123-abc.apps.googleusercontent.com')
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     setTokenClientFactory((config) => ({
       requestAccessToken: () => config.error_callback?.({ type: 'popup_failed_to_open' }),
     }))
@@ -261,18 +222,18 @@ describe('the subscription', () => {
       changes++
     })
 
-    writeClientId('123-abc.apps.googleusercontent.com')
-    expect(changes).toBe(1)
-
+    // The client id is the site's and never changes under a page, so the
+    // changes a screen redraws for are the sign-in and the sign-out.
+    site.googleClientId = '123-abc.apps.googleusercontent.com'
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     await signIn()
-    expect(changes).toBe(2)
+    expect(changes).toBe(1)
 
     signOut()
-    expect(changes).toBe(3)
+    expect(changes).toBe(2)
 
     off()
-    clearClientId()
-    expect(changes).toBe(3)
+    signOut()
+    expect(changes).toBe(2)
   })
 })

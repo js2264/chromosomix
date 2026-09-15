@@ -35,20 +35,16 @@
  */
 
 import { Modal } from './Modal'
-import { button, el, field } from './dom'
+import { button, el } from './dom'
 import { icon, type IconName } from './icons'
 import { bucketForm } from './bucketForm'
-import { clearApiKey, ownApiKey, writeApiKey } from '../s3/credentials'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 import {
   GOOGLE_SIGN_IN_AVAILABLE,
-  clearClientId,
   googleState,
-  ownClientId,
   signIn,
   signOut,
   subscribeGoogle,
-  writeClientId,
 } from '../auth/google'
 import { announce, connectSnapshot } from '../browse/connected'
 import { bucketFolderId } from '../browse/bucket'
@@ -239,93 +235,19 @@ function drivePane(done: (id: string) => void): HTMLElement {
   return el(
     'div',
     { class: 'connect-pane-parts' },
-    googleSection(),
     googleAccountSection(),
     driveFolderSection(done),
   )
 }
 
 /**
- * The Google API key: one box, save, forget.
+ * The Google account: sign in, sign out, and what that means.
  *
- * Deliberately the smallest section in this dialog, because it is the least
- * interesting thing in it — a string that makes one host answer. It connects no
- * folder and so calls no `done`; what it changes is whether a Drive *link*
- * opens, which the reader finds out by opening one.
- *
- * `type=password`, as the bucket secret is, and for the same reason: this box is
- * opened in front of an audience precisely when somebody is being shown how the
- * feature works. The status line reports presence and never the key — printing
- * it back would make a screenshot of this dialog a leak.
- */
-function googleSection(): HTMLElement {
-  const input = el('input', { class: 'input', type: 'password', placeholder: 'AIza…' })
-  const status = el('p', { class: 'hint' })
-  const show = (): void => {
-    status.textContent =
-      ownApiKey() !== null
-        ? 'A key is stored in this browser. It is listed under About → what is stored.'
-        : SITE_DEFAULTS.googleApiKey !== null
-          ? 'This site provides a key, so public Google Drive links open. Paste your own to use ' +
-            'a different Google project.'
-          : 'No key stored. Google Drive links will not open without one.'
-  }
-  show()
-
-  return el(
-    'div',
-    { class: 'connect-section' },
-    el('h3', {}, icon('link', { size: 15 }), el('span', { text: 'A Google API key' })),
-    el('p', {
-      class: 'hint',
-      text:
-        'Opens a public Google Drive file; a public Cloud Storage object needs none. A private ' +
-        'file needs the account sign-in below instead. Kept in this browser, like a bucket key.',
-    }),
-    field('key', input),
-    status,
-    el(
-      'div',
-      { class: 'bucket-actions' },
-      button(
-        'save',
-        () => {
-          writeApiKey(input.value)
-          input.value = ''
-          show()
-        },
-        { class: 'btn btn-primary' },
-      ),
-      button(
-        'forget',
-        () => {
-          clearApiKey()
-          input.value = ''
-          show()
-        },
-        { class: 'btn' },
-      ),
-    ),
-  )
-}
-
-/**
- * The Google account: a client id, a sign-in, and what the grant actually is.
- *
- * Two controls that look alike and are not. The **client id** is the lab's, it
- * is public by construction — it ships in the page of every site that uses this
- * flow — and it is stored; saving it changes nothing about what this browser can
- * read, it only names the project a sign-in would go to. The **sign-in** is the
- * reader's, it produces a credential, and it is kept nowhere.
- *
- * §8.5 says a control that cannot keep its promise is absent rather than
- * disabled, and the sign-in button is the deliberate exception: it is *disabled
- * with the reason next to it* because it becomes available by filling in the box
- * directly above it.
- *
- * Where a sign-in cannot work at all — the desktop build, whose `app://viewer`
- * is not an origin Google's console will register — the section is one
- * sentence saying so, so the Drive pane does not silently end at the key.
+ * Nothing to type. The client id a sign-in goes to is the site's, built in
+ * (`config/siteDefaults.ts`), and so is the API key that opens a public Drive
+ * link; a site built without the client id says so here rather than offering
+ * a box only its maintainer could fill. A reader should not have to wonder
+ * what a client id is, and cannot be handed one to paste.
  */
 function googleAccountSection(): HTMLElement {
   if (!GOOGLE_SIGN_IN_AVAILABLE) {
@@ -337,35 +259,25 @@ function googleAccountSection(): HTMLElement {
         class: 'hint',
         text:
           'Not on the desktop app: a sign-in is registered against a web address, and this ' +
-          'window has none. Public Drive files open with the key above.',
+          'window has none. ' +
+          (SITE_DEFAULTS.googleApiKey !== null
+            ? 'Public Drive files still open.'
+            : 'Public Drive files open on the website.'),
       }),
     )
   }
 
-  const input = el('input', {
-    class: 'input',
-    type: 'text',
-    placeholder: '…apps.googleusercontent.com',
-  })
-  const stored = el('p', { class: 'hint' })
   const account = el('p', { class: 'hint' })
   const error = el('p', { class: 'hint bucket-error' })
   const actions = el('div', { class: 'bucket-actions' })
 
   const show = (): void => {
     const state = googleState()
-    const id = ownClientId()
-    const site = SITE_DEFAULTS.googleClientId
-    stored.textContent =
-      id !== null
-        ? // Printed rather than withheld, which is the opposite of the key box
-          // above and is the right answer for a value that is public: what a
-          // reader coming back here needs to know is *which project*.
-          `Client id stored: ${id}`
-        : site !== null
-          ? `Using this site’s client id (${site}). Paste your own to sign in to a different project.`
-          : 'No client id stored. Signing in needs one; it is not a secret.'
-    account.textContent = accountLine(state)
+    account.textContent = state.configured
+      ? accountLine(state)
+      : 'Signing in to Google is not set up on this site: it needs a Google client id registered ' +
+        'for its address, which the site’s maintainer provides as GOOGLE_CLIENT_ID ' +
+        '(docs/deploy.md).'
 
     const signInLabel = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Google'
     const signInButton = button(
@@ -387,11 +299,15 @@ function googleAccountSection(): HTMLElement {
           ? {}
           : {
               title:
-                'Save a client id above first: a sign-in is a request from this origin to one ' +
-                'Google project, and the client id is what names the project.',
+                'This site was built without a Google client id, so there is no project to sign ' +
+                'in to.',
             }),
       },
     )
+    // Disabled rather than absent where the site has no registration: the
+    // sentence beside it is the one thing a reader can act on — by asking the
+    // site's maintainer — and hiding the button would hide what the sentence
+    // is about.
     signInButton.disabled = !state.configured
     actions.replaceChildren(
       signInButton,
@@ -404,7 +320,7 @@ function googleAccountSection(): HTMLElement {
     // The dialog is built once and thrown away with the modal, and nothing hands
     // a detached body a teardown. It unsubscribes itself the first time it is
     // spoken to after leaving the document.
-    if (!stored.isConnected) {
+    if (!account.isConnected) {
       off()
       return
     }
@@ -418,11 +334,9 @@ function googleAccountSection(): HTMLElement {
     el('p', {
       class: 'hint',
       text:
-        SITE_DEFAULTS.googleClientId !== null
-          ? 'For a Drive file, a Drive folder or a Cloud Storage object that is not public: sign ' +
-            'in with your own Google account.'
-          : 'For a Drive file, a Drive folder or a Cloud Storage object that is not public: your ' +
-            'lab’s client id, then your own sign-in. docs/hosting.md has the four steps.',
+        'For a Drive file, a Drive folder or a Cloud Storage object that is not public: sign in ' +
+        'with your own Google account.' +
+        (SITE_DEFAULTS.googleApiKey !== null ? ' A public Drive link opens without signing in.' : ''),
     }),
     // The two sentences §24.7 requires this dialog to say, and it requires them
     // because a consent screen says neither: Google's names the product, and
@@ -439,34 +353,6 @@ function googleAccountSection(): HTMLElement {
         'The token lives only in this tab’s memory — never written to storage, gone when the tab ' +
         'closes, and expiring about an hour after you sign in.',
     }),
-    field('client id', input),
-    stored,
-    el(
-      'div',
-      { class: 'bucket-actions' },
-      button(
-        'save',
-        () => {
-          error.textContent = ''
-          writeClientId(input.value)
-          input.value = ''
-          show()
-        },
-        { class: 'btn btn-primary' },
-      ),
-      button(
-        'forget',
-        () => {
-          error.textContent = ''
-          // The id only. A token already granted is the reader's own and still
-          // opens the file they are reading.
-          clearClientId()
-          input.value = ''
-          show()
-        },
-        { class: 'btn' },
-      ),
-    ),
     account,
     actions,
     error,

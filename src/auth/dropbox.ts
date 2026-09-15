@@ -48,9 +48,11 @@
  *
  * ## What is kept, and for how long
  *
- * The **app key**, in storage — the lab’s registration of a Dropbox app, which
- * is public by construction (it is in the authorize URL, which the reader can
- * read in their own address bar) and authorises nothing on its own. The
+ * Nothing in storage. The **app key** — the site’s registration of a Dropbox
+ * app, public by construction (it is in the authorize URL, which the reader
+ * can read in their own address bar) and authorising nothing on its own — is
+ * in the page, taken by the build from the `DROPBOX_APP_KEY` variable
+ * (`config/siteDefaults.ts`, docs/deploy.md); no reader is asked for one. The
  * **token**, in memory only and never written (§24.8), held by
  * `s3/credentials.ts`’s bearer registry for the two API hosts, which is a
  * module-level `Map` a reload empties.
@@ -71,12 +73,9 @@
  */
 
 import { clearBearer, setBearer } from '../s3/credentials'
-import type { StoredItem } from '../state/stored'
 import { IS_STANDALONE } from '../version'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 
-/** Where the app key is kept. One row, like the Google client id next door. */
-const KEY = 'metacooler-viewer:dropbox'
 
 /**
  * The two hosts one sign-in is registered for.
@@ -133,117 +132,19 @@ export interface DropboxState {
 }
 
 // ---------------------------------------------------------------------------
-// The app key, which is stored
+// The app key, which is the site's
 // ---------------------------------------------------------------------------
 
-/** Storage that cannot throw — `s3/credentials.ts`’s reasoning, and its shape. */
-function readRaw(): string | null {
-  try {
-    return window.localStorage.getItem(KEY)
-  } catch {
-    return null
-  }
-}
-
 /**
- * The app key a sign-in uses: the reader's own where one is stored, and the
- * site's otherwise (`config/siteDefaults.ts`), or `null` where neither.
+ * The app key a sign-in names: the one this site was built with
+ * (`config/siteDefaults.ts`), or `null` on a site built without one.
+ *
+ * Nothing a reader can enter and nothing this browser keeps, for the reason
+ * `auth/google.ts` gives for the client id: it names the deployment's
+ * registration, and the dialog offers the sign-in rather than a box.
  */
 export function readAppKey(): string | null {
-  return ownAppKey() ?? SITE_DEFAULTS.dropboxAppKey
-}
-
-/**
- * The app key this browser holds, or `null` — the site's not counted.
- *
- * Validated like every other stored value in this app, because stored state
- * outlives the build that wrote it: anything that is not an object with a
- * non-empty string `appKey` is `null` rather than repaired. The repair would be
- * an authorize URL that opens a Dropbox page saying `invalid_client` — a refusal
- * from a third party, in a new tab, about a field this app could have checked
- * itself.
- */
-export function ownAppKey(): string | null {
-  const raw = readRaw()
-  if (raw === null) return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null) return null
-  const key = (parsed as Record<string, unknown>)['appKey']
-  if (typeof key !== 'string') return null
-  const text = key.trim()
-  return text === '' ? null : text
-}
-
-/**
- * Keep `key` as the app key, replacing whatever was there.
- *
- * An empty value forgets, so *save* on an empty box does what it plainly looks
- * like it does — the rule `writeApiKey` and `writeClientId` already follow, so
- * that three boxes in one dialog behave the same way.
- */
-export function writeAppKey(key: string): void {
-  const text = key.trim()
-  if (text === '') {
-    clearAppKey()
-    return
-  }
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify({ appKey: text }))
-  } catch {
-    /* a browser refusing storage still runs; the key just does not persist */
-  }
-  announce()
-}
-
-/**
- * Forget the app key.
- *
- * It does **not** sign out, for the reason `clearClientId` does not: the token
- * already obtained is the reader’s own grant, still good for the file they are
- * reading, and revoking it here would close something that is open. What it does
- * do is take the Dropbox folder out of the panel at the next repaint, since a
- * folder is offered only where there is an app to reach it with.
- */
-export function clearAppKey(): void {
-  try {
-    window.localStorage.removeItem(KEY)
-  } catch {
-    /* nothing stored is nothing to remove */
-  }
-  announce()
-}
-
-/**
- * What this browser keeps for Dropbox, as a line for the stored-data screen.
- *
- * One line, and it **prints the key in full** — the treatment the Google client
- * id gets and the opposite of the one the bucket secret gets, on the same rule:
- * a value that is published by construction is not made safer by being withheld,
- * and the only question a reader has about it is *which app has this browser
- * been told to sign in to*, which a count cannot answer. The token is
- * deliberately absent from this screen, because it is held in memory and never
- * written, so there is nothing on this machine for the screen to account for.
- * So is the site's own key (`config/siteDefaults.ts`): it is in the page, not
- * in this browser's storage, and a screen listing what *this browser* keeps
- * must not claim it.
- */
-export function storedLines(): StoredItem[] {
-  const key = ownAppKey()
-  if (key === null) return []
-  return [
-    {
-      label: 'Dropbox app key',
-      detail:
-        `${key} — your lab’s Dropbox app, not a secret: it identifies the app in the sign-in ` +
-        'URL and authorises nothing on its own. The token signing in with it produces is held ' +
-        'in memory only and is never stored.',
-    },
-  ]
+  return SITE_DEFAULTS.dropboxAppKey
 }
 
 // ---------------------------------------------------------------------------
@@ -412,8 +313,8 @@ export async function beginSignIn(): Promise<{ url: string }> {
   const appKey = readAppKey()
   if (appKey === null) {
     throw new Error(
-      'No Dropbox app key is stored, so there is no app to sign in to. Save the one your lab ' +
-        'registered under Connect → Dropbox; docs/hosting.md has the four steps.',
+      'Signing in to Dropbox is not set up on this site: it needs a Dropbox app key, which the ' +
+        'site’s maintainer provides as DROPBOX_APP_KEY (docs/deploy.md).',
     )
   }
   const fresh = makeVerifier()

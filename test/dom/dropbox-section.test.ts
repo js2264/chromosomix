@@ -27,9 +27,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { dropboxSection } from '@/ui/DropboxSection'
-import { setDropboxFetch, signOut, writeAppKey } from '@/auth/dropbox'
+import { setDropboxFetch, signOut } from '@/auth/dropbox'
 import { bearerFor } from '@/s3/credentials'
 import { all, buttonLabels, buttonNamed, setUpDom, type DomTeardown } from '../support/dom'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const APP_KEY = 'a1b2c3d4e5f6g7h'
 const LIST = 'https://api.dropboxapi.com/2/files/list_folder'
@@ -87,7 +96,7 @@ async function signInThrough(node: HTMLElement): Promise<void> {
   serve({ access_token: 'sl.TOKEN', expires_in: 14_400 })
   buttonNamed(node, 'sign in with Dropbox')?.click()
   await until(() => opened.length > 0)
-  const code = all<HTMLInputElement>(node, 'input')[1]
+  const code = all<HTMLInputElement>(node, 'input')[0]
   code.value = 'CODE-FROM-THE-PAGE'
   buttonNamed(node, 'finish')?.click()
   await until(() => bearerFor(LIST) !== null)
@@ -96,6 +105,7 @@ async function signInThrough(node: HTMLElement): Promise<void> {
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  site.dropboxAppKey = APP_KEY
   opened = []
   serve({})
   signOut()
@@ -113,50 +123,34 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-describe('the app key gate', () => {
-  it('refuses to offer a sign-in until one is saved, and says why', () => {
+describe('the site’s registration, which no reader is asked for', () => {
+  it('says so, and offers no sign-in, on a site built without an app key', () => {
+    site.dropboxAppKey = null
     const node = section()
     const signIn = buttonNamed(node, 'sign in with Dropbox')
-    // Disabled rather than absent: hiding it would hide the consequence of the
-    // box above it.
+    // Disabled rather than absent: the sentence beside it names the one thing
+    // a reader can do — ask the site's maintainer.
     expect(signIn?.disabled).toBe(true)
-    expect(signIn?.title).toMatch(/app key/i)
-    expect(node.textContent).toMatch(/No app key stored/)
+    expect(signIn?.title).toMatch(/built without a Dropbox app key/i)
+    expect(node.textContent).toMatch(/not set up on this site/i)
+    expect(node.textContent).toContain('DROPBOX_APP_KEY')
+    // And nothing to type: the one box on the section is the code's, and it is
+    // hidden until a sign-in has begun.
+    expect(all<HTMLInputElement>(node, 'input')).toHaveLength(1)
+    expect(node.textContent).not.toMatch(/app key stored/i)
   })
 
-  it('saves it, prints it back, and enables the sign-in', () => {
+  it('offers the sign-in on a site built with one, without printing it', () => {
     const node = section()
-    const input = all<HTMLInputElement>(node, 'input')[0]
-    // Not a password box: an app key is in the authorize URL, which the reader
-    // can read in their own address bar, and what they need to know coming back
-    // here is *which app*.
-    expect(input.type).toBe('text')
-
-    input.value = APP_KEY
-    buttonNamed(node, 'save')?.click()
-
-    expect(node.textContent).toContain(APP_KEY)
     expect(buttonNamed(node, 'sign in with Dropbox')?.disabled).toBe(false)
-  })
-
-  it('forgets it without signing out', async () => {
-    writeAppKey(APP_KEY)
-    const node = section()
-    await signInThrough(node)
-
-    buttonNamed(node, 'forget')?.click()
-
-    expect(window.localStorage.getItem('metacooler-viewer:dropbox')).toBeNull()
-    expect(node.textContent).toMatch(/No app key stored/)
-    // The grant is the reader’s own and is still opening the file in front of
-    // them.
-    expect(bearerFor(LIST)).toBe('sl.TOKEN')
+    expect(node.textContent).not.toContain(APP_KEY)
+    expect(node.textContent).not.toMatch(/not set up/i)
   })
 })
 
 describe('signing in', () => {
   it('opens the authorize page and reveals the code box', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     expect(node.querySelector('.connect-code')?.className).toContain('hidden')
 
@@ -182,7 +176,7 @@ describe('signing in', () => {
   })
 
   it('finishes with the pasted code, holds the token, and says until when', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     await signInThrough(node)
 
@@ -196,13 +190,13 @@ describe('signing in', () => {
   })
 
   it('shows what Dropbox refused, and leaves the flow where it was', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     buttonNamed(node, 'sign in with Dropbox')?.click()
     await until(() => opened.length > 0)
 
     serve({ error: 'invalid_grant' }, 400)
-    all<HTMLInputElement>(node, 'input')[1].value = 'STALE'
+    all<HTMLInputElement>(node, 'input')[0].value = 'STALE'
     buttonNamed(node, 'finish')?.click()
     await until(() => (node.textContent ?? '').includes('invalid_grant'))
 
@@ -216,7 +210,7 @@ describe('signing in', () => {
 
 describe('the way in, and the way out', () => {
   it('offers browsing only once it would work, and names the folder', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     let asked: string | null = null
     const node = section((id) => {
       asked = id
@@ -233,7 +227,7 @@ describe('the way in, and the way out', () => {
   })
 
   it('signs out for real, and stops offering the way in', async () => {
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     const node = section()
     await signInThrough(node)
     expect(buttonLabels(node)).toContain('sign out')
@@ -267,7 +261,7 @@ describe('what the section says before anything is pressed', () => {
       calls.push(url)
       return Promise.resolve(new Response('{}'))
     })
-    writeAppKey(APP_KEY)
+    site.dropboxAppKey = APP_KEY
     section()
     await tick()
     expect(calls).toEqual([])

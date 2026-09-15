@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 /**
- * The credentials the site ships (`config/siteDefaults.ts`).
+ * The credentials the site ships (`config/siteDefaults.ts`), and the places
+ * they must and must not reach.
  *
- * Two rules, each pinned for all three values: the site's value stands in
- * where a reader has stored nothing, and a reader's own always wins over it —
- * forgetting the reader's own falls back to the site's rather than to nothing.
- * And two places a site value must *not* reach: the About screen's list of
- * what this browser stores, and the Files panel, which lists a Dropbox under
- * the site's key only while a sign-in is live (§24.9). The defaults are mocked
- * in, because a build in this runner makes none.
+ * Three rules. The site's value is the only value: each reader is answered
+ * from the build and nothing a browser stores counts. Nothing about them is
+ * listed as stored, because nothing is. And the Files panel lists a Dropbox
+ * only while a sign-in is live (§24.9). The defaults are mocked in, because a
+ * build in this runner makes none.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,80 +20,49 @@ vi.mock('@/config/siteDefaults', () => ({
   },
 }))
 
-import {
-  beginSignIn,
-  clearAppKey,
-  finishSignIn,
-  ownAppKey,
-  readAppKey,
-  setDropboxFetch,
-  signOut,
-  writeAppKey,
-} from '@/auth/dropbox'
-import { clearClientId, googleState, ownClientId, readClientId, writeClientId } from '@/auth/google'
+import { beginSignIn, finishSignIn, readAppKey, setDropboxFetch, signOut } from '@/auth/dropbox'
+import { googleState, readClientId } from '@/auth/google'
 import { connectedFolders, folderUsable } from '@/browse/connected'
 import { DROPBOX_FOLDER_ID } from '@/browse/dropbox'
-import { clearApiKey, ownApiKey, readApiKey, writeApiKey } from '@/s3/credentials'
+import { readApiKey } from '@/s3/credentials'
 import { storedItems } from '@/state/stored'
 
 beforeEach(() => {
   window.localStorage.clear()
 })
 
-describe('the site’s defaults', () => {
-  it('stand in for a Google client id nobody stored, and a stored one wins', () => {
-    expect(ownClientId()).toBeNull()
+describe('the site’s registrations', () => {
+  it('are the client id, the API key and the app key every reader signs in with', () => {
     expect(readClientId()).toBe('site-123.apps.googleusercontent.com')
-    // …which is enough to offer the sign-in.
     expect(googleState().configured).toBe(true)
-    writeClientId('mine.apps.googleusercontent.com')
-    expect(readClientId()).toBe('mine.apps.googleusercontent.com')
-    clearClientId()
+    expect(readApiKey()).toBe('AIzaSite')
+    expect(readAppKey()).toBe('sitekey')
+  })
+
+  it('are not read from this browser’s storage, whatever an older build left there', () => {
+    window.localStorage.setItem('metacooler-viewer:google', '{"clientId":"mine.apps.googleusercontent.com"}')
+    window.localStorage.setItem('metacooler-viewer:dropbox', '{"appKey":"minekey"}')
+    window.localStorage.setItem('metacooler-viewer:access', '[{"id":"google-api-key","kind":"google-api-key","key":"AIzaMine"}]')
     expect(readClientId()).toBe('site-123.apps.googleusercontent.com')
-  })
-
-  it('stand in for a Google API key, and a stored one wins', () => {
-    expect(ownApiKey()).toBeNull()
-    expect(readApiKey()).toBe('AIzaSite')
-    writeApiKey('AIzaMine')
-    expect(readApiKey()).toBe('AIzaMine')
-    clearApiKey()
-    expect(readApiKey()).toBe('AIzaSite')
-  })
-
-  it('stand in for a Dropbox app key, and a stored one wins', () => {
-    expect(ownAppKey()).toBeNull()
     expect(readAppKey()).toBe('sitekey')
-    writeAppKey('minekey')
-    expect(readAppKey()).toBe('minekey')
-    clearAppKey()
-    expect(readAppKey()).toBe('sitekey')
+    expect(readApiKey()).toBe('AIzaSite')
   })
 })
 
-describe('where the site’s defaults do not reach', () => {
+describe('where the site’s registrations do not reach', () => {
   afterEach(() => {
     signOut()
     setDropboxFetch(null)
   })
 
-  it('the About screen lists a client id or app key this browser stores, never the site’s', async () => {
+  it('the About screen lists nothing for them, because this browser keeps nothing', async () => {
     const labels = (await storedItems()).map((item) => item.label)
     expect(labels).not.toContain('Google client id')
+    expect(labels).not.toContain('Google API key')
     expect(labels).not.toContain('Dropbox app key')
-
-    writeClientId('mine.apps.googleusercontent.com')
-    writeAppKey('minekey')
-    const items = await storedItems()
-    const client = items.find((item) => item.label === 'Google client id')
-    expect(client?.detail).toContain('mine.apps.googleusercontent.com')
-    expect(client?.detail).not.toContain('site-123')
-    const app = items.find((item) => item.label === 'Dropbox app key')
-    expect(app?.detail).toContain('minekey')
-    expect(app?.detail).not.toContain('sitekey')
   })
 
-  it('the Files panel lists a Dropbox under the site’s key only while signed in', async () => {
+  it('the Files panel lists a Dropbox only while signed in', async () => {
     const dropbox = () => connectedFolders().find((folder) => folder.kind === 'dropbox')
     // Every reader's page carries the site's key; not every reader has a Dropbox.
     expect(dropbox()).toBeUndefined()
@@ -117,11 +85,5 @@ describe('where the site’s defaults do not reach', () => {
     // Signing out is the × of §20.6: nothing of Dropbox is left, the row included.
     signOut()
     expect(dropbox()).toBeUndefined()
-
-    // A key of the reader's own keeps the folder listed, signed in or not, as
-    // it always has — listed and not usable is the honest pair for a saved key.
-    writeAppKey('minekey')
-    expect(dropbox()?.id).toBe(DROPBOX_FOLDER_ID)
-    expect(await folderUsable(dropbox()!)).toBe(false)
   })
 })

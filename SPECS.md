@@ -5116,10 +5116,12 @@ API key and a Google account are settings of *one provider*, and a reader meetin
 bucket and a Drive folder had to work out which they belonged to. They sit under Google Drive now,
 which is the only tile that needs them, in the order a reader meets them — the key, because a
 public Drive link fails without it; the account, because a private one fails afterwards with a key
-in place; the folder, because it needs the account. The Dropbox app key sits under Dropbox. A build
-that cannot offer a provider does not draw its tile (§8.5): the standalone build offers this
-machine alone, and the desktop build's Drive tile carries the key and says why there is no
-sign-in. The plug in the header and the Files column's *Open a local/remote folder* both open it.
+in place; the folder, because it needs the account. Since then the key and the client id have
+become the site's (§24.7), and the Drive pane is the account and the folder: a sign-in, and the
+box that needs it. Dropbox is the same shape, a sign-in and a way in. A build that cannot offer a
+provider does not draw its tile (§8.5): the standalone build offers this machine alone, and the
+desktop build's Drive tile says why there is no sign-in. The Files column's *Open a local/remote
+folder* opens it.
 
 ### 20.1 One level, never a walk
 
@@ -6018,32 +6020,33 @@ guesses, and the annotation worker's own fetch — and `s3/attach.ts`'s `withAcc
 the two `postMessage` boundaries, independently for a source and its `bins` sidecar, exactly as
 `withCredential` stamped one. Two kinds of row feed it, and they are kept differently on purpose:
 
-- **A Google API key** (`metacooler-viewer:access`, one row, named in the stored-data screen the
-  way a bucket key is) — sent as `x-goog-api-key` to the Drive and GCS JSON APIs. A *public* Drive
-  file needs it and nothing else; a public GCS object needs nothing. The key is the lab's, made in
-  the lab's own Google project, under the bargain `docs/hosting.md` states for a bucket key: it
-  lives in the browser, and what bounds it is what it was granted.
+- **A Google API key** — the site's, built in (`config/siteDefaults.ts`) — sent as
+  `x-goog-api-key` to the Drive and GCS JSON APIs. A *public* Drive file needs it and nothing else;
+  a public GCS object needs nothing. The key is made in the site's own Google project and
+  restricted to the site's address, which is why it is the deployment's to provide and nobody's to
+  type: nothing about it is in the browser.
 - **A bearer token**, held in memory only and never written to storage, matched to a host pattern
-  and dropped at its expiry. It is what a signed-in Google account produces: the lab supplies a
-  **client id** registered for the app's origin, the reader signs in through Google Identity
-  Services, and the token rides every request to Drive (`drive.readonly`) and GCS
-  (`devstorage.read_only`) until it expires, after which a `401` from a Google host is answered by
-  the offer to sign in again rather than by the CORS explanation. Absent in the standalone build,
-  which has no origin to register.
+  and dropped at its expiry. It is what a signed-in Google account produces: the site supplies a
+  **client id** registered for its origin, the reader signs in through Google Identity Services,
+  and the token rides every request to Drive (`drive.readonly`) and GCS (`devstorage.read_only`)
+  until it expires, after which a `401` from a Google host is answered by the offer to sign in
+  again rather than by the CORS explanation. Absent in the standalone build, which has no origin to
+  register.
 
-**Where the three values come from.** Each is read in one place — `readApiKey`, `readClientId`,
-and `readAppKey` for the Dropbox key of §20 — and each answers the row this browser stores, or
-failing that the value the page was **built with**: `config/siteDefaults.ts` exports
-`SITE_DEFAULTS`, three strings the build fills from the `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and
-`DROPBOX_APP_KEY` variables of the environment it ran in (`vite.config.ts`; the deploy reads the
-repository's Actions variables of the same names, docs/deploy.md). None of the three is a secret —
-all end up in the page — so the site can carry the lab's own registrations, and a reader of the
-published site signs in to *their* Drive or Dropbox with one press and nothing pasted. The dialog
-says which of the two it is using; a stored value wins over the built-in one wherever both exist,
-so a lab with a project of its own still uses it here; and clearing a stored value falls back to
-the site's rather than to nothing. A build made with the variables unset is the build there was
-before, with every value pasted by hand — the single-file build always, since a `file://` page has
-no origin to register.
+**Where the three values come from, and from nowhere else.** Each is read in one place —
+`readApiKey`, `readClientId`, and `readAppKey` for the Dropbox key of §20 — and each answers the
+value the page was **built with**: `config/siteDefaults.ts` exports `SITE_DEFAULTS`, three strings
+the build fills from the `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and `DROPBOX_APP_KEY` variables of the
+environment it ran in (`vite.config.ts`; the deploy reads the repository's Actions variables of the
+same names, docs/deploy.md). None of the three is a secret — all end up in the page — and none is
+anything a reader is asked for: the dialog offers the sign-in the registration makes possible and
+no box for the registration itself, this browser stores nothing of it, and the stored-data screen
+lists nothing for it. A client id is bound to the site's address and a key to its referrer, so a
+value a reader could paste would be one for a *different* site; the boxes that used to take one
+were a question every reader had to wonder about that only a maintainer could answer. A site
+built without a registration says so where the sign-in would be, names the variable, and offers a
+button that is disabled rather than absent — the exception to §8.5 this dialog makes, because the
+sentence beside it names the one thing a reader can do.
 
 The dialog says one thing plainly that a consent screen would bury: `drive.readonly` is read access
 to **all** of the reader's Drive, where a bucket scope is one prefix. And `docs/hosting.md` says the
@@ -6101,15 +6104,16 @@ What the row does not carry is a folder tree: `files.list` answers one parent at
 §20.1's rule arriving from the other side.
 
 **Dropbox** (`auth/dropbox.ts`, `browse/dropbox.ts`) is the one provider here with an account and
-no key: a lab registers a *scoped-access* app with `files.metadata.read` and `files.content.read`,
-and the app key — public by design, no secret — is the one thing kept, beside the bucket keys. The
+no key: the site registers a *scoped-access* app with `files.metadata.read` and
+`files.content.read`, and the app key — public by design, no secret — is built in (§24.7); nothing
+is kept. The
 sign-in is **PKCE with the code shown by Dropbox and pasted by the reader**, not a redirect: a
 static page on any origin can do it, the desktop build's `app://` origin included, and there is no
 callback route to add to a viewer that has none. The token lives in this tab's memory and dies
-with it; the refresh token Dropbox would also hand over is refused (§24.8). A saved key alone puts
-the folder in the Files panel, usable once signed in; the site's built-in key (§24.7) does not —
-under it the folder is listed only while a sign-in is live, because a row in every reader's panel,
-Dropbox or no Dropbox, would be noise with a × that could not remove it. The folder is the whole
+with it; the refresh token Dropbox would also hand over is refused (§24.8). The folder is in the
+Files panel while a sign-in is live and not otherwise: the site's key is in every reader's page
+(§24.7), and a row in every reader's panel, Dropbox or no Dropbox, would be noise with a × that
+could not remove it. The folder is the whole
 Dropbox the app was granted (or its app folder), listed with `files/list_folder` one level at a
 time, and a picked file is a **temporary link** — unsigned, on the content host that serves ranges
 with CORS `*`, valid four hours — which is what the address bar then carries: a link a colleague

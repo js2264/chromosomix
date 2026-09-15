@@ -52,7 +52,7 @@
 import { ViewerError } from '../errors'
 import { accessHeadersFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
-import { DROPBOX_PERMISSIONS, dropboxState, ownAppKey, clearAppKey, signOut } from '../auth/dropbox'
+import { DROPBOX_PERMISSIONS, dropboxState, signOut } from '../auth/dropbox'
 import { registerFolderSource } from './connected'
 import {
   LISTING_CAP,
@@ -323,29 +323,22 @@ function refusal(status: number, body: string, where: string): ViewerError {
 /**
  * Registered at module load, which is the whole of the wiring.
  *
- * `folders()` reads the store each time, so an app key saved in the dialog puts
- * the folder in the panel without either screen knowing the other exists — and
- * a browser that has never been given one is a browser this backend contributes
- * nothing to. The site's own key (`SITE_DEFAULTS`, §24.7) is not "given": it is
- * in every reader's page, and a Dropbox row in every reader's panel, whether or
- * not they have a Dropbox, would be noise with a × that could not remove it.
- * Under the site's key alone the folder is listed while the reader is signed
- * in — the one state in which it can be browsed — and *browse my Dropbox* in
- * the dialog is how they get there. `usable` is the sign-in, asked rather than
- * assumed: a reload empties the bearer registry, so a folder kept by a saved
- * key is there and not usable this morning, which is exactly what the panel
- * should say.
+ * `folders()` asks the sign-in each time: the Dropbox is in the panel while
+ * this tab is signed in to one, and not otherwise. The site's app key is in
+ * every reader's page (§24.7), and a Dropbox row in every reader's panel,
+ * whether or not they have a Dropbox, would be noise with a × that could not
+ * remove it — so the folder appears when *browse my Dropbox* is pressed, and
+ * a reload, which empties the bearer registry, takes it away until the next
+ * sign-in. `usable` is the same question, asked by the panel before it lists.
  */
 registerFolderSource({
   kind: 'dropbox',
-  folders: () => (ownAppKey() !== null || dropboxState().signedIn ? [dropboxFolder()] : []),
+  folders: () => (dropboxState().signedIn ? [dropboxFolder()] : []),
   usable: async () => dropboxState().signedIn,
-  // There is one Dropbox and it exists because an app key is saved or a sign-in
-  // is live, so the panel's × is sign-out plus forgetting the key — after which
-  // nothing of Dropbox is left in this browser, which is what × should mean
-  // (§20.6).
+  // There is one Dropbox and it exists because a sign-in is live, so the
+  // panel's × is the sign-out — after which nothing of Dropbox is left in this
+  // browser, which is what × should mean (§20.6).
   disconnect: () => {
     signOut()
-    clearAppKey()
   },
 })

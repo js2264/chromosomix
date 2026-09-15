@@ -318,113 +318,17 @@ export function credentialFor(
  * it a scope would mean a scope with no bucket, which `addressOf` refuses and
  * `s3/list.ts` would try to list.
  */
-const ACCESS = 'metacooler-viewer:access'
-
 /**
- * One stored access credential.
+ * The Google API key a Drive request carries: the one this site was built
+ * with (`config/siteDefaults.ts`), or `null` on a site built without one.
  *
- * A union of one member today, and written as one so it can take a second:
- * `kind` is what tells a Google key apart from whatever an institutional portal
- * turns out to need, and a row whose `kind` this build does not know is dropped
- * by {@link readAccessRows} rather than guessed at.
- *
- * There is **exactly one `google-api-key` row at a time**. A key is a property of
- * a project, a reader has one project, and a list would raise a question — which
- * key for which host? — that has no answer the dialog could ask for.
- */
-export interface AccessRow {
-  id: string
-  kind: 'google-api-key'
-  key: string
-}
-
-/**
- * The stored access rows, validated the way {@link readScopes} validates scopes.
- *
- * Same doctrine, same reasons: this is untrusted input that outlives the build
- * that wrote it, and a row missing its key is dropped rather than repaired —
- * an empty `x-goog-api-key` header is a 403 from Google that names the header
- * and looks exactly like a wrong key.
- */
-export function readAccessRows(): AccessRow[] {
-  let raw: string | null
-  try {
-    raw = window.localStorage.getItem(ACCESS)
-  } catch {
-    return []
-  }
-  if (raw === null) return []
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return []
-  }
-  if (!Array.isArray(parsed)) return []
-  const out: AccessRow[] = []
-  for (const entry of parsed) {
-    if (typeof entry !== 'object' || entry === null) continue
-    const row = entry as Record<string, unknown>
-    if (row['kind'] !== 'google-api-key') continue
-    const id = typeof row['id'] === 'string' ? row['id'] : ''
-    const key = typeof row['key'] === 'string' ? row['key'].trim() : ''
-    if (id === '' || key === '') continue
-    out.push({ id, kind: 'google-api-key', key })
-  }
-  return out
-}
-
-/** Replace the stored rows. */
-function writeAccessRows(rows: readonly AccessRow[]): void {
-  try {
-    window.localStorage.setItem(ACCESS, JSON.stringify(rows))
-  } catch {
-    /* a browser refusing storage still runs; the key just does not persist */
-  }
-}
-
-/**
- * The Google API key a Drive request carries: the reader's own where one is
- * stored, and the site's otherwise (`config/siteDefaults.ts`), or `null`.
+ * It used to be a stored row a reader pasted. It is a property of one Google
+ * project restricted to one site's address, which makes it the deployment's
+ * to provide (`GOOGLE_API_KEY`, docs/deploy.md) and nobody's to type; a
+ * reader's browser keeps nothing of it, because the page already carries it.
  */
 export function readApiKey(): string | null {
-  return ownApiKey() ?? SITE_DEFAULTS.googleApiKey
-}
-
-/** The Google API key this browser holds, or `null` — the site's not counted. */
-export function ownApiKey(): string | null {
-  const row = readAccessRows().find((held) => held.kind === 'google-api-key')
-  return row === undefined ? null : row.key
-}
-
-/**
- * Keep `key` as *the* Google API key, replacing whatever was there.
- *
- * An empty value forgets instead of storing an unusable row, so the dialog's
- * save button on an empty box does what it plainly looks like it does.
- */
-export function writeApiKey(key: string): void {
-  const text = key.trim()
-  if (text === '') {
-    clearApiKey()
-    return
-  }
-  const kept = readAccessRows().filter((row) => row.kind !== 'google-api-key')
-  writeAccessRows([...kept, { id: 'google-api-key', kind: 'google-api-key', key: text }])
-}
-
-/** Forget the Google API key. */
-export function clearApiKey(): void {
-  const kept = readAccessRows().filter((row) => row.kind !== 'google-api-key')
-  if (kept.length === 0) {
-    try {
-      window.localStorage.removeItem(ACCESS)
-    } catch {
-      /* nothing stored is nothing to remove */
-    }
-    return
-  }
-  writeAccessRows(kept)
+  return SITE_DEFAULTS.googleApiKey
 }
 
 // ---------------------------------------------------------------------------

@@ -29,12 +29,20 @@ import {
   setTokenClientFactory,
   signIn,
   signOut,
-  writeClientId,
   type TokenResponse,
 } from '@/auth/google'
 import { driveFolderSection } from '@/ui/DriveFolderSection'
 import { readDriveRows } from '@/state/drives'
 import { all, buttonLabels, buttonNamed, setUpDom, type DomTeardown } from '../support/dom'
+
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com'
 
@@ -51,7 +59,7 @@ function section(): HTMLElement {
 
 /** Sign this tab in, through the seam the real flow is driven by. */
 async function signedIn(): Promise<void> {
-  writeClientId(CLIENT_ID)
+  site.googleClientId = CLIENT_ID
   const response: TokenResponse = { access_token: 'ya29.TOKEN', expires_in: 3599 } as TokenResponse
   setTokenClientFactory((config) => ({ requestAccessToken: () => config.callback(response) }))
   await signIn()
@@ -65,6 +73,7 @@ function inputs(node: HTMLElement): HTMLInputElement[] {
 beforeEach(() => {
   teardown = setUpDom()
   window.localStorage.clear()
+  site.googleClientId = null
   connected = []
   setTokenClientFactory(null)
   signOut()
@@ -83,11 +92,12 @@ describe('before anybody has signed in', () => {
     expect(node.querySelector('h3')?.textContent).toBe('A Google Drive folder')
     expect(buttonLabels(node)).toEqual([])
     expect(inputs(node)).toEqual([])
-    expect(node.textContent).toMatch(/no client id is stored/i)
+    expect(node.textContent).toMatch(/not set up on this site/i)
+    expect(node.textContent).toContain('GOOGLE_CLIENT_ID')
   })
 
-  it('asks for the sign-in rather than the client id once one is stored', async () => {
-    writeClientId(CLIENT_ID)
+  it('asks for the sign-in rather than the client id where the site has one', async () => {
+    site.googleClientId = CLIENT_ID
     const node = section()
     expect(buttonLabels(node)).toEqual([])
     expect(node.textContent).toMatch(/sign in with Google in the section above/i)
@@ -182,8 +192,8 @@ describe('once this tab is signed in', () => {
     const node = section()
     inputs(node)[0].value = 'Run 2024'
 
-    // Editing the client id above announces, which redraws this section.
-    writeClientId('456-def.apps.googleusercontent.com')
+    // A sign-in announces, which redraws this section under the reader.
+    await signedIn()
 
     expect(inputs(node)[0].value).toBe('Run 2024')
   })

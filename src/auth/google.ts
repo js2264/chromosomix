@@ -10,16 +10,17 @@
  * is for the reader to sign in to their own Google account, in their own
  * browser, through Google's own script.
  *
- * ## What the lab supplies, and what the reader supplies
+ * ## What the site supplies, and what the reader supplies
  *
- * The lab supplies a **client id**: a registration in a Google Cloud project
+ * The site supplies a **client id**: a registration in a Google Cloud project
  * saying "this origin may ask my users for these scopes". It is not a secret —
  * it ships in the HTML of every site that uses this flow, and it authorises
- * nothing on its own — which is why it is kept in `localStorage` like a
- * preference rather than like the bucket secret, and why the stored-data screen
- * prints it instead of merely admitting it exists. It cannot be shipped in this
- * repository: it is bound to *an origin*, so a fork served from somewhere else
- * needs its own, and `docs/hosting.md` says how to make one.
+ * nothing on its own — and it is bound to *an origin*, which is why it is a
+ * property of the deployment and of nothing else: the build takes it from the
+ * `GOOGLE_CLIENT_ID` variable (`config/siteDefaults.ts`, docs/deploy.md), a
+ * fork served from somewhere else registers its own, and no reader is asked
+ * for one. There used to be a box for it in the dialog, and it was a question
+ * every reader had to wonder about that only a maintainer could answer.
  *
  * The reader supplies the **grant**, and it is much wider than the client id
  * suggests. `drive.readonly` is read access to **all of their Drive**, where a
@@ -30,8 +31,8 @@
  *
  * ## What is kept, and for how long
  *
- * The client id, in storage. The token, **in memory only and never written**
- * (§24.8) — it is held by `s3/credentials.ts`'s bearer registry, which is a
+ * Nothing in storage: the client id is in the page. The token, **in memory
+ * only and never written** (§24.8) — it is held by `s3/credentials.ts`'s bearer registry, which is a
  * module-level `Map` a reload empties, and it expires inside the hour anyway.
  * Storing it would buy a reader nothing and would cost the stored-data screen
  * the one thing it cannot offer for a short-lived secret: an honest answer.
@@ -73,8 +74,6 @@ import { clearBearer, setBearer } from '../s3/credentials'
 import { TARGET } from '../version'
 import { SITE_DEFAULTS } from '../config/siteDefaults'
 
-/** Where the client id is kept. The API key stays in its own row (§24.7). */
-const KEY = 'metacooler-viewer:google'
 
 /**
  * What the token is asked to be good for.
@@ -158,89 +157,20 @@ export type TokenClientFactory = (
 ) => google.accounts.oauth2.TokenClient | Promise<google.accounts.oauth2.TokenClient>
 
 // ---------------------------------------------------------------------------
-// The client id, which is stored
+// The client id, which is the site's
 // ---------------------------------------------------------------------------
 
-/** Storage that cannot throw — `s3/credentials.ts`'s reasoning, and its shape. */
-function readRaw(): string | null {
-  try {
-    return window.localStorage.getItem(KEY)
-  } catch {
-    return null
-  }
-}
-
 /**
- * The client id a sign-in goes to: the reader's own where one is stored, and
- * the site's otherwise (`config/siteDefaults.ts`), or `null` where neither.
+ * The client id a sign-in goes to: the one this site was built with
+ * (`config/siteDefaults.ts`), or `null` on a site built without one.
+ *
+ * Nothing a reader can enter and nothing this browser keeps. A client id is a
+ * registration of *this site's address* with one Google project, so it is the
+ * deployment's to provide and no reader's to know; the dialog offers the
+ * sign-in it makes possible, and on a site without one says so.
  */
 export function readClientId(): string | null {
-  return ownClientId() ?? SITE_DEFAULTS.googleClientId
-}
-
-/**
- * The client id this browser holds, or `null` — the site's not counted.
- *
- * Validated like every other stored value in this app, because stored state
- * outlives the build that wrote it: anything that is not an object with a
- * non-empty string `clientId` is `null` rather than repaired. The repair would
- * be a sign-in button that is offered, pressed, and answers with Google's own
- * `invalid_client` in a popup — a refusal from a third party about a field this
- * app could have checked itself.
- */
-export function ownClientId(): string | null {
-  const raw = readRaw()
-  if (raw === null) return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null) return null
-  const id = (parsed as Record<string, unknown>)['clientId']
-  if (typeof id !== 'string') return null
-  const text = id.trim()
-  return text === '' ? null : text
-}
-
-/**
- * Keep `id` as the client id, replacing whatever was there.
- *
- * An empty value forgets, so *save* on an empty box does what it plainly looks
- * like it does — the rule `writeApiKey` already follows next door, stated the
- * same way so the two boxes in one dialog behave the same.
- */
-export function writeClientId(id: string): void {
-  const text = id.trim()
-  if (text === '') {
-    clearClientId()
-    return
-  }
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify({ clientId: text }))
-  } catch {
-    /* a browser refusing storage still runs; the id just does not persist */
-  }
-  announce()
-}
-
-/**
- * Forget the client id.
- *
- * It does **not** sign out. The two are separate acts: forgetting the id says
- * *this browser should stop offering to sign in to that project*, and the token
- * already obtained is the reader's own grant, still good for the file they are
- * reading. Revoking it here would close a file that is open, which nobody asked
- * for.
- */
-export function clearClientId(): void {
-  try {
-    window.localStorage.removeItem(KEY)
-  } catch {
-    /* nothing stored is nothing to remove */
-  }
-  announce()
+  return SITE_DEFAULTS.googleClientId
 }
 
 // ---------------------------------------------------------------------------
@@ -411,8 +341,9 @@ export async function signIn(): Promise<void> {
   const clientId = readClientId()
   if (clientId === null) {
     throw new Error(
-      'No Google client id is stored, so there is no project to sign in to. Save the one your ' +
-        'lab registered for this origin under Connect → A Google account.',
+      'Signing in to Google is not set up on this site: it needs a Google client id registered ' +
+        'for its address, which the site’s maintainer provides as GOOGLE_CLIENT_ID ' +
+        '(docs/deploy.md).',
     )
   }
 

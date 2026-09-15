@@ -26,23 +26,22 @@
 
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  accessHeadersFor,
-  bearerFor,
-  clearApiKey,
-  clearBearer,
-  readAccessRows,
-  readApiKey,
-  setBearer,
-  writeApiKey,
-} from '@/s3/credentials'
+import { accessHeadersFor, bearerFor, clearBearer, readApiKey, setBearer } from '@/s3/credentials'
 import { withAccess } from '@/s3/attach'
 import { accessHeaders, applyAccess } from '@/sources/access'
 import type { S3Credential } from '@/s3/sigv4'
 
-const ACCESS = 'metacooler-viewer:access'
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, as this file sets them: the build's values, mocked mutable. */
+const site = SITE_DEFAULTS as { googleClientId: string | null; googleApiKey: string | null; dropboxAppKey: string | null }
+
 const DRIVE = 'https://www.googleapis.com/drive/v3/files/1Ab?alt=media&supportsAllDrives=true'
 const GCS_JSON = 'https://storage.googleapis.com/storage/v1/b/lab/o/rep1.mcool?alt=media'
 const GCS_XML = 'https://storage.googleapis.com/lab/rep1.mcool'
@@ -60,61 +59,15 @@ afterEach(() => {
   for (const pattern of PATTERNS) clearBearer(pattern)
 })
 
-describe('the API key row', () => {
-  it('round-trips through storage, and there is exactly one of it', async () => {
-    expect(readApiKey()).toBeNull()
-    writeApiKey('AIzaFIRST')
-    expect(readApiKey()).toBe('AIzaFIRST')
-    // Saving again replaces rather than appends: a reader who pastes a second
-    // key means *this one now*, and a list would raise a question — which key
-    // for which host — that the dialog has no way to ask.
-    writeApiKey('AIzaSECOND')
-    expect(readAccessRows()).toEqual([{ id: 'google-api-key', kind: 'google-api-key', key: 'AIzaSECOND' }])
-  })
-
-  it('trims, and treats an empty box as forgetting', () => {
-    writeApiKey('  AIzaPADDED  ')
-    expect(readApiKey()).toBe('AIzaPADDED')
-    writeApiKey('   ')
-    expect(readApiKey()).toBeNull()
-    expect(window.localStorage.getItem(ACCESS)).toBeNull()
-  })
-
-  it('forgets on request', () => {
-    writeApiKey('AIzaX')
-    clearApiKey()
-    expect(readApiKey()).toBeNull()
-    expect(readAccessRows()).toEqual([])
-  })
-
-  it('drops a stored row that is not one, rather than repairing it', () => {
-    // Stored state outlives the build that wrote it, exactly as a bucket scope
-    // does. A row with an empty key would send `x-goog-api-key:` and get a 403
-    // from Google naming the header, which looks exactly like a wrong key.
-    window.localStorage.setItem(
-      ACCESS,
-      JSON.stringify([
-        { id: 'a', kind: 'google-api-key', key: '' },
-        { id: '', kind: 'google-api-key', key: 'AIzaX' },
-        { id: 'c', kind: 'something-else', key: 'AIzaY' },
-        'not an object',
-        { id: 'd', kind: 'google-api-key', key: 'AIzaGOOD' },
-      ]),
-    )
-    expect(readAccessRows()).toEqual([{ id: 'd', kind: 'google-api-key', key: 'AIzaGOOD' }])
-  })
-
-  it('answers nothing for a body that is not a list', () => {
-    window.localStorage.setItem(ACCESS, '{"key":"AIzaX"}')
-    expect(readAccessRows()).toEqual([])
-    window.localStorage.setItem(ACCESS, 'not json')
-    expect(readAccessRows()).toEqual([])
-  })
-})
-
 describe('accessHeadersFor — which hosts get the key', () => {
   beforeEach(() => {
-    writeApiKey('AIzaKEY')
+    site.googleApiKey = 'AIzaKEY'
+  })
+
+  it('is the site’s key and nothing a reader stored', () => {
+    expect(readApiKey()).toBe('AIzaKEY')
+    site.googleApiKey = null
+    expect(readApiKey()).toBeNull()
   })
 
   it('sends it to the Drive API', () => {
@@ -136,8 +89,8 @@ describe('accessHeadersFor — which hosts get the key', () => {
     expect(accessHeadersFor('https://bucket.example.org/Hum53.metacool')).toEqual({})
   })
 
-  it('sends nothing when no key is stored', () => {
-    clearApiKey()
+  it('sends nothing on a site built without a key', () => {
+    site.googleApiKey = null
     expect(accessHeadersFor(DRIVE)).toEqual({})
   })
 
@@ -189,7 +142,7 @@ describe('bearer tokens', () => {
   })
 
   it('joins the API key on a host that wants both', () => {
-    writeApiKey('AIzaKEY')
+    site.googleApiKey = 'AIzaKEY'
     setToken('*.googleapis.com', 'ya29.TOKEN', hour())
     expect(accessHeadersFor(DRIVE)).toEqual({
       'x-goog-api-key': 'AIzaKEY',
@@ -216,7 +169,7 @@ describe('withAccess — what is stamped on an outbound message', () => {
     (source as { headers?: Record<string, string> }).headers
 
   it('stamps the headers a URL wants, on the source and on its bins sidecar', () => {
-    writeApiKey('AIzaKEY')
+    site.googleApiKey = 'AIzaKEY'
     const message = withAccess({
       kind: 'open',
       uri: GCS_JSON,
@@ -234,7 +187,7 @@ describe('withAccess — what is stamped on an outbound message', () => {
     // The bug the two-field shape exists to make impossible. An earlier draft
     // returned as soon as it found the outer source already signed, which would
     // have left the key off exactly the sources that carry both.
-    writeApiKey('AIzaKEY')
+    site.googleApiKey = 'AIzaKEY'
     const credential: S3Credential = {
       accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
       secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
@@ -246,7 +199,7 @@ describe('withAccess — what is stamped on an outbound message', () => {
   })
 
   it('leaves a source that already carries headers exactly as it is', () => {
-    writeApiKey('AIzaKEY')
+    site.googleApiKey = 'AIzaKEY'
     const source = { ...GOOGLE_SOURCE, headers: { 'x-goog-api-key': 'AIzaCHOSEN' } }
     expect(withAccess({ kind: 'open', source }).source).toBe(source)
   })

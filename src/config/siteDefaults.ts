@@ -12,10 +12,9 @@
  * They arrive as build-time defines (`vite.config.ts`), read from the
  * `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and `DROPBOX_APP_KEY` environment
  * variables — the deploy passes the repository's Actions variables of those
- * names — and a build without them is exactly the build there was before: each
- * box in the dialog empty, each value pasted by hand. A value a reader pastes
- * always wins over the site's, because a reader signing in to their own lab's
- * project is the case the boxes existed for.
+ * names. They are the only source: nothing a reader can enter, nothing the
+ * browser stores. A site built without one says so where the sign-in would
+ * be, and points its maintainer at docs/deploy.md.
  *
  * `typeof` guards rather than bare reads, so the module also loads where no
  * define was made — the test runner, a build from a tree that predates them.

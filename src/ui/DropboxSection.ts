@@ -1,5 +1,5 @@
 /**
- * The Connect dialog’s Dropbox section: an app key, a sign-in, and a way in.
+ * The Connect dialog’s Dropbox section: a sign-in, and a way in.
  *
  * Its own file rather than another function in `ui/ConnectCard.ts`, because it
  * is the only section of that dialog with a **flow** in it — the reader presses
@@ -17,34 +17,30 @@
  * because a reader who is handed a code with no explanation reasonably assumes
  * something has gone wrong.
  *
- * ## Three controls, and what each of them is
+ * ## Two controls, and what each of them is
  *
- * The **app key** is the lab’s, it is public by construction, and it is the only
- * thing kept. The **sign-in** is the reader’s, it produces a credential, and it
- * is kept nowhere. **Browse** is neither — it opens the folder that the first
- * two have made readable, and it is offered only once they have, on §8.5’s rule:
- * a button that opens a folder the account cannot list is a control that cannot
- * keep its promise. The sign-in button is the deliberate exception the Google
- * section already makes — *disabled with the reason beside it*, because it
- * becomes available by filling in the box directly above it.
+ * The **sign-in** is the reader’s, it produces a credential, and it is kept
+ * nowhere; the app key it names is the site’s, built in, and nothing a reader
+ * is asked for. **Browse** opens the folder the sign-in has made readable, and
+ * it is offered only once it has, on §8.5’s rule: a button that opens a folder
+ * the account cannot list is a control that cannot keep its promise. The
+ * sign-in button is the deliberate exception the Google section makes too —
+ * *disabled with the reason beside it* on a site built without an app key,
+ * because the reason names the one thing a reader can do about it.
  */
 
 import { button, el, field } from './dom'
 import { icon } from './icons'
 import {
   beginSignIn,
-  clearAppKey,
   DROPBOX_PERMISSIONS,
   DROPBOX_SIGN_IN_AVAILABLE,
   dropboxState,
   finishSignIn,
-  ownAppKey,
   signOut,
   subscribeDropbox,
-  writeAppKey,
 } from '../auth/dropbox'
 import { DROPBOX_FOLDER_ID } from '../browse/dropbox'
-import { SITE_DEFAULTS } from '../config/siteDefaults'
 
 /**
  * The section, or `null` where a sign-in cannot work at all.
@@ -60,8 +56,6 @@ import { SITE_DEFAULTS } from '../config/siteDefaults'
 export function dropboxSection(done: (id: string) => void): HTMLElement | null {
   if (!DROPBOX_SIGN_IN_AVAILABLE) return null
 
-  const input = el('input', { class: 'input', type: 'text', placeholder: 'your app key' })
-  const stored = el('p', { class: 'hint' })
   const account = el('p', { class: 'hint' })
   const error = el('p', { class: 'hint bucket-error' })
   const actions = el('div', { class: 'bucket-actions' })
@@ -92,19 +86,13 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
 
   const show = (): void => {
     const state = dropboxState()
-    const key = ownAppKey()
-    const site = SITE_DEFAULTS.dropboxAppKey
-    stored.textContent =
-      key !== null
-        ? // Printed rather than withheld, like the Google client id and unlike
-          // the bucket secret: what a reader coming back here needs to know is
-          // *which app*, and "one is stored" would not tell them.
-          `App key stored: ${key}`
-        : site !== null
-          ? `Using this site’s app key (${site}). Paste your own to use a different Dropbox app.`
-          : 'No app key stored. Signing in needs one; it is not a secret, and it is the only part ' +
-            'of this that is kept.'
-    account.textContent = accountLine(state)
+    // Nothing to type: the app key a sign-in names is the site's, built in
+    // (`config/siteDefaults.ts`), and a site built without one says so here
+    // rather than offering a box only its maintainer could fill.
+    account.textContent = state.configured
+      ? accountLine(state)
+      : 'Signing in to Dropbox is not set up on this site: it needs a Dropbox app key, which the ' +
+        'site’s maintainer provides as DROPBOX_APP_KEY (docs/deploy.md).'
 
     const label = state.expiresAt !== null && !state.signedIn ? 'sign in again' : 'sign in with Dropbox'
     const signInButton = button(
@@ -135,8 +123,7 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
           ? {}
           : {
               title:
-                'Save an app key above first: a sign-in names one Dropbox app, and the app key ' +
-                'is what names it.',
+                'This site was built without a Dropbox app key, so there is no app to sign in to.',
             }),
       },
     )
@@ -184,7 +171,7 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
     // The dialog is built once and thrown away with the modal, and nothing hands
     // a detached body a teardown. It unsubscribes itself the first time it is
     // spoken to after leaving the document — `ui/SequenceCard.ts`’s idiom.
-    if (!stored.isConnected) {
+    if (!account.isConnected) {
       off()
       return
     }
@@ -200,17 +187,13 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
     el('h3', {}, icon('plug', { size: 15 }), el('span', { text: 'Dropbox' })),
     el('p', {
       class: 'hint',
-      text:
-        SITE_DEFAULTS.dropboxAppKey !== null
-          ? 'Browse a Dropbox in the Files panel: sign in with your own Dropbox account.'
-          : 'Browse a Dropbox in the Files panel. Listing needs your own sign-in and the app key ' +
-            'your lab registered — docs/hosting.md has the four steps.',
+      text: 'Browse a Dropbox in the Files panel: sign in with your own Dropbox account.',
     }),
     el('p', {
       class: 'hint',
       text:
         `The app is given ${DROPBOX_PERMISSIONS.join(' and ')}: read access to everything in ` +
-        'your Dropbox, or to the app’s own folder inside it if your lab registered it that way.',
+        'your Dropbox, or to the app’s own folder inside it if the site registered it that way.',
     }),
     el('p', {
       class: 'hint',
@@ -219,35 +202,6 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
         'closes, expiring on its own. A file already open keeps reading for the four hours its ' +
         'link lasts.',
     }),
-    field('app key', input),
-    stored,
-    el(
-      'div',
-      { class: 'bucket-actions' },
-      button(
-        'save',
-        () => {
-          error.textContent = ''
-          writeAppKey(input.value)
-          input.value = ''
-          show()
-        },
-        { class: 'btn btn-primary' },
-      ),
-      button(
-        'forget',
-        () => {
-          error.textContent = ''
-          // The key only. A token already granted is the reader’s own and is
-          // still opening the file in front of them; `auth/dropbox.ts` says why
-          // taking it away here would answer a question nobody asked.
-          clearAppKey()
-          input.value = ''
-          show()
-        },
-        { class: 'btn' },
-      ),
-    ),
     account,
     actions,
     codeRow,

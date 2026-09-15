@@ -95,51 +95,23 @@ describe('storedItems', () => {
     expect(items.find((item) => item.label === 'Bucket keys')?.detail).not.toContain('secret')
   })
 
-  it('names the Google API key on its own line, beside the bucket keys', async () => {
-    // The second secret this browser can be holding (SPECS §24.7), and it gets
-    // the bucket key's treatment for the bucket key's reason: it is a
-    // credential, it is readable by any script on this origin, and a reader on a
-    // borrowed machine must not have to press "forget everything" to find out it
-    // is there. Its own line rather than a clause under Bucket keys, because a
-    // reader who set one and not the other is owed a screen that says which.
+  it('lists nothing for Google or Dropbox, because this browser keeps nothing of them', async () => {
+    // The site's client id, API key and app key are in the page rather than
+    // in storage (`config/siteDefaults.ts`), and the tokens a sign-in produces
+    // are held in memory and never written (SPECS §24.7). Rows an older build
+    // wrote for them are swept by the prefix rule below and never listed.
     window.localStorage.setItem(`${PREFIX}theme`, 'dark')
     window.localStorage.setItem(`${PREFIX}access`, '[{"id":"google-api-key","kind":"google-api-key","key":"AIzaX"}]')
+    window.localStorage.setItem(`${PREFIX}google`, '{"clientId":"123-abc.apps.googleusercontent.com"}')
+    window.localStorage.setItem(`${PREFIX}dropbox`, '{"appKey":"a1b2c3d4e5f6g7h"}')
     const items = await storedItems()
     const labels = items.map((item) => item.label)
-    expect(labels).toContain('Google API key')
-    expect(labels).not.toContain('Bucket keys')
-    // Counted once, as a preference or as a key, never as both.
-    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
-    // The key itself is never printed back: a screenshot of this dialog must
-    // not be a leak.
-    expect(items.find((item) => item.label === 'Google API key')?.detail).not.toContain('AIzaX')
-  })
-
-  it('prints the Google client id in full, because it is not a secret', async () => {
-    // The opposite treatment from the key above, and deliberately so: a client
-    // id is published in the page of every site that uses Google sign-in, it
-    // authorises nothing on its own, and the only question a reader has about it
-    // is *which project has this browser been told to sign in to* — which a
-    // count cannot answer (SPECS §24.7).
-    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
-    window.localStorage.setItem(
-      `${PREFIX}google`,
-      JSON.stringify({ clientId: '123-abc.apps.googleusercontent.com' }),
-    )
-    const items = await storedItems()
-    const line = items.find((item) => item.label === 'Google client id')
-    expect(line?.detail).toContain('123-abc.apps.googleusercontent.com')
-    // And it says what is *not* kept, which is the half a reader cannot check:
-    // the token a sign-in produces is held in memory and never written.
-    expect(line?.detail).toMatch(/never stored/i)
-    // Counted once, as a client id or as a preference, never as both.
-    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
-  })
-
-  it('says nothing about a client id when none is stored', async () => {
-    window.localStorage.setItem(`${PREFIX}theme`, 'dark')
-    const labels = (await storedItems()).map((item) => item.label)
+    expect(labels).not.toContain('Google API key')
     expect(labels).not.toContain('Google client id')
+    expect(labels).not.toContain('Dropbox app key')
+    expect(JSON.stringify(items)).not.toContain('AIzaX')
+    // Counted once, as a preference, and the three old rows not at all.
+    expect(items.find((item) => item.label === 'Preferences')?.detail).toContain('1 setting')
   })
 
   /**

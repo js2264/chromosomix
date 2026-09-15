@@ -344,18 +344,18 @@ probe needs its own, and they expire while a tab is open.
 ### Reading from Google Drive and GCS with an account
 
 A **public** Drive file needs an API key and nothing else — the Drive API refuses a request without
-one even for a file anyone can read — and a public GCS object needs neither. Both are one box in
-**Connect → A Google API key**. This section is the other case: a file that is *not* public, which
-needs the reader's own Google account and therefore a **client id the lab registers**. SPECS §24.7
+one even for a file anyone can read — and a public GCS object needs neither. The key is the site's,
+built in from `GOOGLE_API_KEY` ([docs/deploy.md](deploy.md)); nothing asks a reader for one. This
+section is the other case: a file that is *not* public, which needs the reader's own Google account
+and therefore a **client id the site registers**. SPECS §24.7
 is the specification; `src/auth/google.ts` is the implementation.
 
 No client id is written into this repository, and a fork could not reuse this site's if one were:
 an OAuth client is registered against **the origin the page is served from**, so a fork on another
 domain needs its own. The published site is built with its own, read by the deploy from the
 `GOOGLE_CLIENT_ID` repository variable ([docs/deploy.md](deploy.md), "The site's Google and Dropbox
-registrations"), so a reader there signs in without pasting anything; a client id pasted into the
-dialog still wins over it, for a lab with a project of its own. Making one, in a Google Cloud
-project the lab owns:
+registrations"), so a reader there signs in with nothing to paste: the dialog has no box for it.
+Making one, in a Google Cloud project the lab owns:
 
 1. In the Google Cloud console, pick (or create) the project, then **APIs & Services → Credentials
    → Create credentials → OAuth client ID**, application type **Web application**.
@@ -374,9 +374,9 @@ project the lab owns:
 
 4. Copy the client id — it ends in `.apps.googleusercontent.com` — and put it where the site is
    built: the `GOOGLE_CLIENT_ID` repository variable, beside `GOOGLE_API_KEY` for a key of the same
-   project (Settings → Secrets and variables → Actions → Variables). The next deploy carries both,
-   and **Connect → A Google account** says so. To try it before that deploy, or from a checkout,
-   paste it into that section instead. It is not a secret: it is served in the page of every site
+   project (Settings → Secrets and variables → Actions → Variables). The next deploy carries both.
+   To try it from a checkout, put the same two names in the environment of `npm run dev`
+   ([docs/deploy.md](deploy.md)). It is not a secret: it is served in the page of every site
    that uses this flow, and it authorises nothing on its own. The client *secret* beside it in the
    console is for server applications and is never used here; there is no server to keep it in (C1).
 
@@ -388,8 +388,7 @@ may be used by anyone outside the project. An **unverified** app, with its publi
 screen. That is the realistic arrangement for a lab: a handful of named colleagues, no verification,
 no assessment. It is also why the client id is a variable of each deployment rather than a constant
 of this project — a single client shared by every fork would be one hundred test users for
-everybody, or a verification submission on behalf of all of them — and why a reader whose own lab
-has a client can paste it over the site's: the hundred are the site's, not theirs.
+everybody, or a verification submission on behalf of all of them.
 
 **What the reader is agreeing to**, which the dialog says in two sentences because Google's consent
 screen says neither: `drive.readonly` is read access to *all* of their Drive, where a bucket key is
@@ -414,10 +413,9 @@ environment has:
 
 1. Serve the viewer from an origin registered on the client (`npm run dev` on `http://localhost:5173`
    is the quickest), and open it.
-2. **Connect → A Google account**: paste the client id, press *save*. The line under the box should
-   print the id back, and *sign in with Google* should stop being disabled. On a site built with
-   `GOOGLE_CLIENT_ID` the button is live before anything is pasted and the line names the site's
-   id; pasting one is then the check that a reader's own wins.
+2. **Connect → A Google account**: with `GOOGLE_CLIENT_ID` in the build, or in the environment of
+   `npm run dev`, *sign in with Google* is enabled and nothing asks for an id. Without it the
+   section says sign-in is not set up on this site and names the variable.
 3. Press *sign in with Google*. A Google popup asks for the two scopes; grant them. The section
    should then say **signed in**, with the time the token is good until, and offer *sign out*.
 4. Take a Drive share link for a `.mcool`, `.cool`, `.metacool` or `.hic` that is **not** public —
@@ -490,8 +488,8 @@ there is no public way to browse a Dropbox the way a public bucket can be browse
 No app key is written into this repository: it names one lab's registration, and a key committed
 here would be everybody's. The published site is built with its own, read by the deploy from the
 `DROPBOX_APP_KEY` repository variable ([docs/deploy.md](deploy.md)), so a reader there presses
-*sign in with Dropbox* and nothing else; a key pasted into the dialog wins over it. Making one, in
-the Dropbox App Console:
+*sign in with Dropbox* and nothing else: the dialog has no box for a key. Making one, in the
+Dropbox App Console:
 
 1. **App Console → Create app → Scoped access.**
 2. Choose the access the app gets: **App folder** or **Full Dropbox**. App folder confines it to a
@@ -504,8 +502,8 @@ the Dropbox App Console:
    the dialog says as much rather than printing an address it does not have. A permission added
    *after* somebody has signed in does not apply to the token they are holding — they sign out and
    in again.
-4. **Settings tab:** copy the **App key** into the `DROPBOX_APP_KEY` repository variable, or paste
-   it into **Connect → Dropbox** to use it from this browser alone. Leave
+4. **Settings tab:** copy the **App key** into the `DROPBOX_APP_KEY` repository variable, or into
+   the environment of `npm run dev` to try it from a checkout. Leave
    **Redirect URIs empty.** The viewer asks for a code with no `redirect_uri`, which is what makes
    Dropbox display the code on its own page for the reader to copy — and that is why one app key
    works for the published site, a fork of it on another domain, the desktop build and a local
@@ -538,10 +536,9 @@ worth knowing before they happen:
 has:
 
 1. Register the app as above, serve the viewer (`npm run dev` is the quickest), and open it.
-2. **Connect → Dropbox:** paste the app key, press *save*. The line under the box should print it
-   back, and *sign in with Dropbox* should stop being disabled. On a site built with the variable
-   the button is live before anything is pasted and the line names the site's key; pasting one is
-   then the check that a reader's own wins.
+2. **Connect → Dropbox:** with `DROPBOX_APP_KEY` in the build, *sign in with Dropbox* is enabled
+   and nothing asks for a key. Without it the section says sign-in is not set up on this site and
+   names the variable.
 3. Press *sign in with Dropbox*. A Dropbox tab opens asking to allow the app; allow it, and Dropbox
    shows a code instead of returning to the viewer. Copy the code into the box that has appeared and
    press *finish*. The section should then say **signed in**, with the time the token is good until,
@@ -552,8 +549,8 @@ has:
    with the reason in its tooltip — it is not hidden (§20.5).
 5. Press *sign out*, then click a folder in the panel again. It must refuse, in words, with an offer
    to sign in to Dropbox — not list, and not report a CORS problem.
-6. Reload the page. The Dropbox is still in the Files panel, because the app key is stored; it is
-   not usable until you sign in again, because the token never was.
+6. Reload the page. The Dropbox is gone from the Files panel: the token was never stored, and the
+   folder is the sign-in's. Signing in again brings it back.
 
 Steps 5 and 6 are the pair worth doing carefully: together they are the assertion that the token is
 what read the folder, and that nothing was written down that goes on reading it afterwards.
