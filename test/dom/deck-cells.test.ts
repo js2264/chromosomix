@@ -17,6 +17,7 @@ import { PanelDeck } from '@/panels/PanelDeck'
 import { parseG3d } from '@/annotations/g3d'
 import { AnnotationStore } from '@/annotations/store'
 import { GroupSettings } from '@/annotations/groups'
+import { ManualStore } from '@/annotations/manual'
 import { assemblyOf } from '@/genome/assembly'
 import type { TracksContext } from '@/panels/TracksPanel'
 import type { AnnotationEntry, AnnotationStyle } from '@/annotations/types'
@@ -176,6 +177,7 @@ function make(
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
   const dropped: string[] = []
+  const manual = new ManualStore(`deck-cells-marks-${Math.random()}`)
   const deck = new PanelDeck({
     onMapsChange: (maps) => published.push(maps),
     memoryKey: () => 'deck-cells-test',
@@ -184,6 +186,8 @@ function make(
     ...(options.mapsAllowed === undefined ? {} : { mapsAllowed: () => options.mapsAllowed === true }),
     structure: {
       store: () => store as unknown as AnnotationStore | undefined,
+      manual: () => manual,
+      contacts: () => null,
       onGoTo: (range) => went.push(range),
       onDrop: (file) => dropped.push(file.name),
       onDropUrl: (url) => dropped.push(url),
@@ -505,5 +509,70 @@ describe('the deck beside the browser', () => {
     // The add row keeps the two cells that can join and puts the map roads away.
     deck.promptAdd()
     expect(deck.el.querySelector('.deck-add')?.classList.contains('is-cells-only')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Colourings from the session's rows, loops, and a picking mode (§25.5)
+// ---------------------------------------------------------------------------
+
+describe('what the model can be coloured by', () => {
+  function trackEntry(id: string, label: string, kind: 'track' | 'segments' | 'pairs'): AnnotationEntry {
+    return {
+      id,
+      card: 'linear',
+      kind,
+      label,
+      source: { kind: 'detached', name: label },
+      status: 'ready',
+      visible: true,
+      placement: 'bottom',
+      style: defaultStyle(kind, '#c0392b'),
+    } as unknown as AnnotationEntry
+  }
+
+  it('lists the session’s tracks and feature sets, the marks, and the pinned bead’s distance', () => {
+    const store = fakeStore([structureEntry(), trackEntry('t1', 'ATAC', 'track'), trackEntry('f1', 'peaks', 'segments')])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    cell?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
+    const field = all<HTMLElement>(cell ?? document.body, '.structure-menu .structure-field').find(
+      (node) => node.querySelector('span')?.textContent === 'colour by',
+    )
+    const select = field?.querySelector<HTMLSelectElement>('select')
+    const values = Array.from(select?.options ?? []).map((option) => option.value)
+    expect(values).toContain('track:t1')
+    expect(values).toContain('features:f1')
+    expect(values).toContain('marks')
+    expect(values).toContain('distance')
+    expect(values).toContain('contacts')
+    expect(values).not.toContain('track:f1')
+  })
+
+  it('offers a loops row as chords only where the list has one', () => {
+    const without = make(fakeStore([structureEntry()]))
+    without.deck.add({ kind: 'structure' })
+    structureCells(without.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
+    const labels = (deck: PanelDeck): string[] =>
+      all<HTMLElement>(deck.el, '.structure-menu .structure-field > span').map((node) => node.textContent ?? '')
+    expect(labels(without.deck)).not.toContain('loops as chords')
+    const store = fakeStore([structureEntry(), trackEntry('l1', 'loops.bedpe', 'pairs')])
+    const withLoops = make(store)
+    withLoops.deck.add({ kind: 'structure' })
+    structureCells(withLoops.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
+    expect(labels(withLoops.deck)).toContain('loops as chords')
+  })
+
+  it('takes part in a picking mode armed on the deck, and is let go with it', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const wrap = structureCells(deck)[0]?.querySelector('.structure-wrap')
+    let ended = 0
+    const cancel = deck.armPicking({ point: () => {} }, () => ended++)
+    expect(wrap?.classList.contains('is-picking')).toBe(true)
+    cancel()
+    expect(wrap?.classList.contains('is-picking')).toBe(false)
+    expect(ended).toBe(1)
   })
 })

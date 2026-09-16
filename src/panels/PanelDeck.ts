@@ -1417,10 +1417,22 @@ export class PanelDeck {
     }
     if (ref.kind === 'structure') {
       const shared = this.props.structure
+      const contacts = shared?.contacts
       slot.cell = new StructurePanel({
         id: slot.id,
         store: () => shared?.store(),
         manual: () => shared?.manual?.(),
+        client: () => shared?.client?.(),
+        bookmarks: () => shared?.bookmarks?.(),
+        // Passed only where the session offers it, since the cell offers
+        // *colour by contacts* on the strength of its presence.
+        ...(contacts === undefined
+          ? {}
+          : {
+              contacts: (from: { contig: string; bp: number }, to: ReadonlyArray<{ contig: string; bp: number }>) =>
+                contacts(from, to),
+              contactsScale: () => shared?.contactsScale?.() ?? null,
+            }),
         memoryKey: () => this.props.memoryKey(),
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),
@@ -1855,7 +1867,7 @@ export class PanelDeck {
    */
   armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
     const cancels = this.slots
-      .map((slot) => slot.panel?.armPicking(handlers, onEnd))
+      .map((slot) => slot.panel?.armPicking(handlers, onEnd) ?? slot.cell?.armPicking?.(handlers, onEnd))
       .filter((cancel): cancel is () => void => cancel !== undefined)
     return () => {
       for (const cancel of cancels) cancel()

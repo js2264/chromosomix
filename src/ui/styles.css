@@ -9033,6 +9033,22 @@ span.deck-name {
   display: none;
 }
 
+/* A picking mode (`ui/mapPick.ts`): the pointer says a click names a place. */
+.structure-wrap.is-picking > canvas {
+  cursor: crosshair;
+}
+
+/* A bookmark's name on the model, set apart from a sequence's. */
+.structure-label.is-bookmark {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+.structure-label.is-ghost {
+  opacity: 0.45;
+}
+
 /* ---------------------------------------------------------------------------
    The tracks cell (§25.3): the session's tracks alone, in a cell of the deck.
 

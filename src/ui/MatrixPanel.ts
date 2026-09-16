@@ -7316,6 +7316,41 @@ export class MatrixPanel {
   }
 
   /**
+   * The map's own values between one place and many — the row through a
+   * pinned bead, for the structure cell to colour by (§25.5).
+   *
+   * Read out of the block the picture is drawn from, on the square axes, so
+   * a bead's colour is by construction the colour of the cell it names; a
+   * turned map reads the same square. `NaN` for a place off the block or in
+   * an empty cell, and `null` where there is no block, no square axis, or
+   * the first place is not on it. Zero I/O: the block is in hand.
+   */
+  contactsBetween(
+    from: { contig: string; bp: number },
+    to: ReadonlyArray<{ contig: string; bp: number }>,
+  ): Float32Array | null {
+    const data = this.data
+    const values = this.drawn
+    const rows = this.squareAxes.rows
+    const cols = this.squareAxes.cols
+    if (data === null || values === null || rows === null || cols === null) return null
+    const rowUnit = rows.locusToUnit(from.contig, from.bp)
+    if (rowUnit === null) return null
+    const row = Math.floor(rowUnit)
+    if (row < 0 || row >= data.nrows) return null
+    const out = new Float32Array(to.length).fill(Number.NaN)
+    for (let i = 0; i < to.length; i++) {
+      const at = to[i]
+      const colUnit = cols.locusToUnit(at.contig, at.bp)
+      if (colUnit === null) continue
+      const col = Math.floor(colUnit)
+      if (col < 0 || col >= data.ncols) continue
+      out[i] = values[row * data.ncols + col]
+    }
+    return out
+  }
+
+  /**
    * Put a stretch on the **column** axis and leave the rows where they are —
    * what a tracks cell of the deck asks for when the reader pans it (§25.3).
    *

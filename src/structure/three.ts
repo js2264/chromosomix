@@ -46,7 +46,9 @@ import {
   Fog,
   InstancedMesh,
   Line,
+  LineBasicMaterial,
   LineDashedMaterial,
+  LineSegments,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -99,6 +101,9 @@ export class StructureRenderer {
   private sticks: InstancedMesh | null = null
   private tubes: Mesh[] = []
   private chord: Line | null = null
+  /** Loops as chords (§25.5), one segment per pair. */
+  private chords: LineSegments | null = null
+  private chordsFrom: ReadonlyArray<readonly [number, number]> | null = null
   private readonly raycaster = new Raycaster()
   private width = 1
   private height = 1
@@ -273,6 +278,13 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
+    if (this.chords !== null) {
+      this.root.remove(this.chords)
+      this.chords.geometry.dispose()
+      ;(this.chords.material as LineBasicMaterial).dispose()
+      this.chords = null
+      this.chordsFrom = null
+    }
     if (this.chord !== null) {
       this.root.remove(this.chord)
       this.chord.geometry.dispose()
@@ -425,6 +437,14 @@ export class StructureRenderer {
     this.chord.visible = false
     this.root.add(this.chord)
 
+    this.chords = new LineSegments(
+      new BufferGeometry(),
+      new LineBasicMaterial({ color: hexOf(this.palette.ink), transparent: true, opacity: 0.55 }),
+    )
+    this.chords.visible = false
+    this.root.add(this.chords)
+    this.chordsFrom = null
+
     this.recolour()
   }
 
@@ -511,6 +531,27 @@ export class StructureRenderer {
     }
     this.halos.count = count
     this.halos.instanceMatrix.needsUpdate = true
+
+    if (this.chords !== null && this.chordsFrom !== view.chords) {
+      // Rebuilt only when the list is a new one: the panel hands the same
+      // array back frame after frame while nothing about the loops changed.
+      this.chordsFrom = view.chords
+      const kept = view.chords.filter(([a, b]) => this.shown[a] === 1 && this.shown[b] === 1)
+      const array = new Float32Array(kept.length * 6)
+      kept.forEach(([a, b], at) => {
+        array[at * 6] = structure.x[a]
+        array[at * 6 + 1] = structure.y[a]
+        array[at * 6 + 2] = structure.z[a]
+        array[at * 6 + 3] = structure.x[b]
+        array[at * 6 + 4] = structure.y[b]
+        array[at * 6 + 5] = structure.z[b]
+      })
+      this.chords.geometry.dispose()
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(array, 3))
+      this.chords.geometry = geometry
+      this.chords.visible = kept.length > 0
+    }
 
     const chord = view.chord
     if (chord !== null && this.shown[chord[0]] === 1 && this.shown[chord[1]] === 1) {

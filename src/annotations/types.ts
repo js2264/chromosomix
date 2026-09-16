@@ -1097,6 +1097,12 @@ export const STRUCTURE_COLOUR_POSITION = 'position'
 export const STRUCTURE_COLOUR_SCORE = 'score'
 export const STRUCTURE_COLOUR_DISTANCE = 'distance'
 export const STRUCTURE_COLOUR_CONTACTS = 'contacts'
+/** The reader's own marks: a line colours its bead, a rectangle its run (§25.5). */
+export const STRUCTURE_COLOUR_MARKS = 'marks'
+/** `track:<row id>` — a loaded track's values at each bead, on the lane's limits. */
+export const STRUCTURE_COLOUR_TRACK = 'track:'
+/** `features:<row id>` — a feature set's colour where a bead overlaps one. */
+export const STRUCTURE_COLOUR_FEATURES = 'features:'
 
 /**
  * Everything the structure cell's own menu controls.
@@ -1136,6 +1142,12 @@ export interface StructureStyle {
    * the key; the solo is a decision about this model and is kept with it.
    */
   haplotype: string
+  /**
+   * A pairs row (BEDPE, loops) drawn as chords between its anchors' beads, by
+   * the row's id; `''` for none (§25.5). Kept in the style rather than the
+   * cell because it is a fact about how the model reads, like its colouring.
+   */
+  loops: string
 }
 
 export function defaultStructureStyle(): StructureStyle {
@@ -1152,6 +1164,7 @@ export function defaultStructureStyle(): StructureStyle {
     projection: 'perspective',
     lit: true,
     haplotype: '',
+    loops: '',
   }
 }
 
@@ -1206,6 +1219,7 @@ export function structureStyleOf(value: unknown): StructureStyle {
     projection: row['projection'] === 'orthographic' ? 'orthographic' : 'perspective',
     lit: row['lit'] !== false,
     haplotype: typeof haplotype === 'string' && haplotype.length <= 64 ? haplotype : '',
+    loops: typeof row['loops'] === 'string' && (row['loops'] as string).length <= 200 ? (row['loops'] as string) : '',
   }
 }
 

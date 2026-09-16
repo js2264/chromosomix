@@ -29,7 +29,7 @@
  * row draws beside a map cannot disagree about where a bead is.
  */
 
-import type { AnnotationEntry, StructureStyle } from '../annotations/types'
+import type { AnnotationEntry, StructureStyle, TrackSampleSet } from '../annotations/types'
 import {
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
@@ -42,6 +42,32 @@ import {
 import type { AnnotationStore } from '../annotations/store'
 import type { ManualStore } from '../annotations/manual'
 import { mintMarkId } from '../annotations/manual'
+import type { BookmarkStore } from '../annotations/bookmarks'
+import type { AnnotationClient } from '../annotations/worker/client'
+import { SampleCache } from '../annotations/samples'
+import {
+  STRUCTURE_COLOUR_CONTACTS,
+  STRUCTURE_COLOUR_DISTANCE,
+  STRUCTURE_COLOUR_FEATURES,
+  STRUCTURE_COLOUR_MARKS,
+  STRUCTURE_COLOUR_TRACK,
+  hasTrackControls,
+  isIntervalSet,
+} from '../annotations/types'
+import type { ColorScale } from '../types'
+import { featureColouring } from '../render/featureInk'
+import { isArmed, pickLocus, type PickHandlers } from '../ui/mapPick'
+import {
+  contactsSource,
+  distanceSource,
+  featureSource,
+  loopChords,
+  marksSource,
+  midpointsOf,
+  structureAxis,
+  trackSource,
+} from '../structure/sources'
+import type { ColourSource } from '../structure/colour'
 import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
 import type { LocusWindow } from '../render/locus'
 import { colormapCss } from '../render/colormaps'
@@ -89,6 +115,21 @@ export interface StructurePanelProps {
   store(): AnnotationStore | undefined
   /** The reader's marks, for a shift-click to add a line to. */
   manual?(): ManualStore | undefined
+  /** The session's annotation worker, for sampling a track at each bead (§25.5). */
+  client?(): AnnotationClient | undefined
+  /** The reader's bookmarks, named on the model at their beads. */
+  bookmarks?(): BookmarkStore | undefined
+  /**
+   * The lead map's own values between one place and many — the row through
+   * the pinned bead, for *colour by contacts* (§25.5). `null` where the lead
+   * has no block, or is not a map.
+   */
+  contacts?(
+    from: { contig: string; bp: number },
+    to: ReadonlyArray<{ contig: string; bp: number }>,
+  ): Float32Array | null
+  /** The scale that lead draws with, so the beads agree with the picture. */
+  contactsScale?(): ColorScale | null
   /** Where the camera is remembered — the session's memory key. */
   memoryKey(): string
   /** The × on the heading. */
@@ -117,6 +158,9 @@ const CAMERA_SCOPE = 'structure:camera'
 
 /** How far a press may travel and still be a click. */
 const CLICK_SLOP = 4
+
+/** One empty list, handed back frame after frame so the renderer keeps its buffer. */
+const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
 
 /** What a cell says while the row it draws is not ready. */
 const WAITING = {
@@ -149,6 +193,12 @@ export class StructurePanel implements DeckCell {
    * never downloads it. `null` until then, and every call that needs it asks.
    */
   private renderer: StructureRenderer | null = null
+  /** Samples of a track at each bead, fetched through the session's worker. */
+  private samples: SampleCache | null = null
+  /** The loops drawn as chords, kept while nothing about them changed. */
+  private chords: { key: string; list: Array<readonly [number, number]> } | null = null
+  /** A picking mode this cell is taking part in (`ui/mapPick.ts`). */
+  private picking: { handlers: PickHandlers; end: () => void } | null = null
   private observer: ResizeObserver | null = null
   private readonly unsubscribes: Array<() => void> = []
   private entry: AnnotationEntry | null = null
@@ -221,6 +271,12 @@ export class StructurePanel implements DeckCell {
     }
     const store = props.store()
     if (store !== undefined) this.unsubscribes.push(store.subscribe(() => this.sync()))
+    // The marks and the bookmarks are drawn on the model, so a change to
+    // either is a repaint; the marks are also a colouring (§25.5).
+    const manual = props.manual?.()
+    if (manual !== undefined) this.unsubscribes.push(manual.subscribe(() => this.recolour()))
+    const bookmarks = props.bookmarks?.()
+    if (bookmarks !== undefined) this.unsubscribes.push(bookmarks.subscribe(() => this.schedule()))
     this.unsubscribes.push(
       subscribeHoverPlace((place) => {
         if (place === null || place.source === this.source) {
@@ -251,6 +307,16 @@ export class StructurePanel implements DeckCell {
   applyWindow(windows: { rows: LocusWindow[]; cols: LocusWindow[] } | null): void {
     this.windows = windows
     this.relight()
+    // The lead moved, so its block may have: a colouring read off that block
+    // is read again, and the loops touching the window are chosen again.
+    if (this.style().colourBy === STRUCTURE_COLOUR_CONTACTS) this.colours = null
+    this.chords = null
+    this.schedule()
+  }
+
+  /** A colouring's source changed under it: colour again on the next frame. */
+  private recolour(): void {
+    this.colours = null
     this.schedule()
   }
 
@@ -286,7 +352,28 @@ export class StructurePanel implements DeckCell {
     for (const off of this.unsubscribes.splice(0)) off()
     this.observer?.disconnect()
     this.renderer?.destroy()
+    this.samples?.destroy()
+    this.cancelPicking()
     if (this.hovered.length > 0) setHoverPlace(null)
+  }
+
+  /**
+   * Take part in a picking mode: a click on a bead names its locus, on both
+   * axes, for the card that armed it (`ui/mapPick.ts`). A bead is one place,
+   * so the two coordinates are one, as a track's are.
+   */
+  armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
+    this.picking?.end()
+    this.picking = { handlers, end: onEnd }
+    this.wrap.classList.add('is-picking')
+    return () => this.cancelPicking()
+  }
+
+  private cancelPicking(): void {
+    const picking = this.picking
+    this.picking = null
+    this.wrap.classList.remove('is-picking')
+    picking?.end()
   }
 
   /** Fetch the GPU side and seat its canvas; see {@link renderer}. */
@@ -337,6 +424,10 @@ export class StructurePanel implements DeckCell {
       this.structure = null
       this.builtFrom = null
     } else {
+      // A colouring read off another row — a track's values, a feature set's
+      // colours — is stale the moment the list changes under it.
+      this.colours = null
+      this.chords = null
       if (this.builtFrom !== payload.data) {
         this.structure = buildStructure(payload.data)
         this.builtFrom = payload.data
@@ -572,8 +663,27 @@ export class StructurePanel implements DeckCell {
         }
         return
       }
+      // A picking mode first: the click names a place for the card that asked
+      // (a mark's form, an analysis's locus box) rather than pinning.
+      const model = this.structure
+      if (model === null) return
+      const picked = lociOf(model, bead)
+      if (this.picking !== null) {
+        const point = { contig: picked.contig, bp: Math.round((picked.start + picked.end) / 2) }
+        this.picking.handlers.point?.({ rows: point, cols: point, oneAxis: true })
+        return
+      }
+      if (isArmed()) {
+        pickLocus({ contig: picked.contig, start: picked.start, end: picked.end })
+        return
+      }
       if (drag.shift) this.markAt(bead)
-      else this.pinned = this.pinned === bead ? -1 : bead
+      else {
+        this.pinned = this.pinned === bead ? -1 : bead
+        // A colouring from the pinned bead follows the pin.
+        const by = this.style().colourBy
+        if (by === STRUCTURE_COLOUR_DISTANCE || by === STRUCTURE_COLOUR_CONTACTS) this.colours = null
+      }
       this.schedule()
     }
     canvas.addEventListener('pointerup', release)
@@ -602,7 +712,19 @@ export class StructurePanel implements DeckCell {
       },
       { passive: false },
     )
-    canvas.addEventListener('dblclick', () => this.frameLit())
+    // A double-click on a bead takes the maps to its locus (§25.4); on the
+    // air, it frames what they are looking at.
+    canvas.addEventListener('dblclick', (event) => {
+      const at = local(event)
+      const bead = this.renderer?.pick(at.x, at.y) ?? -1
+      const model = this.structure
+      if (bead >= 0 && model !== null) {
+        const locus = lociOf(model, bead)
+        this.props.onGoTo({ contig: locus.contig, start: locus.start, end: locus.end })
+        return
+      }
+      this.frameLit()
+    })
     canvas.addEventListener('keydown', (event) => {
       const step = 0.08
       if (event.key === 'ArrowLeft') this.camera = orbit(this.camera, -step, 0)
@@ -748,7 +870,7 @@ export class StructurePanel implements DeckCell {
     const projection = style.projection
     if (this.camera.projection !== projection) this.camera = { ...this.camera, projection }
     if (this.colours === null || this.colouredBy !== style.colourBy) {
-      this.colours = resolveColours(structure, style)
+      this.colours = resolveColours(structure, style, this.colourSource(structure, style.colourBy))
       this.colouredBy = style.colourBy
     }
     const haplotype = style.haplotype === '' ? -1 : structure.haplotypes.indexOf(style.haplotype)
@@ -761,8 +883,89 @@ export class StructurePanel implements DeckCell {
       hovered: getPlotOptions().crosshair ? this.hovered : [],
       pinned: this.pinned,
       chord: getPlotOptions().crosshair ? this.chord : null,
+      chords: this.loopsOf(structure, style.loops),
       haplotype,
     }
+  }
+
+  /**
+   * What a colouring outside the file is read from (§25.5), or `null` for
+   * one the file answers itself. Each reads the session's own machinery —
+   * the store's rows, the sample cache, the marks, the lead map — and hands
+   * the numbers to `structure/sources.ts`, which decides what they mean.
+   */
+  private colourSource(structure: Structure, by: string): ColourSource | null {
+    const store = this.props.store()
+    if (by.startsWith(STRUCTURE_COLOUR_TRACK)) {
+      const id = by.slice(STRUCTURE_COLOUR_TRACK.length)
+      const entry = store?.entries.find((row) => row.id === id)
+      if (entry === undefined || !hasTrackControls(entry.kind)) {
+        return { label: 'a track no longer in the list' }
+      }
+      return trackSource(structure, this.samplesOf(structure, entry), entry.label, entry.style.limits)
+    }
+    if (by.startsWith(STRUCTURE_COLOUR_FEATURES)) {
+      const id = by.slice(STRUCTURE_COLOUR_FEATURES.length)
+      const entry = store?.entries.find((row) => row.id === id)
+      const payload = entry?.payload
+      if (entry === undefined || payload === undefined || payload.kind !== 'features') {
+        return { label: 'a feature set no longer in the list' }
+      }
+      const colouring = featureColouring(
+        payload.data,
+        entry.kind,
+        entry.style.features?.colourBy ?? '',
+        entry.style.colour,
+      )
+      return featureSource(structure, payload.data, entry.label, entry.style.colour, colouring.colourOf)
+    }
+    if (by === STRUCTURE_COLOUR_MARKS) {
+      return marksSource(structure, this.props.manual?.()?.marks ?? [])
+    }
+    if (by === STRUCTURE_COLOUR_DISTANCE) return distanceSource(structure, this.pinned)
+    if (by === STRUCTURE_COLOUR_CONTACTS) {
+      const contacts = this.props.contacts
+      if (contacts === undefined || this.pinned < 0) return contactsSource(structure, null, null)
+      const from = lociOf(structure, this.pinned)
+      const values = contacts({ contig: from.contig, bp: (from.start + from.end) / 2 }, midpointsOf(structure))
+      return contactsSource(structure, values, this.props.contactsScale?.() ?? null)
+    }
+    return null
+  }
+
+  /**
+   * A track's samples over the whole model, one bucket per bead.
+   *
+   * Through the same cache the lanes use, keyed to this cell, so the values
+   * are the covered-base-weighted means the lane itself draws. `null` until
+   * they arrive, and the cache's callback colours again when they do.
+   */
+  private samplesOf(structure: Structure, entry: AnnotationEntry): TrackSampleSet | null {
+    const client = this.props.client?.()
+    if (client === undefined) return null
+    if (this.samples === null) this.samples = new SampleCache(client, () => this.recolour())
+    const axis = structureAxis(structure)
+    return this.samples.samplesFor({
+      entry: entry.id,
+      scope: `structure:${this.props.id}`,
+      axis,
+      domain: [0, axis.unitEnd],
+      pixels: Math.max(1, structure.set.length),
+      ...(entry.derivedFrom === undefined ? {} : { derived: entry.derivedFrom }),
+    })
+  }
+
+  /** The loops row drawn as chords, or none; kept while nothing about it changed. */
+  private loopsOf(structure: Structure, loops: string): ReadonlyArray<readonly [number, number]> {
+    if (loops === '') return NO_CHORDS
+    const entry = this.props.store()?.entries.find((row) => row.id === loops)
+    const payload = entry?.payload
+    if (entry === undefined || payload === undefined || payload.kind !== 'pairs') return NO_CHORDS
+    const key = `${loops}:${payload.data.length}:${this.lit === null ? 'all' : 'lit'}`
+    if (this.chords === null || this.chords.key !== key) {
+      this.chords = { key, list: loopChords(structure, payload.data, this.lit) }
+    }
+    return this.chords.list
   }
 
   private draw(): void {
@@ -830,6 +1033,22 @@ export class StructurePanel implements DeckCell {
     if (!view.style.labels) return
     const structure = view.structure
     const box = { width: this.wrap.clientWidth, height: this.wrap.clientHeight }
+    // The reader's bookmarks, at the bead in the middle of each (§25.5).
+    for (const mark of this.props.bookmarks?.()?.marks ?? []) {
+      const bead = beadsAt(structure, mark.contig, (mark.start + mark.end) / 2)[0]
+      if (bead === undefined) continue
+      if (view.lit !== null && view.lit[bead] === 0 && view.style.others === 'hide') continue
+      const at = projectInto(view, box, bead)
+      if (at === null) continue
+      this.labelsEl.append(
+        el('span', {
+          class: 'structure-label is-bookmark',
+          text: mark.label,
+          title: `${mark.contig}:${fmt.int(mark.start + 1)}–${fmt.int(mark.end)}`,
+          style: { left: `${at.px}px`, top: `${at.py}px` },
+        }),
+      )
+    }
     for (const chain of structure.chains) {
       if (view.haplotype >= 0 && chain.hap !== view.haplotype) continue
       const mid = chain.beads[chain.beads.length >> 1]
@@ -907,6 +1126,36 @@ export class StructurePanel implements DeckCell {
         colourings.push({ value: field.key, text: `${field.label} (from the file)` })
       }
     }
+    // The session's rows, as colourings (§25.5): a track's values at each
+    // bead, a feature set's colours where a bead overlaps one — and the
+    // reader's marks, the pinned bead's distances, the map's row through it.
+    const store = this.props.store()
+    const tracks = (store?.entries ?? []).filter((row) => hasTrackControls(row.kind) && row.status === 'ready')
+    const featureSets = (store?.entries ?? []).filter(
+      (row) => row.kind !== 'structure' && isIntervalSet(row.kind) && row.status === 'ready',
+    )
+    for (const row of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${row.id}`, text: `${row.label} (track)` })
+    for (const row of featureSets) {
+      colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${row.id}`, text: `${row.label} (features)` })
+    }
+    if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
+    colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
+    if (this.props.contacts !== undefined) {
+      colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
+    }
+    // A colouring the list no longer has stays selectable, so the picker
+    // says what is chosen rather than quietly showing the first option.
+    if (!colourings.some((option) => option.value === style.colourBy)) {
+      colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
+    }
+    const loopRows = (store?.entries ?? []).filter((row) => row.kind === 'pairs' && row.status === 'ready')
+    const loopChoices: Array<{ value: string; text: string }> = [
+      { value: '', text: 'none' },
+      ...loopRows.map((row) => ({ value: row.id, text: row.label })),
+    ]
+    if (style.loops !== '' && !loopRows.some((row) => row.id === style.loops)) {
+      loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
+    }
     const haplotypes: Array<{ value: string; text: string }> = [
       { value: '', text: 'both homologues' },
       ...(structure?.haplotypes.map((name) => ({ value: name, text: name })) ?? []),
@@ -919,6 +1168,9 @@ export class StructurePanel implements DeckCell {
         (value) => this.restyle({ representation: value as StructureStyle['representation'] }),
       ),
       select('colour by', colourings, style.colourBy, (value) => this.restyle({ colourBy: value })),
+      ...(loopRows.length > 0 || style.loops !== ''
+        ? [select('loops as chords', loopChoices, style.loops, (value) => this.restyle({ loops: value }))]
+        : []),
       range('bead radius', style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v })),
       range('tube radius', style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v })),
       range('opacity', style.opacity, 0.1, 1, 0.05, (v) => this.restyle({ opacity: v })),

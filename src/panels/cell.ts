@@ -17,6 +17,7 @@
 
 import type { LocusWindow } from '../render/locus'
 import type { ViewState } from '../types'
+import type { PickHandlers } from '../ui/mapPick'
 
 export type DeckCellKind = 'structure' | 'tracks'
 
@@ -45,5 +46,11 @@ export interface DeckCell {
    * the structure cell does, has no use for the deck's relay.
    */
   showLocusEcho?(locus: { contig: string; bp: number } | null): void
+  /**
+   * Take part in a picking mode (`ui/mapPick.ts`): a click names a place for
+   * the card that armed it, until it is cancelled. Optional, for a cell that
+   * has places to click on.
+   */
+  armPicking?(handlers: PickHandlers, onEnd: () => void): () => void
   destroy(): void
 }

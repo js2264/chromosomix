@@ -48,6 +48,8 @@ export interface StructureView {
   pinned: number
   /** Two beads joined by a chord — the two ends of a hovered contact. */
   chord: readonly [number, number] | null
+  /** Loops drawn as chords (§25.5): each pair's anchors, as beads. */
+  chords: ReadonlyArray<readonly [number, number]>
   /** The one haplotype shown, as an index, or `-1` for all of them. */
   haplotype: number
 }
@@ -193,6 +195,21 @@ export function drawStructure(
     ctx.beginPath()
     ctx.arc(px[i], py[i], radius, 0, Math.PI * 2)
     ctx.fill()
+  }
+
+  // Loops as chords, under the hovered one: thin, so a hundred of them read
+  // as a texture of the model rather than a cage round it.
+  if (view.chords.length > 0) {
+    ctx.globalAlpha = 0.55
+    ctx.strokeStyle = palette.ink
+    ctx.lineWidth = Math.max(0.5, stickRadius * 0.5)
+    ctx.beginPath()
+    for (const [a, b] of view.chords) {
+      if (shown[a] !== 1 || shown[b] !== 1) continue
+      ctx.moveTo(px[a], py[a])
+      ctx.lineTo(px[b], py[b])
+    }
+    ctx.stroke()
   }
 
   // The chord on top of everything: the one line that says *these two*.

@@ -695,6 +695,8 @@ export class Session {
   /** The Metadata card (§8.12); rebuilt with the file, like every other card. */
   private metadataCard: MetadataCard | null = null
   private bookmarksCard: BookmarksCard | null = null
+  /** The bookmarks behind the card, for the structure cell to name on the model (§25.5). */
+  private bookmarkStore: BookmarkStore | null = null
   /**
    * The state the mounted view was built for.
    *
@@ -4192,8 +4194,9 @@ export class Session {
       picker: this.markPicker(),
       fileLabel: fileLabel(uri),
     })
+    this.bookmarkStore = new BookmarkStore(scope)
     this.bookmarksCard = new BookmarksCard({
-      store: new BookmarkStore(scope),
+      store: this.bookmarkStore,
       go: (mark) => this.goToBookmark(mark),
       available: () => this.current?.panel !== undefined,
       // Read off whatever panel is mounted *now*, not off one captured here: this
@@ -5227,6 +5230,12 @@ export class Session {
       structure: {
         store: () => this.annotations?.store,
         manual: () => this.annotations?.manual,
+        client: () => this.annotations?.client,
+        bookmarks: () => this.bookmarkStore ?? undefined,
+        // The lead map's own block, read in place: the row through the
+        // pinned bead, on the scale the map draws with (§25.5).
+        contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,
+        contactsScale: () => this.current?.panel?.shownScale() ?? null,
         onGoTo: (range) => this.goToLocus(formatLocus(range)),
         onDrop: (file) => this.dropped(file),
         onDropUrl: (url) => {
