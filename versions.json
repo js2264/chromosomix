@@ -1,6 +1,13 @@
 {
-  "latest": "6ce6e01",
+  "latest": "0a68e2b",
   "versions": [
+    {
+      "commit": "0a68e2b",
+      "version": "0.12.0",
+      "date": "2026-09-16T14:48:29+02:00",
+      "subject": "Redefine HiC score as mean of bin's line across near-diagonal (#63)",
+      "tag": ""
+    },
     {
       "commit": "6ce6e01",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "fc95dee",
-      "version": "0.12.0",
-      "date": "2026-09-12T00:11:33+02:00",
-      "subject": "Remote sources beyond S3: hubs, portal search, share links, Google Drive and Dropbox (#44)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -206,13 +206,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 63,
-      "commit": "679f971",
-      "title": "Redefine HiC score as mean of bin's line across near-diagonal",
-      "branch": "js/ecstatic-heisenberg-g7hhdt",
-      "date": "2026-09-16T12:45:06Z"
-    },
     {
       "number": 62,
       "commit": "386a4d1",
