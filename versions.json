@@ -207,6 +207,13 @@
   ],
   "pulls": [
     {
+      "number": 64,
+      "commit": "06f191f",
+      "title": "Support bacterial GFF annotations with no hierarchy",
+      "branch": "js/great-rubin-dzo5ng",
+      "date": "2026-09-16T12:05:39Z"
+    },
+    {
       "number": 63,
       "commit": "e02f11a",
       "title": "Redefine HiC score as mean of bin's line across near-diagonal",
