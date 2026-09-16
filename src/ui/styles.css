@@ -5061,6 +5061,21 @@ canvas.is-frozen {
   margin-top: 1.1rem;
 }
 
+/* Air between the three, because they are three *offers* and not three
+   paragraphs of one. Packed at a rem and a bit they read as a single column to
+   be worked down; at 4em each is somewhere the eye stops.
+
+   On the bottom of every section but the last, rather than on the top of every
+   one but the first: the same two gaps either way, and this way the page does
+   not end in space belonging to nothing. `:last-of-type` rather than a class
+   the shell would have to write, and it degrades on its own — the standalone
+   build offers no stores and the dialogs offer only the load box, and in both
+   the last section drawn is the one that goes without. Adjacent margins
+   collapse, so the gap is 4em and not 4em plus the `margin-top` above. */
+.picker-section:not(:last-of-type) {
+  margin-bottom: 4em;
+}
+
 /* A mark before each heading, because three bold lines down one column read as
    one section with emphasis in it rather than as three separate doors — which
    is what they are, and what §24.2 says the page is for. Each wears the mark

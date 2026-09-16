@@ -15,7 +15,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you
-  is marked.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
+  is marked and spaced.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
   gone — between them a fifth of a laptop screen, and what was below the fold was the third of the
   three things the page offers. The target now says *Drop genomic files here* and *or click to
   choose*, and nothing else. Each of the three headings leads with the mark that thing already wears
@@ -25,7 +25,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   characters — rather than clipped to them: the first fifty characters of a sentence are a
   truncation and not a shorter sentence, so the eight are written out beside the blurbs they
   shorten, a remembered store shows the host of its URL, and `builtin-stores.test.ts` holds the
-  budget. The page is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
+  budget. **4em between the three**, on the bottom of every section but the last: they are three
+  offers rather than three paragraphs of one, and packed at a rem and a bit they read as a single
+  column to be worked down. The page is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
   is the only patterned surface in the application: arriving at the landing page and leaving it are
   both legible now, and at that weight it is texture rather than pattern.
 
