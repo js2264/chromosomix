@@ -136,7 +136,9 @@ import {
   type NameBox,
   progressDetail,
 } from '../render/laneLabel'
-import type { LocusAxis } from '../render/locus'
+import type { LocusAxis, LocusWindow } from '../render/locus'
+import type { MapId } from '../annotations/placement'
+import { setHoverPlace } from './hoverLocus'
 import { Scale } from '../render/scale'
 import { basesAreDrawable, baseAt, drawSequence } from '../render/sequence'
 import {
@@ -314,6 +316,18 @@ export interface BrowserViewProps {
    * handed none simply draws none.
    */
   manual?: ManualStore
+  /**
+   * Draw only the tracks **placed on this map**, by the deck's id for the cell
+   * (§25.3). Absent — the session's own browser — every visible track is a
+   * lane, since one axis is the only place there is to draw it.
+   */
+  map?: MapId
+  /**
+   * What this view's pointer is published as (`ui/hoverLocus.ts`): `browser`
+   * for the session's own, a cell's id for a tracks cell of the deck, so a
+   * cell ignores its own echo and answers everybody else's.
+   */
+  hoverSource?: string
 }
 
 /** One lane, resolved for a frame: where it goes and what goes in it. */
@@ -596,6 +610,10 @@ export class BrowserView {
    * snaps the view by a fraction of a pixel on every frame.
    */
   private reported: string | undefined
+  /** Another surface's pointer on this axis, or `null`; see {@link showLocusEcho}. */
+  private echo: { contig: string; bp: number } | null = null
+  /** Whether the last thing published to the hover store was this view's. */
+  private published = false
 
   constructor(private readonly props: BrowserViewProps) {
     this.view = props.selection.restrict(props.assembly)
@@ -788,6 +806,7 @@ export class BrowserView {
 
   destroy(): void {
     this.disposed = true
+    this.publishHover(null)
     // A picking mode outlives nothing: the picture it was placing marks on is
     // going away. Ended here rather than left to be collected, because the card
     // that armed it is *not* going away — it lives in the shell — and it learns
@@ -985,6 +1004,101 @@ export class BrowserView {
    */
   showLocus(text: string): void {
     this.goTo(text)
+  }
+
+  /**
+   * The stretch on screen, or `null` where the view is the whole genome or
+   * straddles two sequences — what a deck cell reports to the maps (§25.3).
+   */
+  framedRange(): LocusRange | null {
+    return this.currentRange()
+  }
+
+  /**
+   * Adopt the stretches another surface is looking at, **without reporting**.
+   *
+   * The deck's road into a tracks cell: the lead map's window, as loci. One
+   * window is a locus; several — a genome-level map framed across sequences —
+   * are shown from the first's start to the last's end, since the axis here
+   * lays the sequences end to end as the map's does. Not reported back, which
+   * is what keeps the cell out of the lock's feedback loop: the cell that was
+   * *told* where to look does not then tell the deck. `false` where nothing
+   * here answers to those sequences.
+   */
+  applyWindows(windows: readonly LocusWindow[]): boolean {
+    const first = windows[0]
+    const last = windows[windows.length - 1]
+    if (first === undefined || last === undefined) return false
+    const from = rangeToUnits(this.view, { contig: first.contig, start: first.start, end: first.end })
+    const to = rangeToUnits(this.view, { contig: last.contig, start: last.start, end: last.end })
+    if (from === null || to === null) return false
+    const lo = Math.min(from[0], to[0])
+    const hi = Math.max(from[1], to[1])
+    if (!(hi > lo)) return false
+    const [d0, d1] = this.scale.domain
+    // Already there, to the pixel: the window the cell asked the maps for
+    // has come back round. Moving again would be a frame of nothing and, on
+    // a trackpad, a fight between two hands.
+    // …once the view has been measured: before its first layout the scale is
+    // one pixel wide and every window is "within a pixel" of every other.
+    const tolerance = this.scale.pixels > 1 ? this.scale.unitsPerPixel : 0
+    if (Math.abs(d0 - lo) <= tolerance && Math.abs(d1 - hi) <= tolerance) return true
+    this.scale.setDomain([lo, hi])
+    this.afterMove(false)
+    return true
+  }
+
+  /**
+   * Mark where another surface's pointer is, on this axis (§25.4).
+   *
+   * The lane-echo shape the map draws for a pointer on another panel's track,
+   * for the same reason: one guide, wherever "here" came from. `null` clears.
+   */
+  showLocusEcho(locus: { contig: string; bp: number } | null): void {
+    const same =
+      (locus === null && this.echo === null) ||
+      (locus !== null && this.echo !== null && locus.contig === this.echo.contig && locus.bp === this.echo.bp)
+    if (same) return
+    this.echo = locus
+    this.schedule()
+  }
+
+  /**
+   * The plot as a canvas at an export dpi, for the deck's figure (§16.11, §25).
+   *
+   * What {@link rasterFigure} draws before its caption, on the deck's terms:
+   * the deck composes cells and writes no caption per cell. `null` where the
+   * page cannot open a canvas, which is a browser that cannot export at all.
+   */
+  exportCanvas(dpi: number): HTMLCanvasElement | null {
+    const width = Math.max(this.canvasWidth, this.gutter + this.scale.pixels)
+    const height = this.heightOf(this.lanes)
+    const scale = scaleForDpi(dpi)
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(width * scale))
+    out.height = Math.max(1, Math.round(height * scale))
+    const ctx = out.getContext('2d')
+    if (ctx === null) return null
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    this.paint(ctx, width, height, false)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.globalCompositeOperation = 'source-over'
+    return out
+  }
+
+  /** Publish the place under the pointer, or `null` once it has left. */
+  private publishHover(x: number | null): void {
+    const locus = x === null || x < this.gutter ? null : this.axis.unitToLocus(this.atUnit(x))
+    if (locus === null) {
+      if (this.published) setHoverPlace(null)
+      this.published = false
+      return
+    }
+    this.published = true
+    setHoverPlace({ loci: [{ contig: locus.contig, bp: locus.bp }], source: this.props.hoverSource ?? 'browser' })
   }
 
   /** Re-measure after a column was folded or the window changed shape. */
@@ -1321,8 +1435,12 @@ export class BrowserView {
     // Both *file* cards, because in one dimension there is no "on the map" to
     // be an overlay of: a BED is boxes and a BEDPE is arcs, and each takes a
     // lane of its own like everything else here.
-    const entries = this.props.store.entries.filter(
-      (entry) => entry.visible && entry.status === 'ready',
+    // A structure is a row of the list and never a lane: its picture is the
+    // deck's structure cell (§25), and a chain of 5 kb beads drawn as boxes
+    // along an axis is one solid bar saying nothing.
+    const held = this.props.map === undefined ? this.props.store.entries : this.props.store.entriesOn(this.props.map)
+    const entries = held.filter(
+      (entry) => entry.visible && entry.status === 'ready' && entry.kind !== 'structure',
     )
     return planStack(entries, {
       groupOf: (entry) => entry.style.group,
@@ -1623,6 +1741,17 @@ export class BrowserView {
     const guided = hover !== null && this.crosshair && hover.x >= this.gutter
     if (guided) {
       drawGuide(ctx, hover.x, 0, height, CROSSHAIR_COLOR, this.dpr)
+    }
+    // Another surface's pointer, at the same coordinate on this axis: a bead
+    // under the hand in the structure cell, a cell on a map of the deck (§25.4).
+    // The same guide, so a reader learns one mark for "here" everywhere.
+    const echo = this.echo
+    if (chrome && echo !== null) {
+      const unit = this.axis.locusToUnit(echo.contig, echo.bp)
+      if (unit !== null) {
+        const px = this.gutter + this.scale.toPixel(unit)
+        if (px >= this.gutter && px <= width) drawGuide(ctx, px, 0, height, CROSSHAIR_COLOR, this.dpr)
+      }
     }
     // Where the line is drawn, it *is* the pointer, and the drawn arrowhead
     // beside it is a second, blunter mark for the same coordinate — sitting on
@@ -2879,6 +3008,7 @@ export class BrowserView {
       if (drag === null) {
         this.hover = { x, y }
         this.describe(x, y, event.clientX, event.clientY)
+        this.publishHover(x)
         // Drawn rather than shown as a cursor: the pointer is the arrowhead
         // everywhere on this canvas, so the affordance has to be in the picture.
         const grip = this.laneAt(y)
@@ -3078,6 +3208,7 @@ export class BrowserView {
 
     const forget = (): void => {
       this.hover = null
+      this.publishHover(null)
       this.gripping = null
       this.onColumn = false
       canvas.classList.remove(

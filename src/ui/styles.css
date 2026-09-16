@@ -9034,6 +9034,50 @@ span.deck-name {
 }
 
 /* ---------------------------------------------------------------------------
+   The tracks cell (§25.3): the session's tracks alone, in a cell of the deck.
+
+   A browser view inside a box the size of the maps beside it, by the same two
+   numbers. The stack scrolls inside the box rather than growing it, so a cell
+   of twelve tracks is as tall as the map next to it and a grid row stays a row.
+   --------------------------------------------------------------------------- */
+.tracks-wrap {
+  width: var(--deck-plot, var(--map-size, 20rem));
+  max-width: 100%;
+  height: var(--deck-plot-h);
+  aspect-ratio: 1 / 1;
+  min-height: 6rem;
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.deck-tracks .view-browser {
+  min-height: 0;
+  padding: 0.25rem 0.35rem;
+}
+
+.deck-tracks .view-head {
+  margin-bottom: 0.25rem;
+}
+
+/* The bar's hint is written for a page; in a cell it is a paragraph over a
+   picture, and the locus box says what the cell is. */
+.deck-tracks .view-head .hint {
+  display: none;
+}
+
+.deck-tracks .browser-bar .browser-search {
+  flex-basis: 8rem;
+  min-width: 6rem;
+}
+
+.deck-tracks.is-unlocked .deck-lock {
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------------------------
    The `+` edges, which draw a deck before there is one (§16.9).
 
    Round the session's own view while there is no deck and round the grid once

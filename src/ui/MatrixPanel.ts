@@ -7316,6 +7316,35 @@ export class MatrixPanel {
   }
 
   /**
+   * Put a stretch on the **column** axis and leave the rows where they are —
+   * what a tracks cell of the deck asks for when the reader pans it (§25.3).
+   *
+   * {@link showLocus} is for a locus, which on a square map is the on-diagonal
+   * square; a stack of tracks names one axis, and moving both would take a
+   * reader looking off the diagonal back onto it for having scrolled a track.
+   * On a turned map the column axis is the only one there is, and the two
+   * calls are the same. `false` where nothing moved, on {@link showLocus}'s
+   * terms.
+   */
+  showLocusOnColumns(window: { contig: string; start: number; end: number }): boolean {
+    if (this.data === null) return false
+    const want = {
+      from: { contig: window.contig, bp: window.start },
+      to: { contig: window.contig, bp: window.end },
+    }
+    const cells = this.cellCount()
+    const cols = spanOnAxis(this.locusAxes.cols, want, cells.cols)
+    if (cols === null) return false
+    if (this.turned !== null) {
+      this.heatmap.showCellSpan([cols[0], cols[1]])
+      return true
+    }
+    const held = this.heatmap.cellWindow()
+    this.heatmap.showCellWindow(held.rows, [cols[0], cols[1]])
+    return true
+  }
+
+  /**
    * The stretch of genome the picture is showing, for something that wants to
    * write it down — the *take a bookmark* button, today.
    *

@@ -32,6 +32,13 @@ import { button, el } from './dom'
 export interface PlacementMap {
   id: string
   label: string
+  /**
+   * The edges this cell can draw a track on, where it is not a map (§25.3):
+   * a tracks cell has one axis and one stack, along the bottom. Absent for a
+   * map, which has all four. The other buttons are greyed rather than hidden,
+   * so the row keeps the shape every other row has.
+   */
+  edges?: readonly LaneEdge[]
 }
 
 /**
@@ -94,6 +101,10 @@ function edgeRow(
           : `Draw this on the ${edge} edge${named ? ` of ${map.label}` : ''} as well`,
     })
     node.setAttribute('aria-pressed', String(on))
+    if (map.edges !== undefined && !map.edges.includes(edge)) {
+      node.disabled = true
+      node.title = `${map.label} has no ${edge} edge: a stack of tracks is drawn along one axis`
+    }
     node.addEventListener('click', () => {
       const next = { ...placement, [edge]: !on }
       // Off its last edge is off *this map* — the track stays in the list with

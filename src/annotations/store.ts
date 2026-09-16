@@ -642,8 +642,12 @@ export class AnnotationStore {
     // who gave it edges or a range there of its own; both are decisions already
     // made, and re-placing over them is what made the deck's arrangement the one
     // part of a workspace that did not come back.
+    // A structure is a row and never a lane (§25): its picture is the deck's
+    // structure cell, and a chain of beads drawn as boxes along an edge is a
+    // solid bar saying nothing. Unplaced from the start, so the stacks never
+    // see it and the location control has nothing to offer it.
     this.lanes =
-      options.lead === null
+      options.lead === null || options.kind === 'structure'
         ? unplace(this.lanes, entry.id, LEAD_MAP)
         : place(this.lanes, entry.id, LEAD_MAP, options.lead?.placement ?? entry.placement)
     if (options.lead != null && options.lead.style !== undefined) {

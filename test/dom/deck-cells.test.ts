@@ -15,9 +15,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { PanelDeck } from '@/panels/PanelDeck'
 import { parseG3d } from '@/annotations/g3d'
+import { AnnotationStore } from '@/annotations/store'
+import { GroupSettings } from '@/annotations/groups'
+import { assemblyOf } from '@/genome/assembly'
+import type { TracksContext } from '@/panels/TracksPanel'
 import type { AnnotationEntry, AnnotationStyle } from '@/annotations/types'
 import { defaultStyle } from '@/annotations/types'
-import type { AnnotationStore } from '@/annotations/store'
 import type { MatrixPanel } from '@/ui/MatrixPanel'
 import type { LocusWindow } from '@/render/locus'
 import { setHoverPlace } from '@/ui/hoverLocus'
@@ -99,6 +102,8 @@ function leadPanel() {
     viewport: null as ((rows: [number, number], cols: [number, number]) => void) | null,
     echoes: [] as Array<{ contig: string; bp: number } | null>,
     framed: 0,
+    /** Every stretch a tracks cell asked the lead to put on its column axis. */
+    followed: [] as Array<{ contig: string; start: number; end: number }>,
   }
   const windows: { rows: LocusWindow[]; cols: LocusWindow[] } = {
     rows: [{ contig: 'chr1', start: 10000, end: 30000, unitFrom: 10, unitTo: 30 } as LocusWindow],
@@ -120,6 +125,10 @@ function leadPanel() {
       state.framed++
       return windows
     },
+    showLocusOnColumns: (range: { contig: string; start: number; end: number }) => {
+      state.followed.push(range)
+      return true
+    },
     turnReach: () => null,
     setLaneFloor: () => {},
     remeasure: () => {},
@@ -140,7 +149,26 @@ function leadPanel() {
   return { panel: panel as unknown as MatrixPanel, state }
 }
 
-function make(store: ReturnType<typeof fakeStore> | undefined) {
+/** The session's machinery a tracks cell borrows, over two sequences. */
+function tracksContext(): TracksContext {
+  const store = new AnnotationStore(`deck-cells-${Math.random()}.cool`, { persist: false })
+  return {
+    assembly: assemblyOf({
+      uri: 'lead.cool',
+      name: 'lead.cool',
+      contigs: [
+        { name: 'chr1', length: 400_000 },
+        { name: 'chr2', length: 200_000 },
+      ],
+      origin: 'cooler',
+    }),
+    store,
+    client: { request: () => Promise.resolve(null), drop: () => {} } as never,
+    groups: new GroupSettings(`deck-cells-groups-${Math.random()}`),
+  }
+}
+
+function make(store: ReturnType<typeof fakeStore> | undefined, tracks?: TracksContext) {
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
   const dropped: string[] = []
@@ -155,6 +183,7 @@ function make(store: ReturnType<typeof fakeStore> | undefined) {
       onDrop: (file) => dropped.push(file.name),
       onDropUrl: (url) => dropped.push(url),
     },
+    tracks: { context: () => tracks },
   })
   document.body.appendChild(deck.el)
   const view = document.createElement('div')
@@ -319,5 +348,85 @@ describe('the place a pointer on the cell names', () => {
     const before = lead.state.echoes.length
     setHoverPlace({ loci: [{ contig: 'chr1', bp: 500 }, { contig: 'chr1', bp: 900 }], source: 'map' })
     expect(lead.state.echoes.length).toBe(before)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The tracks cell
+// ---------------------------------------------------------------------------
+
+function tracksCells(deck: PanelDeck): HTMLElement[] {
+  return all<HTMLElement>(deck.el, '.deck-grid > .deck-tracks')
+}
+
+describe('a tracks cell in the deck', () => {
+  it('is added by the bar, written into the link as `tracks`, and offered as a place with one edge', () => {
+    const { deck, published } = make(undefined, tracksContext())
+    deck.add({ kind: 'tracks' })
+    expect(tracksCells(deck)).toHaveLength(1)
+    expect(published.at(-1)).toBe('tracks')
+    const rows = deck.mapList
+    expect(rows.map((row) => row.label)).toEqual(['lead.cool', 'tracks'])
+    expect(rows[1]?.edges).toEqual(['bottom'])
+    // A second one is a second place, named apart.
+    deck.add({ kind: 'tracks' })
+    expect(deck.mapList.map((row) => row.label)).toEqual(['lead.cool', 'tracks', 'tracks 2'])
+    expect(published.at(-1)).toBe('tracks|tracks')
+  })
+
+  it('says so where the session has no track list', () => {
+    const { deck } = make(undefined, undefined)
+    deck.add({ kind: 'tracks' })
+    expect(tracksCells(deck)[0]?.querySelector('.tracks-note')?.textContent).toMatch(/no track list/)
+    expect(tracksCells(deck)[0]?.querySelector('.view-browser')).toBeNull()
+  })
+
+  it('shows what the lead is looking at, on its own axis, and does not report it back', () => {
+    const lead = leadPanel()
+    const { deck } = make(undefined, tracksContext())
+    deck.setLead(lead.panel)
+    deck.add({ kind: 'tracks' })
+    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
+    expect(box?.value).toBe('chr1:10,001-30,000')
+    expect(lead.state.followed).toEqual([])
+  })
+
+  it('takes the maps with it when the reader moves it, and stops when unhooked', () => {
+    const lead = leadPanel()
+    const { deck } = make(undefined, tracksContext())
+    deck.setLead(lead.panel)
+    deck.add({ kind: 'tracks' })
+    const cell = tracksCells(deck)[0]
+    const box = cell?.querySelector<HTMLInputElement>('.input-region')
+    if (box === null || box === undefined) throw new Error('no locus box')
+    box.value = 'chr2:50,001-60,000'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(lead.state.followed.at(-1)).toEqual({ contig: 'chr2', start: 50000, end: 60000 })
+    // Unhooked: the cell keeps its own window and the maps keep theirs.
+    cell?.querySelector<HTMLButtonElement>('.deck-lock')?.click()
+    expect(cell?.classList.contains('is-unlocked')).toBe(true)
+    const before = lead.state.followed.length
+    box.value = 'chr2:1-20,000'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(lead.state.followed.length).toBe(before)
+    lead.state.viewport?.([0, 100], [0, 100])
+    expect(box.value).toBe('chr2:1-20,000')
+  })
+
+  it('has its pointer echoed onto the maps, like a structure cell’s', () => {
+    const lead = leadPanel()
+    const { deck } = make(undefined, tracksContext())
+    deck.setLead(lead.panel)
+    deck.add({ kind: 'tracks' })
+    setHoverPlace({ loci: [{ contig: 'chr1', bp: 12500 }], source: 'tracks:p1' })
+    expect(lead.state.echoes.at(-1)).toEqual({ contig: 'chr1', bp: 12500 })
+  })
+
+  it('is kept across a link that re-lists it', () => {
+    const { deck } = make(undefined, tracksContext())
+    deck.apply(state('tracks|https://x.example.org/b.cool'))
+    const [cell] = tracksCells(deck)
+    deck.apply(state('https://x.example.org/b.cool|tracks'))
+    expect(tracksCells(deck)[0]).toBe(cell)
   })
 })

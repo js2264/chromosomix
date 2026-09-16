@@ -57,13 +57,14 @@ import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
-import type {
-  AnnotationContext,
-  DeckExport,
-  DerivePresentation,
-  MatrixPanel,
-  PanelGeometry,
-  TurnPresentation,
+import {
+  HOVER_SOURCE_MAP,
+  type AnnotationContext,
+  type DeckExport,
+  type DerivePresentation,
+  type MatrixPanel,
+  type PanelGeometry,
+  type TurnPresentation,
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
@@ -84,6 +85,8 @@ import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
+import { TracksPanel, type TracksCellProps } from './TracksPanel'
+import type { LaneEdge } from '../annotations/types'
 import { subscribeHoverPlace } from '../ui/hoverLocus'
 import { isStructureName } from '../annotations/g3d'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
@@ -367,6 +370,12 @@ export interface PanelDeckProps {
    * else.
    */
   structure?: StructureCellProps
+  /**
+   * What a **tracks cell** needs from the session (§25.3): the lead file's
+   * sequences and the annotation machinery its own browser would have. Absent
+   * where the session has none, in which case a tracks cell says so.
+   */
+  tracks?: TracksCellProps
 }
 
 /**
@@ -568,12 +577,21 @@ export class PanelDeck {
     // presentation. Cleared only when this deck put one there, so a hand
     // leaving a map does not wipe another deck's echo through this one.
     this.unsubscribeHover = subscribeHoverPlace((place) => {
-      const fromCell = place !== null && place.source.startsWith('structure:')
+      const locus = place === null ? null : place.loci[0]
+      // Onto the cells that draw an axis, whoever is pointing — bar the one
+      // pointing. The structure cell listens for itself and has no relay.
+      for (const slot of this.slots) {
+        if (slot.cell === null || place?.source === `${slot.cell.kind}:${slot.id}`) continue
+        slot.cell.showLocusEcho?.(locus)
+      }
+      // Onto the maps only from a cell: the maps already echo between
+      // themselves, through cells and converted, and a second mark for the
+      // same pointer would be two answers.
+      const fromCell = place !== null && place.source !== HOVER_SOURCE_MAP
       if (!fromCell && !this.echoingPlace) return
       this.echoingPlace = fromCell
-      const locus = fromCell ? place.loci[0] : null
-      this.lead?.showLocusEcho(locus)
-      for (const slot of this.slots) slot.panel?.map?.showLocusEcho(locus)
+      this.lead?.showLocusEcho(fromCell ? locus : null)
+      for (const slot of this.slots) slot.panel?.map?.showLocusEcho(fromCell ? locus : null)
     })
     // Restored, then reconciled: a session written when four maps were open can
     // name a slot this one has not built, and `keepStarPresent` puts it back on
@@ -609,6 +627,10 @@ export class PanelDeck {
       // a deck holds one structure cell and a button that did nothing would
       // read as a bug.
       this.structureButton,
+      button('tracks', () => this.add({ kind: 'tracks' }), {
+        class: 'btn deck-add-tracks',
+        title: 'Open a cell of tracks alone beside the maps — put tracks on it from the Tracks card',
+      }),
       fileInput,
     )
     this.urlInput.addEventListener('keydown', (event) => {
@@ -998,8 +1020,10 @@ export class PanelDeck {
    * offered: a placement on a map that holds no file would be a lane waiting
    * for a picture, and the reader can place it the moment one arrives.
    */
-  get mapList(): Array<{ id: string; label: string }> {
-    const out = [{ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' }]
+  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> {
+    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = [
+      { id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' },
+    ]
     for (const slot of this.slots) {
       if (slot.panel === null) continue
       // The panel's **own** URI, which is neither the ref's nor the slot's id.
@@ -1024,6 +1048,15 @@ export class PanelDeck {
         id: slot.id,
         label: this.props.mapLabel?.(slot.panel.uri) ?? fileLabel(slot.panel.uri),
       })
+    }
+    // A tracks cell is a place a track can be put, with one edge (§25.3).
+    // After the maps, and numbered, since two stacks of tracks would
+    // otherwise be two rows with one name.
+    let stacks = 0
+    for (const slot of this.slots) {
+      if (slot.cell?.kind !== 'tracks') continue
+      stacks++
+      out.push({ id: slot.id, label: stacks === 1 ? 'tracks' : `tracks ${stacks}`, edges: ['bottom'] })
     }
     return out
   }
@@ -1359,15 +1392,15 @@ export class PanelDeck {
       return slot
     }
     if (ref.kind === 'tracks') {
-      // Stage C of §25 puts a stack of tracks here; until then the link's
-      // `tracks` token holds its place as an empty card, so a deck that names
-      // one is not refused.
-      slot.vacancy = new VacantPanel({
-        origin,
-        onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
-        onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+      const shared = this.props.tracks
+      slot.cell = new TracksPanel({
+        id: slot.id,
+        context: () => shared?.context(),
         onClose: () => this.remove(slot),
+        onFollow: (range) => this.followColumns(range),
+        onDragChange: (dragging) => this.setArranging(dragging),
       })
+      if (this.lead !== null) slot.cell.applyWindow(this.lead.framedRanges())
       return slot
     }
     if (ref.kind === 'vacant') {
@@ -1720,7 +1753,9 @@ export class PanelDeck {
       this.setArranging(false)
       if (cell === null) return
       event.preventDefault()
-      const from = this.slots.findIndex((slot) => slot.panel?.el.classList.contains('is-dragging') === true)
+      const from = this.slots.findIndex(
+        (slot) => (slot.panel ?? slot.cell)?.el.classList.contains('is-dragging') === true,
+      )
       if (from >= 0) this.swap(from, indexOf(cell))
     })
     this.grid.addEventListener('dragleave', (event) => {
@@ -2534,6 +2569,15 @@ export class PanelDeck {
       await this.copyDeck(dpi)
       return true
     },
+  }
+
+  /**
+   * A tracks cell was panned: the lead goes there on its column axis, and
+   * reports through the lock to every other map (§25.3). One road in, so a
+   * cell never drives a companion the lead is not driving.
+   */
+  private followColumns(range: { contig: string; start: number; end: number }): void {
+    this.lead?.showLocusOnColumns(range)
   }
 
   /** Whether the deck already holds its one structure cell (§25). */

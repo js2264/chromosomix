@@ -1035,7 +1035,14 @@ export class AnnotationCard {
     // either: reads are 1D-only (§8.13), so beside a map the row is there to be
     // closed and renamed and nothing else. A control that silently does nothing
     // is worse than an absent one.
-    if (entry.card === 'linear' && entry.kind !== 'reads' && this.props.context !== 'browser') {
+    // …nor for a structure, which is a row and not a lane (§25): its picture
+    // is the deck's structure cell, not an edge of the map.
+    if (
+      entry.card === 'linear' &&
+      entry.kind !== 'reads' &&
+      entry.kind !== 'structure' &&
+      this.props.context !== 'browser'
+    ) {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
     if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))

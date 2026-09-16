@@ -39,5 +39,11 @@ export interface DeckCell {
   syncName(): void
   /** The picture at an export dpi, or `null` where there is nothing to draw. */
   exportCanvas(dpi: number, now: Date): HTMLCanvasElement | null
+  /**
+   * Another surface's pointer, as a mark at that place (§25.4), or `null` to
+   * clear it. Optional: a cell that subscribes to the hover store itself, as
+   * the structure cell does, has no use for the deck's relay.
+   */
+  showLocusEcho?(locus: { contig: string; bp: number } | null): void
   destroy(): void
 }

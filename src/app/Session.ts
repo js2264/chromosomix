@@ -777,6 +777,8 @@ export class Session {
    * outright, and closing one still falls back to it.
    */
   private assembly: Assembly | null = null
+  /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
+  private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
    * The file {@link assembly} was read from, in the shape a worker opens.
    *
@@ -5214,6 +5216,30 @@ export class Session {
         onDrop: (file) => this.dropped(file),
         onDropUrl: (url) => {
           void this.addRemote(url, { kind: 'remote', url })
+        },
+      },
+      // What a tracks cell draws from (§25.3): the lead file's own sequences
+      // as an assembly — the one `closeMap` would build — and the machinery
+      // the session's browser has. The assembly is kept per file, because the
+      // cell rebuilds its browser when the assembly object changes and a fresh
+      // one per call would rebuild it on every pan.
+      tracks: {
+        context: () => {
+          const held = this.annotations
+          const file = this.file
+          if (held === null || file === null) return undefined
+          if (this.tracksAssembly === null || this.tracksAssembly.file !== file) {
+            const assembly = this.assemblyOfFile(file)
+            if (assembly === null) return undefined
+            this.tracksAssembly = { file, assembly }
+          }
+          return {
+            assembly: this.tracksAssembly.assembly,
+            store: held.store,
+            client: held.client,
+            groups: held.groups,
+            manual: held.manual,
+          }
         },
       },
     })
