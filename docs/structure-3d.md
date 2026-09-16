@@ -11,11 +11,19 @@ only the author of the data can answer. Nothing here is implemented. When the de
 the design becomes a numbered `SPECS.md` section in the usual way, with its own refusals.
 
 Revision 2 changes three decisions of the first draft, each at the author's direction: the file
-format is WashU's g3d (text now, binary later) rather than a home-grown `bed6+xyz`; the renderer
-is three.js rather than a hand-written Canvas 2D painter, because interaction is the point of this
-picture and a library is the price of doing it well; and the deck generalises from *N maps* to
-*N cells of one place*, so that a map with its tracks, a cell of tracks alone, and a structure can
-stand in one row — which also makes the deck available to a session that has tracks and no map.
+format is WashU's g3d text rather than a home-grown `bed6+xyz`; the renderer is three.js rather
+than a hand-written Canvas 2D painter, because interaction is the point of this picture and a
+library is the price of doing it well; and the deck generalises from *N maps* to *N cells of one
+place*, so that a map with its tracks, a cell of tracks alone, and a structure can stand in one
+row — which also makes the deck available to a session that has tracks and no map.
+
+Revision 3 settles the questions revision 2 left open, with the author's answers: a g3d's
+resolution is the spacing of its sorted starts and nothing else, and it is independent of the
+map's rung; the file is text, possibly gzipped, and is read whole over HTTP like any other text
+annotation — there is no binary road; a phased file draws both homologues; a tracks cell draws
+from the session's one track list, with the edge controls inactive where there is no map; one
+structure cell per deck, two being a future suggestion rather than a plan item; and the vector PDF
+of beads and sticks is in the first release.
 
 ---
 
@@ -24,12 +32,12 @@ stand in one row — which also makes the deck available to a session that has t
 | Question | Answer | Why, in one line |
 |---|---|---|
 | Is it worth having? | Yes, scoped tightly | This app's niche — small genomes, whole blocks in memory, analysis in the browser — is where a consensus 3D model is cheapest to make and most defensible to show; and reading g3d makes every structure WashU can show openable here with no conversion, and every structure made here openable there |
-| What file? | **g3d text** (`chrom start x y z [hap]`), then **g3d binary** | The author's format; the text is what solvers and `g3dtools` speak, the binary is indexed and range-readable, which is the one 3D format that fits §12 as written |
+| What file? | **g3d text** (`chrom start x y z [hap]`), plain or gzipped, local or by URL | The author's format and what `g3dtools` speaks; read whole in the annotations worker like every other text annotation, so a `g3d.gz` on a bucket is one request |
 | Where does it live? | **A cell of the deck**, where a cell may be a map, a stack of tracks, or a structure | A structure is a *picture of a place*; the deck is the app's word for pictures of one place beside each other under one navigation. Generalising the cell is what also lets a tracks-only cell exist and lets a 1D session have a deck |
 | How is the file held? | **An annotation row** (`kind: 'structure'`) | The store already gives it sniffing, contig-name matching, haplotype as a colour field, persistence, share links and every export; the 3D panel is a *view of a row*, never a second loading path |
 | How is it drawn? | **three.js**, pinned, behind a thin adapter over a pure scene | Lit tubes, instanced beads, fat lines, transparency, outlines, raycast picking, orbit and trackball controls — the interactions the author wants as first-class, at a cost this project can now afford to state in the open |
 | How is it linked? | **A hover-locus store** plus the echo hooks `MatrixPanel` already has, and a lock that learns one-axis members | The deck already carries a pointer across panels in base pairs; a bead and a track both name *one place*; the lock's currency is already base pairs |
-| What does it refuse? | Structure inference, invented physical units, invented phasing, a vector PDF of a lit surface | Each named in §10 with its mechanism and its way out, in the §13 / §18.9 style |
+| What does it refuse? | Structure inference, invented physical units, invented phasing, a declared resolution, a vector PDF of a lit surface | Each named in §10 with its mechanism and its way out, in the §13 / §18.9 style |
 
 ---
 
@@ -71,8 +79,8 @@ not close the door on (3) is the right shape.
 What this app would add, and each is something it already is:
 
 - **The text a solver writes opens as it is.** Every viewer above wants the converted binary.
-  Reading the g3d *text* directly (§2.2) keeps C3 true for a structure, and reading the binary
-  keeps the file interchangeable with WashU in both directions.
+  Reading the g3d *text* directly (§2.2) keeps C3 true for a structure, and a file that opens here
+  is one `g3dtools` call from opening there.
 - **The colouring is computed in the same window.** Compartments, insulation, coverage, a virtual
   4C, and on a `.metacool` the contig table's own MGE call and completeness, are one click away and
   are already tracks (§18.5). No hosted viewer closes that loop, because none computes anything.
@@ -120,32 +128,44 @@ each visible in the example:
 - **Rows are not sorted** (`50320000` is followed by `26200000`). The row is sorted on
   `(chromosome, haplotype, start)` at parse, which the `FeatureBuilder` does for genomic order
   already and which must keep the coordinates with their rows (§2.3).
-- **There is no end column.** A bead's width is the file's resolution, and the text does not
-  declare it. It is inferred as the **mode of the differences between consecutive starts** within
-  one `(chromosome, haplotype)` after sorting — `1,040,000` here, with `8,400,000` gaps where beads
-  are missing — and the inference is printed in the row's summary line (`1,213 beads · 1.04 Mb ·
-  2 haplotypes · 23 chromosomes`) so a wrong guess is seen rather than suffered. A `#resolution=`
-  header line, if present, is believed over the inference. The binary g3d carries the resolution
-  and needs no guess.
+- **There is no end column, and there is no header.** A bead's width is the file's resolution,
+  and the resolution *is* the spacing of consecutive starts once the rows are sorted: the
+  **mode of the differences between consecutive starts** within one `(chromosome, haplotype)` —
+  `1,040,000` here, with wider gaps where beads are missing. That is the whole definition; nothing
+  in the file and nothing in the app declares it otherwise. The number is printed in the row's
+  summary line (`1,213 beads · 1.04 Mb · 2 haplotypes · 23 chromosomes`) so it is seen.
+- **The structure's resolution is fixed, and the map's is not.** A reader changes the map's rung
+  and the map re-reads; the g3d stays at the spacing it was written at. The two never have to
+  agree because the bridge between them is base pairs (§2.5), not bins — the same reason a computed
+  profile keeps the grid it was computed on when the map under it changes rung (`BinVector`
+  carries its own `binsize`; `test/dom/analysis-carry.test.ts` pins it). A rung change costs the
+  structure nothing and moves no bead.
 - **A haplotype is a second chain over the same loci.** `chr7/m` and `chr7/p` are two beads at
   every position, and they are held as two chains (§2.4) rather than as two files or as two
   beads in one chain. This is the one place the first draft's design changes shape: the map's
   one axis has one `chr7`, and a locus on it lights *two* beads.
 - **Missing beads** are absent rows, not `nan` rows. A gap in the starts wider than one
   resolution breaks the tube.
-- **Units are the solver's.** Nothing in the file says nanometres. Distances print as `model
-  units` unless a `#unit=` header says otherwise (§10).
+- **Units are the solver's.** Nothing in the file says nanometres, and nothing is asked.
+  Distances print as `model units` (§10).
 
 The other formats, in the order they are worth reading:
 
+**How it is read.** Whole, in the annotations worker, as every text annotation is: a local file
+by reference, a URL by one `GET`, `.gz` inflated on the way in — the same rung of the loader
+ladder a BED or a GTF takes (`annotations.worker.ts:1536-1543`, "else whole-file inflate"). A
+`g3d.gz` on a bucket with CORS is therefore one request at open and none afterwards, which is the
+§12 row for a structure. There is no index and none is wanted: the files are megabytes, and a
+1 Mb diploid human model is 6,000 rows.
+
 | Format | What it is | Phase |
 |---|---|---|
-| **g3d text** | above | **1** |
-| **g3d binary** (`.g3d`) | a container with a header, a JSON index of chromosomes, resolutions, haplotypes and samples, and compressed blocks per (chromosome, resolution, haplotype) — read by range requests, like `.hic`. Multi-resolution: `g3dtools` writes coarser rungs by averaging, so a whole-genome view reads the coarse rung and a region the fine one, which is §2's staircase applied to a model | **2** — with `g3djs` as the test **oracle** the way `hic-straw` is one for `.hic`: a devDependency the tests read the fixtures with, never a runtime one |
+| **g3d text**, `.g3d.txt` / `.g3d.txt.gz` | above | **1** |
 | Dip-C `.3dg` | g3d text with `(mat)`/`(pat)` on the chromosome name; `g3dtools 3dg` is exactly that rewrite | 2 (a name rule, ten lines) |
 | `bed6+xyz` | a BED with three columns on the end; the first draft's primary. Kept as a secondary road because it is what anybody with a spreadsheet writes, and because today such a file is **silently read as a broadPeak** (`peakFlavour`, `src/annotations/parse.ts:289`) — the sniff must run before it | 2 |
 | pastis `.xyz` / `.structure` text | `x y z` per bead in bin order, no loci; bridged against the map's own bin arithmetic when the row count matches, refused by name otherwise with the `paste` one-liner that joins the bin table on | 2 |
 | FOF-CT, `.cndb`, Spacewalk `.sw` | ensembles; the `frame` axis of §8.3; `h5wasm` is already here for the HDF5 ones | 3 |
+| WashU's binary `.g3d` | indexed, multi-resolution, range-readable | a future suggestion (§13), not a plan item |
 
 ### 2.2 Recognising the text
 
@@ -180,8 +200,8 @@ Following the `barchart` precedent (`src/annotations/types.ts:439-451` is the ar
   rows are intervals a metaplot can pile on, the same argument the file makes for `barchart`),
   everything else `false`.
 - `FeatureSet` gains an **optional** `model?: { x, y, z: Float32Array; hap: Int8Array; width:
-  number; unit: string | null }` beside `bars`. Not a third `AnnotationPayload` member: that doc
-  explains why a second feature shape silently skips a dozen call sites.
+  number }` beside `bars`, `width` being the inferred spacing. Not a third `AnnotationPayload`
+  member: that doc explains why a second feature shape silently skips a dozen call sites.
 - `FeatureBuilder` (`src/annotations/featureset.ts:53`) carries the triple and the haplotype through
   `finish()`'s sort, exactly as `bars` must — a parallel array in file order against a set in
   genomic order is a bead on the wrong gene, and here on the wrong haplotype too.
@@ -214,8 +234,9 @@ interface Chain {                 // one contig of one haplotype of one model
 interface Structure {
   chains: Chain[]
   start: Int32Array; end: Int32Array          // bead intervals (end = start + width)
+  width: number                               // the resolution: spacing of sorted starts
   x: Float32Array; y: Float32Array; z: Float32Array   // normalised: centroid 0, radius of gyration 1
-  raw: { scale: number; unit: string | null } // to print distances in the file's own units
+  raw: { scale: number }                      // to print distances in the file's own units
   frames?: number                             // §8.3; 1 in phases 1–2
 }
 ```
@@ -240,6 +261,11 @@ and `featureRange` already use:
 
 Above bin level a cell has no base-pair width, so the scene answers whole chains or nothing,
 exactly as `locusAxisFrom` returns `null` at genome level.
+
+Because the bridge is base pairs, the map's rung and the structure's spacing are two independent
+facts that are never reconciled: a 1 kb map over a 1 Mb model lights the one bead that holds the
+cell; a 5 Mb roll-up of the same map lights the five beads it covers; changing from one to the
+other re-reads the map and touches nothing in the scene.
 
 ---
 
@@ -270,8 +296,17 @@ tracks, or a structure.** Everything below follows from it.
 `MapId` (`src/annotations/placement.ts:52`) is already an opaque string "because nothing in this
 module has any business knowing what a panel is", so a tracks cell is simply a cell id whose only
 placement is its stack, and every existing verb — *put this track on every map, take it off this
-one, copy this map's lanes* — works on it unchanged. A track may be on the lead's bottom edge
-*and* in the tracks cell at once, which is exactly the arrangement the author described.
+one, copy this map's lanes* — works on it unchanged. **There is one track list, the session's**,
+and a cell is one more place a track can be sent, exactly as a companion map is today. A track may
+be on the lead's bottom edge *and* in the tracks cell at once, which is the arrangement the author
+described.
+
+The per-cell placement control (the four edge buttons on a track's row, turned on their side
+beside a deck) keeps its shape for every cell, and in a cell that has no map the **`top`, `left`
+and `right` buttons are inactive**, greyed with *no map in this cell* on them, leaving the one that
+means *in this cell's stack*. Greyed rather than absent because the corrected §8.5 doctrine (§18.1)
+says a control is absent only when nothing the reader does next could make it work — and dropping
+a `.cool` on that cell would.
 
 ### 3.3 The lead is the session's own view, whichever shape it has
 
@@ -425,7 +460,7 @@ One control, on the row and on the picture, mirroring `colourByField` (`src/ui/l
 | Colour by | Palette | Reuses |
 |---|---|---|
 | **sequence** (default for several chains) | one hue per contig; per genome on a `.metacool` | `render/hue.ts`, `CATEGORY_PALETTE` |
-| **haplotype** (default for a diploid file) | two hues, or one hue at two lightnesses so the homologue reads as the *same* chromosome | the categorical field the row already exposes |
+| **haplotype** (default for a phased file) | one hue per chromosome at two lightnesses, so a homologue reads as the *same* chromosome and the pair reads as a pair; both homologues are always drawn, and the key's `m`/`p` chips solo one | the categorical field the row already exposes |
 | **position along the chain** | a ramp per chain | `colormapColor('viridis', t)` |
 | **a loaded track** (bigWig, bedGraph, BAM depth, a synthetic track) | the *lane's own* limits, scale and ramp | `SampleCache.samplesFor` over each bead's `[start, end)` with the covered-base-weighted mean `IntervalTrack.samples` computes; a lifted `valueAt(samples, contig, bp)` out of `AnnotationLanes.ts:2093` |
 | **a feature set** (BED, GTF, peaks, loop anchors) | the feature's colour where a bead overlaps one | `featureRange` + `featureColouring(...).colourOf` |
@@ -492,14 +527,18 @@ argues for:
   rather than take a library; `interactivePlot.ts:1-9` does the same for charts. The argument was
   never "no dependencies", it was "not for this arithmetic". A lit, instanced, picked 3D scene is
   not that arithmetic, and the line is drawn there: three.js draws the structure and nothing else.
-- **The structure's PDF is a raster.** `VectorTarget` (`src/ui/vector.ts:132`) cannot carry a lit
-  surface. The precedent is `PanelDeck.saveDeck`, which wraps a composed raster in a one-page PDF
-  and says why in a comment; the structure does the same at the export dpi, rendering into an
-  offscreen `WebGLRenderer` target of that size — a 300 dpi picture, not a screen grab. A vector
-  figure of the *path-shaped* representations (beads and sticks projected through the camera's own
-  view matrix, drawn through `VectorTarget` by a small painter) is a phase-2 option that costs about
-  three hundred lines and gives a figure-quality PDF for the common case; it is not a second
-  renderer because the scene and the camera are shared.
+- **The tube's PDF is a raster; the beads' and sticks' is vector.** `VectorTarget`
+  (`src/ui/vector.ts:132`) cannot carry a lit surface, so the tube and ribbon representations
+  export as `PanelDeck.saveDeck` already exports a deck: a raster at the export dpi wrapped in a
+  one-page PDF, rendered into an offscreen `WebGLRenderer` target of that size — a 300 dpi picture,
+  not a screen grab — with the comment saying why. **Beads and sticks export as paths**, in the
+  first release: a small painter (`src/structure/painter.ts`, about three hundred lines) takes the
+  scene and the camera's own view matrix, projects, depth-sorts, and draws discs and segments
+  through `VectorTarget` — `arc`, `moveTo`, `lineTo`, `fill`, `stroke`, all in the subset the 1D
+  browser exports through, no gradients. It is not a second renderer: the scene, the camera, the
+  colours, what is lit and what is ghosted are the same objects three.js was handed, so the figure
+  is the picture on screen in the representation that is paths. It is also the one path the
+  `drawingOf` test harness can exercise without a GPU.
 - **`GAPS.md:394` refuses WebGL for the heatmap**, and stays right: the map re-rasterises on three
   events and never on pan or zoom. The section narrows the entry to its subject rather than
   deleting it, the way BAM and VCF entries were narrowed.
@@ -517,8 +556,8 @@ argues for:
 - **Tests.** jsdom has no WebGL, and this project does not fake canvases (`test/support/dom.ts`).
   The renderer is therefore a thin adapter over the pure scene: everything with a number in it —
   normalisation, the bridge, the haplotype rules, the camera's matrices, what is lit and what is
-  ghosted, the colour of every bead — lives in `src/structure/*` and is tested in node; the adapter
-  is exercised in a real browser by hand and by the `drawingOf` path of the phase-2 vector painter.
+  ghosted, the colour of every bead — lives in `src/structure/*` and is tested in node; the painter
+  is tested through `drawingOf`; the adapter alone is exercised in a real browser by hand.
 - **CSP and targets.** The desktop CSP keeps `'wasm-unsafe-eval'` and no `unsafe-eval`; shader
   compilation needs neither. The standalone `file://` target forbids module workers and sibling
   fetches, neither of which a renderer needs. All six targets read the same source; the adapter
@@ -555,7 +594,9 @@ argues for:
 | human at 100 kb, two haplotypes | 62,000 | 60 fps as instanced beads; the tube at that count is rebuilt in ~100 ms on a representation change and drawn at 60 fps after |
 | human at 10 kb | 620,000 | out of scope for a consensus model; the point-cloud representation of §8.3 |
 
-Everything is one bounded read at open and **0 requests per frame**, which is the §12 row.
+Everything is one read of the whole file at open — one `GET` for a URL, inflated in the worker
+— and **0 requests per frame, per gesture and per change of the map's rung**, which is the §12
+row.
 
 ---
 
@@ -564,7 +605,7 @@ Everything is one bounded read at open and **0 requests per frame**, which is th
 | Fact | Where | Precedent |
 |---|---|---|
 | the structure file | `tracks[]` of the session config as a `StoredEntry` of kind `structure`; a local file arrives detached with its name in a share link | every loaded track |
-| the cells and their order | `maps=` in the hash: `3d` / `3d:<label>` for a structure, `tracks` for a tracks cell, a URI for a map, `~` for a vacant cell | `~` |
+| the cells and their order | `maps=` in the hash: `3d` for the structure cell, `tracks` for a tracks cell, a URI for a map, `~` for a vacant cell. One structure cell per deck, so `3d` needs no label; the row it shows is the session's structure row | `~` |
 | representation, colour-by, radii, opacity, others, gaps, labels, projection | `AnnotationStyle.structure`, stored with the row | `reads`, `features` |
 | the camera | **per-file session memory** (`UiMemory`, `structure:camera`), not the hash | the lock, the column count: "the hash has never carried a pan or a zoom" |
 | the pinned bead | nowhere | `lastPick()` |
@@ -597,7 +638,7 @@ Per haplotype where the file has two.
 
 ### 8.3 Ensembles, frames, point clouds
 
-A structure row may hold many models: FOF-CT traces, `.cndb` frames, the samples of a binary g3d.
+A structure row may hold many models: FOF-CT traces, `.cndb` frames, several g3d texts of one map.
 The scene gains a `frame` index and the picture a slider and a play button; the task in §8.1 gains
 *mean over frames* and the tracks a per-bead variance; the representation gains a **point cloud**
 (a `Points` object, the one place three.js earns its size outright). Deliberately not in phase 1;
@@ -618,19 +659,19 @@ line and a drop.
 ### 9.1 Files
 
 ```
-src/annotations/g3d.ts                 sniffG3d, parseG3d (barchart.ts's shape); the 3dg name rule
-src/annotations/g3dBinary.ts           phase 2: header, index, blocks by range request (hic/format.ts's shape)
+src/annotations/g3d.ts                 sniffG3d, parseG3d (barchart.ts's shape); the width inference; the 3dg name rule
 src/structure/scene.ts                 Structure, Chain, normalise, beadsAt/beadsIn/lociOf, haplotypes
 src/structure/camera.ts                the camera object, orbit/dolly/pan/fit as arithmetic
 src/structure/colour.ts                the colour-by resolvers over the annotation store
-src/structure/three.ts                 the adapter: scene graph, materials, controls, picking, export
-src/structure/painter.ts               phase 2: beads and sticks through VectorTarget, for the vector PDF
+src/structure/three.ts                 the adapter: scene graph, materials, controls, picking, raster export
+src/structure/painter.ts               beads and sticks through VectorTarget, for the vector PDF
 src/panels/StructurePanel.ts           the deck occupant: el, apply, applyLook, exportCanvas, menu, key
 src/panels/TracksPanel.ts              stage C: a BrowserView in a cell, as a one-axis LockMember
 src/ui/hoverLocus.ts                   the pointer's place, readout.ts's shape
-test/unit/g3d-parse.test.ts            the sniff against BED5/6/9, bedGraph, the peak flavours, 3dg
-test/unit/structure-scene.test.ts      bridge arithmetic, two haplotypes, gaps, circular contigs, above-bin
+test/unit/g3d-parse.test.ts            the sniff against BED5/6/9, bedGraph, the peak flavours, 3dg; the width from unsorted rows with gaps; a .gz
+test/unit/structure-scene.test.ts      bridge arithmetic at a width the bin does not divide, two haplotypes, gaps, circular contigs, above-bin, a rung change
 test/unit/structure-camera.test.ts     matrices and fits, goldens computed independently
+test/unit/structure-painter.test.ts    drawingOf: discs and segments in depth order, no gradients, the lit ones last
 test/unit/structure-colour.test.ts     a bead by a bigWig equals the lane's colour at that value
 test/unit/panel-lock.test.ts           one-axis members, the guards
 test/dom/structure-panel.test.ts       arrangement, hover in and out, destroy, the menu
@@ -642,8 +683,8 @@ Touched: `annotations/types.ts`, `featureset.ts`, `loader.ts`, `store.ts`, `work
 `worker/annotations.worker.ts`, `fields.ts`; `panels/deck.ts`, `PanelDeck.ts`, `lock.ts`;
 `app/Session.ts`; `ui/MatrixPanel.ts` (`showLocusEcho`, two store writes), `ui/BrowserView.ts`
 (the store write, the echo guide, the member), `ui/AnnotationCard.ts`, `ui/SequenceCard.ts`,
-`ui/laneSettings.ts`; `styles.css`; `package.json` (`three`, pinned, with a `comments` entry in the
-existing register; `g3djs` as a devDependency oracle in phase 2); `vite.*.config.ts` (the chunk).
+`ui/laneSettings.ts` (the greyed edges); `styles.css`; `package.json` (`three`, pinned, with a
+`comments` entry in the existing register); `vite.*.config.ts` (the chunk).
 
 Documentation, in the shape the last feature landed in: a numbered `SPECS.md` section (§25) with
 its §12 row and its refusals, and a paragraph in §16 for the generalised cell; a `CHANGELOG.md`
@@ -654,10 +695,11 @@ format list; `GLOSSARY.md` entries for **structure**, **model**, **bead**, **cha
 ### 9.2 Demo data
 
 `scripts/make_structure_demo.py` runs `pastis-mds` over `demo/ecoli` and `demo/yeast` at a coarse
-bin and writes g3d text (and, in phase 2, the binary through `g3dtools`), recording in its
-docstring what it was checked against. The yeast model shows the Rabl arrangement at a glance —
-centromeres clustered, arms radiating — and is the picture the README can show. The author's own
-diploid example is the haplotype fixture, if it can be shared.
+bin and writes g3d text, gzipped, recording in its docstring what it was checked against — and
+checks the written file opens in `g3dtools`, which is the independent reader the format has. The
+yeast model shows the Rabl arrangement at a glance — centromeres clustered, arms radiating — and is
+the picture the README can show. The author's own phased example is the haplotype fixture, if it
+can be shared.
 
 ### 9.3 Tests worth naming
 
@@ -672,23 +714,33 @@ diploid example is the haplotype fixture, if it can be shared.
 - The echo loop: a hover on the model produces one `showLocusEcho` on each map and none on itself;
   a tracks cell's report moves every map's columns and no map's rows; nothing oscillates.
 - The link round trip: `maps=a.cool|tracks|3d` parses, serialises, and rebuilds three cells in
-  order with a `~` where a local map was.
+  order with a `~` where a local map was; a second `3d` in a link is dropped with a note, since a
+  deck holds one.
+- The width: the example file, shuffled, with two chromosomes and a haplotype column, yields
+  `1,040,000` and not the gap; the same file with its sixth column removed yields the same width
+  over one chain; a file of three rows yields the one difference it has.
 
 ---
 
 ## 10. Refused inside this scope, and why
 
 - **No structure inference** in phases 1–2 (§8.4). The way out is a solver and `g3dtools`.
-- **No physical unit is invented.** Distances are `model units` unless a `#unit=` header declares
-  one, which is believed and printed. Nothing converts.
+- **No declared resolution.** The width is the spacing of sorted starts, printed on the row; no
+  header, no control and no map rung changes it. A file whose starts are irregular gets the mode
+  and a summary that says how many beads are not at it, which is the fact the reader needs.
+- **No physical unit is invented.** Distances are `model units`; the format carries no unit and
+  the app does not ask for one. Nothing converts.
 - **No phasing is invented.** A file without the sixth column is `s` throughout, as the format
   says. A `.3dg`'s `(mat)`/`(pat)` become `m`/`p` because that is the rewrite `g3dtools 3dg`
   makes; nothing else is read as a haplotype.
 - **No bridging of gaps.** A missing bead breaks the tube; the solver did not place it and a line
   through the gap would be this app's invention. *Gaps: dashed* draws the absence, not a path.
 - **No vector PDF of a lit surface.** The tube and ribbon export as a raster at the export dpi,
-  and the export row says so; beads and sticks may export as paths in phase 2 through the painter,
-  which draws the same scene through the same camera.
+  and the export row says so; beads and sticks export as paths through the painter, which draws
+  the same scene through the same camera.
+- **One structure cell per deck.** Two models side by side is a future suggestion (§13), and
+  keeping it out is what lets `3d` be a bare word in the link and the structure row be *the*
+  structure row.
 - **No WebGL for the heatmap.** `GAPS.md:394` keeps its subject.
 - **No drag selection on the tube** in phase 1, and **no camera in the link** (§7).
 - **No writing back** onto the file that was opened (§13's meaning of write access). Exporting the
@@ -701,43 +753,46 @@ diploid example is the haplotype fixture, if it can be shared.
 
 | Phase | Delivers | Size | Depends on |
 |---|---|---|---|
-| **0 — the row** | g3d text recognised and parsed in the worker; a `structure` row that draws as a segments lane with haplotype as a colour field; persisted and shared; the sniff and bridge tests | ~700 lines | nothing |
+| **0 — the row** | g3d text and `.gz` recognised and parsed in the worker, local or by URL; the width inferred and printed; a `structure` row that draws as a segments lane with haplotype as a colour field; persisted and shared; the sniff and bridge tests | ~700 lines | nothing |
 | **A — the extraction** | `DeckPanel` out of `PanelDeck`; no behaviour change | ~750 lines moved or new | nothing |
-| **1 — the cell** | the scene and camera; the three.js adapter with beads, sticks, tube, opacity, depth cue, lighting; the structure cell from a drop, a `+` cell or a link; hover both ways with the chord and the readout; click to pin, shift-click to mark, double-click to go; colour by sequence, haplotype, position, score; show/hide by navigation, Sequences ticks and key chips; raster PDF/PNG and the deck figure; `v` gains a structure-alone stop; SPECS §25, CHANGELOG with measured sizes, GLOSSARY, README, `GAPS.md` narrowed, demo models | ~3,000 lines + ~1,000 tests | 0, A |
-| **C — the tracks cell** | one-axis lock members; a `BrowserView` in a cell over the file's `/chroms`, sharing the session's tracks; `maps=…|tracks|…` | ~700 lines + tests | A |
+| **1 — the cell** | the scene and camera; the three.js adapter with beads, sticks, tube, opacity, depth cue, lighting; both homologues of a phased file; the structure cell from a drop, a `+` cell or a link; hover both ways with the chord and the readout; click to pin, shift-click to mark, double-click to go; colour by sequence, haplotype, position, score; show/hide by navigation, Sequences ticks and key chips; **vector PDF of beads and sticks through the painter, raster PDF/PNG of the tube**, and the deck figure; `v` gains a structure-alone stop; SPECS §25, CHANGELOG with measured sizes, GLOSSARY, README, `GAPS.md` narrowed, demo models | ~3,300 lines + ~1,100 tests | 0, A |
+| **C — the tracks cell** | one-axis lock members; a `BrowserView` in a cell over the file's `/chroms`, drawing from the session's one track list; the greyed edge buttons; `maps=…|tracks|…` | ~700 lines + tests | A |
 | **D — the deck without a map** | the browser as lead; the gate split; a map companion beside a browser lead; `.metacool` allowances | ~400 lines + tests | C |
-| **2 — the colours and the roads** | colour by any track, feature set, metadata column, marks, the pin's distance and contacts; loops as chords; bookmarks as labels; pick mode; the vector painter for beads and sticks; g3d binary with `g3djs` as oracle; `.3dg`, `bed6+xyz` (fixing the broadPeak misread), pastis `.xyz` against the map's bins | ~2,000 lines + tests | 1 |
-| **3 — the instrument** | model-versus-map task; the spatial tracks; frames, ensembles and point clouds with FOF-CT, `.cndb` and g3d samples | ~2,000 lines + tests | 2, and someone with ensembles |
+| **2 — the colours and the roads** | colour by any track, feature set, metadata column, marks, the pin's distance and contacts; loops as chords; bookmarks as labels; pick mode; `.3dg`, `bed6+xyz` (fixing the broadPeak misread), pastis `.xyz` against the map's bins | ~1,700 lines + tests | 1 |
+| **3 — the instrument** | model-versus-map task; the spatial tracks; frames, ensembles and point clouds with FOF-CT and `.cndb` | ~2,000 lines + tests | 2, and someone with ensembles |
 
 Phase 0 is worth doing on its own. 1 does not wait for C or D, which is why the structure lands
 before the tracks cell, and C and D are what the author's three-cell row and the map-less deck are.
 
 ---
 
-## 12. Questions only the author can answer
+## 13. Future suggestions, not in the plan
 
-1. **Resolution.** Will the text files carry a `#resolution=` line, or should the inference from
-   consecutive starts be the contract? The inference is printed either way; a header removes the
-   one case it can get wrong (a file so sparse that gaps outnumber neighbours).
-2. **The binary g3d.** Is reading `.g3d` over HTTP by range request wanted in phase 2, with its
-   resolution ladder and samples? It is the one format here that a bucket can serve the way it
-   serves a `.cool`, and it is what WashU users already have.
-3. **Haplotype defaults.** On a diploid file, show both homologues by default, or one with a
-   toggle? Both, coloured at two lightnesses of the chromosome's hue, is the proposal.
-4. **The tracks cell's tracks.** The session's one track list, with the cell as one more placement
-   (the proposal), or a list of its own? The first is what makes *put this on every map* keep
-   working; the second is what a reader who wants different tracks in each cell would ask for, and
-   it is what the lane-per-cell `style` patch cannot express today.
-5. **Several structures at once.** Two structure cells (two models of one map, or two samples of a
-   g3d) side by side under one navigation is allowed by the design; is it wanted in phase 1, which
-   decides whether the `3d:<label>` member is needed from the start?
-6. **The vector figure.** Is a path-based PDF of beads and sticks (phase 2) worth three hundred
-   lines, or is a 300 dpi raster the figure the lab actually makes?
-7. **Inference.** Would a port of `pastis-mds` for small genomes be wanted enough to pay the §18.9
-   bar for it?
-8. **The words.** *Structure* (the file, the row), *model* (one set of coordinates), *chain* (one
+Listed so they are decisions deferred rather than omissions, and so nothing in the plan closes
+the door on them:
+
+- **Two structure cells in one deck** — two models of one map, or a model against a simulation —
+  under one navigation. The design allows it (a cell is a view of a row) and the plan excludes it;
+  it would need `3d:<label>` in the link and a way to say which row a cell shows.
+- **WashU's binary `.g3d`** — indexed, multi-resolution, range-readable, with samples. Worth it
+  the day a bucket serves one that is too large to read whole, with `g3djs` as the test oracle the
+  way `hic-straw` is for `.hic`.
+- **A port of `pastis-mds`** for small genomes in the analysis worker, under §18.9's bar (§8.4).
+- **Coarsening a model** the way `g3dtools` does, by averaging beads, so a whole-genome view of a
+  fine model draws fewer beads. Cheap, and unneeded at the sizes in §6.4.
+
+---
+
+## 12. Questions still open
+
+The questions of revision 2 are answered and folded in above (resolution, the binary, haplotypes,
+the track list, one cell, the vector figure). Two remain, and neither blocks phase 0 or A:
+
+1. **Inference.** Would a port of `pastis-mds` for small genomes be wanted enough to pay the §18.9
+   bar for it? It stays in §13 until answered.
+2. **The words.** *Structure* (the file, the row), *model* (one set of coordinates), *chain* (one
    contig of one haplotype), *cell* widened to mean any occupant of the deck. Confirm before they
-   are written into the glossary.
+   are written into the glossary, because they are written in a great many places after that.
 
 ---
 
@@ -745,7 +800,7 @@ before the tracks cell, and C and D are what the author's three-cell row and the
 
 - WashU Epigenome Browser 3D module and g3d — https://www.nature.com/articles/s41592-022-01550-y ,
   https://epigenomegateway.readthedocs.io/en/latest/3d.html , https://github.com/lidaof/eg-3d-demo
-  (the `g3dtools 3dg` conversion), `g3djs` on npm
+  (the `g3dtools 3dg` conversion)
 - Spacewalk — https://github.com/igvteam/spacewalk , https://igvteam.github.io/spacewalk/ ,
   https://aidenlab.org/spacewalk/ , https://github.com/aidenlab/swtool , https://github.com/igvteam/swcproject
 - Nucleome Browser — https://www.nature.com/articles/s41592-022-01559-3 ,
