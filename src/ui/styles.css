@@ -4846,10 +4846,16 @@ canvas.is-frozen {
 
    A tiny uniform dot grid, full bleed behind the column — not on the column
    itself, which would draw a 52rem sheet with a hard edge down each side and
-   turn the page into a card. One dot per 13 px, one pixel across, in the
-   border grey: at that pitch it is texture rather than pattern, which is the
-   difference between paper and wallpaper. Nothing else in the application has
-   a patterned ground, so arriving at one and leaving it are both legible.
+   turn the page into a card. A sub-pixel dot every 10 px, at half the border
+   grey: fine enough and close enough together to read as *grain* rather than
+   as dots, which is the difference between paper and wallpaper. Nothing else
+   in the application has a patterned ground, so arriving at one and leaving it
+   are both legible.
+
+   The 0.8px stop against a 1px transparent is a fifth of a pixel of feather,
+   and it is what stops the grid crawling: a hard-edged dot lands on a
+   different fraction of a device pixel in each cell and the row shimmers as
+   the page scrolls.
 
    `:has()` rather than a class the shell would have to remember to write and
    to take off again. The dialogs' copy of this picker is in a `.modal-panel`
@@ -4857,10 +4863,10 @@ canvas.is-frozen {
 .content:has(.view-picker) {
   background-image: radial-gradient(
     circle,
-    color-mix(in srgb, var(--border) 45%, transparent) 0.8px,
-    transparent 0.9px
+    color-mix(in srgb, var(--border) 50%, transparent) 0.8px,
+    transparent 1px
   );
-  background-size: 15px 15px;
+  background-size: 10px 10px;
   /* From the top-left corner of the box rather than of the viewport, so the
      grid does not walk when the column scrolls. */
   background-position: 0 0;

@@ -27,9 +27,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shorten, a remembered store shows the host of its URL, and `builtin-stores.test.ts` holds the
   budget. **4em between the three**, on the bottom of every section but the last: they are three
   offers rather than three paragraphs of one, and packed at a rem and a bit they read as a single
-  column to be worked down. The page is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
-  is the only patterned surface in the application: arriving at the landing page and leaving it are
-  both legible now, and at that weight it is texture rather than pattern.
+  column to be worked down. The page is a **dotted ground** — a sub-pixel dot every 10 px at half the
+  border grey — which is the only patterned surface in the application: arriving at the landing page
+  and leaving it are both legible now, and at that pitch and weight it is grain rather than pattern.
 
 - **One button, everywhere.** Every `.btn` takes the same gesture on approach — the border and the
   word to the accent, a one-pixel lift, a shadow — which was the store tiles' hover and is now the
