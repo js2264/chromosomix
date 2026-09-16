@@ -1,6 +1,14 @@
 # A 3D structure beside the map — survey and design
 
-Working document for a feature that does not exist yet: an interactive 3D view of a chromatin
+> **Status: implemented**, through phase 2 plus the two analysis tasks of §8.1–8.2, as SPECS §25
+> and §16.11. Where this document and SPECS disagree, SPECS stands; the differences are named in
+> §25.8 (no inference, no ensembles, no map beside a browser lead, no resolution picker for a
+> binary g3d, no metadata colouring), and one of design: the tracks cell and the browser lead follow
+> the maps by loci rather than as one-axis members of the lock (§3.4 here), which reaches the same
+> picture with no change to the lock. `bed3d` (`chrom start end x y z`) took the place of the
+> bed6+xyz reader of §2.
+
+Working document for a feature that did not exist yet: an interactive 3D view of a chromatin
 fibre (one chromosome or several, one genome or several MAGs, one haplotype or two) read from a
 g3d file, drawn *beside* the map and the tracks as a cell of the deck, linked to them in both
 directions, and coloured by whatever the session already knows about the sequence.

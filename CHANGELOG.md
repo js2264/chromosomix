@@ -224,6 +224,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A 3D structure beside the map (§25).** A chromatin model read from WashU's g3d — the text
+  `g3dtools` takes, gzipped or not, local or over HTTP; the binary container it writes, through a
+  reader written here; a `.3dg`; and `bed3d`, the same file with the end column — becomes a row of
+  the Tracks card and a **cell of the deck**, drawn with three.js loaded on the first cell only:
+  beads, sticks or a tube, both homologues of a phased file, a camera remembered per file, vector PDF
+  of beads and sticks. Hover links every surface: a pointer on a map lights the beads at both ends
+  and joins them, a pointer on a bead marks every map and tracks cell, the lead's window ghosts what
+  the maps are not looking at. A click pins, Shift-click marks, a double-click goes. Colour by
+  sequence, haplotype, position, the file's columns, **a loaded track on the lane's own limits, a
+  feature set, the reader's marks, the distance to the pinned bead, or the map's own row through
+  it**; a loops file as chords; bookmarks named on the model. Two analysis tasks: **model versus
+  map** — distance matrices, distance by separation beside the map's P(s), Spearman agreement per
+  sequence — and **spatial tracks**: radial position, distance to a locus, local compaction, as
+  synthetic tracks. The deck gains **cells that are not maps** (§16.11): a **tracks cell** drawing
+  the session's tracks alone, placed on it from the location control and following the maps both
+  ways, and **the browser as lead**, so a deck of tracks and a structure opens with no map at all.
+  Demo models for the E. coli and yeast maps under `demo/`. Measured: three.js is a 552 kB chunk
+  (140 kB gzipped) fetched only by a session that opens a structure cell.
+
 - **The store grid: Roadmap shipped as a hub, a link to whoever made each shelf, and two doors named
   for what they do (§24.2, §24.10).**
 

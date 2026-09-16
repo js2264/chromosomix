@@ -3864,6 +3864,20 @@ Three things about where the name lives:
   the record says nothing about — and a config that says nothing leaves the importing tab's names
   alone.
 
+### 16.11 Cells that are not maps
+
+A deck was *N maps*; it is now *N cells*, of which the maps are the kind the lock drives. Two
+kinds hold no file: a **structure** cell drawing the session's 3D model, and a **tracks** cell
+drawing the session's tracks alone (§25). Both answer the same short contract (`panels/cell.ts`):
+adopt the view, be told the lead's window as loci, remeasure, repaint, export a canvas, be
+destroyed. Everything the deck says to a *map* by name — a lock member, a lane floor, a bin size,
+a colour scale, the star — it goes on saying to the maps only. A cell holds no file, so it takes no
+share of the read budget (§16.7) and is not an empty card either; the bar counts it as neither.
+
+In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
+maps and the `~` of a vacancy are. A deck holds one structure cell — a second `3d` is dropped on
+the way in — and as many tracks cells as the reader opens, named apart in the location control.
+
 ## 17. The turn: 45°, distance up the side
 
 A contact map is symmetric about its diagonal, and the diagonal is where all the signal is. So a
@@ -6754,3 +6768,137 @@ The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C 
 That is the only check worth having: a file this repository wrote and this repository read proves
 that two implementations share a reading of the format, which is exactly what they would do if the
 reading were wrong.
+
+## 25. A 3D structure beside the map
+
+A chromatin model — one chromosome or several, one haplotype or two — read from a file of beads
+with a place in space, drawn as a cell of the deck beside the maps and the tracks, linked to them
+in both directions, and coloured by whatever the session already knows about the sequence. The
+design it was built from, with the alternatives weighed and the sizes measured, is
+`docs/structure-3d.md`; this section is what stands.
+
+### 25.1 Words
+
+A **structure** is the file and the row it makes in the Tracks card — a row of kind `structure`,
+which is also a feature set: every bead is an interval. A **model** is one set of coordinates; a
+**chain** is the beads of one sequence and one haplotype in genomic order; a **bead** is one row
+of the file. A **cell** is any occupant of the deck (§16.11).
+
+### 25.2 The formats
+
+**g3d text**, WashU's own and what `g3dtools` takes: `chrom start x y z [haplotype]`, no header,
+no end column, rows in any order, the sixth column `m`, `p` or `s` (or `maternal`, `paternal`,
+`shared`), and the `chr7(mat)` fold of a `.3dg` read the same. The **width** of a bead is the
+commonest step between consecutive sorted starts, counted across every sequence — the spacing the
+file was modelled at, inferred rather than declared, and printed under the row so a reader whose
+file was meant to be at 10 kb and reads *1.04 Mb* has been told the one thing this reader could
+get wrong. It is independent of the map's bin size: the same file opens the same way beside a 1 kb
+map and a 50 kb one.
+
+**bed3d**: the same file with the end written down, `chrom start end x y z [haplotype]`, for a
+model whose beads are the bins of a map or of any width a BED can say. Each bead keeps its own
+end; the commonest length is the width under the row.
+
+**Binary g3d**, the container `g3dtools` writes: a 64 000-byte msgpack header and one zlib block
+per resolution, read by range like a BAM rather than whole like a text, through a reader written
+here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a dependency. It opens at
+its finest resolution and names the others under the row. A version-1 container is refused by
+name, with the way out (`g3dtools` rewrites it).
+
+All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+would be a lane of boxes whose *end* is a coordinate in space — and by name as a tiebreak only:
+`.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP. A file of whole-number coordinates
+has to be *named* to be read as a structure. The tests pin what a BED5, a BED6, a bedGraph and a
+narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
+location control, and skipped by every stack; its picture is the cell.
+
+### 25.3 The deck of cells
+
+**The structure cell** draws the session's one structure row — the first of the list — with
+three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
+on the web, folded into the one file of the standalone build. Beads, sticks, both, or a tube; a
+halo on the hovered bead; a dashed chord across a hovered contact; a fog for depth; lit or flat;
+perspective or orthographic; the camera remembered per file. A phased file draws both homologues,
+and the key's chips solo one. It opens when a structure is dropped or named by URL while a map or
+the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
+link's `3d`; a second structure replaces the picture rather than adding a cell.
+
+**The tracks cell** is the session's own browser over the lead file's sequences — the same store,
+client, groups and marks — drawing only the tracks **placed on it**: the location control lists
+it beside the maps, with its one edge live and the other three greyed and saying why. It follows
+the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
+deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
+cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
+spreads to every other map. The chain in its heading unhooks both roads.
+
+**The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
+session's view, re-parented into cell 0 as a map's is, and the cells beside it are tracks and the
+structure. The deck learns a lead that is not a map — the browser's windows as loci, and a way to
+be taken somewhere — and the browser reports every move of its window, a link's included. A map
+may not join such a deck: the bar refuses it in words, the add row puts its map roads away, and a
+map a link names is held as the cell it would have been, under its name.
+
+### 25.4 Hover, both ways
+
+A store of one place (`ui/hoverLocus.ts`): one locus from a track, a bead or the browser's axis,
+two from a map's cell, each saying which surface it came from, every subscriber ignoring its own.
+A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
+bead is a mark on every map's column axis and a guide on every tracks cell; a pointer on a tracks
+cell is the same on the maps and the structure. The deck's own cell-to-cell echo between maps is
+untouched, and a map's hover is not relayed to the maps twice.
+
+What the maps are looking at reaches the cell as loci on every pan; beads outside the window are
+ghosted, hidden or shown, at the reader's choice, and the frame button puts the camera on what is
+lit. A click pins a bead; Shift-click puts a mark at its locus that every map and track then
+draws; a double-click on a bead takes the maps there; on the air, it frames. A picking mode armed
+by the marks card or an analysis form takes a click on a bead as the place, on both axes at once,
+as a track's does.
+
+### 25.5 Colour, chords, names
+
+One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
+own **score** and any column it carries; and, from the session, **a track's values** at each
+bead, read through the same sample cache the lanes use at one bucket per bead and on the lane's
+own limits, so a bead coloured by a bigWig agrees with the lane at every value; **a feature
+set's** colour where a bead overlaps one; **the reader's marks**; **the distance to the pinned
+bead** in the model's units; and **contacts with the pinned bead** — the lead map's own row
+through it, read out of the block in hand on the map's own transform, range and colormap, the
+virtual 4C drawn in space. A colouring the list no longer has stays named in the picker rather
+than silently becoming the first option. Two rules carried from the modules reused: fit the
+colouring to the file, not to the window, so turning the model never changes what a colour means;
+and use the lane's scale.
+
+A **pairs row** — BEDPE, loops — can be drawn as chords between its anchors' beads, kept to the
+loops touching the window and capped at six hundred, past which a model is a cage. The reader's
+**bookmarks** are named on the model at their middle beads.
+
+### 25.6 Analysis
+
+Two tasks under *map*, listed greyed until a map is open and a structure loaded. **Model versus
+map** bins the beads to the map's bins per sequence and answers the validation picture: the
+model's distances as a matrix and as `1/d^α`, the mean distance at each separation beside the
+map's own P(s) over the same bins with the log-log slope, and a table of Spearman correlations
+between `1/d` and the observed contacts per sequence and haplotype — rank-based, so the exponent
+enters the picture and not the number. **Spatial tracks** turns the model into three profiles on
+the map's bins — radial position, distance to a chosen locus, local compaction — which "a
+synthetic track is a track" (§18.5) makes lanes, colourings of the model itself, and inputs of
+every track task. Both are `structure/versusMap.ts`, pure over arrays, held still by tests.
+
+### 25.7 Export
+
+Beads and sticks export as **paths** through `structure/painter.ts`, projected through the same
+camera the screen was; a tube is a lit surface no `arc` can be and exports as the raster the GPU
+drew, at 300 dpi; the deck's figure takes the cell's canvas like any other. Both say which on
+the button.
+
+### 25.8 Refused, and not yet built
+
+- **Inference** — computing a structure from the map — under §18.9's rule: a second caller needs
+  a published upstream with its own goldens. The way out is `pastis` or `g3dtools` and a drop.
+- **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
+  one model. The scene's shape does not close the door.
+- **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one
+  yet.
+- **A resolution picker for a binary g3d**: the finest opens; the others are named under the row.
+- **Metadata columns as a colouring** and the Sequences card's ticks over the model: the key's
+  chips and the haplotype solo cover the case a reader meets.

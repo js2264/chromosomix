@@ -22,8 +22,8 @@ code disagree, the code is right and this file is a bug.
 - [What is being looked at](#what-is-being-looked-at) — view state, views, levels
 - [Files and addressing](#files-and-addressing) — cool, metacool, entries, URIs, stores
 - [Genomes and sequences](#genomes-and-sequences) — genome, contig, assembly, naming
-- [Maps on screen](#maps-on-screen) — lead, companion, deck, star, the second file
-- [Annotations](#annotations) — track, lane, placement, group, mark, bookmark
+- [Maps on screen](#maps-on-screen) — lead, companion, deck, cell, star, the second file
+- [Annotations](#annotations) — track, lane, placement, group, mark, bookmark, structure
 - [The picture](#the-picture) — score, transform, clip, the turn, refine
 - [Analysis](#analysis) — task, availability, result, synthetic track
 - [Machinery](#machinery) — workers, sources, budgets, grants, buckets
@@ -390,6 +390,13 @@ An empty cell: a link's memory of a *local* companion, with no bytes behind it a
 where its map would be. Written as `~` in a link, so a shared deck keeps the count and the order of
 what was sent even where it cannot keep the bytes (§11).
 
+### cell
+
+Any occupant of the deck (§16.11, §25): a map (the lead or a companion), a **vacancy**, a
+**structure** cell drawing the session's 3D model, or a **tracks** cell drawing the session's tracks
+alone. Only the maps are members of the lock; the other two are told the lead's window as loci and
+never report one back. In a link: a URI, `~`, `3d`, `tracks`.
+
 ### star
 
 Which panel the Analysis column reads (§18.2). It starts on the lead and says only which picture the
@@ -430,7 +437,15 @@ may not** — a deck reserves the same lane room on every panel so the maps line
 ### placement and edge
 
 Which of the map's four edges a lane sits on: `top`, `right`, `bottom`, `left`. A track may be on
-several at once.
+several at once. A tracks cell has one edge, the bottom; the other three are greyed for it.
+
+### structure, model, chain, bead
+
+A **structure** is a file of beads with a place in space (g3d, bed3d, §25) and the row it makes in
+the Tracks card — a row that is also a feature set, since every bead is an interval, and that is
+never a lane. A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
+haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
+file was modelled at, inferred from its starts and independent of the map's bin size.
 
 ### card
 
