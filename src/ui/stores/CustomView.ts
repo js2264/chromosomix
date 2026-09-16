@@ -18,6 +18,7 @@ import { button, el } from '../dom'
 import { canonicalUrl } from '../../sources/rewrite'
 import { fetchStore, storeFromText, type StoreFile } from '../../state/store'
 import { addStoreRow, readStoreRows, removeStoreRow } from '../../state/stores'
+import { exampleHubText, exampleStoreText } from '../examples'
 import type { StoreView } from '../../state/facets'
 import { PortalView, storeFailure } from './PortalView'
 import type { StoreHost } from './host'
@@ -138,6 +139,17 @@ export class CustomView {
                   class: 'btn btn-primary',
                   title: hub ? 'Read this text as a hub.' : 'Read this text as a store.',
                 }),
+                // A worked example, and one that **opens**: it names the
+                // published demo files, so the first press draws a shelf and the
+                // reader's first edit is to something that already worked rather
+                // than to a template whose state they cannot tell
+                // (`ui/examples.ts`).
+                button('fill in an example', () => this.fillExample(), {
+                  class: 'btn custom-example',
+                  title: hub
+                    ? 'Put a small working hub in the box, over the demo data. Press open, then edit it into your own.'
+                    : 'Put a small working store in the box, over the demo data. Press open, then edit it into your own.',
+                }),
               ),
             ),
           )
@@ -174,6 +186,40 @@ export class CustomView {
       return
     }
     await this.load(url)
+  }
+
+  /**
+   * Put a worked example in the box.
+   *
+   * It **replaces** what is there, and asks first when that is not empty: the
+   * box is where somebody's half-written hub lives, and the one thing this
+   * button must not be is a way to lose it to a misclick. The base is cleared
+   * with it, because the example's own URLs are absolute and a base left over
+   * from a previous paste would resolve nothing and confuse the next refusal.
+   */
+  private fillExample(): void {
+    const hub = this.props.front.kind === 'hub'
+    if (
+      this.textInput.value.trim() !== '' &&
+      !window.confirm('Replace what is in the box with the example?')
+    ) {
+      return
+    }
+    this.textInput.value = hub ? exampleHubText() : exampleStoreText()
+    this.baseInput.value = ''
+    this.say(
+      hub
+        ? 'An example hub over the demo data. Press open, then edit it into your own.'
+        : 'An example store over the demo data. Press open, then edit it into your own.',
+      false,
+    )
+    this.textInput.focus()
+    // The **top**, and both of these are needed: the caret goes there on its
+    // own, the scroll does not, and a box that lands showing its last five
+    // lines has hidden the two comment lines that say what the reader is
+    // looking at and where `twoBitPath` would go.
+    this.textInput.setSelectionRange(0, 0)
+    this.textInput.scrollTop = 0
   }
 
   /**

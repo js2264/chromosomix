@@ -1480,8 +1480,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   whose rows fail one at a time when they are pressed. A pasted shelf has no address, so it is not
   put in the address bar and not offered for remembering: a store worth keeping is one with a URL.
 
+  Each box carries a **fill in an example** button beside *open what is pasted*, and what it puts
+  there is a hub and a store that actually **read** — over the published demo files, so the first
+  press draws a shelf and the reader's first edit is to a thing that already worked rather than to a
+  template whose state they cannot tell. It asks before replacing a box that is not empty, because
+  that box is where somebody's half-written hub lives. A test pins every file the two examples name
+  against the published set, since an example that 404s on its first press is worse than none.
+
   The CORS failure now names the box, because a reader staring at *Failed to fetch* has no reason
-  to guess there is one.
+  to guess there is one — and where the host is a **UCSC** one it says what was measured on
+  2026-09-16: neither `genome.ucsc.edu` nor `hgdownload.soe.ucsc.edu` sends the header, so UCSC's
+  own example hubs and the whole of GenArk are out of reach of *any* browser-only viewer, this one,
+  igv.js or otherwise. That is a UCSC hosting decision rather than a fault in the reader's URL, and
+  saying so beats sending them to check a link that is perfectly correct. It also says that pasting
+  such a hub's text gets past it for the hub and not for its `bigDataUrl`s, which are on the same
+  hosts — the part that would otherwise be discovered one row at a time.
 
 - **A store's own name replaces the door's on the drawer heading once it lands.** A door is named
   for the errand — *A track hub*, *Your own store* — which is right until one has been read, at

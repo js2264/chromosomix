@@ -201,6 +201,37 @@ describe('the hub door', () => {
     expect(buttonNamed(drawer.el, 'remember this store')).toBeNull()
   })
 
+  it('fills the box with an example that then opens', async () => {
+    const { drawer } = build()
+    drawer.open('hub')
+    requested.length = 0
+    buttonNamed(drawer.el, 'fill in an example')?.click()
+    const text = drawer.el.querySelector('.custom-text') as HTMLTextAreaElement
+    expect(text.value).toContain('hub exampleHub')
+    // The point of the button: what it puts in the box is a thing that *reads*,
+    // so the reader's first edit is to something that already drew a shelf.
+    buttonNamed(drawer.el, 'open what is pasted')?.click()
+    await settled()
+    expect(requested).toEqual([])
+    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Example hub')
+    expect(textsOf(drawer.el, '.portal-name')).toContain('MNase')
+  })
+
+  it('asks before replacing a box that is not empty', () => {
+    const { drawer } = build()
+    drawer.open('hub')
+    const text = drawer.el.querySelector('.custom-text') as HTMLTextAreaElement
+    text.value = 'hub halfWritten'
+    // The box is where somebody's unfinished hub lives; the one thing this
+    // button must not be is a way to lose it to a misclick.
+    vi.stubGlobal('confirm', () => false)
+    buttonNamed(drawer.el, 'fill in an example')?.click()
+    expect(text.value).toBe('hub halfWritten')
+    vi.stubGlobal('confirm', () => true)
+    buttonNamed(drawer.el, 'fill in an example')?.click()
+    expect(text.value).toContain('hub exampleHub')
+  })
+
   it('says what is missing when only the hub.txt is pasted', async () => {
     const { drawer } = build()
     drawer.open('hub')

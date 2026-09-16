@@ -6655,7 +6655,20 @@ concatenated are the same thing, since the only keys the concatenation loses are
 the next file is. `hasGenomeStanzas` is what tells a whole hub from its first file, so a text that is
 only a `hub.txt` is refused by name and told what to paste after it. A pasted shelf is not put in the
 address bar and not offered for remembering: a store worth keeping is one with an address, and the
-honest way to get one is to publish the file. What this does **not** do is proxy the fetch — routing a
+honest way to get one is to publish the file. Each box offers a **worked example** that reads — a hub
+and a store over the published demo files — because an example beside a paste box is not there to
+show syntax, which this document does better, but to be pressed: the reader's first edit should be to
+something that already drew a shelf.
+
+**What CORS costs, measured.** On 2026-09-16 neither `genome.ucsc.edu` nor
+`hgdownload.soe.ucsc.edu` answers a cross-origin `GET`, which puts UCSC's own example hubs and the
+whole of GenArk out of reach of every browser-only viewer — this one, igv.js, anything without a
+server. The failure message says so for a `*.ucsc.edu` host rather than sending a reader to check a
+URL that is perfectly correct, and says the part that would otherwise be found out one row at a
+time: pasting such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the
+same hosts and will not open. Downloading the hub and opening it from a mounted folder is the road
+that works, and it is the reader's own machine doing the fetching, which is the only place this
+project is willing to move that work to. What this does **not** do is proxy the fetch — routing a
 reader's traffic through a third party to work around somebody else's header is exactly what C1
 refuses.
 

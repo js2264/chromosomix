@@ -543,12 +543,18 @@ async function fetchText(
     // A `TypeError` here is almost always the CORS answer the host did not
     // give, and saying so is more use than the browser's own "Failed to fetch":
     // the fix is a bucket setting, on a host the reader may well control.
+    //
+    // …and where they do not control it, the sentence has to name the way past
+    // it, because plenty of hosts will never send that header. Pasting the text
+    // is that way, and a reader staring at *Failed to fetch* has no reason to
+    // guess there is a box for it.
     return {
       ok: false,
       reason: 'network',
       message:
         `${url} could not be read: ${err instanceof Error ? err.message : String(err)}. ` +
-        'The host must allow a cross-origin GET from this page.',
+        'The host must allow a cross-origin GET from this page — and if it will not, open the ' +
+        `file yourself and paste its text into the box under the URL.${hostNote(url)}`,
     }
   }
   if (response.status === 404) {
@@ -636,6 +642,41 @@ export async function storeFromText(text: string, base = ''): Promise<StoreFetch
     }
   }
   return store
+}
+
+/**
+ * A sentence about *this host*, where there is one worth saying.
+ *
+ * Measured rather than assumed, and recorded here because it costs a reader an
+ * afternoon otherwise: on 2026-09-16 neither `genome.ucsc.edu` nor
+ * `hgdownload.soe.ucsc.edu` answers a cross-origin `GET`, which puts UCSC's own
+ * example hubs and the whole of GenArk out of reach of **any** browser-only
+ * viewer — this one, igv.js, anything without a server of its own. That is a
+ * UCSC hosting decision rather than a fault in the reader's URL, so the message
+ * says so instead of sending them to check a link that is perfectly correct.
+ *
+ * It says the same about the *data* files, because that is the part that would
+ * otherwise be found out one row at a time: pasting a UCSC hub's text gets a
+ * shelf whose `bigDataUrl`s are on those same hosts and fail the same way.
+ *
+ * Appended to the general sentence rather than replacing it, and dated, because
+ * the day UCSC adds the header this paragraph is wrong and the sentence above
+ * it still is not.
+ */
+function hostNote(url: string): string {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+  if (!/(^|\.)ucsc\.edu$/.test(host)) return ''
+  return (
+    ` As of September 2026 UCSC's servers — ${host} among them — do not send that header, so no ` +
+    'browser-only viewer can read a hub hosted there. Pasting the text gets past it for the hub ' +
+    'itself, but its bigDataUrls are on the same hosts and will not open either; downloading the ' +
+    'hub and opening it from a mounted folder is the way that works.'
+  )
 }
 
 /** `https:`, `s3:`, `gs:` — anything with a scheme, which needs no base. */

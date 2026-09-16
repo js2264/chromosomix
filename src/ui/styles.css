@@ -6017,6 +6017,12 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* Beside the primary verb, and quiet: filling the box is a way to *start*, not
+   the thing the reader came to press. */
+.custom-example {
+  flex: 0 0 auto;
+}
+
 .custom-address {
   flex: 1 1 auto;
   min-width: 0;

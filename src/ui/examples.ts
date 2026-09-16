@@ -586,3 +586,132 @@ export function clearShelves(): void {
   shelves.clear()
   asked.clear()
 }
+
+// ---------------------------------------------------------------------------
+// Worked examples for the paste boxes
+// ---------------------------------------------------------------------------
+
+/**
+ * A hub and a store, ready to paste — and **ready to open**.
+ *
+ * The point of an example beside a paste box is not to show syntax, which the
+ * specification does better. It is to be something a reader can press *open*
+ * on and then edit into their own: the two below name the published demo files,
+ * so each of them draws a shelf on the first press wherever this build is
+ * served from, and the reader's first edit is to a thing that already worked
+ * rather than to a template they cannot tell the state of.
+ *
+ * Which means they are held to the same bar as any other demo: every URL is one
+ * of {@link DEMO_DATA_FILES} or {@link DEMO_ANNOTATION_FILES}, so the test that
+ * reads those off disk covers these too, and neither example can come to name a
+ * file the bucket does not have.
+ *
+ * The hub is a **db hub** — no `twoBitPath` — because the `.2bit` beside the
+ * demo is not one of the published files, and an example that 404s on the
+ * deployed site is worse than one that demonstrates one rung less. The rung it
+ * skips is named in a comment inside the example, where somebody writing an
+ * assembly hub will be looking for it.
+ */
+export function exampleHubText(): string {
+  const at = `${demoBase()}yeast/`
+  return [
+    '# A UCSC track hub, in one file: the hub line, its genome, and its tracks.',
+    '# Press open — this one works — then edit it into your own.',
+    '#',
+    '# Three separate files (hub.txt, genomes.txt, trackDb.txt) can be pasted',
+    '# one after another instead: concatenated, they are exactly this.',
+    'hub exampleHub',
+    'shortLabel Example hub',
+    'longLabel The yeast demo data, as a hub you can edit',
+    'useOneFile on',
+    '',
+    'genome sacCer3_syn40',
+    'organism Saccharomyces cerevisiae',
+    '# An *assembly hub* carries its own sequence here, and it is always a .2bit:',
+    '#   twoBitPath https://your.host/yeast.2bit',
+    '# With none, the genome opens on the lengths in the first bigWig’s header.',
+    '',
+    'track signal',
+    'compositeTrack on',
+    'shortLabel Signal',
+    'longLabel Two tracks, grouped as their hub groups them',
+    'type bigWig',
+    '',
+    '    track mnase',
+    '    parent signal on',
+    '    shortLabel MNase',
+    '    longLabel Nucleosome occupancy',
+    `    bigDataUrl ${at}Yeast_MNase.bw`,
+    '    type bigWig',
+    '',
+    '    track atac',
+    '    parent signal on',
+    '    shortLabel ATAC',
+    '    longLabel ATAC-seq accessibility',
+    `    bigDataUrl ${at}Yeast_ATAC.bw`,
+    '    type bigWig',
+    '',
+    'track contacts',
+    'shortLabel Micro-C map',
+    'longLabel A contact map, which opens through the map door',
+    `bigDataUrl ${at}Yeast_hic.hic`,
+    'type hic',
+    '',
+  ].join('\n')
+}
+
+/**
+ * The store-file counterpart: the same two demo files, as a shelf.
+ *
+ * Deliberately small. A store's whole shape is `kind`, `columns` and `entries`,
+ * and an example with twenty rows would bury that under nineteen copies of the
+ * one line worth reading.
+ */
+export function exampleStoreText(): string {
+  const at = `${demoBase()}yeast/`
+  return `${JSON.stringify(
+    {
+      kind: STORE_KIND,
+      version: STORE_VERSION,
+      name: 'Example shelf',
+      description: 'Two of the demo files, as a store you can edit',
+      columns: [
+        { key: 'assay', label: 'Assay' },
+        { key: 'assembly', label: 'Assembly' },
+      ],
+      entries: [
+        {
+          label: 'Yeast micro-C, G2/M, 1 kb',
+          uri: `${at}Yeast_microC_G2M_1kb.cool`,
+          kind: 'map',
+          note: 'A contact map, which opens through the map door',
+          fields: { assay: 'Micro-C', assembly: 'sacCer3_syn40' },
+          tracks: [{ label: 'MNase', url: `${at}Yeast_MNase.bw` }],
+        },
+        {
+          label: 'MNase',
+          uri: `${at}Yeast_MNase.bw`,
+          kind: 'genome',
+          note: 'A bigWig, which opens as a browser over its own genome',
+          fields: { assay: 'MNase-seq', assembly: 'sacCer3_syn40' },
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`
+}
+
+/**
+ * Every URL the two examples name, as their paths under `demo/`.
+ *
+ * For the test that reads the published demo files off disk: an example that
+ * names a file the bucket does not have is an example that fails on its first
+ * press, which is the one thing worse than no example at all.
+ */
+export const EXAMPLE_FILES: readonly string[] = [
+  'yeast/Yeast_MNase.bw',
+  'yeast/Yeast_ATAC.bw',
+  'yeast/Yeast_hic.hic',
+  'yeast/Yeast_microC_G2M_1kb.cool',
+]

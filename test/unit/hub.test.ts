@@ -47,6 +47,7 @@ import { parseGenePred, sniffGenePred } from '@/annotations/genepred'
 import { parseInteract, sniffInteract } from '@/annotations/interact'
 import { parseLongRange, sniffLongRange } from '@/annotations/longrange'
 import { STORE_KIND, storeFromText } from '@/state/store'
+import { EXAMPLE_FILES, exampleHubText, exampleStoreText } from '@/ui/examples'
 import type { StoreEntry } from '@/state/store'
 
 const HUB_URL = 'https://lab.example.org/myHub/hub.txt'
@@ -687,5 +688,68 @@ describe('storeFromText', () => {
     const result = await storeFromText('   ')
     expect(result.ok).toBe(false)
     expect(!result.ok && result.message).toContain('Nothing pasted')
+  })
+})
+
+/**
+ * The worked examples the paste boxes offer.
+ *
+ * An example beside a paste box is not there to show syntax — the specification
+ * does that better. It is there to be pressed: the reader's first edit should be
+ * to something that already drew a shelf, not to a template whose state they
+ * cannot tell. So the bar is that each one **reads**, and that every file it
+ * names is one the demo bucket has.
+ */
+describe('the paste boxes’ examples', () => {
+  it('reads the hub example into a shelf', async () => {
+    const result = await storeFromText(exampleHubText())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.store.name).toBe('Example hub')
+    expect(result.store.entries.map((entry) => entry.label)).toEqual([
+      'Saccharomyces cerevisiae (sacCer3_syn40)',
+      'MNase',
+      'ATAC',
+      'Micro-C map',
+    ])
+    // Its genome is the db-hub fallback — no `twoBitPath`, so the first bigWig's
+    // header carries the lengths — and it says so where a reader will see it.
+    const genome = result.store.entries[0]
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.note).toContain('names no sequence of its own')
+    // …and the contact map goes through the map door.
+    expect(result.store.entries[3].kind).toBe('map')
+  })
+
+  it('reads the store example into a shelf', async () => {
+    const result = await storeFromText(exampleStoreText())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.store.name).toBe('Example shelf')
+    expect(result.store.entries).toHaveLength(2)
+    expect(result.store.entries[0].kind).toBe('map')
+    expect(result.store.entries[0].tracks).toHaveLength(1)
+  })
+
+  it('names only files the demo bucket has', () => {
+    const named = [...exampleHubText().matchAll(/https?:\/\/\S+/g)]
+      .map((match) => match[0])
+      .concat([...exampleStoreText().matchAll(/https?:\/\/[^"]+/g)].map((match) => match[0]))
+      // The commented `twoBitPath` line is an illustration, not a file.
+      .filter((url) => !url.includes('your.host'))
+      .map((url) => url.split('/').slice(-2).join('/'))
+    expect(named.length).toBeGreaterThan(0)
+    for (const path of new Set(named)) {
+      expect(EXAMPLE_FILES).toContain(path)
+    }
+  })
+
+  it('needs no base, because every URL in it is absolute', async () => {
+    // The refusal for relative names is what would fire otherwise, and an
+    // example that cannot be opened without a second box filled in is not one.
+    for (const text of [exampleHubText(), exampleStoreText()]) {
+      const result = await storeFromText(text)
+      expect(result.ok).toBe(true)
+    }
   })
 })
