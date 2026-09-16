@@ -5,25 +5,36 @@
  * same place: the diamond asks what crosses a bin, the index asks which way it
  * leans, and this asks how much there is around it at all. The first two are
  * *ratios* and are deliberately blind to depth — that is what makes them
- * comparable between chromosomes — and this one is a **sum** and is not, which
- * is the whole reason it is a separate reading rather than a third smoothing of
- * the same one. A region that has lost its local structure has a smaller sum and
- * an unremarkable insulation score, because the ratio it is measured against fell
- * with it.
+ * comparable between chromosomes — and this one is a **mean cell value** and is
+ * not, which is the whole reason it is a separate reading rather than a third
+ * smoothing of the same one. A region that has lost its local structure has a
+ * smaller mean and an unremarkable insulation score, because the ratio it is
+ * measured against fell with it.
  *
- * ## The window
+ * ## The window is in bins, and it is a count of diagonals
  *
- * In base pairs, and it is the **side of the square** rather than its reach each
- * way. A reader asking for a 200 kb HiC score means a 200 kb window, which is
- * the interval the score is a statement about; halving it into a radius is
- * arithmetic the form should do and not the reader. The runner says in a note
- * what that came to in bins, for the same reason the directionality index does.
+ * Like the diamond's and the directionality index's, and for their reason: the
+ * three are read side by side against the same map, and a form that asks for two
+ * of them in bins and the third in base pairs makes comparing them arithmetic.
+ * The near-diagonal is a fact about the grid rather than about the genome, and
+ * the same typed number of base pairs meant three bins at one resolution and one
+ * at the next.
  *
- * The default is **50 kb**, which is the scale the score is a useful reading at
- * on the bacterial and phage maps it comes from — small enough that the window is
- * one structural feature rather than a whole domain, large enough that it holds
- * more than the self-ligation spike. A mammalian map wants it wider, and that is
- * exactly the kind of thing a form control is for.
+ * It is the **side of the square** rather than its reach each way, which on a
+ * window centred on the diagonal is the same as **how many diagonals the
+ * triangle spans, counting the main one**: a window `2x + 1` bins across holds
+ * separations `0 … 2x`, and both counts are `2x + 1`. So the one number a reader
+ * types is the one the method is described with.
+ *
+ * {@link DEFAULT_HIC_SCORE_WINDOW_BINS} is **3** — the main diagonal and the two
+ * above it, six cells — which is the reading the score comes from on bacterial
+ * maps, where it is run on 2 kb matrices and the feature being looked for is a
+ * few kb of chromosome that has stopped folding against itself. Wider windows
+ * are a different and blunter question, and a map with much larger domains wants
+ * one; that is exactly the kind of thing a form control is for. The runner says
+ * what the window came to in base pairs on the file actually open, because 3
+ * bins is 6 kb on the 2 kb map this default was chosen against and 150 kb on a
+ * 50 kb one.
  */
 
 import { contigNamed, framingCovers } from '../context'
@@ -39,25 +50,33 @@ import type {
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 
-/** The window the score is read at unless somebody says otherwise. */
-export const DEFAULT_HIC_SCORE_WINDOW_BP = 50_000
+/**
+ * The main diagonal and the two above it, which is the bacterial reading.
+ *
+ * Three diagonals on the 2 kb matrices this score is computed on there — a 6 kb
+ * square, six cells averaged — and a default has to be a number of bins rather
+ * than a distance now that the form asks in bins.
+ */
+export const DEFAULT_HIC_SCORE_WINDOW_BINS = 3
 
-/** The window in base pairs — the whole side of the square. */
-export function windowBpOf(params: Params): number {
-  const value = typeof params.window === 'number' ? params.window : DEFAULT_HIC_SCORE_WINDOW_BP
+/** The window in bins — the whole side of the square, at least one. */
+export function windowBinsOf(params: Params): number {
+  const value = typeof params.window === 'number' ? params.window : DEFAULT_HIC_SCORE_WINDOW_BINS
   return Math.max(1, Math.round(value))
 }
 
 /**
  * How far the square reaches each way, in bins.
  *
- * Half the window, and **at least one bin**: a window narrower than two bins is
- * a square one cell on a side, which is the main diagonal and not a reading of
- * anything around it. The floor is what turns that into a small answer rather
- * than an empty one, and the runner says so when it bites.
+ * A square centred on a bin has an odd number of bins on a side, so an even
+ * window is the **largest odd square that fits inside it** rather than the next
+ * one up: asking for 4 bins and being given 5 is a window wider than the one on
+ * the label. The floor of one is the other half of that — a square one cell on a
+ * side is the main diagonal and not a reading of anything around it — and the
+ * runner says so when either bites.
  */
-export function halfWidthAt(params: Params, binsize: number): number {
-  return Math.max(1, Math.round(windowBpOf(params) / Math.max(1, binsize) / 2))
+export function halfWidthAt(params: Params): number {
+  return Math.max(1, Math.floor((windowBinsOf(params) - 1) / 2))
 }
 
 function regionOf(params: Params): string {
@@ -74,11 +93,14 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'window',
     label: 'Window',
-    hint: 'The side of the square, centred on each bin. Everything inside it is added up.',
-    default: DEFAULT_HIC_SCORE_WINDOW_BP,
+    hint:
+      'The side of the square centred on each bin, which is also how many diagonals it spans, ' +
+      'counting the main one. 3 is the main diagonal and the two above it — six cells — the ' +
+      'reading bacterial maps are scored with at 2 kb.',
+    default: DEFAULT_HIC_SCORE_WINDOW_BINS,
     min: 1,
     integer: true,
-    unit: 'bp',
+    unit: 'bins',
   },
   {
     kind: 'region',
@@ -114,9 +136,10 @@ const PARAMS: readonly ParamSpec[] = [
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
-  const half = halfWidthAt(params, context.binsize)
-  // The corners of the square are `2h` apart, so that is how deep the band has
-  // to be read. Pricing it at `h` would quote half the reads the runner makes.
+  const half = halfWidthAt(params)
+  // The two ends of the window contact each other `2h` apart, so that is how
+  // deep the band has to be read. Pricing it at `h` would quote half the reads
+  // the runner makes.
   const depth = half * 2
   const contig = regionContig(context, regionOf(params))
 
@@ -185,10 +208,14 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 export const HIC_SCORE_TASK: AnalysisTask = {
   id: 'hicscore',
   title: 'HiC score',
-  blurb: 'How much contact there is in a window around each bin.',
+  blurb: 'The mean contact in a window around each bin.',
   group: 'map',
   venue: 'analysis',
-  version: 1,
+  // Bumped with the definition: it is the mean of the window's upper triangle
+  // now and was the sum of the whole square, and the window is a bin count where
+  // it used to be base pairs. A result carried in from a shared session naming
+  // version 1 is a different quantity under the same title.
+  version: 2,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['profile'],

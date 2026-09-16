@@ -254,7 +254,7 @@ metacooler-run tasks
 ## 
 ## hicscore
 ##     HiC score
-##       --window (default 50000)  Window
+##       --window (default 3)  Window
 ##       --region  Sequence
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the window

@@ -6,48 +6,77 @@
  * boundary but a change in how tightly a stretch of the genome is folded against
  * itself — a transcribed region that has lost its local structure, a phage
  * genome that has gained one. The reading is deliberately blunt: put a square
- * window on the diagonal, centred on the bin, and add up everything inside it.
+ * window on the diagonal, centred on the bin, and take the **mean** of the half
+ * of it that is above and to the right of the diagonal.
  *
  * ## What it is, exactly
  *
- * For bin `i` and a square `2h + 1` bins on a side:
+ * For bin `k` and a window reaching `x` bins each way:
  *
  * ```
- * score(i) = Σ M[r, c]   for r, c ∈ [i − h, i + h]
+ *                 1    k+x   k+x
+ * HiC score(k) = ───    Σ     Σ    a[i, j]
+ *                 N   i=k−x  j=i
  * ```
  *
- * The **whole square**, not a band and not a triangle: cells on both sides of
- * the diagonal, the diagonal itself, and the corners where the two ends of the
- * window contact each other. That last part is the half of it that insulation
- * throws away and this one keeps, and it is why the two tracks are not the same
- * track smoothed differently — a bin in a compact domain has bright corners and
- * a bin in an open one does not.
+ * — every cell with `k − x ≤ i ≤ j ≤ k + x`, which is the upper triangle of the
+ * square, the main diagonal included — over `N`, the number of cells in it:
+ *
+ * ```
+ * N = (2x + 1)(2x + 2) / 2 = (2x + 1)(x + 1)
+ * ```
+ *
+ * Not `½(2x + 1)²`, which is what the derivation of this score is usually
+ * written with and is half the *square* rather than the triangle: it leaves out
+ * the half-diagonal the halving cuts through, and being a count of cells that is
+ * never a whole number is the tell. At the three-diagonal window this task
+ * defaults to it is 4.5 against a true 6, so the "mean" would run a third high.
+ * It is a constant, so the shape of the track is the same either way — but a
+ * lane labelled in contacts should be readable as contacts.
+ *
+ * ## Why a triangle and not the whole square
+ *
+ * The matrix is symmetric, so the two are the same reading up to one thing:
+ * `square = 2 × triangle − diagonal`. Every off-diagonal cell is in the square
+ * twice, once each side, and the main diagonal is in it once — so summing the
+ * square gives the near-diagonal **half** the weight, relative to everything
+ * else, that counting each pair once does. On a bacterial map where the main
+ * diagonal is the largest thing in a three-bin window, that is not a constant:
+ * it is a different track. Counting each contact once is what the published
+ * score does and what this now does.
  *
  * ## Why it is computed one diagonal at a time
  *
- * The obvious loop is `(2h + 1)²` additions per bin, which at a 200 kb window on
- * a 1 kb map is forty thousand per bin and four hundred million over a bacterial
- * chromosome — before anything is drawn. What is here is the same sum in
- * `2h + 1` passes: each **diagonal** of the band is walked once with a running
- * prefix sum, and every bin's window takes a constant number of lookups from it.
- * That is `O(n · h)` rather than `O(n · h²)`, holds one row of prefix at a time
- * rather than the band twice over, and is exact rather than approximate — it is
- * the same addition in a different order.
+ * The obvious loop is `O(x²)` cells per bin, which at a 200 kb window on a 1 kb
+ * map is ten thousand per bin and a hundred million over a bacterial chromosome
+ * — before anything is drawn. What is here is the same sum in `2x + 1` passes:
+ * each **diagonal** of the band is walked once with a running prefix sum, and
+ * every bin's window takes a constant number of lookups from it. That is
+ * `O(n · x)` rather than `O(n · x²)`, holds one row of prefix at a time rather
+ * than the band twice over, and is exact rather than approximate — it is the
+ * same addition in a different order.
  *
- * The symmetry does the other half of the work. The matrix is symmetric, so the
- * cells at separation `−o` inside the square are the cells at `+o` inside it read
- * from the other end, and their sum is the same; each diagonal is therefore
- * walked once and counted twice, with the main diagonal counted once.
+ * The cells of the triangle at separation `d` are the rows `k − x … k + x − d`
+ * of that diagonal, which is one range of one prefix; the triangle is therefore
+ * one range per diagonal and there is no second, mirrored one to add.
  *
- * ## Missing cells
+ * ## Missing cells, and windows that run off the end
  *
- * Counted rather than guessed at. A balanced matrix drops whole rows (§6.4) and
- * a window overlapping a dropped stretch has a genuinely smaller sum — so the
- * cells that carried a value are counted, and a bin whose window is mostly gone
- * scores `NaN` rather than a small number that reads as *not much contact here*.
- * The sum itself is over what was countable and is never scaled up to pretend
+ * Two different things, and they are answered differently.
+ *
+ * A **partial window** — a bin closer to the end of a linear sequence than the
+ * window reaches — gets no score at all. Dividing a short sum by the full `N`
+ * would fade both ends of every chromosome out towards zero, which reads as
+ * *this end is unstructured* and is the artefact the diamond refuses partial
+ * windows for (§18.5). On a circular sequence there is no end to run off, the
+ * window wraps, and every bin scores.
+ *
+ * A **dropped cell** inside a whole window is counted rather than guessed at. A
+ * balanced matrix drops whole rows (§6.4) and a window overlapping a dropped
+ * stretch has a genuinely smaller mean; the sum is never scaled up to pretend
  * the missing cells were average, which would be inventing the data the balancer
- * deliberately refused to supply.
+ * deliberately refused to supply, and a bin whose window has lost more than
+ * `minValid` of itself scores `NaN` rather than a small number.
  */
 
 import type { SeparationBand } from './band'
@@ -55,27 +84,54 @@ import type { SeparationBand } from './band'
 export interface HicScoreOptions {
   /** Half the square's side, in bins: the window reaches this far each way. */
   halfWidth: number
-  /** The fraction of the square's cells that must carry a value. */
+  /** The fraction of the triangle's cells that must carry a value. */
   minValid: number
   /**
    * Separations to leave out, as `ignore_diags` elsewhere: `0` counts every
-   * cell, `1` drops the main diagonal, `2` drops it and the two beside it.
+   * cell, `1` drops the main diagonal, `2` drops it and the cells one bin
+   * apart — the rule is `|col − row| < ignore`, as everywhere else here.
    *
    * `0` by default, because the score is a statement about *all* the contact
    * around a position and the near-diagonal is most of it. It is offered because
    * on a map where self-ligation has not been cleaned out that near-diagonal is
    * an artefact of the library rather than a fact about the fold, and a track
    * carried by it would be a picture of the protocol.
+   *
+   * `N` is reduced with it, so the score stays a mean of the cells it actually
+   * counts rather than a sum over some of them divided by all of them.
    */
   ignoreDiags?: number
+}
+
+/**
+ * `N`: cells in the upper triangle of a `2h + 1` square, less the cut diagonals.
+ *
+ * Diagonal `d` of the triangle holds `2h + 1 − d` cells — the whole row of the
+ * window at `d = 0`, one cell at `d = 2h` — so the total is the triangular
+ * number `(2h + 1)(2h + 2) / 2`. Summed rather than solved for because
+ * `ignoreDiags` takes the first few off the front and the closed form for that
+ * is two triangular numbers subtracted, which is a line nobody can check by eye
+ * against a `2h` that may be smaller than the cut.
+ *
+ * Exported because the runner quotes it in a note and the tests check the
+ * arithmetic the header argues about.
+ */
+export function triangleCells(halfWidth: number, ignoreDiags = 0): number {
+  const h = Math.max(0, Math.trunc(halfWidth))
+  const ignore = Math.max(0, Math.trunc(ignoreDiags))
+  const side = 2 * h + 1
+  let cells = 0
+  for (let d = ignore; d <= 2 * h; d++) cells += side - d
+  return cells
 }
 
 /**
  * The score at every bin of the band, in the band's own local bins.
  *
  * The band must reach `2 × halfWidth`, which is the widest separation inside the
- * square — the two far corners. A narrower one leaves those corners `NaN` and
- * they are counted as missing, which the `minValid` guard will then notice.
+ * window — the corner where the two ends of it contact each other. A narrower
+ * one leaves that corner `NaN` and it is counted as missing, which the
+ * `minValid` guard will then notice.
  */
 export function hicScore(band: SeparationBand, options: HicScoreOptions): Float64Array {
   const n = band.n
@@ -84,19 +140,22 @@ export function hicScore(band: SeparationBand, options: HicScoreOptions): Float6
   const out = new Float64Array(n).fill(Number.NaN)
   if (n === 0) return out
 
+  // `N`, and the threshold under it: `minValid` is a fraction of what the window
+  // could actually hold, so cutting diagonals moves both together.
+  const cells = triangleCells(h, ignore)
+  if (cells <= 0) return out
+  const need = Math.max(1, Math.ceil(cells * Math.max(0, Math.min(1, options.minValid))))
+
+  // Bins with a whole window around them. On a line that is everything but the
+  // two ends; on a circle it is every bin, because the window wraps. Scoring
+  // only these is what keeps a short sum from being divided by a full `N` —
+  // see the header.
+  const first = band.circular ? 0 : h
+  const last = band.circular ? n - 1 : n - 1 - h
+  if (last < first) return out
+
   const sums = new Float64Array(n)
   const counts = new Float64Array(n)
-
-  // Cells in a full square, so `minValid` is a fraction of something the window
-  // could actually contain. `ignoreDiags` removes `2 × (2h + 1 − d)` of them per
-  // cut diagonal `d`, plus the main one.
-  const side = 2 * h + 1
-  let cells = side * side
-  for (let d = 0; d < ignore; d++) {
-    if (d > 2 * h) break
-    cells -= d === 0 ? side : 2 * (side - d)
-  }
-  const need = Math.max(1, Math.ceil(Math.max(0, cells) * Math.max(0, Math.min(1, options.minValid))))
 
   // One prefix pass per diagonal, reused. `n + 1` long so `prefix[k]` is the sum
   // of the first `k` entries and an empty range is a subtraction rather than a
@@ -118,16 +177,14 @@ export function hicScore(band: SeparationBand, options: HicScoreOptions): Float6
     }
     const total = prefixSum[n]
     const totalCount = prefixCount[n]
-    // The main diagonal is in the square once; every other is in it twice, once
-    // each side.
-    const weight = offset === 0 ? 1 : 2
 
-    for (let bin = 0; bin < n; bin++) {
-      // Rows whose cell at this separation lands inside the square: the row is
-      // at least the window's start and the *column* is at most its end.
+    for (let bin = first; bin <= last; bin++) {
+      // Rows whose cell at this separation lands inside the triangle: the row is
+      // at least the window's start and the *column* is at most its end. Each is
+      // counted once — the mirrored cell below the diagonal is the same contact
+      // and the triangle is what says so.
       const lo = bin - h
       const hiRow = bin + h - offset
-      if (hiRow < lo) continue
       let sum: number
       let count: number
       if (band.circular) {
@@ -146,19 +203,19 @@ export function hicScore(band: SeparationBand, options: HicScoreOptions): Float6
           count = totalCount - prefixCount[start] + prefixCount[end - n]
         }
       } else {
-        const a = Math.max(0, lo)
-        const b = Math.min(n - 1, hiRow)
-        if (b < a) continue
-        sum = prefixSum[b + 1] - prefixSum[a]
-        count = prefixCount[b + 1] - prefixCount[a]
+        // `first` and `last` put the whole window inside the sequence, so this
+        // range needs no clamping: `0 ≤ lo ≤ hiRow ≤ n − 1` for every `offset`
+        // the loop reaches.
+        sum = prefixSum[hiRow + 1] - prefixSum[lo]
+        count = prefixCount[hiRow + 1] - prefixCount[lo]
       }
-      sums[bin] += weight * sum
-      counts[bin] += weight * count
+      sums[bin] += sum
+      counts[bin] += count
     }
   }
 
-  for (let bin = 0; bin < n; bin++) {
-    if (counts[bin] >= need) out[bin] = sums[bin]
+  for (let bin = first; bin <= last; bin++) {
+    if (counts[bin] >= need) out[bin] = sums[bin] / cells
   }
   return out
 }

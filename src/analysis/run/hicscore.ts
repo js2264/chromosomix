@@ -3,16 +3,22 @@
  *
  * The same plan as the directionality index beside it — a band per sequence, one
  * kernel, one lane — with one number different: the band is read **twice as
- * deep** as the window reaches, because the corners of a square `h` bins each
- * way from the diagonal are `2h` apart. A band read to `h` would leave those
- * corners unread, the kernel would count them as missing, and the score would
- * come back systematically low in a way no amount of staring at the track would
+ * deep** as the window reaches, because the two ends of a square `h` bins each
+ * way from the diagonal are `2h` apart. A band read to `h` would leave that
+ * corner unread, the kernel would count it as missing, and the score would come
+ * back systematically low in a way no amount of staring at the track would
  * reveal.
+ *
+ * What this file owns beyond that is the arithmetic between the reader's number
+ * and the kernel's: a window typed in bins becomes a half-width, and the notes
+ * say what that came to in base pairs on the file actually open and how many
+ * cells each score is a mean of. Both are one line and both are things a reader
+ * would otherwise have to work out from the label.
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
-import { hicScore } from '../hicscore'
+import { hicScore, triangleCells } from '../hicscore'
 import {
   boolParam,
   contigIdFor,
@@ -22,7 +28,7 @@ import {
   type JobContext,
   type TaskRunner,
 } from '../job'
-import { halfWidthAt, windowBpOf } from '../tasks/hicscore'
+import { halfWidthAt, windowBinsOf } from '../tasks/hicscore'
 import type { ProfileOutput, TaskOutput } from '../types'
 import { bandFor, displayableContigs, spanOfContig, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
@@ -59,18 +65,41 @@ export const runHicScore: TaskRunner = async (job) => {
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
   const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 0)))
-  const windowBp = windowBpOf(job.params)
-  const half = halfWidthAt(job.params, job.mc.binsize)
+  const asked = windowBinsOf(job.params)
+  const half = halfWidthAt(job.params)
   const depth = half * 2
+  // The square that was actually built, which is `asked` when `asked` is odd and
+  // the odd one below it when it is not. Everything downstream — the label, the
+  // notes, the refusals — quotes this rather than what was typed, because it is
+  // what the numbers are a reading of.
+  const side = depth + 1
+  const windowBp = side * job.mc.binsize
+  const cells = triangleCells(half, ignoreDiags)
 
-  // The floor in `halfWidthAt` has bitten: the window asked for is narrower than
-  // the three bins a square can be. Said rather than silently widened, because
-  // the label on the lane will say the window the reader typed.
-  if (windowBp < job.mc.binsize * 2) {
+  // What the window came to in base pairs on *this* file, and how many cells are
+  // behind each point of the track. The form asks in bins so the three
+  // near-diagonal tasks can be set to the same scale (see `tasks/hicscore.ts`),
+  // and the cost of that is exactly this line.
+  const included = ignoreDiags > 0 ? 'less the diagonals cut below' : 'its main diagonal included'
+  job.note(
+    `A ${side.toLocaleString()}-bin window is ${formatBp(windowBp)} at this file’s ` +
+      `${job.mc.binsize.toLocaleString()} bp resolution, and each score is the mean of ` +
+      `${cells.toLocaleString()} ${cells === 1 ? 'cell' : 'cells'} — the upper triangle of ` +
+      `that square, ${included}.`,
+  )
+
+  // The floor and the rounding in `halfWidthAt` have bitten. Said rather than
+  // silently accepted, because a reader who typed 4 and is shown a track
+  // computed on 3 should be told which of the two the lane is.
+  if (asked !== side) {
     job.note(
-      `A ${windowBp.toLocaleString()} bp window is narrower than two of this file’s ` +
-        `${job.mc.binsize.toLocaleString()} bp bins, so the square has been widened to the ` +
-        'three bins that are the smallest one there is. Open a finer rung to ask for less.',
+      asked < 3
+        ? `A ${asked}-bin window is narrower than the three bins the smallest square there is ` +
+            'has on a side, so the square has been widened to three. Open a finer rung to ask ' +
+            'for less genome than that.'
+        : `A square centred on a bin has an odd number of bins on a side, so a ${asked}-bin ` +
+            `window is the ${side}-bin square that fits inside it rather than the ` +
+            `${(side + 2).toLocaleString()}-bin one that does not.`,
     )
   }
 
@@ -88,7 +117,7 @@ export const runHicScore: TaskRunner = async (job) => {
   const units = planned.filter((unit) => unit.span.to - unit.span.from > depth)
   if (units.length === 0) {
     job.note(
-      `No sequence in this file is longer than a ${windowBp.toLocaleString()} bp window, so no ` +
+      `No sequence in this file is longer than a ${side.toLocaleString()}-bin window, so no ` +
         'bin on any of them has a whole square around it. Use a narrower window.',
     )
     return []
@@ -136,18 +165,29 @@ export const runHicScore: TaskRunner = async (job) => {
         'window wraps past the end and every bin is scored.',
     )
   }
+  if (circularUnits < units.length) {
+    // The other half of the same fact, and the one a reader is more likely to be
+    // puzzled by: a linear sequence has no whole square around its first and last
+    // `h` bins, so the track begins and ends with a gap rather than a fade.
+    job.note(
+      `The first and last ${half.toLocaleString()} ${half === 1 ? 'bin' : 'bins'} of a linear ` +
+        'sequence have no whole square around them and are left as gaps, rather than scored on ' +
+        'the part of the window that fits — which would fade both ends towards zero.',
+    )
+  }
 
   const profile: ProfileOutput = {
     kind: 'profile',
-    id: `hicscore-${windowBp}`,
+    id: `hicscore-w${side}`,
     label: `HiC score · ${formatBp(windowBp)}`,
     values: scores,
     extent: [0, nBins],
     binsize: job.mc.binsize,
-    // A sum of cells, so it carries the same unit the cells do — counts on a raw
-    // map, and a balanced map's own dimensionless numbers where the run was
-    // balanced. `contacts` is what every other summed track in the catalogue
-    // says and what the axis should be read as.
+    // A mean of cells, so it carries the same unit one cell does — counts on a
+    // raw map, and a balanced map's own dimensionless numbers where the run was
+    // balanced. `contacts` is what every other lane of cell values in the
+    // catalogue says and what the axis should be read as; that this one is an
+    // average rather than a total is in the notes and in the label's window.
     unit: 'contacts',
   }
   const outputs: TaskOutput[] = [profile]

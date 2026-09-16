@@ -4538,19 +4538,44 @@ the next. The gaps the index leaves stay gaps — the sum carries across them bu
 dropped stretch cannot be the floor of a trough — and Dixon's own HMM differs from this in one visible
 way worth knowing before comparing against a published set: the HMM leaves stretches it calls
 unorganised in no domain at all, where borders-between-borders tile.
-*HiC score* — the sum of every cell in a square window centred on the bin, which is the reading Bignaud
-et al. use where the question is not where a domain ends but how tightly a stretch is folded against
-itself. The first two are **ratios** and are deliberately blind to depth, which is what makes them
-comparable between chromosomes; this is a **sum** and is not, which is why it is a third reading rather
-than a third smoothing of the same one — a region that has lost its local structure has a smaller sum
-and an unremarkable insulation score, because the ratio it is measured against fell with it. The whole
-square, corners included: the cells where the two ends of the window contact each other are the half of
-it insulation throws away, and they are what tells a compact domain from an open one. The window is the
-**side** of that square in base pairs rather than its reach each way, because a reader asking for a
-200 kb score means a 200 kb window; the band behind it is therefore read `2h` deep, since the corners
-are `2h` apart, and an estimate quoting `h` would price half the reads the runner makes. It is computed
-one diagonal at a time with a running prefix — the same addition in a different order, exact rather than
-approximate — which is `O(n·h)` where the double loop is `O(n·h²)`.
+*HiC score* — the **mean** cell value in the upper triangle of a square window centred on the bin,
+which is the reading Bignaud et al. use where the question is not where a domain ends but how tightly a
+stretch is folded against itself. Every cell with `k − x ≤ i ≤ j ≤ k + x`, over `N = (2x + 1)(x + 1)`,
+which is how many of them there are. The first two are **ratios** and are deliberately blind to depth,
+which is what makes them comparable between chromosomes; this is a **mean of cell values** and is not,
+which is why it is a third reading rather than a third smoothing of the same one — a region that has
+lost its local structure has a smaller mean and an unremarkable insulation score, because the ratio it
+is measured against fell with it. The corner of the window is in it: the cells where the two ends
+contact each other are the half of it insulation throws away, and they are what tells a compact domain
+from an open one.
+
+**The triangle rather than the whole square**, and the difference is not a scale factor. The matrix is
+symmetric, so `square = 2 × triangle − diagonal`: summing the square counts every off-diagonal cell
+twice and the main diagonal once, which gives the near-diagonal half the weight relative to everything
+else that counting each contact once does. On a bacterial map, where the main diagonal is most of what a
+three-bin window holds, that is a different track. `N` is the triangle's real cell count and not the
+`½(2x + 1)²` the method is usually written with — half a square is not a triangle, it is a triangle less
+half a diagonal, and a cell count that is never a whole number is the tell; at the default window it
+would run the "mean" a third high.
+
+**The window is in bins, and it is a count of diagonals.** The side of the square rather than its reach
+each way, which on a window centred on the diagonal is also how many diagonals it spans counting the
+main one: both are `2x + 1`. It defaults to **3** — the main diagonal and the two above it, six cells —
+which is the bacterial reading at the 2 kb resolution this score is computed on there, and the runner
+says what that came to in base pairs on the file open and how many cells are behind each point. Bins in
+base pairs for the reason the diamond's and the index's are (§18.5): the near-diagonal is a fact about
+the grid, and the three are read side by side. The band behind it is read `2h` deep, since the corner is
+`2h` from the diagonal, and an estimate quoting `h` would price half the reads the runner makes. It is
+computed one diagonal at a time with a running prefix — the same addition in a different order, exact
+rather than approximate — which is `O(n·x)` where the double loop is `O(n·x²)`.
+
+**A bin without a whole square around it scores nothing.** Dividing a short sum by a full `N` fades both
+ends of every linear sequence towards zero, which reads as *this end is unstructured*; it is the
+artefact the diamond refuses partial windows for, and it arrives here the moment the reading becomes a
+mean. A circular sequence has no end to run off and every bin on one is scored. A cell the balancer
+dropped *inside* a whole window is a different thing and is counted rather than guessed at: the mean is
+genuinely smaller there, is never scaled up to pretend the missing cells were average, and a bin that
+has lost more than `minValid` of its window scores nothing at all.
 *4C profile* from an anchor — a sequence, a stretch of one, or on a metagenome a whole genome — output
 as a bigWig. On a cooler it is **cis by default with trans as a stated-cost toggle**, and optionally
 **over expected**, where "expected" means the anchor's own sequence's decay in cis and the mean of what

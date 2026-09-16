@@ -12,6 +12,50 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Changed
+
+- **The HiC score is the mean of its window's upper triangle, which is what the score is defined as.**
+  It was the *sum of the whole square*, and the two are not the same reading rescaled. A Hi-C matrix is
+  symmetric, so `square = 2 × triangle − diagonal`: summing the square counts every off-diagonal cell
+  twice and the main diagonal once, which gives the near-diagonal half the weight, relative to
+  everything else, that counting each contact once gives it. On a bacterial map — where the main
+  diagonal is most of what a small window holds — that is a different track, not a different scale, and
+  the one it was drawing was the flatter of the two.
+
+  It is now `(1/N) Σ a[i, j]` over every cell with `k − x ≤ i ≤ j ≤ k + x`, the main diagonal included,
+  with **`N = (2x + 1)(x + 1)`** — the number of cells in that triangle. Not the `½(2x + 1)²` the method
+  is usually written with, which is half the *square* and therefore the triangle less half a diagonal: a
+  count of pixels that is never a whole number is the tell, and at the window this task now defaults to
+  it is 4.5 against a true 6, so the "mean" would run a third high. A lane labelled in contacts is
+  readable as contacts again — a score of 12 is twelve contacts per cell, at any window, on any file —
+  where a sum grew with the square of the window and could only be compared against another run of the
+  same size on the same map.
+
+  **The window is typed in bins, and it is a count of diagonals.** P(s)'s minimum separation and the
+  diamond's window went the same way for the same reason: the near-diagonal is a fact about the grid
+  rather than about the genome, and the same number of base pairs meant three bins at one resolution and
+  one at the next. On a window centred on the diagonal the side in bins and the number of diagonals it
+  spans are the same number, `2x + 1`, so the one number typed is the one the method is described with.
+  It defaults to **3** — the main diagonal and the two above it, six cells averaged — which is the
+  bacterial reading, 6 kb on the 2 kb matrices this score is computed on there; it was 50 kb, which is
+  25 diagonals at that resolution and a blunter question. An even window is the largest odd square that
+  fits inside it rather than the next one up, and the runner says so, along with what the window came to
+  in base pairs on the file open and how many cells are behind each point of the track.
+
+  **A bin without a whole square around it now scores nothing.** Dividing a short sum by a full `N`
+  fades both ends of every linear sequence towards zero, which reads as *this end of the chromosome is
+  unstructured* — the artefact the diamond has always refused partial windows for, and one that arrives
+  here the moment the reading becomes a mean rather than a sum. A circular sequence has no end to run
+  off and every bin on one is still scored. A cell the balancer dropped *inside* a whole window is a
+  different thing and is unchanged: it is counted rather than guessed at, the mean is genuinely smaller
+  there, and a bin that has lost more than `minValid` of its window scores nothing at all.
+
+  The task's version is **2**, so a result carried in from a shared session is not silently compared
+  against one computed here: the numbers under that title mean something else now. `--window 50000` in
+  an old command line is 50,000 *bins* to this one, which on a bacterial map is refused as wider than
+  the sequence rather than quietly reinterpreted, and on a larger one is priced as the enormous read it
+  would be before anything runs — three is the number that script wants.
+
 ### Fixed
 
 - **A bacterial GFF arrived as 87 features out of 5,870.** A 6.4 Mb *Pseudomonas aeruginosa* PAK
