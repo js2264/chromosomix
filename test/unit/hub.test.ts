@@ -274,6 +274,26 @@ describe('the store a hub becomes', () => {
     expect(human.note).toContain('names no sequence of its own')
   })
 
+  it('keeps a contact map off the track shelf, and gives it its own row', async () => {
+    const store = (await readHub(
+      HUB_URL,
+      HUB_TXT,
+      reader({
+        ...FILES,
+        'https://lab.example.org/myHub/galGal7/trackDb.txt':
+          `${GALGAL_TRACKDB}\ntrack contacts\nshortLabel Contacts\nbigDataUrl maps/a.hic\ntype hic\n`,
+      }),
+    ))!
+    // The row is there and takes the map door…
+    expect(entryNamed(store.entries, 'Contacts').kind).toBe('map')
+    // …and is *not* on the shelf, because a shelf is annotations. Put there, it
+    // reaches the annotation loader, which reads it as text and reports that
+    // every one of its lines failed the contig/start/end test — a true sentence
+    // about the wrong question.
+    const genome = entryNamed(store.entries, 'Chicken (galGal7)')
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['Genes'])
+  })
+
   it('hangs every drawable track on the genome row as a shelf', async () => {
     const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
     const human = entryNamed(store.entries, 'Human (hg38)')
@@ -497,11 +517,13 @@ describe('the demo hub', () => {
     expect(store!.description).not.toContain('not offered')
   })
 
-  it('opens on the hub’s own .2bit, with every track on its shelf', async () => {
+  it('opens on the hub’s own .2bit, with every annotation on its shelf', async () => {
     const store = (await readHub(at, (await read(at)) as string, read))!
     const genome = store.entries.find((entry) => entry.fields?.['role'] === 'sequence')
-    expect(genome?.uri).toBe('https://demo/S288c_syn40-XIII.2bit')
+    expect(genome?.uri).toBe('https://demo/Yeast_reference.2bit')
     expect(genome?.fields?.['format']).toBe('2bit')
+    // Every annotation — and **not** the contact map, which is not one and has
+    // a row of its own through the map door.
     expect(genome?.tracks?.map((track) => track.label)).toEqual([
       'MNase',
       'ATAC',
@@ -510,7 +532,6 @@ describe('the demo hub', () => {
       'RNA −',
       'Shotgun',
       'Micro-C loops',
-      'Micro-C map',
     ])
   })
 
@@ -712,11 +733,13 @@ describe('the paste boxes’ examples', () => {
       'ATAC',
       'Micro-C map',
     ])
-    // Its genome is the db-hub fallback — no `twoBitPath`, so the first bigWig's
-    // header carries the lengths — and it says so where a reader will see it.
+    // It is an **assembly hub**: the genome is the hub's own `.2bit`, which is
+    // the rung of §24.10's ladder worth demonstrating and the only way a hub
+    // carries a sequence of its own.
     const genome = result.store.entries[0]
     expect(genome.fields?.['role']).toBe('sequence')
-    expect(genome.note).toContain('names no sequence of its own')
+    expect(genome.fields?.['format']).toBe('2bit')
+    expect(genome.uri).toMatch(/Yeast_reference\.2bit$/)
     // …and the contact map goes through the map door.
     expect(result.store.entries[3].kind).toBe('map')
   })

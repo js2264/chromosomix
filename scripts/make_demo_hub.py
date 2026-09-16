@@ -21,7 +21,7 @@ viewer reading somebody's hub.
 What it writes, and what each one is for
 ----------------------------------------
 
-``S288c_syn40-XIII.2bit``
+``Yeast_reference.2bit``
     The demo genome packed at two bits a base (§8.21), which is what makes the
     hub an **assembly hub**: `twoBitPath` is the only way a hub carries its own
     sequence. Written here because kent's `faToTwoBit` is not a dependency this
@@ -64,7 +64,7 @@ HERE = Path(__file__).resolve().parent
 DEMO = HERE.parent / "demo" / "yeast"
 
 FASTA = DEMO / "S288c_syn40-XIII.fa"
-TWOBIT = DEMO / "S288c_syn40-XIII.2bit"
+TWOBIT = DEMO / "Yeast_reference.2bit"
 LOOPS = DEMO / "Yeast_microC_loops.tsv"
 LONGRANGE = DEMO / "Yeast_microC_loops.longrange"
 INTERACT = DEMO / "Yeast_microC_loops.interact"

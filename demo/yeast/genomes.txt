@@ -1,6 +1,6 @@
 genome sacCer3_syn40
 trackDb trackDb.txt
-twoBitPath S288c_syn40-XIII.2bit
+twoBitPath Yeast_reference.2bit
 organism Saccharomyces cerevisiae
 description S288c with a synthetic chromosome XIII
 defaultPos IV:1-200000

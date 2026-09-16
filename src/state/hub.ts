@@ -411,10 +411,16 @@ export function hubStore(options: HubStoreOptions): StoreFile {
     }
 
     const label = genome.label === genome.assembly ? genome.assembly : `${genome.label} (${genome.assembly})`
-    const shelf = drawable.map((held_) => ({
-      label: labelOf(held_.track),
-      url: held_.url,
-    }))
+    // The shelf is **annotations**, and a contact map is not one. A `type hic`
+    // track has a row of its own that opens through the map door, and putting
+    // it here as well would hand it to the annotation loader, which reads it as
+    // text, sniffs it as a BED and reports that all 32,918 of its lines failed
+    // the contig/start/end test — a true sentence about the wrong question.
+    // What a reader wants from a hub's map is to open it as a map, and that row
+    // already does.
+    const shelf = drawable
+      .filter((held_) => !isContactMap(held_.track))
+      .map((held_) => ({ label: labelOf(held_.track), url: held_.url }))
     const sequence = sequenceFor(genome, genomesUrl, drawable)
     if (sequence !== null) {
       entries.push({
@@ -505,6 +511,17 @@ function sequenceFor(
       `lengths in ${labelOf(declaring.track)}’s header.`,
     format: declaring.format,
   }
+}
+
+/**
+ * Whether this track is a contact map rather than something drawn along an axis.
+ *
+ * One type, and it is the app's *primary* object rather than an annotation of
+ * one — which is why it takes the map door in `hubStore` and is kept off the
+ * track shelf.
+ */
+function isContactMap(track: HubTrack): boolean {
+  return track.type === 'hic'
 }
 
 /** A track's display name: its `shortLabel`, or the identifier it was declared under. */

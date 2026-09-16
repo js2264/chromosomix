@@ -6615,6 +6615,11 @@ fetch a `chrom.sizes` nobody asked for: C1 says nothing leaves the machine that 
 ask for, and a third-party request invented by a translation layer is exactly that. A hub of nothing
 but BAMs against `hg38` therefore gets no genome row, and keeps every track row it has.
 
+**A contact map is not a track.** A `type hic` gets a row that takes the map door, and is kept off
+the genome row's shelf: a shelf is annotations, and a map handed to the annotation loader is read as
+text, sniffed as a BED and refused with a count of lines that failed the contig/start/end test —
+true, and about the wrong question.
+
 **One row per genome, one per track, and the genome carries the shelf.** The genome's `tracks` are
 what the shell turns into the tracks in the Tracks card once it opens (§24.1), so *open with its
 tracks* works on a hub with no session file existing anywhere: `ui/stores/ResultList.ts` takes the

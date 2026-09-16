@@ -387,7 +387,7 @@ describe('.2bit', () => {
  */
 describe('the demo .2bit', () => {
   const root = process.cwd()
-  const packed = readFileSync(join(root, 'demo/yeast/S288c_syn40-XIII.2bit'))
+  const packed = readFileSync(join(root, 'demo/yeast/Yeast_reference.2bit'))
   const bytes = new Uint8Array(packed.buffer, packed.byteOffset, packed.byteLength)
   const fasta = parseFasta(new Uint8Array(readFileSync(join(root, 'demo/yeast/S288c_syn40-XIII.fa'))))
 

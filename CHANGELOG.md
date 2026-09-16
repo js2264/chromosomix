@@ -1483,7 +1483,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   Each box carries a **fill in an example** button beside *open what is pasted*, and what it puts
   there is a hub and a store that actually **read** — over the published demo files, so the first
   press draws a shelf and the reader's first edit is to a thing that already worked rather than to a
-  template whose state they cannot tell. It asks before replacing a box that is not empty, because
+  template whose state they cannot tell. The hub example is an **assembly hub**, naming the demo's
+  own `.2bit` through `twoBitPath`: the rung of §24.10's ladder worth demonstrating, and the only
+  way a hub carries a sequence of its own. It is a hub somebody wrote and checked against the bucket
+  rather than one composed here, which is why `Yeast_reference.2bit` is published beside the FASTA
+  and carries that name. It asks before replacing a box that is not empty, because
   that box is where somebody's half-written hub lives. A test pins every file the two examples name
   against the published set, since an example that 404s on its first press is worse than none.
 
@@ -1502,6 +1506,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   description under it. Both doors, not only the new one.
 
 ### Fixed
+
+- **A contact map is never put on a track shelf.** A hub's `type hic` track has a row of its own
+  that opens through the map door, and it was *also* going onto the genome row's shelf — so *open
+  with its tracks* handed it to the annotation loader, which read the binary as text, sniffed it as
+  a BED and reported that all 32,918 of its lines failed the contig/start/end test. A true sentence
+  about the wrong question. A shelf is annotations, a contact map is not one, and the row that opens
+  it as a map was there all along.
 
 - **“Open with its tracks” loads them.** It opened the file and offered the tracks behind a button,
   which is the thing a reader who pressed those words had just pressed past. The heading verb now

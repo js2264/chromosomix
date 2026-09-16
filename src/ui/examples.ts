@@ -229,6 +229,21 @@ const DEMO_DATA: Array<{
     assembly: 'S288C (syn XIII-40)',
     dataset: 'Yeast',
   },
+  {
+    // The same sequence packed at two bits a base (§8.21). Published beside the
+    // FASTA rather than instead of it, because the two are read by different
+    // roads and both are worth having openable: a FASTA under the whole-read
+    // limit is held and searchable, a `.2bit` is read by range and is what an
+    // assembly hub names — which is why the hub example in the paste box points
+    // at this file.
+    folder: 'yeast',
+    file: 'Yeast_reference.2bit',
+    label: 'S288C sequence, as a .2bit',
+    kind: 'genome',
+    format: '2bit',
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  },
   ...(
     [
       ['Yeast_annotations.gtf', 'Genes', 'gtf'],
@@ -606,30 +621,30 @@ export function clearShelves(): void {
  * reads those off disk covers these too, and neither example can come to name a
  * file the bucket does not have.
  *
- * The hub is a **db hub** — no `twoBitPath` — because the `.2bit` beside the
- * demo is not one of the published files, and an example that 404s on the
- * deployed site is worse than one that demonstrates one rung less. The rung it
- * skips is named in a comment inside the example, where somebody writing an
- * assembly hub will be looking for it.
+ * The hub is an **assembly hub**: it names the demo's own `.2bit` through
+ * `twoBitPath`, which is the only way a hub carries its own sequence and the
+ * rung of §24.10's ladder worth demonstrating. It is this exact text because it
+ * is the one a reader wrote and checked against the bucket, rather than one
+ * composed here and argued about — and the URLs are built from
+ * {@link DEMO_BUCKET} rather than from {@link demoBase} for a reason that only
+ * shows up under `DEMO_BASE`: a local copy of `demo/` has these files, but the
+ * example is a thing to *press*, and a base that pointed it at a directory
+ * somebody is still filling would break the one promise it makes.
  */
 export function exampleHubText(): string {
-  const at = `${demoBase()}yeast/`
   return [
     '# A UCSC track hub, in one file: the hub line, its genome, and its tracks.',
-    '# Press open — this one works — then edit it into your own.',
-    '#',
     '# Three separate files (hub.txt, genomes.txt, trackDb.txt) can be pasted',
-    '# one after another instead: concatenated, they are exactly this.',
+    '# one after another in the same text box. ',
+    '',
     'hub exampleHub',
     'shortLabel Example hub',
-    'longLabel The yeast demo data, as a hub you can edit',
+    'longLabel Yeast demo data from RSG lab',
     'useOneFile on',
     '',
     'genome sacCer3_syn40',
     'organism Saccharomyces cerevisiae',
-    '# An *assembly hub* carries its own sequence here, and it is always a .2bit:',
-    '#   twoBitPath https://your.host/yeast.2bit',
-    '# With none, the genome opens on the lengths in the first bigWig’s header.',
+    `    twoBitPath ${DEMO_BUCKET}yeast/Yeast_reference.2bit`,
     '',
     'track signal',
     'compositeTrack on',
@@ -641,20 +656,20 @@ export function exampleHubText(): string {
     '    parent signal on',
     '    shortLabel MNase',
     '    longLabel Nucleosome occupancy',
-    `    bigDataUrl ${at}Yeast_MNase.bw`,
+    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_MNase.bw`,
     '    type bigWig',
     '',
     '    track atac',
     '    parent signal on',
     '    shortLabel ATAC',
     '    longLabel ATAC-seq accessibility',
-    `    bigDataUrl ${at}Yeast_ATAC.bw`,
+    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_ATAC.bw`,
     '    type bigWig',
     '',
     'track contacts',
     'shortLabel Micro-C map',
     'longLabel A contact map, which opens through the map door',
-    `bigDataUrl ${at}Yeast_hic.hic`,
+    `bigDataUrl ${DEMO_BUCKET}yeast/Yeast_hic.hic`,
     'type hic',
     '',
   ].join('\n')
@@ -710,6 +725,7 @@ export function exampleStoreText(): string {
  * press, which is the one thing worse than no example at all.
  */
 export const EXAMPLE_FILES: readonly string[] = [
+  'yeast/Yeast_reference.2bit',
   'yeast/Yeast_MNase.bw',
   'yeast/Yeast_ATAC.bw',
   'yeast/Yeast_hic.hic',
