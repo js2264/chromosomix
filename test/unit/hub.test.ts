@@ -465,6 +465,7 @@ describe('hubStore on its own', () => {
               bigDataIndex: '',
               parent: '',
               container: false,
+              shown: true,
             },
           ],
           trackDbUrl: HUB_URL,
@@ -496,6 +497,126 @@ describe('hubStore on its own', () => {
  * instruction is wrong — which is the kind of thing nobody notices until
  * somebody follows it.
  */
+// ---------------------------------------------------------------------------
+// A published db hub, in the shape they actually come in
+// ---------------------------------------------------------------------------
+
+/**
+ * The arrangement of EPFL's Breast Cancer Epigenomics hub, which is what a
+ * *real* hub looks like as opposed to a written-for-the-test one: a db hub on
+ * hg19 with no sequence of its own, its trackDb a directory down from the
+ * hub.txt, its `bigDataUrl`s relative to *that*, and some four hundred bigWigs
+ * in nine composites of which it asks for twenty.
+ *
+ * Both halves matter and neither is exercised above. A hub whose `genomesFile`
+ * and `trackDb` sit at different depths is where resolving against the wrong
+ * base stops being invisible; a hub with hundreds of subtracks is where
+ * ignoring `parent … off` stops being invisible.
+ */
+const BC_URL = 'https://bchub.example.org/breastca.txt'
+
+const BC_FILES: Record<string, string> = {
+  [BC_URL]: `hub breastca
+shortLabel Breast Cancer Epigenomics
+longLabel Breast Cancer Epigenomics Track Hub
+genomesFile genomes.txt
+email somebody@example.org
+`,
+  'https://bchub.example.org/genomes.txt': `genome hg19
+trackDb hg19/trackDb.txt
+defaultPos chr17:74616083-74644657
+`,
+  'https://bchub.example.org/hg19/trackDb.txt': `track mohammed15
+compositeTrack on
+shortLabel Mohammed 2015
+type bigWig
+visibility dense
+
+    track mcf7_esr1_e2_3hr
+    parent mohammed15 off
+    shortLabel MCF7-ESR1-E2-3hr
+    bigDataUrl bigWig/mohammed15/MCF7_ESR1_E2_3hr.bw
+    type bigWig
+    visibility dense
+
+    track mcf7_pgr_pg_3hr
+    parent mohammed15 on
+    shortLabel MCF7-PGR-P4-3hr-A
+    bigDataUrl bigWig/mohammed15/MCF7_PGR_PG_3hr.bw
+    type bigWig
+    visibility dense
+
+track nacht19
+compositeTrack on
+shortLabel Nacht 2019
+type bigWig
+visibility hide
+
+    track t47d_pgr_r5020
+    parent nacht19 on
+    shortLabel T47D-PGR-R5020
+    bigDataUrl bigWig/nacht19/T47D_PGR_R5020.bw
+    type bigWig
+    visibility dense
+`,
+}
+
+describe('a published db hub', () => {
+  async function bcStore() {
+    const store = await readHub(BC_URL, BC_FILES[BC_URL], reader(BC_FILES))
+    if (store === null) throw new Error('the hub did not read')
+    return store
+  }
+
+  it('resolves bigDataUrls against the trackDb, not the hub.txt', async () => {
+    const store = await bcStore()
+    // `genomesFile genomes.txt` is beside the hub.txt and `trackDb
+    // hg19/trackDb.txt` is a directory down, so a `bigDataUrl` of
+    // `bigWig/…` is under **hg19/**. Resolving it against the hub.txt would
+    // give a URL one directory too high that 404s on every read, and the only
+    // place that shows is a hub laid out like this one.
+    expect(entryNamed(store.entries, 'MCF7-PGR-P4-3hr-A').uri).toBe(
+      'https://bchub.example.org/hg19/bigWig/mohammed15/MCF7_PGR_PG_3hr.bw',
+    )
+  })
+
+  it('gives every track a row, switched off or not', async () => {
+    const store = await bcStore()
+    // Off by default is not the same as absent: the reader who came for one
+    // particular ChIP still finds it, over their own map, by its own row.
+    const labels = store.entries.map((entry) => entry.label)
+    expect(labels).toContain('MCF7-ESR1-E2-3hr')
+    expect(labels).toContain('MCF7-PGR-P4-3hr-A')
+    expect(labels).toContain('T47D-PGR-R5020')
+  })
+
+  it('shelves only the tracks the hub asks for', async () => {
+    const store = await bcStore()
+    const genome = entryNamed(store.entries, 'hg19')
+    // One of the three: `parent … off` takes out the first, and the third is
+    // under a composite the hub hid — which beats its own `parent … on`, the
+    // way a hidden composite does in UCSC.
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['MCF7-PGR-P4-3hr-A'])
+  })
+
+  it('opens a db hub on its first bigWig, having no sequence of its own', async () => {
+    const store = await bcStore()
+    const genome = entryNamed(store.entries, 'hg19')
+    // No `twoBitPath`, no `chromSizes`: hg19 lives at UCSC, which will not
+    // serve it to a browser. The contigs come out of a header the hub itself
+    // named (§5.8).
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.uri).toBe('https://bchub.example.org/hg19/bigWig/mohammed15/MCF7_ESR1_E2_3hr.bw')
+  })
+
+  it('says how many of its tracks it asks for', async () => {
+    const store = await bcStore()
+    // Three rows, one shelf: without this the reader reads "1 assembly" over a
+    // table of hundreds and has no idea what the verb beside it will load.
+    expect(store.description).toContain('3 tracks, 1 on by default')
+  })
+})
+
 describe('the demo hub', () => {
   const dir = join(process.cwd(), 'demo/yeast')
   const read = async (url: string): Promise<string | null> => {

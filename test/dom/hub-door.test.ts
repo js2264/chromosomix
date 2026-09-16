@@ -169,6 +169,63 @@ describe('the hub door', () => {
     expect(opened.length + withTracks.length).toBeGreaterThan(1)
   })
 
+  it('promises only the tracks the hub switched on', async () => {
+    const { drawer, withTracks } = build()
+    drawer.open('hub')
+    const text = drawer.el.querySelector('.custom-text') as HTMLTextAreaElement
+    text.value = [
+      'hub big',
+      'shortLabel Big hub',
+      '',
+      'genome hg19',
+      '',
+      'track chip',
+      'compositeTrack on',
+      'shortLabel ChIP',
+      'type bigWig',
+      'visibility dense',
+      '',
+      '    track one',
+      '    parent chip on',
+      '    shortLabel One',
+      '    bigDataUrl https://lab.example.org/one.bw',
+      '    type bigWig',
+      '',
+      '    track two',
+      '    parent chip off',
+      '    shortLabel Two',
+      '    bigDataUrl https://lab.example.org/two.bw',
+      '    type bigWig',
+      '',
+      'track hidden',
+      'compositeTrack on',
+      'shortLabel Hidden',
+      'type bigWig',
+      'visibility hide',
+      '',
+      '    track three',
+      '    parent hidden on',
+      '    shortLabel Three',
+      '    bigDataUrl https://lab.example.org/three.bw',
+      '    type bigWig',
+      '',
+    ].join('\n')
+    buttonNamed(drawer.el, 'open what is pasted')?.click()
+    await settled()
+
+    // All three have rows — off by default is not absent.
+    const names = textsOf(drawer.el, '.portal-name')
+    expect(names).toContain('One')
+    expect(names).toContain('Two')
+    expect(names).toContain('Three')
+    // …and the button says what it will do, which on a real hub is the whole
+    // difference between a shelf and four hundred bigWigs at one press.
+    const verb = drawer.el.querySelector('.portal-session') as HTMLButtonElement
+    expect(verb.title).toContain('its 1 track')
+    verb.click()
+    expect(withTracks[0].tracks?.map((track) => track.label)).toEqual(['One'])
+  })
+
   it('reads a hub pasted into the box, with nothing fetched', async () => {
     const { drawer } = build()
     drawer.open('hub')

@@ -47,6 +47,16 @@
  * reader did not ask for, and a third-party request invented by a translation
  * layer is exactly that.
  *
+ * ## What the hub asks to be on
+ *
+ * A published hub is not a short list. EPFL's Breast Cancer Epigenomics hub
+ * declares some 440 bigWigs across nine composites and asks for twenty of them,
+ * so the genome row's shelf — the one *open with its tracks* loads — is what
+ * the hub asks for and not everything it names: `parent <name> off` and
+ * `visibility hide` are its own answer, and a hidden composite hides its
+ * children whatever their own word says. Every track keeps a row of its own,
+ * because off by default is not absent.
+ *
  * ## What is refused, and where it is said
  *
  * A track whose `type` this viewer cannot draw gets **no row**, and is counted
@@ -248,6 +258,12 @@ export interface HubTrack {
   parent: string
   /** `true` for a composite, super-track or view: a heading, not a file. */
   container: boolean
+  /**
+   * What the hub asks for when a reader connects: `parent <name> on` or a
+   * `visibility` that is not `hide`. This is the stanza's own word only —
+   * {@link hubStore} cascades it through the containers.
+   */
+  shown: boolean
 }
 
 export function parseTrackDb(text: string): HubTrack[] {
@@ -255,8 +271,10 @@ export function parseTrackDb(text: string): HubTrack[] {
   for (const stanza of parseStanzas(text, 'track')) {
     const track = stanza.get('track') ?? ''
     if (track === '') continue
-    // `parent <name> [on|off]` — the visibility word is not part of the name.
-    const parent = (stanza.get('parent') ?? stanza.get('superTrack') ?? '').split(/\s+/)[0] ?? ''
+    // `parent <name> [on|off]` — the visibility word is not part of the name,
+    // but it is the hub's answer to whether this one is on, so keep it.
+    const hangs = (stanza.get('parent') ?? stanza.get('superTrack') ?? '').split(/\s+/)
+    const parent = hangs[0] ?? ''
     const container =
       /^on$/i.test(stanza.get('compositeTrack') ?? '') ||
       /^on$/i.test(stanza.get('superTrack') ?? '') ||
@@ -274,7 +292,57 @@ export function parseTrackDb(text: string): HubTrack[] {
       bigDataIndex: stanza.get('bigDataIndex') ?? '',
       parent: parent === track ? '' : parent,
       container,
+      shown: shownHere(stanza.get('visibility') ?? '', hangs[1] ?? ''),
     })
+  }
+  return out
+}
+
+/**
+ * Whether one stanza asks to be on, by its own two words.
+ *
+ * A subtrack's checkbox is the word after its `parent`; a top-level track's is
+ * its `visibility`. A subtrack usually carries both — `parent x off` beside
+ * `visibility dense` — and they are not in conflict: the second is the density
+ * to draw it at *if* it is on, which the first says it is not.
+ */
+function shownHere(visibility: string, hangsAs: string): boolean {
+  if (/^off$/i.test(hangsAs)) return false
+  return !/^(hide|none)$/i.test(visibility.trim())
+}
+
+/** How far up a `parent` chain to walk before calling it a cycle. */
+const PARENT_DEPTH = 16
+
+/**
+ * The tracks a hub asks to be **on**, cascaded through their containers.
+ *
+ * A hub says twice what a reader should see on connecting: once per track, and
+ * once per composite over all of them. A hidden composite hides its children
+ * whatever their own word says, which is UCSC's rule and the only reading that
+ * makes the two words agree.
+ *
+ * Honouring it is the difference between a shelf and a stampede. A published
+ * hub is not a short list: EPFL's breast-cancer hub declares some 440 bigWigs
+ * across nine composites and asks for twenty of them, and *open with its
+ * tracks* on that genome has to mean the twenty. Every one of the 440 still has
+ * a row of its own, which is where a reader goes for the other 420.
+ */
+function shownTracks(tracks: readonly HubTrack[]): Set<string> {
+  const byName = new Map(tracks.map((track) => [track.track, track]))
+  const out = new Set<string>()
+  for (const track of tracks) {
+    let held: HubTrack | undefined = track
+    let on = true
+    for (let hop = 0; held !== undefined && hop < PARENT_DEPTH; hop++) {
+      if (!held.shown) {
+        on = false
+        break
+      }
+      if (held.parent === '') break
+      held = byName.get(held.parent)
+    }
+    if (on) out.add(track.track)
   }
   return out
 }
@@ -393,10 +461,13 @@ export function hubStore(options: HubStoreOptions): StoreFile {
   const { header, hubUrl, genomes, genomesUrl } = options
   const entries: StoreEntry[] = []
   let refused = 0
+  let drawn = 0
+  let offered = 0
   const reasons = new Map<string, number>()
 
   for (const held of genomes) {
     const { genome, tracks, trackDbUrl } = held
+    const shown = shownTracks(tracks)
     const drawable: Array<{ track: HubTrack; url: string; format: string }> = []
     for (const track of tracks) {
       if (track.bigDataUrl === '') continue // a composite, a view, a heading
@@ -418,9 +489,15 @@ export function hubStore(options: HubStoreOptions): StoreFile {
     // the contig/start/end test — a true sentence about the wrong question.
     // What a reader wants from a hub's map is to open it as a map, and that row
     // already does.
+    // …and not what the hub has switched off. `visibility hide` on a composite
+    // and `parent <name> off` on a subtrack are how a hub says which of its
+    // tracks a reader should arrive to, and a shelf that ignored them would
+    // open four hundred bigWigs at a press.
     const shelf = drawable
-      .filter((held_) => !isContactMap(held_.track))
+      .filter((held_) => !isContactMap(held_.track) && shown.has(held_.track.track))
       .map((held_) => ({ label: labelOf(held_.track), url: held_.url }))
+    drawn += drawable.length
+    offered += shelf.length
     const sequence = sequenceFor(genome, genomesUrl, drawable)
     if (sequence !== null) {
       entries.push({
@@ -466,7 +543,7 @@ export function hubStore(options: HubStoreOptions): StoreFile {
     kind: STORE_KIND,
     version: STORE_VERSION,
     name: header.shortLabel !== '' ? header.shortLabel : header.name !== '' ? header.name : hubUrl,
-    description: describe(header, genomes.length, refused, reasons),
+    description: describe(header, genomes.length, refused, reasons, drawn, offered),
     source: hubUrl,
     columns: [...HUB_COLUMNS],
     entries,
@@ -733,10 +810,15 @@ function describe(
   genomes: number,
   refused: number,
   reasons: ReadonlyMap<string, number>,
+  drawn: number,
+  offered: number,
 ): string {
   const parts: string[] = []
   if (header.longLabel !== '' && header.longLabel !== header.shortLabel) parts.push(header.longLabel)
   parts.push(`${genomes} ${genomes === 1 ? 'assembly' : 'assemblies'}`)
+  // Said only when the hub switched some off, because otherwise the number is
+  // the row count and the table is already showing it.
+  if (drawn > offered) parts.push(`${drawn} tracks, ${offered} on by default`)
   if (refused > 0) {
     const why = [...reasons.entries()]
       .sort((a, b) => b[1] - a[1])

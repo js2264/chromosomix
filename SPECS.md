@@ -6620,6 +6620,16 @@ the genome row's shelf: a shelf is annotations, and a map handed to the annotati
 text, sniffed as a BED and refused with a count of lines that failed the contig/start/end test —
 true, and about the wrong question.
 
+**And neither is a track the hub has switched off.** A published hub is not a short list. EPFL's
+Breast Cancer Epigenomics hub declares some 440 bigWigs across nine composites and asks for twenty of
+them; a shelf that ignored the difference would open all 440 at one press. A hub says which twice —
+`parent <name> off` on a subtrack, `visibility hide` on the track or the composite over it — and a
+hidden composite hides its children whatever their own word says, which is UCSC's rule and the only
+reading on which the two words agree. The shelf is therefore what the hub asks for, the verb's own
+tooltip counts it, and the store's description says `440 tracks, 20 on by default` whenever the two
+differ. Every track still has a **row of its own**: off by default is not absent, and the reader who
+came for one particular ChIP finds it there.
+
 **One row per genome, one per track, and the genome carries the shelf.** The genome's `tracks` are
 what the shell turns into the tracks in the Tracks card once it opens (§24.1), so *open with its
 tracks* works on a hub with no session file existing anywhere: `ui/stores/ResultList.ts` takes the

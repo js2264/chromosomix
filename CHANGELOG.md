@@ -201,6 +201,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   because a row that misdraws when it is pressed is worse than an absent one. It has its own tile on
   the landing page, beside the one for a store file.
 
+  **The shelf is what the hub asks for.** A published hub is not a short list: EPFL's Breast Cancer
+  Epigenomics hub declares some 440 bigWigs across nine composites and asks for twenty of them. So
+  *open with its tracks* loads the twenty, not the 440 — `parent <name> off` and `visibility hide`
+  are the hub's own answer to what a reader should arrive to, and a hidden composite hides its
+  children whatever their own word says, which is UCSC's rule. The verb's tooltip counts what it will
+  load, and the store's description says `440 tracks, 20 on by default` when the two differ. Every
+  track keeps a **row of its own**, because off by default is not absent: the reader who came for one
+  particular ChIP still opens it over their own map.
+
   **A hub to try it on ships with the demo.** `scripts/make_demo_hub.py` writes a real assembly
   hub over the yeast demo data — a `.2bit` of its genome, the loop calls as `longrange`, the six
   bigWigs as a composite and the contact map as `type hic` — so the whole path can be walked with no
