@@ -11,7 +11,7 @@ only the author of the data can answer. Nothing here is implemented. When the de
 the design becomes a numbered `SPECS.md` section in the usual way, with its own refusals.
 
 Revision 2 changes three decisions of the first draft, each at the author's direction: the file
-format is WashU's g3d text rather than a home-grown `bed6+xyz`; the renderer is three.js rather
+format is WashU's g3d text format rather than a home-grown `bed6+xyz`; the renderer is three.js rather
 than a hand-written Canvas 2D painter, because interaction is the point of this picture and a
 library is the price of doing it well; and the deck generalises from *N maps* to *N cells of one
 place*, so that a map with its tracks, a cell of tracks alone, and a structure can stand in one
@@ -32,7 +32,7 @@ of beads and sticks is in the first release.
 | Question | Answer | Why, in one line |
 |---|---|---|
 | Is it worth having? | Yes, scoped tightly | This app's niche — small genomes, whole blocks in memory, analysis in the browser — is where a consensus 3D model is cheapest to make and most defensible to show; and reading g3d makes every structure WashU can show openable here with no conversion, and every structure made here openable there |
-| What file? | **`.g3d` text** (`chrom start x y z [hap]`), or the same gzipped as **`.g3d.gz`**, local or by URL | The author's format and what `g3dtools` speaks; read whole in the annotations worker like every other text annotation, so a `.g3d.gz` on a bucket is one request |
+| What file? | **WashU's g3d text format** (`chrom start x y z [hap]`), named `.g3d`, or the same gzipped as `.g3d.gz`, local or by URL | The format WashU specifies as the input of `g3dtools`; read whole in the annotations worker like every other text annotation, so a `.g3d.gz` on a bucket is one request |
 | Where does it live? | **A cell of the deck**, where a cell may be a map, a stack of tracks, or a structure | A structure is a *picture of a place*; the deck is the app's word for pictures of one place beside each other under one navigation. Generalising the cell is what also lets a tracks-only cell exist and lets a 1D session have a deck |
 | How is the file held? | **An annotation row** (`kind: 'structure'`) | The store already gives it sniffing, contig-name matching, haplotype as a colour field, persistence, share links and every export; the 3D panel is a *view of a row*, never a second loading path |
 | How is it drawn? | **three.js**, pinned, behind a thin adapter over a pure scene | Lit tubes, instanced beads, fat lines, transparency, outlines, raycast picking, orbit and trackball controls — the interactions the author wants as first-class, at a cost this project can now afford to state in the open |
@@ -71,16 +71,16 @@ not close the door on (3) is the right shape.
 
 | Tool | Input | Draws with | Linked to | Coloured by | Needs |
 |---|---|---|---|---|---|
-| WashU Epigenome Browser 3D module | `.g3d` (binary, indexed, multi-resolution, haplotypes, samples) | three.js | its own tracks; the browser window highlighted; gene and Hi-C anchors shown on the model | bigWig ("paint"), BED annotations | `g3dtools` conversion, a hosted browser |
+| WashU Epigenome Browser 3D module | the g3d text (`chrom start x y z [hap]`) as `g3dtools`' input; the browser itself loads the packed container `g3dtools` writes (indexed, multi-resolution, haplotypes, samples) | three.js | its own tracks; the browser window highlighted; gene and Hi-C anchors shown on the model | bigWig ("paint"), BED annotations | the `g3dtools load` step, a hosted browser |
 | Spacewalk (igv team, Aiden lab) | `.sw` (HDF5), FOF-CT | three.js | an embedded igv.js and juicebox.js | genomic position, tracks | `swtool` conversion, its own page |
 | Nucleome Browser | `.g3d` | three.js | every component through an event channel | signals | a hosted platform |
 | ChimeraX / PyMOL with pastis' PDB | PDB | GPU | nothing genomic | manual | a desktop application |
 
 What this app would add, and each is something it already is:
 
-- **The text a solver writes opens as it is.** Every viewer above wants the converted binary.
-  Reading the g3d *text* directly (§2.2) keeps C3 true for a structure, and a file that opens here
-  is one `g3dtools` call from opening there.
+- **The text opens as it is.** Every viewer above loads a packed container built from it. Reading
+  WashU's g3d text directly (§2.2) keeps C3 true for a structure, and a file that opens here is the
+  file WashU's own `g3dtools load` takes, so it opens there after that one step.
 - **The colouring is computed in the same window.** Compartments, insulation, coverage, a virtual
   4C, and on a `.metacool` the contig table's own MGE call and completeness, are one click away and
   are already tracks (§18.5). No hosted viewer closes that loop, because none computes anything.
@@ -113,7 +113,9 @@ why the design leans on both.
 
 ### 2.1 What arrives
 
-The primary format is the text `g3dtools` consumes, exactly as the author gave it:
+The format is **WashU's g3d text format**: the format the WashU Epigenome Browser's `g3dtools`
+specifies as its input and documents column by column, and the format the author's files are in.
+Exactly as the author gave it:
 
 ```
 chr7    16760000    -14.3866688728  -36.3919302029  19.8483965881   m
@@ -167,7 +169,7 @@ opens; the `.gz` suffix is what the reader is told to expect and what the demo w
 | `bed6+xyz` | a BED with three columns on the end; the first draft's primary. Kept as a secondary road because it is what anybody with a spreadsheet writes, and because today such a file is **silently read as a broadPeak** (`peakFlavour`, `src/annotations/parse.ts:289`) — the sniff must run before it | 2 |
 | pastis `.xyz` / `.structure` text | `x y z` per bead in bin order, no loci; bridged against the map's own bin arithmetic when the row count matches, refused by name otherwise with the `paste` one-liner that joins the bin table on | 2 |
 | FOF-CT, `.cndb`, Spacewalk `.sw` | ensembles; the `frame` axis of §8.3; `h5wasm` is already here for the HDF5 ones | 3 |
-| WashU's binary, also named `.g3d` | indexed, multi-resolution, range-readable; told apart from the text by its magic bytes | a future suggestion (§13), not a plan item; refused by name until then |
+| the packed container `g3dtools load` writes, which WashU's browser loads and which may also be named `.g3d` | indexed, multi-resolution, range-readable; told apart from the text by its magic bytes | a future suggestion (§13), not a plan item; refused by name until then |
 
 ### 2.2 Recognising the text
 
@@ -191,10 +193,11 @@ and `sniffBedMethyl`, walking the first few hundred rows the way `looksLikeBarCh
 Collisions checked: a five-column file is a BED5 only if column 3 is an integer end ≥ column 2,
 which a coordinate fails whenever it is fractional or negative; a bedGraph is four columns; the
 peak flavours are nine, ten and fifteen. The extension (`.g3d`, `.g3d.gz`, `.3dg`) is a tiebreak,
-never the test, as in every sniffer here — and `.g3d` is also the name WashU's binary carries, so
-the name cannot decide on its own: the binary opens with a magic the text cannot, and a `.g3d`
-that starts with it is refused by name with the future-suggestion's wording (§13) rather than
-parsed as text.
+never the test, as in every sniffer here — and the packed container `g3dtools load` writes may
+carry the same `.g3d` name (WashU's own example input is `test.g3d.bed.gz`, so the convention is
+loose on both sides), which is why the name cannot decide on its own: the container opens with a
+magic the text cannot, and a `.g3d` that starts with it is refused by name with the
+future-suggestion's wording (§13) rather than parsed as text.
 
 ### 2.3 One row in the store, one kind in the union
 
@@ -779,9 +782,9 @@ the door on them:
 - **Two structure cells in one deck** — two models of one map, or a model against a simulation —
   under one navigation. The design allows it (a cell is a view of a row) and the plan excludes it;
   it would need `3d:<label>` in the link and a way to say which row a cell shows.
-- **WashU's binary `.g3d`** — indexed, multi-resolution, range-readable, with samples. Worth it
-  the day a bucket serves one that is too large to read whole, with `g3djs` as the test oracle the
-  way `hic-straw` is for `.hic`.
+- **The packed g3d container** `g3dtools load` writes and WashU's browser loads — indexed,
+  multi-resolution, range-readable, with samples. Worth it the day a bucket serves one that is too
+  large to read whole, with `g3djs` as the test oracle the way `hic-straw` is for `.hic`.
 - **A port of `pastis-mds`** for small genomes in the analysis worker, under §18.9's bar (§8.4).
 - **Coarsening a model** the way `g3dtools` does, by averaging beads, so a whole-genome view of a
   fine model draws fewer beads. Cheap, and unneeded at the sizes in §6.4.
@@ -803,9 +806,11 @@ the track list, one cell, the vector figure). Two remain, and neither blocks pha
 
 ### Sources read for §1.2 and §2.1
 
-- WashU Epigenome Browser 3D module and g3d — https://www.nature.com/articles/s41592-022-01550-y ,
-  https://epigenomegateway.readthedocs.io/en/latest/3d.html , https://github.com/lidaof/eg-3d-demo
-  (the `g3dtools 3dg` conversion)
+- WashU Epigenome Browser 3D module and the g3d format — https://www.nature.com/articles/s41592-022-01550-y ,
+  https://epigenomegateway.readthedocs.io/en/latest/3d.html , the `g3dtools` documentation at
+  https://g3d.readthedocs.io/en/latest/g3dtools.html (the text input format: chromosome, start,
+  X, Y, Z, haplotype `m`/`p`/`s` with `s` when omitted; the `load` and `3dg` commands),
+  https://github.com/lidaof/eg-3d-demo
 - Spacewalk — https://github.com/igvteam/spacewalk , https://igvteam.github.io/spacewalk/ ,
   https://aidenlab.org/spacewalk/ , https://github.com/aidenlab/swtool , https://github.com/igvteam/swcproject
 - Nucleome Browser — https://www.nature.com/articles/s41592-022-01559-3 ,
