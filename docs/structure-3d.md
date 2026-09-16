@@ -32,7 +32,7 @@ of beads and sticks is in the first release.
 | Question | Answer | Why, in one line |
 |---|---|---|
 | Is it worth having? | Yes, scoped tightly | This app's niche — small genomes, whole blocks in memory, analysis in the browser — is where a consensus 3D model is cheapest to make and most defensible to show; and reading g3d makes every structure WashU can show openable here with no conversion, and every structure made here openable there |
-| What file? | **g3d text** (`chrom start x y z [hap]`), plain or gzipped, local or by URL | The author's format and what `g3dtools` speaks; read whole in the annotations worker like every other text annotation, so a `g3d.gz` on a bucket is one request |
+| What file? | **`.g3d` text** (`chrom start x y z [hap]`), or the same gzipped as **`.g3d.gz`**, local or by URL | The author's format and what `g3dtools` speaks; read whole in the annotations worker like every other text annotation, so a `.g3d.gz` on a bucket is one request |
 | Where does it live? | **A cell of the deck**, where a cell may be a map, a stack of tracks, or a structure | A structure is a *picture of a place*; the deck is the app's word for pictures of one place beside each other under one navigation. Generalising the cell is what also lets a tracks-only cell exist and lets a 1D session have a deck |
 | How is the file held? | **An annotation row** (`kind: 'structure'`) | The store already gives it sniffing, contig-name matching, haplotype as a colour field, persistence, share links and every export; the 3D panel is a *view of a row*, never a second loading path |
 | How is it drawn? | **three.js**, pinned, behind a thin adapter over a pure scene | Lit tubes, instanced beads, fat lines, transparency, outlines, raycast picking, orbit and trackball controls — the interactions the author wants as first-class, at a cost this project can now afford to state in the open |
@@ -154,18 +154,20 @@ The other formats, in the order they are worth reading:
 **How it is read.** Whole, in the annotations worker, as every text annotation is: a local file
 by reference, a URL by one `GET`, `.gz` inflated on the way in — the same rung of the loader
 ladder a BED or a GTF takes (`annotations.worker.ts:1536-1543`, "else whole-file inflate"). A
-`g3d.gz` on a bucket with CORS is therefore one request at open and none afterwards, which is the
-§12 row for a structure. There is no index and none is wanted: the files are megabytes, and a
-1 Mb diploid human model is 6,000 rows.
+`.g3d` or `.g3d.gz` on a bucket with CORS is therefore one request at open and none afterwards,
+which is the §12 row for a structure. There is no index and none is wanted: the files are
+megabytes, and a 1 Mb diploid human model is 6,000 rows. Gzip is recognised by its magic bytes and
+not by the name, as everywhere else in the loader, so a `.g3d` that happens to be compressed still
+opens; the `.gz` suffix is what the reader is told to expect and what the demo writes.
 
 | Format | What it is | Phase |
 |---|---|---|
-| **g3d text**, `.g3d.txt` / `.g3d.txt.gz` | above | **1** |
+| **`.g3d` text**, and **`.g3d.gz`** | above | **1** |
 | Dip-C `.3dg` | g3d text with `(mat)`/`(pat)` on the chromosome name; `g3dtools 3dg` is exactly that rewrite | 2 (a name rule, ten lines) |
 | `bed6+xyz` | a BED with three columns on the end; the first draft's primary. Kept as a secondary road because it is what anybody with a spreadsheet writes, and because today such a file is **silently read as a broadPeak** (`peakFlavour`, `src/annotations/parse.ts:289`) — the sniff must run before it | 2 |
 | pastis `.xyz` / `.structure` text | `x y z` per bead in bin order, no loci; bridged against the map's own bin arithmetic when the row count matches, refused by name otherwise with the `paste` one-liner that joins the bin table on | 2 |
 | FOF-CT, `.cndb`, Spacewalk `.sw` | ensembles; the `frame` axis of §8.3; `h5wasm` is already here for the HDF5 ones | 3 |
-| WashU's binary `.g3d` | indexed, multi-resolution, range-readable | a future suggestion (§13), not a plan item |
+| WashU's binary, also named `.g3d` | indexed, multi-resolution, range-readable; told apart from the text by its magic bytes | a future suggestion (§13), not a plan item; refused by name until then |
 
 ### 2.2 Recognising the text
 
@@ -188,8 +190,11 @@ and `sniffBedMethyl`, walking the first few hundred rows the way `looksLikeBarCh
 
 Collisions checked: a five-column file is a BED5 only if column 3 is an integer end ≥ column 2,
 which a coordinate fails whenever it is fractional or negative; a bedGraph is four columns; the
-peak flavours are nine, ten and fifteen. The extension (`.g3d.txt`, `.3dg`) is a tiebreak, never
-the test, as in every sniffer here.
+peak flavours are nine, ten and fifteen. The extension (`.g3d`, `.g3d.gz`, `.3dg`) is a tiebreak,
+never the test, as in every sniffer here — and `.g3d` is also the name WashU's binary carries, so
+the name cannot decide on its own: the binary opens with a magic the text cannot, and a `.g3d`
+that starts with it is refused by name with the future-suggestion's wording (§13) rather than
+parsed as text.
 
 ### 2.3 One row in the store, one kind in the union
 
@@ -695,7 +700,7 @@ format list; `GLOSSARY.md` entries for **structure**, **model**, **bead**, **cha
 ### 9.2 Demo data
 
 `scripts/make_structure_demo.py` runs `pastis-mds` over `demo/ecoli` and `demo/yeast` at a coarse
-bin and writes g3d text, gzipped, recording in its docstring what it was checked against — and
+bin and writes `Ecoli.g3d.gz` and `Yeast_microC.g3d.gz`, recording in its docstring what it was checked against — and
 checks the written file opens in `g3dtools`, which is the independent reader the format has. The
 yeast model shows the Rabl arrangement at a glance — centromeres clustered, arms radiating — and is
 the picture the README can show. The author's own phased example is the haplotype fixture, if it
