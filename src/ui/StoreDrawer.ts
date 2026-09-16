@@ -419,17 +419,47 @@ export class StoreDrawer {
   // -------------------------------------------------------------------------
 
   /**
-   * The download, or nothing.
+   * The two buttons on the store's own line: where it came from, and the file.
    *
-   * Absent rather than disabled while a store is still being read or could not
-   * be (§8.5): a greyed button on a catalogue that failed to load says the file
-   * exists and this build will not give it to you, which is the one reading
-   * that is false.
+   * The **home** link is drawn whenever the front declares one, read or not —
+   * it is a fact about the store rather than about this reading of it, and a
+   * reader whose catalogue failed to load is exactly the one who wants the
+   * site it came from. It sits before the download because it is the older
+   * question: *whose is this* comes before *give me a copy*.
+   *
+   * The **download** is absent rather than disabled while a store is still
+   * being read or could not be (§8.5): a greyed button on a catalogue that
+   * failed to load says the file exists and this build will not give it to you,
+   * which is the one reading that is false.
    */
   private paintDownload(): void {
     this.downloadSlot.replaceChildren()
     const current = this.current
-    if (current === null || current.page.fileNow() === null) return
+    if (current === null) return
+    const home = current.front.home
+    if (home !== undefined) {
+      this.downloadSlot.appendChild(
+        // An `<a>` and not a button that calls `window.open`: what this is *is*
+        // a link, so it gets the middle-click, the copy-link-address and the
+        // status bar that a reader expects of one — and `noopener` because the
+        // page it opens is somebody else's.
+        el(
+          'a',
+          {
+            class: 'btn btn-icon store-home',
+            attrs: {
+              href: home,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              title: `${current.front.label} on the web — opens in a new tab.`,
+              'aria-label': `${current.front.label} on the web`,
+            },
+          },
+          icon('arrow-up-right', { size: 14 }),
+        ),
+      )
+    }
+    if (current.page.fileNow() === null) return
     this.downloadSlot.appendChild(
       iconButton(
         'download',

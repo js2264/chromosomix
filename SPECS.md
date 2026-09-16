@@ -6077,9 +6077,15 @@ shallower than it was: a box deep enough to be the page said that dragging was t
 there are two sections under it that have to be seen. *Mount a local or remote folder* is a row of four buttons, side by side and
 of equal height, wrapping a long label to a second line rather than breaking the row — *choose a
 folder…*, which opens the directory picker itself, and *connect a bucket…*, *sign in to Google…*
-and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a row of tiles — the lab's
-own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a dashed `+` for one
-by URL — each a mark, a name and one line (`ui/stores/tiles.ts`). Nothing else is on the page. The
+and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a **grid** of tiles — the lab's
+own figures, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every store the reader connected, and the
+two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
+wrap, which was right while there were five and the set was the page's whole offer: a fifth tile on a
+second line would have read as an afterthought. There are more than five now and a reader can connect
+as many again, so it is equal columns that fill the width and spill onto the next line, on
+`auto-fill` rather than `auto-fit` so that the last line's tiles stay the width of the ones above
+them — four over three reading as seven of one thing rather than as three larger ones underneath.
+Nothing else is on the page. The
 picker's *browse…* and its *private buckets…* are gone — they were the folder row said less
 plainly — and the *Hubs* dropdown of eighteen shelves was the tile row under another name.
 
@@ -6110,6 +6116,31 @@ there from the first paint and never withdrawn, because its own *Open a local/re
 the only door to a folder; it is now there exactly while a place is connected, like the four
 columns beside it (§16.5, §8.5). Mounting one opens it on the folder, which is the only thing a
 reader who has just connected one wants next.
+
+**The two doors are named for what they add, and carry the marks of what they add.** *Add a UCSC
+hub* takes a `hub.txt`; *Add a custom store config* takes a store file — and each says *add* because
+that is the errand, where *A track hub* and *Your own store* named a category and left the verb to
+be guessed. The first wears UCSC's own logo, which is the one word a reader holding a hub is looking
+for, and so does Roadmap beside it and every hub the reader remembers: the mark is the sentence
+*this is a UCSC hub*, and it is true of all three. The second wears **this viewer's own icon**,
+because the file behind that door is the one format in the grid written *for* this viewer rather
+than translated into it (§24.1). Both marks come through `scripts/make-store-logos.mjs` like the
+rest, which grew two things for them: an incremental run, so that adding a logo does not mean
+re-obtaining the four whose sources are not committed, and a **bleed** fit for a mark that is
+already a tile — the app icon is a squircle plate with its own margin and shadow, and containing it
+on white drew a plate inside a plate.
+
+**Every store says whose it is, and links there.** A store is somebody else's data, and what a
+reader is looking at is a catalogue this viewer translated — carrying none of the licence, the
+citation, the release notes or the caveats the people who made it wrote down. So the drawer's head
+carries an outbound link beside the download, an arrow leaving its corner, opening in a tab of its
+own with `noopener`: RSG's team page, IGV's genome documentation, 4DN's portal, ENCODE's matrix, DNA
+Zoo, Roadmap's WashU portal, and — on the hub door, which has no store behind it — UCSC's
+`hgHubConnect`, which is where a reader without a hub in hand goes to find one. It is drawn **as
+soon as the store is opened, read or not**, because whose shelf this is is a fact about the store
+rather than about this reading of it, and the reader whose catalogue just failed to load is exactly
+the one who wants the site behind it. The download is the opposite and stays absent until there is a
+file (§8.5).
 
 **Pressing a tile opens the store drawer** (`ui/StoreDrawer.ts`): the same kind of panel the
 Analysis drawer (§18.1) and the console (§23) are, down the *left*, where files come from. It
@@ -6656,6 +6687,16 @@ along with any `type` this viewer has no reader for. The drawable list is UCSC's
 types, and five of them — `bigInteract`, `interact`, `longTabix`, `bigMethyl`, `bedMethyl` — are
 readable only because of §8.18 and §8.20: before those, a hub carrying one would have got a row that
 misdrew when it was opened.
+
+**One is shipped.** *Roadmap (UCSC hub)* is a built-in store whose rows are
+`https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt` — WashU's hub over the 111 reference
+epigenomes — and it is the first shipped store that is **somebody else's hub rather than a file this
+project generates**. That is the point of it: no shard list, no `stores/` entry, no workflow, no
+front of its own. A URL, the grouping every hub has, and the same `fetchStore` every other store URL
+already went through, which is what §24.10 claimed and this is the proof of. Its rows are read on
+the gesture that opens it and not before, like every store's (§24.2), so the tile costs no request;
+if WashU will not allow a cross-origin GET the front says so in the ordinary way, which is the same
+sentence any hub gets and the reason there is nothing special to write here for it.
 
 **Its own tile.** A hub gets a door beside the store one on the landing page, and the argument is the
 portals': a hub is not a rarer kind of store file, it is the format an enormous amount of published

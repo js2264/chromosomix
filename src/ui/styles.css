@@ -5100,17 +5100,25 @@ canvas.is-frozen {
   margin-top: 0.6rem;
 }
 
-/* The row of large tiles stays *one* row. There are five of them and the set
-   is the page's whole offer, so a fifth tile dropping onto a second line reads
-   as an afterthought rather than as the last of five. They share the width
-   instead: `flex: 1 1 0` with `min-width: 0` lets each shrink below the basis
-   `width` sets, and the blurb under each takes another line as they narrow. */
+/* The large tiles are a *grid* rather than a row, and wrap.
+   They were one nowrap row, which was right while there were five and the set
+   was the page's whole offer — a fifth tile on a second line would have read as
+   an afterthought. There are seven now and a reader can connect more, so the
+   question has changed from "how do five share a line" to "how does an
+   open-ended set stay a set", and the answer is equal columns that fill the
+   width and spill onto the next line: `auto-fill` rather than `auto-fit` so
+   that the last row's tiles stay the width of the ones above them instead of
+   stretching to fill what is left, which is what makes four over three read as
+   seven of the same thing. `min()` keeps a single tile from overflowing a
+   viewport narrower than the track. */
 .store-tiles-large {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr));
+  align-items: stretch;
 }
 
 .store-tiles-large .store-tile {
-  flex: 1 1 0;
+  width: auto;
   min-width: 0;
 }
 
@@ -5275,6 +5283,16 @@ canvas.is-frozen {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  gap: 0.15rem;
+}
+
+/* The link out, beside the download and drawn as one of it: an `<a>` has to be
+   told the things a `button` is given, which is the whole of this rule. */
+.store-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .store-head-text {

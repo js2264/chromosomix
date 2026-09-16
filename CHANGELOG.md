@@ -134,6 +134,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The store grid: Roadmap shipped as a hub, a link to whoever made each shelf, and two doors named
+  for what they do (§24.2, §24.10).**
+
+  **Roadmap (UCSC hub)** is a sixth built-in store, reading WashU's hub over the 111 reference
+  epigenomes. It is the first shipped store that is somebody else's hub rather than a file this
+  project generates — no shard list, no `stores/` entry, no workflow, no front of its own, just a
+  `hub.txt` URL and the same `fetchStore` every store URL already went through. Its rows are read on
+  the gesture that opens it, so the tile costs no request.
+
+  **Every store now links to the people who made it**, from an arrow beside the download in the
+  drawer's head: RSG's team page, IGV's genome documentation, 4DN's portal, ENCODE's matrix, DNA
+  Zoo, Roadmap's WashU portal, and UCSC's `hgHubConnect` on the hub door. A store is somebody else's
+  data and the rows are a translation of their catalogue, carrying none of the licence, citation or
+  caveats they wrote down; this is the whole of what the viewer does about that. It is drawn as soon
+  as a store is opened, read or not — the reader whose catalogue just failed to load is exactly the
+  one who wants the site behind it.
+
+  **The two doors are named for the errand**: *A track hub* is now *Add a UCSC hub* and *Your own
+  store* is *Add a custom store config*. The first wears UCSC's logo, and so do Roadmap and every
+  hub a reader remembers; the second wears this viewer's own icon, the file behind it being the one
+  format in the grid written *for* this viewer rather than translated into it.
+
+  **The grid wraps.** It was one row that could not, which was right while there were five tiles;
+  there are eight now and a reader can connect more, so it is equal columns that fill the width and
+  spill onto the next line, with the last line's tiles the width of the ones above them.
+
+  `scripts/make-store-logos.mjs` grew two things to carry the new marks: an **incremental run**, so
+  adding a logo no longer means re-obtaining the four whose sources are not committed, and a
+  **bleed** fit for a mark that is already a tile — the app icon is a squircle plate with its own
+  margin and shadow, and containing it on white drew a plate inside a plate.
+
 - **Five UCSC formats, and track hubs as stores (§8.18–§8.21, §24.10).** Everything below is one
   change with one shape: the formats UCSC's browser reads that this one did not, and the index most
   of the world's published data is actually behind.
@@ -217,7 +248,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   third-party host and no CORS question in the way:
 
   ```sh
-  npm run dev   # then paste http://localhost:5173/demo/yeast/hub.txt into the *A track hub* tile
+  npm run dev   # then paste http://localhost:5173/demo/yeast/hub.txt into the *Add a UCSC hub* tile
   ```
 
   The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C in kent's own

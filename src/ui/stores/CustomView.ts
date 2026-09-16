@@ -36,7 +36,7 @@ export interface CustomViewProps {
   /**
    * The store that landed calls itself this.
    *
-   * A door is named for the errand — *A track hub*, *Your own store* — and that
+   * A door is named for the errand — *Add a UCSC hub*, *Add a custom store config* — and that
    * is right until one has been read, at which point the page is about a
    * particular shelf and the heading should say which. Handed up rather than
    * written here, because the heading belongs to the drawer and this view owns

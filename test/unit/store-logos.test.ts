@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest'
 
 import { STORE_LOGOS } from '@/ui/stores/logos.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
-import { builtinStores } from '@/ui/stores/registry'
+import { builtinStores, customStore, hubStoreFront } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
 
 /** The edge `make-store-logos.mjs` fits every mark to. */
@@ -60,13 +60,33 @@ describe('the store logos', () => {
 
   it('leaves every shipped store a mark of its own', () => {
     const shipped = builtinStores()
-    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', 'dnazoo'])
+    expect(shipped.map((front) => front.id)).toEqual([
+      'rsg',
+      'igv',
+      '4dn',
+      'encode',
+      'dnazoo',
+      'roadmap',
+    ])
     const images = shipped.map((front) => front.mark.image)
-    // All five present, and five different pictures — a copy-paste that gave
-    // two stores the same logo would otherwise look plausible on the page.
+    // All six present, and six different pictures — a copy-paste that gave two
+    // stores the same logo would otherwise look plausible on the page.
     expect(images.every((image) => image !== undefined)).toBe(true)
-    expect(new Set(images).size).toBe(5)
+    expect(new Set(images).size).toBe(6)
     expect(images[0]).toBe(RSG_MARK_IMAGE)
+  })
+
+  it('draws Roadmap and the hub door with the same UCSC mark, on purpose', () => {
+    // The one place two tiles share a picture, and it is not a slip: Roadmap is
+    // a UCSC hub and the door beside it is where the others are pasted, so the
+    // mark is the sentence *this is a UCSC hub* said twice about two things
+    // that are both one.
+    const roadmap = builtinStores().find((front) => front.id === 'roadmap')!
+    expect(roadmap.mark.image).toBe(STORE_LOGOS.ucsc)
+    expect(hubStoreFront().mark.image).toBe(STORE_LOGOS.ucsc)
+    // …and the custom door is this viewer's own icon, the one door whose file
+    // was written for this viewer rather than translated into it.
+    expect(customStore().mark.image).toBe(STORE_LOGOS.app)
   })
 
   /**

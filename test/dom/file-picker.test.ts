@@ -195,7 +195,7 @@ describe('the landing page', () => {
     expect(textsOf(el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
   })
 
-  it('offers the five shipped stores as tiles, then the two doors', () => {
+  it('offers the six shipped stores as tiles, then the two doors', () => {
     const { el } = build()
     expect(textsOf(el, '.store-tile .store-tile-name')).toEqual([
       'RSG lab data',
@@ -203,14 +203,15 @@ describe('the landing page', () => {
       '4DN open data',
       'ENCODE',
       'DNA Zoo',
+      'Roadmap (UCSC hub)',
       // The two doors, always last and always in this order: far more of the
       // world's published data is behind a hub than behind a store file
       // written for this viewer (§24.10).
-      'A track hub',
-      'Your own store',
+      'Add a UCSC hub',
+      'Add a custom store config',
     ])
     // Every tile is a mark and a line, not a request.
-    expect(all(el, '.store-tile .store-mark')).toHaveLength(7)
+    expect(all(el, '.store-tile .store-mark')).toHaveLength(8)
   })
 
   it('fetches nothing when it is built or when the tiles are drawn', () => {
