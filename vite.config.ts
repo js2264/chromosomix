@@ -49,6 +49,36 @@ const COMMIT = git(['rev-parse', '--short', 'HEAD'])
  * is nothing coherent to precache, and a worker holding yesterday's chunks is
  * the classic reason "my change does not show up".
  */
+/**
+ * Serve a `.gz` file as the bytes it is, under `npm run dev`.
+ *
+ * Vite's static middleware answers a `.gz` with `Content-Encoding: gzip`, so
+ * the browser inflates it on the way in — which is right for a pre-compressed
+ * `.js.gz` and wrong for a file whose gzip *is* the format: a `.g3d.gz`, a
+ * `.bed.gz`, a bgzipped anything. A byte-range read of such a file then gets
+ * inflated bytes of a different length and fails as a network error, while
+ * the same file on the built site is served plainly and opens. The demo's
+ * structure is one (`demo/yeast/Yeast_structure.g3d.gz`), so the dev server
+ * is taught what the site already does: no encoding header on a `.gz`.
+ */
+function gzippedAsIs(): Plugin {
+  return {
+    name: 'metacooler-gz-as-is',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!/\.gz(\?|$)/.test(req.url ?? '')) return next()
+        const setHeader = res.setHeader.bind(res)
+        res.setHeader = (name, value) => {
+          if (String(name).toLowerCase() === 'content-encoding') return res
+          return setHeader(name, value)
+        }
+        next()
+      })
+    },
+  }
+}
+
 function serviceWorker(base: string): Plugin {
   return {
     name: 'metacooler-service-worker',
@@ -117,7 +147,7 @@ export default defineConfig({
     __GOOGLE_API_KEY__: JSON.stringify(process.env.GOOGLE_API_KEY ?? ''),
     __DROPBOX_APP_KEY__: JSON.stringify(process.env.DROPBOX_APP_KEY ?? ''),
   },
-  plugins: [serviceWorker(process.env.BASE_PATH ?? '/')],
+  plugins: [serviceWorker(process.env.BASE_PATH ?? '/'), gzippedAsIs()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

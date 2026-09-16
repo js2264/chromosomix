@@ -984,6 +984,7 @@ export class StructurePanel implements DeckCell {
       return
     }
     if (this.renderer.lost) this.say(WAITING.lost)
+    else if (this.note.textContent === WAITING.renderer || this.note.textContent === WAITING.lost) this.say('')
     this.renderer.setView(view)
     this.paintKey(view.colours.key)
     this.paintLabels(view)

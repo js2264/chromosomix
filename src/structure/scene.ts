@@ -82,8 +82,9 @@ export interface Structure {
   readonly scale: number
   /**
    * The typical distance between neighbouring beads, normalised: the median
-   * over every run. Bead and tube radii are fractions of this, so a radius
-   * setting reads the same on every model.
+   * over every run, floored at a fraction of the model's size. Bead and tube
+   * radii are fractions of this, so a radius setting reads the same on every
+   * model — and stays visible on a dense one.
    */
   readonly step: number
   /** How many beads the file placed. */
@@ -267,8 +268,16 @@ function stepOf(chains: readonly Chain[], x: Float32Array, y: Float32Array, z: F
   if (steps.length === 0) return 1
   steps.sort((a, b) => a - b)
   const median = steps[steps.length >> 1]
-  return median > 0 ? median : 1
+  // Floored at a fraction of the model's own size (the coordinates are
+  // normalised to a radius of gyration of 1): a genome of thousands of 5 kb
+  // beads steps a hundredth of its extent, and a tube that thin is a hairline
+  // on any screen. The floor is what keeps a bead a bead on a dense model,
+  // and it is below the step of any model a reader can tell beads apart on.
+  return Math.max(median > 0 ? median : 1, STEP_FLOOR)
 }
+
+/** The least a step is taken to be, in units of the radius of gyration. */
+const STEP_FLOOR = 0.035
 
 // ---------------------------------------------------------------------------
 // The bridge: (contig, bp) ↔ bead

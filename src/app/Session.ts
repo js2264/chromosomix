@@ -779,6 +779,8 @@ export class Session {
    * outright, and closing one still falls back to it.
    */
   private assembly: Assembly | null = null
+  /** Structure rows already seen, so a new one opens its cell (§25.3); `null` until the watch begins. */
+  private knownStructures: Set<string> | null = null
   /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
   private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
@@ -1203,6 +1205,7 @@ export class Session {
     this.wholeFile = null
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.compare?.client.terminate()
     this.compare = null
     this.correlator?.terminate()
@@ -2814,7 +2817,10 @@ export class Session {
     // arranging tracks and then closed the window would get none of it back.
     // The write itself is debounced, so a track landing costs no more than the
     // colour slider already does.
-    store.subscribe(() => this.host.sessionChanged(this))
+    store.subscribe(() => {
+      this.host.sessionChanged(this)
+      this.watchStructureRows(store)
+    })
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
@@ -3462,6 +3468,31 @@ export class Session {
   }
 
   /**
+   * The other road a structure arrives by: a row the Tracks card made itself,
+   * from its URL box or its file chooser, which never passes through
+   * {@link dropped} or {@link addRemote}. Watched on the store rather than
+   * hooked into the card, so every road agrees: a structure row that was not
+   * there a moment ago opens its cell. The rows already in the list when the
+   * watch begins — a restored session's — are noted and not opened, since
+   * their deck is the link's to rebuild.
+   */
+  private watchStructureRows(store: AnnotationStore): void {
+    const seen = this.knownStructures
+    const now = store.entries.filter((entry) => entry.kind === 'structure').map((entry) => entry.id)
+    if (seen === null) {
+      this.knownStructures = new Set(now)
+      return
+    }
+    let fresh = false
+    for (const id of now) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      fresh = true
+    }
+    if (fresh && this.deckIsPossible) this.ensureDeck().add({ kind: 'structure' })
+  }
+
+  /**
    * Take this browser's sequence lengths from a `chrom.sizes` instead.
    *
    * The case it exists for is a browser opened on a BED or a GTF, whose
@@ -4048,6 +4079,7 @@ export class Session {
     this.compareCarry = null
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.manualCard = null
     this.metadataCard = null
     this.bookmarksCard = null
@@ -4085,6 +4117,7 @@ export class Session {
   private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.manualCard = null
     this.metadataCard = null
     this.bookmarksCard = null
@@ -4139,7 +4172,10 @@ export class Session {
     // arranging tracks and then closed the window would get none of it back.
     // The write itself is debounced, so a track landing costs no more than the
     // colour slider already does.
-    store.subscribe(() => this.host.sessionChanged(this))
+    store.subscribe(() => {
+      this.host.sessionChanged(this)
+      this.watchStructureRows(store)
+    })
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const loader = new AnnotationLoader(
@@ -5904,6 +5940,7 @@ export class Session {
       // hold them until the tab closed.
       this.annotations?.client.destroy()
       this.annotations = null
+    this.knownStructures = null
       this.manualCard = null
       this.metadataCard = null
       this.bookmarksCard = null

@@ -198,7 +198,7 @@ function bySource(structure: Structure, source: ColourSource): BeadColours {
   }
   const values = source.values ?? new Float32Array(n).fill(Number.NaN)
   const colormap = source.colormap ?? STRUCTURE_RAMP
-  const range = source.range ?? rangeOf(values)
+  const range = source.range ?? robustRangeOf(values)
   const span = range.max - range.min
   for (let i = 0; i < n; i++) {
     const value = values[i]
@@ -211,6 +211,24 @@ function bySource(structure: Structure, source: ColourSource): BeadColours {
     css,
     key: { kind: 'ramp', title: source.label, colormap, min: range.min, max: range.max },
   }
+}
+
+/**
+ * The 2nd to the 98th percentile of the finite values, or `[0, 1]` for none.
+ *
+ * What a colouring with no limits of its own is fitted to: a track sampled
+ * over a whole genome has a spike somewhere — the rDNA, a collapsed repeat —
+ * and a ramp stretched to it paints every other bead the same dark, which is
+ * a picture of one outlier. The lane's own limits, where the reader set them,
+ * still win (`ColourSource.range`).
+ */
+export function robustRangeOf(values: Float32Array): { min: number; max: number } {
+  const finite = Array.from(values).filter((v) => Number.isFinite(v)).sort((a, b) => a - b)
+  if (finite.length === 0) return { min: 0, max: 1 }
+  const at = (q: number): number => finite[Math.min(finite.length - 1, Math.max(0, Math.round(q * (finite.length - 1))))]
+  const min = at(0.02)
+  const max = at(0.98)
+  return max > min ? { min, max } : rangeOf(values)
 }
 
 /** The finite extent of a value array, or `[0, 1]` for one with none. */

@@ -329,7 +329,16 @@ export class StructureRenderer {
       at++
     }
     this.picks.instanceMatrix.needsUpdate = true
+    // A raycast against an instanced mesh is gated by its bounding sphere,
+    // which three computes once and never again: left as it was, it is the
+    // sphere of a mesh that had no instances yet, and every ray misses. The
+    // same sphere is what frustum culling reads, which is why every object
+    // under the root is added with culling off (`frustumCulled = false`): a
+    // halo or a chord placed after its sphere was computed was culled as
+    // out of view and never drawn.
+    this.picks.computeBoundingSphere()
     this.root.add(this.picks)
+    this.picks.frustumCulled = false
 
     const drawBeads = style.representation === 'beads' || style.representation === 'beads+sticks'
     const drawSticks = style.representation === 'sticks' || style.representation === 'beads+sticks'
@@ -348,6 +357,7 @@ export class StructureRenderer {
       }
       this.beads.instanceMatrix.needsUpdate = true
       this.root.add(this.beads)
+      this.beads.frustumCulled = false
     }
 
     if (drawSticks || drawTube) {
@@ -380,6 +390,7 @@ export class StructureRenderer {
         this.sticks.instanceMatrix.needsUpdate = true
         this.sticks.userData['pairs'] = pairs
         this.root.add(this.sticks)
+        this.sticks.frustumCulled = false
       }
       if (drawTube) {
         for (const chain of structure.chains) {
@@ -427,6 +438,7 @@ export class StructureRenderer {
     )
     this.halos.count = 0
     this.root.add(this.halos)
+    this.halos.frustumCulled = false
 
     const chordGeometry = new BufferGeometry()
     chordGeometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3))
@@ -436,6 +448,7 @@ export class StructureRenderer {
     )
     this.chord.visible = false
     this.root.add(this.chord)
+    this.chord.frustumCulled = false
 
     this.chords = new LineSegments(
       new BufferGeometry(),
@@ -443,6 +456,7 @@ export class StructureRenderer {
     )
     this.chords.visible = false
     this.root.add(this.chords)
+    this.chords.frustumCulled = false
     this.chordsFrom = null
 
     this.recolour()

@@ -8831,9 +8831,12 @@ span.deck-name {
   position: relative;
   width: var(--deck-plot, var(--map-size, 20rem));
   max-width: 100%;
-  height: var(--deck-plot-h);
+  /* A square of the deck's width, and not `--deck-plot-h`: beside a turned map
+     that number is the band's height, and a model in a band is a model
+     nobody can read. Width is what the cells share; a picture with no axis
+     has no height to share. */
   aspect-ratio: 1 / 1;
-  min-height: 6rem;
+  min-height: 12rem;
   max-height: 60vh;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -8899,6 +8902,10 @@ span.deck-name {
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   line-height: 1.2;
   max-width: 60%;
+  /* Sixteen chromosomes is sixteen rows; the key scrolls inside the plot
+     rather than standing taller than it. */
+  max-height: 55%;
+  overflow-y: auto;
   z-index: 2;
 }
 
@@ -9059,9 +9066,10 @@ span.deck-name {
 .tracks-wrap {
   width: var(--deck-plot, var(--map-size, 20rem));
   max-width: 100%;
-  height: var(--deck-plot-h);
+  /* The same square, for the same reason as `.structure-wrap`'s: a stack of
+     tracks beside a turned map needs room for its lanes, not the band's. */
   aspect-ratio: 1 / 1;
-  min-height: 6rem;
+  min-height: 12rem;
   max-height: 60vh;
   overflow: auto;
   border: 1px solid var(--border);

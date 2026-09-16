@@ -66,7 +66,7 @@ const DEPTH_FADE = 0.45
 const DEPTH_SHRINK = 0.35
 
 /** The opacity of a bead outside the window, under `others: 'ghost'`. */
-export const GHOST_OPACITY = 0.18
+export const GHOST_OPACITY = 0.3
 
 /** How much wider than a bead the halo round a hovered or pinned one is. */
 const HALO = 1.8
