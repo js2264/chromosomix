@@ -242,9 +242,11 @@ const ROADMAP: StoreFront = {
   label: 'Roadmap (UCSC hub)',
   blurb: 'The Roadmap Epigenomics integrative tracks, as the hub WashU publishes them.',
   kind: 'portal',
-  // UCSC's mark, because what this is *is* a UCSC hub, and the tile saying so
-  // is the whole of what a reader needs to know before pressing it.
-  mark: { text: 'ROAD', short: 'RME', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc },
+  // Roadmap's own emblem, cropped from a logo five times as wide as it is tall
+  // (`scripts/make-store-logos.mjs`). The colour under it is UCSC's, which is
+  // what shows if the image ever fails and is the truer fallback of the two:
+  // what this is *is* a UCSC hub.
+  mark: { text: 'ROAD', short: 'RME', colour: COLOURS.ucsc, image: STORE_LOGOS.roadmap },
   builtin: true,
   rows: {
     id: 'roadmap',

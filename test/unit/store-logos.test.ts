@@ -76,17 +76,19 @@ describe('the store logos', () => {
     expect(images[0]).toBe(RSG_MARK_IMAGE)
   })
 
-  it('draws Roadmap and the hub door with the same UCSC mark, on purpose', () => {
-    // The one place two tiles share a picture, and it is not a slip: Roadmap is
-    // a UCSC hub and the door beside it is where the others are pasted, so the
-    // mark is the sentence *this is a UCSC hub* said twice about two things
-    // that are both one.
-    const roadmap = builtinStores().find((front) => front.id === 'roadmap')!
-    expect(roadmap.mark.image).toBe(STORE_LOGOS.ucsc)
+  it('draws the two doors with the marks of what they add', () => {
+    // UCSC's own logo on the hub door, which is the one word a reader holding a
+    // hub is looking for…
     expect(hubStoreFront().mark.image).toBe(STORE_LOGOS.ucsc)
-    // …and the custom door is this viewer's own icon, the one door whose file
-    // was written for this viewer rather than translated into it.
+    // …and this viewer's own icon on the other, whose file is the one format in
+    // the grid written *for* this viewer rather than translated into it.
     expect(customStore().mark.image).toBe(STORE_LOGOS.app)
+    // Roadmap wears its own emblem, but keeps UCSC's colour underneath: that is
+    // what shows if the image fails, and *this is a UCSC hub* is the truer
+    // thing to say in that case than a lettermark would be.
+    const roadmap = builtinStores().find((front) => front.id === 'roadmap')!
+    expect(roadmap.mark.image).toBe(STORE_LOGOS.roadmap)
+    expect(roadmap.mark.colour).toBe(hubStoreFront().mark.colour)
   })
 
   /**

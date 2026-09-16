@@ -152,18 +152,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   one who wants the site behind it.
 
   **The two doors are named for the errand**: *A track hub* is now *Add a UCSC hub* and *Your own
-  store* is *Add a custom store config*. The first wears UCSC's logo, and so do Roadmap and every
-  hub a reader remembers; the second wears this viewer's own icon, the file behind it being the one
-  format in the grid written *for* this viewer rather than translated into it.
+  store* is *Add a custom store config*. The first wears UCSC's logo, and so does every hub a
+  reader remembers; Roadmap wears its own emblem over UCSC's colour. The second wears this viewer's
+  own icon, the file behind it being the one format in the grid written *for* this viewer rather
+  than translated into it.
 
   **The grid wraps.** It was one row that could not, which was right while there were five tiles;
   there are eight now and a reader can connect more, so it is equal columns that fill the width and
   spill onto the next line, with the last line's tiles the width of the ones above them.
 
-  `scripts/make-store-logos.mjs` grew two things to carry the new marks: an **incremental run**, so
-  adding a logo no longer means re-obtaining the four whose sources are not committed, and a
+  `scripts/make-store-logos.mjs` grew three things to carry the new marks. An **incremental run**,
+  so adding a logo no longer means re-obtaining the four whose sources are not committed. A
   **bleed** fit for a mark that is already a tile — the app icon is a squircle plate with its own
-  margin and shadow, and containing it on white drew a plate inside a plate.
+  margin and shadow, and containing it on white drew a plate inside a plate. And a **crop**, for a
+  logo too long to letterbox: Roadmap's is 958x208, which whole would have set its wordmark at about
+  five pixels on the landing page, so what is taken is the square at its left end.
 
 - **Five UCSC formats, and track hubs as stores (§8.18–§8.21, §24.10).** Everything below is one
   change with one shape: the formats UCSC's browser reads that this one did not, and the index most

@@ -6121,14 +6121,18 @@ reader who has just connected one wants next.
 hub* takes a `hub.txt`; *Add a custom store config* takes a store file — and each says *add* because
 that is the errand, where *A track hub* and *Your own store* named a category and left the verb to
 be guessed. The first wears UCSC's own logo, which is the one word a reader holding a hub is looking
-for, and so does Roadmap beside it and every hub the reader remembers: the mark is the sentence
-*this is a UCSC hub*, and it is true of all three. The second wears **this viewer's own icon**,
+for, and so does every hub the reader remembers. Roadmap beside it wears its own emblem over UCSC's
+colour, so that the sentence *this is a UCSC hub* is what shows if the image ever fails. The second wears **this viewer's own icon**,
 because the file behind that door is the one format in the grid written *for* this viewer rather
 than translated into it (§24.1). Both marks come through `scripts/make-store-logos.mjs` like the
-rest, which grew two things for them: an incremental run, so that adding a logo does not mean
-re-obtaining the four whose sources are not committed, and a **bleed** fit for a mark that is
+rest, which grew three things for them. An **incremental run**, so that adding a logo does not
+mean re-obtaining the four whose sources are not committed. A **bleed** fit for a mark that is
 already a tile — the app icon is a squircle plate with its own margin and shadow, and containing it
-on white drew a plate inside a plate.
+on white drew a plate inside a plate. And a **crop**, for a logo too long to survive being
+letterboxed: Roadmap's is 958x208, which whole would fill a fifth of the tile's height and set its
+wordmark at about five pixels on the landing page, so what is taken is the square at its left end —
+its emblem, full bleed, no letterbox at all. The tile sets the store's name in type under the mark,
+so a mark that cannot carry the name legibly carries the picture instead.
 
 **Every store says whose it is, and links there.** A store is somebody else's data, and what a
 reader is looking at is a catalogue this viewer translated — carrying none of the licence, the

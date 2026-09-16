@@ -11,9 +11,9 @@
  * they are removed once it is written, so a re-run means putting them back.
  *
  * PNG, and only PNG — `decode` below is not a general image reader and says so
- * rather than guessing. DNA Zoo's was supplied as a JPEG, and a logo that
- * arrives in another format is converted once before it is put here; this
- * script is not the place for a second decoder. That is deliberate — the marks below are published
+ * rather than guessing. DNA Zoo's was supplied as a JPEG, and so was Roadmap's;
+ * a logo that arrives in another format is converted once before it is put
+ * here, and this script is not the place for a second decoder. That is deliberate — the marks below are published
  * artwork belonging to the projects they name, carried here because this
  * viewer was given them to carry, and the repository holds one copy of each
  * (the fitted mark) rather than two. If a logo changes, replace the file,
@@ -88,6 +88,21 @@ const EDGE = 160
  * that radius makes it a badge on white, which is what ENCODE and DNA Zoo
  * already are.
  *
+ * `crop` is a box in fractions of the source — `[x0, y0, x1, y1]` — taken
+ * before anything else, for a logo too long to survive being letterboxed into a
+ * square. Roadmap's is the case, and the limit of what letterboxing can do: at
+ * 958x208 it is nearly five times as wide as it is tall, so whole it fills a
+ * fifth of the tile's height, which puts its wordmark at about five pixels on
+ * the landing page and two in the drawer's head. ENCODE at 170x102 is the
+ * shape this still works for; this is not.
+ *
+ * So Roadmap's **emblem** is taken — the square at the logo's left end, which
+ * then needs no letterbox at all — and its words are not. That is the one trade
+ * here the others do not make, and what makes it affordable is that the tile
+ * sets the store's name in type directly under the mark: the square is not
+ * where the name is, so a mark that cannot carry the name legibly should carry
+ * the picture instead.
+ *
  * `committed` marks a source that is in the repository and stays there. It is
  * true of one file: `build/icon.png`, which is a build input the icon script
  * writes and every clone already has (`scripts/make-app-icons.py`). The rest
@@ -98,7 +113,10 @@ const LOGOS = [
   { file: '4DN.png', key: 'fourdn', store: '4DN', fit: 'contain' },
   { file: 'ENCODE.png', key: 'encode', store: 'ENCODE', fit: 'contain' },
   { file: 'DnaZoo.png', key: 'dnazoo', store: 'DNA Zoo', fit: 'contain' },
-  { file: 'UCSC.png', key: 'ucsc', store: 'UCSC — the hub door, and Roadmap', fit: 'contain', inset: 0.16 },
+  { file: 'UCSC.png', key: 'ucsc', store: 'UCSC — the hub door', fit: 'contain', inset: 0.16 },
+  // 208/958 — the source's own height, so what is taken is the square at its
+  // left end: the emblem, full bleed, no letterbox at all.
+  { file: 'Roadmap.png', key: 'roadmap', store: 'Roadmap Epigenomics', fit: 'contain', crop: [0, 0, 0.2171, 1] },
   { file: 'build/icon.png', key: 'app', store: 'this viewer', fit: 'bleed', committed: true },
 ]
 
@@ -248,6 +266,18 @@ function opaqueBox({ width, height, rgba }) {
   return { left, top, width: right - left + 1, height: bottom - top + 1 }
 }
 
+/** A `[x0, y0, x1, y1]` box in fractions, as pixels of this image. */
+function fractionBox({ width, height }, [x0, y0, x1, y1]) {
+  const left = Math.round(x0 * width)
+  const top = Math.round(y0 * height)
+  return {
+    left,
+    top,
+    width: Math.max(1, Math.round(x1 * width) - left),
+    height: Math.max(1, Math.round(y1 * height) - top),
+  }
+}
+
 /** The pixels inside `box`, as their own image. */
 function crop(image, box) {
   const rgba = new Uint8Array(box.width * box.height * 4)
@@ -323,12 +353,13 @@ function resample(src, sw, sh, dw, dh) {
 }
 
 /** The logo on an `EDGE` square, scaled to fit and centred — see `LOGOS.fit`. */
-function fit(source, mode, inset = 0) {
+function fit(source, mode, inset = 0, taking) {
   const bleeding = mode === 'bleed'
-  const image = bleeding ? crop(source, opaqueBox(source)) : source
+  const taken = taking === undefined ? source : crop(source, fractionBox(source, taking))
+  const image = bleeding ? crop(taken, opaqueBox(taken)) : taken
   const ground = bleeding ? ownGround(image) : WHITE
-  const box = EDGE * (1 - inset)
-  const scale = Math.min(box / image.width, box / image.height)
+  const room = EDGE * (1 - inset)
+  const scale = Math.min(room / image.width, room / image.height)
   const width = Math.max(1, Math.round(image.width * scale))
   const height = Math.max(1, Math.round(image.height * scale))
   const inner = resample(over(image, ground), image.width, image.height, width, height)
@@ -431,7 +462,7 @@ function existingMarks() {
 const OUT = 'src/ui/stores/logos.generated.ts'
 const already = existingMarks()
 
-const marks = LOGOS.map(({ file, key, store, fit: mode, inset, committed }) => {
+const marks = LOGOS.map(({ file, key, store, fit: mode, inset, crop: box, committed }) => {
   let source = null
   try {
     source = readFileSync(join(root, file))
@@ -450,7 +481,7 @@ const marks = LOGOS.map(({ file, key, store, fit: mode, inset, committed }) => {
     )
   }
   const image = decode(source)
-  const { canvas, width, height } = fit(image, mode, inset)
+  const { canvas, width, height } = fit(image, mode, inset, box)
   const bytes = png(canvas)
   console.log(
     `${file}: ${image.width}x${image.height} -> ${width}x${height} on ${EDGE} square, ` +
