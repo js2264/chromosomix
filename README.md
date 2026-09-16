@@ -1,14 +1,16 @@
 # metacooler-viewer
 
 A unified genome browser for `.*cool`, `.scool`, `.hic`, `.pairs`, HiC-Pro, and other similar formats, 
-and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, BAM, VCF and barChart. 
+and other genome-wide data formats like bigWig, bedGraph, GTF, FASTA, `.2bit`, BAM, VCF, barChart, 
+genePred, bedMethyl and UCSC's two interaction formats. 
 It is a single-page application that runs entirely in the browser, with no 
 server-side processing or data upload.
 
 ## Main features 
 
 - Serverless: There is no upload, no required preprocessing step, no backend of any kind. The viewer is static files, and reads data directly from standard genome-wide formats. 
-- Support 1D genomic formats: bigWig, BED, bedGraph, GTF, FASTA, BAM, VCF, barChart/bigBarChart, chrom.sizes, ...
+- Support 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
+- Support interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
 - Support 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., with resolution ladder and on-the-fly balancing.
 - Dedicated Analysis panel, with exportable results: 
   - for common 1D analysis tasks: metaplots, track correlation, interval overlap with a shuffle null, FRiP over a feature set, ...
@@ -22,7 +24,7 @@ server-side processing or data upload.
 - Synchronized navigation across contact maps: Open two contact maps and pan and zoom them together.
 - Adaptative resolution: The viewer automatically chooses the best resolution that can be displayed based on the current zoom level. Genome-wide views are automatically coarsened to fit the screen, and zooming in refines the resolution.
 - Cloud-based file access: Open files directly from local files, from any object store that serves byte ranges with CORS — S3, Cloudflare R2, MinIO, Google Cloud Storage, Azure Blob with a SAS — or any HTTP(S) server that supports range requests; presigned links, `s3://` and `gs://` addresses, Dropbox and Google Drive share links are rewritten to the form that works, and a Google Drive folder or a Dropbox can be connected and browsed like a bucket.
-- Stores: The landing page offers three things — **load files**, **mount a local or remote folder** and **connect to a data store** — and the stores are a row of tiles: the lab's own figures, **IGV's genomes** with their tracks, **4DN open data** (every openable file on its bucket, ~25,700 rows), **ENCODE** (~210,000 rows, by assembly and by signal/peaks/alignments), and any store a lab publishes as one JSON file beside its data. A tile opens a drawer down the left, the way the console opens along the bottom. The lab's and IGV's stores are cards of pre-configured sessions with a line of context each: pick *hg38* and the sequence and its gene tracks are on screen together. The portals are a faceted search: tick assays, biosources and labs and watch every other facet's counts follow, cross two facets into a matrix and open a cell, or collect rows in a tray and open them together. What is open is in the address (`?store=4dn&assay=Hi-C&view=matrix`), so a narrowed store is a link. All of it is regenerated weekly, and nothing is fetched until a tile is pressed.
+- Stores: The landing page offers three things — **load files**, **mount a local or remote folder** and **connect to a data store** — and the stores are a row of tiles: the lab's own figures, **IGV's genomes** with their tracks, **4DN open data** (every openable file on its bucket, ~25,700 rows), **ENCODE** (~210,000 rows, by assembly and by signal/peaks/alignments), **any UCSC track hub** — paste a `hub.txt` and its genomes and tracks become a shelf, an assembly hub opening its own `.2bit` with its tracks beside it — and any store a lab publishes as one JSON file beside its data. A tile opens a drawer down the left, the way the console opens along the bottom. The lab's and IGV's stores are cards of pre-configured sessions with a line of context each: pick *hg38* and the sequence and its gene tracks are on screen together. The portals are a faceted search: tick assays, biosources and labs and watch every other facet's counts follow, cross two facets into a matrix and open a cell, or collect rows in a tray and open them together. What is open is in the address (`?store=4dn&assay=Hi-C&view=matrix`), so a narrowed store is a link. All of it is regenerated weekly, and nothing is fetched until a tile is pressed.
 - CLI-based analysis: The same analysis tasks available in the Analysis panel can be run from a command line, with the same parameters and producing the same results.
 - Console: A bottom panel recording every run, file opened and file written, each run written as the `metacooler-run` command that repeats it — one line per map, so a run over a deck is a line each. Copy or save a day of work as a shell script.
 

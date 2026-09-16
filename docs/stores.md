@@ -140,9 +140,18 @@ both load their genome menu from — and **probes every URL** with a ranged GET 
 carry, and the answer to *does this open without credentials*. Both of the rows it drops are worth
 knowing about:
 
-- **IGV's `refgene` tracks**, 29 of its 63: UCSC `genePred` tables in a `.txt.gz`, a format this
-  viewer has no parser for. Counted in the log rather than written as rows that fail when they are
-  clicked.
+- **IGV's `refgene` tracks are no longer dropped.** 29 of its 63 tracks are UCSC `genePred` tables
+  in a `.txt.gz`, and until the viewer could read one they were counted in the log rather than
+  written as rows that fail when they are clicked. SPECS §8.19 reads the format — `genePred`,
+  `genePredExt` and `refFlat`, with or without a MySQL dump's leading `bin` — so those rows are
+  published, and most of IGV's genomes gained the gene model that is the first track anybody wants
+  beside a sequence. They carry `format: genepred` whatever UCSC called the file, so one tick of the
+  Format facet finds `refGene`, `ncbiRefSeq`, `refFlat` and `knownGene` together. `.2bit` came off
+  the same list for the same reason (§8.21).
+
+  What is still dropped is three files that are not annotations of a genome: a cytoband table (an
+  ideogram this viewer does not draw), an alias file (a map between spellings, which §5.9 does from
+  the files themselves) and a `chrom.sizes` (which declares a genome rather than annotating one).
 - **Six genomes whose sequence is not public.** As of 2026-09-11, `igv-genepattern-org` answers
   `403 AccessDenied` to an anonymous ranged GET, which takes out IGV's `hg38`, `hg19`,
   `GCF_016699485.2`, `NC_016856.1` and `GCA_000182895.1`; so does one object on

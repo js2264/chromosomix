@@ -111,20 +111,42 @@ export class ResultList {
     // One *open with its tracks* per assembly the group was published on: a
     // session is one set of coordinates (§24.3), and a set on two assemblies
     // is two sessions.
+    //
+    // Two things can supply that verb, and the second is what gives a track hub
+    // the same heading a portal's has (§24.10). A **published session** is the
+    // richer answer: coordinates, lane order, everything its author placed.
+    // Where there is none, a row that is *the thing the group is about* and
+    // carries a shelf of tracks does the same job — opening it registers that
+    // shelf (`App.noteShelf`), so the reader lands on the genome with its
+    // tracks one press away. A hub has no sessions and every assembly has such
+    // a row; nothing else changes, because a store with neither still gets no
+    // button.
     const assemblies = [...new Set(entries.map((entry) => valueOf(entry, 'assembly')))]
     const sessions = assemblies.flatMap((assembly) => {
+      const label = assemblies.length > 1 ? `open with its tracks · ${assembly}` : 'open with its tracks'
       const session = paint.sessions.get(`${key}|${assembly}`)
-      if (session === undefined) return []
-      return [
-        withNewMark(
-          button(
-            assemblies.length > 1 ? `open with its tracks · ${assembly}` : 'open with its tracks',
-            () => this.props.host.open(session),
-            {
+      if (session !== undefined) {
+        return [
+          withNewMark(
+            button(label, () => this.props.host.open(session), {
               class: 'btn btn-quiet portal-session',
               title: `${session.label} — a pre-configured session: the map with the tracks published beside it, in one tab`,
-            },
+            }),
           ),
+        ]
+      }
+      const lead = entries.find(
+        (entry) =>
+          valueOf(entry, 'assembly') === assembly && entry.tracks !== undefined && entry.tracks.length > 0,
+      )
+      if (lead === undefined) return []
+      const count = lead.tracks?.length ?? 0
+      return [
+        withNewMark(
+          button(label, () => this.props.host.open(lead), {
+            class: 'btn btn-quiet portal-session',
+            title: `${lead.label} — opens with ${count} ${count === 1 ? 'track' : 'tracks'} on the shelf beside it`,
+          }),
         ),
       ]
     })

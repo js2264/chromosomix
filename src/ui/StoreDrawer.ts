@@ -42,6 +42,7 @@ import { messageToast } from './toast'
 import { KEYS, withKey } from './commands'
 import { EMPTY_VIEW, writeStoreView, type StoreView } from '../state/facets'
 import { subscribeStores } from '../state/stores'
+import { looksLikeHubUrl } from '../state/hub'
 import { CustomView } from './stores/CustomView'
 import { GalleryView } from './stores/GalleryView'
 import { GenomesView } from './stores/GenomesView'
@@ -109,6 +110,18 @@ function writeLast(id: string): void {
 }
 
 /** A control whose Escape means "leave this field", which outranks the drawer's. */
+/**
+ * Whether this id is one of the two **doors** rather than a store.
+ *
+ * A door is a URL box with nothing behind it until something is typed, so it is
+ * never what *last store* should reopen — and it is the one front whose typed
+ * URL is worth keeping when the drawer is closed, since there is no `rows` to
+ * find it again from.
+ */
+function isDoor(id: string): boolean {
+  return id === 'custom' || id === 'hub'
+}
+
 function takesEscape(node: HTMLElement): boolean {
   if (node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) return true
   if (!(node instanceof HTMLInputElement)) return node.isContentEditable
@@ -286,7 +299,7 @@ export class StoreDrawer {
       page,
     }
     this.lastOpened = front.id
-    if (front.id !== 'custom') writeLast(front.id)
+    if (!isDoor(front.id)) writeLast(front.id)
     this.markSlot.replaceChildren(storeMark(front.mark, 30))
     this.titleEl.textContent = front.label
     this.blurbEl.textContent = front.blurb
@@ -310,7 +323,13 @@ export class StoreDrawer {
    */
   openLink(target: string, view: StoreView): void {
     if (/^https?:\/\//i.test(target)) {
-      this.open('custom', view, target)
+      // A hub link lands on the hub door rather than the store one. Both read
+      // the same URL through the same `fetchStore` and arrive at the same
+      // portal, so this changes nothing about what is shown — what it changes
+      // is which tile is lit and which sentence is over the box, and a reader
+      // who followed somebody's hub link should find the word *hub* where they
+      // landed.
+      this.open(looksLikeHubUrl(target) ? 'hub' : 'custom', view, target)
       return
     }
     if (frontById(target) !== null) this.open(target, view)
@@ -321,7 +340,7 @@ export class StoreDrawer {
     const { front, view, target } = this.current
     this.left.set(front.id, {
       view,
-      ...(front.id === 'custom' && /^https?:\/\//i.test(target) ? { url: target } : {}),
+      ...(isDoor(front.id) && /^https?:\/\//i.test(target) ? { url: target } : {}),
     })
     this.current.page.destroy()
     this.current = null
@@ -363,7 +382,12 @@ export class StoreDrawer {
         return new GenomesView({ front, host, onLoaded: () => this.paintDownload() })
       case 'portal':
         return new PortalView({ front, host, view, onView, onLoaded: () => this.paintDownload() })
+      // One view for both doors. What differs between them is the sentence over
+      // the box (`CustomView` reads `front.kind` for it) and nothing else: a
+      // hub read from either lands in the same portal, and is remembered and
+      // forgotten by the same two links.
       case 'custom':
+      case 'hub':
         return new CustomView({
           front,
           host,
@@ -375,6 +399,14 @@ export class StoreDrawer {
               this.current.target = loaded
               this.writeQuery()
             }
+          },
+          onName: (label, blurb) => {
+            // Only while this front is the one in front: a read that lands
+            // after the reader has moved on must not rename the store they
+            // moved to.
+            if (this.current === null || this.current.front.id !== front.id) return
+            this.titleEl.textContent = label
+            this.blurbEl.textContent = blurb
           },
           onChanged: () => this.paintTiles(),
           onLoaded: () => this.paintDownload(),

@@ -134,6 +134,79 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Five UCSC formats, and track hubs as stores (§8.18–§8.21, §24.10).** Everything below is one
+  change with one shape: the formats UCSC's browser reads that this one did not, and the index most
+  of the world's published data is actually behind.
+
+  **`interact` and `bigInteract`, `longrange` and longTabix (§8.18).** UCSC's interaction formats,
+  which are the only ones it has that are about the thing this application is about: two places
+  joined. Both become a `PairSet` — what a bedpe becomes — so both arrive drawn, as arcs across the
+  matrix and as their own lane in the 1D browser, with no renderer written for either. Trans
+  interactions survive as ordinary off-diagonal arcs rather than as the labelled edge marker a single
+  axis forces on UCSC.
+
+  This is a **correctness fix and not only an addition**. Both formats are BED-shaped enough to reach
+  the BED sniffer, whose last line is `return 'bed'`, so neither was refused: an `interact` with a
+  fractional `value` — UCSC's own examples write `5.000000` — was drawn as one box spanning both
+  anchors *and the gap between them*, and an `interact` whose `value` happened to be a whole number
+  matched the bedpe rule and was read as one, putting the interaction's **name** in the second contig
+  and its display **score** in the second start. Arcs, drawn confidently, between coordinates that
+  were never in the file. A `longrange` was a BED4 whose names were the coordinates of the arcs it
+  should have drawn. A `longrange`'s reciprocal lines — the format writes every interaction twice so
+  that a tabix query from either end finds it — are folded, and the lane says how many it folded,
+  rather than every loop being drawn twice and every count being wrong by a factor of two.
+
+  **`genePred`, `genePredExt` and `refFlat` (§8.19).** How the gene models of half the assemblies in
+  circulation are distributed, and the gap with a number on it: the IGV store this project publishes
+  was dropping **29 of IGV's 63 tracks** because they are UCSC `genePred` tables in a `.txt.gz`, and
+  those 29 are the gene models — the first track anybody wants beside a sequence. They are published
+  now. The same ten columns start at column 0, 1 or 2 depending on whether the file is a `refFlat` and
+  whether it carries a MySQL dump's `bin` index, and eleven columns is ambiguous between the two — so
+  the offset is not guessed from the width but *found*, by keeping the one where the file agrees with
+  itself: a strand where a strand goes, and two comma lists whose length is the exon count and whose
+  blocks tile the transcript. A `bigGenePred` already drew correctly, its first twelve columns being
+  a BED12; what its schema now buys is being a gene model rather than a peak set.
+
+  **`bedMethyl` and `bigMethyl` (§8.20).** Base-resolution modification calls, as the quantitative
+  track they are — percent modified per base, with the range, ceiling, autoscale and colour every
+  bigWig lane has. Read as the BED9 they begin with, which is what happened before, they were a lane
+  of grey boxes one base wide with the measurement never mentioned. A file holding two modifications
+  over the same bases draws the more abundant one and **says which it did not draw**, because those
+  are two measurements and averaging them would produce a number that is in no file. The
+  metagenomic case is the one this was really added for: bacterial 6mA and 4mC are strain-specific
+  and are used to bin contigs, which is what the MAG layer is for.
+
+  **`.2bit` (§8.21).** UCSC's packed sequence format, read by range. One file rather than a FASTA and
+  a `.fai` — so every way §8.8's index goes missing simply cannot arise — at two bits a base instead
+  of eight, which is 800 MB for hg38 against 3.1 GB. The gaps are read from the N blocks and painted
+  over the unpacked bases, because the bits under a centromere are not blank but a convincing run of
+  thymine; the mask blocks are stepped over and never fetched, being eight megabytes a chromosome for
+  a lowercase this viewer discards twice over. A long (version 1) `.2bit` is refused by name rather
+  than misread as wrong residues. The CLI reads one the same way, through the same arithmetic.
+
+  **UCSC track hubs, as stores (§24.10).** Paste a `hub.txt` and its genomes and tracks become a
+  shelf: grouped by assembly, narrowed by the hub's own composite and super-track names, with *open
+  with its tracks* on every assembly's heading. An **assembly hub** opens its own `.2bit` as the
+  genome — which is why that format is in the same release, since without it every assembly hub opens
+  as tracks over coordinates nothing can read — and a **db hub**, which carries no sequence, falls
+  back to its `chromSizes` and then to the first bigWig or bigBed in its own trackDb, whose header
+  carries the lengths. It never reaches for a `chrom.sizes` nobody asked for.
+
+  A hub is recognised from its **content** at the one function every store URL already goes through,
+  so a hub works in `?store=`, in the Connect box, as a remembered tile and in a shared link, and
+  none of those had to learn the word — while a JSON store served from a file called `hub.txt` still
+  opens as a store. Composite and super-track stanzas, `include` files, `useOneFile on` hubs,
+  continuation lines and the indentation subtracks are written with are all read. A track whose type
+  this viewer cannot draw gets **no row** and is counted with its reason in the store's description,
+  because a row that misdraws when it is pressed is worse than an absent one. It has its own tile on
+  the landing page, beside the one for a store file.
+
+  **The IGV store gained the rows this unblocked.** Its generator was dropping IGV's `refgene`
+  tracks and every `.2bit` because there was no reader for either; both are read now, so the 29 gene
+  models are published, they carry `format: genepred` whatever UCSC called the file — so one tick of
+  the Format facet finds `refGene`, `ncbiRefSeq`, `refFlat` and `knownGene` together — and hg38's
+  genome row carries its gene track on the shelf where it used to carry nothing.
+
 - **A whole chart inside one feature: barChart and bigBarChart (§8.17).** UCSC's format puts a
   *vector* on each row — `expCount` numbers, one per category — and gene expression across fifty-four
   GTEx tissues is what it was built for. A dropped `.barChart` or a bigBed written with the barChart
@@ -1368,6 +1441,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - The scaled pileup's axes are labelled in units of the feature — `0` at its
   start and `1` at its end — with the flank the run used named beside them,
   instead of an unlabelled *Scaled position*.
+
+### Changed
+
+- **A store's own name replaces the door's on the drawer heading once it lands.** A door is named
+  for the errand — *A track hub*, *Your own store* — which is right until one has been read, at
+  which point the page is about a particular shelf and the heading says which, with the store's own
+  description under it. Both doors, not only the new one.
 
 ## [0.12.0] - 2026-09-10
 

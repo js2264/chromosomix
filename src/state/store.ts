@@ -55,6 +55,7 @@ import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { looksLikeConfig, type ConfigRefusal } from './SessionConfig'
+import { looksLikeHub, readHub } from './hub'
 
 /** What a store file must call itself. */
 export const STORE_KIND = 'metacooler.store'
@@ -467,12 +468,62 @@ export interface FetchStoreOptions {
  * way for a lab to publish its own shelf, and this request being the one
  * unsigned link would make the whole arrangement fail at its first step.
  *
+ * …or **three or more**, when those bytes turn out to be a UCSC track hub
+ * (§24.10): a `hub.txt` names a `genomes.txt` which names a `trackDb.txt` per
+ * assembly, and every one of them is read through the same signed `GET` below.
+ * Still one gesture, and still nothing fetched before it.
+ *
  * It never throws. Every road out is a value, because the caller is a table that
  * has to draw *something* whatever happened, and a rejected promise at a `<select>`
  * change handler is an empty table with the reason in the console.
  */
 export async function fetchStore(url: string, options: FetchStoreOptions = {}): Promise<StoreFetch> {
   const run = options.fetchImpl ?? fetch
+  const first = await fetchText(url, run)
+  if (!first.ok) return first
+
+  // A **track hub** is the other thing a reader pastes into the store box, and
+  // it is one of these bytes rather than a second road: UCSC's `hub.txt` is the
+  // format most published genomics data is indexed by, and `state/hub.ts`
+  // translates one into exactly the `StoreFile` this function already returns.
+  //
+  // Recognised by the *content* and not by the URL, for §8.3's reason applied a
+  // level up: a hub is routinely served from an address that says nothing — a
+  // bucket key with no suffix, a `?download=1`, a redirect — and the first
+  // stanza of the file says what it is without ambiguity. The name is consulted
+  // nowhere, which is also why a store named `hub.txt` still opens as a store.
+  //
+  // Doing it *here* is what makes hubs first class: every road a store URL
+  // travels — `?store=`, the Connect box, a remembered tile, a shared link, the
+  // drawer's download — goes through this function, so none of them needed to
+  // learn what a hub is.
+  if (looksLikeHub(first.text)) {
+    const store = await readHub(url, first.text, async (at) => {
+      const got = await fetchText(at, run)
+      return got.ok ? got.text : null
+    })
+    if (store !== null) return { ok: true, store: resolveStore(store, url) }
+  }
+
+  const parsed = parseStore(first.text)
+  if ('reason' in parsed) {
+    return { ok: false, reason: 'refused', refusal: parsed, message: '' }
+  }
+  return { ok: true, store: resolveStore(parsed, url) }
+}
+
+/**
+ * One signed `GET`, as text, or the reason there is none.
+ *
+ * Split out of {@link fetchStore} because a hub is three files and each of them
+ * wants the same signing, the same 404-is-a-state and the same CORS wording —
+ * and because a second copy of that is a second place for a private bucket to
+ * stop working.
+ */
+async function fetchText(
+  url: string,
+  run: typeof fetch,
+): Promise<{ ok: true; text: string } | Exclude<StoreFetch, { ok: true }>> {
   let response: Response
   try {
     // Signed when a bucket scope covers the URL, and carrying whatever static
@@ -511,9 +562,8 @@ export async function fetchStore(url: string, options: FetchStoreOptions = {}): 
       message: `${url} could not be read: the host answered ${response.status} ${response.statusText}.`,
     }
   }
-  let body: string
   try {
-    body = await response.text()
+    return { ok: true, text: await response.text() }
   } catch (err) {
     return {
       ok: false,
@@ -521,9 +571,4 @@ export async function fetchStore(url: string, options: FetchStoreOptions = {}): 
       message: `${url} was cut off: ${err instanceof Error ? err.message : String(err)}.`,
     }
   }
-  const parsed = parseStore(body)
-  if ('reason' in parsed) {
-    return { ok: false, reason: 'refused', refusal: parsed, message: '' }
-  }
-  return { ok: true, store: resolveStore(parsed, url) }
 }

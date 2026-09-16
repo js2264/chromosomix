@@ -32,6 +32,16 @@ export interface CustomViewProps {
   url?: string
   /** A store was read from this URL, which is what the address bar should now name. */
   onTarget?(url: string): void
+  /**
+   * The store that landed calls itself this.
+   *
+   * A door is named for the errand — *A track hub*, *Your own store* — and that
+   * is right until one has been read, at which point the page is about a
+   * particular shelf and the heading should say which. Handed up rather than
+   * written here, because the heading belongs to the drawer and this view owns
+   * only its body.
+   */
+  onName?(label: string, blurb: string): void
   /** The reader remembered or forgot a store; the drawer redraws its tiles. */
   onChanged?(): void
   /** The catalogue landed, or was cleared; the drawer redraws its download. */
@@ -49,11 +59,14 @@ export class CustomView {
   private destroyed = false
 
   constructor(private readonly props: CustomViewProps) {
+    const hub = props.front.kind === 'hub'
     this.urlInput = el('input', {
       class: 'input custom-url',
       type: 'url',
-      placeholder: 'https://lab.example.org/store.json',
-      attrs: { 'aria-label': 'the URL of a store file' },
+      placeholder: hub
+        ? 'https://lab.example.org/myHub/hub.txt'
+        : 'https://lab.example.org/store.json',
+      attrs: { 'aria-label': hub ? 'the URL of a hub.txt' : 'the URL of a store file' },
     })
     this.urlInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') void this.loadTyped()
@@ -66,8 +79,9 @@ export class CustomView {
             { class: 'custom-form' },
             el('p', {
               class: 'hint',
-              text:
-                'A store is one JSON file a lab publishes beside its data — its maps, genomes and saved sessions, with columns to narrow on. Nothing is fetched until you press open.',
+              text: hub
+                ? 'A UCSC track hub: the hub.txt that names a genomes.txt and a trackDb per assembly. Its genomes and every track this viewer can draw become a shelf you can narrow, open and remember. An assembly hub opens its own .2bit as the sequence, with its tracks on the shelf beside it.'
+                : 'A store is one JSON file a lab publishes beside its data — its maps, genomes and saved sessions, with columns to narrow on. Nothing is fetched until you press open.',
             }),
             el(
               'div',
@@ -75,7 +89,7 @@ export class CustomView {
               this.urlInput,
               button('open', () => void this.loadTyped(), {
                 class: 'btn btn-primary',
-                title: 'Read the store at this URL.',
+                title: hub ? 'Read the hub at this URL.' : 'Read the store at this URL.',
               }),
             ),
           )
@@ -153,6 +167,7 @@ export class CustomView {
     })
     this.body.replaceChildren(this.portal.el)
     this.props.onTarget?.(url)
+    this.props.onName?.(front.label, file.description ?? url)
     this.offerRemember(file, url)
   }
 

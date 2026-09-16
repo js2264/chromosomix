@@ -61,10 +61,18 @@ import { fmt } from '../ui/dom'
  */
 function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.bedpe(\.gz)?$/i.test(name)) return { card: 'overlay', kind: 'pairs' }
+  if (/\.(interact|biginteract|longrange|longtabix)(\.gz)?$/i.test(name)) {
+    return { card: 'overlay', kind: 'pairs' }
+  }
   if (/\.(bw|bigwig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
   if (/\.(bdg|bedgraph|wig)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
+  if (/\.(bedmethyl|bigmethyl)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'track' }
   if (/\.(fa|fasta|fna|fas)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'sequence' }
+  if (/\.2bit$/i.test(name)) return { card: 'linear', kind: 'sequence' }
   if (/\.(gtf|gff3?)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'gtf' }
+  if (/\.(genepred|genepredext|refflat)(\.txt)?(\.gz)?$/i.test(name)) {
+    return { card: 'linear', kind: 'gtf' }
+  }
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
@@ -721,6 +729,11 @@ function remoteIndexFor(source: { url: string; index?: string }): string | undef
 export function cardFor(format: DetectedFormat): AnnotationCard | null {
   switch (format) {
     case 'bedpe':
+    // UCSC's two interaction formats join two places, which is the same fact
+    // about a bedpe that puts one here — so they land on the same card and are
+    // drawn by the same arcs (§8.18).
+    case 'interact':
+    case 'longrange':
       return 'overlay'
     case 'bigwig':
     case 'bigbed':
@@ -732,6 +745,9 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'barchart':
     case 'fasta':
     case 'bam':
+    case 'genepred':
+    case 'bedmethyl':
+    case 'twobit':
       return 'linear'
     default:
       return null
@@ -750,10 +766,25 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // A bedGraph and a wig are a bigWig written out, and become the same kind
     // of thing: values sampled per view, with a range, a ceiling, an autoscale
     // and every other affordance a bigWig lane already has.
-    if (format === 'bigwig' || format === 'bedgraph' || format === 'wig') return 'track'
-    if (format === 'fasta') return 'sequence'
+    // A bedMethyl joins the three, and the argument is theirs exactly: a
+    // modification call is a number at a place, so it becomes a track and
+    // arrives with every affordance a bigWig lane already has (§8.20).
+    if (
+      format === 'bigwig' ||
+      format === 'bedgraph' ||
+      format === 'wig' ||
+      format === 'bedmethyl'
+    ) {
+      return 'track'
+    }
+    // A `.2bit` is a genome exactly as a FASTA is — the same lane, the same GC
+    // at distance and residues up close — and differs only in how the bytes
+    // were packed on disk (§8.21).
+    if (format === 'fasta' || format === 'twobit') return 'sequence'
     if (format === 'bam') return 'alignments'
-    if (format === 'gtf') return 'gtf'
+    // A genePred describes what a GTF describes, in a different spelling, so it
+    // is the same kind of thing on screen: exons on a spine (§8.19).
+    if (format === 'gtf' || format === 'genepred') return 'gtf'
     // Called variants (§8.14). A `FeatureSet` like the two below, and its own
     // kind because a reader means something different by a row of it.
     if (format === 'vcf') return 'variants'
@@ -767,7 +798,10 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     return null
   }
   if (format === 'bed' || format === 'bigbed') return 'segments'
-  if (format === 'bedpe') return 'pairs'
+  // All three paired formats, because a `PairSet` is a `PairSet`: what reaches
+  // the overlay from an interact and from a bedpe is the same arrays drawn by
+  // the same arcs (§8.18).
+  if (format === 'bedpe' || format === 'interact' || format === 'longrange') return 'pairs'
   return null
 }
 

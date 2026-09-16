@@ -2926,6 +2926,186 @@ does and can be used as its legend. The colours come from the function the rende
 a bar named there in a colour it is not drawn in would be a bug in the ink rule rather than a second
 palette drifting out of step.
 
+### 8.18 Two interaction formats: interact and longrange
+
+The one thing UCSC has that this application is already about. Everything else a genome browser
+draws is a measurement *along* a genome; a contact map is a measurement *between two points of one*,
+and so are these — a ChIA-PET loop set, a promoter–enhancer call, a set of SNP→gene assignments.
+They are the annotation a reader most wants drawn **over** a Hi-C map, because whether they agree
+with the map is the whole question.
+
+| Format | On disk | Read as |
+|---|---|---|
+| `interact` | BED5+13: a bounding span, then the source and target triples with names and strands | `PairSet` |
+| `bigInteract` | the same rows in a bigBed, identified by its `autoSql` | `PairSet` |
+| `longrange` / `longTabix` | BED3 and a fourth column packing `chrom:start-end,score` | `PairSet` |
+
+**Both become a `PairSet`, which is what a bedpe becomes**, so both are drawn by code that already
+existed: arcs across the matrix on the overlay card (§8.1) and a lane of arcs in the map-less 1D
+browser. Not a line of renderer was written for either, and that is the argument for the shape rather
+than a happy accident — an `interact` and a bedpe differ in spelling and in nothing a picture can see.
+Trans interactions survive, because a `PairSet` holds a contig per end; UCSC draws the far end of one
+as a labelled vertical bar, having a single axis to draw it on, and on a contact map it is an
+ordinary off-diagonal arc.
+
+**What they were doing before.** Both are BED-shaped enough to reach `sniffFormat`, whose last line
+is `return 'bed'`, so neither was refused:
+
+- an `interact` with a fractional `value` — UCSC's own examples write `5.000000` — was **one box
+  spanning both anchors and the gap between them**, with the ten columns naming the ends never read;
+- an `interact` whose `value` happened to be a whole number matched the bedpe rule (column 3 not an
+  integer, columns 4 and 5 integers) and was read as a **bedpe**: the interaction's name became the
+  second contig and its 0–1000 score became the second start. Arcs between coordinates that were
+  never in the file;
+- a `longrange` was a BED4 whose *names* were the coordinates of the arcs.
+
+So the sniffers run in front of the BED one, and each is stricter than it. An `interact` must be
+exactly eighteen columns with integers, a score, a value, two strands **and** a bounding span that
+really bounds whichever of its own anchors sit on `chrom` — the §8.17 agreement test, which three
+unrelated columns do not satisfy by coincidence. Note what is *not* tested: that the contig columns
+are non-numeric. An Ensembl contig is called `1`, and assuming otherwise is precisely the mistake
+`sniffFormat`'s bedpe rule makes.
+
+**`score` is `value`, not the 0–1000 beside it.** That column is a display score — UCSC's own
+clamped, rounded scaling, for picking a shade of grey — and this viewer has its own scales. `value`
+is the number the pipeline computed, so it is what ranks arcs, exports and reads out under a
+pointer. The display score is kept in the detail, where a reader can see the two disagree.
+
+**A `longrange` writes every interaction twice and that is the interesting part.** The format exists
+to be `bgzip`ped and `tabix`ed, and a tabix query returns rows whose *first three columns* overlap —
+so an interaction recorded only under its left end is invisible to anybody asking about its right.
+Both ends are therefore written, as two mirrored lines. Read naively that is every loop drawn twice
+and every count wrong by a factor of two, so the reciprocal is recognised and folded, and the lane's
+summary says how many lines it folded. The key is the two ends in a fixed order **and the score**:
+two interactions over the same anchors with different scores are two interactions, and a mirror pair
+agrees about its score by construction, so exactly the duplicates the convention creates are dropped
+and nothing else.
+
+### 8.19 The genePred family
+
+`genePred`, `genePredExt` and `refFlat`: how the gene models of half the assemblies in circulation
+are actually distributed, and — measurably — what this viewer was missing. The IGV store it publishes
+dropped **29 of IGV's 63 tracks** for exactly this reason (§24.3, `docs/stores.md`), and those 29 are
+not a corner of the catalogue, they are the gene models. Every UCSC table download (`refGene`,
+`ncbiRefSeq`, `knownGene`) is this format, and so is the `refFlat` half the RNA-seq world takes as
+its annotation input.
+
+Ten columns — `name chrom strand txStart txEnd cdsStart cdsEnd exonCount exonStarts exonEnds` —
+which `genePredExt` extends by five (`score`, `name2`, two CDS status words, the exon frames) and
+`refFlat` prefixes with a gene symbol. Any of the three, out of a MySQL table rather than the
+download server, carries a leading **`bin`** index as well.
+
+**So the same ten columns start at column 0, 1 or 2, and the width cannot say which**: eleven columns
+is a `refFlat` *or* a binned `genePred`. Deciding by "does the first column look like a number" fails
+on the one gene in the file called `7SK`. What the reader does instead is **try each offset and keep
+the one where the format agrees with itself** — a strand where a strand belongs, five integers, and
+two comma lists whose length is the exon count *and* whose blocks tile the transcript from `txStart`
+to `txEnd`. Three numbers and two lists agreeing about a count and a span is a statement the file is
+making, and it is the only kind of evidence a headerless text format can offer that does not arise by
+accident. The offset is decided **per row**, which sounds lax and is the opposite: it is what reads a
+concatenated file, and a dump whose `bin` column is present on some tables and not others.
+
+**A `FeatureSet` with exons and a coding span**, which is what `parseGtf` produces — the two formats
+describe the same objects and differ only in how they spell them. The one arithmetic difference is
+that a genePred's lists are **absolute coordinates** where a BED12's are a size and an offset from the
+feature's start, and reusing the BED path would have put every exon at the transcript's start plus its
+own position.
+
+`name` and `id` follow the rule §8's `FeatureSet` already states: `id` is the accession the file is
+keyed by (`NM_001005484`), `name` is the symbol a reader looks for (`OR4F5`), and `name === id` is
+how the set says the file gave no symbol. `refFlat` keeps the symbol in front of the ten and
+`genePredExt` keeps it behind as `name2`; a binned `genePred` has neither, and its leading column is
+a number this must not offer as a gene called `585`.
+
+A **`bigGenePred`** needs none of this: its first twelve columns are a BED12, so §8.7's "read it as
+the BED it holds" already draws its exons in the right places. What its `autoSql` buys is the
+*kind* — a gene model rather than a peak set — which decides the glyph, the search box and the line
+under the label. The rows still go through `parseBed`, because they are a BED12 and there is no
+second parser to keep in step.
+
+### 8.20 bedMethyl and bigMethyl
+
+Base-resolution modification calls, as the quantitative lane they are. The human-epigenetics case is
+the obvious one and not the strongest: the strongest is **metagenomic**, because bacterial
+methylation — 6mA, 4mC, 5mC — is strain-specific and is used to *bin contigs*, which is the question
+the MAG layer exists to answer. A `modkit pileup` over an ONT or PacBio assembly is one `bedMethyl`
+and it belongs beside the contact map.
+
+BED9, then the measurement: column 10 is the read depth a call rests on and column 11 is the
+percentage modified. `modkit` appends seven counts; the older ENCODE WGBS spelling stops at eleven.
+Both are read, because the eleventh column is the whole point and everything past it is provenance.
+
+**It becomes a track**, for `annotations/signal.ts`'s reason: a modification call is a number at a
+place, so it is a `kind: 'track'` whose data stays in the worker and is sampled per view (§8.2), and
+it arrives with a range, a ceiling, an autoscale, a colour and the ⌘-scroll without any of them being
+written again. Read as the BED9 it begins with — which is what happened before — it was a lane of
+grey boxes one base wide, eighty million of them, with the percentage never mentioned. The starting
+clip is **0–100** rather than the data's own range: a methylation lane autoscaled to 12–94 % says
+nothing about how methylated anything is, and the autoscale every track has is one press away.
+
+**The one thing it refuses to invent.** A `bedMethyl` may hold more than one modification over the
+same bases — `m` and `h` at every CpG is the standard output of a 5mC/5hmC model — and those are two
+measurements, not one. There is one lane per loaded file, so the reader draws the **most abundant
+code** and says, under the lane's label, which codes were in the file and how many rows each had:
+§8.7's bargain for a truncated bigBed made again. Averaging them would produce a number that is in
+no file and is the methylation level of nothing.
+
+Strands are **not** collapsed and do not need to be: a row is one base, and the two cytosines of a
+CpG are at consecutive positions on opposite strands — two calls at two coordinates, side by side in
+one lane with nothing overlapping. A file written with `--combine-strands` has already made that
+choice. A row whose depth is zero is dropped rather than drawn as `0 %`, which would put a floor of
+confident zeroes under every uncovered base in the genome.
+
+A **`bigMethyl`** is this in a bigBed, and is the format that most needs its schema asked: its first
+nine columns *are* a valid BED9, so §8.7 produces a lane that looks entirely correct — one box per
+cytosine, in the file's own colours — and is missing the only column anybody opened the file for.
+
+### 8.21 .2bit
+
+UCSC's packed sequence format, read by byte range. §8.8 already reads a FASTA by range given a `.fai`
+beside it, so the claim here is not random access. It is three other things.
+
+**It is one file.** A ranged FASTA is two, and the second is the one people forget to publish: every
+failure mode of §8.8 — no index, an index at an address the guesser did not try, an index that does
+not match its FASTA — cannot arise, because the index *is* the file's first kilobyte.
+
+**It is four times smaller.** Two bits a base against eight, before the line endings. hg38 is 3.1 GB
+of FASTA and 800 MB of `.2bit`, and that difference decides whether a lab puts a genome on a bucket.
+
+**It is what assemblies are published as** — and, the reason this is in the same release as §24.10,
+**an assembly hub's genome is a `twoBitPath` and nothing else**. Without this reader every assembly
+hub in the world opens as tracks over coordinates the viewer cannot read. The two features are one
+feature.
+
+A 16-byte header, an index of `name → offset`, then per sequence: `dnaSize`, the N blocks, the mask
+blocks, and four bases a byte with `T C A G` for `0 1 2 3`, most significant pair first.
+
+**The N blocks are read and applied.** A run of `N` is a gap in the assembly; it is data, and the
+packed bits under one are not blank but whatever the writer left there (`T`, in every file kent
+wrote), so a reader that skipped them would draw a convincing run of thymine across every centromere
+in the genome.
+
+**The mask blocks are stepped over by arithmetic and never fetched.** They record soft-masking —
+the lowercase in a RepeatMasked FASTA — and hg38's chr1 has on the order of a million of them, eight
+megabytes of offsets, for a distinction this viewer discards twice: `render/sequence.ts` upper-cases
+every residue before drawing it, and `gcBins` counts a lowercase `c` as a `C`. Reading eight
+megabytes a chromosome to compute something nothing looks at is the cost §8.8 exists to refuse. The
+count is still read, because the packed DNA begins after them.
+
+**A long `.2bit` is refused by name rather than misread.** Version 1 is the variant with 64-bit
+offsets for files past 4 GB; nothing this viewer is likely to meet is one, and a reader guessing at
+fields it had never seen would fail far from here, in the middle of a chromosome, as wrong residues.
+The refusal names the version and the two commands that convert it.
+
+The assembly is `origin: 'twobit'` and **exact** — every `dnaSize` is in the index — so an 800 MB
+genome declares its chromosomes in a few hundred kilobytes without reading a base. The store is the
+shape `IndexedSequences` has, and for the same reason: both are "an assembly in memory and a way to
+turn a window into a byte range", and every caller above them wants exactly that. What differs is two
+lines of arithmetic. The CLI reads one the same way (`cli/tracks.ts`), through the same pure
+functions, so a metaplot over ten thousand windows of hg38 reads a few megabytes rather than
+unpacking 3.1 GB.
+
+
 ---
 
 ## 9. cool and mcool
@@ -6084,9 +6264,11 @@ The four front ends:
   file this viewer can draw, and one pre-configured session per genome. Every URL is **probed with
   a ranged GET** — the request the viewer itself makes, not a `HEAD`, because the two differ on a
   real bucket — which answers two questions at once: the size, which IGV's table does not carry,
-  and whether the file opens with no credentials. A file that does not answer gets no row, and that
-  drops more than it sounds: IGV's `refgene` tracks (29 of its 63) are UCSC `genePred` tables this
-  viewer has no parser for, and six genomes' sequences are **not public** — `igv-genepattern-org`
+  and whether the file opens with no credentials. A file that does not answer gets no row. IGV's
+  `refgene` tracks — 29 of its 63 — used to be dropped here too, being UCSC `genePred` tables this
+  viewer had no parser for; §8.19 reads them and they are published, which is most of IGV's gene
+  models arriving at once. What is still dropped is six genomes whose sequences are **not
+  public** — `igv-genepattern-org`
   answers `403 AccessDenied` anonymously, taking out IGV's own `hg38` and `hg19`, and one object on
   `igv.broadinstitute.org` takes out `rn6`. A genome whose sequence will not open is dropped whole,
   since its tracks annotate coordinates nothing can read; GRCh38 remains on the shelf through IGV's
@@ -6386,3 +6568,72 @@ Neither backend was exercised against its provider from where it was written —
 reaches neither `accounts.google.com` nor any Dropbox host — so both are asserted against their
 documented wire formats through a stubbed transport, and `docs/hosting.md` carries the manual check
 for each. What is specified above is the contract; the first sign-in is the test.
+
+### 24.10 A UCSC track hub is a store
+
+A store is somebody's shelf of data written down once, with enough about each row to choose without
+opening it (§24.1). A **track hub** is the same object, declared in a format that predates this one
+by fifteen years and is what most of the world's published genomics data is actually indexed by: a
+`hub.txt` naming a `genomes.txt` naming a `trackDb.txt` per assembly, each track a stanza with a
+`bigDataUrl` and a `type`.
+
+So `state/hub.ts` is a **translation** and not a second catalogue system. It reads the files and
+produces a `StoreFile`, and from there a hub *is* a store: the same table, the same facets, the same
+two verbs on every row, the same `?store=` in the address, the same *remember this store*, the same
+download. Nothing downstream knows what a hub is, which is what makes them first-class rather than
+bolted on.
+
+**Recognised by content, at `fetchStore`.** A hub is spotted from its first stanza — a `hub` key with
+a `shortLabel` or a `genomesFile` beside it — rather than from its URL, which is §8.3's rule applied
+a level up: a hub is routinely served from an address that says nothing (a bucket key with no suffix,
+a `?download=1`, a redirect), and a JSON store served from a file called `hub.txt` must still open as
+a store. Doing it in `fetchStore` is what makes every road a store URL travels carry a hub too, with
+none of them needing to learn the word.
+
+**The stanza format, and the three things that bite.** `ra` is `key value` a line, a blank line
+between records, `#` for a comment and a trailing `\` continuing a line. Indentation under a
+composite is presentation — what nests a track is its `parent` line and nothing else — so it is
+stripped. A repeated `track` key starts a new record even with no blank line before it, because hubs
+in the wild do not always have one and a parser that insisted would merge a composite with its first
+subtrack into one stanza whose `bigDataUrl` belongs to neither. And a `bigDataUrl` resolves against
+the **`trackDb.txt` that named it**, a `twoBitPath` against `genomes.txt`, and an `include`d file's
+tracks against *that* file: three bases, and using the hub's own for all three puts every track one
+directory up.
+
+**`useOneFile on`** puts hub, genome and track stanzas in the single file already read — what UCSC
+now recommends for a hub of a handful of tracks — and nothing further is fetched. There, ordering
+*is* the nesting: a track belongs to whichever `genome` stanza it follows.
+
+**The genome row.** An **assembly hub** carries its own sequence as `twoBitPath`, always a `.2bit`,
+which is why §8.21 is in this release rather than being a separate nicety: without it, every assembly
+hub opens as tracks over coordinates nothing can read. A **db hub** names an assembly UCSC hosts
+(`genome hg38`) and carries no sequence, so the row falls back to the `chromSizes` the hub declares,
+and failing that to the **first bigWig or bigBed in its own trackDb**, whose header carries every
+sequence and its exact length (§5.8) — the same door a dropped bigWig opens a browser through, and
+it says so in the row's note. What this deliberately does **not** do is reach for `hgdownload` to
+fetch a `chrom.sizes` nobody asked for: C1 says nothing leaves the machine that the reader did not
+ask for, and a third-party request invented by a translation layer is exactly that. A hub of nothing
+but BAMs against `hg38` therefore gets no genome row, and keeps every track row it has.
+
+**One row per genome, one per track, and the genome carries the shelf.** The genome's `tracks` are
+what the shell turns into the offer in the Tracks card once it opens (§24.1), so *open with its
+tracks* works on a hub with no session file existing anywhere: `ui/stores/ResultList.ts` takes the
+verb from a published session where there is one and from a `tracks`-carrying row where there is not.
+Rows are grouped by **assembly**, which is what a hub is, and carry the hub's own `parent` — the
+composite or super-track its author spent their time on — as the `group` column, which is the facet a
+reader of somebody else's hub will actually narrow by.
+
+**What is refused gets no row, and is counted in so many words.** A row that draws the wrong picture
+when it is pressed is worse than an absent one. `cram` is refused on its own grounds and `halSnake`
+because there is no file behind one; both are named in the store's description with their counts,
+along with any `type` this viewer has no reader for. The drawable list is UCSC's own set of remote
+types, and five of them — `bigInteract`, `interact`, `longTabix`, `bigMethyl`, `bedMethyl` — are
+readable only because of §8.18 and §8.20: before those, a hub carrying one would have got a row that
+misdrew when it was opened.
+
+**Its own tile.** A hub gets a door beside the store one on the landing page, and the argument is the
+portals': a hub is not a rarer kind of store file, it is the format an enormous amount of published
+data is already in, and a reader holding one thinks of it as *the hub*. A door that never says the
+word is a door they will not try. Nothing behind it is hub-specific — a hub pasted into the other box
+works exactly as well — and a remembered hub keeps the hub mark and the hub's grouping, because both
+are facts about the rows rather than about the door they arrived through.

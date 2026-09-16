@@ -45,6 +45,14 @@ export type AssemblyOrigin =
   // their last variant when the file says where they really end. A VCF that
   // declares no contigs is `features`, correctly, and gets the lower bound.
   | 'vcf'
+  // A `.2bit`'s index, which carries every sequence's `dnaSize` in the file's
+  // first kilobyte (§8.21). Exact, and exact *cheaply* — this is the one
+  // sequence format whose assembly is known without reading a base, which is
+  // what makes an 800 MB hg38 open as fast as a `chrom.sizes`. Its own member
+  // rather than `fasta` because the Genome card says where lengths came from,
+  // and "the sequences themselves" would be a lie about a read that never
+  // touched them.
+  | 'twobit'
 
 export interface Assembly {
   /** What names it: the URI of the file its lengths were read from. */

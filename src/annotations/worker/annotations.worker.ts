@@ -62,6 +62,24 @@ import { COMMIT, VERSION } from '../../version'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../fasta'
 import { byteRange, contigsOf as contigsOfIndex, parseFai, residuesIn, type FaiRecord } from '../fai'
 import { FASTA_NAME, guessedIndexUrl } from '../sidecar'
+import { interactSummary, isInteractSchema, parseInteract, sniffInteract } from '../interact'
+import { longRangeSummary, parseLongRange, sniffLongRange } from '../longrange'
+import { genePredSummary, isGenePredSchema, parseGenePred, sniffGenePred } from '../genepred'
+import {
+  bedMethylSummary,
+  isBedMethylSchema,
+  parseBedMethyl,
+  sniffBedMethyl,
+  type BedMethylResult,
+} from '../bedmethyl'
+import {
+  contigsOfRecords,
+  dnaByteRange,
+  looksLikeTwoBit,
+  openTwoBit,
+  unpackDna,
+  type TwoBitRecord,
+} from '../twobit'
 import {
   decodeAnnotationBytes,
   parseBed,
@@ -73,6 +91,7 @@ import type {
   BaseRegion,
   ContigOverlap,
   FeatureSet,
+  PairSet,
   ReadPile,
   ReadStyle,
   ReadWindow,
@@ -180,8 +199,18 @@ function basesOf(store: SequenceStore, name: string): Uint8Array | undefined {
   return at < 0 ? undefined : store.bases.get(store.contigs[at].name)
 }
 
-/** {@link basesOf} for an indexed store: the record, by the same ladder of names. */
-function recordOf(store: IndexedSequences, name: string): FaiRecord | undefined {
+/**
+ * {@link basesOf} for a ranged store: the record, by the same ladder of names.
+ *
+ * Generic over the two record types because the ladder is about *spelling* and
+ * knows nothing about what a record holds — and writing it twice is how the
+ * `.2bit` arm would come to disagree with the `.fai` one about which alias to
+ * try next.
+ */
+function recordOf<T extends { name: string }>(
+  store: { records: Map<string, T>; contigs: Contig[] },
+  name: string,
+): T | undefined {
   const direct = store.records.get(name)
   if (direct !== undefined) return direct
   const at = contigIndexOf(store.contigs, name)
@@ -189,22 +218,29 @@ function recordOf(store: IndexedSequences, name: string): FaiRecord | undefined 
 }
 
 /**
- * The residues `[start, end)` of one sequence of an indexed store, read by
+ * The residues `[start, end)` of one sequence of a ranged store, read by
  * range — or out of the slab the last read left, when that reaches.
  *
  * `undefined` for a name the store has not got, exactly as {@link basesOf};
  * empty for a window that holds no residues. The slab is replaced rather than
  * grown: a lane asks for a padded window and then for the next padded window,
  * and keeping both would be keeping the genome, a screen at a time.
+ *
+ * The two store kinds differ in exactly two lines — which range to ask for, and
+ * what the bytes mean once they arrive. A FASTA's are residues with line
+ * endings in them, so `residuesIn` strips those; a `.2bit`'s are four bases a
+ * byte with the assembly's gaps recorded elsewhere, so `unpackDna` expands them
+ * and paints the gaps back on. Everything around those two lines — the name
+ * ladder, the clamp, the slab — is one piece of code because it is one idea.
  */
 async function residuesOf(
-  store: IndexedSequences,
+  store: RangedSequences,
   name: string,
   start: number,
   end: number,
   report?: Report,
 ): Promise<Uint8Array | undefined> {
-  const record = recordOf(store, name)
+  const record = recordOf<FaiRecord | TwoBitRecord>(store, name)
   if (record === undefined) return undefined
   const from = Math.max(0, Math.floor(start))
   const to = Math.min(record.length, Math.ceil(end))
@@ -213,10 +249,17 @@ async function residuesOf(
   if (held !== undefined && held.start <= from && held.start + held.bases.length >= to) {
     return held.bases.subarray(from - held.start, to - held.start)
   }
-  const range = byteRange(record, from, to)
-  const bases = residuesIn(
-    await store.handle.read(range.to - range.from, range.from, report === undefined ? {} : { onProgress: report }),
-  )
+  const options = report === undefined ? {} : { onProgress: report }
+  let bases: Uint8Array
+  if (isTwoBit(store)) {
+    const packed = record as TwoBitRecord
+    const range = dnaByteRange(packed, from, to)
+    const raw = await store.handle.read(range.to - range.from, range.from, options)
+    bases = unpackDna(raw, range.firstBase, packed, from, to)
+  } else {
+    const range = byteRange(record as FaiRecord, from, to)
+    bases = residuesIn(await store.handle.read(range.to - range.from, range.from, options))
+  }
   store.held.set(record.name, { start: from, bases })
   return bases
 }
@@ -292,10 +335,58 @@ interface IndexedSequences {
   held: Map<string, { start: number; bases: Uint8Array }>
 }
 
-type Sequences = SequenceStore | IndexedSequences
+/**
+ * A `.2bit`, held as its index and read by range (§8.21).
+ *
+ * The same shape {@link IndexedSequences} has, and deliberately so: both are
+ * "an assembly in memory and a way to turn a window into a byte range", and
+ * every caller above them — the GC lane, the residue lane, the rename — wants
+ * exactly that and nothing more. What differs is two functions' worth of
+ * arithmetic (`annotations/twobit.ts`), which is why they are two types with one
+ * predicate over them rather than one type with a mode flag.
+ *
+ * The **records are read at open**, all of them, and that is the cost this
+ * format asks for: a record header is `dnaSize`, the gap runs and two counts,
+ * and there is one per sequence. For a human assembly that is a few hundred
+ * small reads out of a handle that caches 256 KiB chunks, so it is a handful of
+ * requests; for an assembly of fifty thousand scaffolds it would be worse, and
+ * `twobit.ts`'s `TWOBIT_MAX_SEQUENCES` is where that is refused rather than
+ * discovered.
+ */
+interface TwoBitSequences {
+  readonly twobit: true
+  contigs: Contig[]
+  /** By the name a sequence goes by *now*, which after a rename is the map's. */
+  records: Map<string, TwoBitRecord>
+  handle: BlobFile | RemoteFile
+  total: number
+  /** The last slab read per sequence, exactly as {@link IndexedSequences.held}. */
+  held: Map<string, { start: number; bases: Uint8Array }>
+}
+
+type Sequences = SequenceStore | IndexedSequences | TwoBitSequences
+
+/** The two that are read by range rather than held whole. */
+type RangedSequences = IndexedSequences | TwoBitSequences
 
 function isIndexed(store: Sequences): store is IndexedSequences {
   return (store as IndexedSequences).indexed === true
+}
+
+function isTwoBit(store: Sequences): store is TwoBitSequences {
+  return (store as TwoBitSequences).twobit === true
+}
+
+/**
+ * Whether this store answers a window with a read rather than with a slice.
+ *
+ * The predicate every caller outside this file's sequence section wants: the GC
+ * gate, the motif refusal and the residue path all care that a window costs a
+ * request, and none of them cares whether the arithmetic behind it is a `.fai`'s
+ * line arithmetic or a `.2bit`'s bit arithmetic.
+ */
+function isRanged(store: Sequences): store is RangedSequences {
+  return isIndexed(store) || isTwoBit(store)
 }
 
 /**
@@ -738,16 +829,19 @@ async function runTask(
     residues: (entry) => {
       const store = sequences.get(entry)
       if (store === undefined) return undefined
-      if (isIndexed(store)) {
+      if (isRanged(store)) {
         // Not held, so not searchable here — and reading it whole for the
-        // search would be the download it was indexed to avoid (§8.8).
+        // search would be the download it was indexed to avoid (§8.8, §8.21).
         return {
           contigs: store.contigs,
           bases: () => undefined,
-          refusal:
-            'This FASTA is read by range from its index rather than held, so its sequences are ' +
-            `not here to search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
-            'and can be searched.',
+          refusal: isTwoBit(store)
+            ? 'This .2bit is read by range rather than held, so its sequences are not here to ' +
+              `search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole and can be ` +
+              'searched (`twoBitToFa`).'
+            : 'This FASTA is read by range from its index rather than held, so its sequences are ' +
+              `not here to search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
+              'and can be searched.',
         }
       }
       return {
@@ -849,6 +943,17 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'fasta', contigs: store.contigs, origin: 'fasta', exact: true }
   }
 
+  // A `.2bit` answers this question better than any other sequence file can, and
+  // answers it for almost nothing: every sequence and its exact length are in
+  // the index, so an 800 MB hg38 declares its assembly in a few hundred
+  // kilobytes and never reads a base to do it (§8.21). `origin: 'twobit'`
+  // rather than `'fasta'` because the Genome card says where lengths came from,
+  // and they came from an index rather than from the residues.
+  if (looksLikeTwoBit(head)) {
+    const store = await readTwoBit(source, handle, report)
+    return { format: 'twobit', contigs: store.contigs, origin: 'twobit', exact: true }
+  }
+
   const raw = await handle.readFile({ onProgress: report })
   const bytes = await decodeAnnotationBytes(raw)
   // …and a gzipped one is only recognisable here, once it has been inflated.
@@ -903,6 +1008,37 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'barchart', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
 
+  // The same five, in the same order as `load`, and it has to be: this is what
+  // decides which road a *drop* takes, so a genePred routed as a BED here would
+  // open as one however well the loader knew better. Every one of them gives the
+  // ordinary "ends at its last feature" lower bound — none of these formats
+  // declares a genome, unlike the VCF above.
+  if (sniffInteract(text, source.name)) {
+    const data = parseInteract(text)
+    return { format: 'interact', contigs: endsOfPairs(data), origin: 'features', exact: false }
+  }
+  if (sniffLongRange(text, source.name)) {
+    const data = parseLongRange(text)
+    return { format: 'longrange', contigs: endsOfPairs(data), origin: 'features', exact: false }
+  }
+  if (sniffGenePred(text, source.name)) {
+    const data = parseGenePred(text)
+    recent = { key: cacheKey(source), format: 'genepred', features: data }
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'genepred', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+  if (sniffBedMethyl(text, source.name)) {
+    const { signal: set } = parseBedMethyl(text)
+    const ends = new Map<string, number>()
+    for (const contig of set.contigs) {
+      let furthest = 0
+      for (const end of contig.ends) if (end > furthest) furthest = end
+      note(ends, contig.name, furthest)
+    }
+    return { format: 'bedmethyl', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   const signal = sniffSignal(text)
   if (signal !== null) {
     const set = signal === 'wig' ? parseWig(text) : parseBedGraph(text)
@@ -922,12 +1058,7 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
   if (format === 'bedpe') {
     const data = parseBedpe(text)
     recent = { key: cacheKey(source), format, features: null }
-    const ends = new Map<string, number>()
-    for (let i = 0; i < data.length; i++) {
-      note(ends, data.contigs[data.contig1[i]], data.end1[i])
-      note(ends, data.contigs[data.contig2[i]], data.end2[i])
-    }
-    return { format, contigs: contigsOf(ends), origin: 'features', exact: false }
+    return { format, contigs: endsOfPairs(data), origin: 'features', exact: false }
   }
 
   const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
@@ -955,6 +1086,25 @@ function contigsOfHeader(header: { refsByNumber: Record<number, RefInfo> }): Con
 function note(ends: Map<string, number>, contig: string, end: number): void {
   const seen = ends.get(contig)
   if (seen === undefined || end > seen) ends.set(contig, end)
+}
+
+/**
+ * The inferred assembly of a paired file: both ends of every row.
+ *
+ * Both ends, which is the whole of why this is a function rather than a loop
+ * inlined at each of its three call sites (bedpe, interact, longrange). A
+ * paired format's second end is routinely on a sequence its first end never
+ * mentions — that is what a trans interaction *is* — and a reader that walked
+ * only `contig1` would open a browser missing every chromosome that appears
+ * solely as a target.
+ */
+function endsOfPairs(data: PairSet): Contig[] {
+  const ends = new Map<string, number>()
+  for (let i = 0; i < data.length; i++) {
+    note(ends, data.contigs[data.contig1[i]], data.end1[i])
+    note(ends, data.contigs[data.contig2[i]], data.end2[i])
+  }
+  return contigsOf(ends)
 }
 
 /**
@@ -1330,7 +1480,7 @@ async function load(
   const magic = bbiMagic(head)
 
   if (magic === 'bigwig') return loadBigWig(entry, source, mapContigs)
-  if (magic === 'bigbed') return loadBigBed(source, mapContigs)
+  if (magic === 'bigbed') return loadBigBed(entry, source, mapContigs)
   // Asked before the text road, and only for a BGZF file: a BAM is a BGZF
   // container, so the question is one inflate of the first block deep. A
   // bgzipped *text* file falls through it and takes the tabix path it always
@@ -1352,6 +1502,13 @@ async function load(
   }
   if (looksLikeFasta(head)) {
     return loadFasta(entry, await readSequence(source, handle, report), mapContigs)
+  }
+  // A `.2bit` is a magic number like a BBI file is, so it is settled here rather
+  // than on the text road: nothing is decompressed, nothing is sniffed, and the
+  // 800 MB the file may be is never a candidate for the whole-file read below
+  // (§8.21).
+  if (looksLikeTwoBit(head)) {
+    return loadFasta(entry, await readTwoBit(source, handle, report), mapContigs)
   }
 
   // The parse this file already had, when the browser asked what genome it was
@@ -1407,6 +1564,23 @@ async function load(
   // nine and an integer count in column 8 that matches its own list.
   if (sniffBarChart(text, source.name)) return loadBarChart(text, source.name, mapContigs)
 
+  // The five UCSC formats of §8.18–§8.20, all of them in front of the BED
+  // sniffer and every one of them for its reason. This block is the price of
+  // `sniffFormat`'s last line being `return 'bed'`: a format it has not been
+  // taught is never refused, only silently drawn as something it is not, so
+  // every format that is not a BED has to be recognised *before* it is asked.
+  //
+  // The order inside the block matters only where two could match one file, and
+  // none of these can. An interact is eighteen columns whose bounding span
+  // contains its own anchors; a longrange is four whose last packs a locus; a
+  // genePred has a strand in column 3 and two comma lists that tile a
+  // transcript; a bedMethyl is a one-base BED9 with a depth and a percentage.
+  // They are written in the order a reader is most likely to bring one.
+  if (sniffInteract(text, source.name)) return loadInteract(text, mapContigs)
+  if (sniffLongRange(text, source.name)) return loadLongRange(text, mapContigs)
+  if (sniffGenePred(text, source.name)) return loadGenePred(text, mapContigs)
+  if (sniffBedMethyl(text, source.name)) return loadBedMethyl(entry, text, mapContigs)
+
   const signal = sniffSignal(text)
   if (signal !== null) return loadSignal(entry, signal, text, mapContigs)
 
@@ -1455,6 +1629,96 @@ function loadVcf(text: string, mapContigs: NamedSequence[]): LoadResult {
       `${count(data.length)} variant${data.length === 1 ? '' : 's'}` +
       (samples === 0 ? '' : ` · ${count(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
     payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * An `interact`, text or bigBed, as the arcs it is (§8.18).
+ *
+ * One function for both roads for §8.7's reason, and here the reason is
+ * sharper than usual: a `bigInteract` is a bigBed whose *rows* are ordinary
+ * interact rows, so re-joining them into text and running this parser is not a
+ * shortcut — it is what makes the two files draw identically, down to the
+ * strand arrow in a tooltip.
+ */
+function loadInteract(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseInteract(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'interact',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: interactSummary(data),
+    payload: { kind: 'pairs', data },
+  }
+}
+
+/** A `longrange`, as the arcs it is, with its reciprocal lines folded (§8.18). */
+function loadLongRange(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseLongRange(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'longrange',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: longRangeSummary(data),
+    payload: { kind: 'pairs', data },
+  }
+}
+
+/**
+ * A `genePred`, `genePredExt` or `refFlat`, as the transcripts it holds (§8.19).
+ *
+ * Its own arm rather than a line in {@link featureResult} for `loadVcf`'s
+ * reason: the summary is the format's. A gene-model file's rows are
+ * *transcripts*, and how many of them code is the thing that explains a lane
+ * with no thick spans in it.
+ */
+function loadGenePred(text: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseGenePred(text)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'genepred',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: genePredSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * A `bedMethyl` or `bigMethyl`, as the track of percentages it is (§8.20).
+ *
+ * Registered in {@link signals} beside the bedGraphs, which is the whole of what
+ * makes it a track: `sample` looks there, so every lane, control and renderer
+ * above is unchanged — the range, the ceiling, the autoscale and the ⌘-scroll
+ * all arrive for free, exactly as they did for a bedGraph (§8.2).
+ *
+ * The extent is seeded to the file's own, which for a percentage is the one
+ * case where the honest starting clip is *not* the data's range: a lane
+ * autoscaled to 12–94 % says nothing about how methylated anything is. So the
+ * clip offered is 0–100, the scale a percentage is read against, and a reader
+ * who wants the data's own range has the autoscale button that every track has.
+ */
+function loadBedMethyl(entry: string, text: string, mapContigs: NamedSequence[]): LoadResult {
+  const result: BedMethylResult = parseBedMethyl(text)
+  const set = result.signal
+  const renaming = renameInto(
+    set.contigs.map((contig) => ({ name: contig.name })),
+    mapContigs,
+  )
+  set.contigs.forEach((contig, at) => {
+    contig.name = renaming.names[at]
+  })
+  const track = new IntervalTrack(set)
+  signals.set(entry, track)
+  const contigs = track.contigNames
+  return {
+    format: 'bedmethyl',
+    contigs,
+    overlap: overlapReport(contigs, mapContigs, renaming),
+    summary: bedMethylSummary(result),
+    fileExtent: { min: 0, max: 100 },
   }
 }
 
@@ -1593,6 +1857,39 @@ async function readFastaIndex(
   }
 }
 
+/**
+ * A `.2bit`, opened: its index read, its records read, no base fetched (§8.21).
+ *
+ * The reading itself is `annotations/twobit.ts`'s, over a `read` this supplies —
+ * so the CLI, whose handle is a local file with no progress to report, runs the
+ * same loops over the same arithmetic. What is left here is what the worker
+ * owns: the cache, and turning the records into the store the sequence lane
+ * asks questions of.
+ */
+async function readTwoBit(
+  source: WireSource,
+  handle: BlobFile | RemoteFile,
+  report: Report,
+): Promise<TwoBitSequences> {
+  const cached = recentFasta
+  if (cached !== null && cached.key === cacheKey(source) && isTwoBit(cached.store)) {
+    return cached.store
+  }
+  const file = await openTwoBit((length, position) =>
+    handle.read(length, position, { onProgress: report }),
+  )
+  const store: TwoBitSequences = {
+    twobit: true,
+    contigs: contigsOfRecords(file.ordered),
+    records: file.records,
+    handle,
+    total: file.total,
+    held: new Map(),
+  }
+  recentFasta = { key: cacheKey(source), store }
+  return store
+}
+
 function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
   if (bytes.length > FASTA_BYTE_CAP) throw tooLarge(bytes.length, source)
   const store = parseFasta(bytes)
@@ -1617,18 +1914,29 @@ function tooLarge(size: number, source: WireSource): Error {
   )
 }
 
-/** A FASTA as a row: the sequences stay here, the summary goes back. */
+/**
+ * A sequence file as a row: the sequences stay here, the summary goes back.
+ *
+ * One function for the three ways a genome arrives — a FASTA held whole, a
+ * FASTA read through its `.fai`, a `.2bit` read through its own index — because
+ * from the row's point of view they are one thing. The `format` is the only
+ * place they differ, and it differs because it is what the *bytes* were.
+ */
 function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[]): LoadResult {
   const renaming = renameSequences(store, mapContigs)
   sequences.set(entry, store)
   const names = store.contigs.map((contig) => contig.name)
   return {
-    format: 'fasta',
+    format: isTwoBit(store) ? 'twobit' : 'fasta',
     contigs: names,
     overlap: overlapReport(names, mapContigs, renaming),
     summary:
       `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp` +
-      (isIndexed(store) ? ' · read by range from its index' : ''),
+      (isTwoBit(store)
+        ? ' · read by range, two bits a base'
+        : isIndexed(store)
+          ? ' · read by range from its index'
+          : ''),
   }
 }
 
@@ -1644,14 +1952,17 @@ function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[])
 function renameSequences(store: Sequences, mapContigs: NamedSequence[]): Renaming {
   const renaming = renameInto(store.contigs, mapContigs)
   if (renaming.renamed === 0) return renaming
+  // Both ranged stores keep their sequences in a `records` map keyed by name, so
+  // one helper serves them — two call sites rather than one because narrowing a
+  // union by its records' type is what `recordOf`'s type parameter exists to
+  // avoid having to do here.
+  if (isTwoBit(store)) {
+    store.records = renameRecords(store.records, store.contigs, renaming.names)
+    store.held.clear()
+    return renaming
+  }
   if (isIndexed(store)) {
-    const records = new Map<string, FaiRecord>()
-    store.contigs.forEach((contig, at) => {
-      const record = store.records.get(contig.name)
-      contig.name = renaming.names[at]
-      if (record !== undefined) records.set(contig.name, { ...record, name: contig.name })
-    })
-    store.records = records
+    store.records = renameRecords(store.records, store.contigs, renaming.names)
     store.held.clear()
     return renaming
   }
@@ -1663,6 +1974,28 @@ function renameSequences(store: Sequences, mapContigs: NamedSequence[]): Renamin
   })
   store.bases = bases
   return renaming
+}
+
+/**
+ * A ranged store's records, re-keyed by the map's spelling of each sequence.
+ *
+ * Renames `contigs` in place as it goes, which is what the two callers'
+ * `store.contigs.forEach` used to do inline and is the half that must not be
+ * forgotten: a store whose records moved and whose contigs did not is a
+ * sequence lane that draws its ruler and no residues.
+ */
+function renameRecords<T extends { name: string }>(
+  records: Map<string, T>,
+  contigs: Contig[],
+  names: readonly string[],
+): Map<string, T> {
+  const out = new Map<string, T>()
+  contigs.forEach((contig, at) => {
+    const record = records.get(contig.name)
+    contig.name = names[at]
+    if (record !== undefined) out.set(contig.name, { ...record, name: contig.name })
+  })
+  return out
 }
 
 /**
@@ -1687,7 +2020,7 @@ async function gcSamples(
   const out: TrackSamples[] = []
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
-  if (isIndexed(store)) {
+  if (isRanged(store)) {
     // A window wider than the read it would take draws nothing, and says so
     // rather than sitting blank (§8.8). Summed over every region of the
     // request and not judged one region at a time: a whole-genome view of a
@@ -1707,7 +2040,7 @@ async function gcSamples(
   for (const region of regions) {
     if (!(region.end > region.start)) continue
     let bins
-    if (isIndexed(store)) {
+    if (isRanged(store)) {
       const from = Math.max(0, Math.floor(region.start))
       const window = await residuesOf(store, region.contig, from, region.end, report)
       if (window === undefined || window.length === 0) continue
@@ -1763,7 +2096,7 @@ async function bases(entry: string, regions: Region[], report: Report): Promise<
   let budget = BASES_PER_REQUEST
   for (const region of regions) {
     const start = Math.max(0, Math.floor(region.start))
-    if (isIndexed(store)) {
+    if (isRanged(store)) {
       const window = await residuesOf(
         store,
         region.contig,
@@ -1816,7 +2149,11 @@ const BIGBED_FEATURE_CAP = 1_000_000
  * behave the same way it does in the text file it came from — one parser, one
  * set of rules, one place where BED's quirks live.
  */
-async function loadBigBed(source: WireSource, mapContigs: NamedSequence[]): Promise<LoadResult> {
+async function loadBigBed(
+  entry: string,
+  source: WireSource,
+  mapContigs: NamedSequence[],
+): Promise<LoadResult> {
   const bigbed = new BigBed({ filehandle: handleFor(source) })
   const header = await bigbed.getHeader()
   const refs = contigsOfHeader(header)
@@ -1842,11 +2179,43 @@ async function loadBigBed(source: WireSource, mapContigs: NamedSequence[]): Prom
   // own declaration rather than a guess from its column shapes (§8.17). Asked
   // of the header, which was already read, so it costs nothing on the bigBeds
   // that are not one.
-  if (isBarChartSchema(header.autoSql ?? '')) {
+  // The three bigBed schemas whose payload is *not* in the first twelve columns,
+  // asked of the file's own autoSql. §8.7's "read it as the BED it holds" is
+  // right for bigGenePred, bigPsl, bigNarrowPeak, bigChain and bigMaf — their
+  // leading columns really are a BED12, so they draw their exons and their
+  // blocks correctly through the ordinary parser — and it is wrong for exactly
+  // these three, whose meaning starts at column 9 or 10. A bigInteract read as a
+  // BED is one box spanning both its anchors; a bigMethyl read as a BED is a
+  // perfectly plausible lane of coloured boxes with the percentage missing.
+  const schema = header.autoSql ?? ''
+  if (isBarChartSchema(schema)) {
     const result = loadBarChart(text, source.name, mapContigs)
     return truncated ? { ...result, summary: cutOff(result.summary) } : result
   }
+  if (isInteractSchema(schema)) {
+    const result = loadInteract(text, mapContigs)
+    return truncated ? { ...result, summary: cutOff(result.summary) } : result
+  }
+  if (isBedMethylSchema(schema)) {
+    const result = loadBedMethyl(entry, text, mapContigs)
+    return truncated ? { ...result, summary: cutOff(result.summary) } : result
+  }
   const data = parseBed(text, source.name)
+  // A `bigGenePred` is the one schema here that does *not* change how the rows
+  // are read — they are a BED12 and `parseBed` has already read them correctly.
+  // What it changes is what they are: a gene model rather than a peak set, which
+  // decides the kind, the glyph and the summary (`annotations/genepred.ts`).
+  if (isGenePredSchema(schema)) {
+    const renaming = renameContigs(data.contigs, mapContigs)
+    const result: LoadResult = {
+      format: 'genepred',
+      contigs: data.contigs,
+      overlap: overlapReport(data.contigs, mapContigs, renaming),
+      summary: genePredSummary(data),
+      payload: { kind: 'features', data },
+    }
+    return truncated ? { ...result, summary: cutOff(result.summary) } : result
+  }
   const result = featureResult('bigbed', data, mapContigs)
   return {
     ...result,
@@ -2755,10 +3124,12 @@ const VARIANT_BELOW = 16
 function residuesFor(region: Region): { start: number; bases: Uint8Array } | undefined {
   const start = Math.max(0, Math.floor(region.start))
   for (const store of sequences.values()) {
-    if (isIndexed(store)) {
-      // Never fetched for (§8.13): what an indexed sequence has is the slab
-      // its own lane last drew, and the pile reads that or nothing.
-      const record = recordOf(store, region.contig)
+    if (isRanged(store)) {
+      // Never fetched for (§8.13): what a ranged sequence has is the slab its
+      // own lane last drew, and the pile reads that or nothing. True of a
+      // `.2bit` for the same reason it is true of an indexed FASTA — colouring
+      // a read pile is not worth a request, whichever format would serve it.
+      const record = recordOf<FaiRecord | TwoBitRecord>(store, region.contig)
       const slab = record === undefined ? undefined : store.held.get(record.name)
       if (slab === undefined) continue
       const end = Math.min(slab.start + slab.bases.length, Math.ceil(region.end))

@@ -47,6 +47,15 @@ import { LocalFile } from 'generic-filehandle2'
 import { decodeAnnotationBytes, decodeAnnotationText } from '../annotations/parse'
 import { gcBins, looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { IntervalTrack, parseBedGraph, parseWig, sniffSignal } from '../annotations/signal'
+import { parseBedMethyl, sniffBedMethyl } from '../annotations/bedmethyl'
+import {
+  contigsOfRecords,
+  dnaByteRange,
+  looksLikeTwoBit,
+  openTwoBit,
+  unpackDna,
+  type TwoBitRecord,
+} from '../annotations/twobit'
 import type { Region, TrackSampleSet, TrackSamples } from '../annotations/types'
 import { bbiMagic } from '../annotations/worker/protocol'
 import type { Contig } from '../genome/assembly'
@@ -58,7 +67,7 @@ export interface LoadedTrack {
   readonly path: string
   /** The file's base name, which is what a figure calls it. */
   readonly name: string
-  readonly format: 'bigwig' | 'bedgraph' | 'wig' | 'fasta'
+  readonly format: 'bigwig' | 'bedgraph' | 'wig' | 'fasta' | 'bedmethyl' | 'twobit'
   /** The sequences the file itself names, with the lengths it states. */
   readonly contigs: readonly Contig[]
   sample(regions: readonly Region[], basesPerPixel: number): Promise<TrackSampleSet>
@@ -91,14 +100,26 @@ async function loadTrack(path: string): Promise<LoadedTrack> {
       `${name} is a bigBed, which is a feature set and not a signal: name it with --features.`,
     )
   }
+  // Settled by magic, before anything is decompressed, exactly as the worker
+  // settles it — and never read whole: a `.2bit` of a human genome is 800 MB on
+  // disk and 3.1 GB unpacked, so the CLI reads it by range just as the browser
+  // does (§8.21).
+  if (looksLikeTwoBit(raw.subarray(0, 4))) return twoBitTrack(path, name)
   const bytes = await decodeAnnotationBytes(raw)
   if (looksLikeFasta(bytes)) return gcTrack(path, name, parseFasta(bytes))
   const text = await decodeAnnotationText(bytes)
+  // Asked before `sniffSignal` for the reason it is asked before it everywhere:
+  // a bedMethyl is a BED9 with the measurement past column 9, and nothing that
+  // reads it as anything else will find that column (§8.20).
+  if (sniffBedMethyl(text, name)) {
+    const { signal } = parseBedMethyl(text)
+    return signalTrack(path, name, 'bedmethyl', new IntervalTrack(signal), signal)
+  }
   const format = sniffSignal(text)
   if (format === null) {
     throw new Error(
-      `${name} is not a track this command can sample: a bigWig, a bedGraph, a wig, or a FASTA ` +
-        '(read as GC content) are.',
+      `${name} is not a track this command can sample: a bigWig, a bedGraph, a wig, a bedMethyl, ` +
+        'a FASTA or a .2bit (the last two read as GC content) are.',
     )
   }
   const set = format === 'wig' ? parseWig(text) : parseBedGraph(text)
@@ -185,7 +206,7 @@ async function openBigWig(path: string, name: string): Promise<LoadedTrack> {
 function signalTrack(
   path: string,
   name: string,
-  format: 'bedgraph' | 'wig',
+  format: 'bedgraph' | 'wig' | 'bedmethyl',
   track: IntervalTrack,
   set: { contigs: ReadonlyArray<{ name: string; ends: Int32Array }> },
 ): LoadedTrack {
@@ -250,6 +271,81 @@ export function gcTrack(path: string, name: string, store: SequenceStore): Loade
         const seq = basesOf(region.contig)
         if (seq === undefined || !(region.end > region.start)) continue
         const bins = gcBins(seq, region.start, region.end, basesPerPixel)
+        for (const value of bins.values) {
+          if (!Number.isFinite(value)) continue
+          if (value < min) min = value
+          if (value > max) max = value
+        }
+        out.push({
+          contig: region.contig,
+          start: region.start,
+          end: region.end,
+          starts: bins.starts,
+          ends: bins.ends,
+          values: bins.values,
+          min: null,
+          max: null,
+          variant: null,
+          summary: true,
+        })
+      }
+      return { basesPerPixel, regions: out, extent: min <= max ? { min, max } : null }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// .2bit, as GC content
+// ---------------------------------------------------------------------------
+
+/**
+ * A `.2bit` as a GC track, read by range (§8.21).
+ *
+ * The browser's arrangement, without the browser: `openTwoBit` reads the index
+ * and the records, and every sampled window is one ranged read and one unpack.
+ * What it must not do is what {@link gcTrack} does — hold the sequences — and
+ * the reason is the same one the worker gives, in the units a command line
+ * cares about: a metaplot over ten thousand windows of hg38 reads a few
+ * megabytes this way and 3.1 GB the other.
+ *
+ * No slab cache, unlike the worker's. A CLI run samples each window once, in
+ * one pass, so there is no second question about a window to answer from a
+ * cache — and a cache sized for a genome-wide run is the memory this avoids.
+ */
+async function twoBitTrack(path: string, name: string): Promise<LoadedTrack> {
+  const handle = new LocalFile(path)
+  const file = await openTwoBit((length, position) => handle.read(length, position))
+  const recordOf = (contig: string): TwoBitRecord | undefined => {
+    const direct = file.records.get(contig)
+    if (direct !== undefined) return direct
+    const at = contigIndexOf(file.ordered, contig)
+    return at < 0 ? undefined : file.ordered[at]
+  }
+  return {
+    path,
+    name,
+    format: 'twobit',
+    contigs: contigsOfRecords(file.ordered),
+    sample: async (regions, basesPerPixel) => {
+      const out: TrackSamples[] = []
+      let min = Number.POSITIVE_INFINITY
+      let max = Number.NEGATIVE_INFINITY
+      for (const region of regions) {
+        const record = recordOf(region.contig)
+        if (record === undefined || !(region.end > region.start)) continue
+        const from = Math.max(0, Math.floor(region.start))
+        const to = Math.min(record.length, Math.ceil(region.end))
+        if (!(to > from)) continue
+        const range = dnaByteRange(record, from, to)
+        const packed = await handle.read(range.to - range.from, range.from)
+        const window = unpackDna(packed, range.firstBase, record, from, to)
+        const bins = gcBins(window, 0, window.length, basesPerPixel)
+        // The window's own coordinates, put back on the sequence's — the
+        // worker's `gcSamples` does exactly this and for the same reason.
+        for (let i = 0; i < bins.starts.length; i++) {
+          bins.starts[i] += from
+          bins.ends[i] += from
+        }
         for (const value of bins.values) {
           if (!Number.isFinite(value)) continue
           if (value < min) min = value

@@ -713,23 +713,33 @@ describe.skipIf(!havePython)('the IGV front end', () => {
     // wants the FASTA. The session below is the third answer.
     const roles = (store.entries ?? []).map((entry) => (entry.fields as Record<string, string>).role)
     expect(roles.filter((role) => role === 'sequence')).toHaveLength(6)
-    expect(roles.filter((role) => role === 'annotation')).toHaveLength(9)
+    expect(roles.filter((role) => role === 'annotation')).toHaveLength(10)
   })
 
-  it('skips a refgene track rather than writing a row that cannot open', () => {
-    // 29 of IGV's 63 tracks are UCSC genePred tables in a `.txt.gz`, which this
-    // viewer has no parser for. A row for one would fail when it was clicked,
-    // and the count is logged so the gap is known rather than discovered.
+  it('publishes a refgene track, now that genePred is read', () => {
+    // **This test used to assert the opposite**, and the entry it was pinning
+    // is the one `docs/stores.md` recorded as a known gap: 29 of IGV's 63
+    // tracks are UCSC genePred tables in a `.txt.gz`, and a row for one would
+    // have failed when it was clicked. SPECS §8.19 reads the format, so the
+    // rows are written — which is most of IGV's gene models arriving at once.
     const text = JSON.stringify(store)
-    expect(text).not.toContain('ncbiRefSeq.txt.gz')
-    expect(text).not.toContain('refGene.sorted.txt.gz')
-    // hg38 publishes exactly one track and it is a refgene, so the genome is a
-    // row with no tracks at all — which is the honest answer.
-    const hg38 = (store.entries ?? []).find(
-      (entry) => (entry.fields as Record<string, string>).assembly === 'hg38',
+    expect(text).toContain('ncbiRefSeq.txt.gz')
+    // …and under the format they share, so one tick of the Format facet finds
+    // every gene-model table whatever UCSC called the file.
+    const genes = (store.entries ?? []).find(
+      (entry) => (entry.fields as Record<string, string>).format === 'genepred',
     )
-    expect(hg38?.tracks).toBeUndefined()
-    expect(String(hg38?.note)).toContain('no tracks this viewer can draw')
+    expect(genes).toBeDefined()
+    // hg38 publishes exactly one track and it is that refgene, so the genome
+    // row now carries it on its shelf where it used to carry nothing.
+    const hg38 = (store.entries ?? []).find(
+      (entry) =>
+        (entry.fields as Record<string, string>).assembly === 'hg38' &&
+        (entry.fields as Record<string, string>).role === 'sequence',
+    )
+    expect((hg38?.tracks as Array<{ label: string }>).map((track) => track.label)).toEqual([
+      'Refseq Genes',
+    ])
   })
 
   it('hangs the genome row’s companions off it, as the demos hang theirs', () => {
