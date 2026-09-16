@@ -19,11 +19,15 @@ row — which also makes the deck available to a session that has tracks and no 
 
 Revision 3 settles the questions revision 2 left open, with the author's answers: a g3d's
 resolution is the spacing of its sorted starts and nothing else, and it is independent of the
-map's rung; the file is text, possibly gzipped, and is read whole over HTTP like any other text
-annotation — there is no binary road; a phased file draws both homologues; a tracks cell draws
+map's rung; the text file, possibly gzipped, is read whole over HTTP like any other text
+annotation; a phased file draws both homologues; a tracks cell draws
 from the session's one track list, with the edge controls inactive where there is no map; one
 structure cell per deck, two being a future suggestion rather than a plan item; and the vector PDF
 of beads and sticks is in the first release.
+
+Revision 4 adds WashU's **binary** `.g3d` to phase 2, read by a reader written here under the
+app's own byte source and checked bead for bead against `g3djs`, which is a test dependency and
+never a runtime one (§2.6).
 
 ---
 
@@ -32,7 +36,7 @@ of beads and sticks is in the first release.
 | Question | Answer | Why, in one line |
 |---|---|---|
 | Is it worth having? | Yes, scoped tightly | This app's niche — small genomes, whole blocks in memory, analysis in the browser — is where a consensus 3D model is cheapest to make and most defensible to show; and reading g3d makes every structure WashU can show openable here with no conversion, and every structure made here openable there |
-| What file? | **WashU's g3d text format** (`chrom start x y z [hap]`), named `.g3d`, or the same gzipped as `.g3d.gz`, local or by URL | The format WashU specifies as the input of `g3dtools`; read whole in the annotations worker like every other text annotation, so a `.g3d.gz` on a bucket is one request |
+| What file? | **Both of WashU's g3d files**: the text (`chrom start x y z [hap]`, as `.g3d` or `.g3d.gz`) in phase 1, and the **binary `.g3d` container** the WashU browser loads in phase 2, told apart by content | The text is what `g3dtools` takes and is read whole like any text annotation; the binary is indexed and range-readable, so a large one on a bucket costs a handful of bounded reads. The binary reader is written here under the app's own byte source, with `g3djs` as a test-only oracle, exactly as `.hic` was done against `hic-straw` |
 | Where does it live? | **A cell of the deck**, where a cell may be a map, a stack of tracks, or a structure | A structure is a *picture of a place*; the deck is the app's word for pictures of one place beside each other under one navigation. Generalising the cell is what also lets a tracks-only cell exist and lets a 1D session have a deck |
 | How is the file held? | **An annotation row** (`kind: 'structure'`) | The store already gives it sniffing, contig-name matching, haplotype as a colour field, persistence, share links and every export; the 3D panel is a *view of a row*, never a second loading path |
 | How is it drawn? | **three.js**, pinned, behind a thin adapter over a pure scene | Lit tubes, instanced beads, fat lines, transparency, outlines, raycast picking, orbit and trackball controls — the interactions the author wants as first-class, at a cost this project can now afford to state in the open |
@@ -78,9 +82,11 @@ not close the door on (3) is the right shape.
 
 What this app would add, and each is something it already is:
 
-- **The text opens as it is.** Every viewer above loads a packed container built from it. Reading
-  WashU's g3d text directly (§2.2) keeps C3 true for a structure, and a file that opens here is the
-  file WashU's own `g3dtools load` takes, so it opens there after that one step.
+- **Both of WashU's files open, and the text opens as it is.** Every viewer above loads only the
+  packed container. Reading the text directly (§2.2) keeps C3 true for a structure and means a
+  solver's output needs no step at all; reading the container too (§2.6) means every model already
+  published for the WashU browser opens here, and every model made here opens there after one
+  `g3dtools load`.
 - **The colouring is computed in the same window.** Compartments, insulation, coverage, a virtual
   4C, and on a `.metacool` the contig table's own MGE call and completeness, are one click away and
   are already tracks (§18.5). No hosted viewer closes that loop, because none computes anything.
@@ -169,7 +175,7 @@ opens; the `.gz` suffix is what the reader is told to expect and what the demo w
 | `bed6+xyz` | a BED with three columns on the end; the first draft's primary. Kept as a secondary road because it is what anybody with a spreadsheet writes, and because today such a file is **silently read as a broadPeak** (`peakFlavour`, `src/annotations/parse.ts:289`) — the sniff must run before it | 2 |
 | pastis `.xyz` / `.structure` text | `x y z` per bead in bin order, no loci; bridged against the map's own bin arithmetic when the row count matches, refused by name otherwise with the `paste` one-liner that joins the bin table on | 2 |
 | FOF-CT, `.cndb`, Spacewalk `.sw` | ensembles; the `frame` axis of §8.3; `h5wasm` is already here for the HDF5 ones | 3 |
-| the packed container `g3dtools load` writes, which WashU's browser loads and which may also be named `.g3d` | indexed, multi-resolution, range-readable; told apart from the text by its magic bytes | a future suggestion (§13), not a plan item; refused by name until then |
+| **the binary `.g3d`** `g3dtools load` writes and WashU's browser loads | a container: a header with a magic, a JSON-described index of chromosomes, resolutions, haplotypes and samples, and compressed blocks per (chromosome, resolution, haplotype, sample) — see §2.6 | **2** — an in-house reader, `g3djs` as the test oracle |
 
 ### 2.2 Recognising the text
 
@@ -193,11 +199,57 @@ and `sniffBedMethyl`, walking the first few hundred rows the way `looksLikeBarCh
 Collisions checked: a five-column file is a BED5 only if column 3 is an integer end ≥ column 2,
 which a coordinate fails whenever it is fractional or negative; a bedGraph is four columns; the
 peak flavours are nine, ten and fifteen. The extension (`.g3d`, `.g3d.gz`, `.3dg`) is a tiebreak,
-never the test, as in every sniffer here — and the packed container `g3dtools load` writes may
-carry the same `.g3d` name (WashU's own example input is `test.g3d.bed.gz`, so the convention is
-loose on both sides), which is why the name cannot decide on its own: the container opens with a
-magic the text cannot, and a `.g3d` that starts with it is refused by name with the
-future-suggestion's wording (§13) rather than parsed as text.
+never the test, as in every sniffer here — and the binary `.g3d` carries the same name (WashU's
+own example input is `test.g3d.bed.gz`, so the convention is loose on both sides), which is why
+the name cannot decide on its own. The binary is recognised first, by its magic in the first bytes,
+on the rung of the ladder where BBI, BGZF, FASTA and 2bit are recognised (`annotations.worker.ts:1479-1512`),
+before any text sniffer is asked; a file that is neither falls through to the text sniffers as
+now. One name, two formats, decided by content — the same arrangement a `.bed` that is really a
+narrowPeak already gets.
+
+### 2.6 The binary `.g3d`: a reader written here, checked against `g3djs`
+
+The WashU browser reads its container with `g3djs`. That package is not taken at runtime, for the
+reason `package.json` gives for `hic-straw` and `@gmod/bam`: every read in this app goes through a
+byte source that counts its requests, caches its chunks and signs them where a bucket needs it,
+and a parser that fetches for itself sits outside all three. So the reader is written under
+`src/annotations/g3dBinary.ts` against the existing `ByteSource`, from the format's public
+description and `g3dtools`' own writer, and **`g3djs` becomes a devDependency the tests read the
+fixtures with** — the arrangement that caught the `.hic` endianness bug on its first run, and the
+one `test/unit/bam-oracle.test.ts` repeats for BAM.
+
+What the reader does, in the shape the `.hic` reader has (`src/hic/`):
+
+- **Open**: the header and the index in a bounded number of range requests — the index names every
+  chromosome, resolution, haplotype and sample the file holds, with the offset and length of each
+  block. That listing is what the row's summary and the picker below are built from, and nothing
+  else is read at open.
+- **Load a model**: one block per (chromosome, haplotype) at the chosen resolution and sample,
+  coalesced into as few range requests as the offsets allow, decompressed in the worker, and
+  handed to the same `FeatureBuilder` the text goes through — so from the row down, a binary g3d
+  and a text g3d are the same `FeatureSet` with the same `model` field, and the scene, the bridge,
+  the colours and the panel cannot tell them apart. A local file is read in place; a remote one is
+  a handful of requests, which is the §12 row below.
+- **Resolution and sample are the row's choice.** A binary g3d carries a ladder of resolutions
+  (`g3dtools` writes coarser rungs by averaging) and may carry several samples or cells. The row
+  opens at the **finest** resolution and the first sample, and its menu offers the others, the way
+  a companion map's `::1000` picker offers a rung (§16.2). The rung chosen is the structure's fixed
+  spacing for as long as it is chosen: it stays independent of the map's rung (§2.1), and switching
+  it is a new load of the blocks, never a resampling. Choosing the rung from the zoom automatically
+  is a future suggestion (§13), not a plan item.
+- **Haplotypes** in the container are the same `m`/`p`/`s` the text has, and become chains the
+  same way.
+
+| Operation | Budget |
+|---|---|
+| Open a binary `.g3d`: magic, header, index | ≤ 3 range requests, once |
+| One model (every chromosome, both haplotypes, one resolution, one sample) | ≤ 2 coalesced range requests per chromosome; 0 for a local file |
+| Every frame, gesture and change of the map's rung | 0 requests |
+| Switching the structure's resolution or sample | one model's reads again |
+
+Fixtures are written by `g3dtools` itself over the demo models (§9.2) so the oracle and the
+reader read a file neither wrote — a round trip against this app's own writer would prove only
+that two halves of one implementation agree, which is the lesson §18.10 records.
 
 ### 2.3 One row in the store, one kind in the union
 
@@ -668,6 +720,7 @@ line and a drop.
 
 ```
 src/annotations/g3d.ts                 sniffG3d, parseG3d (barchart.ts's shape); the width inference; the 3dg name rule
+src/annotations/g3dBinary.ts           phase 2: magic, header, index, blocks by range request under ByteSource (src/hic/'s shape)
 src/structure/scene.ts                 Structure, Chain, normalise, beadsAt/beadsIn/lociOf, haplotypes
 src/structure/camera.ts                the camera object, orbit/dolly/pan/fit as arithmetic
 src/structure/colour.ts                the colour-by resolvers over the annotation store
@@ -677,6 +730,8 @@ src/panels/StructurePanel.ts           the deck occupant: el, apply, applyLook, 
 src/panels/TracksPanel.ts              stage C: a BrowserView in a cell, as a one-axis LockMember
 src/ui/hoverLocus.ts                   the pointer's place, readout.ts's shape
 test/unit/g3d-parse.test.ts            the sniff against BED5/6/9, bedGraph, the peak flavours, 3dg; the width from unsorted rows with gaps; a .gz
+test/unit/g3d-binary-oracle.test.ts    phase 2: every bead of a g3dtools-written fixture equal between this reader and g3djs; skipped by name without fixtures
+test/budgets/structure.test.ts         phase 2: the open and one-model request counts of §2.6 against a CountingRangeSource
 test/unit/structure-scene.test.ts      bridge arithmetic at a width the bin does not divide, two haplotypes, gaps, circular contigs, above-bin, a rung change
 test/unit/structure-camera.test.ts     matrices and fits, goldens computed independently
 test/unit/structure-painter.test.ts    drawingOf: discs and segments in depth order, no gradients, the lit ones last
@@ -692,7 +747,8 @@ Touched: `annotations/types.ts`, `featureset.ts`, `loader.ts`, `store.ts`, `work
 `app/Session.ts`; `ui/MatrixPanel.ts` (`showLocusEcho`, two store writes), `ui/BrowserView.ts`
 (the store write, the echo guide, the member), `ui/AnnotationCard.ts`, `ui/SequenceCard.ts`,
 `ui/laneSettings.ts` (the greyed edges); `styles.css`; `package.json` (`three`, pinned, with a
-`comments` entry in the existing register); `vite.*.config.ts` (the chunk).
+`comments` entry in the existing register; in phase 2 `g3djs` as a **devDependency** with a
+`comments` entry in `hic-straw`'s words, never a runtime one); `vite.*.config.ts` (the chunk).
 
 Documentation, in the shape the last feature landed in: a numbered `SPECS.md` section (§25) with
 its §12 row and its refusals, and a paragraph in §16 for the generalised cell; a `CHANGELOG.md`
@@ -703,7 +759,8 @@ format list; `GLOSSARY.md` entries for **structure**, **model**, **bead**, **cha
 ### 9.2 Demo data
 
 `scripts/make_structure_demo.py` runs `pastis-mds` over `demo/ecoli` and `demo/yeast` at a coarse
-bin and writes `Ecoli.g3d.gz` and `Yeast_microC.g3d.gz`, recording in its docstring what it was checked against — and
+bin and writes `Ecoli.g3d.gz` and `Yeast_microC.g3d.gz`, and in phase 2 runs `g3dtools load` over
+each to write the binary beside it as the oracle fixture, recording in its docstring what it was checked against — and
 checks the written file opens in `g3dtools`, which is the independent reader the format has. The
 yeast model shows the Rabl arrangement at a glance — centromeres clustered, arms radiating — and is
 the picture the README can show. The author's own phased example is the haplotype fixture, if it
@@ -766,7 +823,7 @@ can be shared.
 | **1 — the cell** | the scene and camera; the three.js adapter with beads, sticks, tube, opacity, depth cue, lighting; both homologues of a phased file; the structure cell from a drop, a `+` cell or a link; hover both ways with the chord and the readout; click to pin, shift-click to mark, double-click to go; colour by sequence, haplotype, position, score; show/hide by navigation, Sequences ticks and key chips; **vector PDF of beads and sticks through the painter, raster PDF/PNG of the tube**, and the deck figure; `v` gains a structure-alone stop; SPECS §25, CHANGELOG with measured sizes, GLOSSARY, README, `GAPS.md` narrowed, demo models | ~3,300 lines + ~1,100 tests | 0, A |
 | **C — the tracks cell** | one-axis lock members; a `BrowserView` in a cell over the file's `/chroms`, drawing from the session's one track list; the greyed edge buttons; `maps=…|tracks|…` | ~700 lines + tests | A |
 | **D — the deck without a map** | the browser as lead; the gate split; a map companion beside a browser lead; `.metacool` allowances | ~400 lines + tests | C |
-| **2 — the colours and the roads** | colour by any track, feature set, metadata column, marks, the pin's distance and contacts; loops as chords; bookmarks as labels; pick mode; `.3dg`, `bed6+xyz` (fixing the broadPeak misread), pastis `.xyz` against the map's bins | ~1,700 lines + tests | 1 |
+| **2 — the colours and the roads** | colour by any track, feature set, metadata column, marks, the pin's distance and contacts; loops as chords; bookmarks as labels; pick mode; **the binary `.g3d` reader** under the byte source with its resolution and sample picker, `g3djs` as devDependency oracle, fixtures written by `g3dtools`, a budgets test; `.3dg`, `bed6+xyz` (fixing the broadPeak misread), pastis `.xyz` against the map's bins | ~2,400 lines + tests | 1 |
 | **3 — the instrument** | model-versus-map task; the spatial tracks; frames, ensembles and point clouds with FOF-CT and `.cndb` | ~2,000 lines + tests | 2, and someone with ensembles |
 
 Phase 0 is worth doing on its own. 1 does not wait for C or D, which is why the structure lands
@@ -782,9 +839,10 @@ the door on them:
 - **Two structure cells in one deck** — two models of one map, or a model against a simulation —
   under one navigation. The design allows it (a cell is a view of a row) and the plan excludes it;
   it would need `3d:<label>` in the link and a way to say which row a cell shows.
-- **The packed g3d container** `g3dtools load` writes and WashU's browser loads — indexed,
-  multi-resolution, range-readable, with samples. Worth it the day a bucket serves one that is too
-  large to read whole, with `g3djs` as the test oracle the way `hic-straw` is for `.hic`.
+- **Choosing a binary g3d's resolution from the zoom**, the way the map refines on crossing its
+  grid (§2): a whole-genome view reading the coarse rung and a region the fine one. The reader in
+  §2.6 makes it one call; what is not settled is whether a structure that changes its bead count
+  under the hand is wanted, given that the map's own refinement is off by default for that reason.
 - **A port of `pastis-mds`** for small genomes in the analysis worker, under §18.9's bar (§8.4).
 - **Coarsening a model** the way `g3dtools` does, by averaging beads, so a whole-genome view of a
   fine model draws fewer beads. Cheap, and unneeded at the sizes in §6.4.
