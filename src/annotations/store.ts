@@ -49,6 +49,7 @@ import {
   normalisePlacement,
   placementOn,
   readStyleOf,
+  structureStyleOf,
 } from './types'
 import { featureStyleOf } from './fields'
 
@@ -1033,7 +1034,9 @@ export class AnnotationStore {
       // object, which is enough to hand a renderer a negative MAPQ floor or a
       // colouring it has never heard of — see {@link readStyleOf}.
       rows.push(
-        row.style.reads === undefined && row.style.features === undefined
+        row.style.reads === undefined &&
+          row.style.features === undefined &&
+          row.style.structure === undefined
           ? row
           : {
               ...row,
@@ -1048,6 +1051,12 @@ export class AnnotationStore {
                 ...(row.style.features === undefined
                   ? {}
                   : { features: featureStyleOf(row.style.features, row.kind) }),
+                // …and a third time for a model's controls (§25), where the
+                // unclamped values are a radius of a million and an opacity a
+                // renderer would draw as more than opaque.
+                ...(row.style.structure === undefined
+                  ? {}
+                  : { structure: structureStyleOf(row.style.structure) }),
               },
             },
       )
@@ -1244,7 +1253,7 @@ function sideOf(placement: Placement): LaneEdge | 'neither' {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas|g3d|3dg)(\.gz)?$/i,
     '',
   )
 }

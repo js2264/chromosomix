@@ -24,6 +24,7 @@ import {
 } from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { barChartSummary, isBarChartSchema, parseBarChart, sniffBarChart } from '../barchart'
+import { g3dSummary, parseG3d, sniffG3d } from '../g3d'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
 import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
@@ -997,6 +998,16 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'vcf', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
 
+  // A structure dropped on an empty session declares a genome the way any
+  // feature file does — every sequence ends at its last bead — and opens a
+  // browser over it (§5.8, §25). Same place in the order as in `load`.
+  if (sniffG3d(text, source.name)) {
+    const data = parseG3d(text, source.name)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   // Same place in the order as in `load`, and it has to be: this decides which
   // road a *drop* takes, and a barChart routed as a BED here would open as one
   // however well the loader knew better (§8.17). Its lengths are the ordinary
@@ -1556,6 +1567,13 @@ async function load(
   // so neither can capture the other whichever order they are asked in.
   if (sniffVcf(text)) return loadVcf(text, mapContigs)
 
+  // A 3D model (§25), asked here for the reason every sniffer in this block is:
+  // a five-column g3d read as a BED is a lane of boxes whose "end" is a
+  // coordinate in space. It cannot capture a VCF (eight columns, a non-integer
+  // in column 2) and nothing below it can capture a g3d (five or six columns,
+  // three coordinates where a BED has an integer end).
+  if (sniffG3d(text, source.name)) return loadG3d(text, source.name, mapContigs)
+
   // Third of the three, and stricter than the BED sniffer it precedes for the
   // same reason the two above are (§8.17): a barChart read as a BED is a lane
   // of boxes whose ninth column — the whole of what the file is about — was
@@ -1743,6 +1761,27 @@ function loadBarChart(
     contigs: data.contigs,
     overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary: barChartSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * A g3d, read into beads with a place on each (§25).
+ *
+ * Its own arm for the summary's sake, which is the one place the inferred
+ * spacing is said: a reader whose file was meant to be at 10 kb reads `1.04 Mb`
+ * under the row and has been told the one thing this reader could have got
+ * wrong. The rename into the map's vocabulary is the generic one, so `chr7`
+ * meets `7` here exactly as a BED's does.
+ */
+function loadG3d(text: string, fileName: string, mapContigs: NamedSequence[]): LoadResult {
+  const data = parseG3d(text, fileName)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'structure',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: g3dSummary(data),
     payload: { kind: 'features', data },
   }
 }

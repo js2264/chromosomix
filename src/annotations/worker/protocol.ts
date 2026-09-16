@@ -83,6 +83,12 @@ export type DetectedFormat =
   // own so that the lane can say which modification it is drawing and which
   // ones it is not.
   | 'bedmethyl'
+  // A 3D model of the fibre (§25): WashU's g3d, as the text `g3dtools` takes or
+  // as the container it writes. One member for both, for the reason `barchart`
+  // is one for its text and its bigBed: what a reader has is a structure, and
+  // the two answers to "what is this" that matter downstream — the kind it
+  // becomes and the shape of its payload — are the same for both.
+  | 'structure'
   | 'sizes'
   | 'hdf5'
   | 'fasta'

@@ -178,13 +178,36 @@ describe('what counts as a set of intervals', () => {
     // be aggregated over and must not be offered — and one that *is* must be,
     // which is what a barChart added here is about: its rows are intervals
     // whatever is drawn inside them, and a metaplot over them is a reading
-    // nobody should have to convert a file to ask for (§8.17).
+    // nobody should have to convert a file to ask for (§8.17). A structure's
+    // beads are the same argument once more: an interval that has a place in
+    // space is still an interval (§25).
     expect(KINDS.filter(isIntervalSet).sort()).toEqual([
       'barchart',
       'gtf',
       'segments',
+      'structure',
       'variants',
     ])
+  })
+})
+
+/**
+ * A structure is a fifth feature kind, and beside a map nothing more than that.
+ *
+ * §8.14's argument for a variant set, made for a model (§25): a `FeatureSet`
+ * like a peak set, so no payload arm, no lane renderer and no cache had to be
+ * written for the boxes it draws beside a map. What it has besides is a place
+ * per bead, and the place is read by a cell of the deck rather than by a lane —
+ * so the kind answers no profile question, and it is an interval set.
+ */
+describe('a structure', () => {
+  it('draws no profile and gets no track controls', () => {
+    expect(drawsAProfile('structure')).toBe(false)
+    expect(hasAMovableAxis('structure')).toBe(false)
+    expect(hasTrackControls('structure')).toBe(false)
+    expect(drawnFromSamples('structure')).toBe(false)
+    expect(readsAlignments('structure')).toBe(false)
+    expect(isMetadata('structure')).toBe(false)
   })
 })
 

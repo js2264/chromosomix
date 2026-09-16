@@ -76,6 +76,9 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
+  // WashU's g3d, text or container, and Dip-C's `.3dg` which is the same text
+  // with the haplotype folded into the chromosome's name (§25).
+  if (/\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'structure' }
   return { card: 'linear', kind: 'segments' }
 }
 
@@ -748,6 +751,10 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'genepred':
     case 'bedmethyl':
     case 'twobit':
+    // A model's beads are intervals along one axis and its picture is a cell of
+    // the deck, which is neither card: the row lives with the tracks, where its
+    // lane of boxes is drawn, and the cell reads the row (§25).
+    case 'structure':
       return 'linear'
     default:
       return null
@@ -792,6 +799,9 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // be a box — so it is a kind rather than a `segments` with a column nothing
     // reads.
     if (format === 'barchart') return 'barchart'
+    // A 3D model (§25): a set of intervals that carry a place in space, and its
+    // own kind because the picture that reads the place is a cell of the deck.
+    if (format === 'structure') return 'structure'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
     if (format === 'bed' || format === 'bigbed') return 'segments'
