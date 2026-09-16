@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 62,
-      "commit": "56ee5af",
+      "commit": "513db16",
       "title": "Read five UCSC formats, and open a track hub as a store (§8.18–§8.21, §24.10)",
       "branch": "claude/ucsc-genome-formats-dkhme2",
-      "date": "2026-09-16T00:47:03Z"
+      "date": "2026-09-16T06:46:02Z"
     }
   ]
 }
