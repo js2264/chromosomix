@@ -1253,7 +1253,7 @@ function sideOf(placement: Placement): LaneEdge | 'neither' {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas|g3d|3dg)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas|g3d|3dg|bed3d)(\.gz)?$/i,
     '',
   )
 }

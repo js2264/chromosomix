@@ -70,6 +70,24 @@ export type PanelRef =
   | { kind: 'remote'; uri: string }
   | { kind: 'local'; uri: string }
   | { kind: 'vacant' }
+  // A cell that is not a map (§25, §16.11). A **structure** cell draws the
+  // session's 3D model beside the maps; a **tracks** cell draws the session's
+  // tracks alone, on one axis, as the 1D browser does. Neither has a file of
+  // its own to name: the structure is a row of the session's track list and
+  // the tracks are that list, so the link carries a word rather than a URI.
+  | { kind: 'structure' }
+  | { kind: 'tracks' }
+
+/** What a structure cell is written as in the `maps` key. */
+export const STRUCTURE_REF = '3d'
+
+/** What a tracks cell is written as in the `maps` key. */
+export const TRACKS_REF = 'tracks'
+
+/** Whether a ref names a map — a file with a worker behind it. */
+export function isMapRef(ref: PanelRef): ref is { kind: 'remote' | 'local'; uri: string } {
+  return ref.kind === 'remote' || ref.kind === 'local'
+}
 
 /**
  * The separator between URIs in the `maps` key.
@@ -116,7 +134,13 @@ export function serialiseMaps(refs: readonly PanelRef[]): string | undefined {
       // would double-encode it and cost the readability the pipe was chosen for
       // — `maps=a.cool|b.cool` is a list at a glance and
       // `maps=http%3A%2F%2F…` is not.
-      ref.kind === 'remote' ? ref.uri.split(MAPS_SEPARATOR).join(ESCAPED_SEPARATOR) : VACANT,
+      ref.kind === 'remote'
+        ? ref.uri.split(MAPS_SEPARATOR).join(ESCAPED_SEPARATOR)
+        : ref.kind === 'structure'
+          ? STRUCTURE_REF
+          : ref.kind === 'tracks'
+            ? TRACKS_REF
+            : VACANT,
     )
     .join(MAPS_SEPARATOR)
 }
@@ -134,10 +158,19 @@ export function parseMaps(value: string | undefined): PanelRef[] {
   for (const part of value.split(MAPS_SEPARATOR)) {
     const trimmed = part.trim()
     if (trimmed === '') continue
+    // One structure cell per deck (§25): a second `3d` in a link is dropped
+    // rather than opened twice, since both would show the one row the session
+    // has. A tracks cell may be repeated — two stacks of the session's tracks
+    // beside two maps is a legitimate arrangement.
+    if (trimmed === STRUCTURE_REF && refs.some((ref) => ref.kind === 'structure')) continue
     refs.push(
       trimmed === VACANT
         ? { kind: 'vacant' }
-        : { kind: 'remote', uri: trimmed.split(ESCAPED_SEPARATOR).join(MAPS_SEPARATOR) },
+        : trimmed === STRUCTURE_REF
+          ? { kind: 'structure' }
+          : trimmed === TRACKS_REF
+            ? { kind: 'tracks' }
+            : { kind: 'remote', uri: trimmed.split(ESCAPED_SEPARATOR).join(MAPS_SEPARATOR) },
     )
     if (refs.length >= MAX_PANELS - 1) break
   }
@@ -324,7 +357,8 @@ export function sameRefs(a: readonly PanelRef[], b: readonly PanelRef[]): boolea
   if (a.length !== b.length) return false
   return a.every((ref, index) => {
     const other = b[index]
-    return ref.kind === other.kind && (ref.kind === 'vacant' || ref.uri === (other as { uri: string }).uri)
+    if (ref.kind !== other.kind) return false
+    return !isMapRef(ref) || ref.uri === (other as { uri: string }).uri
   })
 }
 

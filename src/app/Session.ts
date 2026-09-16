@@ -101,6 +101,7 @@ import { driveFileName } from '../browse/driveName'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
+import { isStructureName } from '../annotations/g3d'
 import {
   assemblyOf,
   browsingBinsize,
@@ -3347,6 +3348,7 @@ export class Session {
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addUrl(path, label, placement)
+    this.openStructureCell(path)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue
@@ -3421,6 +3423,7 @@ export class Session {
     // here without being asked *here* — see the hook's own comment for why it
     // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
+    this.openStructureCell(file.name)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -3432,6 +3435,22 @@ export class Session {
         held.store.placeOn(entry.id, map, entry.placement)
       }
     }
+  }
+
+  /**
+   * A structure file arrived: put the cell that draws it beside the map (§25).
+   *
+   * By the file's *name*, because this runs the moment the file is handed to
+   * the loader and before anything has read it; a structure under another
+   * name lands in the Tracks card as a row and the reader opens its cell from
+   * the deck's own bar. One cell per deck, which `PanelDeck.add` keeps, so a
+   * second g3d replaces the picture rather than adding a cell. Nothing where
+   * there is no map to put it beside yet (§25 stage D).
+   */
+  private openStructureCell(name: string): void {
+    if (!isStructureName(name)) return
+    if (this.file === null || !this.deckIsPossible) return
+    this.ensureDeck().add({ kind: 'structure' })
   }
 
   /**
@@ -5184,6 +5203,19 @@ export class Session {
       // both rebuilt from this session's memory on `sessionChanged`. The same
       // line the annotation store subscribes with, for the same reason.
       onLooksChange: () => this.host.sessionChanged(this),
+      // What a structure cell draws and where its gestures go (§25). The store
+      // is asked each time rather than captured: a browser session replaces
+      // its annotation machinery when its lengths are, and a cell holding the
+      // old store would draw a row nobody can see in the Tracks card.
+      structure: {
+        store: () => this.annotations?.store,
+        manual: () => this.annotations?.manual,
+        onGoTo: (range) => this.goToLocus(formatLocus(range)),
+        onDrop: (file) => this.dropped(file),
+        onDropUrl: (url) => {
+          void this.addRemote(url, { kind: 'remote', url })
+        },
+      },
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in

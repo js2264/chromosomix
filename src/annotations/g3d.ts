@@ -52,6 +52,31 @@ import { DETAIL_SEP, type FeatureSet } from './types'
  */
 export const G3D_FIELD_HAPLOTYPE = 'haplotype'
 
+/**
+ * Whether a file **name** says it is a structure — `.g3d`, the text g3dtools
+ * takes or the container it writes, or a `.3dg`, gzipped or not.
+ *
+ * By name only, which is what a road that has not read the file yet can ask:
+ * the deck routing a drop to its structure cell, the session deciding to open
+ * one. A structure under another name is still read as one by
+ * {@link sniffG3d}; it simply arrives as a row without opening a cell.
+ */
+export function isStructureName(name: string): boolean {
+  const last = name.split(/[\\/]/).pop() ?? name
+  return /\.(g3d|3dg|bed3d)(\.txt)?(\.gz)?$/i.test(last.split(/[?#]/)[0] ?? last)
+}
+
+/**
+ * The two text layouts a structure comes in.
+ *
+ * `g3d` is WashU's: `chrom start x y z [haplotype]`, no end column, the bead
+ * width inferred from the spacing of the starts. `bed3d` is the same file with
+ * the end written down — `chrom start end x y z [haplotype]` — for a model
+ * whose beads are the bins of a map, or of any width a BED can say. One
+ * reader for both; the layout is the one thing that differs.
+ */
+export type StructureLayout = 'g3d' | 'bed3d'
+
 /** The three category names `g3dtools` writes, from the letters it accepts. */
 const SHARED = 'shared'
 const MATERNAL = 'maternal'
@@ -96,7 +121,27 @@ const COHERENT_STEP = 1 / 3
  * format has answered the question that test was asking.
  */
 export function sniffG3d(text: string, fileName = ''): boolean {
-  const named = /\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(fileName)
+  return sniffStructure(text, fileName, 'g3d')
+}
+
+/**
+ * Whether these lines are a bed3d: `chrom start end x y z [haplotype]`.
+ *
+ * The same five tests as {@link sniffG3d}, one column to the right, plus an
+ * integer end after the integer start. A BED6 is kept out twice over: its
+ * fourth column is a name, its sixth a strand, and neither is a finite number
+ * — and a BED of integer coordinates that happens to be numeric in every
+ * column still has to be named `.bed3d` to be read as one.
+ */
+export function sniffBed3d(text: string, fileName = ''): boolean {
+  return sniffStructure(text, fileName, 'bed3d')
+}
+
+function sniffStructure(text: string, fileName: string, layout: StructureLayout): boolean {
+  const named =
+    layout === 'g3d'
+      ? /\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(fileName)
+      : /\.bed3d(\.txt)?(\.gz)?$/i.test(fileName)
   const sample: Row[] = []
   let fractional = false
   let index = 0
@@ -114,7 +159,7 @@ export function sniffG3d(text: string, fileName = ''): boolean {
     if (line === '' || line.charCodeAt(0) === 35) continue
     if (line.startsWith('track ') || line.startsWith('browser ')) continue
     const columns = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/)
-    const row = rowOf(columns)
+    const row = rowOf(columns, layout)
     if (row === null) return false
     if (!Number.isInteger(row.xyz[0]) || !Number.isInteger(row.xyz[1]) || !Number.isInteger(row.xyz[2])) {
       fractional = true
@@ -132,6 +177,8 @@ export function sniffG3d(text: string, fileName = ''): boolean {
 interface Row {
   contig: string
   start: number
+  /** The bead's own end, where the layout writes one (`bed3d`); else `null`. */
+  end: number | null
   xyz: [number, number, number]
   hap: string
 }
@@ -145,16 +192,25 @@ interface Row {
  * `g3dtools` writes, so a `.3dg` and a g3d of the same model name their
  * homologues the same way.
  */
-function rowOf(columns: string[]): Row | null {
-  if (columns.length < 5 || columns.length > 6) return null
+function rowOf(columns: string[], layout: StructureLayout): Row | null {
+  // Where the coordinates start: after the start in a g3d, after the end in a
+  // bed3d. Everything after them reads the same.
+  const at = layout === 'g3d' ? 2 : 3
+  if (columns.length < at + 3 || columns.length > at + 4) return null
   if (!isInteger(columns[1])) return null
-  const x = Number(columns[2])
-  const y = Number(columns[3])
-  const z = Number(columns[4])
-  if (columns[2] === '' || columns[3] === '' || columns[4] === '') return null
+  let end: number | null = null
+  if (layout === 'bed3d') {
+    if (!isInteger(columns[2])) return null
+    end = Number(columns[2])
+    if (end <= Number(columns[1])) return null
+  }
+  const x = Number(columns[at])
+  const y = Number(columns[at + 1])
+  const z = Number(columns[at + 2])
+  if (columns[at] === '' || columns[at + 1] === '' || columns[at + 2] === '') return null
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null
   let contig = columns[0]
-  let hap = columns[5]
+  let hap = columns[at + 3]
   if (hap !== undefined) {
     if (!/^[A-Za-z][\w.-]*$/.test(hap)) return null
   } else {
@@ -165,7 +221,7 @@ function rowOf(columns: string[]): Row | null {
     }
   }
   if (contig === '') return null
-  return { contig, start: Number(columns[1]), xyz: [x, y, z], hap: categoryOf(hap) }
+  return { contig, start: Number(columns[1]), end, xyz: [x, y, z], hap: categoryOf(hap) }
 }
 
 /** The category name a row's sixth column means, in `g3dtools`' own words. */
@@ -257,6 +313,23 @@ export function widthOf(groups: Iterable<readonly number[]>): number {
   return width
 }
 
+/** The commonest of some lengths, ties to the smaller; 1 where there are none. */
+function modeOf(lengths: readonly number[]): number {
+  const votes = new Map<number, number>()
+  for (const length of lengths) {
+    if (length > 0) votes.set(length, (votes.get(length) ?? 0) + 1)
+  }
+  let width = 1
+  let best = 0
+  for (const [length, count] of votes) {
+    if (count > best || (count === best && length < width)) {
+      best = count
+      width = length
+    }
+  }
+  return width
+}
+
 /**
  * Read a g3d into beads with a place on each.
  *
@@ -267,18 +340,34 @@ export function widthOf(groups: Iterable<readonly number[]>): number {
  * written in any order comes out with every bead at its own locus.
  */
 export function parseG3d(text: string, fileName = ''): FeatureSet {
+  return parseStructure(text, fileName, 'g3d')
+}
+
+/**
+ * Read a bed3d — {@link parseG3d} with the end column taken from the file.
+ *
+ * The width under the row is the commonest bead length rather than the
+ * commonest spacing: a bed3d says how wide each bead is, and the number a
+ * reader checks is the one they wrote.
+ */
+export function parseBed3d(text: string, fileName = ''): FeatureSet {
+  return parseStructure(text, fileName, 'bed3d')
+}
+
+function parseStructure(text: string, fileName: string, layout: StructureLayout): FeatureSet {
   const rows: Row[] = []
   let skipped = 0
   forEachRow(text, (columns) => {
-    const row = rowOf(columns)
+    const row = rowOf(columns, layout)
     if (row === null) skipped++
     else rows.push(row)
   })
   if (rows.length === 0) {
+    const shape = layout === 'g3d' ? 'chromosome, start, x, y, z' : 'chromosome, start, end, x, y, z'
     throw new Error(
       skipped > 0
-        ? `No usable rows: all ${skipped} lines failed the "chromosome, start, x, y, z" test that ` +
-          'a g3d begins with.'
+        ? `No usable rows: all ${skipped} lines failed the "${shape}" test that ` +
+          `a ${layout} begins with.`
         : `${fileName === '' ? 'This file' : fileName} has no rows.`,
     )
   }
@@ -295,14 +384,15 @@ export function parseG3d(text: string, fileName = ''): FeatureSet {
     if (held === undefined) starts.set(key, [row.start])
     else held.push(row.start)
   }
-  const width = widthOf(starts.values())
+  const width =
+    layout === 'g3d' ? widthOf(starts.values()) : modeOf(rows.map((row) => (row.end ?? row.start) - row.start))
   // Written only where it tells two beads apart: a haploid file's rows all
   // saying `haplotype shared` would offer the picker a category with one
   // level, which is a colouring that colours nothing.
   const phased = haplotypes.length > 1
   const builder = new FeatureBuilder()
   for (const row of rows) {
-    builder.add(row.contig, row.start, row.start + width, {
+    builder.add(row.contig, row.start, row.end ?? row.start + width, {
       xyz: row.xyz,
       hap: hapIds.get(row.hap) ?? 0,
       detail: phased ? `${G3D_FIELD_HAPLOTYPE} ${row.hap}` : '',

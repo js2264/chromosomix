@@ -9,6 +9,7 @@
  */
 
 import type { NamedSequence } from '../genome/naming'
+import { isStructureName } from './g3d'
 
 import type { AnnotationStore } from './store'
 import { defaultStyle } from './types'
@@ -78,7 +79,7 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   // WashU's g3d, text or container, and Dip-C's `.3dg` which is the same text
   // with the haplotype folded into the chromosome's name (§25).
-  if (/\.(g3d|3dg)(\.txt)?(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'structure' }
+  if (isStructureName(name)) return { card: 'linear', kind: 'structure' }
   return { card: 'linear', kind: 'segments' }
 }
 

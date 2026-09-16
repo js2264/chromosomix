@@ -210,6 +210,10 @@ import {
 import { openMenu, type MenuItem } from './Menu'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
+import { setHoverPlace } from './hoverLocus'
+
+/** What a contact map calls itself when it publishes the place under its pointer. */
+export const HOVER_SOURCE_MAP = 'map'
 import { revealTrack } from './revealTrack'
 import {
   MATRIX_OPTIONS,
@@ -6956,11 +6960,10 @@ export class MatrixPanel {
 
   /** Hand the current lane hover to whoever is listening, in matrix units. */
   private reportLaneHover(): void {
-    const listen = this.laneHoverListener
-    if (listen === null) return
     const guide = this.laneHover
     if (guide === null) {
-      listen(null)
+      this.laneHoverListener?.(null)
+      setHoverPlace(null)
       return
     }
     // The same conversion {@link paintLaneGuide} makes, and for the same reason
@@ -6971,7 +6974,47 @@ export class MatrixPanel {
     const unit = horizontal
       ? this.heatmap.scaleX.toUnit(guide.along - plot.x)
       : this.heatmap.scaleY.toUnit(guide.along - plot.y)
-    listen({ axis: horizontal ? 'cols' : 'rows', unit })
+    this.laneHoverListener?.({ axis: horizontal ? 'cols' : 'rows', unit })
+    // One place, for a structure cell (§25): a pointer on a track names a
+    // locus and not a contact, so one locus is what goes out.
+    const axis = horizontal ? this.locusAxes.cols : this.locusAxes.rows
+    const locus = axis?.unitToLocus(unit) ?? null
+    setHoverPlace(locus === null ? null : { loci: [locus], source: HOVER_SOURCE_MAP })
+  }
+
+  /**
+   * Show a place named by something that is not a map — a bead of a structure
+   * cell (§25) — or stop showing it.
+   *
+   * A bead is *one* genomic place, so it takes the lane-echo shape and not the
+   * cell-echo one: the small guide on the diagonal and a tick in the stacks on
+   * that axis, which is what a pointer on another panel's track already gets.
+   * Converted through the column axis, which is the one that means position in
+   * both presentations, and through `locusToUnits`' first answer — a circular
+   * sequence panned across its junction is on the axis twice, and one mark is
+   * what a place gets.
+   */
+  showLocusEcho(locus: { contig: string; bp: number } | null): void {
+    if (locus === null) {
+      this.showLaneEcho(null)
+      return
+    }
+    const units = this.locusAxes.cols?.locusToUnits(locus.contig, locus.bp) ?? []
+    this.showLaneEcho(units.length === 0 ? null : { axis: 'cols', unit: units[0] })
+  }
+
+  /**
+   * The stretches of sequence on screen, per axis, for a cell that lights what
+   * the deck is looking at (§25).
+   *
+   * Empty above bin level, where a cell is a whole sequence and a window
+   * inside one would be an invention, and empty before a block has arrived.
+   */
+  framedRanges(): { rows: LocusWindow[]; cols: LocusWindow[] } {
+    return {
+      rows: this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY),
+      cols: this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX),
+    }
   }
 
   /**
@@ -7643,6 +7686,25 @@ export class MatrixPanel {
     // has to be told on every move — including the move off the edge, which is
     // what takes the other panels' marks away with the pointer.
     if (moved) this.hoverListener?.(cell === null ? null : { row: cell.row, col: cell.col })
+    // …and the *place*, for whatever is not a map: a structure cell lights the
+    // beads at both ends of the contact under the pointer (§25). Published as
+    // loci rather than cells because a bead has no cell to be converted into,
+    // and through the square block so a turned map names the contact it is
+    // over rather than a band row and a half-bin.
+    if (moved) {
+      const at = cell === null || this.data === null ? null : this.locusOf(cell)
+      setHoverPlace(
+        at === null
+          ? null
+          : {
+              loci: [
+                { contig: at.rows.contig, bp: at.rows.bp },
+                { contig: at.cols.contig, bp: at.cols.bp },
+              ],
+              source: HOVER_SOURCE_MAP,
+            },
+      )
+    }
 
     if (cell === null || this.data === null) {
       setReadout('')

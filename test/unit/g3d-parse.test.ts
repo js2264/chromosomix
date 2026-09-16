@@ -23,7 +23,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { sniffBarChart } from '@/annotations/barchart'
-import { G3D_FIELD_HAPLOTYPE, g3dSummary, parseG3d, sniffG3d, widthOf } from '@/annotations/g3d'
+import {
+  G3D_FIELD_HAPLOTYPE,
+  g3dSummary,
+  isStructureName,
+  parseBed3d,
+  parseG3d,
+  sniffBed3d,
+  sniffG3d,
+  widthOf,
+} from '@/annotations/g3d'
 import { fieldLevels, featureFields } from '@/annotations/fields'
 import { featureRange } from '@/annotations/featureset'
 import { cardFor, kindFor } from '@/annotations/loader'
@@ -316,5 +325,88 @@ describe('the structure style', () => {
     expect(read.haplotype).toBe('paternal')
     expect(structureStyleOf(null)).toEqual(defaultStructureStyle())
     expect(structureStyleOf('tube')).toEqual(defaultStructureStyle())
+  })
+})
+
+// ---------------------------------------------------------------------------
+// bed3d: the same file with the end written down
+// ---------------------------------------------------------------------------
+
+/** A chain of ten 5 kb beads with their ends, and two on a second sequence. */
+const BED3D = [
+  ...Array.from({ length: 10 }, (_, i) => `chr1\t${i * 5000}\t${(i + 1) * 5000}\t${i * 0.9}\t${i * 0.4 - 1}\t${0.3 * i}`),
+  'chr2\t0\t5000\t12.5\t-3.0\t0.25',
+  'chr2\t5000\t10000\t13.1\t-2.6\t0.4',
+].join('\n')
+
+describe('bed3d', () => {
+  it('is chromosome, start, end, x, y, z — a BED3 with a place on each row', () => {
+    expect(sniffBed3d(BED3D)).toBe(true)
+    // …and not a g3d: a g3d's sixth column is a haplotype, and `5000` is not.
+    expect(sniffG3d(BED3D)).toBe(false)
+  })
+
+  it('leaves a BED6 alone, whose name and strand are not coordinates', () => {
+    const bed6 = ['chr1\t0\t5000\tpeak1\t900\t+', 'chr1\t5000\t10000\tpeak2\t850\t-'].join('\n')
+    expect(sniffBed3d(bed6)).toBe(false)
+    // A numeric name and score still leave a strand, which is not a number.
+    const numeric = ['chr1\t0\t5000\t1\t900\t+', 'chr1\t5000\t10000\t2\t850\t-'].join('\n')
+    expect(sniffBed3d(numeric)).toBe(false)
+  })
+
+  it('refuses an end that is not after its start', () => {
+    const backwards = BED3D.replace('chr1\t5000\t10000', 'chr1\t5000\t5000')
+    expect(sniffBed3d(backwards)).toBe(false)
+  })
+
+  it('needs a fractional or negative coordinate, unless it is named .bed3d', () => {
+    const lattice = ['chr1\t0\t5000\t0\t0\t0', 'chr1\t5000\t10000\t1\t0\t0'].join('\n')
+    expect(sniffBed3d(lattice)).toBe(false)
+    expect(sniffBed3d(lattice, 'model.bed3d')).toBe(true)
+    expect(sniffBed3d(lattice, 'model.bed3d.gz')).toBe(true)
+  })
+
+  it('takes each bead\'s end from the file and reports the commonest width', () => {
+    const set = parseBed3d(BED3D)
+    expect(set.length).toBe(12)
+    expect(set.model?.width).toBe(5000)
+    expect(set.start[0]).toBe(0)
+    expect(set.end[0]).toBe(5000)
+    // A bead of another width keeps its own.
+    const mixed = parseBed3d(BED3D + '\nchr2\t10000\t12000\t14.0\t-2.0\t0.5')
+    const last = mixed.length - 1
+    expect(mixed.end[last] - mixed.start[last]).toBe(2000)
+    expect(mixed.model?.width).toBe(5000)
+    expect(g3dSummary(mixed)).toContain('5 kb')
+  })
+
+  it('reads a seventh column as the haplotype, as a g3d reads its sixth', () => {
+    const phased = [
+      'chr1\t0\t5000\t0.1\t0.2\t0.3\tm',
+      'chr1\t0\t5000\t1.1\t1.2\t1.3\tp',
+      'chr1\t5000\t10000\t0.4\t0.5\t0.6\tm',
+      'chr1\t5000\t10000\t1.4\t1.5\t1.6\tp',
+    ].join('\n')
+    expect(sniffBed3d(phased)).toBe(true)
+    const set = parseBed3d(phased)
+    expect(set.model?.haplotypes).toEqual(['maternal', 'paternal'])
+    expect(fieldLevels(set, G3D_FIELD_HAPLOTYPE)).toEqual(['maternal', 'paternal'])
+  })
+
+  it('is a structure by name, with its gzipped and URL forms', () => {
+    expect(isStructureName('model.bed3d')).toBe(true)
+    expect(isStructureName('https://x.org/dir/model.bed3d.gz?token=1')).toBe(true)
+    expect(isStructureName('model.g3d')).toBe(true)
+    expect(isStructureName('model.3dg.txt.gz')).toBe(true)
+    expect(isStructureName('model.bed')).toBe(false)
+    expect(isStructureName('model.bed3d.bw')).toBe(false)
+    expect(cardFor('structure')).toBe('linear')
+    expect(kindFor('linear', 'structure')).toBe('structure')
+  })
+
+  it('cannot capture the sniffers asked before it', () => {
+    expect(sniffBarChart(BED3D)).toBe(false)
+    expect(sniffSignal(BED3D)).toBe(null)
+    expect(sniffVcf(BED3D)).toBe(false)
   })
 })

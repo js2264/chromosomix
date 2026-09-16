@@ -27,7 +27,7 @@ import {
   type ConfigRefusal,
   type SessionConfig,
 } from '@/state/SessionConfig'
-import { MAPS_SEPARATOR, VACANT, parseMaps, type PanelRef } from '@/panels/deck'
+import { MAPS_SEPARATOR, VACANT, isMapRef, parseMaps, type PanelRef } from '@/panels/deck'
 import { recall, remember } from '@/state/UiMemory'
 import { DEFAULT_UI_PLOT_OPTIONS } from '@/ui/plotOptions'
 import { COMMIT, PRODUCER } from '@/version'
@@ -480,7 +480,7 @@ describe('what a tab carries beyond its tracks', () => {
  */
 /** A ref's URI, or `undefined` for a vacancy — which has none by construction. */
 function uriOf(ref: PanelRef | undefined): string | undefined {
-  return ref === undefined || ref.kind === 'vacant' ? undefined : ref.uri
+  return ref !== undefined && isMapRef(ref) ? ref.uri : undefined
 }
 
 describe('resolveConfig', () => {
