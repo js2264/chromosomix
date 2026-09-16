@@ -25,17 +25,21 @@
  * else silently did not exist inside them. Fourteen declarations cannot drift
  * from themselves.
  *
- * Contrast is deliberate and was raised once: the borders and the two sunken
- * greys were pale enough that a card read as floating on nothing and a table's
- * rules disappeared on a projector. A hairline that cannot be seen is not a
- * quiet hairline, it is a missing one.
+ * The greys are **neutral**, not blue. They had a cool cast all the way down —
+ * `#c8cdd4`, `#98a1ac`, `#4a5058` are all a blue-grey — and a blue-grey chrome
+ * around a blue accent leaves the accent nothing to be: the one coloured thing
+ * on screen has to sit on something that is not already tinted towards it.
+ * They are lighter with it, `--bg-sunken` back up to `#f5f6f8`, because the
+ * surfaces are what a card floats on and the *borders* are what carry the
+ * contrast. A hairline that cannot be seen is not a quiet hairline, it is a
+ * missing one; a fill that cannot be seen is just the page, which is fine.
  */
 :root,
 :root[data-theme='light'],
 .content,
 .analysis-figure {
   --bg: #ffffff;
-  --bg-sunken: #eef0f3;
+  --bg-sunken: #f5f6f8;
   --bg-raised: #ffffff;
   /*
    * A surface that is *present and inert*: a control listed because the reader
@@ -43,12 +47,12 @@
    * from `--bg-sunken`, which is a well things sit in, and from `--bg-raised`,
    * which is a live card.
    */
-  --bg-muted: #e2e5e9;
-  --border: #c8cdd4;
-  --border-strong: #98a1ac;
-  --text: #14161a;
-  --text-dim: #4a5058;
-  --text-faint: #6d747d;
+  --bg-muted: #e9eaec;
+  --border: #d2d3d6;
+  --border-strong: #a5a7ab;
+  --text: #17181a;
+  --text-dim: #54565a;
+  --text-faint: #7b7d81;
   --accent: #1f5fa9;
   --accent-soft: #dce8f7;
   --danger: #a32020;
@@ -76,7 +80,7 @@
    * while the paint is see-through. Opaque, they can overlap by any amount and
    * the tab is one colour.
    */
-  --tab-rest: #e3e5e9;
+  --tab-rest: #eaebed;
   /*
    * Two elevations, and no third.
    *
@@ -86,8 +90,8 @@
    * black shadow over a warm white reads as grey dirt, and over the dark theme
    * it reads as nothing at all, which is why the dark values are not these.
    */
-  --shadow-1: 0 1px 2px rgb(20 22 26 / 7%), 0 1px 1px rgb(20 22 26 / 4%);
-  --shadow-2: 0 6px 18px -10px rgb(20 22 26 / 30%), 0 2px 5px -3px rgb(20 22 26 / 16%);
+  --shadow-1: 0 1px 2px rgb(24 24 26 / 7%), 0 1px 1px rgb(24 24 26 / 4%);
+  --shadow-2: 0 6px 18px -10px rgb(24 24 26 / 30%), 0 2px 5px -3px rgb(24 24 26 / 16%);
 }
 
 :root {
@@ -145,15 +149,15 @@
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-  --bg: #16181c;
-  --bg-sunken: #101216;
-  --bg-raised: #20242b;
-  --bg-muted: #141619;
-  --border: #3a414b;
-  --border-strong: #565e6a;
-  --text: #eceef2;
-  --text-dim: #b0b7c2;
-  --text-faint: #858d99;
+  --bg: #191a1c;
+  --bg-sunken: #131416;
+  --bg-raised: #232529;
+  --bg-muted: #161719;
+  --border: #3e4044;
+  --border-strong: #5a5c61;
+  --text: #eeeff1;
+  --text-dim: #b3b5b9;
+  --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
   --danger: #ef8a8a;
@@ -161,7 +165,7 @@
   --ok: #6cc48f;
   --warn: #e3a857;
   --warn-soft: #3b2d15;
-  --tab-rest: #272b33;
+  --tab-rest: #2a2b2e;
   /* Deeper and softer than the light theme's: on ink there is no shading to
      be had from darkening, so what separates a raised surface from the page
      is the spread rather than the density. */
@@ -172,15 +176,15 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #16181c;
-  --bg-sunken: #101216;
-  --bg-raised: #20242b;
-  --bg-muted: #141619;
-  --border: #3a414b;
-  --border-strong: #565e6a;
-  --text: #eceef2;
-  --text-dim: #b0b7c2;
-  --text-faint: #858d99;
+  --bg: #191a1c;
+  --bg-sunken: #131416;
+  --bg-raised: #232529;
+  --bg-muted: #161719;
+  --border: #3e4044;
+  --border-strong: #5a5c61;
+  --text: #eeeff1;
+  --text-dim: #b3b5b9;
+  --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
   --danger: #ef8a8a;
@@ -188,7 +192,7 @@
   --ok: #6cc48f;
   --warn: #e3a857;
   --warn-soft: #3b2d15;
-  --tab-rest: #272b33;
+  --tab-rest: #2a2b2e;
   --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 1px rgb(0 0 0 / 28%);
   --shadow-2: 0 8px 22px -10px rgb(0 0 0 / 66%), 0 2px 6px -3px rgb(0 0 0 / 44%);
 }
@@ -5264,16 +5268,18 @@ canvas.is-frozen {
   line-height: 1.2;
 }
 
-/* Two lines, and the third is clipped rather than allowed to set the height of
-   the whole row: the tiles are a grid of equal cells, so one long sentence
-   costs every tile beside it the same height. The full text is on the tile's
-   `title`, which is where the small tiles have always kept it. */
+/* Two lines, reserved rather than enforced.
+
+   It was a `line-clamp`, which is the wrong tool twice over: it clipped a
+   sentence mid-word, and it made the tile's height depend on how long that
+   sentence happened to be. The lines are written to fit now
+   (`stores/tiles.ts`), so nothing is cut; the `min-height` is what keeps a
+   one-line tile the same height as a two-line one, which is what makes eight
+   of them read as a grid rather than as eight boxes. A line that somehow
+   overruns grows the row instead of losing a word — the full text is on the
+   tile's `title` in both sizes. */
 .store-tile-blurb {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
+  min-height: 2.6em;
   color: var(--text-dim);
   font-size: var(--step--2);
   line-height: 1.3;
@@ -5300,29 +5306,6 @@ canvas.is-frozen {
 .store-tiles-small .store-tile-name {
   font-size: var(--step--1);
   font-weight: 500;
-}
-
-/* Colour arrives with the pointer.
-
-   A row of seven saturated logos is seven things shouting at once, and a
-   reader looking for one of them has to read all seven. Held down to a third
-   of their saturation the row reads as a *set* — seven shapes, one weight —
-   and the one under the pointer is the only coloured thing on screen, which is
-   the cheapest pointer feedback there is.
-
-   On the mark rather than on the tile, because the name and the line under it
-   are already drawn in text tokens: desaturating the whole tile would move
-   them for no reason and cost contrast on the words. The open store keeps its
-   colour at rest — it is not a thing to find, it is where you are. */
-.store-tile .store-mark {
-  filter: saturate(0.3);
-  transition: filter 140ms ease;
-}
-
-.store-tile:hover .store-mark,
-.store-tile:focus-visible .store-mark,
-.store-tile.is-on .store-mark {
-  filter: saturate(1);
 }
 
 /* The mark: a rounded square in the store's colour, the word in white. */

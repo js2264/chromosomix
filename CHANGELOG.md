@@ -15,15 +15,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 ### Changed
 
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you
-  reach them.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
+  is marked.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
   gone — between them a fifth of a laptop screen, and what was below the fold was the third of the
   three things the page offers. The target now says *Drop genomic files here* and *or click to
   choose*, and nothing else. Each of the three headings leads with the mark that thing already wears
   elsewhere — a file, `folder-tree` from the Files column, `library` from the store drawer — because
   three bold lines down one column read as one section with emphasis in it rather than as three
-  doors. The store tiles are held at a third of their saturation until the pointer reaches one, so
-  the row reads as a set and the tile under the hand is the only coloured thing on screen. The page
-  is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
+  doors. Each store tile's line is **written for the two lines it is drawn on** — about fifty
+  characters — rather than clipped to them: the first fifty characters of a sentence are a
+  truncation and not a shorter sentence, so the eight are written out beside the blurbs they
+  shorten, a remembered store shows the host of its URL, and `builtin-stores.test.ts` holds the
+  budget. The page is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
   is the only patterned surface in the application: arriving at the landing page and leaving it are
   both legible now, and at that weight it is texture rather than pattern.
 
@@ -53,10 +55,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the favicon, the install icon, the iOS icon, the dock icon and the custom-store tile are all the
   one drawing.
 
-- **More contrast, and shading.** The borders and the two sunken greys were pale enough that a card
-  read as floating on nothing and a table's rules disappeared on a projector; they are darker in the
-  light theme and lighter in the dark one. Two elevation tokens, `--shadow-1` for *resting on the
-  page* and `--shadow-2` for *lifted off it*, tinted with the text colour rather than with black.
+- **The greys are neutral, and the borders carry the contrast.** The whole ramp had a blue cast —
+  `#c8cdd4`, `#98a1ac`, `#4a5058` are all blue-greys — and a blue-grey chrome around a blue accent
+  leaves the accent nothing to be. They are neutral now, in both themes, and lighter in the light
+  one: `--bg-sunken` is `#f5f6f8`, and what got darker instead is `--border` and `--border-strong`,
+  which were pale enough that a card read as floating on nothing and a table's rules disappeared on
+  a projector. A hairline that cannot be seen is a missing hairline; a fill that cannot be seen is
+  just the page. Two elevation tokens with it, `--shadow-1` for *resting on the page* and
+  `--shadow-2` for *lifted off it*.
 
 - **The two store doors are named for the errand.** *Add a UCSC hub* is **Connect to a UCSC hub** —
   a hub is somebody else's shelf, read where it stands, which is what *connect* means everywhere

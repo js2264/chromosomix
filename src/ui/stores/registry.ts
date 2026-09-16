@@ -108,8 +108,24 @@ export interface StoreFront {
   /** `'rsg' | 'igv' | '4dn' | 'encode'` for the shipped ones, `'custom'` for the URL box, `'store:<n>'` for a remembered one. */
   id: string
   label: string
-  /** One line under the tile and under the drawer's heading. */
+  /**
+   * One line under the drawer's heading, where there is a column to say it in.
+   */
   blurb: string
+  /**
+   * The tile's line, which is a different length of the same claim.
+   *
+   * A large tile is 10.5rem wide and gives its subtitle two lines at
+   * `--step--2` — about fifty characters. Every `blurb` here is longer than
+   * that, so the tile either clipped one mid-word or grew a third line and
+   * pushed the row below it off the screen. Neither is a subtitle. Written out
+   * rather than derived, because the first fifty characters of a sentence are
+   * not a shorter sentence: *Every file on the 4DN open-data bucket, by cell
+   * line…* is a truncation and *Every 4DN file, by cell line and assay.* is a
+   * line. Absent falls back to the blurb, which is what a remembered store
+   * does before `storeTiles` shortens its URL to a host.
+   */
+  tagline?: string
   kind: StoreFrontKind
   mark: StoreMark
   builtin: boolean
@@ -241,6 +257,7 @@ const ROADMAP: StoreFront = {
   id: 'roadmap',
   label: 'Roadmap (UCSC hub)',
   blurb: 'The Roadmap Epigenomics integrative tracks, as the hub WashU publishes them.',
+  tagline: 'Roadmap Epigenomics, as WashU publishes it.',
   kind: 'portal',
   // Roadmap's own emblem, cropped from a logo five times as wide as it is tall
   // (`scripts/make-store-logos.mjs`). The colour under it is UCSC's, which is
@@ -271,6 +288,7 @@ export function builtinStores(): StoreFront[] {
       id: 'rsg',
       label: 'RSG lab data',
       blurb: 'Composed figures over the lab’s published yeast and metagenome data, one click each.',
+      tagline: 'The lab’s published figures, one click each.',
       kind: 'gallery',
       mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },
       builtin: true,
@@ -283,6 +301,7 @@ export function builtinStores(): StoreFront[] {
       id: 'igv',
       label: 'IGV genomes',
       blurb: 'IGV’s reference genomes, each with the tracks it ships, ready for the 1D browser.',
+      tagline: 'Reference genomes with the tracks they ship.',
       kind: 'genomes',
       mark: { text: 'IGV', colour: COLOURS.igv, image: STORE_LOGOS.igv },
       builtin: true,
@@ -300,6 +319,7 @@ export function builtinStores(): StoreFront[] {
       id: '4dn',
       label: '4DN open data',
       blurb: 'Every file on the 4DN open-data bucket, by cell line, assay, lab and experiment set.',
+      tagline: 'Every 4DN file, by cell line and assay.',
       kind: 'portal',
       mark: { text: '4DN', colour: COLOURS.fourdn, image: STORE_LOGOS.fourdn },
       builtin: true,
@@ -319,6 +339,7 @@ export function builtinStores(): StoreFront[] {
       id: 'encode',
       label: 'ENCODE',
       blurb: 'ENCODE’s released signal, peaks and alignments, one file per experiment, by assembly.',
+      tagline: 'Signal, peaks and alignments by assembly.',
       kind: 'portal',
       mark: { text: 'ENCODE', short: 'ENC', colour: COLOURS.encode, image: STORE_LOGOS.encode },
       builtin: true,
@@ -341,6 +362,7 @@ export function builtinStores(): StoreFront[] {
       id: 'dnazoo',
       label: 'DNA Zoo',
       blurb: 'Chromosome-length genome assemblies and the Hi-C maps behind them, a directory a species.',
+      tagline: 'Chromosome-length assemblies and their maps.',
       kind: 'portal',
       // `DNA` behind the logo, not `DNAZOO`: the ladder in `ui/stores/marks.ts`
       // is tuned so that six letters just fill the square, and it was tuned
@@ -379,6 +401,7 @@ export function customStore(): StoreFront {
     id: 'custom',
     label: 'Add a custom store',
     blurb: 'A store file a lab published beside its data — paste its URL, or the config itself.',
+    tagline: 'Paste a store file’s URL, or the file itself.',
     kind: 'custom',
     // This viewer's own icon, because the file behind this door is the one
     // format in the row that was written *for this viewer* — the others are
@@ -410,6 +433,7 @@ export function hubStoreFront(): StoreFront {
     id: 'hub',
     label: 'Connect to a UCSC hub',
     blurb: 'Any UCSC track hub — paste its hub.txt and its genomes and tracks become a shelf.',
+    tagline: 'Paste a hub.txt; its tracks become a shelf.',
     kind: 'hub',
     mark: { text: 'HUB', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc },
     builtin: false,

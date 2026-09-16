@@ -39,6 +39,27 @@ export function storeTiles(props: StoreTilesProps): HTMLElement {
   )
 }
 
+/**
+ * The line under a tile's name: short enough for the two lines it is given.
+ *
+ * A shipped store writes its own (`registry.ts`), because the first fifty
+ * characters of a sentence are a truncation rather than a shorter sentence. A
+ * store the reader remembered has no such line — its blurb is the URL it came
+ * from — and a URL is the one string here that can be arbitrarily long, so what
+ * the tile shows is the **host**, which is the part of it that says whose shelf
+ * this is. The whole URL is on the tile's `title` either way.
+ */
+function tagline(front: StoreFront): string {
+  if (front.tagline !== undefined) return front.tagline
+  try {
+    return new URL(front.blurb).host
+  } catch {
+    // Not a URL: a blurb written somewhere this module does not know about.
+    // Shown as it is, and the row grows a line rather than losing a word.
+    return front.blurb
+  }
+}
+
 function tile(front: StoreFront, props: StoreTilesProps): HTMLElement {
   const on = props.current === front.id
   const node = el(
@@ -51,7 +72,7 @@ function tile(front: StoreFront, props: StoreTilesProps): HTMLElement {
     },
     storeMark(front.mark, MARK_SIZE[props.size]),
     el('span', { class: 'store-tile-name', text: front.label }),
-    props.size === 'large' ? el('span', { class: 'store-tile-blurb', text: front.blurb }) : null,
+    props.size === 'large' ? el('span', { class: 'store-tile-blurb', text: tagline(front) }) : null,
   )
   node.addEventListener('click', () => props.onPick(front.id))
   return node
