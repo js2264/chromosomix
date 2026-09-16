@@ -323,6 +323,13 @@ export interface BrowserViewProps {
    */
   map?: MapId
   /**
+   * The window moved, by any road — a pan, the box, a link, the deck. What the
+   * deck listens to when this view is its lead (§25 stage D), because a link
+   * moving the view does not report a locus and the cells still have to
+   * follow. Nothing is passed: the listener asks {@link framedWindows}.
+   */
+  onWindowChange?(): void
+  /**
    * What this view's pointer is published as (`ui/hoverLocus.ts`): `browser`
    * for the session's own, a cell's id for a tracks cell of the deck, so a
    * cell ignores its own echo and answers everybody else's.
@@ -1393,7 +1400,33 @@ export class BrowserView {
       this.reportTimer = null
       this.report()
     }
+    this.props.onWindowChange?.()
     this.schedule()
+  }
+
+  /**
+   * The stretches on screen, per sequence, in the shape the deck hands its
+   * cells (§25): what `MatrixPanel.framedRanges` answers for a map, for the
+   * browser as a deck's lead. One window per stretch of the axis the domain
+   * overlaps, each carrying its segment as a map's does.
+   */
+  framedWindows(): LocusWindow[] {
+    const [d0, d1] = this.scale.domain
+    const out: LocusWindow[] = []
+    for (const segment of this.axis.segments) {
+      const lo = Math.max(d0, segment.unitStart)
+      const hi = Math.min(d1, segment.unitEnd)
+      if (!(hi > lo)) continue
+      out.push({
+        contig: segment.contig,
+        start: segment.bpStart + (lo - segment.unitStart) * segment.bpPerUnit,
+        end: segment.bpStart + (hi - segment.unitStart) * segment.bpPerUnit,
+        unitFrom: lo,
+        unitTo: hi,
+        segment,
+      })
+    }
+    return out
   }
 
   /** The window, as one sequence and a span in it — what the box shows. */

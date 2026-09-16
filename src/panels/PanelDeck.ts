@@ -84,6 +84,7 @@ import { folderPickButton } from '../ui/pickFromFolders'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
+import type { LocusWindow } from '../render/locus'
 import { StructurePanel, type StructureCellProps } from './StructurePanel'
 import { TracksPanel, type TracksCellProps } from './TracksPanel'
 import type { LaneEdge } from '../annotations/types'
@@ -376,6 +377,24 @@ export interface PanelDeckProps {
    * where the session has none, in which case a tracks cell says so.
    */
   tracks?: TracksCellProps
+  /**
+   * Whether a **map** may join this deck (§25 stage D). Absent is yes. `false`
+   * for a deck whose lead is the 1D browser: its cells are tracks and a
+   * structure, and a map dropped on it is refused in the bar rather than
+   * opened beside a lead it cannot follow.
+   */
+  mapsAllowed?(): boolean
+}
+
+/**
+ * A lead that is not a map (§25 stage D): the session's browser, re-parented
+ * into cell 0 like a map's view, answering the two things the cells need of a
+ * lead — where it is looking, as loci, and to be taken somewhere.
+ */
+export interface LeadAxis {
+  windows(): { rows: LocusWindow[]; cols: LocusWindow[] }
+  /** Put a stretch on the axis; `false` where it could not. */
+  show(range: { contig: string; start: number; end: number }): boolean
 }
 
 /**
@@ -424,6 +443,11 @@ const DECK_EXPORT_GAP = 0.02
  * In the deck's own bar and on the `+` edges rather than on an error screen: a
  * refusal to open a *sixty-fifth* map is not a reason to take the others away.
  */
+/** A map offered to a deck whose lead is the browser (§25 stage D). */
+const NO_MAP_LEAD =
+  'This deck is of tracks and a structure beside the browser. A map opens as a session of its ' +
+  'own — drop it on the tab strip, or open it first and put the tracks beside it.'
+
 const NO_ROOM =
   `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
   'many are useful: every panel is a worker and, for a whole-file view, a block held in memory, ' +
@@ -476,6 +500,8 @@ export class PanelDeck {
   private slots: Slot[] = []
   private readonly lock = new ViewportLock()
   private lead: MatrixPanel | null = null
+  /** The lead when it is not a map — the browser (§25 stage D); else `null`. */
+  private leadAxis: LeadAxis | null = null
   private readonly unsubscribeHover: () => void
   /** Whether the echo on the maps is one a structure cell's pointer put there. */
   private echoingPlace = false
@@ -1101,6 +1127,7 @@ export class PanelDeck {
     this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
     this.lead?.setDeckExport(null)
     this.lead = null
+    this.leadAxis = null
   }
 
   /**
@@ -1373,6 +1400,21 @@ export class PanelDeck {
       cell: null,
       locked: held?.locked !== false,
     }
+    if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
+      // A map named beside a lead that is not one (§25 stage D): held as the
+      // cell it would have been, under its name, rather than opened beside a
+      // browser it could not follow — and rather than dropped from the link,
+      // which would lose the reader's arrangement for opening it in the
+      // wrong session.
+      slot.vacancy = new VacantPanel({
+        origin: 'remembered',
+        name: ref.uri,
+        onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
+        onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onClose: () => this.remove(slot),
+      })
+      return slot
+    }
     if (ref.kind === 'structure') {
       const shared = this.props.structure
       slot.cell = new StructurePanel({
@@ -1388,7 +1430,8 @@ export class PanelDeck {
       })
       // What the maps are looking at, from the moment the cell exists rather
       // than from the lead's next pan: the lead's window is where it was.
-      if (this.lead !== null) slot.cell.applyWindow(this.lead.framedRanges())
+      const windows = this.leadWindows()
+      if (windows !== null) slot.cell.applyWindow(windows)
       return slot
     }
     if (ref.kind === 'tracks') {
@@ -1400,7 +1443,8 @@ export class PanelDeck {
         onFollow: (range) => this.followColumns(range),
         onDragChange: (dragging) => this.setArranging(dragging),
       })
-      if (this.lead !== null) slot.cell.applyWindow(this.lead.framedRanges())
+      const windows = this.leadWindows()
+      if (windows !== null) slot.cell.applyWindow(windows)
       return slot
     }
     if (ref.kind === 'vacant') {
@@ -2026,6 +2070,10 @@ export class PanelDeck {
       this.hideAdd()
       return
     }
+    if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
+      this.warn(NO_MAP_LEAD)
+      return
+    }
     const empty = this.slots.find((slot) => slot.ref.kind === 'vacant')
     if (empty !== undefined) {
       this.warn('')
@@ -2265,6 +2313,7 @@ export class PanelDeck {
     // (§16.9); this opens a map.
     const adding = !this.addRow.classList.contains('hidden')
     this.structureButton.disabled = this.hasStructure()
+    this.addRow.classList.toggle('is-cells-only', this.props.mapsAllowed?.() === false)
     const addMap = button(
       adding ? 'cancel' : 'add a map…',
       () => (adding ? this.hideAdd() : this.promptAdd()),
@@ -2574,10 +2623,38 @@ export class PanelDeck {
   /**
    * A tracks cell was panned: the lead goes there on its column axis, and
    * reports through the lock to every other map (§25.3). One road in, so a
-   * cell never drives a companion the lead is not driving.
+   * cell never drives a companion the lead is not driving. A browser lead is
+   * taken there the same way, and tells the cells itself.
    */
   private followColumns(range: { contig: string; start: number; end: number }): void {
-    this.lead?.showLocusOnColumns(range)
+    if (this.lead !== null) this.lead.showLocusOnColumns(range)
+    else this.leadAxis?.show(range)
+  }
+
+  /**
+   * The lead the session mounted when it is **not a map** — its browser
+   * (§25 stage D). `null` when the lead is a map, or nothing.
+   *
+   * The map road is {@link setLead}; the two are exclusive, and the session
+   * calls the one for the view it mounted. The cells are told where the new
+   * lead is looking at once, since a browser reports nothing until it moves.
+   */
+  setLeadAxis(axis: LeadAxis | null): void {
+    this.leadAxis = axis
+    if (axis !== null) this.leadMoved()
+  }
+
+  /** The browser lead moved: the cells follow, as they do a map's pan. */
+  leadMoved(): void {
+    const windows = this.leadWindows()
+    if (windows === null) return
+    for (const slot of this.slots) slot.cell?.applyWindow(windows)
+  }
+
+  /** Where the lead is looking, whichever shape it has, or `null` for none. */
+  private leadWindows(): { rows: LocusWindow[]; cols: LocusWindow[] } | null {
+    if (this.lead !== null) return this.lead.framedRanges()
+    return this.leadAxis?.windows() ?? null
   }
 
   /** Whether the deck already holds its one structure cell (§25). */

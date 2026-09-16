@@ -168,7 +168,11 @@ function tracksContext(): TracksContext {
   }
 }
 
-function make(store: ReturnType<typeof fakeStore> | undefined, tracks?: TracksContext) {
+function make(
+  store: ReturnType<typeof fakeStore> | undefined,
+  tracks?: TracksContext,
+  options: { mapsAllowed?: boolean } = {},
+) {
   const published: Array<string | undefined> = []
   const went: Array<{ contig: string; start: number; end: number }> = []
   const dropped: string[] = []
@@ -177,6 +181,7 @@ function make(store: ReturnType<typeof fakeStore> | undefined, tracks?: TracksCo
     memoryKey: () => 'deck-cells-test',
     leadName: () => 'lead.cool',
     leadLabel: () => 'lead.cool',
+    ...(options.mapsAllowed === undefined ? {} : { mapsAllowed: () => options.mapsAllowed === true }),
     structure: {
       store: () => store as unknown as AnnotationStore | undefined,
       onGoTo: (range) => went.push(range),
@@ -428,5 +433,77 @@ describe('a tracks cell in the deck', () => {
     const [cell] = tracksCells(deck)
     deck.apply(state('https://x.example.org/b.cool|tracks'))
     expect(tracksCells(deck)[0]).toBe(cell)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A lead that is not a map (§25 stage D)
+// ---------------------------------------------------------------------------
+
+describe('the deck beside the browser', () => {
+  /** A browser standing in as the lead: windows to hand out, a place to be taken. */
+  function browserLead() {
+    const state = {
+      window: { contig: 'chr1', start: 100_000, end: 120_000 },
+      shown: [] as Array<{ contig: string; start: number; end: number }>,
+    }
+    const axis = {
+      windows: () => ({
+        rows: [],
+        cols: [
+          {
+            contig: state.window.contig,
+            start: state.window.start,
+            end: state.window.end,
+            unitFrom: state.window.start,
+            unitTo: state.window.end,
+          } as LocusWindow,
+        ],
+      }),
+      show: (range: { contig: string; start: number; end: number }) => {
+        state.shown.push(range)
+        state.window = range
+        return true
+      },
+    }
+    return { axis, state }
+  }
+
+  it('hands the browser’s window to its cells, when they are built and when it moves', () => {
+    const lead = browserLead()
+    const { deck } = make(undefined, tracksContext())
+    deck.setLeadAxis(lead.axis)
+    deck.add({ kind: 'tracks' })
+    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
+    expect(box?.value).toBe('chr1:100,001-120,000')
+    lead.state.window = { contig: 'chr2', start: 0, end: 50_000 }
+    deck.leadMoved()
+    expect(box?.value).toBe('chr2:1-50,000')
+  })
+
+  it('takes the browser where a tracks cell was panned', () => {
+    const lead = browserLead()
+    const { deck } = make(undefined, tracksContext())
+    deck.setLeadAxis(lead.axis)
+    deck.add({ kind: 'tracks' })
+    const box = tracksCells(deck)[0]?.querySelector<HTMLInputElement>('.input-region')
+    if (box === null || box === undefined) throw new Error('no locus box')
+    box.value = 'chr2:10,001-20,000'
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(lead.state.shown.at(-1)).toEqual({ contig: 'chr2', start: 10000, end: 20000 })
+  })
+
+  it('refuses a map in its bar, and holds one a link names as the cell it would have been', () => {
+    const { deck, published } = make(undefined, tracksContext(), { mapsAllowed: false })
+    deck.add({ kind: 'remote', uri: 'https://x.example.org/b.cool' })
+    expect(deck.el.querySelector('.deck-warning')?.textContent).toMatch(/tracks and a structure/)
+    expect(published).toEqual([])
+    deck.apply(state('https://x.example.org/b.cool|tracks'))
+    expect(all(deck.el, '.deck-grid > .is-vacant')).toHaveLength(1)
+    expect(all(deck.el, '.deck-grid > .deck-panel:not(.is-lead)')).toHaveLength(2)
+    expect(tracksCells(deck)).toHaveLength(1)
+    // The add row keeps the two cells that can join and puts the map roads away.
+    deck.promptAdd()
+    expect(deck.el.querySelector('.deck-add')?.classList.contains('is-cells-only')).toBe(true)
   })
 })

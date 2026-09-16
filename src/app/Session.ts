@@ -3093,6 +3093,10 @@ export class Session {
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
+      // The deck's cells follow this view when it is their lead (§25 stage D);
+      // by every road the window moves, a link included, which is why it is
+      // not the locus report above.
+      onWindowChange: () => this.deck?.leadMoved(),
       groups: held.groups,
       // The same store the card writes into and the map draws from. Handed over
       // rather than read back through the session, for the reason the tracks and
@@ -3451,7 +3455,7 @@ export class Session {
    */
   private openStructureCell(name: string): void {
     if (!isStructureName(name)) return
-    if (this.file === null || !this.deckIsPossible) return
+    if (!this.deckIsPossible) return
     this.ensureDeck().add({ kind: 'structure' })
   }
 
@@ -5136,8 +5140,16 @@ export class Session {
       // the colour controls follow, and for the same reason: adding a map to
       // what is on screen is not a navigation away from it.
       onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
-      memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
-      leadName: () => (this.file === null ? undefined : this.mapLabel(this.file.uri)),
+      memoryKey: () => this.memoryKey(this.file?.uri ?? this.assembly?.uri ?? ''),
+      // The browser as lead is named for its assembly (§25 stage D); a map for
+      // its file, under whatever the reader called it.
+      leadName: () =>
+        this.store.state?.view === 'browser'
+          ? this.assembly?.name
+          : this.file === null
+            ? undefined
+            : this.mapLabel(this.file.uri),
+      mapsAllowed: () => this.mapsAllowed,
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.
       derive: () => {
@@ -5165,7 +5177,10 @@ export class Session {
         const names = this.contigNames()
         return names === null ? undefined : NameIndex.for(names).context
       },
-      leadLabel: () => this.mapLabel(this.file?.uri ?? ''),
+      leadLabel: () =>
+        this.store.state?.view === 'browser' && this.assembly !== null
+          ? this.assembly.name
+          : this.mapLabel(this.file?.uri ?? ''),
       mapLabel: (uri) => this.mapLabel(uri),
       onRenameMap: (uri, name) => this.renameMap(uri, name),
       onRenameLead: (name) => {
@@ -5227,14 +5242,22 @@ export class Session {
         context: () => {
           const held = this.annotations
           const file = this.file
-          if (held === null || file === null) return undefined
-          if (this.tracksAssembly === null || this.tracksAssembly.file !== file) {
-            const assembly = this.assemblyOfFile(file)
-            if (assembly === null) return undefined
-            this.tracksAssembly = { file, assembly }
+          if (held === null) return undefined
+          // Beside a browser the axis is the browser's own assembly (§25
+          // stage D); beside a map, the map's sequences, kept per file.
+          let assembly: Assembly | null
+          if (this.store.state?.view === 'browser' || file === null) assembly = this.assembly
+          else {
+            if (this.tracksAssembly === null || this.tracksAssembly.file !== file) {
+              const made = this.assemblyOfFile(file)
+              if (made === null) return undefined
+              this.tracksAssembly = { file, assembly: made }
+            }
+            assembly = this.tracksAssembly.assembly
           }
+          if (assembly === null) return undefined
           return {
-            assembly: this.tracksAssembly.assembly,
+            assembly,
             store: held.store,
             client: held.client,
             groups: held.groups,
@@ -5250,7 +5273,7 @@ export class Session {
     // one arrives through `showContent` and does it properly.
     if (this.contentNode !== null && this.contentNode.isConnected && this.deckIsPossible) {
       this.contentEl.replaceChildren(this.framed(this.contentNode))
-      deck.setLead(this.current?.panel ?? null)
+      this.syncDeckLead(deck)
     }
     return deck
   }
@@ -5275,7 +5298,7 @@ export class Session {
    * them, so the impatient gesture and the deliberate one reach the same deck.
    */
   private growDeck(direction: GrowDirection, picked?: PickedFile): void {
-    if (this.file === null || !this.deckIsPossible) return
+    if (!this.deckIsPossible) return
     this.ensureDeck().grow(direction, picked)
   }
 
@@ -5304,7 +5327,42 @@ export class Session {
   private get deckIsPossible(): boolean {
     if (this.file?.info.hasGenomes === true) return false
     const view = this.store.state?.view
+    // The browser names a place too (§25 stage D): a deck beside it holds
+    // tracks and a structure, drawn against the assembly its axis is. What may
+    // *not* join it is a map — {@link mapsAllowed} — since a map beside a
+    // browser has no lead to follow.
+    if (view === 'browser') return this.assembly !== null && this.annotations !== null
     return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
+  }
+
+  /** Whether a map may join the deck: only beside a map (§25 stage D). */
+  private get mapsAllowed(): boolean {
+    return this.file !== null && this.store.state?.view !== 'browser'
+  }
+
+  /**
+   * Tell the deck which lead the session just mounted, in whichever shape.
+   *
+   * A map's panel drives the lock; the browser drives the cells by loci
+   * ({@link PanelDeck.setLeadAxis}). Exactly one of the two, and `null` for
+   * the other, so a deck that outlives a navigation from one to the other is
+   * not left following the view that went away.
+   */
+  private syncDeckLead(deck: PanelDeck): void {
+    const panel = this.current?.panel ?? null
+    deck.setLead(panel)
+    const browser = this.browser
+    deck.setLeadAxis(
+      panel === null && browser !== null && this.store.state?.view === 'browser'
+        ? {
+            windows: () => ({ rows: [], cols: browser.framedWindows() }),
+            show: (range) => {
+              browser.showLocus(formatLocus(range))
+              return true
+            },
+          }
+        : null,
+    )
   }
 
   /**
@@ -7099,7 +7157,7 @@ export class Session {
     // files reopened — it simply stops being a frame while there is nothing for
     // it to be a frame around.
     this.contentEl.replaceChildren(this.framed(node))
-    this.deck?.setLead(view?.panel ?? null)
+    if (this.deck !== null) this.syncDeckLead(this.deck)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.

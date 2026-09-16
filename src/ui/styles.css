@@ -9077,6 +9077,13 @@ span.deck-name {
   color: var(--text-faint);
 }
 
+/* The add row beside a browser lead (§25 stage D): the roads that open a
+   *map* are put away, since a map cannot follow a browser; the two cells that
+   can stay. */
+.deck-add.is-cells-only > :not(.deck-add-structure):not(.deck-add-tracks) {
+  display: none;
+}
+
 /* ---------------------------------------------------------------------------
    The `+` edges, which draw a deck before there is one (§16.9).
 
