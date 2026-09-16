@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 63,
-      "commit": "e02f11a",
+      "commit": "679f971",
       "title": "Redefine HiC score as mean of bin's line across near-diagonal",
       "branch": "js/ecstatic-heisenberg-g7hhdt",
-      "date": "2026-09-16T09:49:33Z"
+      "date": "2026-09-16T12:45:06Z"
     },
     {
       "number": 62,
