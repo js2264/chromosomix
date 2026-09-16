@@ -14,6 +14,55 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The landing page is one screen, the three ways in are marked, and the stores colour up as you
+  reach them.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
+  gone — between them a fifth of a laptop screen, and what was below the fold was the third of the
+  three things the page offers. The target now says *Drop genomic files here* and *or click to
+  choose*, and nothing else. Each of the three headings leads with the mark that thing already wears
+  elsewhere — a file, `folder-tree` from the Files column, `library` from the store drawer — because
+  three bold lines down one column read as one section with emphasis in it rather than as three
+  doors. The store tiles are held at a third of their saturation until the pointer reaches one, so
+  the row reads as a set and the tile under the hand is the only coloured thing on screen. The page
+  is a **dotted ground** — a dot under a pixel across, one per 15, at 45% of the border grey — which
+  is the only patterned surface in the application: arriving at the landing page and leaving it are
+  both legible now, and at that weight it is texture rather than pattern.
+
+- **One button, everywhere.** Every `.btn` takes the same gesture on approach — the border and the
+  word to the accent, a one-pixel lift, a shadow — which was the store tiles' hover and is now the
+  rule rather than the one place in the app that had one. The quiet ones (a close cross, a link, a
+  chip, a tab's ×) opt out of the lift, having no surface to raise. The landing page's row of places
+  and the two sign-ins stop being `.btn-primary`: they stood directly above a row of store tiles
+  offering the same gesture, and four blue blocks over eight grey squares read as a toolbar over a
+  gallery — as well as claiming, against the doctrine, that one of the four was the answer. None of
+  them is. They are tiles now, and `.btn-primary` is back to meaning the invited answer in a dialog.
+
+- **The mark has a track down its left side and another under it**, which is where this application
+  puts a track: the lanes grow towards the matrix from the bottom and the left edges. Both rise at
+  the first bin of each of the three blocks and disagree in between, which is what having two of
+  them is for.
+
+  They are **slivers in the margin the plate already had** — a third of a pitch across, a fifth of a
+  pitch clear of the map — and **one hue at two saturations**, not two hues. The first attempt gave
+  each lane a whole row of an 8 × 8 grid and a colour of its own, and it cost more than it bought:
+  three hues on one plate is a generic analytics icon and breaks the rule this application is built
+  on, a solid run of seven cells outlasts a sparse diagonal at every downsample so at 24 px the
+  decoration became the identity, and the extra row took an eighth off the map, which is the
+  subject. Drawn this way the field keeps the size, the spacing and the palette it has always had;
+  the one thing the lanes ask of it is half a lane's footprint of optical centring, so the mark
+  rather than the map sits in the middle of the plate. Redrawn from `scripts/make-app-icons.py`, so
+  the favicon, the install icon, the iOS icon, the dock icon and the custom-store tile are all the
+  one drawing.
+
+- **More contrast, and shading.** The borders and the two sunken greys were pale enough that a card
+  read as floating on nothing and a table's rules disappeared on a projector; they are darker in the
+  light theme and lighter in the dark one. Two elevation tokens, `--shadow-1` for *resting on the
+  page* and `--shadow-2` for *lifted off it*, tinted with the text colour rather than with black.
+
+- **The two store doors are named for the errand.** *Add a UCSC hub* is **Connect to a UCSC hub** —
+  a hub is somebody else's shelf, read where it stands, which is what *connect* means everywhere
+  else on the page — and *Add a custom store config* is **Add a custom store**, a file this viewer
+  takes a copy of. Naming both *add* made the first promise the second's gesture.
+
 - **The HiC score is the mean of the bin's own line across the near-diagonal, which is what the R the
   score comes from computes.** It was the *sum of every cell in a square window*, and neither the shape
   nor the missing division was right.
@@ -68,6 +117,39 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   `ignoreDiags = 1` cuts that cell out of the score, and the hint on the control now says why one might.
 
 ### Fixed
+
+- **Fourteen rules in the stylesheet drew nothing, and looked like they meant to.** Six names —
+  `--line`, `--muted`, `--fg`, `--fg-quiet`, `--bg-inset` and `--warn` — were read across the sheet
+  and defined nowhere, neither in CSS nor from the code. An unresolvable `var()` is *invalid at
+  computed-value time*, which does not skip the declaration: the property takes its inherited value
+  if it inherits and its initial value if it does not. So `border: 1px solid var(--line)` came out
+  `border-style: none` and drew **no border** — on the colour ramp beside an annotation, on the
+  share dialog's link box, under the analysis drawer's map tabs and round a plot control's number
+  box. `background: var(--line)` came out transparent, so the well behind a feature-count bar and
+  the one-pixel divider in the plot controls were **invisible**. And `color: var(--muted)` inherited,
+  so two labels meant to sit quietly under something else were drawn at **full strength**. Each of
+  those looks, in a screenshot, exactly like a deliberate choice, which is why none was found.
+
+  `--warn` is now a real token in both themes, and the three rules that wanted a warning colour stop
+  inventing one each: `.pairs-warning` was written `var(--warn, var(--accent))` and therefore drew a
+  warning in **link blue**, and the other two hard-coded ambers that never changed in the dark theme.
+  `.input.is-bad` takes `--danger` like the `.input-region.is-bad` three thousand lines above it,
+  instead of a red of its own that stayed dark on the dark theme's dark surface.
+
+  **`test/unit/css-tokens.test.ts` is why there is not a fourth time.** It reads every `var()` in the
+  sheet and fails, with the line number, on any name nothing defines — allowing only the sixteen
+  properties the code writes with `setProperty`, and checking that allowance against the source so it
+  cannot rot. It also holds the two halves of the dark palette to each other and the light palette to
+  the dark one's set of names, which is how `--tab-rest` came to exist in four of the six blocks that
+  carried a palette and in neither of the other two.
+
+- **The palette is written once.** The light values were spelled out in full in four places —
+  `:root`, `[data-theme='light']`, `.content` and `.analysis-figure` — and are now one selector list
+  that names all four. Eighty-four declarations become sixteen, and the two boxes that stay light
+  while the furniture goes dark can no longer drift from the theme they are a copy of. The dead
+  `var()` fallbacks went with it: `var(--accent, …)` appeared with **three different** fallbacks for
+  a token that is always defined, and fifteen font sizes bypassed the type scale for values that
+  were a step under another name.
 
 - **A bacterial GFF arrived as 87 features out of 5,870.** A 6.4 Mb *Pseudomonas aeruginosa* PAK
   annotation — 5,783 CDS, 74 tRNA, 12 rRNA, one tmRNA — opened as 87 anonymous boxes: every RNA in

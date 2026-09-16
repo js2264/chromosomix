@@ -112,7 +112,7 @@ describe('the hub door', () => {
     const { drawer } = build()
     drawer.open('hub')
     expect(drawer.storeId).toBe('hub')
-    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Add a UCSC hub')
+    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Connect to a UCSC hub')
     // The sentence over the box says *hub*, which is the whole reason this is a
     // door of its own rather than a line in the store one.
     expect(drawer.el.querySelector('.custom-form .hint')?.textContent).toContain('track hub')
@@ -307,7 +307,7 @@ describe('the hub door', () => {
     await settled()
     expect(drawer.storeId).toBe('hub')
     expect(drawer.el.querySelector('.store-tile.is-on .store-tile-name')?.textContent).toBe(
-      'Add a UCSC hub',
+      'Connect to a UCSC hub',
     )
     expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Lab hub')
   })

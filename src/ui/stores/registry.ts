@@ -377,7 +377,7 @@ export function builtinStores(): StoreFront[] {
 export function customStore(): StoreFront {
   return {
     id: 'custom',
-    label: 'Add a custom store config',
+    label: 'Add a custom store',
     blurb: 'A store file a lab published beside its data — paste its URL, or the config itself.',
     kind: 'custom',
     // This viewer's own icon, because the file behind this door is the one
@@ -408,7 +408,7 @@ export function customStore(): StoreFront {
 export function hubStoreFront(): StoreFront {
   return {
     id: 'hub',
-    label: 'Add a UCSC hub',
+    label: 'Connect to a UCSC hub',
     blurb: 'Any UCSC track hub — paste its hub.txt and its genomes and tracks become a shelf.',
     kind: 'hub',
     mark: { text: 'HUB', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc },

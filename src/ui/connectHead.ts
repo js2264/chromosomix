@@ -147,7 +147,7 @@ export function signInButton(
   options: { disabled: boolean; reason?: string },
 ): HTMLButtonElement {
   return markButton(label, mark, onClick, {
-    class: 'btn btn-primary btn-mark btn-signin',
+    class: 'btn btn-mark btn-signin',
     disabled: options.disabled,
     ...(options.reason === undefined ? {} : { reason: options.reason }),
   })

@@ -27,7 +27,7 @@ export interface StoreTilesProps {
   onPick(id: string): void
 }
 
-const MARK_SIZE = { large: 72, small: 26 } as const
+const MARK_SIZE = { large: 52, small: 26 } as const
 
 /** The row. Rebuilt by the caller when the list changes — it is at most a handful. */
 export function storeTiles(props: StoreTilesProps): HTMLElement {
@@ -46,7 +46,7 @@ function tile(front: StoreFront, props: StoreTilesProps): HTMLElement {
     {
       class: `store-tile${front.id === 'custom' ? ' store-tile-add' : ''}${on ? ' is-on' : ''}`,
       type: 'button',
-      title: props.size === 'small' ? front.blurb : '',
+      title: front.blurb,
       attrs: { role: 'listitem', 'aria-pressed': String(on) },
     },
     storeMark(front.mark, MARK_SIZE[props.size]),

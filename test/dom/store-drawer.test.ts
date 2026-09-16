@@ -141,8 +141,8 @@ describe('opening', () => {
       'ENCODE',
       'DNA Zoo',
       'Roadmap (UCSC hub)',
-      'Add a UCSC hub',
-      'Add a custom store config',
+      'Connect to a UCSC hub',
+      'Add a custom store',
     ])
     expect(drawer.el.querySelector('.store-tile.is-on .store-tile-name')?.textContent).toBe('4DN open data')
     // …and opening a portal is the gesture that reads its rows, and the
