@@ -2,15 +2,13 @@
  * The HiC score, run.
  *
  * The same plan as the directionality index beside it — a band per sequence, one
- * kernel, one lane — with one number different: the band is read **twice as
- * deep** as the window reaches, because the two ends of a square `h` bins each
- * way from the diagonal are `2h` apart. A band read to `h` would leave that
- * corner unread, the kernel would count it as missing, and the score would come
- * back systematically low in a way no amount of staring at the track would
- * reveal.
+ * kernel, one lane — and the shallowest read of the three: the score is the
+ * bin's own line across the near-diagonal, so the band is read exactly as deep
+ * as the line reaches, `diagonals − 1`. At the bacterial default that is two
+ * bins, which on most files is one strip and no tiling at all.
  *
  * What this file owns beyond that is the arithmetic between the reader's number
- * and the kernel's: a window typed in bins becomes a half-width, and the notes
+ * and the kernel's: a count of diagonals becomes a reach in bins, and the notes
  * say what that came to in base pairs on the file actually open and how many
  * cells each score is a mean of. Both are one line and both are things a reader
  * would otherwise have to work out from the label.
@@ -18,7 +16,7 @@
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import { parseRegionString } from '../../metacooler/range'
-import { hicScore, triangleCells } from '../hicscore'
+import { hicScore, lineCells } from '../hicscore'
 import {
   boolParam,
   contigIdFor,
@@ -28,7 +26,7 @@ import {
   type JobContext,
   type TaskRunner,
 } from '../job'
-import { halfWidthAt, windowBinsOf } from '../tasks/hicscore'
+import { diagonalsOf, reachOf } from '../tasks/hicscore'
 import type { ProfileOutput, TaskOutput } from '../types'
 import { bandFor, displayableContigs, spanOfContig, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
@@ -65,42 +63,31 @@ export const runHicScore: TaskRunner = async (job) => {
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
   const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 0)))
-  const asked = windowBinsOf(job.params)
-  const half = halfWidthAt(job.params)
-  const depth = half * 2
-  // The square that was actually built, which is `asked` when `asked` is odd and
-  // the odd one below it when it is not. Everything downstream — the label, the
-  // notes, the refusals — quotes this rather than what was typed, because it is
-  // what the numbers are a reading of.
-  const side = depth + 1
-  const windowBp = side * job.mc.binsize
-  const cells = triangleCells(half, ignoreDiags)
+  const diagonals = diagonalsOf(job.params)
+  const depth = reachOf(job.params)
+  const reachBp = depth * job.mc.binsize
+  const cells = lineCells(diagonals, ignoreDiags)
 
-  // What the window came to in base pairs on *this* file, and how many cells are
-  // behind each point of the track. The form asks in bins so the three
-  // near-diagonal tasks can be set to the same scale (see `tasks/hicscore.ts`),
-  // and the cost of that is exactly this line.
-  const included = ignoreDiags > 0 ? 'less the diagonals cut below' : 'its main diagonal included'
+  // What the score reaches in base pairs on *this* file, and how many cells are
+  // behind each point of the track. The form asks in diagonals so the number a
+  // reader types is the number the method is described with (see
+  // `tasks/hicscore.ts`), and the cost of that is exactly this line.
+  const included = ignoreDiags > 0 ? 'less the diagonals cut below' : 'the main diagonal included'
   job.note(
-    `A ${side.toLocaleString()}-bin window is ${formatBp(windowBp)} at this file’s ` +
+    `${diagonals.toLocaleString()} ${diagonals === 1 ? 'diagonal reaches' : 'diagonals reach'} ` +
+      `${formatBp(reachBp)} either way at this file’s ` +
       `${job.mc.binsize.toLocaleString()} bp resolution, and each score is the mean of ` +
-      `${cells.toLocaleString()} ${cells === 1 ? 'cell' : 'cells'} — the upper triangle of ` +
-      `that square, ${included}.`,
+      `${cells.toLocaleString()} ${cells === 1 ? 'cell' : 'cells'} — the bin’s own line ` +
+      `across them, ${included}.`,
   )
 
-  // The floor and the rounding in `halfWidthAt` have bitten. Said rather than
-  // silently accepted, because a reader who typed 4 and is shown a track
-  // computed on 3 should be told which of the two the lane is.
-  if (asked !== side) {
+  if (cells === 0) {
     job.note(
-      asked < 3
-        ? `A ${asked}-bin window is narrower than the three bins the smallest square there is ` +
-            'has on a side, so the square has been widened to three. Open a finer rung to ask ' +
-            'for less genome than that.'
-        : `A square centred on a bin has an odd number of bins on a side, so a ${asked}-bin ` +
-            `window is the ${side}-bin square that fits inside it rather than the ` +
-            `${(side + 2).toLocaleString()}-bin one that does not.`,
+      `Ignoring ${ignoreDiags.toLocaleString()} diagonals leaves nothing of a ` +
+        `${diagonals.toLocaleString()}-diagonal line, so there is no cell left to average. ` +
+        'Count more diagonals, or ignore fewer.',
     )
+    return []
   }
 
   const region = strParam(job.params, 'region', '').trim()
@@ -114,11 +101,14 @@ export const runHicScore: TaskRunner = async (job) => {
     return []
   }
 
-  const units = planned.filter((unit) => unit.span.to - unit.span.from > depth)
+  // The line spans `2 × depth + 1` bins, so a sequence shorter than that has no
+  // bin with a whole line through it — on a circle as on a line, because past
+  // half the circle the short way round is the other way.
+  const units = planned.filter((unit) => unit.span.to - unit.span.from > 2 * depth)
   if (units.length === 0) {
     job.note(
-      `No sequence in this file is longer than a ${side.toLocaleString()}-bin window, so no ` +
-        'bin on any of them has a whole square around it. Use a narrower window.',
+      `No sequence in this file is longer than the ${(2 * depth + 1).toLocaleString()} bins this ` +
+        'line spans, so no bin on any of them has a whole line through it. Use fewer diagonals.',
     )
     return []
   }
@@ -153,7 +143,7 @@ export const runHicScore: TaskRunner = async (job) => {
         )
       },
     })
-    const local = hicScore(band, { halfWidth: half, minValid, ignoreDiags })
+    const local = hicScore(band, { diagonals, minValid, ignoreDiags })
     for (let i = 0; i < local.length; i++) scores[unit.span.from + i] = local[i]
   }
   job.progress(units.length, units.length, 'Done')
@@ -162,24 +152,24 @@ export const runHicScore: TaskRunner = async (job) => {
     job.note(
       `${circularUnits.toLocaleString()} of ${units.length.toLocaleString()} ` +
         `${units.length === 1 ? 'sequence was' : 'sequences were'} read as circular, so the ` +
-        'window wraps past the end and every bin is scored.',
+        'line wraps past the end and every bin is scored.',
     )
   }
-  if (circularUnits < units.length) {
+  if (circularUnits < units.length && depth > 0) {
     // The other half of the same fact, and the one a reader is more likely to be
-    // puzzled by: a linear sequence has no whole square around its first and last
-    // `h` bins, so the track begins and ends with a gap rather than a fade.
+    // puzzled by: a linear sequence has no whole line through its first and last
+    // few bins, so the track begins and ends with a gap rather than a fade.
     job.note(
-      `The first and last ${half.toLocaleString()} ${half === 1 ? 'bin' : 'bins'} of a linear ` +
-        'sequence have no whole square around them and are left as gaps, rather than scored on ' +
-        'the part of the window that fits — which would fade both ends towards zero.',
+      `The first and last ${depth.toLocaleString()} ${depth === 1 ? 'bin' : 'bins'} of a linear ` +
+        'sequence have no whole line through them and are left as gaps, rather than scored on ' +
+        'the part of it that fits — which would fade both ends towards zero.',
     )
   }
 
   const profile: ProfileOutput = {
     kind: 'profile',
-    id: `hicscore-w${side}`,
-    label: `HiC score · ${formatBp(windowBp)}`,
+    id: `hicscore-d${diagonals}`,
+    label: `HiC score · ${diagonals} diag`,
     values: scores,
     extent: [0, nBins],
     binsize: job.mc.binsize,

@@ -1,35 +1,36 @@
 /**
- * The HiC score, checked against the definition it is an optimisation of.
+ * The HiC score, checked against the script it reproduces.
  *
- * The kernel walks one diagonal at a time with a running prefix, which is the
- * same addition in a different order — so the test that matters is that it *is*
- * the same addition. `bruteForce` below is the obvious double loop, written out
- * so slowly that it is obviously right, and the properties are checked against
- * it on a square with no symmetry in it at all: a uniform square would agree
- * with almost any wrong implementation.
+ * The kernel walks one bin's line across the near-diagonal and averages it, and
+ * the reading it has to agree with is not a paraphrase: it is the R the score
+ * comes from, whose accumulation loop is transcribed below index for index —
+ * including the part that is easy to get wrong, which is that a positive offset
+ * lands the cell on the *column* it ends at and a negative one on the column it
+ * starts from. Both are the same contact under the symmetry, and a
+ * transcription that quietly counted one of them twice would still look like a
+ * plausible track.
  *
- * What is being pinned beyond equality:
+ * What is being pinned beyond that equality:
  *
- * - it is the **mean of the upper triangle**, each contact counted once — which
- *   is not the sum of the whole square divided by anything, because the square
- *   holds every off-diagonal cell twice and the main diagonal once;
- * - `N` is the triangle's real cell count, `(2h + 1)(h + 1)`, and the test for
- *   it is that a **uniform** map scores its own value: a mean that is not one
- *   comes back as some other number, which no amount of staring at a track would
+ * - the score is `rle2 / N` exactly, where `N = 2D − 1` — the shape is the same
+ *   set of cells, and the only difference is the division;
+ * - it is **half a crosshair**: one arm-pair through the diagonal, so a contact
+ *   is counted once and not once per arm;
+ * - `N` is fixed by the test that a **uniform** map scores its own value, which
+ *   a wrong denominator fails by a number no amount of staring at a track would
  *   reveal;
- * - a bin without a **whole** square around it scores nothing rather than a
- *   short sum divided by a full `N`, which would fade both ends of a chromosome
- *   towards zero;
- * - a bin whose window is mostly dropped scores `NaN`;
- * - and on a circular sequence the window wraps, so the ends score rather than
+ * - a bin without a **whole** line through it scores nothing rather than a short
+ *   sum divided by a full `N`, which would fade both ends of a chromosome;
+ * - a bin whose line is mostly dropped scores `NaN`;
+ * - and on a circular sequence the line wraps, so the ends score rather than
  *   fading out — which is a different track and not a cosmetic difference.
  */
 
 import { describe, expect, it } from 'vitest'
 
 import { squareBand } from '@/analysis/band'
-import { hicScore, triangleCells } from '@/analysis/hicscore'
-import { DEFAULT_HIC_SCORE_WINDOW_BINS, halfWidthAt, windowBinsOf } from '@/analysis/tasks/hicscore'
+import { hicScore, lineCells } from '@/analysis/hicscore'
+import { DEFAULT_HIC_SCORE_DIAGONALS, diagonalsOf, reachOf } from '@/analysis/tasks/hicscore'
 
 /** A symmetric square with no structure that could hide an indexing mistake. */
 function noisySquare(n: number): Float32Array {
@@ -46,173 +47,169 @@ function noisySquare(n: number): Float32Array {
   return values
 }
 
-/** The definition, written as the double loop nobody would ship. */
-function bruteForce(
-  values: Float32Array,
-  n: number,
-  bin: number,
-  h: number,
-  options: { circular?: boolean; ignoreDiags?: number } = {},
-): number {
-  const ignore = options.ignoreDiags ?? 0
-  let sum = 0
-  // `k − x ≤ i ≤ j ≤ k + x`: the upper triangle of the window, main diagonal
-  // included, every contact once.
-  for (let i = bin - h; i <= bin + h; i++) {
-    for (let j = i; j <= bin + h; j++) {
-      if (j - i < ignore) continue
-      let row = i
-      let col = j
-      if (options.circular === true) {
-        row = ((i % n) + n) % n
-        col = ((j % n) + n) % n
-      } else if (row < 0 || row >= n || col < 0 || col >= n) {
-        continue
-      }
-      const value = values[row * n + col]
-      if (Number.isFinite(value)) sum += value
-    }
-  }
-  return sum / triangleCells(h, ignore)
-}
-
-/** The whole square, for the identity the two readings are related by. */
-function squareSum(values: Float32Array, n: number, bin: number, h: number): number {
-  let sum = 0
-  for (let r = bin - h; r <= bin + h; r++) {
-    for (let c = bin - h; c <= bin + h; c++) {
-      if (r < 0 || r >= n || c < 0 || c >= n) continue
-      const value = values[r * n + c]
-      if (Number.isFinite(value)) sum += value
+/**
+ * The R script's own loop, transcribed.
+ *
+ * `for (offset in -num_diagonals:num_diagonals)`, with its two index cases and
+ * the two ranges it adds them to. `num_diagonals` is `D − 1` here: it counts the
+ * diagonals *beside* the main one where this task counts them including it.
+ */
+function rleScript(values: Float32Array, n: number, beside: number): Float64Array {
+  const sum = new Float64Array(n)
+  for (let offset = -beside; offset <= beside; offset++) {
+    if (offset === 0) {
+      for (let i = 0; i < n; i++) sum[i] += values[i * n + i]
+    } else if (offset > 0) {
+      // `diagonal_sum[(1 + offset):n] <- … + contact_map[cbind(1:(n-offset), (1+offset):n)]`
+      for (let i = 0; i + offset < n; i++) sum[i + offset] += values[i * n + (i + offset)]
+    } else {
+      // `diagonal_sum[1:(n + offset)] <- … + contact_map[cbind((1-offset):n, 1:(n+offset))]`
+      const back = -offset
+      for (let i = 0; i + back < n; i++) sum[i] += values[(i + back) * n + i]
     }
   }
   return sum
 }
 
-describe('triangleCells', () => {
-  it('is the triangular number, not half the square', () => {
-    for (let h = 0; h <= 8; h++) {
-      const side = 2 * h + 1
-      expect(triangleCells(h)).toBe((side * (side + 1)) / 2)
-      // The form the method is usually written with, which is never a whole
-      // number and is short by half a diagonal.
-      expect(triangleCells(h)).toBeGreaterThan((side * side) / 2)
-    }
-    // The bacterial default: three diagonals, six cells.
-    expect(triangleCells(1)).toBe(6)
+/** The whole crosshair — row and column both — for the identity below. */
+function crosshair(values: Float32Array, n: number, bin: number, far: number): number {
+  let sum = 0
+  for (let d = -far; d <= far; d++) {
+    if (bin + d < 0 || bin + d >= n) continue
+    sum += values[bin * n + (bin + d)]
+    if (d !== 0) sum += values[(bin + d) * n + bin]
+  }
+  return sum
+}
+
+describe('lineCells', () => {
+  it('is one cell on the main diagonal and two on every other', () => {
+    for (let d = 1; d <= 9; d++) expect(lineCells(d)).toBe(2 * d - 1)
+    // The bacterial default: three diagonals, five cells.
+    expect(lineCells(3)).toBe(5)
   })
 
-  it('drops a diagonal at a time, and empties past the window', () => {
-    // A 5-bin square: 5 + 4 + 3 + 2 + 1 cells on separations 0 … 4.
-    expect(triangleCells(2)).toBe(15)
-    expect(triangleCells(2, 1)).toBe(10)
-    expect(triangleCells(2, 2)).toBe(6)
-    expect(triangleCells(2, 5)).toBe(0)
-    expect(triangleCells(2, 99)).toBe(0)
+  it('drops a diagonal at a time, and empties past the line', () => {
+    expect(lineCells(3, 1)).toBe(4) // the main one goes, its two arms stay
+    expect(lineCells(3, 2)).toBe(2) // only separation 2 is left, both sides
+    expect(lineCells(3, 3)).toBe(0)
+    expect(lineCells(3, 99)).toBe(0)
   })
 })
 
 describe('hicScore', () => {
-  it('is the mean of the window’s upper triangle', () => {
+  it('is the R script’s own sum, divided by N', () => {
     const n = 60
-    const h = 4
     const values = noisySquare(n)
-    const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-      halfWidth: h,
-      minValid: 1,
-    })
-    for (let bin = h; bin < n - h; bin++) {
-      expect(score[bin]).toBeCloseTo(bruteForce(values, n, bin, h), 5)
+    for (const diagonals of [1, 2, 3, 6]) {
+      const far = diagonals - 1
+      const score = hicScore(squareBand(values, n, { hi: far }), { diagonals, minValid: 1 })
+      const reference = rleScript(values, n, far)
+      for (let bin = far; bin < n - far; bin++) {
+        expect(score[bin] * lineCells(diagonals)).toBeCloseTo(reference[bin], 5)
+      }
     }
   })
 
   it('scores a uniform map at its own value, which is what fixes N', () => {
     const n = 40
     const values = new Float32Array(n * n).fill(3)
-    for (const h of [1, 2, 5]) {
-      const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-        halfWidth: h,
-        minValid: 1,
-      })
-      for (let bin = h; bin < n - h; bin++) expect(score[bin]).toBeCloseTo(3, 10)
+    for (const diagonals of [1, 3, 7]) {
+      const score = hicScore(squareBand(values, n, { hi: diagonals - 1 }), { diagonals, minValid: 1 })
+      for (let bin = diagonals; bin < n - diagonals; bin++) expect(score[bin]).toBeCloseTo(3, 10)
     }
   })
 
-  it('counts each contact once, where the square counts most of them twice', () => {
-    // `square = 2 × triangle − diagonal` on a symmetric matrix: the identity the
-    // two readings differ by, and the reason the old sum was a different track
-    // rather than this one rescaled.
+  it('is half a crosshair: each contact once, not once per arm', () => {
+    // `cross = 2 × line − diagonal` on a symmetric matrix, which is what makes
+    // the line the honest half of the figure rather than an arbitrary one.
     const n = 50
-    const h = 3
+    const diagonals = 4
+    const far = diagonals - 1
     const values = noisySquare(n)
-    const cells = triangleCells(h)
-    const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-      halfWidth: h,
-      minValid: 1,
-    })
-    for (let bin = h; bin < n - h; bin++) {
-      let diagonal = 0
-      for (let i = bin - h; i <= bin + h; i++) diagonal += values[i * n + i]
-      expect(2 * score[bin] * cells - diagonal).toBeCloseTo(squareSum(values, n, bin, h), 4)
+    const cells = lineCells(diagonals)
+    const score = hicScore(squareBand(values, n, { hi: far }), { diagonals, minValid: 1 })
+    for (let bin = far; bin < n - far; bin++) {
+      expect(2 * score[bin] * cells - values[bin * n + bin]).toBeCloseTo(
+        crosshair(values, n, bin, far),
+        4,
+      )
     }
   })
 
-  it('agrees with the double loop when diagonals are cut', () => {
+  it('cuts diagonals off the near end, N with them', () => {
     const n = 60
-    const h = 5
+    const diagonals = 6
     const values = noisySquare(n)
-    const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-      halfWidth: h,
+    const score = hicScore(squareBand(values, n, { hi: diagonals - 1 }), {
+      diagonals,
       minValid: 1,
-      ignoreDiags: 3,
+      ignoreDiags: 2,
     })
-    for (let bin = h; bin < n - h; bin++) {
-      expect(score[bin]).toBeCloseTo(bruteForce(values, n, bin, h, { ignoreDiags: 3 }), 5)
+    for (let bin = diagonals; bin < n - diagonals; bin++) {
+      let sum = 0
+      for (let sep = 2; sep <= diagonals - 1; sep++) {
+        sum += values[bin * n + (bin + sep)] + values[bin * n + (bin - sep)]
+      }
+      expect(score[bin]).toBeCloseTo(sum / lineCells(diagonals, 2), 5)
     }
   })
 
-  it('scores nothing where the window is not wholly on the sequence', () => {
+  it('scores nothing where the line is not wholly on the sequence', () => {
     const n = 60
-    const h = 4
+    const diagonals = 5
+    const far = diagonals - 1
     // `minValid: 0` would score anything with one countable cell in it, so this
-    // is the case that separates *a window off the end* from *a window with gaps
-    // in it*: the ends are refused whatever the coverage threshold says.
-    const score = hicScore(squareBand(noisySquare(n), n, { hi: 2 * h }), {
-      halfWidth: h,
-      minValid: 0,
-    })
-    for (let bin = 0; bin < h; bin++) {
+    // is the case that separates *a line off the end* from *a line with gaps in
+    // it*: the ends are refused whatever the coverage threshold says.
+    const score = hicScore(squareBand(noisySquare(n), n, { hi: far }), { diagonals, minValid: 0 })
+    for (let bin = 0; bin < far; bin++) {
       expect(score[bin]).toBeNaN()
       expect(score[n - 1 - bin]).toBeNaN()
     }
-    expect(score[h]).not.toBeNaN()
-    expect(score[n - 1 - h]).not.toBeNaN()
+    expect(score[far]).not.toBeNaN()
+    expect(score[n - 1 - far]).not.toBeNaN()
   })
 
-  it('has nothing to say about a sequence shorter than the window', () => {
+  it('has nothing to say about a sequence shorter than the line', () => {
     const n = 5
-    const h = 4
-    const score = hicScore(squareBand(noisySquare(n), n, { hi: 2 * h }), {
-      halfWidth: h,
-      minValid: 0,
-    })
+    const diagonals = 9
+    const score = hicScore(squareBand(noisySquare(n), n, { hi: 8 }), { diagonals, minValid: 0 })
     for (let bin = 0; bin < n; bin++) expect(score[bin]).toBeNaN()
   })
 
-  it('wraps the window round a circular sequence, so every bin scores', () => {
-    const n = 60
-    const h = 4
-    const values = noisySquare(n)
-    const band = squareBand(values, n, { circular: true, hi: 2 * h })
-    const score = hicScore(band, { halfWidth: h, minValid: 1 })
-    for (let bin = 0; bin < n; bin++) {
-      expect(score[bin]).toBeCloseTo(bruteForce(values, n, bin, h, { circular: true }), 5)
+  it('needs 2D − 1 bins before any bin has a whole line', () => {
+    // The boundary the runner's own length filter mirrors: one bin fewer than
+    // the line spans and the whole sequence is a gap; exactly as many, and the
+    // middle bin alone scores.
+    const diagonals = 3
+    const far = diagonals - 1
+    for (const n of [2 * far, 2 * far + 1]) {
+      const score = hicScore(squareBand(noisySquare(n), n, { hi: far }), { diagonals, minValid: 0 })
+      const scored = Array.from(score).filter((v) => Number.isFinite(v)).length
+      expect(scored).toBe(n === 2 * far ? 0 : 1)
     }
   })
 
-  it('drops a bin whose window is mostly missing', () => {
+  it('wraps the line round a circular sequence, so every bin scores', () => {
     const n = 60
-    const h = 3
+    const diagonals = 3
+    const far = diagonals - 1
+    const values = noisySquare(n)
+    const score = hicScore(squareBand(values, n, { circular: true, hi: far }), {
+      diagonals,
+      minValid: 1,
+    })
+    for (let bin = 0; bin < n; bin++) {
+      let sum = 0
+      for (let d = -far; d <= far; d++) sum += values[bin * n + (((bin + d) % n) + n) % n]
+      expect(score[bin]).toBeCloseTo(sum / lineCells(diagonals), 5)
+    }
+  })
+
+  it('drops a bin whose line is mostly missing', () => {
+    const n = 60
+    const diagonals = 4
     const values = noisySquare(n)
     // A dropped stretch, as the balancer leaves one: whole rows and their
     // mirrored columns.
@@ -222,62 +219,57 @@ describe('hicScore', () => {
         values[k * n + dead] = Number.NaN
       }
     }
-    const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-      halfWidth: h,
+    const score = hicScore(squareBand(values, n, { hi: diagonals - 1 }), {
+      diagonals,
       minValid: 0.5,
     })
     expect(score[30]).toBeNaN()
     // And a bin far from it is untouched, rather than the whole track going.
-    expect(score[10]).toBeCloseTo(bruteForce(values, n, 10, h), 5)
+    expect(score[10] * lineCells(diagonals)).toBeCloseTo(rleScript(values, n, diagonals - 1)[10], 5)
   })
 
-  it('divides a window with gaps by the whole of N, rather than scaling it up', () => {
+  it('divides a line with gaps by the whole of N, rather than scaling it up', () => {
     const n = 40
-    const h = 2
+    const diagonals = 3
     const values = new Float32Array(n * n).fill(4)
-    // One dropped row inside bin 20's window: 5 of its 15 cells go, so the mean
-    // is 4 × 10/15 rather than 4.
+    // One dropped row inside bin 20's line: it takes 1 of the 5 cells, so the
+    // mean is 4 × 4/5 rather than 4.
     for (let k = 0; k < n; k++) {
       values[19 * n + k] = Number.NaN
       values[k * n + 19] = Number.NaN
     }
-    const score = hicScore(squareBand(values, n, { hi: 2 * h }), {
-      halfWidth: h,
+    const score = hicScore(squareBand(values, n, { hi: diagonals - 1 }), {
+      diagonals,
       minValid: 0.5,
     })
-    expect(score[20]).toBeCloseTo((4 * 10) / 15, 6)
+    expect(score[20]).toBeCloseTo((4 * 4) / 5, 6)
   })
 })
 
 /**
- * The window a reader types, and the square it becomes.
+ * The number a reader types, and the line it becomes.
  *
- * The number is the **side** of the square in bins, which on a window centred on
- * the diagonal is also how many diagonals it spans — and a square centred on a
- * bin has an odd number of bins on a side, so the even case has to round one way
- * or the other. Down, because a 4-bin window answered with a 5-bin square is a
- * window wider than the one on the label.
+ * Diagonals counting the main one — so the reach each way, and the depth the
+ * band is read to, is one less. The R script's `num_diagonals` is that reach:
+ * its 2 is this task's 3.
  */
-describe('the window', () => {
-  it('defaults to three diagonals, which is six cells', () => {
-    expect(DEFAULT_HIC_SCORE_WINDOW_BINS).toBe(3)
-    const half = halfWidthAt({})
-    expect(half).toBe(1)
-    expect(2 * half + 1).toBe(3)
-    expect(triangleCells(half)).toBe(6)
+describe('the diagonal count', () => {
+  it('defaults to three diagonals, which is five cells reaching two bins', () => {
+    expect(DEFAULT_HIC_SCORE_DIAGONALS).toBe(3)
+    expect(diagonalsOf({})).toBe(3)
+    expect(reachOf({})).toBe(2)
+    expect(lineCells(diagonalsOf({}))).toBe(5)
   })
 
-  it('is the largest odd square that fits, never the next one up', () => {
-    expect(halfWidthAt({ window: 3 })).toBe(1)
-    expect(halfWidthAt({ window: 4 })).toBe(1)
-    expect(halfWidthAt({ window: 5 })).toBe(2)
-    expect(halfWidthAt({ window: 25 })).toBe(12)
-    expect(halfWidthAt({ window: 50 })).toBe(24)
+  it('reaches one bin fewer than it counts', () => {
+    expect(reachOf({ diagonals: 1 })).toBe(0)
+    expect(reachOf({ diagonals: 5 })).toBe(4)
+    expect(reachOf({ diagonals: 25 })).toBe(24)
   })
 
-  it('floors at the smallest square there is', () => {
-    expect(windowBinsOf({ window: 0 })).toBe(1)
-    expect(halfWidthAt({ window: 1 })).toBe(1)
-    expect(halfWidthAt({ window: 2 })).toBe(1)
+  it('floors at the main diagonal alone', () => {
+    expect(diagonalsOf({ diagonals: 0 })).toBe(1)
+    expect(diagonalsOf({ diagonals: -4 })).toBe(1)
+    expect(reachOf({ diagonals: 0 })).toBe(0)
   })
 })
