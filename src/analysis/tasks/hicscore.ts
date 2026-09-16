@@ -3,27 +3,36 @@
  *
  * After the directionality index, and the three of them read outward from the
  * same place: the diamond asks what crosses a bin, the index asks which way it
- * leans, and this asks how much there is around it at all. The first two are
+ * leans, and this asks how much contact the bin makes at all. The first two are
  * *ratios* and are deliberately blind to depth — that is what makes them
- * comparable between chromosomes — and this one is a **sum** and is not, which
- * is the whole reason it is a separate reading rather than a third smoothing of
- * the same one. A region that has lost its local structure has a smaller sum and
- * an unremarkable insulation score, because the ratio it is measured against fell
- * with it.
+ * comparable between chromosomes — and this one is a **mean cell value** and is
+ * not, which is the whole reason it is a separate reading rather than a third
+ * smoothing of the same one. A region that has lost its local structure has a
+ * smaller mean and an unremarkable insulation score, because the ratio it is
+ * measured against fell with it.
  *
- * ## The window
+ * ## The parameter is a count of diagonals
  *
- * In base pairs, and it is the **side of the square** rather than its reach each
- * way. A reader asking for a 200 kb HiC score means a 200 kb window, which is
- * the interval the score is a statement about; halving it into a radius is
- * arithmetic the form should do and not the reader. The runner says in a note
- * what that came to in bins, for the same reason the directionality index does.
+ * The score is the bin's own line across the near-diagonal, so the one number
+ * that decides what it measures is **how many diagonals that line spans**,
+ * counting the main one. `3` is the main diagonal and the one either side of it
+ * — five cells, reaching two bins each way. It is the same number the method is
+ * described with and the same number the R script this reproduces calls
+ * `num_diagonals`, one greater (that one counts diagonals *beside* the main one
+ * and 2 there is 3 here).
  *
- * The default is **50 kb**, which is the scale the score is a useful reading at
- * on the bacterial and phage maps it comes from — small enough that the window is
- * one structural feature rather than a whole domain, large enough that it holds
- * more than the self-ligation spike. A mammalian map wants it wider, and that is
- * exactly the kind of thing a form control is for.
+ * In diagonals rather than base pairs for the reason the diamond's window and
+ * the index's are in bins (§18.5): the near-diagonal is a fact about the grid
+ * rather than about the genome, and the same typed number of base pairs meant
+ * three diagonals at one resolution and one at the next. The runner says what
+ * the reach came to in base pairs on the file actually open, because three
+ * diagonals reach 4 kb either way on the 2 kb maps this default was chosen
+ * against and 100 kb on a 50 kb one.
+ *
+ * {@link DEFAULT_HIC_SCORE_DIAGONALS} is **3**, which is the bacterial reading:
+ * 2 kb matrices, the main diagonal and the two beside it, five cells averaged.
+ * A map with much larger domains wants more, and that is exactly the kind of
+ * thing a form control is for.
  */
 
 import { contigNamed, framingCovers } from '../context'
@@ -39,25 +48,30 @@ import type {
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 
-/** The window the score is read at unless somebody says otherwise. */
-export const DEFAULT_HIC_SCORE_WINDOW_BP = 50_000
+/**
+ * The main diagonal and the one either side, which is the bacterial reading.
+ *
+ * Five cells on the 2 kb matrices this score is computed on there, reaching
+ * 4 kb each way — `num_diagonals = 2` in the R script this reproduces, which
+ * counts the same set from the other end.
+ */
+export const DEFAULT_HIC_SCORE_DIAGONALS = 3
 
-/** The window in base pairs — the whole side of the square. */
-export function windowBpOf(params: Params): number {
-  const value = typeof params.window === 'number' ? params.window : DEFAULT_HIC_SCORE_WINDOW_BP
+/** Diagonals the line spans, counting the main one. At least one. */
+export function diagonalsOf(params: Params): number {
+  const value = typeof params.diagonals === 'number' ? params.diagonals : DEFAULT_HIC_SCORE_DIAGONALS
   return Math.max(1, Math.round(value))
 }
 
 /**
- * How far the square reaches each way, in bins.
+ * The widest separation the line touches, in bins.
  *
- * Half the window, and **at least one bin**: a window narrower than two bins is
- * a square one cell on a side, which is the main diagonal and not a reading of
- * anything around it. The floor is what turns that into a small answer rather
- * than an empty one, and the runner says so when it bites.
+ * One less than the diagonal count — the main diagonal is separation zero — and
+ * it is also how far the line reaches each way, and therefore how deep the band
+ * behind it has to be read.
  */
-export function halfWidthAt(params: Params, binsize: number): number {
-  return Math.max(1, Math.round(windowBpOf(params) / Math.max(1, binsize) / 2))
+export function reachOf(params: Params): number {
+  return diagonalsOf(params) - 1
 }
 
 function regionOf(params: Params): string {
@@ -72,13 +86,15 @@ function regionContig(context: AnalysisContext, region: string): ContextContig |
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
-    key: 'window',
-    label: 'Window',
-    hint: 'The side of the square, centred on each bin. Everything inside it is added up.',
-    default: DEFAULT_HIC_SCORE_WINDOW_BP,
+    key: 'diagonals',
+    label: 'Diagonals',
+    hint:
+      'How many diagonals the bin’s line crosses, counting the main one. 3 is the main diagonal ' +
+      'and the one either side — five cells, two bins each way — the reading bacterial maps are ' +
+      'scored with at 2 kb.',
+    default: DEFAULT_HIC_SCORE_DIAGONALS,
     min: 1,
     integer: true,
-    unit: 'bp',
   },
   {
     kind: 'region',
@@ -91,7 +107,10 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'ignoreDiags',
     label: 'Diagonals to ignore',
-    hint: '0 counts every cell, including the bin’s contact with itself.',
+    hint:
+      '0 counts every cell, including the bin’s contact with itself — which at three diagonals is ' +
+      'most of the score, is where self-ligation lands, and on a balanced map is the one place the ' +
+      'weights were never fitted. 1 cuts it out.',
     default: 0,
     min: 0,
     integer: true,
@@ -100,7 +119,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of the window',
+    label: 'Minimum coverage of the line',
     hint: 'Below this fraction of usable cells the bin gets no score at all.',
     default: 0.5,
     min: 0,
@@ -114,22 +133,22 @@ const PARAMS: readonly ParamSpec[] = [
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
-  const half = halfWidthAt(params, context.binsize)
-  // The corners of the square are `2h` apart, so that is how deep the band has
-  // to be read. Pricing it at `h` would quote half the reads the runner makes.
-  const depth = half * 2
+  // The furthest cell of the line is `diagonals − 1` from the diagonal, so that
+  // is how deep the band has to be read — and no deeper. The square-window
+  // reading this replaced needed twice its own reach, for its corners.
+  const depth = reachOf(params)
   const contig = regionContig(context, regionOf(params))
 
-  if (contig !== undefined && contig.bins <= depth) {
+  if (contig !== undefined && contig.bins <= 2 * depth) {
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `${contig.name} is ${contig.bins.toLocaleString()} bins and the window is ` +
-        `${(depth + 1).toLocaleString()} across, so no bin on it has a whole square around it. ` +
-        'Use a narrower window, or a longer sequence.',
+        `${contig.name} is ${contig.bins.toLocaleString()} bins and the line is ` +
+        `${(2 * depth + 1).toLocaleString()} across, so no bin on it has a whole line through ` +
+        'it. Use fewer diagonals, or a longer sequence.',
     }
   }
 
@@ -164,19 +183,19 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       bytes: null,
       note:
         `About ${requests.toLocaleString()} range requests: ${contig.name} is read as a band ` +
-        `${depth.toLocaleString()} bins deep, in ${tiles.toLocaleString()} ` +
-        `${tiles === 1 ? 'strip' : 'strips'}, never as the whole square.`,
+        `${depth.toLocaleString()} ${depth === 1 ? 'bin' : 'bins'} deep, in ` +
+        `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'}, never as the whole square.`,
     }
   }
 
-  const long = context.contigs.filter((entry) => entry.bins > depth)
+  const long = context.contigs.filter((entry) => entry.bins > 2 * depth)
   const tiles = long.reduce((sum, entry) => sum + bandTiles(entry.bins, depth), 0)
   return {
     class: 'scan',
     requests: tiles * perTile,
     bytes: null,
     note:
-      `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
+      `${long.length.toLocaleString()} sequences are long enough for this score, read as ` +
       `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals. ` +
       'Progress is reported per sequence and it can be cancelled at any point.',
   }
@@ -185,10 +204,15 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 export const HIC_SCORE_TASK: AnalysisTask = {
   id: 'hicscore',
   title: 'HiC score',
-  blurb: 'How much contact there is in a window around each bin.',
+  blurb: 'The mean contact a bin makes with its near neighbourhood.',
   group: 'map',
   venue: 'analysis',
-  version: 1,
+  // Bumped twice over this cycle: version 1 summed the whole square window, 2
+  // took the mean of its upper triangle, and this one is the mean of the bin's
+  // own line across the near-diagonal — which is the reading the R script the
+  // score comes from computes. A result carried in from a shared session naming
+  // an older version is a different quantity under the same title.
+  version: 3,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
   outputs: ['profile'],

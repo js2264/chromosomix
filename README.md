@@ -254,10 +254,10 @@ metacooler-run tasks
 ## 
 ## hicscore
 ##     HiC score
-##       --window (default 50000)  Window
+##       --diagonals (default 3)  Diagonals
 ##       --region  Sequence
 ##       --ignoreDiags (default 0)  Diagonals to ignore
-##       --minValid (default 0.5)  Minimum coverage of the window
+##       --minValid (default 0.5)  Minimum coverage of the line
 ##       --balance (default false)  Use balancing weights
 ## 
 ## compartments
