@@ -25,6 +25,7 @@ import {
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { barChartSummary, isBarChartSchema, parseBarChart, sniffBarChart } from '../barchart'
 import { g3dSummary, parseBed3d, parseG3d, sniffBed3d, sniffG3d } from '../g3d'
+import { g3dBinaryNote, isG3dBinary, readG3dHeader, readG3dModel, type G3dHeader } from '../g3dBinary'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
 import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
@@ -100,6 +101,7 @@ import type {
   TrackSamples,
   TrackSampleSet,
 } from '../types'
+import { DETAIL_SEP } from '../types'
 import {
   bbiMagic,
   isHdf5,
@@ -1001,6 +1003,12 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
   // A structure dropped on an empty session declares a genome the way any
   // feature file does — every sequence ends at its last bead — and opens a
   // browser over it (§5.8, §25). Same place in the order as in `load`.
+  if (isG3dBinary(head)) {
+    const data = await readFinestG3d(handle)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
   if (sniffG3d(text, source.name) || sniffBed3d(text, source.name)) {
     const data = sniffG3d(text, source.name) ? parseG3d(text, source.name) : parseBed3d(text, source.name)
     const ends = new Map<string, number>()
@@ -1521,6 +1529,10 @@ async function load(
   if (looksLikeTwoBit(head)) {
     return loadFasta(entry, await readTwoBit(source, handle, report), mapContigs)
   }
+  // WashU's container, by its magic (§25.2): a 64 000-byte msgpack header
+  // and one zlib block per resolution, read by range like a BAM rather than
+  // whole like a text — the header says where each block is.
+  if (isG3dBinary(head)) return loadG3dBinary(handle, mapContigs)
 
   // The parse this file already had, when the browser asked what genome it was
   // on a moment ago. Same bytes, same answer; the overlap report is recomputed
@@ -1788,6 +1800,44 @@ function loadG3d(
     contigs: data.contigs,
     overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary: g3dSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * The finest model of a binary g3d, with the header it came from.
+ *
+ * The finest rather than the map's rung, because a structure's spacing is a
+ * fact about how it was modelled and not about the map it is drawn beside
+ * (§25.2): the same file opens the same way next to a 1 kb map and a 50 kb
+ * one, and the coarser rungs are named under the row so a reader knows they
+ * exist. Two range reads: the header, then the one block.
+ */
+async function readFinestG3d(
+  handle: BlobFile | RemoteFile,
+): Promise<FeatureSet & { header: G3dHeader }> {
+  const read = (length: number, position: number): Promise<Uint8Array> => handle.read(length, position)
+  const size = await sizeOf(handle)
+  const header = await readG3dHeader(read, size ?? undefined)
+  const finest = Math.min(...header.resolutions)
+  const data = await readG3dModel(read, header, finest)
+  return Object.assign(data, { header })
+}
+
+async function loadG3dBinary(handle: BlobFile | RemoteFile, mapContigs: NamedSequence[]): Promise<LoadResult> {
+  const data = await readFinestG3d(handle)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  const others = data.header.resolutions.filter((resolution) => resolution !== data.model?.width)
+  const summary = [
+    g3dSummary(data),
+    g3dBinaryNote(data.header),
+    ...(others.length === 0 ? [] : [`also at ${others.join(', ')} bp`]),
+  ].join(DETAIL_SEP)
+  return {
+    format: 'structure',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary,
     payload: { kind: 'features', data },
   }
 }
