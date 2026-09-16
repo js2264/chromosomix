@@ -415,6 +415,7 @@ interface Draft {
   geneName: string
   biotype: string
   source: string
+  product: string
   exons: number[]
   cdsFrom: number
   cdsTo: number
@@ -429,10 +430,12 @@ interface Draft {
  * Per transcript is what a genome browser draws and what the exon structure
  * belongs to.
  *
- * A transcript is assembled from whichever lines mention it, so the three
- * layouts in the wild all work: a file with `transcript` lines, a file with only
- * `exon` lines, and a file with neither (which falls back to `gene` lines drawn
- * as plain boxes).
+ * A transcript is assembled from whichever lines mention it, so the four layouts
+ * in the wild all work: a file with `transcript` lines, a file with only `exon`
+ * lines, a file with neither (which falls back to `gene` lines drawn as plain
+ * boxes), and a file with **no hierarchy at all** — one row per feature, no
+ * `Parent` anywhere, which is what every bacterial annotation is and what
+ * {@link roleOf} calls `standalone`.
  *
  * **Names and ids are two different facts and both are kept.** A gene has a
  * symbol a reader recognises (`LipL1`) and an accession a database does
@@ -447,6 +450,9 @@ export function parseGtf(text: string): FeatureSet {
   const geneNames = new Map<string, string>()
   const geneBiotypes = new Map<string, string>()
   const genes: Draft[] = []
+  // Rows that are a whole feature and name nobody, not even themselves: nothing
+  // can reference them, so they need no key and are held in a plain list.
+  const singles: Draft[] = []
   const gff3 = looksLikeGff3(text)
 
   forEachRow(text, (columns) => {
@@ -461,13 +467,17 @@ export function parseGtf(text: string): FeatureSet {
     const strand = strandOf(columns[6])
     const attributes = parseAttributes(columns[8] ?? '', gff3)
 
-    const isGene = isGeneRow(feature)
-    const isTranscript = !isGene && isTranscriptRow(feature)
-    const geneId = geneIdOf(attributes, gff3, isGene, isTranscript)
+    const role = roleOf(feature, attributes, gff3)
+    // The sequence's own row is not a feature on it. Dropped here rather than
+    // drawn as the full-width box it would otherwise become now that a row with
+    // no parent is something this parser keeps.
+    if (role === 'landmark') return
+    const geneId = geneIdOf(attributes, role)
     const geneName = firstOf(attributes, GENE_NAME_KEYS)
     const biotype = attributes.get('gene_biotype') ?? attributes.get('gene_type') ?? ''
+    const product = attributes.get('product') ?? ''
 
-    if (isGene) {
+    if (role === 'gene') {
       // Registered under *every* id a child could name it by — GTF's `gene_id`
       // and GFF3's own `ID` — because the two conventions are mixed inside one
       // file more often than not: the PlasmoDB gene line carries `ID`, its mRNA
@@ -487,6 +497,7 @@ export function parseGtf(text: string): FeatureSet {
         geneName,
         biotype,
         source,
+        product,
         exons: [],
         cdsFrom: -1,
         cdsTo: -1,
@@ -494,9 +505,13 @@ export function parseGtf(text: string): FeatureSet {
       return
     }
 
-    const key = transcriptKey(attributes, gff3, isTranscript)
-    if (key === null) return
-    let draft = drafts.get(key)
+    const key = transcriptKey(attributes, role)
+    // A `part` with no key is a fragment of a transcript the file never names,
+    // and there is genuinely nothing to draw it against. A `standalone` with no
+    // key is a whole feature that simply carries no `ID`, which is a thing GFF3
+    // permits of any row nothing points at — it is drawn, keyless.
+    if (key === null && role !== 'standalone') return
+    let draft = key === null ? undefined : drafts.get(key)
     if (draft === undefined) {
       draft = {
         contig,
@@ -507,14 +522,18 @@ export function parseGtf(text: string): FeatureSet {
         geneName,
         biotype,
         source,
+        product,
         exons: [],
         cdsFrom: -1,
         cdsTo: -1,
       }
-      drafts.set(key, draft)
+      if (key === null) singles.push(draft)
+      else drafts.set(key, draft)
     }
-    // A transcript's own line gives the span; an exon-only file has to grow it.
-    if (isTranscript) {
+    // A transcript's own line gives the span; an exon-only file has to grow it,
+    // and so does the one case where two rows share an `ID` without either
+    // being a transcript — GFF3's way of writing a feature with a gap in it.
+    if (role === 'transcript') {
       draft.start = start
       draft.end = end
     } else {
@@ -524,6 +543,7 @@ export function parseGtf(text: string): FeatureSet {
     if (draft.geneId === '') draft.geneId = geneId
     if (draft.geneName === '') draft.geneName = geneName
     if (draft.biotype === '') draft.biotype = biotype
+    if (draft.product === '') draft.product = product
     if (feature === 'exon') draft.exons.push(start, end)
     if (feature === 'cds') {
       if (draft.cdsFrom < 0 || start < draft.cdsFrom) draft.cdsFrom = start
@@ -531,13 +551,15 @@ export function parseGtf(text: string): FeatureSet {
     }
   })
 
+  const assembled = [...drafts.values(), ...singles]
   // Nothing with sub-structure: a bare gene list, or an annotation of features
   // this parser has no hierarchy for. Draw what is there.
-  const rows = drafts.size > 0 ? [...drafts.values()] : genes
+  const rows = assembled.length > 0 ? assembled : genes
   if (rows.length === 0) {
     throw new Error(
-      'No genes, transcripts or exons found. A GTF or GFF needs a feature column ' +
-        '(column 3) naming at least one of them.',
+      'No features found. Every row either described the sequence itself rather than ' +
+        'something on it, or named a parent that the file never defines — on a GTF, that ' +
+        'means no row carried a `transcript_id`.',
     )
   }
 
@@ -559,6 +581,10 @@ export function parseGtf(text: string): FeatureSet {
     // it, while the feature card gains a label it was missing anyway.
     const detail = [
       biotype === '' ? '' : `biotype ${biotype}`,
+      // What a prokaryotic annotation is *for*. Without it the card on a
+      // Prokka CDS reads `source Prodigal:002006` and nothing else, while the
+      // one sentence saying what the protein does sits unread in the file.
+      draft.product === '' ? '' : `product ${draft.product}`,
       draft.source === '' ? '' : `source ${draft.source}`,
       draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
     ]
@@ -585,11 +611,24 @@ export function parseGtf(text: string): FeatureSet {
  * GFF3's, and it is last because a transcript line carries one too and it means
  * the transcript — which is exactly why the gene's own line is consulted first
  * when the row is resolved.
+ *
+ * A bare `gene` is NCBI's and Prokka's, and it sits above `Name` for the same
+ * reason `Name` is last: `gene=dnaA` means the gene's symbol on whatever row it
+ * appears, so it is never the transcript's when the two disagree.
  */
-const GENE_NAME_KEYS = ['gene_name', 'genename', 'gene_symbol', 'symbol', 'name']
+const GENE_NAME_KEYS = ['gene_name', 'genename', 'gene_symbol', 'symbol', 'gene', 'name']
 
-/** …and its **accession**. `ID` is not here: see {@link geneIdOf} for why. */
-const GENE_ID_KEYS = ['gene_id', 'geneid']
+/**
+ * …and its **accession**.
+ *
+ * `locus_tag` is the third spelling, and the one a bacterial file writes. It is
+ * assigned per gene by definition — NCBI puts the same one on the gene row and
+ * on its CDS — so a row carrying one is naming its gene exactly as `gene_id`
+ * would, and a Prokka file that writes nothing else has an accession after all.
+ *
+ * `ID` is still not here: see {@link geneIdOf} for why.
+ */
+const GENE_ID_KEYS = ['gene_id', 'geneid', 'locus_tag']
 
 /** The first of these attributes the line carries, or `''`. */
 function firstOf(attributes: Map<string, string>, keys: readonly string[]): string {
@@ -615,16 +654,14 @@ function firstOf(attributes: Map<string, string>, keys: readonly string[]): stri
  * transcript instead, so they are left to contribute whatever `gene_id` they
  * carry (VEuPathDB writes one) and nothing otherwise.
  */
-function geneIdOf(
-  attributes: Map<string, string>,
-  gff3: boolean,
-  isGene: boolean,
-  isTranscript: boolean,
-): string {
+function geneIdOf(attributes: Map<string, string>, role: RowRole): string {
   const explicit = firstOf(attributes, GENE_ID_KEYS)
   if (explicit !== '') return explicit
-  if (isGene) return attributes.get('id') ?? ''
-  if (!gff3 || !isTranscript) return ''
+  // On a gene row `ID` is the gene, and on a standalone row it is the whole
+  // feature — which is the same fact twice, because a file with no hierarchy
+  // in it has nothing above the row for the id to belong to instead.
+  if (role === 'gene' || role === 'standalone') return attributes.get('id') ?? ''
+  if (role !== 'transcript') return ''
   const parent = attributes.get('parent') ?? ''
   return parent === '' ? '' : parent.split(',')[0]
 }
@@ -659,24 +696,103 @@ function isTranscriptRow(feature: string): boolean {
 }
 
 /**
- * Which id groups a line into a transcript.
+ * Which id groups a line into one drawn feature.
  *
  * GTF says `transcript_id`. GFF3 says the child's `Parent` and the transcript's
  * own `ID`, which are the same string seen from the two ends of the
- * relationship. A line with neither is one this parser cannot place, and it is
- * skipped rather than guessed at.
+ * relationship. A `standalone` row is keyed by its own `ID` for a third reason:
+ * nothing points at it, so the only thing that can share its key is another row
+ * spelling the same `ID` — which is how GFF3 writes a feature with a gap in it,
+ * and those two rows are one feature and want one glyph.
+ *
+ * `null` means *cannot be keyed*, which is a dropped row for a `part` and a
+ * keyless one for a `standalone` — see {@link parseGtf}. An empty `ID` counts as
+ * no id: keying on `''` would collect every row that has one into a single
+ * feature stretching across the file.
  */
-function transcriptKey(
-  attributes: Map<string, string>,
-  gff3: boolean,
-  isTranscript: boolean,
-): string | null {
+function transcriptKey(attributes: Map<string, string>, role: RowRole): string | null {
   const explicit = attributes.get('transcript_id')
   if (explicit !== undefined && explicit !== '') return explicit
-  if (!gff3) return null
-  if (isTranscript) return attributes.get('id') ?? null
-  const parent = attributes.get('parent')
-  return parent === undefined || parent === '' ? null : parent.split(',')[0]
+  if (role === 'part') {
+    const parent = attributes.get('parent')
+    return parent === undefined || parent === '' ? null : parent.split(',')[0]
+  }
+  const id = attributes.get('id')
+  return id === undefined || id === '' ? null : id
+}
+
+/**
+ * What kind of thing one GTF/GFF line is, which is what decides how it is keyed.
+ *
+ * - `gene` — the gene's own row. Its `ID` is the gene.
+ * - `transcript` — an mRNA, a tRNA, a `pseudogenic_transcript`: the thing a
+ *   glyph is drawn for. Its `ID` is the transcript, its `Parent` is the gene.
+ * - `part` — an exon or a CDS *of* something, which names the transcript it
+ *   belongs to through `Parent` or `transcript_id` and lends it its span.
+ * - `standalone` — a row that names no parent at all, which makes it a whole
+ *   feature rather than a fragment of one.
+ * - `landmark` — a row about the sequence itself rather than anything on it.
+ */
+type RowRole = 'gene' | 'transcript' | 'part' | 'standalone' | 'landmark'
+
+/**
+ * Which of the five a row is.
+ *
+ * The first three are the hierarchy GTF and an Ensembl-flavoured GFF3 are built
+ * from — gene, transcript, and the exons and CDS underneath — and for a long
+ * time they were the only three this parser knew. `standalone` is the one that
+ * was missing, and leaving it out is what made a 5,870-feature Prokka GFF arrive
+ * as 87 features.
+ *
+ * **A bacterial annotation has no hierarchy in it.** Prokka, Bakta and DFAST all
+ * write one row per feature, each with its own `ID` and `locus_tag`, and not a
+ * single `Parent` anywhere in the file: a bacterial gene is one uninterrupted
+ * CDS, so there is no sub-structure for a parent to hold together and the gene
+ * and mRNA rows Ensembl writes would each be a second copy of the same span.
+ * Read as a `part`, every one of those CDS rows went looking for a transcript to
+ * belong to, found that it had never named one, and was dropped — while the
+ * file's tRNAs and rRNAs matched {@link isTranscriptRow} and came through on
+ * their own `ID`s. That is the whole of the 87: a file's RNAs and none of its
+ * proteins, which is also why what was drawn looked like a working parser.
+ *
+ * So the test is what claims the row, not what the row is called: `Parent` and
+ * `transcript_id` are the two ways a line says it is part of something, and a
+ * line that says neither is not a fragment of anything. It is a feature.
+ */
+function roleOf(feature: string, attributes: Map<string, string>, gff3: boolean): RowRole {
+  if (LANDMARK_ROWS.has(feature)) return 'landmark'
+  if (isGeneRow(feature)) return 'gene'
+  if (isTranscriptRow(feature)) return 'transcript'
+  if (carries(attributes, 'transcript_id')) return 'part'
+  // GTF has no `Parent` and never meant to: its rows are fragments by
+  // construction and `transcript_id` above is the only thing that places one.
+  if (!gff3) return 'part'
+  return carries(attributes, 'parent') ? 'part' : 'standalone'
+}
+
+/**
+ * Rows that describe the **sequence** rather than something on it.
+ *
+ * NCBI opens each contig with a `region` row spanning it end to end, and a GFF
+ * converted from GenBank writes `source` for the same thing. Both were dropped
+ * before, silently and by accident — they name no parent, so they were
+ * unplaceable `part`s — and a row with no parent is now kept, so what used to
+ * fall off the end has to be turned away deliberately instead. Drawn, each would
+ * be a box the width of the chromosome sitting on top of the genes.
+ */
+const LANDMARK_ROWS = new Set([
+  'region',
+  'source',
+  'chromosome',
+  'contig',
+  'scaffold',
+  'supercontig',
+])
+
+/** Whether the row carries a non-empty value for `key`. */
+function carries(attributes: Map<string, string>, key: string): boolean {
+  const value = attributes.get(key)
+  return value !== undefined && value !== ''
 }
 
 /** GFF3 writes `key=value`; GTF writes `key "value"`. One `=` before a `"` decides. */

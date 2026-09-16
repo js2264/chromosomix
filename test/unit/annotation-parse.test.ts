@@ -303,6 +303,122 @@ describe('a GFF3 that spells its attributes the other way', () => {
   })
 })
 
+/**
+ * The GFF3 with no hierarchy in it at all, which is what a bacterial annotation
+ * is.
+ *
+ * Prokka, Bakta and DFAST write **one row per feature** — its own `ID`, its own
+ * `locus_tag`, and not one `Parent` anywhere in the file — because a bacterial
+ * gene is a single uninterrupted CDS, so there is no sub-structure for a parent
+ * to hold together and the gene and mRNA rows Ensembl writes would each be a
+ * second copy of the same span.
+ *
+ * Read as fragments of a transcript they had never named, every CDS row in such
+ * a file was dropped. What came through was the rows whose *type* ends in `rna`
+ * and which were therefore read as transcripts of their own: a 6.4 Mb
+ * Pseudomonas annotation arrived as **87 features out of 5,870**, every one of
+ * them an RNA and not one of them a protein.
+ */
+describe('a GFF3 with no hierarchy in it', () => {
+  /** Four rows as Prokka writes them, copied from a real `PAK.gff`. */
+  const PROKKA =
+    'L1\tProdigal:002006\tCDS\t7\t1545\t.\t+\t0\tID=T_00001;Name=dnaA;gene=dnaA;locus_tag=T_00001;product=Chromosomal replication initiator protein DnaA\n' +
+    'L1\tProdigal:002006\tCDS\t6525\t7298\t.\t-\t0\tID=T_00005;locus_tag=T_00005;product=hypothetical protein\n' +
+    'L1\tAragorn:001002\ttRNA\t286539\t286615\t.\t-\t.\tID=T_00259;locus_tag=T_00259;product=tRNA-Arg(ccg)\n' +
+    'L1\tbarrnap:0.9\trRNA\t706360\t707890\t0\t+\t.\tID=T_00667;locus_tag=T_00667;product=16S ribosomal RNA\n'
+
+  it('draws every row, not only the ones whose type ends in RNA', () => {
+    const set = parseGtf(PROKKA)
+    expect(set.length).toBe(4)
+    // The shape of the bug, stated the way the file showed it: the two RNAs
+    // came through and the two CDS rows did not.
+    expect(indexOfNamed(set, 'dnaA')).toBeGreaterThanOrEqual(0)
+  })
+
+  it('converts a standalone row to 0-based half-open like any other', () => {
+    const set = parseGtf(PROKKA)
+    const at = indexOfNamed(set, 'dnaA')
+    expect(set.start[at]).toBe(6)
+    expect(set.end[at]).toBe(1545)
+    expect(set.strand[at]).toBe(1)
+  })
+
+  it('takes the accession from `locus_tag` and the symbol from `gene`', () => {
+    const set = parseGtf(PROKKA)
+    const at = indexOfNamed(set, 'dnaA')
+    expect(set.id[at]).toBe('T_00001')
+  })
+
+  // 2,643 of the file's 5,783 proteins are `hypothetical protein` and carry no
+  // symbol at all. `name === id` is how a nameless feature is spelled.
+  it('falls back to the accession where a row carries no symbol', () => {
+    const set = parseGtf(PROKKA)
+    const at = indexOfNamed(set, 'T_00005')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(set.id[at]).toBe('T_00005')
+  })
+
+  // The whole informational content of a bacterial annotation. Without it the
+  // card on a Prokka CDS reads `source Prodigal:002006` and stops.
+  it('keeps `product` for the card and the colour picker', () => {
+    const set = parseGtf(PROKKA)
+    expect(set.detail[indexOfNamed(set, 'dnaA')]).toContain(
+      'product Chromosomal replication initiator protein DnaA',
+    )
+    expect(set.detail[indexOfNamed(set, 'T_00259')]).toContain('product tRNA-Arg(ccg)')
+  })
+
+  // GFF3 asks for an `ID` only on a row something else points at, so a file
+  // where nothing points anywhere is entitled to leave every one of them out.
+  it('draws a row that does not even name itself', () => {
+    const set = parseGtf(
+      'L1\tx\tCDS\t100\t200\t.\t+\t0\tproduct=one\n' +
+        'L1\tx\tCDS\t400\t500\t.\t+\t0\tproduct=two\n',
+    )
+    // Two rows, two features — not one feature keyed on the empty string.
+    expect(set.length).toBe(2)
+    expect(set.start[0]).toBe(99)
+    expect(set.start[1]).toBe(399)
+  })
+
+  // GFF3's way of writing one feature with a gap in it: the same `ID` twice.
+  it('joins two rows that share an ID into one feature', () => {
+    const set = parseGtf(
+      'L1\tx\tCDS\t100\t200\t.\t+\t0\tID=split;locus_tag=split\n' +
+        'L1\tx\tCDS\t400\t500\t.\t+\t0\tID=split;locus_tag=split\n',
+    )
+    expect(set.length).toBe(1)
+    expect(set.start[0]).toBe(99)
+    expect(set.end[0]).toBe(500)
+  })
+
+  // NCBI opens every contig with one of these. It names no parent either, so it
+  // arrives by the same door the CDS rows now do — and it is not a feature.
+  it('does not draw the row that describes the sequence itself', () => {
+    const set = parseGtf(
+      'L1\t.\tregion\t1\t6395872\t.\t+\t.\tID=L1:1..6395872;Is_circular=true\n' +
+        'L1\tx\tCDS\t100\t200\t.\t+\t0\tID=c1;locus_tag=c1\n',
+    )
+    expect(set.length).toBe(1)
+    expect(set.id[0]).toBe('c1')
+  })
+
+  // The other half of the same rule: where a file *does* say what a row belongs
+  // to, that still decides, and a CDS never becomes a feature beside its own
+  // transcript.
+  it('still folds a CDS into its parent where the file names one', () => {
+    const set = parseGtf(
+      'L1\tdb\tgene\t100\t400\t.\t+\t.\tID=g;Name=ACT1;locus_tag=b0001\n' +
+        'L1\tdb\tmRNA\t100\t400\t.\t+\t.\tID=g.1;Parent=g\n' +
+        'L1\tdb\texon\t100\t400\t.\t+\t.\tParent=g.1\n' +
+        'L1\tdb\tCDS\t120\t380\t.\t+\t0\tParent=g.1\n',
+    )
+    expect(set.length).toBe(1)
+    expect(set.name[0]).toBe('ACT1')
+    expect(set.cdsStart[0]).toBe(119)
+  })
+})
+
 describe('BEDPE', () => {
   it('parses the demo loop calls through their header', () => {
     const set = parseBedpe(demo('Yeast_microC_loops.tsv'))

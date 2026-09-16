@@ -1701,6 +1701,23 @@ demo data has, and refusing it because of its suffix would be pedantry. A file w
 intersect the map's is reported with the overlap count, as a bigWig is, rather than loaded to draw
 nothing.
 
+**A GFF row that names no parent is a feature, not a fragment.** GTF and an Ensembl-flavoured GFF3
+are a hierarchy — gene, transcript, and the exons and CDS underneath — and a glyph is drawn per
+*transcript*, assembled from whichever rows name it through `Parent` or `transcript_id`. A bacterial
+annotation has none of that: Prokka, Bakta and DFAST write one row per feature with its own `ID` and
+`locus_tag` and not a single `Parent` in the file, because a bacterial gene is one uninterrupted CDS
+and a gene row above it would be a second copy of the same span. So a row that names no parent is
+read as the whole feature it is, keyed on its own `ID` — two rows sharing one `ID` being GFF3's way
+of writing a feature with a gap in it, and a row with no `ID` being one nothing can point at, drawn
+keyless. The accession comes from `locus_tag` where the file writes one, which is per-gene by
+definition; the symbol from `gene` or `Name`; and `product` joins `biotype` and `source` in the
+detail string, because it is the whole of what a bacterial annotation has to say and the colour
+picker (§8.16) can only offer what is written there.
+
+The rows that describe the **sequence** rather than something on it — NCBI's per-contig `region`,
+GenBank's `source` — are dropped by name. They were dropped by accident before, as rows with no
+parent to place them, and drawn they would each be a box the width of the chromosome.
+
 ### 8.4 Geometry, and why nothing can drift
 
 One rule: **the heatmap and every annotation share the axis `Scale` objects** (§`render/scale.ts`),
