@@ -2849,6 +2849,17 @@ export class Session {
       picker: this.markPicker(),
       fileLabel: fileLabel(assembly.uri),
     })
+    // The tracks published beside this genome, as one click — the same offer the
+    // map path makes, and until now the one thing a browser session did not
+    // inherit from it. It matters most for exactly the rows this release added:
+    // a **track hub's** assembly opens as a `.2bit` or a `chrom.sizes` and its
+    // whole trackDb rides along as the shelf (§24.10), so without this the
+    // *open with its tracks* verb on a hub's heading opened the genome and
+    // silently dropped the tracks. An IGV genome row carries the same shelf and
+    // was losing it the same way.
+    const published = demoAnnotationsToOffer(assembly.uri, {
+      restoring: AnnotationStore.stored(scope).length > 0,
+    })
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card, not below it: what a reader just computed is what
@@ -2860,6 +2871,21 @@ export class Session {
         loader,
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
+        ...(published.length === 0
+          ? {}
+          : {
+              demo: {
+                label: `load the ${published.length} tracks published with this genome`,
+                hint:
+                  'The tracks the store or hub this genome came from lists beside it, on its own ' +
+                  'assembly. They open the same way any remote file does.',
+                run: () => {
+                  for (const entry of published) {
+                    loader.addUrl(entry.url, entry.label)
+                  }
+                },
+              },
+            }),
       }).el,
       this.manualCard.el,
     ])

@@ -201,6 +201,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   because a row that misdraws when it is pressed is worse than an absent one. It has its own tile on
   the landing page, beside the one for a store file.
 
+  **A hub to try it on ships with the demo.** `scripts/make_demo_hub.py` writes a real assembly
+  hub over the yeast demo data — a `.2bit` of its genome, the loop calls as `longrange`, the six
+  bigWigs as a composite and the contact map as `type hic` — so the whole path can be walked with no
+  third-party host and no CORS question in the way:
+
+  ```sh
+  npm run dev   # then paste http://localhost:5173/demo/yeast/hub.txt into the *A track hub* tile
+  ```
+
+  The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C in kent's own
+  tree, so what the reader is tested against is a file UCSC's own code has already read back base
+  for base — which a fixture this repository wrote could never be. Two loose files sit beside the
+  hub for the formats a hub cannot legitimately carry (UCSC's remote types are the `big*` ones plus
+  `bam`, `cram`, `vcfTabix`, `hic` and `longTabix`): the same loop calls as `interact`, and the
+  demo's GTF as a `genePredExt` table.
+
   **The IGV store gained the rows this unblocked.** Its generator was dropping IGV's `refgene`
   tracks and every `.2bit` because there was no reader for either; both are read now, so the 29 gene
   models are published, they carry `format: genepred` whatever UCSC called the file — so one tick of
@@ -1448,6 +1464,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   for the errand — *A track hub*, *Your own store* — which is right until one has been read, at
   which point the page is about a particular shelf and the heading says which, with the store's own
   description under it. Both doors, not only the new one.
+
+### Fixed
+
+- **The tracks published beside a genome are offered in the 1D browser.** The map path has offered
+  its shelf since the demo map shipped with ten annotation files — one click, and a reader who
+  brought no tracks has a picture — and the browser path never did. Nothing had noticed, because
+  until now the only thing that registered a shelf was a store row whose file was a contact map.
+
+  A track hub makes it the common case and makes it visible: an assembly hub's genome is its
+  `.2bit` and its whole trackDb is the shelf that rides along, so *open with its tracks* on a hub's
+  assembly heading opened the genome and dropped every track on the way. An IGV genome row carries
+  the same shelf and was losing it the same way. The Tracks card now offers them in a browser
+  session exactly as it does beside a map, through the same one question and the same gate — so a
+  restored session, which is bringing its own tracks back, is still not offered them on top.
 
 ## [0.12.0] - 2026-09-10
 

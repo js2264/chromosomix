@@ -15,14 +15,27 @@
  *
  * ## .2bit
  *
- * Built here rather than checked in, which is the point: writing the format out
- * byte by byte is the only way a test can claim to know it. Four bases a byte,
- * two bits each, most significant first, `T C A G` for `0 1 2 3` — and then the
- * two things a naive reader gets wrong, which are that the gaps are recorded
- * *outside* the packed bits (so a centromere reads as a convincing run of
- * thymine unless they are applied) and that the mask blocks have to be stepped
- * over even though they are never read.
+ * Twice over, because neither half is enough on its own.
+ *
+ * A **fixture written here byte by byte**, which is the only way a test can
+ * claim to know the rules: four bases a byte, two bits each, most significant
+ * first, `T C A G` for `0 1 2 3` — and then the two things a naive reader gets
+ * wrong, which are that the gaps are recorded *outside* the packed bits (so a
+ * centromere reads as a convincing run of thymine unless they are applied) and
+ * that the mask blocks have to be stepped over even though they are never read.
+ * A file written here can exercise both; the demo assembly, being unmasked,
+ * cannot.
+ *
+ * And the **demo `.2bit` itself**, at the end of this file, because a fixture
+ * proves nothing about real files: two implementations sharing one
+ * misunderstanding of a format agree perfectly with each other and with nothing
+ * else. `scripts/make_demo_hub.py` writes that file and checks it with `py2bit`,
+ * a wrapper around the C in kent's own tree, so what is being compared here is
+ * this reader against a file UCSC's own code has already read back in full.
  */
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -40,6 +53,7 @@ import {
   readTwoBitHeader,
   unpackDna,
 } from '@/annotations/twobit'
+import { parseFasta } from '@/annotations/fasta'
 import { cardFor, kindFor } from '@/annotations/loader'
 import { sniffFormat } from '@/annotations/parse'
 import { sniffSignal } from '@/annotations/signal'
@@ -350,5 +364,91 @@ describe('.2bit', () => {
     expect(routeOf('https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.2bit')).toBe(
       'genome',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …and against a real file
+// ---------------------------------------------------------------------------
+
+/**
+ * The demo `.2bit`, read back and compared with the FASTA it was packed from.
+ *
+ * Everything above is a fixture this file wrote, which pins the *rules* and
+ * proves nothing about real files — two implementations sharing one
+ * misunderstanding of a format agree perfectly with each other and with nothing
+ * else. So the loop is closed three ways: `scripts/make_demo_hub.py` writes the
+ * file, `py2bit` — a wrapper around the C in kent's own tree — reads every base
+ * of it back and is checked by that script, and this reads the same bytes
+ * through the reader the browser uses and compares them with the FASTA.
+ *
+ * The windows are chosen to land where the arithmetic is hardest: on the gaps,
+ * across them, off a byte boundary, and at the very end of a sequence.
+ */
+describe('the demo .2bit', () => {
+  const root = process.cwd()
+  const packed = readFileSync(join(root, 'demo/yeast/S288c_syn40-XIII.2bit'))
+  const bytes = new Uint8Array(packed.buffer, packed.byteOffset, packed.byteLength)
+  const fasta = parseFasta(new Uint8Array(readFileSync(join(root, 'demo/yeast/S288c_syn40-XIII.fa'))))
+
+  const read = async (length: number, position: number): Promise<Uint8Array> =>
+    bytes.subarray(position, Math.min(bytes.length, position + length))
+
+  it('declares the same assembly the FASTA does', async () => {
+    const file = await openTwoBit(read)
+    expect(contigsOfRecords(file.ordered)).toEqual(fasta.contigs)
+  })
+
+  it('unpacks every base of every sequence', async () => {
+    const file = await openTwoBit(read)
+    const decoder = new TextDecoder()
+    for (const record of file.ordered) {
+      const range = dnaByteRange(record, 0, record.length)
+      const got = unpackDna(
+        bytes.subarray(range.from, range.to),
+        range.firstBase,
+        record,
+        0,
+        record.length,
+      )
+      const want = fasta.bases.get(record.name)
+      expect(want).toBeDefined()
+      // Upper-cased on both sides: this assembly carries no soft-masking, and
+      // what is checked here is the residues rather than the case (§8.21).
+      expect(decoder.decode(got)).toBe(decoder.decode(want as Uint8Array).toUpperCase())
+    }
+  })
+
+  it('reads a window off a byte boundary, and one that runs to the end', async () => {
+    const file = await openTwoBit(read)
+    const record = file.ordered[0]
+    const want = fasta.bases.get(record.name) as Uint8Array
+    const decoder = new TextDecoder()
+    for (const [from, to] of [
+      [1, 7],
+      [3, 4],
+      [1023, 2049],
+      [record.length - 3, record.length],
+    ]) {
+      const range = dnaByteRange(record, from, to)
+      const got = unpackDna(bytes.subarray(range.from, range.to), range.firstBase, record, from, to)
+      expect(decoder.decode(got)).toBe(decoder.decode(want.subarray(from, to)).toUpperCase())
+    }
+  })
+
+  it('carries the assembly’s real gaps, and paints them rather than trusting the bits', async () => {
+    const file = await openTwoBit(read)
+    const withGaps = file.ordered.filter((record) => record.nStarts.length > 0)
+    // The demo assembly has 5,095 Ns; a reader that dropped the N blocks would
+    // return a convincing run of thymine over every one of them.
+    expect(withGaps.length).toBeGreaterThan(0)
+    const record = withGaps[0]
+    const from = Math.max(0, record.nStarts[0] - 4)
+    const to = Math.min(record.length, record.nEnds[0] + 4)
+    const range = dnaByteRange(record, from, to)
+    const got = unpackDna(bytes.subarray(range.from, range.to), range.firstBase, record, from, to)
+    const window = new TextDecoder().decode(got)
+    expect(window).toContain('N')
+    expect(window.slice(4, -4)).toMatch(/^N+$/)
   })
 })

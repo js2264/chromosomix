@@ -6637,3 +6637,19 @@ data is already in, and a reader holding one thinks of it as *the hub*. A door t
 word is a door they will not try. Nothing behind it is hub-specific — a hub pasted into the other box
 works exactly as well — and a remembered hub keeps the hub mark and the hub's grouping, because both
 are facts about the rows rather than about the door they arrived through.
+
+**A hub to try it on.** `scripts/make_demo_hub.py` writes one over the yeast demo data — a `.2bit`
+of its genome, the loop calls as `longrange`, the six bigWigs as a composite and the contact map as
+`type hic` — so the whole path is walkable with `npm run dev` and
+`http://localhost:5173/demo/yeast/hub.txt`, same origin, with no third-party host and no CORS
+question standing between a reader and the answer. It is **strictly valid**, which constrains what
+is in it: a hub's tracks are the `big*` formats plus `bam`, `cram`, `vcfTabix`, `hic` and
+`longTabix`, so the demo's `.narrowPeak`, `.bed`, `.gtf` and `.barChart` cannot appear without a
+`bedToBigBed` this project does not ship, and a hub naming them anyway would open here and fail in
+UCSC's browser — the one thing a demo hub must not teach. The same loop calls as `interact` and the
+demo's GTF as a `genePredExt` sit beside it as files to drop instead.
+
+The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C in kent's own tree.
+That is the only check worth having: a file this repository wrote and this repository read proves
+that two implementations share a reading of the format, which is exactly what they would do if the
+reading were wrong.

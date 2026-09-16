@@ -1,0 +1,60 @@
+track signal
+compositeTrack on
+shortLabel Signal
+longLabel Every signal track published with the yeast demo
+type bigWig
+visibility full
+
+    track mnase
+    parent signal on
+    shortLabel MNase
+    longLabel Nucleosome occupancy
+    bigDataUrl Yeast_MNase.bw
+    type bigWig
+
+    track atac
+    parent signal on
+    shortLabel ATAC
+    longLabel ATAC-seq accessibility
+    bigDataUrl Yeast_ATAC.bw
+    type bigWig
+
+    track pol2
+    parent signal on
+    shortLabel Pol II
+    longLabel Pol II ChIP over input
+    bigDataUrl Yeast_ChIP_Pol2-vs-input.bw
+    type bigWig
+
+    track rnafwd
+    parent signal on
+    shortLabel RNA +
+    longLabel RNA-seq, forward strand
+    bigDataUrl Yeast_RNA_fwd.bw
+    type bigWig
+
+    track rnarev
+    parent signal on
+    shortLabel RNA −
+    longLabel RNA-seq, reverse strand
+    bigDataUrl Yeast_RNA_rev.bw
+    type bigWig
+
+    track shotgun
+    parent signal on
+    shortLabel Shotgun
+    longLabel Shotgun sequencing coverage
+    bigDataUrl Yeast_Shotgun.bw
+    type bigWig
+
+track loops
+shortLabel Micro-C loops
+longLabel Loop calls, as longrange — both ends of each, as the format asks
+bigDataUrl Yeast_microC_loops.longrange
+type longTabix
+
+track contacts
+shortLabel Micro-C map
+longLabel The demo contact map, which opens through the map door
+bigDataUrl Yeast_hic.hic
+type hic

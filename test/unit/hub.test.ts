@@ -22,6 +22,9 @@
  * the count must be said rather than silently dropped.
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -39,6 +42,9 @@ import {
   parseTrackDb,
   readHub,
 } from '@/state/hub'
+import { parseGenePred, sniffGenePred } from '@/annotations/genepred'
+import { parseInteract, sniffInteract } from '@/annotations/interact'
+import { parseLongRange, sniffLongRange } from '@/annotations/longrange'
 import { STORE_KIND } from '@/state/store'
 import type { StoreEntry } from '@/state/store'
 
@@ -445,5 +451,131 @@ describe('hubStore on its own', () => {
     })
     expect(store.entries).toHaveLength(1)
     expect(store.entries[0].fields?.['role']).toBe('annotation')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …and the hub this repository ships
+// ---------------------------------------------------------------------------
+
+/**
+ * The demo hub, read off disk exactly as the browser reads it off a server.
+ *
+ * Everything above is a hub this file wrote, which pins the rules. This is the
+ * one `scripts/make_demo_hub.py` generates over the yeast demo, and it is here
+ * for two reasons that a fixture cannot cover.
+ *
+ * It is a **real assembly hub**: its genome is a `.2bit` that kent's own reader
+ * has verified base for base, so the `twoBitPath` rung of §24.10's ladder is
+ * exercised against a file rather than against a string in a test.
+ *
+ * And it is the file a reader is about to be told to paste into the hub tile
+ * (`http://localhost:5173/demo/yeast/hub.txt`), so if this test fails, that
+ * instruction is wrong — which is the kind of thing nobody notices until
+ * somebody follows it.
+ */
+describe('the demo hub', () => {
+  const dir = join(process.cwd(), 'demo/yeast')
+  const read = async (url: string): Promise<string | null> => {
+    const name = url.replace(/^https:\/\/demo\//, '')
+    try {
+      return readFileSync(join(dir, name), 'utf8')
+    } catch {
+      return null
+    }
+  }
+  const at = 'https://demo/hub.txt'
+
+  it('reads as an assembly hub over the demo data', async () => {
+    const store = await readHub(at, await read(at) as string, read)
+    expect(store).not.toBeNull()
+    expect(store!.name).toBe('metacooler demo')
+    expect(store!.description).toContain('1 assembly')
+    // Nothing refused: every track in it is a type this viewer draws.
+    expect(store!.description).not.toContain('not offered')
+  })
+
+  it('opens on the hub’s own .2bit, with every track on its shelf', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const genome = store.entries.find((entry) => entry.fields?.['role'] === 'sequence')
+    expect(genome?.uri).toBe('https://demo/S288c_syn40-XIII.2bit')
+    expect(genome?.fields?.['format']).toBe('2bit')
+    expect(genome?.tracks?.map((track) => track.label)).toEqual([
+      'MNase',
+      'ATAC',
+      'Pol II',
+      'RNA +',
+      'RNA −',
+      'Shotgun',
+      'Micro-C loops',
+      'Micro-C map',
+    ])
+  })
+
+  it('keeps the six bigWigs under the composite their hub groups them in', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const signal = store.entries.filter((entry) => entry.fields?.['group'] === 'signal')
+    expect(signal).toHaveLength(6)
+    expect(signal.every((entry) => entry.fields?.['format'] === 'bigWig')).toBe(true)
+    // The composite stanza itself names no file, so it gets no row of its own.
+    expect(store.entries.some((entry) => entry.label === 'Signal')).toBe(false)
+  })
+
+  it('sends the contact map through the map door and the loops through the genome one', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const map = store.entries.find((entry) => entry.label === 'Micro-C map')
+    expect(map?.kind).toBe('map')
+    const loops = store.entries.find((entry) => entry.label === 'Micro-C loops')
+    expect(loops?.kind).toBe('genome')
+    expect(loops?.fields?.['format']).toBe('longrange')
+  })
+})
+
+/**
+ * The two loose demo files the hub cannot carry, read by the readers they are
+ * for.
+ *
+ * UCSC's remote-data types are the `big*` ones plus `bam`, `cram`, `vcfTabix`,
+ * `hic` and `longTabix` — so a plain `.interact` or `.genePred` in a `trackDb`
+ * is a hub UCSC itself would refuse, and the demo hub does not write one
+ * (`scripts/make_demo_hub.py`). They are beside it as files to drop instead,
+ * and this is what says they open.
+ */
+describe('the demo files for the formats a hub cannot carry', () => {
+  const dir = join(process.cwd(), 'demo/yeast')
+
+  it('reads the loop calls as interact, both anchors intact', () => {
+    const text = readFileSync(join(dir, 'Yeast_microC_loops.interact'), 'utf8')
+    expect(sniffInteract(text)).toBe(true)
+    const set = parseInteract(text)
+    expect(set.length).toBeGreaterThan(1000)
+    // The anchors, not the span between them: every pair is two 1 kb windows.
+    for (let i = 0; i < 20; i++) {
+      expect(set.end1[i] - set.start1[i]).toBe(1000)
+      expect(set.end2[i] - set.start2[i]).toBe(1000)
+    }
+  })
+
+  it('reads the same calls as longrange, folding the reciprocal lines', () => {
+    const text = readFileSync(join(dir, 'Yeast_microC_loops.longrange'), 'utf8')
+    expect(sniffLongRange(text)).toBe(true)
+    const folded = parseLongRange(text)
+    const interact = parseInteract(readFileSync(join(dir, 'Yeast_microC_loops.interact'), 'utf8'))
+    // The file holds both ends of each call, so it is twice as many lines as
+    // interactions — and the reader must arrive at the interact file's count.
+    expect(text.trim().split('\n')).toHaveLength(interact.length * 2)
+    expect(folded.length).toBe(interact.length)
+  })
+
+  it('reads the GTF’s transcripts back out of the genePred spelling', () => {
+    const text = readFileSync(join(dir, 'Yeast_annotations.genePred'), 'utf8')
+    expect(sniffGenePred(text)).toBe(true)
+    const set = parseGenePred(text)
+    expect(set.length).toBe(7071)
+    // The symbol in front of the accession, which is what `name2` carries.
+    const at = set.name.findIndex((name) => name === 'SOR2')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(set.id[at]).toMatch(/^Y/)
+    expect(set.exonAt[at + 1]).toBeGreaterThan(set.exonAt[at])
   })
 })
