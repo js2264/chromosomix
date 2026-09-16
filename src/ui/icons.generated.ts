@@ -587,6 +587,12 @@ export const GENERATED_ICONS = {
     ['path', {"d":"m12 5 7 7-7 7"}],
     ],
   },
+  'arrow-up-right': {
+    shapes: [
+    ['path', {"d":"M7 7h10v10"}],
+    ['path', {"d":"M7 17 17 7"}],
+    ],
+  },
   'terminal': {
     shapes: [
     ['path', {"d":"M12 19h8"}],

@@ -65,9 +65,31 @@ export type DetectedFormat =
   // "what is this" that matter downstream are the kind it becomes and the
   // parser that reads it — which are the same for both.
   | 'barchart'
+  // UCSC's two interaction formats (§8.18). Both become a `PairSet`, which is
+  // what a bedpe becomes, so both are `kindFor`'d to `'pairs'` and drawn as
+  // arcs — but they stay two members because the summary line differs (a
+  // longrange folds reciprocal lines and says so) and because a refusal that
+  // named the wrong one would send a reader to the wrong specification.
+  | 'interact'
+  | 'longrange'
+  // UCSC's gene-model tables (§8.19): `genePred`, `genePredExt` and `refFlat`,
+  // with or without the leading `bin` column a MySQL dump carries. A
+  // `FeatureSet` with exons, exactly as a GTF is, and its own member because
+  // that is what lets the summary say *transcripts* and the refusal name the
+  // ten columns rather than BED's three.
+  | 'genepred'
+  // Base-resolution modification calls (§8.20). A *track*, not a feature set —
+  // it resolves to `'track'` exactly as a bedGraph does — and a member of its
+  // own so that the lane can say which modification it is drawing and which
+  // ones it is not.
+  | 'bedmethyl'
   | 'sizes'
   | 'hdf5'
   | 'fasta'
+  // UCSC's packed sequence format (§8.21). Named apart from `fasta` for the
+  // reason `bam` is named apart from `alignments`: this is what the *bytes*
+  // turned out to be. What it becomes is a sequence like any other.
+  | 'twobit'
   // Aligned reads (§8.13). Named `bam` and not `alignments` because this is
   // what the *bytes* turned out to be, and CRAM — which is refused, and for its
   // own reasons — would be a second member here rather than the same one.

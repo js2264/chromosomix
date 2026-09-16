@@ -460,4 +460,53 @@ describe('fetching a store', () => {
     expect(!result.ok && result.reason).toBe('network')
     expect(!result.ok && result.message).toContain('cross-origin')
   })
+
+  // The integration point that makes a track hub first class (§24.10): every
+  // road a store URL travels — `?store=`, the Connect box, a remembered tile, a
+  // shared link — goes through this one function, so a hub recognised *here*
+  // works on all of them and none of them had to learn what a hub is.
+  it('reads a track hub through the same door as a store', async () => {
+    const files: Record<string, string> = {
+      'https://lab.example/hub.txt':
+        'hub h\nshortLabel Lab hub\ngenomesFile genomes.txt\n',
+      'https://lab.example/genomes.txt': 'genome hg38\ntrackDb db.txt\norganism Human\n',
+      'https://lab.example/db.txt':
+        'track a\nshortLabel Coverage\nbigDataUrl data/a.bw\ntype bigWig\n',
+    }
+    const seen: string[] = []
+    const run = ((url: string) => {
+      seen.push(String(url))
+      const body = files[String(url)]
+      return Promise.resolve({
+        ok: body !== undefined,
+        status: body === undefined ? 404 : 200,
+        statusText: body === undefined ? 'Not Found' : 'OK',
+        text: () => Promise.resolve(body ?? ''),
+      } as unknown as Response)
+    }) as unknown as typeof fetch
+
+    const result = await fetchStore('https://lab.example/hub.txt', { fetchImpl: run })
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.name).toBe('Lab hub')
+    // Its three files, in order, and nothing else.
+    expect(seen).toEqual([
+      'https://lab.example/hub.txt',
+      'https://lab.example/genomes.txt',
+      'https://lab.example/db.txt',
+    ])
+    expect(result.ok && result.store.entries.map((entry) => entry.uri)).toEqual([
+      'https://lab.example/data/a.bw',
+      'https://lab.example/data/a.bw',
+    ])
+  })
+
+  // …and a store that happens to be served from `hub.txt` still opens as a
+  // store, because the content decides and the name is never consulted (§8.3).
+  it('does not mistake a store for a hub because of its name', async () => {
+    const result = await fetchStore('https://lab.example/hub.txt', {
+      fetchImpl: answering(200, storeText({ entries: [{ label: 'a', uri: 'a.mcool' }] })),
+    })
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.entries[0].uri).toBe('https://lab.example/a.mcool')
+  })
 })

@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest'
 
 import { STORE_LOGOS } from '@/ui/stores/logos.generated'
 import { RSG_MARK_IMAGE } from '@/ui/stores/rsg-mark.generated'
-import { builtinStores } from '@/ui/stores/registry'
+import { builtinStores, customStore, hubStoreFront } from '@/ui/stores/registry'
 import { storeMark } from '@/ui/stores/marks'
 
 /** The edge `make-store-logos.mjs` fits every mark to. */
@@ -60,13 +60,35 @@ describe('the store logos', () => {
 
   it('leaves every shipped store a mark of its own', () => {
     const shipped = builtinStores()
-    expect(shipped.map((front) => front.id)).toEqual(['rsg', 'igv', '4dn', 'encode', 'dnazoo'])
+    expect(shipped.map((front) => front.id)).toEqual([
+      'rsg',
+      'igv',
+      '4dn',
+      'encode',
+      'dnazoo',
+      'roadmap',
+    ])
     const images = shipped.map((front) => front.mark.image)
-    // All five present, and five different pictures — a copy-paste that gave
-    // two stores the same logo would otherwise look plausible on the page.
+    // All six present, and six different pictures — a copy-paste that gave two
+    // stores the same logo would otherwise look plausible on the page.
     expect(images.every((image) => image !== undefined)).toBe(true)
-    expect(new Set(images).size).toBe(5)
+    expect(new Set(images).size).toBe(6)
     expect(images[0]).toBe(RSG_MARK_IMAGE)
+  })
+
+  it('draws the two doors with the marks of what they add', () => {
+    // UCSC's own logo on the hub door, which is the one word a reader holding a
+    // hub is looking for…
+    expect(hubStoreFront().mark.image).toBe(STORE_LOGOS.ucsc)
+    // …and this viewer's own icon on the other, whose file is the one format in
+    // the grid written *for* this viewer rather than translated into it.
+    expect(customStore().mark.image).toBe(STORE_LOGOS.app)
+    // Roadmap wears its own emblem, but keeps UCSC's colour underneath: that is
+    // what shows if the image fails, and *this is a UCSC hub* is the truer
+    // thing to say in that case than a lettermark would be.
+    const roadmap = builtinStores().find((front) => front.id === 'roadmap')!
+    expect(roadmap.mark.image).toBe(STORE_LOGOS.roadmap)
+    expect(roadmap.mark.colour).toBe(hubStoreFront().mark.colour)
   })
 
   /**

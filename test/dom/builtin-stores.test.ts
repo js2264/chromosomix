@@ -49,19 +49,27 @@ function generatorShards(): string[] {
 }
 
 describe('the shipped stores, on a page', () => {
-  it('are five, in the order the tiles offer them', () => {
+  it('are six, in the order the tiles offer them', () => {
     expect(builtinStores().map((front) => front.id)).toEqual([
       'rsg',
       'igv',
       '4dn',
       'encode',
       'dnazoo',
+      // Last, and the only one that is not a file this project generates: a
+      // `hub.txt` on somebody else's host, read by the same `fetchStore`
+      // (§24.10).
+      'roadmap',
     ])
     expect(builtinStores().map((front) => front.kind)).toEqual([
       'gallery',
       'genomes',
       'portal',
       'portal',
+      'portal',
+      // A hub's page *is* the portal front: grouped, faceted, two verbs a row.
+      // Nothing downstream of `hubStore` knows what a hub is, which is what
+      // let a hub be shipped as a store with no front of its own (§24.10).
       'portal',
     ])
   })
@@ -80,6 +88,28 @@ describe('the shipped stores, on a page', () => {
     // sessions — one file, written by the `bucket` front end.
     expect(frontById('dnazoo')?.rows?.url).toBe(`${site}/stores/dnazoo.json`)
     expect(frontById('dnazoo')?.sessions).toBeUndefined()
+    // Roadmap is the exception, and reads from WashU: it is somebody else's
+    // hub rather than a file this project generates, so there is no `stores/`
+    // entry and no workflow behind it — only the URL, read on the gesture that
+    // opens it like every other store's rows.
+    expect(frontById('roadmap')?.rows?.url).toBe(
+      'https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt',
+    )
+    expect(frontById('roadmap')?.sessions).toBeUndefined()
+  })
+
+  it('points every shipped store and the hub door at the people who made it', () => {
+    // A store is somebody else's data and the rows are a translation of their
+    // catalogue, carrying none of the licence, citation or caveats they wrote
+    // down. The link in the drawer's head is the whole of what this viewer
+    // does about that, so a shipped store without one is a bug.
+    for (const front of builtinStores()) {
+      expect(front.home, front.id).toMatch(/^https:\/\//)
+    }
+    expect(frontById('rsg')?.home).toContain('research.pasteur.fr')
+    expect(frontById('roadmap')?.home).toBe('https://egg2.wustl.edu/roadmap/web_portal/')
+    // …and the hub door points at where hubs are, rather than at a hub.
+    expect(frontById('hub')?.home).toBe('https://genome-euro.ucsc.edu/cgi-bin/hgHubConnect')
   })
 
   it('offers one ENCODE shard per pair the generator writes, and no others', () => {
@@ -126,6 +156,7 @@ describe('stores the reader connected', () => {
       '4dn',
       'encode',
       'dnazoo',
+      'roadmap',
       row.id,
     ])
     const mine = frontById(row.id)

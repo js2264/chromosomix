@@ -91,6 +91,7 @@ function build(view: StoreView = EMPTY_VIEW): { view: PortalView; opened: StoreE
   const views: StoreView[] = []
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => true,

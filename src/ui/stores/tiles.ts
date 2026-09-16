@@ -8,14 +8,16 @@
  * where the row is how a reader switches store without closing it, and the
  * name is enough.
  *
- * The last tile is always the one that adds a store by URL: a dashed square
- * with a `+`, so a lab's own shelf sits in the same row as the shipped ones and
- * is reached the same way.
+ * The last two tiles are always the doors: a **track hub**, and a store file by
+ * URL — the second a dashed square with a `+` — so a lab's own shelf and
+ * somebody else's hub sit in the same row as the shipped ones and are reached
+ * the same way. The hub comes first of the two because far more of the data in
+ * the world is behind one.
  */
 
 import { el } from '../dom'
 import { storeMark } from './marks'
-import { customStore, type StoreFront } from './registry'
+import { customStore, hubStoreFront, type StoreFront } from './registry'
 
 export interface StoreTilesProps {
   fronts: readonly StoreFront[]
@@ -29,7 +31,7 @@ const MARK_SIZE = { large: 72, small: 26 } as const
 
 /** The row. Rebuilt by the caller when the list changes — it is at most a handful. */
 export function storeTiles(props: StoreTilesProps): HTMLElement {
-  const fronts = [...props.fronts, customStore()]
+  const fronts = [...props.fronts, hubStoreFront(), customStore()]
   return el(
     'div',
     { class: `store-tiles store-tiles-${props.size}`, attrs: { role: 'list' } },

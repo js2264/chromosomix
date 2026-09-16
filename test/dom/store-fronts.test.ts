@@ -38,6 +38,7 @@ afterEach(() => {
 function host(opened: StoreEntry[], empty = true): StoreHost {
   return {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => empty,
@@ -100,13 +101,15 @@ describe('the lab’s gallery', () => {
       '4 files',
       '2 files',
     ])
-    // …and the files no figure names — two maps, the shotgun coverage and the
-    // synthetic barChart, which is deliberately in none: every figure here
-    // carries a DOI, and a lane of generated numbers does not belong in one.
-    // They are still offered, under the cards.
+    // …and the files no figure names — two maps, the shotgun coverage, the
+    // synthetic barChart and the `.2bit`. The barChart is deliberately in none:
+    // every figure here carries a DOI, and a lane of generated numbers does not
+    // belong in one. The `.2bit` is the same sequence a figure already names as
+    // a FASTA, published beside it because the paste box's hub example points at
+    // it (§8.21, §24.10). They are still offered, under the cards.
     const loose = view.el.querySelector('.gallery-loose') as HTMLElement
-    expect(loose.querySelector('summary')?.textContent).toBe('4 more files, in no figure')
-    expect(all(loose, '.portal-row')).toHaveLength(4)
+    expect(loose.querySelector('summary')?.textContent).toBe('5 more files, in no figure')
+    expect(all(loose, '.portal-row')).toHaveLength(5)
   })
 })
 

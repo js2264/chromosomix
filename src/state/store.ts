@@ -55,6 +55,7 @@ import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { looksLikeConfig, type ConfigRefusal } from './SessionConfig'
+import { hasGenomeStanzas, looksLikeHub, parseHubHeader, readHub } from './hub'
 
 /** What a store file must call itself. */
 export const STORE_KIND = 'metacooler.store'
@@ -467,12 +468,62 @@ export interface FetchStoreOptions {
  * way for a lab to publish its own shelf, and this request being the one
  * unsigned link would make the whole arrangement fail at its first step.
  *
+ * …or **three or more**, when those bytes turn out to be a UCSC track hub
+ * (§24.10): a `hub.txt` names a `genomes.txt` which names a `trackDb.txt` per
+ * assembly, and every one of them is read through the same signed `GET` below.
+ * Still one gesture, and still nothing fetched before it.
+ *
  * It never throws. Every road out is a value, because the caller is a table that
  * has to draw *something* whatever happened, and a rejected promise at a `<select>`
  * change handler is an empty table with the reason in the console.
  */
 export async function fetchStore(url: string, options: FetchStoreOptions = {}): Promise<StoreFetch> {
   const run = options.fetchImpl ?? fetch
+  const first = await fetchText(url, run)
+  if (!first.ok) return first
+
+  // A **track hub** is the other thing a reader pastes into the store box, and
+  // it is one of these bytes rather than a second road: UCSC's `hub.txt` is the
+  // format most published genomics data is indexed by, and `state/hub.ts`
+  // translates one into exactly the `StoreFile` this function already returns.
+  //
+  // Recognised by the *content* and not by the URL, for §8.3's reason applied a
+  // level up: a hub is routinely served from an address that says nothing — a
+  // bucket key with no suffix, a `?download=1`, a redirect — and the first
+  // stanza of the file says what it is without ambiguity. The name is consulted
+  // nowhere, which is also why a store named `hub.txt` still opens as a store.
+  //
+  // Doing it *here* is what makes hubs first class: every road a store URL
+  // travels — `?store=`, the Connect box, a remembered tile, a shared link, the
+  // drawer's download — goes through this function, so none of them needed to
+  // learn what a hub is.
+  if (looksLikeHub(first.text)) {
+    const store = await readHub(url, first.text, async (at) => {
+      const got = await fetchText(at, run)
+      return got.ok ? got.text : null
+    })
+    if (store !== null) return { ok: true, store: resolveStore(store, url) }
+  }
+
+  const parsed = parseStore(first.text)
+  if ('reason' in parsed) {
+    return { ok: false, reason: 'refused', refusal: parsed, message: '' }
+  }
+  return { ok: true, store: resolveStore(parsed, url) }
+}
+
+/**
+ * One signed `GET`, as text, or the reason there is none.
+ *
+ * Split out of {@link fetchStore} because a hub is three files and each of them
+ * wants the same signing, the same 404-is-a-state and the same CORS wording —
+ * and because a second copy of that is a second place for a private bucket to
+ * stop working.
+ */
+async function fetchText(
+  url: string,
+  run: typeof fetch,
+): Promise<{ ok: true; text: string } | Exclude<StoreFetch, { ok: true }>> {
   let response: Response
   try {
     // Signed when a bucket scope covers the URL, and carrying whatever static
@@ -492,12 +543,18 @@ export async function fetchStore(url: string, options: FetchStoreOptions = {}): 
     // A `TypeError` here is almost always the CORS answer the host did not
     // give, and saying so is more use than the browser's own "Failed to fetch":
     // the fix is a bucket setting, on a host the reader may well control.
+    //
+    // …and where they do not control it, the sentence has to name the way past
+    // it, because plenty of hosts will never send that header. Pasting the text
+    // is that way, and a reader staring at *Failed to fetch* has no reason to
+    // guess there is a box for it.
     return {
       ok: false,
       reason: 'network',
       message:
         `${url} could not be read: ${err instanceof Error ? err.message : String(err)}. ` +
-        'The host must allow a cross-origin GET from this page.',
+        'The host must allow a cross-origin GET from this page — and if it will not, open the ' +
+        `file yourself and paste its text into the box under the URL.${hostNote(url)}`,
     }
   }
   if (response.status === 404) {
@@ -511,9 +568,8 @@ export async function fetchStore(url: string, options: FetchStoreOptions = {}): 
       message: `${url} could not be read: the host answered ${response.status} ${response.statusText}.`,
     }
   }
-  let body: string
   try {
-    body = await response.text()
+    return { ok: true, text: await response.text() }
   } catch (err) {
     return {
       ok: false,
@@ -521,9 +577,143 @@ export async function fetchStore(url: string, options: FetchStoreOptions = {}): 
       message: `${url} was cut off: ${err instanceof Error ? err.message : String(err)}.`,
     }
   }
-  const parsed = parseStore(body)
-  if ('reason' in parsed) {
-    return { ok: false, reason: 'refused', refusal: parsed, message: '' }
+}
+
+// ---------------------------------------------------------------------------
+// …or pasted
+// ---------------------------------------------------------------------------
+
+/**
+ * The same two formats, read from text somebody pasted rather than from a URL.
+ *
+ * ## Why this exists
+ *
+ * Because a URL is not always readable and is not always what a reader has.
+ *
+ * **CORS.** A store or a hub is fetched by the *page*, so the host has to allow
+ * a cross-origin `GET`. Plenty do not — `genome.ucsc.edu` among them, which
+ * means UCSC's own example hubs cannot be read from any browser-only viewer,
+ * this one included. The file is public, the reader can see it in another tab,
+ * and the one thing standing between them is a response header on somebody
+ * else's server. Pasting the text is the way past that which does not involve
+ * routing a reader's traffic through a proxy this project would then be asking
+ * them to trust (C1).
+ *
+ * **Writing one.** A lab assembling its own shelf edits, pastes, sees what
+ * broke and edits again. Asking them to publish a file to a bucket between each
+ * of those is a loop nobody will run twice.
+ *
+ * ## One box, not three
+ *
+ * A hub is three files, and a paste box for each would be three boxes to keep
+ * in step. It is not needed: `useOneFile on` is a hub in a single file, and a
+ * `hub.txt`, `genomes.txt` and `trackDb.txt` **concatenated** are the same
+ * thing — the only keys the concatenation loses are the two saying where the
+ * next file is, and the next file is already in the box (`state/hub.ts`). So
+ * one textarea reads every hub that can be read without fetching, and a text
+ * that is *only* a `hub.txt` is refused by name rather than coming back as an
+ * empty shelf.
+ *
+ * ## The base
+ *
+ * A pasted file has no address, so there is nothing for a relative
+ * `bigDataUrl` or a relative `uri` to resolve against. Absolute names need no
+ * base and are the common case; relative ones are refused with the count and
+ * the first of them, so the reader knows what to paste into the base box rather
+ * than being handed a shelf whose rows fail one at a time when they are
+ * pressed.
+ */
+export async function storeFromText(text: string, base = ''): Promise<StoreFetch> {
+  if (text.trim() === '') {
+    return { ok: false, reason: 'refused', refusal: { reason: 'not-json' }, message: 'Nothing pasted.' }
   }
-  return { ok: true, store: resolveStore(parsed, url) }
+  const store = looksLikeHub(text) ? await hubFromText(text, base) : storeJsonFromText(text, base)
+  if (!store.ok) return store
+  // Relative names, which a pasted file has nothing to resolve against.
+  const loose = store.store.entries.filter((entry) => !isAbsolute(entry.uri))
+  if (loose.length > 0) {
+    return {
+      ok: false,
+      reason: 'network',
+      message:
+        `${loose.length} ${loose.length === 1 ? 'row names its file' : 'rows name their files'} ` +
+        `relatively — ${loose[0].uri} — and pasted text has no address for those to be relative ` +
+        'to. Give the base URL they hang off, or paste a version with absolute URLs.',
+    }
+  }
+  return store
+}
+
+/**
+ * A sentence about *this host*, where there is one worth saying.
+ *
+ * Measured rather than assumed, and recorded here because it costs a reader an
+ * afternoon otherwise: on 2026-09-16 neither `genome.ucsc.edu` nor
+ * `hgdownload.soe.ucsc.edu` answers a cross-origin `GET`, which puts UCSC's own
+ * example hubs and the whole of GenArk out of reach of **any** browser-only
+ * viewer — this one, igv.js, anything without a server of its own. That is a
+ * UCSC hosting decision rather than a fault in the reader's URL, so the message
+ * says so instead of sending them to check a link that is perfectly correct.
+ *
+ * It says the same about the *data* files, because that is the part that would
+ * otherwise be found out one row at a time: pasting a UCSC hub's text gets a
+ * shelf whose `bigDataUrl`s are on those same hosts and fail the same way.
+ *
+ * Appended to the general sentence rather than replacing it, and dated, because
+ * the day UCSC adds the header this paragraph is wrong and the sentence above
+ * it still is not.
+ */
+function hostNote(url: string): string {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+  if (!/(^|\.)ucsc\.edu$/.test(host)) return ''
+  return (
+    ` As of September 2026 UCSC's servers — ${host} among them — do not send that header, so no ` +
+    'browser-only viewer can read a hub hosted there. Pasting the text gets past it for the hub ' +
+    'itself, but its bigDataUrls are on the same hosts and will not open either; downloading the ' +
+    'hub and opening it from a mounted folder is the way that works.'
+  )
+}
+
+/** `https:`, `s3:`, `gs:` — anything with a scheme, which needs no base. */
+function isAbsolute(uri: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(uri)
+}
+
+async function hubFromText(text: string, base: string): Promise<StoreFetch> {
+  if (!hasGenomeStanzas(text)) {
+    const header = parseHubHeader(text)
+    const named = header === null || header.genomesFile === '' ? 'genomes.txt' : header.genomesFile
+    return {
+      ok: false,
+      reason: 'refused',
+      refusal: { reason: 'not-a-store' },
+      message:
+        `This is the hub.txt alone: it names ${named}, which is not in the box and cannot be ` +
+        'fetched from pasted text. Paste the genomes.txt and the trackDb.txt after it — a hub in ' +
+        'one file is read exactly as three are — or give the hub’s URL instead.',
+    }
+  }
+  // Nothing to fetch: every file a pasted hub has is the one in hand, so the
+  // reader hands back nothing and `readHub` takes the one-file road.
+  const store = await readHub(base, text, async () => null)
+  if (store === null) {
+    return {
+      ok: false,
+      reason: 'refused',
+      refusal: { reason: 'not-a-store' },
+      message: 'This starts like a hub and has no `hub` line this could read.',
+    }
+  }
+  return { ok: true, store: base === '' ? store : resolveStore(store, base) }
+}
+
+function storeJsonFromText(text: string, base: string): StoreFetch {
+  const parsed = parseStore(text)
+  if ('reason' in parsed) return { ok: false, reason: 'refused', refusal: parsed, message: '' }
+  return { ok: true, store: base === '' ? parsed : resolveStore(parsed, base) }
 }

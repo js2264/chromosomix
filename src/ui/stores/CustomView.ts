@@ -16,8 +16,9 @@
 
 import { button, el } from '../dom'
 import { canonicalUrl } from '../../sources/rewrite'
-import { fetchStore, type StoreFile } from '../../state/store'
+import { fetchStore, storeFromText, type StoreFile } from '../../state/store'
 import { addStoreRow, readStoreRows, removeStoreRow } from '../../state/stores'
+import { exampleHubText, exampleStoreText } from '../examples'
 import type { StoreView } from '../../state/facets'
 import { PortalView, storeFailure } from './PortalView'
 import type { StoreHost } from './host'
@@ -32,6 +33,16 @@ export interface CustomViewProps {
   url?: string
   /** A store was read from this URL, which is what the address bar should now name. */
   onTarget?(url: string): void
+  /**
+   * The store that landed calls itself this.
+   *
+   * A door is named for the errand — *Add a UCSC hub*, *Add a custom store config* — and that
+   * is right until one has been read, at which point the page is about a
+   * particular shelf and the heading should say which. Handed up rather than
+   * written here, because the heading belongs to the drawer and this view owns
+   * only its body.
+   */
+  onName?(label: string, blurb: string): void
   /** The reader remembered or forgot a store; the drawer redraws its tiles. */
   onChanged?(): void
   /** The catalogue landed, or was cleared; the drawer redraws its download. */
@@ -41,6 +52,9 @@ export interface CustomViewProps {
 export class CustomView {
   readonly el: HTMLElement
   private readonly urlInput: HTMLInputElement
+  /** The paste box, and the base its relative names hang off. */
+  private readonly textInput: HTMLTextAreaElement
+  private readonly baseInput: HTMLInputElement
   private readonly statusEl = el('p', { class: 'hint portal-status hidden' })
   private readonly keepSlot = el('span', { class: 'custom-keep' })
   private readonly body = el('div', { class: 'custom-body' })
@@ -49,14 +63,39 @@ export class CustomView {
   private destroyed = false
 
   constructor(private readonly props: CustomViewProps) {
+    const hub = props.front.kind === 'hub'
     this.urlInput = el('input', {
       class: 'input custom-url',
       type: 'url',
-      placeholder: 'https://lab.example.org/store.json',
-      attrs: { 'aria-label': 'the URL of a store file' },
+      placeholder: hub
+        ? 'https://lab.example.org/myHub/hub.txt'
+        : 'https://lab.example.org/store.json',
+      attrs: { 'aria-label': hub ? 'the URL of a hub.txt' : 'the URL of a store file' },
     })
     this.urlInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') void this.loadTyped()
+    })
+
+    // The other way in: the text itself. A host that will not allow a
+    // cross-origin GET — `genome.ucsc.edu` among them — cannot be read by any
+    // browser-only viewer, and a lab writing its own shelf wants to edit and
+    // re-read without publishing between each try (`state/store.ts`).
+    this.textInput = el('textarea', {
+      class: 'input custom-text',
+      attrs: {
+        rows: '10',
+        spellcheck: 'false',
+        'aria-label': hub ? 'the text of a hub' : 'the text of a store file',
+        placeholder: hub
+          ? 'hub myHub\nshortLabel My hub\n\ngenome hg38\n\ntrack signal\nbigDataUrl https://…/signal.bw\ntype bigWig'
+          : '{ "kind": "metacooler.store", "name": "My shelf", "entries": [ … ] }',
+      },
+    }) as HTMLTextAreaElement
+    this.baseInput = el('input', {
+      class: 'input custom-base',
+      type: 'url',
+      placeholder: 'https://lab.example.org/data/  (only if the names above are relative)',
+      attrs: { 'aria-label': 'the base URL relative names hang off' },
     })
     const remembered = props.front.rows?.url
     const head =
@@ -66,8 +105,9 @@ export class CustomView {
             { class: 'custom-form' },
             el('p', {
               class: 'hint',
-              text:
-                'A store is one JSON file a lab publishes beside its data — its maps, genomes and saved sessions, with columns to narrow on. Nothing is fetched until you press open.',
+              text: hub
+                ? 'A UCSC track hub: the hub.txt that names a genomes.txt and a trackDb per assembly. Its genomes and every track this viewer can draw become a shelf you can narrow, open and remember. An assembly hub opens its own .2bit as the sequence, with its tracks on the shelf beside it.'
+                : 'A store is one JSON file a lab publishes beside its data — its maps, genomes and saved sessions, with columns to narrow on. Nothing is fetched until you press open.',
             }),
             el(
               'div',
@@ -75,8 +115,42 @@ export class CustomView {
               this.urlInput,
               button('open', () => void this.loadTyped(), {
                 class: 'btn btn-primary',
-                title: 'Read the store at this URL.',
+                title: hub ? 'Read the hub at this URL.' : 'Read the store at this URL.',
               }),
+            ),
+            // Folded, because a URL is the ordinary way in and a box of text is
+            // the answer to a problem most readers will not have.
+            el(
+              'details',
+              { class: 'custom-paste' },
+              el('summary', { text: hub ? 'or paste the hub' : 'or paste the store' }),
+              el('p', {
+                class: 'hint',
+                text: hub
+                  ? 'Paste the whole hub: a one-file hub, or the hub.txt, genomes.txt and trackDb.txt one after another — concatenated, they are the same file. Use this when the host will not allow a cross-origin GET (genome.ucsc.edu does not), or while you are still writing one.'
+                  : 'Paste the store’s JSON. Use this when the host will not allow a cross-origin GET, or while you are still writing one.',
+              }),
+              this.textInput,
+              el('div', { class: 'custom-row' }, this.baseInput),
+              el(
+                'div',
+                { class: 'custom-row' },
+                button('open what is pasted', () => void this.loadPasted(), {
+                  class: 'btn btn-primary',
+                  title: hub ? 'Read this text as a hub.' : 'Read this text as a store.',
+                }),
+                // A worked example, and one that **opens**: it names the
+                // published demo files, so the first press draws a shelf and the
+                // reader's first edit is to something that already worked rather
+                // than to a template whose state they cannot tell
+                // (`ui/examples.ts`).
+                button('fill in an example', () => this.fillExample(), {
+                  class: 'btn custom-example',
+                  title: hub
+                    ? 'Put a small working hub in the box, over the demo data. Press open, then edit it into your own.'
+                    : 'Put a small working store in the box, over the demo data. Press open, then edit it into your own.',
+                }),
+              ),
             ),
           )
         : el(
@@ -112,6 +186,71 @@ export class CustomView {
       return
     }
     await this.load(url)
+  }
+
+  /**
+   * Put a worked example in the box.
+   *
+   * It **replaces** what is there, and asks first when that is not empty: the
+   * box is where somebody's half-written hub lives, and the one thing this
+   * button must not be is a way to lose it to a misclick. The base is cleared
+   * with it, because the example's own URLs are absolute and a base left over
+   * from a previous paste would resolve nothing and confuse the next refusal.
+   */
+  private fillExample(): void {
+    const hub = this.props.front.kind === 'hub'
+    if (
+      this.textInput.value.trim() !== '' &&
+      !window.confirm('Replace what is in the box with the example?')
+    ) {
+      return
+    }
+    this.textInput.value = hub ? exampleHubText() : exampleStoreText()
+    this.baseInput.value = ''
+    this.say(
+      hub
+        ? 'An example hub over the demo data. Press open, then edit it into your own.'
+        : 'An example store over the demo data. Press open, then edit it into your own.',
+      false,
+    )
+    this.textInput.focus()
+    // The **top**, and both of these are needed: the caret goes there on its
+    // own, the scroll does not, and a box that lands showing its last five
+    // lines has hidden the two comment lines that say what the reader is
+    // looking at and where `twoBitPath` would go.
+    this.textInput.setSelectionRange(0, 0)
+    this.textInput.scrollTop = 0
+  }
+
+  /**
+   * Read what is in the paste box.
+   *
+   * No URL to remember afterwards and none to put in the address bar: a pasted
+   * shelf exists in this tab and nowhere else, which is why `onTarget` is not
+   * called and *remember this store* is not offered. A store worth keeping is a
+   * store with an address, and the honest way to get one is to publish the file.
+   */
+  private async loadPasted(): Promise<void> {
+    const token = ++this.pending
+    this.portal?.destroy()
+    this.portal = null
+    this.props.onLoaded?.()
+    this.body.replaceChildren()
+    this.keepSlot.replaceChildren()
+    this.say('Reading what you pasted…', false)
+    const result = await storeFromText(this.textInput.value, canonicalUrl(this.baseInput.value.trim()))
+    if (token !== this.pending || this.destroyed) return
+    if (!result.ok) {
+      this.say(
+        result.reason === 'refused' && result.message === ''
+          ? storeFailure(result, { id: 'pasted', label: 'what you pasted', builtin: false })
+          : result.message,
+        true,
+      )
+      return
+    }
+    this.say('', false)
+    this.show(result.store, '')
   }
 
   /** Whatever the portal inside is holding — this view reads, it does not keep. */
@@ -152,8 +291,14 @@ export class CustomView {
       file,
     })
     this.body.replaceChildren(this.portal.el)
-    this.props.onTarget?.(url)
-    this.offerRemember(file, url)
+    // A pasted shelf has no address, so there is nothing to put in the address
+    // bar and nothing to remember: both of those are a URL, and the one this
+    // was read from is the box above.
+    if (url !== '') {
+      this.props.onTarget?.(url)
+      this.offerRemember(file, url)
+    }
+    this.props.onName?.(front.label, file.description ?? (url === '' ? 'read from pasted text' : url))
   }
 
   /** Offer to keep a store reached by URL, or to forget one already kept. */

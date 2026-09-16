@@ -8,3 +8,10 @@
 # Golden oracles are generated, deterministic JSON; a diff in them means a real
 # format change, so keep them readable in review rather than collapsed.
 test/golden/*.json -diff=off
+
+# A `.2bit` is a packed genome and must reach a checkout byte for byte. The rule
+# above is `text=auto`, which leaves a file alone once git has detected it as
+# binary — and a 2bit is full of NULs, so detection works. This says it outright
+# anyway: the cost of that heuristic being wrong once is a corrupt genome in the
+# repository, found by somebody whose sequence lane is drawing nonsense.
+*.2bit binary

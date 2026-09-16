@@ -229,6 +229,21 @@ const DEMO_DATA: Array<{
     assembly: 'S288C (syn XIII-40)',
     dataset: 'Yeast',
   },
+  {
+    // The same sequence packed at two bits a base (§8.21). Published beside the
+    // FASTA rather than instead of it, because the two are read by different
+    // roads and both are worth having openable: a FASTA under the whole-read
+    // limit is held and searchable, a `.2bit` is read by range and is what an
+    // assembly hub names — which is why the hub example in the paste box points
+    // at this file.
+    folder: 'yeast',
+    file: 'Yeast_reference.2bit',
+    label: 'S288C sequence, as a .2bit',
+    kind: 'genome',
+    format: '2bit',
+    assembly: 'S288C (syn XIII-40)',
+    dataset: 'Yeast',
+  },
   ...(
     [
       ['Yeast_annotations.gtf', 'Genes', 'gtf'],
@@ -510,6 +525,22 @@ export function demosStore(): StoreFile {
 const shelves = new Map<string, DemoAnnotationLink[]>()
 
 /**
+ * The shelves that were **asked for** rather than merely brought along.
+ *
+ * *Open with its tracks* says what it does, so it has to do it: a reader who
+ * presses those words and gets a genome and a button has been given the thing
+ * they pressed past. Every other road to the same file — the row's own open
+ * verb, a `?store=` link, a dropped copy — keeps the offer, because opening a
+ * genome is not a request for eight more files.
+ *
+ * A set beside the map rather than a field on the link, because it is a fact
+ * about the *gesture* and not about the tracks: the same shelf is asked for
+ * through one door and offered through another, and a flag on each link would
+ * have to be rewritten on every registration to say so.
+ */
+const asked = new Set<string>()
+
+/**
  * Remember the tracks published beside `uri`, so the Tracks card can offer them.
  *
  * Keyed on the **absolute URI's file half**, so it answers for the same file
@@ -524,13 +555,17 @@ const shelves = new Map<string, DemoAnnotationLink[]>()
 export function registerShelf(
   uri: string,
   tracks: ReadonlyArray<{ label: string; url: string }>,
+  options: { asked?: boolean } = {},
 ): void {
   const key = splitUri(uri).path
   if (key === '') return
   if (tracks.length === 0) {
     shelves.delete(key)
+    asked.delete(key)
     return
   }
+  if (options.asked === true) asked.add(key)
+  else asked.delete(key)
   shelves.set(
     key,
     tracks.map((track) => ({
@@ -545,7 +580,154 @@ export function registerShelf(
   )
 }
 
+/**
+ * Whether this file's shelf was asked for, and should be loaded rather than
+ * offered.
+ *
+ * Read once, by the session building its cards, and **cleared as it is read**:
+ * the gesture is spent. Without that, closing the tracks and reopening the same
+ * genome would bring all eight back, which is the one reading of *open with its
+ * tracks* nobody wants — the reader has just said no to them.
+ */
+export function shelfWasAsked(uri: string): boolean {
+  const key = splitUri(uri).path
+  if (!asked.has(key)) return false
+  asked.delete(key)
+  return true
+}
+
 /** Forget every registered shelf. Tests only — the map is otherwise per page. */
 export function clearShelves(): void {
   shelves.clear()
+  asked.clear()
 }
+
+// ---------------------------------------------------------------------------
+// Worked examples for the paste boxes
+// ---------------------------------------------------------------------------
+
+/**
+ * A hub and a store, ready to paste — and **ready to open**.
+ *
+ * The point of an example beside a paste box is not to show syntax, which the
+ * specification does better. It is to be something a reader can press *open*
+ * on and then edit into their own: the two below name the published demo files,
+ * so each of them draws a shelf on the first press wherever this build is
+ * served from, and the reader's first edit is to a thing that already worked
+ * rather than to a template they cannot tell the state of.
+ *
+ * Which means they are held to the same bar as any other demo: every URL is one
+ * of {@link DEMO_DATA_FILES} or {@link DEMO_ANNOTATION_FILES}, so the test that
+ * reads those off disk covers these too, and neither example can come to name a
+ * file the bucket does not have.
+ *
+ * The hub is an **assembly hub**: it names the demo's own `.2bit` through
+ * `twoBitPath`, which is the only way a hub carries its own sequence and the
+ * rung of §24.10's ladder worth demonstrating. It is this exact text because it
+ * is the one a reader wrote and checked against the bucket, rather than one
+ * composed here and argued about — and the URLs are built from
+ * {@link DEMO_BUCKET} rather than from {@link demoBase} for a reason that only
+ * shows up under `DEMO_BASE`: a local copy of `demo/` has these files, but the
+ * example is a thing to *press*, and a base that pointed it at a directory
+ * somebody is still filling would break the one promise it makes.
+ */
+export function exampleHubText(): string {
+  return [
+    '# A UCSC track hub, in one file: the hub line, its genome, and its tracks.',
+    '# Three separate files (hub.txt, genomes.txt, trackDb.txt) can be pasted',
+    '# one after another in the same text box. ',
+    '',
+    'hub exampleHub',
+    'shortLabel Example hub',
+    'longLabel Yeast demo data from RSG lab',
+    'useOneFile on',
+    '',
+    'genome sacCer3_syn40',
+    'organism Saccharomyces cerevisiae',
+    `    twoBitPath ${DEMO_BUCKET}yeast/Yeast_reference.2bit`,
+    '',
+    'track signal',
+    'compositeTrack on',
+    'shortLabel Signal',
+    'longLabel Two tracks, grouped as their hub groups them',
+    'type bigWig',
+    '',
+    '    track mnase',
+    '    parent signal on',
+    '    shortLabel MNase',
+    '    longLabel Nucleosome occupancy',
+    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_MNase.bw`,
+    '    type bigWig',
+    '',
+    '    track atac',
+    '    parent signal on',
+    '    shortLabel ATAC',
+    '    longLabel ATAC-seq accessibility',
+    `    bigDataUrl ${DEMO_BUCKET}yeast/Yeast_ATAC.bw`,
+    '    type bigWig',
+    '',
+    'track contacts',
+    'shortLabel Micro-C map',
+    'longLabel A contact map, which opens through the map door',
+    `bigDataUrl ${DEMO_BUCKET}yeast/Yeast_hic.hic`,
+    'type hic',
+    '',
+  ].join('\n')
+}
+
+/**
+ * The store-file counterpart: the same two demo files, as a shelf.
+ *
+ * Deliberately small. A store's whole shape is `kind`, `columns` and `entries`,
+ * and an example with twenty rows would bury that under nineteen copies of the
+ * one line worth reading.
+ */
+export function exampleStoreText(): string {
+  const at = `${demoBase()}yeast/`
+  return `${JSON.stringify(
+    {
+      kind: STORE_KIND,
+      version: STORE_VERSION,
+      name: 'Example shelf',
+      description: 'Two of the demo files, as a store you can edit',
+      columns: [
+        { key: 'assay', label: 'Assay' },
+        { key: 'assembly', label: 'Assembly' },
+      ],
+      entries: [
+        {
+          label: 'Yeast micro-C, G2/M, 1 kb',
+          uri: `${at}Yeast_microC_G2M_1kb.cool`,
+          kind: 'map',
+          note: 'A contact map, which opens through the map door',
+          fields: { assay: 'Micro-C', assembly: 'sacCer3_syn40' },
+          tracks: [{ label: 'MNase', url: `${at}Yeast_MNase.bw` }],
+        },
+        {
+          label: 'MNase',
+          uri: `${at}Yeast_MNase.bw`,
+          kind: 'genome',
+          note: 'A bigWig, which opens as a browser over its own genome',
+          fields: { assay: 'MNase-seq', assembly: 'sacCer3_syn40' },
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`
+}
+
+/**
+ * Every URL the two examples name, as their paths under `demo/`.
+ *
+ * For the test that reads the published demo files off disk: an example that
+ * names a file the bucket does not have is an example that fails on its first
+ * press, which is the one thing worse than no example at all.
+ */
+export const EXAMPLE_FILES: readonly string[] = [
+  'yeast/Yeast_reference.2bit',
+  'yeast/Yeast_MNase.bw',
+  'yeast/Yeast_ATAC.bw',
+  'yeast/Yeast_hic.hic',
+  'yeast/Yeast_microC_G2M_1kb.cool',
+]

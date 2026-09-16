@@ -39,6 +39,7 @@ import {
   DEMO_BUCKET,
   DEMO_DATA_FILES,
   DEMO_FILES,
+  EXAMPLE_FILES,
   clearShelves,
   demoAnnotationsFor,
   demoAnnotationsToOffer,
@@ -302,6 +303,26 @@ describe('the annotations published beside a demo map', () => {
         existsSync(`${DIR}${file}`),
         `${file} is offered beside a demo map but is not in demo/`,
       ).toBe(true)
+    })
+  }
+
+  // The same bar, for the two worked examples the paste boxes offer (§24.10).
+  // Each is meant to be *pressed* rather than read, so a file it names that the
+  // bucket does not have is an example that fails on its first press — which is
+  // the one thing worse than offering none.
+  for (const file of EXAMPLE_FILES) {
+    it(`ships ${file}, which a paste-box example names`, () => {
+      expect(
+        existsSync(`${DIR}${file}`),
+        `${file} is named by a paste-box example but is not in demo/`,
+      ).toBe(true)
+      // …and is published, not merely on disk: the examples are absolute URLs
+      // on the demo bucket, so a file that ships but is never synced is a row
+      // that 404s for everybody but a contributor running `npm run dev`.
+      expect(
+        [...DEMO_DATA_FILES, ...DEMO_ANNOTATION_FILES],
+        `${file} is named by a paste-box example but is not in the published set`,
+      ).toContain(file)
     })
   }
 

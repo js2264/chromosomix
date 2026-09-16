@@ -41,12 +41,23 @@ import { demosStore } from '../examples'
 import { RSG_MARK_IMAGE } from './rsg-mark.generated'
 import { STORE_LOGOS } from './logos.generated'
 import { rememberedStores } from '../../state/stores'
+import { looksLikeHubUrl } from '../../state/hub'
 import type { StoreRef } from '../../state/store'
 import { HOMEPAGE } from '../../version'
 import { SITE_BASE } from '../../versions'
 
 /** Which page draws a store. */
-export type StoreFrontKind = 'gallery' | 'genomes' | 'portal' | 'custom'
+/**
+ * Which page draws a store.
+ *
+ * `hub` is a `custom` in everything but its wording: the same URL box, the same
+ * portal behind it, the same *remember this store*. It is a kind of its own
+ * because what a reader needs to be told at the box differs completely — one
+ * asks for a JSON file a lab wrote for this viewer, the other for a `hub.txt`
+ * that already exists and was written for somebody else — and a door whose help
+ * text is right for only half its visitors is a door most of them walk past.
+ */
+export type StoreFrontKind = 'gallery' | 'genomes' | 'portal' | 'custom' | 'hub'
 
 /** The tile's mark: a short word in a colour, and an image to prefer when there is one. */
 export interface StoreMark {
@@ -117,6 +128,17 @@ export interface StoreFront {
   headline?: readonly string[]
   /** The two facets a matrix opens on. */
   axes?: readonly [string, string]
+  /**
+   * Where this shelf comes from, on the web.
+   *
+   * A store is somebody else's data, and the row a reader is looking at is a
+   * line in a catalogue this viewer translated — with none of the licence, the
+   * citation, the release notes or the caveats that the people who made it
+   * wrote down. The one honest thing to do about that is to say whose it is
+   * and link to them, which is what the drawer's head does with this, beside
+   * the download.
+   */
+  home?: string
 }
 
 /**
@@ -134,6 +156,10 @@ const COLOURS = {
   fourdn: '#1f8a70',
   encode: '#5a4fa2',
   dnazoo: '#a8326a',
+  // UCSC's own two, from the mark: the yellow frame over the navy the helix
+  // and the wordmark are drawn in. It is the ground under the hub door's logo
+  // and under Roadmap's, which is a UCSC hub.
+  ucsc: '#1c3b6e',
   custom: '#5b6169',
 } as const
 
@@ -195,7 +221,49 @@ export function encodeShards(): string[] {
   )
 }
 
-/** The four stores this build ships, in the order the tiles offer them. */
+/**
+ * Roadmap Epigenomics, as the track hub WashU publishes it (§24.10).
+ *
+ * The first shipped store that is **somebody else's hub rather than a file this
+ * project generated**, and it is here to make the point that those are the same
+ * thing now: no shard list, no workflow, no `stores/` entry — a `hub.txt` URL
+ * and the grouping a hub always has, read by the same `fetchStore` every other
+ * store URL goes through. The 111 reference epigenomes are the obvious first
+ * one to ship, being the set most often wanted next to somebody's own data.
+ *
+ * Its rows are read from WashU on the gesture that opens it and not before, as
+ * every store's are (§24.2), so the tile costs nothing to offer. If that host
+ * will not allow a cross-origin GET the front says so in the ordinary way —
+ * which is the same sentence any hub gets, and the reason there is nothing
+ * special to write here for it.
+ */
+const ROADMAP: StoreFront = {
+  id: 'roadmap',
+  label: 'Roadmap (UCSC hub)',
+  blurb: 'The Roadmap Epigenomics integrative tracks, as the hub WashU publishes them.',
+  kind: 'portal',
+  // Roadmap's own emblem, cropped from a logo five times as wide as it is tall
+  // (`scripts/make-store-logos.mjs`). The colour under it is UCSC's, which is
+  // what shows if the image ever fails and is the truer fallback of the two:
+  // what this is *is* a UCSC hub.
+  mark: { text: 'ROAD', short: 'RME', colour: COLOURS.ucsc, image: STORE_LOGOS.roadmap },
+  builtin: true,
+  rows: {
+    id: 'roadmap',
+    label: 'Roadmap (UCSC hub)',
+    url: 'https://vizhub.wustl.edu/VizHub/RoadmapIntegrative.txt',
+    builtin: true,
+  },
+  // A hub's own grouping, which `hubStore` writes and which is the same here as
+  // it is for a hub the reader pastes: by assembly, with the genome's name on
+  // the heading and the hub's composites as the facet worth narrowing by.
+  group: 'assembly',
+  headline: ['genome'],
+  axes: ['format', 'group'],
+  home: 'https://egg2.wustl.edu/roadmap/web_portal/',
+}
+
+/** The stores this build ships, in the order the tiles offer them. */
 export function builtinStores(): StoreFront[] {
   const base = storesBase()
   return [
@@ -209,6 +277,7 @@ export function builtinStores(): StoreFront[] {
       // Inline: the one store that costs no request and is certainly there.
       rows: { id: 'rsg', label: 'RSG lab data', inline: demosStore(), builtin: true },
       group: 'assembly',
+      home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
     },
     {
       id: 'igv',
@@ -225,6 +294,7 @@ export function builtinStores(): StoreFront[] {
         builtin: true,
       },
       group: 'assembly',
+      home: 'https://igv.org/doc/desktop/#FileFormats/Genomes',
     },
     {
       id: '4dn',
@@ -243,6 +313,7 @@ export function builtinStores(): StoreFront[] {
       group: 'set',
       headline: ['dataset', 'biosource', 'assay'],
       axes: ['assay', 'biosource'],
+      home: 'https://data.4dnucleome.org/',
     },
     {
       id: 'encode',
@@ -264,6 +335,7 @@ export function builtinStores(): StoreFront[] {
       group: 'dataset',
       headline: ['biosample', 'assay', 'target'],
       axes: ['assay', 'biosample'],
+      home: 'https://www.encodeproject.org/matrix/?type=Experiment',
     },
     {
       id: 'dnazoo',
@@ -290,7 +362,9 @@ export function builtinStores(): StoreFront[] {
       // long: which of a species' two assemblies a file belongs to, against
       // what kind of file it is.
       axes: ['assembly', 'format'],
+      home: 'https://www.dnazoo.org/',
     },
+    ROADMAP,
   ]
 }
 
@@ -303,11 +377,55 @@ export function builtinStores(): StoreFront[] {
 export function customStore(): StoreFront {
   return {
     id: 'custom',
-    label: 'Your own store',
-    blurb: 'A store file a lab published beside its data — paste its URL.',
+    label: 'Add a custom store config',
+    blurb: 'A store file a lab published beside its data — paste its URL, or the config itself.',
     kind: 'custom',
-    mark: { text: '+', colour: COLOURS.custom },
+    // This viewer's own icon, because the file behind this door is the one
+    // format in the row that was written *for this viewer* — the others are
+    // somebody else's index, read by translation. The `+` stays underneath as
+    // the ground, which is what shows while the image loads and what is left
+    // if it fails.
+    mark: { text: '+', colour: COLOURS.custom, image: STORE_LOGOS.app },
     builtin: false,
+  }
+}
+
+/**
+ * The tile that opens a **UCSC track hub** (§24.10).
+ *
+ * Its own door rather than a line in the one above, and the argument is the
+ * same one that gave the portals their own fronts: a hub is not a rarer kind of
+ * store file, it is the format an enormous amount of published data is already
+ * indexed by — every assembly hub, every paper that shipped its tracks, every
+ * `genome browser` link in a supplementary table. A reader who has one does not
+ * think of it as "a store"; they think of it as *the hub*, and a door that never
+ * says the word is a door they will not try.
+ *
+ * Nothing behind it is hub-specific. `fetchStore` recognises a hub wherever a
+ * store URL is read, so this tile is a URL box with the right sentence above it
+ * — and a hub pasted into the *other* box works exactly as well.
+ */
+export function hubStoreFront(): StoreFront {
+  return {
+    id: 'hub',
+    label: 'Add a UCSC hub',
+    blurb: 'Any UCSC track hub — paste its hub.txt and its genomes and tracks become a shelf.',
+    kind: 'hub',
+    mark: { text: 'HUB', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc },
+    builtin: false,
+    // Not a hub, but where hubs are: UCSC's own connect page, which is the
+    // list a reader without one in hand goes to find one.
+    home: 'https://genome-euro.ucsc.edu/cgi-bin/hgHubConnect',
+    // A hub's rows are grouped by **assembly**, because that is what a hub is: a
+    // set of tracks per genome. The heading then carries the genome's own name
+    // and *open with its tracks*, which the assembly's sequence row supplies
+    // (`ui/stores/ResultList.ts`) — so a hub's page reads like the portals'
+    // without a session file existing anywhere.
+    group: 'assembly',
+    headline: ['genome'],
+    // What a hub is worth crossing: which kind of file against which part of the
+    // hub's own grouping. The two columns whose values a hub actually varies.
+    axes: ['format', 'group'],
   }
 }
 
@@ -323,26 +441,42 @@ export function initialsOf(label: string): string {
     .toUpperCase()
 }
 
-/** Every store the drawer offers: the four shipped ones, then those the reader connected. */
+/** Every store the drawer offers: the shipped ones, then those the reader connected. */
 export function storeFronts(): StoreFront[] {
   return [
     ...builtinStores(),
-    ...rememberedStores().map(
-      (ref): StoreFront => ({
+    ...rememberedStores().map((ref): StoreFront => {
+      // A remembered hub keeps the hub mark and colour, so a row of tiles says
+      // which of a reader's shelves are hubs and which are store files. Judged
+      // by the URL, which is all there is to judge by before anything is
+      // fetched — and the convention that makes `hub.txt` a name is exactly why
+      // that is enough here, where `fetchStore` still decides by content.
+      const hub = ref.url !== undefined && looksLikeHubUrl(ref.url)
+      return {
         id: ref.id,
         label: ref.label,
         blurb: ref.url ?? '',
         kind: 'custom',
-        mark: { text: initialsOf(ref.label), colour: COLOURS.custom },
+        // No `short`: `HUB` is already three letters, so it is legible on the
+        // small tiles in the drawer's head — and the whole value of the mark is
+        // that it says the same word at both sizes.
+        mark: hub
+          ? { text: 'HUB', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc }
+          : { text: initialsOf(ref.label), colour: COLOURS.custom },
         builtin: false,
         rows: ref,
-      }),
-    ),
+        // …and a remembered hub keeps the hub's page as well as its mark: the
+        // grouping is a fact about the rows, so it cannot be left behind on the
+        // door the reader happened to arrive through.
+        ...(hub ? { group: 'assembly', headline: ['genome'], axes: ['format', 'group'] as const } : {}),
+      }
+    }),
   ]
 }
 
-/** The front with this id, the custom one for `'custom'`, or `null`. */
+/** The front with this id, the two doors for their own ids, or `null`. */
 export function frontById(id: string): StoreFront | null {
   if (id === 'custom') return customStore()
+  if (id === 'hub') return hubStoreFront()
   return storeFronts().find((front) => front.id === id) ?? null
 }

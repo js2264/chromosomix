@@ -66,6 +66,7 @@ function build(): { drawer: StoreDrawer; opened: StoreEntry[]; layouts: number }
   let layouts = 0
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => true,
@@ -104,6 +105,32 @@ describe('opening', () => {
     expect(requested).toEqual([])
   })
 
+  it('links out to the store’s own site, beside the download', () => {
+    const { drawer } = build()
+    drawer.open('dnazoo')
+    const link = drawer.el.querySelector('.store-head-actions .store-home') as HTMLAnchorElement
+    expect(link).not.toBeNull()
+    expect(link.getAttribute('href')).toBe('https://www.dnazoo.org/')
+    // A new tab, and `noopener` — the page it opens is somebody else's, and a
+    // link that hands over `window.opener` hands over this one.
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+    expect(link.getAttribute('title')).toContain('DNA Zoo')
+    // Found on the turn `open` returns, before the catalogue it asked for has
+    // answered: whose shelf this is does not wait on the read, and the reader
+    // whose catalogue *failed* is exactly the one who wants the site behind it.
+    // The download beside it is the opposite, and absent until there is a file.
+    expect(drawer.el.querySelector('.store-head-actions .btn-icon:not(.store-home)')).toBeNull()
+  })
+
+  it('leaves the link out for a store that declares no home', () => {
+    const { drawer } = build()
+    // The custom door is a URL box; there is no site behind it to point at, so
+    // there is no button rather than a dead one.
+    drawer.open('custom')
+    expect(drawer.el.querySelector('.store-head-actions .store-home')).toBeNull()
+  })
+
   it('offers every store as a tile in its head, the open one marked', () => {
     const { drawer } = build()
     drawer.open('4dn')
@@ -113,7 +140,9 @@ describe('opening', () => {
       '4DN open data',
       'ENCODE',
       'DNA Zoo',
-      'Your own store',
+      'Roadmap (UCSC hub)',
+      'Add a UCSC hub',
+      'Add a custom store config',
     ])
     expect(drawer.el.querySelector('.store-tile.is-on .store-tile-name')?.textContent).toBe('4DN open data')
     // …and opening a portal is the gesture that reads its rows, and the

@@ -119,6 +119,12 @@ const LUCIDE = [
   'bookmark',
   'bookmark-plus',
   'arrow-right',
+  // A link that leaves the app, on the stores drawer's head beside the
+  // download (§24.2). The arrow leaving its own corner is the web's settled
+  // sign for *this opens elsewhere*, and it is the distinction that matters
+  // here: the button beside it hands you a file, this one hands you to
+  // somebody else's site, in a tab of its own.
+  'arrow-up-right',
   // The console (§23), on the header and on its own heading. A prompt with a
   // caret and a line beside it, because what that panel holds is the commands
   // that would repeat the day — the same thing `metacooler-run` is typed into,

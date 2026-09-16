@@ -1,0 +1,982 @@
+/**
+ * UCSC track hubs, read as stores (§24.10).
+ *
+ * The claims here are about a translation, so they come in pairs: what the hub
+ * format says, and what the store has to end up meaning.
+ *
+ * The three that are easiest to get wrong, and are therefore tested hardest:
+ *
+ * **Stanza boundaries.** The `ra` format separates records with a blank line,
+ * indents subtracks for readability, and continues lines with a trailing `\\`.
+ * A parser that treated indentation as nesting, or that needed the blank line,
+ * merges a composite with its first subtrack — producing one stanza whose
+ * `bigDataUrl` belongs to neither.
+ *
+ * **Which base a URL resolves against.** A `bigDataUrl` is relative to the
+ * `trackDb.txt` that named it, a `twoBitPath` to `genomes.txt`, and an
+ * `include`d file's tracks to *that* file. Three bases, and using the hub's own
+ * for all three is the bug that puts every track one directory up.
+ *
+ * **What is refused.** A track this viewer cannot draw must get no row — a row
+ * that draws the wrong picture when pressed is worse than an absent one — and
+ * the count must be said rather than silently dropped.
+ */
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import {
+  HUB_COLUMNS,
+  hasGenomeStanzas,
+  hubFormat,
+  hubRefusal,
+  hubStore,
+  includesOf,
+  looksLikeHub,
+  looksLikeHubUrl,
+  oneFileGenomes,
+  parseHubGenomes,
+  parseHubHeader,
+  parseStanzas,
+  parseTrackDb,
+  readHub,
+} from '@/state/hub'
+import { parseGenePred, sniffGenePred } from '@/annotations/genepred'
+import { parseInteract, sniffInteract } from '@/annotations/interact'
+import { parseLongRange, sniffLongRange } from '@/annotations/longrange'
+import { STORE_KIND, storeFromText } from '@/state/store'
+import { EXAMPLE_FILES, exampleHubText, exampleStoreText } from '@/ui/examples'
+import type { StoreEntry } from '@/state/store'
+
+const HUB_URL = 'https://lab.example.org/myHub/hub.txt'
+
+const HUB_TXT = `hub myHub
+shortLabel My Hub
+longLabel Everything the lab published in 2026
+genomesFile genomes.txt
+email me@example.org
+`
+
+const GENOMES_TXT = `genome hg38
+trackDb hg38/trackDb.txt
+organism Human
+
+genome galGal7
+trackDb galGal7/trackDb.txt
+twoBitPath galGal7/galGal7.2bit
+organism Chicken
+description Gallus gallus, 2026
+defaultPos chr1:1-100000
+`
+
+/** Indented subtracks, a continuation line, a composite, and two refusals. */
+const HG38_TRACKDB = `track signal
+compositeTrack on
+shortLabel Signal
+longLabel Every signal track \\
+in this hub
+type bigWig
+
+    track signalRep1
+    parent signal on
+    shortLabel Rep 1
+    bigDataUrl data/rep1.bw
+    type bigWig 0 100
+
+    track signalRep2
+    parent signal on
+    shortLabel Rep 2
+    bigDataUrl data/rep2.bw
+    type bigWig
+
+track loops
+shortLabel Loops
+longLabel ChIA-PET loops
+bigDataUrl data/loops.inter.bb
+type bigInteract
+
+track methyl
+shortLabel 5mC
+bigDataUrl data/calls.bb
+type bigMethyl
+
+track reads
+shortLabel Reads
+bigDataUrl data/sample.cram
+type cram
+
+track snakes
+shortLabel Snake
+bigDataUrl data/aln.hal
+type halSnake
+
+include extra.txt
+`
+
+const HG38_EXTRA = `track genes
+shortLabel Genes
+bigDataUrl genes.bb
+type bigGenePred
+
+track variants
+shortLabel Variants
+bigDataUrl calls.vcf.gz
+bigDataIndex indexes/calls.vcf.gz.tbi
+type vcfTabix
+`
+
+const GALGAL_TRACKDB = `track chickenGenes
+shortLabel Genes
+bigDataUrl genes.bb
+type bigBed 12
+`
+
+const FILES: Record<string, string> = {
+  [HUB_URL]: HUB_TXT,
+  'https://lab.example.org/myHub/genomes.txt': GENOMES_TXT,
+  'https://lab.example.org/myHub/hg38/trackDb.txt': HG38_TRACKDB,
+  'https://lab.example.org/myHub/hg38/extra.txt': HG38_EXTRA,
+  'https://lab.example.org/myHub/galGal7/trackDb.txt': GALGAL_TRACKDB,
+}
+
+function reader(files: Record<string, string> = FILES): (url: string) => Promise<string | null> {
+  return async (url) => files[url] ?? null
+}
+
+function entryNamed(entries: readonly StoreEntry[], label: string): StoreEntry {
+  const found = entries.find((entry) => entry.label === label)
+  if (found === undefined) throw new Error(`no entry called ${label}: ${entries.map((e) => e.label).join(', ')}`)
+  return found
+}
+
+describe('the stanza format', () => {
+  it('splits on blank lines', () => {
+    const stanzas = parseStanzas('a 1\nb 2\n\nc 3\n')
+    expect(stanzas.map((stanza) => [...stanza])).toEqual([
+      [
+        ['a', '1'],
+        ['b', '2'],
+      ],
+      [['c', '3']],
+    ])
+  })
+
+  it('strips the indentation subtracks are written with', () => {
+    const stanzas = parseStanzas('track a\n\n    track b\n    parent a\n', 'track')
+    expect(stanzas[1].get('track')).toBe('b')
+    expect(stanzas[1].get('parent')).toBe('a')
+  })
+
+  it('starts a new record on a repeated start key with no blank line', () => {
+    const stanzas = parseStanzas('track a\nshortLabel A\ntrack b\nshortLabel B\n', 'track')
+    expect(stanzas).toHaveLength(2)
+    expect(stanzas[1].get('shortLabel')).toBe('B')
+  })
+
+  it('joins a continued line', () => {
+    const stanzas = parseStanzas('track a\nlongLabel one \\\ntwo\n')
+    expect(stanzas[0].get('longLabel')).toBe('one two')
+  })
+
+  it('keeps the first of a repeated key and drops comments', () => {
+    const stanzas = parseStanzas('# a comment\ntrack a\ntype bigWig\ntype bigBed\n')
+    expect(stanzas[0].get('type')).toBe('bigWig')
+  })
+})
+
+describe('reading the three files', () => {
+  it('recognises a hub by its content, not its name', () => {
+    expect(looksLikeHub(HUB_TXT)).toBe(true)
+    expect(looksLikeHub('{"kind":"metacooler.store"}')).toBe(false)
+    expect(looksLikeHub(HG38_TRACKDB)).toBe(false)
+    expect(looksLikeHubUrl(HUB_URL)).toBe(true)
+    expect(looksLikeHubUrl('https://lab.example.org/store.json')).toBe(false)
+  })
+
+  it('reads the header', () => {
+    const header = parseHubHeader(HUB_TXT)
+    expect(header).toMatchObject({
+      name: 'myHub',
+      shortLabel: 'My Hub',
+      genomesFile: 'genomes.txt',
+      oneFile: false,
+    })
+  })
+
+  it('reads the genomes, with an assembly hub’s own sequence', () => {
+    const genomes = parseHubGenomes(GENOMES_TXT)
+    expect(genomes.map((genome) => genome.assembly)).toEqual(['hg38', 'galGal7'])
+    expect(genomes[0].twoBitPath).toBe('')
+    expect(genomes[1].twoBitPath).toBe('galGal7/galGal7.2bit')
+    expect(genomes[1].label).toBe('Chicken')
+  })
+
+  it('reads the tracks, telling a container from a file', () => {
+    const tracks = parseTrackDb(HG38_TRACKDB)
+    const composite = tracks.find((track) => track.track === 'signal')!
+    expect(composite.container).toBe(true)
+    expect(composite.bigDataUrl).toBe('')
+    expect(composite.longLabel).toBe('Every signal track in this hub')
+    const sub = tracks.find((track) => track.track === 'signalRep1')!
+    expect(sub.parent).toBe('signal')
+    expect(sub.type).toBe('bigwig')
+    expect(sub.bigDataUrl).toBe('data/rep1.bw')
+  })
+
+  it('finds the include lines', () => {
+    expect(includesOf(HG38_TRACKDB)).toEqual(['extra.txt'])
+  })
+})
+
+describe('the store a hub becomes', () => {
+  it('is an ordinary store file', async () => {
+    const store = await readHub(HUB_URL, HUB_TXT, reader())
+    expect(store).not.toBeNull()
+    expect(store!.kind).toBe(STORE_KIND)
+    expect(store!.name).toBe('My Hub')
+    expect(store!.source).toBe(HUB_URL)
+    expect(store!.columns).toEqual([...HUB_COLUMNS])
+  })
+
+  it('resolves each URL against the file that named it', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    // A trackDb's own directory…
+    expect(entryNamed(store.entries, 'Rep 1').uri).toBe(
+      'https://lab.example.org/myHub/hg38/data/rep1.bw',
+    )
+    // …an included file's, which is the same directory here but reached another
+    // way, and `genomes.txt`'s for an assembly hub's sequence.
+    expect(entryNamed(store.entries, 'Genes').uri).toBe(
+      'https://lab.example.org/myHub/hg38/genes.bb',
+    )
+    expect(entryNamed(store.entries, 'Chicken (galGal7)').uri).toBe(
+      'https://lab.example.org/myHub/galGal7/galGal7.2bit',
+    )
+  })
+
+  it('opens an assembly hub on its own .2bit', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    const chicken = entryNamed(store.entries, 'Chicken (galGal7)')
+    expect(chicken.kind).toBe('genome')
+    expect(chicken.fields?.['role']).toBe('sequence')
+    expect(chicken.fields?.['format']).toBe('2bit')
+  })
+
+  it('opens a db hub on a track whose header declares the assembly', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    // hg38 has no twoBitPath and no chromSizes, so the genome row falls back to
+    // the first track whose header carries lengths — and says so.
+    const human = entryNamed(store.entries, 'Human (hg38)')
+    expect(human.fields?.['role']).toBe('sequence')
+    expect(human.uri).toBe('https://lab.example.org/myHub/hg38/data/rep1.bw')
+    expect(human.note).toContain('names no sequence of its own')
+  })
+
+  it('keeps a contact map off the track shelf, and gives it its own row', async () => {
+    const store = (await readHub(
+      HUB_URL,
+      HUB_TXT,
+      reader({
+        ...FILES,
+        'https://lab.example.org/myHub/galGal7/trackDb.txt':
+          `${GALGAL_TRACKDB}\ntrack contacts\nshortLabel Contacts\nbigDataUrl maps/a.hic\ntype hic\n`,
+      }),
+    ))!
+    // The row is there and takes the map door…
+    expect(entryNamed(store.entries, 'Contacts').kind).toBe('map')
+    // …and is *not* on the shelf, because a shelf is annotations. Put there, it
+    // reaches the annotation loader, which reads it as text and reports that
+    // every one of its lines failed the contig/start/end test — a true sentence
+    // about the wrong question.
+    const genome = entryNamed(store.entries, 'Chicken (galGal7)')
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['Genes'])
+  })
+
+  it('hangs every drawable track on the genome row as a shelf', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    const human = entryNamed(store.entries, 'Human (hg38)')
+    expect(human.tracks?.map((track) => track.label)).toEqual([
+      'Rep 1',
+      'Rep 2',
+      'Loops',
+      '5mC',
+      'Genes',
+      'Variants',
+    ])
+  })
+
+  it('gives every track a row, under the group its hub put it in', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    expect(entryNamed(store.entries, 'Rep 1').fields).toMatchObject({
+      assembly: 'hg38',
+      role: 'annotation',
+      format: 'bigWig',
+      group: 'signal',
+    })
+    // A track with no parent has no group, which is what leaves it loose in the
+    // list rather than under an invented heading.
+    expect(entryNamed(store.entries, 'Loops').fields?.['group']).toBeUndefined()
+    expect(entryNamed(store.entries, 'Loops').fields?.['format']).toBe('bigInteract')
+    expect(entryNamed(store.entries, '5mC').fields?.['format']).toBe('bigMethyl')
+  })
+
+  it('carries a hub-named index as the fragment this app reads', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    expect(entryNamed(store.entries, 'Variants').uri).toBe(
+      'https://lab.example.org/myHub/hg38/calls.vcf.gz#index=https://lab.example.org/myHub/hg38/indexes/calls.vcf.gz.tbi',
+    )
+  })
+
+  it('offers no row for a track it cannot draw, and says how many', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader()))!
+    expect(store.entries.some((entry) => entry.label === 'Reads')).toBe(false)
+    expect(store.entries.some((entry) => entry.label === 'Snake')).toBe(false)
+    expect(store.description).toContain('2 tracks not offered')
+    expect(store.description).toContain('CRAM')
+    expect(store.description).toContain('HAL')
+  })
+
+  it('names the refusals one by one', () => {
+    expect(hubRefusal('bigwig')).toBeNull()
+    expect(hubRefusal('cram')).toContain('reference')
+    expect(hubRefusal('halsnake')).toContain('server')
+    expect(hubRefusal('')).toContain('no type')
+    expect(hubRefusal('wigmaf')).toContain('wigmaf')
+  })
+
+  it('knows the five formats this release added', () => {
+    expect(hubFormat('biginteract')).toBe('bigInteract')
+    expect(hubFormat('interact')).toBe('interact')
+    expect(hubFormat('longtabix')).toBe('longrange')
+    expect(hubFormat('bigmethyl')).toBe('bigMethyl')
+    expect(hubFormat('biggenepred')).toBe('bigGenePred')
+    expect(hubFormat('hic')).toBe('hic')
+  })
+
+  it('sends a .hic through the map door and everything else through the genome one', async () => {
+    const store = (await readHub(
+      HUB_URL,
+      HUB_TXT,
+      reader({
+        ...FILES,
+        'https://lab.example.org/myHub/hg38/trackDb.txt':
+          'track contacts\nshortLabel Contacts\nbigDataUrl maps/gm12878.hic\ntype hic\n',
+      }),
+    ))!
+    expect(entryNamed(store.entries, 'Contacts').kind).toBe('map')
+  })
+
+  it('survives a genomes.txt that is not there', async () => {
+    const store = (await readHub(HUB_URL, HUB_TXT, reader({ [HUB_URL]: HUB_TXT })))!
+    expect(store.entries).toEqual([])
+    expect(store.name).toBe('My Hub')
+    expect(store.description).toContain('0 assemblies')
+  })
+})
+
+describe('a one-file hub', () => {
+  const ONE_FILE = `hub oneFile
+shortLabel One File
+longLabel A hub in a single file
+useOneFile on
+
+genome hg38
+organism Human
+
+track first
+shortLabel First
+bigDataUrl a.bw
+type bigWig
+
+track second
+shortLabel Second
+bigDataUrl b.bb
+type bigBed 9
+
+genome mm39
+organism Mouse
+twoBitPath mm39.2bit
+
+track third
+shortLabel Third
+bigDataUrl c.bw
+type bigWig
+`
+
+  it('keeps each track under the genome it follows', () => {
+    const genomes = oneFileGenomes(ONE_FILE, HUB_URL)
+    expect(genomes.map((held) => held.genome.assembly)).toEqual(['hg38', 'mm39'])
+    expect(genomes[0].tracks.map((track) => track.track)).toEqual(['first', 'second'])
+    expect(genomes[1].tracks.map((track) => track.track)).toEqual(['third'])
+  })
+
+  it('reads with no further fetch at all', async () => {
+    let asked = 0
+    const store = (await readHub(HUB_URL, ONE_FILE, async () => {
+      asked++
+      return null
+    }))!
+    expect(asked).toBe(0)
+    expect(store.name).toBe('One File')
+    expect(entryNamed(store.entries, 'First').uri).toBe('https://lab.example.org/myHub/a.bw')
+    expect(entryNamed(store.entries, 'Mouse (mm39)').uri).toBe(
+      'https://lab.example.org/myHub/mm39.2bit',
+    )
+  })
+})
+
+describe('hubStore on its own', () => {
+  it('drops a genome it can open nothing for, and keeps its tracks', () => {
+    const store = hubStore({
+      header: {
+        name: 'h',
+        shortLabel: 'H',
+        longLabel: '',
+        genomesFile: '',
+        oneFile: false,
+        descriptionUrl: '',
+        email: '',
+      },
+      hubUrl: HUB_URL,
+      genomesUrl: HUB_URL,
+      genomes: [
+        {
+          genome: {
+            assembly: 'hg38',
+            label: 'hg38',
+            trackDb: '',
+            twoBitPath: '',
+            chromSizes: '',
+            description: '',
+            defaultPos: '',
+          },
+          // A BAM declares an assembly to this app, but not through a bbi
+          // header — and the genome row has to be a file the 1D browser can
+          // open on. Nothing here is one.
+          tracks: [
+            {
+              track: 'reads',
+              shortLabel: 'Reads',
+              longLabel: '',
+              type: 'bam',
+              bigDataUrl: 'https://host/reads.bam',
+              bigDataIndex: '',
+              parent: '',
+              container: false,
+              shown: true,
+            },
+          ],
+          trackDbUrl: HUB_URL,
+        },
+      ],
+    })
+    expect(store.entries).toHaveLength(1)
+    expect(store.entries[0].fields?.['role']).toBe('annotation')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …and the hub this repository ships
+// ---------------------------------------------------------------------------
+
+/**
+ * The demo hub, read off disk exactly as the browser reads it off a server.
+ *
+ * Everything above is a hub this file wrote, which pins the rules. This is the
+ * one `scripts/make_demo_hub.py` generates over the yeast demo, and it is here
+ * for two reasons that a fixture cannot cover.
+ *
+ * It is a **real assembly hub**: its genome is a `.2bit` that kent's own reader
+ * has verified base for base, so the `twoBitPath` rung of §24.10's ladder is
+ * exercised against a file rather than against a string in a test.
+ *
+ * And it is the file a reader is about to be told to paste into the hub tile
+ * (`http://localhost:5173/demo/yeast/hub.txt`), so if this test fails, that
+ * instruction is wrong — which is the kind of thing nobody notices until
+ * somebody follows it.
+ */
+// ---------------------------------------------------------------------------
+// A published db hub, in the shape they actually come in
+// ---------------------------------------------------------------------------
+
+/**
+ * The arrangement of EPFL's Breast Cancer Epigenomics hub, which is what a
+ * *real* hub looks like as opposed to a written-for-the-test one: a db hub on
+ * hg19 with no sequence of its own, its trackDb a directory down from the
+ * hub.txt, its `bigDataUrl`s relative to *that*, and some four hundred bigWigs
+ * in nine composites of which it asks for twenty.
+ *
+ * Both halves matter and neither is exercised above. A hub whose `genomesFile`
+ * and `trackDb` sit at different depths is where resolving against the wrong
+ * base stops being invisible; a hub with hundreds of subtracks is where
+ * ignoring `parent … off` stops being invisible.
+ */
+const BC_URL = 'https://bchub.example.org/breastca.txt'
+
+const BC_FILES: Record<string, string> = {
+  [BC_URL]: `hub breastca
+shortLabel Breast Cancer Epigenomics
+longLabel Breast Cancer Epigenomics Track Hub
+genomesFile genomes.txt
+email somebody@example.org
+`,
+  'https://bchub.example.org/genomes.txt': `genome hg19
+trackDb hg19/trackDb.txt
+defaultPos chr17:74616083-74644657
+`,
+  'https://bchub.example.org/hg19/trackDb.txt': `track mohammed15
+compositeTrack on
+shortLabel Mohammed 2015
+type bigWig
+visibility dense
+
+    track mcf7_esr1_e2_3hr
+    parent mohammed15 off
+    shortLabel MCF7-ESR1-E2-3hr
+    bigDataUrl bigWig/mohammed15/MCF7_ESR1_E2_3hr.bw
+    type bigWig
+    visibility dense
+
+    track mcf7_pgr_pg_3hr
+    parent mohammed15 on
+    shortLabel MCF7-PGR-P4-3hr-A
+    bigDataUrl bigWig/mohammed15/MCF7_PGR_PG_3hr.bw
+    type bigWig
+    visibility dense
+
+track nacht19
+compositeTrack on
+shortLabel Nacht 2019
+type bigWig
+visibility hide
+
+    track t47d_pgr_r5020
+    parent nacht19 on
+    shortLabel T47D-PGR-R5020
+    bigDataUrl bigWig/nacht19/T47D_PGR_R5020.bw
+    type bigWig
+    visibility dense
+`,
+}
+
+describe('a published db hub', () => {
+  async function bcStore() {
+    const store = await readHub(BC_URL, BC_FILES[BC_URL], reader(BC_FILES))
+    if (store === null) throw new Error('the hub did not read')
+    return store
+  }
+
+  it('resolves bigDataUrls against the trackDb, not the hub.txt', async () => {
+    const store = await bcStore()
+    // `genomesFile genomes.txt` is beside the hub.txt and `trackDb
+    // hg19/trackDb.txt` is a directory down, so a `bigDataUrl` of
+    // `bigWig/…` is under **hg19/**. Resolving it against the hub.txt would
+    // give a URL one directory too high that 404s on every read, and the only
+    // place that shows is a hub laid out like this one.
+    expect(entryNamed(store.entries, 'MCF7-PGR-P4-3hr-A').uri).toBe(
+      'https://bchub.example.org/hg19/bigWig/mohammed15/MCF7_PGR_PG_3hr.bw',
+    )
+  })
+
+  it('gives every track a row, switched off or not', async () => {
+    const store = await bcStore()
+    // Off by default is not the same as absent: the reader who came for one
+    // particular ChIP still finds it, over their own map, by its own row.
+    const labels = store.entries.map((entry) => entry.label)
+    expect(labels).toContain('MCF7-ESR1-E2-3hr')
+    expect(labels).toContain('MCF7-PGR-P4-3hr-A')
+    expect(labels).toContain('T47D-PGR-R5020')
+  })
+
+  it('shelves only the tracks the hub asks for', async () => {
+    const store = await bcStore()
+    const genome = entryNamed(store.entries, 'hg19')
+    // One of the three: `parent … off` takes out the first, and the third is
+    // under a composite the hub hid — which beats its own `parent … on`, the
+    // way a hidden composite does in UCSC.
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['MCF7-PGR-P4-3hr-A'])
+  })
+
+  it('opens a db hub on its first bigWig, having no sequence of its own', async () => {
+    const store = await bcStore()
+    const genome = entryNamed(store.entries, 'hg19')
+    // No `twoBitPath`, no `chromSizes`: hg19 lives at UCSC, which will not
+    // serve it to a browser. The contigs come out of a header the hub itself
+    // named (§5.8).
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.uri).toBe('https://bchub.example.org/hg19/bigWig/mohammed15/MCF7_ESR1_E2_3hr.bw')
+  })
+
+  it('says how many of its tracks it asks for', async () => {
+    const store = await bcStore()
+    // Three rows, one shelf: without this the reader reads "1 assembly" over a
+    // table of hundreds and has no idea what the verb beside it will load.
+    expect(store.description).toContain('3 tracks, 1 on by default')
+  })
+})
+
+/**
+ * The Human cellular microRNAome hub, pasted rather than fetched.
+ *
+ * Two things here are not in any other fixture. It is three files **pasted one
+ * after another** — a `hub.txt` naming a `genomes.txt` naming a `trackDb.txt`,
+ * none of which are fetched because all three are in the box — which is the
+ * road a reader takes when the hub's own host will not allow a cross-origin
+ * GET. And every one of its tracks is a `bigBarChart`, which is the case that
+ * showed the genome-row fallback was excluding bbi types it had no reason to.
+ */
+const MIRNA_HUB = `hub miRNAome
+shortLabel Human cellular microRNAome barCharts
+longLabel Evaluation of >10 billion small RNA-seq reads
+genomesFile genomes.txt
+email somebody@example.org
+
+genome hg38
+trackDb hg38/trackDb.txt
+
+track primary_cells
+type bigBarChart
+barChartBars Astrocyte Schwann_cell
+shortLabel Primary cells
+longLabel miRNA expression of primary cells
+bigDataUrl https://raw.githubusercontent.com/example/repo/master/miRNA_primary_barchart.bb
+barChartUnit RPM
+visibility pack
+
+track cancer_cells
+type bigBarChart
+barChartBars HAF1608_cell HELF977_cell
+shortLabel Cancer cells
+longLabel miRNA expression of cancer cells
+bigDataUrl https://raw.githubusercontent.com/example/repo/master/miRNA_cancer_barchart.bb
+barChartUnit RPM
+visibility pack
+`
+
+describe('a hub of nothing but bar charts', () => {
+  async function pasted() {
+    const got = await storeFromText(MIRNA_HUB)
+    if (!got.ok) throw new Error(`refused: ${got.message}`)
+    return got.store
+  }
+
+  it('reads three files pasted one after another, fetching nothing', async () => {
+    const store = await pasted()
+    // No `useOneFile on` and a `genomesFile` that is never fetched: what makes
+    // this read is that all three files are in the box, which is the whole
+    // point of the box.
+    expect(store.kind).toBe(STORE_KIND)
+    expect(store.name).toBe('Human cellular microRNAome barCharts')
+    expect(store.entries.map((entry) => entry.label)).toEqual([
+      'hg38',
+      'Primary cells',
+      'Cancer cells',
+    ])
+  })
+
+  it('opens hg38 on a bar chart’s header, every big* type being a bbi', async () => {
+    const store = await pasted()
+    const genome = entryNamed(store.entries, 'hg38')
+    // A bigBarChart is a bigBed with a particular autoSql and nothing else, so
+    // its header carries the chrom B-tree like any other. Excluding it left a
+    // hub whose tracks are all one kind with no genome row at all — no row to
+    // open the assembly on, and nowhere for the shelf to hang.
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.uri).toBe(
+      'https://raw.githubusercontent.com/example/repo/master/miRNA_primary_barchart.bb',
+    )
+    expect(genome.note).toContain('names no sequence of its own')
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['Primary cells', 'Cancer cells'])
+  })
+
+  it('keeps both, `visibility pack` being a density and not a refusal', async () => {
+    const store = await pasted()
+    // The switched-off rule reads `hide` and `none`. Every other visibility
+    // word — `pack`, `full`, `squish`, `dense` — says how to draw a track that
+    // is on, and must not be mistaken for the track being off.
+    expect(store.description).not.toContain('on by default')
+  })
+})
+
+describe('the demo hub', () => {
+  const dir = join(process.cwd(), 'demo/yeast')
+  const read = async (url: string): Promise<string | null> => {
+    const name = url.replace(/^https:\/\/demo\//, '')
+    try {
+      return readFileSync(join(dir, name), 'utf8')
+    } catch {
+      return null
+    }
+  }
+  const at = 'https://demo/hub.txt'
+
+  it('reads as an assembly hub over the demo data', async () => {
+    const store = await readHub(at, await read(at) as string, read)
+    expect(store).not.toBeNull()
+    expect(store!.name).toBe('metacooler demo')
+    expect(store!.description).toContain('1 assembly')
+    // Nothing refused: every track in it is a type this viewer draws.
+    expect(store!.description).not.toContain('not offered')
+  })
+
+  it('opens on the hub’s own .2bit, with every annotation on its shelf', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const genome = store.entries.find((entry) => entry.fields?.['role'] === 'sequence')
+    expect(genome?.uri).toBe('https://demo/Yeast_reference.2bit')
+    expect(genome?.fields?.['format']).toBe('2bit')
+    // Every annotation — and **not** the contact map, which is not one and has
+    // a row of its own through the map door.
+    expect(genome?.tracks?.map((track) => track.label)).toEqual([
+      'MNase',
+      'ATAC',
+      'Pol II',
+      'RNA +',
+      'RNA −',
+      'Shotgun',
+      'Micro-C loops',
+    ])
+  })
+
+  it('keeps the six bigWigs under the composite their hub groups them in', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const signal = store.entries.filter((entry) => entry.fields?.['group'] === 'signal')
+    expect(signal).toHaveLength(6)
+    expect(signal.every((entry) => entry.fields?.['format'] === 'bigWig')).toBe(true)
+    // The composite stanza itself names no file, so it gets no row of its own.
+    expect(store.entries.some((entry) => entry.label === 'Signal')).toBe(false)
+  })
+
+  it('sends the contact map through the map door and the loops through the genome one', async () => {
+    const store = (await readHub(at, (await read(at)) as string, read))!
+    const map = store.entries.find((entry) => entry.label === 'Micro-C map')
+    expect(map?.kind).toBe('map')
+    const loops = store.entries.find((entry) => entry.label === 'Micro-C loops')
+    expect(loops?.kind).toBe('genome')
+    expect(loops?.fields?.['format']).toBe('longrange')
+  })
+})
+
+/**
+ * The two loose demo files the hub cannot carry, read by the readers they are
+ * for.
+ *
+ * UCSC's remote-data types are the `big*` ones plus `bam`, `cram`, `vcfTabix`,
+ * `hic` and `longTabix` — so a plain `.interact` or `.genePred` in a `trackDb`
+ * is a hub UCSC itself would refuse, and the demo hub does not write one
+ * (`scripts/make_demo_hub.py`). They are beside it as files to drop instead,
+ * and this is what says they open.
+ */
+describe('the demo files for the formats a hub cannot carry', () => {
+  const dir = join(process.cwd(), 'demo/yeast')
+
+  it('reads the loop calls as interact, both anchors intact', () => {
+    const text = readFileSync(join(dir, 'Yeast_microC_loops.interact'), 'utf8')
+    expect(sniffInteract(text)).toBe(true)
+    const set = parseInteract(text)
+    expect(set.length).toBeGreaterThan(1000)
+    // The anchors, not the span between them: every pair is two 1 kb windows.
+    for (let i = 0; i < 20; i++) {
+      expect(set.end1[i] - set.start1[i]).toBe(1000)
+      expect(set.end2[i] - set.start2[i]).toBe(1000)
+    }
+  })
+
+  it('reads the same calls as longrange, folding the reciprocal lines', () => {
+    const text = readFileSync(join(dir, 'Yeast_microC_loops.longrange'), 'utf8')
+    expect(sniffLongRange(text)).toBe(true)
+    const folded = parseLongRange(text)
+    const interact = parseInteract(readFileSync(join(dir, 'Yeast_microC_loops.interact'), 'utf8'))
+    // The file holds both ends of each call, so it is twice as many lines as
+    // interactions — and the reader must arrive at the interact file's count.
+    expect(text.trim().split('\n')).toHaveLength(interact.length * 2)
+    expect(folded.length).toBe(interact.length)
+  })
+
+  it('reads the GTF’s transcripts back out of the genePred spelling', () => {
+    const text = readFileSync(join(dir, 'Yeast_annotations.genePred'), 'utf8')
+    expect(sniffGenePred(text)).toBe(true)
+    const set = parseGenePred(text)
+    expect(set.length).toBe(7071)
+    // The symbol in front of the accession, which is what `name2` carries.
+    const at = set.name.findIndex((name) => name === 'SOR2')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(set.id[at]).toMatch(/^Y/)
+    expect(set.exonAt[at + 1]).toBeGreaterThan(set.exonAt[at])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …pasted rather than fetched
+// ---------------------------------------------------------------------------
+
+/**
+ * A hub read from text somebody pasted (§24.10).
+ *
+ * The reason this road exists is not convenience: a store or a hub is fetched by
+ * the *page*, so the host has to allow a cross-origin `GET`, and plenty do not —
+ * `genome.ucsc.edu` among them, which puts UCSC's own example hubs out of reach
+ * of every browser-only viewer. The file is public and the one thing in the way
+ * is a response header on somebody else's server.
+ *
+ * **One box, not three.** A `hub.txt`, a `genomes.txt` and a `trackDb.txt`
+ * concatenated are a one-file hub in every respect that matters: the only keys
+ * the concatenation loses are the two saying where the next file is, and the
+ * next file is already in the box.
+ */
+describe('a hub pasted rather than fetched', () => {
+  const CONCATENATED = [HUB_TXT, GENOMES_TXT.split('\n\n')[1], GALGAL_TRACKDB].join('\n')
+
+  it('reads a concatenation with no `useOneFile` line and no fetch at all', async () => {
+    let asked = 0
+    const store = await readHub('https://lab.example.org/myHub/', CONCATENATED, async () => {
+      asked++
+      return null
+    })
+    expect(asked).toBe(0)
+    expect(store!.name).toBe('My Hub')
+    expect(store!.entries.map((entry) => entry.label)).toEqual([
+      'Chicken (galGal7)',
+      'Genes',
+    ])
+  })
+
+  it('tells a whole hub from its first file', () => {
+    expect(hasGenomeStanzas(CONCATENATED)).toBe(true)
+    // A real three-file `hub.txt` has no genome stanza, which is what keeps this
+    // from ever firing on one by mistake.
+    expect(hasGenomeStanzas(HUB_TXT)).toBe(false)
+  })
+})
+
+describe('storeFromText', () => {
+  const ONE_FILE = [
+    'hub pasted',
+    'shortLabel Pasted hub',
+    '',
+    'genome hg38',
+    'organism Human',
+    '',
+    'track cov',
+    'shortLabel Coverage',
+    'bigDataUrl https://lab.example.org/data/cov.bw',
+    'type bigWig',
+    '',
+  ].join('\n')
+
+  it('reads a pasted hub with absolute URLs and no base', async () => {
+    const result = await storeFromText(ONE_FILE)
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.name).toBe('Pasted hub')
+    expect(result.ok && result.store.entries.map((entry) => entry.uri)).toEqual([
+      'https://lab.example.org/data/cov.bw',
+      'https://lab.example.org/data/cov.bw',
+    ])
+  })
+
+  it('refuses a hub.txt on its own, and says what is missing', async () => {
+    const result = await storeFromText(HUB_TXT)
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('hub.txt alone')
+    expect(!result.ok && result.message).toContain('genomes.txt')
+  })
+
+  it('refuses relative names with nothing to resolve them against', async () => {
+    const relative = ONE_FILE.replace('https://lab.example.org/data/cov.bw', 'cov.bw')
+    const result = await storeFromText(relative)
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('relatively')
+    expect(!result.ok && result.message).toContain('cov.bw')
+  })
+
+  it('takes those same names once a base is given', async () => {
+    const relative = ONE_FILE.replace('https://lab.example.org/data/cov.bw', 'cov.bw')
+    const result = await storeFromText(relative, 'https://lab.example.org/data/')
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.entries[0].uri).toBe('https://lab.example.org/data/cov.bw')
+  })
+
+  it('reads a pasted store file too, not only a hub', async () => {
+    const json = JSON.stringify({
+      kind: STORE_KIND,
+      version: 1,
+      name: 'Pasted shelf',
+      columns: [],
+      entries: [{ label: 'One', uri: 'https://lab.example.org/one.mcool' }],
+    })
+    const result = await storeFromText(json)
+    expect(result.ok && result.store.name).toBe('Pasted shelf')
+  })
+
+  it('says so when nothing was pasted', async () => {
+    const result = await storeFromText('   ')
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('Nothing pasted')
+  })
+})
+
+/**
+ * The worked examples the paste boxes offer.
+ *
+ * An example beside a paste box is not there to show syntax — the specification
+ * does that better. It is there to be pressed: the reader's first edit should be
+ * to something that already drew a shelf, not to a template whose state they
+ * cannot tell. So the bar is that each one **reads**, and that every file it
+ * names is one the demo bucket has.
+ */
+describe('the paste boxes’ examples', () => {
+  it('reads the hub example into a shelf', async () => {
+    const result = await storeFromText(exampleHubText())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.store.name).toBe('Example hub')
+    expect(result.store.entries.map((entry) => entry.label)).toEqual([
+      'Saccharomyces cerevisiae (sacCer3_syn40)',
+      'MNase',
+      'ATAC',
+      'Micro-C map',
+    ])
+    // It is an **assembly hub**: the genome is the hub's own `.2bit`, which is
+    // the rung of §24.10's ladder worth demonstrating and the only way a hub
+    // carries a sequence of its own.
+    const genome = result.store.entries[0]
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.fields?.['format']).toBe('2bit')
+    expect(genome.uri).toMatch(/Yeast_reference\.2bit$/)
+    // …and the contact map goes through the map door.
+    expect(result.store.entries[3].kind).toBe('map')
+  })
+
+  it('reads the store example into a shelf', async () => {
+    const result = await storeFromText(exampleStoreText())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.store.name).toBe('Example shelf')
+    expect(result.store.entries).toHaveLength(2)
+    expect(result.store.entries[0].kind).toBe('map')
+    expect(result.store.entries[0].tracks).toHaveLength(1)
+  })
+
+  it('names only files the demo bucket has', () => {
+    const named = [...exampleHubText().matchAll(/https?:\/\/\S+/g)]
+      .map((match) => match[0])
+      .concat([...exampleStoreText().matchAll(/https?:\/\/[^"]+/g)].map((match) => match[0]))
+      // The commented `twoBitPath` line is an illustration, not a file.
+      .filter((url) => !url.includes('your.host'))
+      .map((url) => url.split('/').slice(-2).join('/'))
+    expect(named.length).toBeGreaterThan(0)
+    for (const path of new Set(named)) {
+      expect(EXAMPLE_FILES).toContain(path)
+    }
+  })
+
+  it('needs no base, because every URL in it is absolute', async () => {
+    // The refusal for relative names is what would fire otherwise, and an
+    // example that cannot be opened without a second box filled in is not one.
+    for (const text of [exampleHubText(), exampleStoreText()]) {
+      const result = await storeFromText(text)
+      expect(result.ok).toBe(true)
+    }
+  })
+})

@@ -24,6 +24,16 @@ import type { StoreEntry } from '../../state/store'
 export interface StoreHost {
   /** Open one entry: an empty tab is filled, otherwise a new tab is opened. */
   open(entry: StoreEntry): void
+  /**
+   * The same, and then **load the tracks the entry carries**.
+   *
+   * Its own verb rather than a flag on {@link StoreHost.open}, because the two
+   * are different promises. *Open* is one file and whatever the reader does
+   * next; *open with its tracks* is a sentence that has to come true, and a
+   * reader who presses it and gets a genome with a button offering the tracks
+   * has been handed the thing they just pressed past (§24.10).
+   */
+  openWithTracks(entry: StoreEntry): void
   /** Join the open tab: a map beside the map, anything else as a track. An empty tab is filled. */
   add(entry: StoreEntry): void
   /**

@@ -156,7 +156,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { demoAnnotationsToOffer } from '../ui/examples'
+import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
@@ -438,6 +438,7 @@ const ORIGINS: Record<Assembly['origin'], string> = {
   cooler: 'from the cooler’s /chroms',
   bam: 'from the BAM’s @SQ header',
   vcf: 'declared by the VCF’s ##contig lines',
+  twobit: 'from the .2bit index',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */
@@ -2848,6 +2849,22 @@ export class Session {
       picker: this.markPicker(),
       fileLabel: fileLabel(assembly.uri),
     })
+    // The tracks published beside this genome, as one click — the same offer the
+    // map path makes, and until now the one thing a browser session did not
+    // inherit from it. It matters most for exactly the rows this release added:
+    // a **track hub's** assembly opens as a `.2bit` or a `chrom.sizes` and its
+    // whole trackDb rides along as the shelf (§24.10), so without this the
+    // *open with its tracks* verb on a hub's heading opened the genome and
+    // silently dropped the tracks. An IGV genome row carries the same shelf and
+    // was losing it the same way.
+    const published = demoAnnotationsToOffer(assembly.uri, {
+      restoring: AnnotationStore.stored(scope).length > 0,
+    })
+    // …and whether they were **asked for** rather than merely brought along.
+    // *Open with its tracks* is a sentence that has to come true, so that road
+    // loads them here and shows no button; every other road to the same file
+    // keeps the offer (`ui/examples.ts`).
+    const wanted = published.length > 0 && shelfWasAsked(assembly.uri)
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card, not below it: what a reader just computed is what
@@ -2859,11 +2876,33 @@ export class Session {
         loader,
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
+        ...(published.length === 0 || wanted
+          ? {}
+          : {
+              demo: {
+                label: `load the ${published.length} tracks published with this genome`,
+                hint:
+                  'The tracks the store or hub this genome came from lists beside it, on its own ' +
+                  'assembly. They open the same way any remote file does.',
+                run: () => {
+                  for (const entry of published) {
+                    loader.addUrl(entry.url, entry.label)
+                  }
+                },
+              },
+            }),
       }).el,
       this.manualCard.el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
+    // The tracks the reader asked for, put on. After the cards are mounted and
+    // after `restore`, for `restore`'s own reason: a row landing in a list that
+    // does not exist yet is a row nobody draws, and a row landing *before* the
+    // restored ones would reorder a lane stack the reader arranged last time.
+    if (wanted) {
+      for (const entry of published) loader.addUrl(entry.url, entry.label)
+    }
     // …and what this session was already holding, exactly as the map path does
     // it. Not only for symmetry: `carry` runs before every tear-down and only
     // an adoption clears it, so a browser that ignored the rows would leave
@@ -4164,6 +4203,8 @@ export class Session {
     const published = demoAnnotationsToOffer(uri, {
       restoring: AnnotationStore.stored(scope).length > 0,
     })
+    // See the browser path: asked for, or merely brought along.
+    const wanted = published.length > 0 && shelfWasAsked(uri)
     // Contact maps first, and that is the change of mind this card's eyes made
     // necessary: while it was only "load a second file to compare against" it
     // belonged under the tracks, as the rarest thing in the column. It is now
@@ -4206,7 +4247,7 @@ export class Session {
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
         maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
-        ...(published.length === 0
+        ...(published.length === 0 || wanted
           ? {}
           : {
               demo: {
@@ -4233,6 +4274,14 @@ export class Session {
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
     loader.restore(AnnotationStore.stored(scope))
+    // The tracks the reader asked for, put on. After the cards are mounted and
+    // after `restore`, for `restore`'s own reason: a row landing in a list that
+    // does not exist yet is a row nobody draws, and a row landing *before* the
+    // restored ones would reorder a lane stack the reader arranged last time.
+    if (wanted) {
+      for (const entry of published) loader.addUrl(entry.url, entry.label)
+    }
+
     // Where the tracks were *drawn*, when the answer is not "on the lead".
     // Seeded rather than placed: the lanes go into the store's parking, and
     // `adoptHome` — which already runs once per render for every live cell —

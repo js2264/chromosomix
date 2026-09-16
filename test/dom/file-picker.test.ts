@@ -195,7 +195,7 @@ describe('the landing page', () => {
     expect(textsOf(el, '.picker-provider')[0]).toBe('choose a folder (this visit)…')
   })
 
-  it('offers the five shipped stores as tiles, then the one that adds a store', () => {
+  it('offers the six shipped stores as tiles, then the two doors', () => {
     const { el } = build()
     expect(textsOf(el, '.store-tile .store-tile-name')).toEqual([
       'RSG lab data',
@@ -203,10 +203,15 @@ describe('the landing page', () => {
       '4DN open data',
       'ENCODE',
       'DNA Zoo',
-      'Your own store',
+      'Roadmap (UCSC hub)',
+      // The two doors, always last and always in this order: far more of the
+      // world's published data is behind a hub than behind a store file
+      // written for this viewer (§24.10).
+      'Add a UCSC hub',
+      'Add a custom store config',
     ])
     // Every tile is a mark and a line, not a request.
-    expect(all(el, '.store-tile .store-mark')).toHaveLength(6)
+    expect(all(el, '.store-tile .store-mark')).toHaveLength(8)
   })
 
   it('fetches nothing when it is built or when the tiles are drawn', () => {
@@ -219,11 +224,12 @@ describe('the landing page', () => {
   it('hands a pressed tile up by id, which is the gesture that opens the drawer', () => {
     const built = build()
     const tiles = all<HTMLButtonElement>(built.el, '.store-tile')
-    // A shipped one in the middle, and the last tile — which is the one that
-    // adds a store, and stays last however many are shipped in front of it.
+    // A shipped one in the middle, then the two doors — which stay last, in
+    // that order, however many are shipped in front of them.
     tiles[2].click()
+    tiles[tiles.length - 2].click()
     tiles[tiles.length - 1].click()
-    expect(built.stores).toEqual(['4dn', 'custom'])
+    expect(built.stores).toEqual(['4dn', 'hub', 'custom'])
   })
 
   it('leaves the two rows out when it is given no door to them, and keeps the rest', () => {

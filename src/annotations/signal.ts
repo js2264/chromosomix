@@ -101,8 +101,15 @@ export function sniffSignal(text: string): SignalFormat | null {
   return dataRows > 0 ? 'bedgraph' : null
 }
 
-/** Accumulates one contig's intervals without knowing how many there will be. */
-class ContigBuilder {
+/**
+ * Accumulates one contig's intervals without knowing how many there will be.
+ *
+ * Exported for `annotations/bedmethyl.ts`, which is a third text format that
+ * becomes a track: a modification call is a number at a place, so it wants this
+ * builder, this sort and {@link finishSet}, and a copy of them beside it would
+ * be a second place for the sort-on-finish rule to be got wrong.
+ */
+export class ContigBuilder {
   private starts: number[] = []
   private ends: number[] = []
   private values: number[] = []
@@ -265,7 +272,7 @@ export function parseWig(text: string): SignalSet {
   return finishSet(builders, length, min, max)
 }
 
-function finishSet(
+export function finishSet(
   builders: Map<string, ContigBuilder>,
   length: number,
   min: number,

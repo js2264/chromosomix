@@ -351,8 +351,22 @@ ROUTE_MAP = re.compile(
 )
 ROUTE_GENOME = re.compile(
     r"\.(bw|bigwig|bb|bigbed|chrom\.sizes|sizes|genome|fai|fa|fasta|fna|fas|gtf|gff3?"
-    r"|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig|bam)(\.gz)?$",
+    r"|bed|bedpe|narrowPeak|broadPeak|gappedPeak|vcf|bdg|bedgraph|wig|bam"
+    # The UCSC names (SPECS §8.18–§8.21). This list and `browse/route.ts`'s must
+    # agree: a generator that wrote a row the viewer has no door for publishes a
+    # shelf whose file fails when it is clicked, and one that dropped a row the
+    # viewer can open publishes a shorter shelf than the data deserves. The
+    # second is what this half of the list was doing until now.
+    r"|interact|biginteract|longrange|longtabix|genepred|genepredext|refflat"
+    r"|bedmethyl|bigmethyl|2bit)(\.txt)?(\.gz)?$",
     re.I,
+)
+
+#: The gene-model tables UCSC publishes under a bare `.txt.gz`, which no suffix
+#: rule can catch: `hg38.refGene.txt.gz`, `ncbiRefSeq.txt.gz`, `refFlat.txt.gz`.
+#: 29 of IGV's 63 tracks are one of these.
+ROUTE_GENOME_NAMED = re.compile(
+    r"(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.gz)?$", re.I
 )
 
 
@@ -415,7 +429,7 @@ def route_of(name: str) -> Optional[str]:
         return "workspace"
     if ROUTE_MAP.search(bare):
         return "map"
-    if ROUTE_GENOME.search(bare):
+    if ROUTE_GENOME.search(bare) or ROUTE_GENOME_NAMED.search(bare):
         return "genome"
     return None
 
@@ -424,6 +438,27 @@ def route_of(name: str) -> Optional[str]:
 #: answer, which is a door and not a format: a reader filtering for `mcool`
 #: does not want every map.
 FORMAT_SUFFIXES = (
+    # The UCSC names first, because three of them end in a suffix that is also
+    # something else: `.interact` and `.bedMethyl` are BED-family names, and a
+    # gene-model table is a `.txt.gz` whose format is in the stem rather than
+    # the suffix. Longest-match ordering is what keeps them apart.
+    "refgene.txt.gz",
+    "refgene.txt",
+    "ncbirefseq.txt.gz",
+    "ncbirefseq.txt",
+    "refflat.txt.gz",
+    "refflat.txt",
+    "knowngene.txt.gz",
+    "knowngene.txt",
+    ".genepred",
+    ".genepredext",
+    ".biginteract",
+    ".interact",
+    ".longrange",
+    ".longtabix",
+    ".bedmethyl",
+    ".bigmethyl",
+    ".2bit",
     ".mcool",
     ".scool",
     ".cool",
@@ -490,9 +525,33 @@ def format_of(name: str) -> str:
     bare = name.split("?")[0].split("#")[0].rsplit("/", 1)[-1].lower()
     for suffix in FORMAT_SUFFIXES:
         if bare.endswith(suffix):
-            return suffix.lstrip(".")
+            return GENEPRED_NAMES.get(suffix, suffix.lstrip("."))
     tail = bare.rsplit(".", 1)
     return tail[-1] if len(tail) > 1 else ""
+
+
+#: The four names UCSC publishes one format under, folded to that format.
+#:
+#: A Format column exists to be filtered on, and a reader looking for gene
+#: models should tick one value and get all of them — ``refGene``,
+#: ``ncbiRefSeq``, ``refFlat`` and ``knownGene`` are four tables in the same
+#: ``genePred`` family (SPECS §8.19), and four cells saying so is four filters
+#: nobody wants.
+GENEPRED_NAMES = {
+    suffix: "genepred"
+    for suffix in (
+        "refgene.txt.gz",
+        "refgene.txt",
+        "ncbirefseq.txt.gz",
+        "ncbirefseq.txt",
+        "refflat.txt.gz",
+        "refflat.txt",
+        "knowngene.txt.gz",
+        "knowngene.txt",
+        ".genepred",
+        ".genepredext",
+    )
+}
 
 
 # ---------------------------------------------------------------------------
@@ -2001,14 +2060,19 @@ def entries_dnazoo(
 
 #: What IGV calls a track format, mapped to whether this viewer has a reader.
 #:
-#: ``refgene`` is the one that matters and the one that is missing: 29 of IGV's
-#: 63 tracks are UCSC ``genePred`` tables (``ncbiRefSeq.txt.gz``), a nine-column
-#: tab-separated format this viewer has no parser for. Those tracks are counted
-#: and skipped rather than written as rows that fail when they are clicked —
-#: `route_of` would refuse them anyway, since the name ends in ``.txt.gz``, and
-#: the count is logged so that "IGV has a gene track for hg38 and this store does
-#: not" is a known gap rather than a surprise.
-IGV_UNREADABLE = ("refgene", "genepred", "2bit", "cytoband", "alias", "chromsizes")
+#: ``refgene``, ``genepred`` and ``2bit`` **used to be on this list** and are the
+#: reason it existed: 29 of IGV's 63 tracks are UCSC ``genePred`` tables
+#: (``ncbiRefSeq.txt.gz``) and most of its genomes are ``.2bit``, and the count
+#: of them was logged so that "IGV has a gene track for hg38 and this store does
+#: not" stayed a known gap rather than a surprise. Both formats are read now
+#: (SPECS §8.19, §8.21), so both come off the list and those rows are published.
+#:
+#: What is left are three files that are **not annotations of a genome**: a
+#: cytoband table is an ideogram this viewer does not draw, an alias file is a
+#: map between spellings rather than data (§5.9 does that job from the files
+#: themselves), and a ``chrom.sizes`` declares a genome rather than annotating
+#: one — which is the refusal `annotations/loader.ts` states in so many words.
+IGV_UNREADABLE = ("cytoband", "alias", "chromsizes")
 
 
 def _igv_index(url: str, index: str) -> str:

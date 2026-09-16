@@ -78,6 +78,22 @@ export function routeOf(uri: string): FileRoute {
   ) {
     return 'genome'
   }
+  // The UCSC names (§8.18–§8.21). On the genome door with every other
+  // annotation, and `.2bit` among them because it is a sequence — the same door
+  // a FASTA goes through, and the one an assembly hub's genome arrives at.
+  //
+  // `refFlat.txt` and `refGene.txt` are here without a dot-extension of their
+  // own, because that is how they are published: IGV's genome table names 29 of
+  // them, and a router that insisted on a suffix would go on greying out
+  // exactly the gene models this release exists to open.
+  if (
+    /\.(interact|biginteract|longrange|longtabix|genepred|genepredext|refflat|bedmethyl|bigmethyl|2bit)(\.txt)?(\.gz)?$/i.test(
+      name,
+    ) ||
+    /(^|[._-])(refflat|refgene|ncbirefseq|knowngene)\.txt(\.gz)?$/i.test(name)
+  ) {
+    return 'genome'
+  }
   // A BAM annotates a genome and can declare one, so it is the same door as a
   // bigWig (§8.13) — even though, unlike every other name on that list, it may
   // yet be refused for want of an index. Routing is about which front door a

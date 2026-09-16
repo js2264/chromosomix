@@ -111,6 +111,7 @@ function build(options: { view?: StoreView; empty?: boolean; front?: StoreFront 
   const views: StoreView[] = []
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: (entry) => added.push(entry),
     openTogether: (entries) => together.push([...entries]),
     tabEmpty: () => options.empty ?? true,
@@ -329,7 +330,13 @@ describe('sessions', () => {
     const opened: StoreEntry[] = []
     const view = new PortalView({
       front,
-      host: { open: (entry) => opened.push(entry), add: () => undefined, openTogether: () => undefined, tabEmpty: () => true },
+      host: {
+        open: (entry) => opened.push(entry),
+        openWithTracks: (entry) => opened.push(entry),
+        add: () => undefined,
+        openTogether: () => undefined,
+        tabEmpty: () => true,
+      },
       view: EMPTY_VIEW,
       onView: () => undefined,
     })

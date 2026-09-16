@@ -11,9 +11,9 @@
  * they are removed once it is written, so a re-run means putting them back.
  *
  * PNG, and only PNG — `decode` below is not a general image reader and says so
- * rather than guessing. DNA Zoo's was supplied as a JPEG, and a logo that
- * arrives in another format is converted once before it is put here; this
- * script is not the place for a second decoder. That is deliberate — the marks below are published
+ * rather than guessing. DNA Zoo's was supplied as a JPEG, and so was Roadmap's;
+ * a logo that arrives in another format is converted once before it is put
+ * here, and this script is not the place for a second decoder. That is deliberate — the marks below are published
  * artwork belonging to the projects they name, carried here because this
  * viewer was given them to carry, and the repository holds one copy of each
  * (the fitted mark) rather than two. If a logo changes, replace the file,
@@ -68,12 +68,56 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
  */
 const EDGE = 160
 
-/** What is read, what it is called in the generated file, and its store. */
+/**
+ * What is read, what it is called in the generated file, and its store.
+ *
+ * `fit` says how a mark meets the square, and there are two answers because
+ * there are two kinds of thing here. **contain** is a logo drawn for paper:
+ * scaled whole onto a white ground, letterboxed if it is not square, which is
+ * the only way a wordmark survives. **bleed** is a mark that is already a tile
+ * — this viewer's own app icon is a squircle plate with a margin and a shadow
+ * around it — so it is trimmed to its own edge and fills the square, on its own
+ * colour rather than on white. Containing it would draw a plate inside a plate,
+ * which is what it looked like and why the option exists.
+ *
+ * `inset` is a margin, as a fraction of the square, for a mark whose *own*
+ * outline runs near its edge. UCSC's is a rounded yellow frame, and a frame
+ * drawn to the edge of a square that is then clipped at a 22% radius
+ * (`ui/stores/styles.css`) has its four corners cut off — which reads as a
+ * broken frame rather than as a crop. Pulling it in until its corners clear
+ * that radius makes it a badge on white, which is what ENCODE and DNA Zoo
+ * already are.
+ *
+ * `crop` is a box in fractions of the source — `[x0, y0, x1, y1]` — taken
+ * before anything else, for a logo too long to survive being letterboxed into a
+ * square. Roadmap's is the case, and the limit of what letterboxing can do: at
+ * 958x208 it is nearly five times as wide as it is tall, so whole it fills a
+ * fifth of the tile's height, which puts its wordmark at about five pixels on
+ * the landing page and two in the drawer's head. ENCODE at 170x102 is the
+ * shape this still works for; this is not.
+ *
+ * So Roadmap's **emblem** is taken — the square at the logo's left end, which
+ * then needs no letterbox at all — and its words are not. That is the one trade
+ * here the others do not make, and what makes it affordable is that the tile
+ * sets the store's name in type directly under the mark: the square is not
+ * where the name is, so a mark that cannot carry the name legibly should carry
+ * the picture instead.
+ *
+ * `committed` marks a source that is in the repository and stays there. It is
+ * true of one file: `build/icon.png`, which is a build input the icon script
+ * writes and every clone already has (`scripts/make-app-icons.py`). The rest
+ * are supplied by hand and removed once this has run — see the header.
+ */
 const LOGOS = [
-  { file: 'IGV.png', key: 'igv', store: 'IGV genomes' },
-  { file: '4DN.png', key: 'fourdn', store: '4DN' },
-  { file: 'ENCODE.png', key: 'encode', store: 'ENCODE' },
-  { file: 'DnaZoo.png', key: 'dnazoo', store: 'DNA Zoo' },
+  { file: 'IGV.png', key: 'igv', store: 'IGV genomes', fit: 'contain' },
+  { file: '4DN.png', key: 'fourdn', store: '4DN', fit: 'contain' },
+  { file: 'ENCODE.png', key: 'encode', store: 'ENCODE', fit: 'contain' },
+  { file: 'DnaZoo.png', key: 'dnazoo', store: 'DNA Zoo', fit: 'contain' },
+  { file: 'UCSC.png', key: 'ucsc', store: 'UCSC — the hub door', fit: 'contain', inset: 0.16 },
+  // 208/958 — the source's own height, so what is taken is the square at its
+  // left end: the emblem, full bleed, no letterbox at all.
+  { file: 'Roadmap.png', key: 'roadmap', store: 'Roadmap Epigenomics', fit: 'contain', crop: [0, 0, 0.2171, 1] },
+  { file: 'build/icon.png', key: 'app', store: 'this viewer', fit: 'bleed', committed: true },
 ]
 
 // --- reading a PNG ---------------------------------------------------------
@@ -184,13 +228,87 @@ function decode(png) {
  * colour across a transparent edge — where the colour under `alpha = 0` is
  * usually black, and averaging it in draws a dark fringe round the logo.
  */
-function overWhite({ width, height, rgba }) {
+function over({ width, height, rgba }, ground) {
   const rgb = new Uint8Array(width * height * 3)
   for (let i = 0; i < width * height; i++) {
     const a = rgba[i * 4 + 3] / 255
-    for (let c = 0; c < 3; c++) rgb[i * 3 + c] = Math.round(rgba[i * 4 + c] * a + 255 * (1 - a))
+    for (let c = 0; c < 3; c++) {
+      rgb[i * 3 + c] = Math.round(rgba[i * 4 + c] * a + ground[c] * (1 - a))
+    }
   }
   return rgb
+}
+
+const WHITE = [255, 255, 255]
+
+/**
+ * The tightest box containing every pixel that is not all but transparent.
+ *
+ * `> 8` rather than `> 0` because a drop shadow fades to nothing over many
+ * pixels and never quite reaches it, so a zero threshold trims almost nothing
+ * and the plate stays adrift in its own shadow.
+ */
+function opaqueBox({ width, height, rgba }) {
+  let left = width
+  let top = height
+  let right = -1
+  let bottom = -1
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (rgba[(y * width + x) * 4 + 3] <= 8) continue
+      if (x < left) left = x
+      if (x > right) right = x
+      if (y < top) top = y
+      if (y > bottom) bottom = y
+    }
+  }
+  if (right < left || bottom < top) return { left: 0, top: 0, width, height }
+  return { left, top, width: right - left + 1, height: bottom - top + 1 }
+}
+
+/** A `[x0, y0, x1, y1]` box in fractions, as pixels of this image. */
+function fractionBox({ width, height }, [x0, y0, x1, y1]) {
+  const left = Math.round(x0 * width)
+  const top = Math.round(y0 * height)
+  return {
+    left,
+    top,
+    width: Math.max(1, Math.round(x1 * width) - left),
+    height: Math.max(1, Math.round(y1 * height) - top),
+  }
+}
+
+/** The pixels inside `box`, as their own image. */
+function crop(image, box) {
+  const rgba = new Uint8Array(box.width * box.height * 4)
+  for (let y = 0; y < box.height; y++) {
+    const from = ((y + box.top) * image.width + box.left) * 4
+    rgba.set(image.rgba.subarray(from, from + box.width * 4), y * box.width * 4)
+  }
+  return { width: box.width, height: box.height, rgba }
+}
+
+/**
+ * The mark's own ground: the mean of four samples a little inside its edges.
+ *
+ * What a bleeding mark needs behind it is the colour it already is at its own
+ * rim, so that the square's corners — which a squircle does not reach into —
+ * carry on the plate rather than showing white through them. A tenth of the
+ * way in, at each edge's midpoint, is inside the rounding and outside anything
+ * drawn in the middle.
+ */
+function ownGround(image) {
+  const { width, height, rgba } = image
+  const inset = Math.max(1, Math.round(Math.min(width, height) / 10))
+  const at = [
+    [Math.floor(width / 2), inset],
+    [Math.floor(width / 2), height - 1 - inset],
+    [inset, Math.floor(height / 2)],
+    [width - 1 - inset, Math.floor(height / 2)],
+  ]
+  return [0, 1, 2].map((c) =>
+    Math.round(at.reduce((sum, [x, y]) => sum + rgba[(y * width + x) * 4 + c], 0) / at.length),
+  )
 }
 
 /**
@@ -234,13 +352,19 @@ function resample(src, sw, sh, dw, dh) {
   return out
 }
 
-/** The logo on an `EDGE`-square white ground, scaled to fit and centred. */
-function fit(image) {
-  const scale = Math.min(EDGE / image.width, EDGE / image.height)
+/** The logo on an `EDGE` square, scaled to fit and centred — see `LOGOS.fit`. */
+function fit(source, mode, inset = 0, taking) {
+  const bleeding = mode === 'bleed'
+  const taken = taking === undefined ? source : crop(source, fractionBox(source, taking))
+  const image = bleeding ? crop(taken, opaqueBox(taken)) : taken
+  const ground = bleeding ? ownGround(image) : WHITE
+  const room = EDGE * (1 - inset)
+  const scale = Math.min(room / image.width, room / image.height)
   const width = Math.max(1, Math.round(image.width * scale))
   const height = Math.max(1, Math.round(image.height * scale))
-  const inner = resample(overWhite(image), image.width, image.height, width, height)
-  const canvas = new Uint8Array(EDGE * EDGE * 3).fill(255)
+  const inner = resample(over(image, ground), image.width, image.height, width, height)
+  const canvas = new Uint8Array(EDGE * EDGE * 3)
+  for (let i = 0; i < EDGE * EDGE; i++) canvas.set(ground, i * 3)
   const left = Math.round((EDGE - width) / 2)
   const top = Math.round((EDGE - height) / 2)
   for (let y = 0; y < height; y++) {
@@ -311,23 +435,57 @@ function png(canvas) {
 
 // --- the file --------------------------------------------------------------
 
-const marks = LOGOS.map(({ file, key, store }) => {
-  let source
+/**
+ * The data URIs already in the generated file, by key.
+ *
+ * Read so that a run can be **incremental**. The hand-supplied sources are not
+ * committed and are removed once they have been fitted, so a script that
+ * insisted on all of them would make adding a sixth logo mean re-obtaining the
+ * first five — and the one thing worse than a build input nobody has is a
+ * build step nobody can run. A key whose source is absent keeps the mark it
+ * already has; a key with neither is an error that names the file.
+ */
+function existingMarks() {
+  let text
+  try {
+    text = readFileSync(join(root, OUT), 'utf8')
+  } catch {
+    return new Map()
+  }
+  const found = new Map()
+  for (const [, key, uri] of text.matchAll(/^ {2}([A-Za-z0-9_$]+):\s*\n?\s*'(data:image\/png;base64,[^']+)',/gm)) {
+    found.set(key, uri)
+  }
+  return found
+}
+
+const OUT = 'src/ui/stores/logos.generated.ts'
+const already = existingMarks()
+
+const marks = LOGOS.map(({ file, key, store, fit: mode, inset, crop: box, committed }) => {
+  let source = null
   try {
     source = readFileSync(join(root, file))
   } catch {
+    const kept = already.get(key)
+    if (kept !== undefined) {
+      console.log(`${file}: not here, keeping the mark already generated (${store})`)
+      return { key, store, uri: kept }
+    }
     throw new Error(
-      `${file} is not at the repository root. The three logos are supplied by ` +
-        `hand and are not committed — see this script's header. Put ${file} back ` +
-        `and re-run.`,
+      committed
+        ? `${file} is missing, and it is a committed build input — run \`npm run icons:app\`.`
+        : `${file} is not at the repository root, and no mark for \`${key}\` has ` +
+          `been generated before. The logos are supplied by hand and are not ` +
+          `committed — see this script's header. Put ${file} there and re-run.`,
     )
   }
   const image = decode(source)
-  const { canvas, width, height } = fit(image)
+  const { canvas, width, height } = fit(image, mode, inset, box)
   const bytes = png(canvas)
   console.log(
     `${file}: ${image.width}x${image.height} -> ${width}x${height} on ${EDGE} square, ` +
-      `${bytes.length} B (${store})`,
+      `${bytes.length} B, ${mode} (${store})`,
   )
   return { key, store, uri: `data:image/png;base64,${bytes.toString('base64')}` }
 })
@@ -337,15 +495,19 @@ const entries = marks
   .join('\n')
 
 writeFileSync(
-  join(root, 'src/ui/stores/logos.generated.ts'),
+  join(root, OUT),
   `/**
- * The logos the other three shipped stores are drawn with, as data URIs.
+ * The logos the shipped stores and the two doors are drawn with, as data URIs.
  *
  * Generated — run \`npm run icons:stores\` after replacing one of the source
  * files, which \`scripts/make-store-logos.mjs\` names and which are not
- * committed. Each is the project's own published mark, fitted to a ${EDGE}-pixel
- * square on white so that a tile can draw it without cropping the wordmark off
- * a logo that is wider than it is tall.
+ * committed. A run is incremental: a logo whose source is not at the root keeps
+ * the mark already here, so adding one does not mean re-obtaining the rest.
+ *
+ * Each is the project's own published mark, fitted to a ${EDGE}-pixel square —
+ * on white for a logo drawn for paper, so that a tile can draw it without
+ * cropping the wordmark off one that is wider than it is tall, and bled to the
+ * edge on its own colour for a mark that is already a tile.
  *
  * RSG's mark is not here: it is drawn rather than given, and lives in
  * \`rsg-mark.generated.ts\`.
@@ -355,4 +517,4 @@ ${entries}
 } as const
 `,
 )
-console.log('src/ui/stores/logos.generated.ts written')
+console.log(`${OUT} written`)
