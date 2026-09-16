@@ -1,6 +1,13 @@
 {
-  "latest": "d64e690",
+  "latest": "6ce6e01",
   "versions": [
+    {
+      "commit": "6ce6e01",
+      "version": "0.12.0",
+      "date": "2026-09-16T14:44:16+02:00",
+      "subject": "Draw a GFF row that names no parent: a bacterial annotation is 5,870 features, not 87 (#64)",
+      "tag": ""
+    },
     {
       "commit": "d64e690",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "1cdb529",
-      "version": "0.12.0",
-      "date": "2026-09-11T21:45:54Z",
-      "subject": "Three things the command writer had been getting wrong, seen at last",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -206,13 +206,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 64,
-      "commit": "06f191f",
-      "title": "Support bacterial GFF annotations with no hierarchy",
-      "branch": "js/great-rubin-dzo5ng",
-      "date": "2026-09-16T12:05:39Z"
-    },
     {
       "number": 63,
       "commit": "e02f11a",
