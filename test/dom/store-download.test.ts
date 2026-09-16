@@ -92,6 +92,7 @@ afterEach(() => {
 function build(): StoreDrawer {
   const host: StoreHost = {
     open: () => undefined,
+    openWithTracks: () => undefined,
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => true,

@@ -38,6 +38,7 @@ afterEach(() => {
 function host(opened: StoreEntry[], empty = true): StoreHost {
   return {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => empty,

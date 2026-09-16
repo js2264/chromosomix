@@ -29,6 +29,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   HUB_COLUMNS,
+  hasGenomeStanzas,
   hubFormat,
   hubRefusal,
   hubStore,
@@ -45,7 +46,7 @@ import {
 import { parseGenePred, sniffGenePred } from '@/annotations/genepred'
 import { parseInteract, sniffInteract } from '@/annotations/interact'
 import { parseLongRange, sniffLongRange } from '@/annotations/longrange'
-import { STORE_KIND } from '@/state/store'
+import { STORE_KIND, storeFromText } from '@/state/store'
 import type { StoreEntry } from '@/state/store'
 
 const HUB_URL = 'https://lab.example.org/myHub/hub.txt'
@@ -577,5 +578,114 @@ describe('the demo files for the formats a hub cannot carry', () => {
     expect(at).toBeGreaterThanOrEqual(0)
     expect(set.id[at]).toMatch(/^Y/)
     expect(set.exonAt[at + 1]).toBeGreaterThan(set.exonAt[at])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// …pasted rather than fetched
+// ---------------------------------------------------------------------------
+
+/**
+ * A hub read from text somebody pasted (§24.10).
+ *
+ * The reason this road exists is not convenience: a store or a hub is fetched by
+ * the *page*, so the host has to allow a cross-origin `GET`, and plenty do not —
+ * `genome.ucsc.edu` among them, which puts UCSC's own example hubs out of reach
+ * of every browser-only viewer. The file is public and the one thing in the way
+ * is a response header on somebody else's server.
+ *
+ * **One box, not three.** A `hub.txt`, a `genomes.txt` and a `trackDb.txt`
+ * concatenated are a one-file hub in every respect that matters: the only keys
+ * the concatenation loses are the two saying where the next file is, and the
+ * next file is already in the box.
+ */
+describe('a hub pasted rather than fetched', () => {
+  const CONCATENATED = [HUB_TXT, GENOMES_TXT.split('\n\n')[1], GALGAL_TRACKDB].join('\n')
+
+  it('reads a concatenation with no `useOneFile` line and no fetch at all', async () => {
+    let asked = 0
+    const store = await readHub('https://lab.example.org/myHub/', CONCATENATED, async () => {
+      asked++
+      return null
+    })
+    expect(asked).toBe(0)
+    expect(store!.name).toBe('My Hub')
+    expect(store!.entries.map((entry) => entry.label)).toEqual([
+      'Chicken (galGal7)',
+      'Genes',
+    ])
+  })
+
+  it('tells a whole hub from its first file', () => {
+    expect(hasGenomeStanzas(CONCATENATED)).toBe(true)
+    // A real three-file `hub.txt` has no genome stanza, which is what keeps this
+    // from ever firing on one by mistake.
+    expect(hasGenomeStanzas(HUB_TXT)).toBe(false)
+  })
+})
+
+describe('storeFromText', () => {
+  const ONE_FILE = [
+    'hub pasted',
+    'shortLabel Pasted hub',
+    '',
+    'genome hg38',
+    'organism Human',
+    '',
+    'track cov',
+    'shortLabel Coverage',
+    'bigDataUrl https://lab.example.org/data/cov.bw',
+    'type bigWig',
+    '',
+  ].join('\n')
+
+  it('reads a pasted hub with absolute URLs and no base', async () => {
+    const result = await storeFromText(ONE_FILE)
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.name).toBe('Pasted hub')
+    expect(result.ok && result.store.entries.map((entry) => entry.uri)).toEqual([
+      'https://lab.example.org/data/cov.bw',
+      'https://lab.example.org/data/cov.bw',
+    ])
+  })
+
+  it('refuses a hub.txt on its own, and says what is missing', async () => {
+    const result = await storeFromText(HUB_TXT)
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('hub.txt alone')
+    expect(!result.ok && result.message).toContain('genomes.txt')
+  })
+
+  it('refuses relative names with nothing to resolve them against', async () => {
+    const relative = ONE_FILE.replace('https://lab.example.org/data/cov.bw', 'cov.bw')
+    const result = await storeFromText(relative)
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('relatively')
+    expect(!result.ok && result.message).toContain('cov.bw')
+  })
+
+  it('takes those same names once a base is given', async () => {
+    const relative = ONE_FILE.replace('https://lab.example.org/data/cov.bw', 'cov.bw')
+    const result = await storeFromText(relative, 'https://lab.example.org/data/')
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.store.entries[0].uri).toBe('https://lab.example.org/data/cov.bw')
+  })
+
+  it('reads a pasted store file too, not only a hub', async () => {
+    const json = JSON.stringify({
+      kind: STORE_KIND,
+      version: 1,
+      name: 'Pasted shelf',
+      columns: [],
+      entries: [{ label: 'One', uri: 'https://lab.example.org/one.mcool' }],
+    })
+    const result = await storeFromText(json)
+    expect(result.ok && result.store.name).toBe('Pasted shelf')
+  })
+
+  it('says so when nothing was pasted', async () => {
+    const result = await storeFromText('   ')
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.message).toContain('Nothing pasted')
   })
 })

@@ -1460,12 +1460,43 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A store or a hub can be pasted instead of fetched.** Both doors now carry a folded *or paste
+  the hub* / *or paste the store* box, with an optional base URL for relative names. Two reasons,
+  and the first is not convenience: a store is fetched by the **page**, so the host has to allow a
+  cross-origin `GET`, and plenty never will — `genome.ucsc.edu` among them, which puts UCSC's own
+  example hubs out of reach of every browser-only viewer. The file is public, the reader can see it
+  in another tab, and the only thing in the way is a response header on somebody else's server.
+  Pasting gets past that without routing anybody's traffic through a proxy this project would then
+  be asking them to trust (C1). The second is writing one: a lab assembling its own shelf edits,
+  pastes, sees what broke and edits again, and publishing a file to a bucket between each of those
+  is a loop nobody runs twice.
+
+  **One box and not three**, even for a hub, which is three files. `useOneFile on` is a hub in a
+  single file — and a `hub.txt`, `genomes.txt` and `trackDb.txt` **concatenated** are the same
+  thing, because the only keys the concatenation loses are the two saying where the next file is
+  and the next file is already in the box. A text that is *only* a `hub.txt` is refused by name and
+  told what to paste after it, rather than coming back as an empty shelf. Relative names are
+  refused with the first of them quoted, so the base box is an obvious fix rather than a shelf
+  whose rows fail one at a time when they are pressed. A pasted shelf has no address, so it is not
+  put in the address bar and not offered for remembering: a store worth keeping is one with a URL.
+
+  The CORS failure now names the box, because a reader staring at *Failed to fetch* has no reason
+  to guess there is one.
+
 - **A store's own name replaces the door's on the drawer heading once it lands.** A door is named
   for the errand — *A track hub*, *Your own store* — which is right until one has been read, at
   which point the page is about a particular shelf and the heading says which, with the store's own
   description under it. Both doors, not only the new one.
 
 ### Fixed
+
+- **“Open with its tracks” loads them.** It opened the file and offered the tracks behind a button,
+  which is the thing a reader who pressed those words had just pressed past. The heading verb now
+  has a road of its own through the shell (`openWithTracks`) that marks the shelf as *asked for*,
+  and a session with an asked-for shelf loads it instead of drawing the offer. Every other road to
+  the same file — a row's own open verb, a `?store=` link, a dropped copy — keeps the offer, because
+  opening a genome is not a request for eight more files. The mark is spent when it is read, so
+  closing the tracks and reopening the same genome does not bring them all back.
 
 - **The tracks published beside a genome are offered in the 1D browser.** The map path has offered
   its shelf since the demo map shipped with ten annotation files — one click, and a reader who

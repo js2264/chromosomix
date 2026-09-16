@@ -82,10 +82,12 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
 })
 
-function build(): { drawer: StoreDrawer; opened: StoreEntry[] } {
+function build(): { drawer: StoreDrawer; opened: StoreEntry[]; withTracks: StoreEntry[] } {
   const opened: StoreEntry[] = []
+  const withTracks: StoreEntry[] = []
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => withTracks.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => true,
@@ -95,7 +97,7 @@ function build(): { drawer: StoreDrawer; opened: StoreEntry[] } {
   body.className = 'app-body'
   body.appendChild(drawer.el)
   document.body.appendChild(body)
-  return { drawer, opened }
+  return { drawer, opened, withTracks }
 }
 
 /** Let the three chained fetches and the paint that follows them settle. */
@@ -144,7 +146,7 @@ describe('the hub door', () => {
   })
 
   it('offers *open with its tracks* on the assembly, from the row that carries them', async () => {
-    const { drawer, opened } = build()
+    const { drawer, opened, withTracks } = build()
     drawer.open('hub')
     const box = drawer.el.querySelector('.custom-url') as HTMLInputElement
     box.value = HUB_URL
@@ -154,11 +156,61 @@ describe('the hub door', () => {
     const verb = drawer.el.querySelector('.portal-session') as HTMLButtonElement
     expect(verb).not.toBeNull()
     verb.click()
-    // The genome row, which is the hub's own `.2bit` — and it arrives carrying
-    // the shelf, which is what the verb promises.
-    expect(opened).toHaveLength(1)
-    expect(opened[0].uri).toBe('https://lab.example.org/myHub/galGal7.2bit')
-    expect(opened[0].tracks?.map((track) => track.label)).toEqual(['Rep 1', 'Loops'])
+    // Through the verb that *loads* them, not the one that merely opens: the
+    // words on the button are a promise, and a reader who presses them and gets
+    // a genome with an offer beside it has been handed the thing they pressed
+    // past (`ui/stores/host.ts`).
+    expect(opened).toHaveLength(0)
+    expect(withTracks).toHaveLength(1)
+    expect(withTracks[0].uri).toBe('https://lab.example.org/myHub/galGal7.2bit')
+    expect(withTracks[0].tracks?.map((track) => track.label)).toEqual(['Rep 1', 'Loops'])
+    // …while a row's own open verb stays the plain one.
+    ;(drawer.el.querySelector('.portal-row .row-verb-new') as HTMLButtonElement)?.click()
+    expect(opened.length + withTracks.length).toBeGreaterThan(1)
+  })
+
+  it('reads a hub pasted into the box, with nothing fetched', async () => {
+    const { drawer } = build()
+    drawer.open('hub')
+    requested.length = 0
+    const text = drawer.el.querySelector('.custom-text') as HTMLTextAreaElement
+    expect(text).not.toBeNull()
+    text.value = [
+      'hub pasted',
+      'shortLabel Pasted hub',
+      '',
+      'genome hg38',
+      'organism Human',
+      '',
+      'track cov',
+      'shortLabel Coverage',
+      'bigDataUrl https://lab.example.org/data/cov.bw',
+      'type bigWig',
+      '',
+    ].join('\n')
+    buttonNamed(drawer.el, 'open what is pasted')?.click()
+    await settled()
+
+    // The whole point: a shelf on screen and not one request made, which is what
+    // gets past a host that will not allow a cross-origin GET.
+    expect(requested).toEqual([])
+    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Pasted hub')
+    expect(textsOf(drawer.el, '.portal-name')).toEqual(['Human (hg38)', 'Coverage'])
+    // Nothing to remember: a pasted shelf has no address, and offering to keep
+    // one would be keeping a URL that does not exist.
+    expect(buttonNamed(drawer.el, 'remember this store')).toBeNull()
+  })
+
+  it('says what is missing when only the hub.txt is pasted', async () => {
+    const { drawer } = build()
+    drawer.open('hub')
+    const text = drawer.el.querySelector('.custom-text') as HTMLTextAreaElement
+    text.value = 'hub lab\nshortLabel Lab hub\ngenomesFile genomes.txt\n'
+    buttonNamed(drawer.el, 'open what is pasted')?.click()
+    await settled()
+    const status = drawer.el.querySelector('.portal-status')?.textContent ?? ''
+    expect(status).toContain('hub.txt alone')
+    expect(status).toContain('genomes.txt')
   })
 
   it('lands a ?store= hub link on the hub door rather than the store one', async () => {

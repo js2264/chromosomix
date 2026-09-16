@@ -66,6 +66,7 @@ function build(): { drawer: StoreDrawer; opened: StoreEntry[]; layouts: number }
   let layouts = 0
   const host: StoreHost = {
     open: (entry) => opened.push(entry),
+    openWithTracks: (entry) => opened.push(entry),
     add: () => undefined,
     openTogether: () => undefined,
     tabEmpty: () => true,

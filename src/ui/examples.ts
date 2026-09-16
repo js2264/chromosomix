@@ -510,6 +510,22 @@ export function demosStore(): StoreFile {
 const shelves = new Map<string, DemoAnnotationLink[]>()
 
 /**
+ * The shelves that were **asked for** rather than merely brought along.
+ *
+ * *Open with its tracks* says what it does, so it has to do it: a reader who
+ * presses those words and gets a genome and a button has been given the thing
+ * they pressed past. Every other road to the same file — the row's own open
+ * verb, a `?store=` link, a dropped copy — keeps the offer, because opening a
+ * genome is not a request for eight more files.
+ *
+ * A set beside the map rather than a field on the link, because it is a fact
+ * about the *gesture* and not about the tracks: the same shelf is asked for
+ * through one door and offered through another, and a flag on each link would
+ * have to be rewritten on every registration to say so.
+ */
+const asked = new Set<string>()
+
+/**
  * Remember the tracks published beside `uri`, so the Tracks card can offer them.
  *
  * Keyed on the **absolute URI's file half**, so it answers for the same file
@@ -524,13 +540,17 @@ const shelves = new Map<string, DemoAnnotationLink[]>()
 export function registerShelf(
   uri: string,
   tracks: ReadonlyArray<{ label: string; url: string }>,
+  options: { asked?: boolean } = {},
 ): void {
   const key = splitUri(uri).path
   if (key === '') return
   if (tracks.length === 0) {
     shelves.delete(key)
+    asked.delete(key)
     return
   }
+  if (options.asked === true) asked.add(key)
+  else asked.delete(key)
   shelves.set(
     key,
     tracks.map((track) => ({
@@ -545,7 +565,24 @@ export function registerShelf(
   )
 }
 
+/**
+ * Whether this file's shelf was asked for, and should be loaded rather than
+ * offered.
+ *
+ * Read once, by the session building its cards, and **cleared as it is read**:
+ * the gesture is spent. Without that, closing the tracks and reopening the same
+ * genome would bring all eight back, which is the one reading of *open with its
+ * tracks* nobody wants — the reader has just said no to them.
+ */
+export function shelfWasAsked(uri: string): boolean {
+  const key = splitUri(uri).path
+  if (!asked.has(key)) return false
+  asked.delete(key)
+  return true
+}
+
 /** Forget every registered shelf. Tests only — the map is otherwise per page. */
 export function clearShelves(): void {
   shelves.clear()
+  asked.clear()
 }

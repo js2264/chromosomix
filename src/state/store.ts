@@ -55,7 +55,7 @@ import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { applyAccess } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { looksLikeConfig, type ConfigRefusal } from './SessionConfig'
-import { looksLikeHub, readHub } from './hub'
+import { hasGenomeStanzas, looksLikeHub, parseHubHeader, readHub } from './hub'
 
 /** What a store file must call itself. */
 export const STORE_KIND = 'metacooler.store'
@@ -571,4 +571,108 @@ async function fetchText(
       message: `${url} was cut off: ${err instanceof Error ? err.message : String(err)}.`,
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// …or pasted
+// ---------------------------------------------------------------------------
+
+/**
+ * The same two formats, read from text somebody pasted rather than from a URL.
+ *
+ * ## Why this exists
+ *
+ * Because a URL is not always readable and is not always what a reader has.
+ *
+ * **CORS.** A store or a hub is fetched by the *page*, so the host has to allow
+ * a cross-origin `GET`. Plenty do not — `genome.ucsc.edu` among them, which
+ * means UCSC's own example hubs cannot be read from any browser-only viewer,
+ * this one included. The file is public, the reader can see it in another tab,
+ * and the one thing standing between them is a response header on somebody
+ * else's server. Pasting the text is the way past that which does not involve
+ * routing a reader's traffic through a proxy this project would then be asking
+ * them to trust (C1).
+ *
+ * **Writing one.** A lab assembling its own shelf edits, pastes, sees what
+ * broke and edits again. Asking them to publish a file to a bucket between each
+ * of those is a loop nobody will run twice.
+ *
+ * ## One box, not three
+ *
+ * A hub is three files, and a paste box for each would be three boxes to keep
+ * in step. It is not needed: `useOneFile on` is a hub in a single file, and a
+ * `hub.txt`, `genomes.txt` and `trackDb.txt` **concatenated** are the same
+ * thing — the only keys the concatenation loses are the two saying where the
+ * next file is, and the next file is already in the box (`state/hub.ts`). So
+ * one textarea reads every hub that can be read without fetching, and a text
+ * that is *only* a `hub.txt` is refused by name rather than coming back as an
+ * empty shelf.
+ *
+ * ## The base
+ *
+ * A pasted file has no address, so there is nothing for a relative
+ * `bigDataUrl` or a relative `uri` to resolve against. Absolute names need no
+ * base and are the common case; relative ones are refused with the count and
+ * the first of them, so the reader knows what to paste into the base box rather
+ * than being handed a shelf whose rows fail one at a time when they are
+ * pressed.
+ */
+export async function storeFromText(text: string, base = ''): Promise<StoreFetch> {
+  if (text.trim() === '') {
+    return { ok: false, reason: 'refused', refusal: { reason: 'not-json' }, message: 'Nothing pasted.' }
+  }
+  const store = looksLikeHub(text) ? await hubFromText(text, base) : storeJsonFromText(text, base)
+  if (!store.ok) return store
+  // Relative names, which a pasted file has nothing to resolve against.
+  const loose = store.store.entries.filter((entry) => !isAbsolute(entry.uri))
+  if (loose.length > 0) {
+    return {
+      ok: false,
+      reason: 'network',
+      message:
+        `${loose.length} ${loose.length === 1 ? 'row names its file' : 'rows name their files'} ` +
+        `relatively — ${loose[0].uri} — and pasted text has no address for those to be relative ` +
+        'to. Give the base URL they hang off, or paste a version with absolute URLs.',
+    }
+  }
+  return store
+}
+
+/** `https:`, `s3:`, `gs:` — anything with a scheme, which needs no base. */
+function isAbsolute(uri: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(uri)
+}
+
+async function hubFromText(text: string, base: string): Promise<StoreFetch> {
+  if (!hasGenomeStanzas(text)) {
+    const header = parseHubHeader(text)
+    const named = header === null || header.genomesFile === '' ? 'genomes.txt' : header.genomesFile
+    return {
+      ok: false,
+      reason: 'refused',
+      refusal: { reason: 'not-a-store' },
+      message:
+        `This is the hub.txt alone: it names ${named}, which is not in the box and cannot be ` +
+        'fetched from pasted text. Paste the genomes.txt and the trackDb.txt after it — a hub in ' +
+        'one file is read exactly as three are — or give the hub’s URL instead.',
+    }
+  }
+  // Nothing to fetch: every file a pasted hub has is the one in hand, so the
+  // reader hands back nothing and `readHub` takes the one-file road.
+  const store = await readHub(base, text, async () => null)
+  if (store === null) {
+    return {
+      ok: false,
+      reason: 'refused',
+      refusal: { reason: 'not-a-store' },
+      message: 'This starts like a hub and has no `hub` line this could read.',
+    }
+  }
+  return { ok: true, store: base === '' ? store : resolveStore(store, base) }
+}
+
+function storeJsonFromText(text: string, base: string): StoreFetch {
+  const parsed = parseStore(text)
+  if ('reason' in parsed) return { ok: false, reason: 'refused', refusal: parsed, message: '' }
+  return { ok: true, store: base === '' ? parsed : resolveStore(parsed, base) }
 }

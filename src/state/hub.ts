@@ -174,6 +174,17 @@ export function looksLikeHubUrl(url: string): boolean {
   return /(^|\/)[^/?#]*hub[^/?#]*\.txt(\?|#|$)/i.test(url)
 }
 
+/**
+ * Whether this text carries the genomes as well as the hub line.
+ *
+ * What tells a whole hub from its first file — and so what decides whether a
+ * pasted text can be read at all, since pasting leaves nothing to fetch the
+ * rest from.
+ */
+export function hasGenomeStanzas(text: string): boolean {
+  return parseStanzas(text, ['hub', 'genome', 'track']).some((stanza) => stanza.has('genome'))
+}
+
 export function parseHubHeader(text: string): HubHeader | null {
   const stanza = parseStanzas(text)[0]
   if (stanza === undefined || !stanza.has('hub')) return null
@@ -587,7 +598,14 @@ export async function readHub(
     return read(url)
   }
 
-  if (header.oneFile) {
+  // `useOneFile on` — **or** a text that simply has genome stanzas in it, which
+  // is the same file by another route and is what a **pasted** hub looks like:
+  // somebody's `hub.txt`, `genomes.txt` and `trackDb.txt` one after another in a
+  // box (§24.10). Concatenating them *is* a one-file hub in every respect that
+  // matters here, because the only keys it loses are the two that say where the
+  // next file is, and the next file is already in hand. A real three-file
+  // `hub.txt` has no `genome` stanza, so this can never fire on one by mistake.
+  if (header.oneFile || hasGenomeStanzas(text)) {
     return hubStore({
       header,
       hubUrl,

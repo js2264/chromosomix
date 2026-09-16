@@ -5977,6 +5977,46 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* The paste box, folded under the URL row: a whole column of the form. */
+.custom-paste {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.custom-paste > summary {
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0.2rem 0;
+}
+
+.custom-paste > .hint {
+  margin: 0.3rem 0 0.5rem;
+}
+
+.custom-paste > .custom-row {
+  margin-top: 0.4rem;
+}
+
+/* Monospaced, because what goes in it is a file: a stanza whose indentation a
+   reader is checking, or JSON they are about to fix a comma in. */
+.custom-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.custom-base {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .custom-address {
   flex: 1 1 auto;
   min-width: 0;

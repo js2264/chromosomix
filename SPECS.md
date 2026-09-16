@@ -6616,9 +6616,17 @@ ask for, and a third-party request invented by a translation layer is exactly th
 but BAMs against `hg38` therefore gets no genome row, and keeps every track row it has.
 
 **One row per genome, one per track, and the genome carries the shelf.** The genome's `tracks` are
-what the shell turns into the offer in the Tracks card once it opens (§24.1), so *open with its
+what the shell turns into the tracks in the Tracks card once it opens (§24.1), so *open with its
 tracks* works on a hub with no session file existing anywhere: `ui/stores/ResultList.ts` takes the
 verb from a published session where there is one and from a `tracks`-carrying row where there is not.
+
+That verb **loads** them rather than offering them, through a road of its own in the shell
+(`StoreHost.openWithTracks`), and the distinction is the whole of why it is a second verb: *open* is
+one file and whatever the reader does next, while *open with its tracks* is a sentence that has to
+come true — a reader who presses those words and gets a genome with a button proposing the tracks
+has been handed the thing they pressed past. Every other road to the same file keeps the offer,
+because opening a genome is not a request for eight more files, and the mark is spent when it is
+read, so closing the tracks and reopening the genome does not bring them back.
 Rows are grouped by **assembly**, which is what a hub is, and carry the hub's own `parent` — the
 composite or super-track its author spent their time on — as the `group` column, which is the facet a
 reader of somebody else's hub will actually narrow by.
@@ -6637,6 +6645,19 @@ data is already in, and a reader holding one thinks of it as *the hub*. A door t
 word is a door they will not try. Nothing behind it is hub-specific — a hub pasted into the other box
 works exactly as well — and a remembered hub keeps the hub mark and the hub's grouping, because both
 are facts about the rows rather than about the door they arrived through.
+
+**Pasted, when it cannot be fetched.** A store is fetched by the *page*, so the host has to allow a
+cross-origin `GET` — and plenty never will, `genome.ucsc.edu` among them, which puts UCSC's own
+example hubs out of reach of every browser-only viewer. Both doors therefore carry a paste box, with
+an optional base for relative names. **One box and not three**, even though a hub is three files:
+`useOneFile on` is a hub in a single file, and a `hub.txt`, `genomes.txt` and `trackDb.txt`
+concatenated are the same thing, since the only keys the concatenation loses are the two saying where
+the next file is. `hasGenomeStanzas` is what tells a whole hub from its first file, so a text that is
+only a `hub.txt` is refused by name and told what to paste after it. A pasted shelf is not put in the
+address bar and not offered for remembering: a store worth keeping is one with an address, and the
+honest way to get one is to publish the file. What this does **not** do is proxy the fetch — routing a
+reader's traffic through a third party to work around somebody else's header is exactly what C1
+refuses.
 
 **A hub to try it on.** `scripts/make_demo_hub.py` writes one over the yeast demo data — a `.2bit`
 of its genome, the loop calls as `longrange`, the six bigWigs as a composite and the contact map as

@@ -156,7 +156,7 @@ import type { TableUiState } from '../ui/VirtualTable'
 import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
-import { demoAnnotationsToOffer } from '../ui/examples'
+import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
 import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
@@ -2860,6 +2860,11 @@ export class Session {
     const published = demoAnnotationsToOffer(assembly.uri, {
       restoring: AnnotationStore.stored(scope).length > 0,
     })
+    // …and whether they were **asked for** rather than merely brought along.
+    // *Open with its tracks* is a sentence that has to come true, so that road
+    // loads them here and shows no button; every other road to the same file
+    // keeps the offer (`ui/examples.ts`).
+    const wanted = published.length > 0 && shelfWasAsked(assembly.uri)
     this.setAnnotations([
       this.compareCard.el,
       // Above the Tracks card, not below it: what a reader just computed is what
@@ -2871,7 +2876,7 @@ export class Session {
         loader,
         context: 'browser',
         onPickDropped: (event) => this.pickDropped(event),
-        ...(published.length === 0
+        ...(published.length === 0 || wanted
           ? {}
           : {
               demo: {
@@ -2891,6 +2896,13 @@ export class Session {
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
     loader.restore(AnnotationStore.stored(scope))
+    // The tracks the reader asked for, put on. After the cards are mounted and
+    // after `restore`, for `restore`'s own reason: a row landing in a list that
+    // does not exist yet is a row nobody draws, and a row landing *before* the
+    // restored ones would reorder a lane stack the reader arranged last time.
+    if (wanted) {
+      for (const entry of published) loader.addUrl(entry.url, entry.label)
+    }
     // …and what this session was already holding, exactly as the map path does
     // it. Not only for symmetry: `carry` runs before every tear-down and only
     // an adoption clears it, so a browser that ignored the rows would leave
@@ -4191,6 +4203,8 @@ export class Session {
     const published = demoAnnotationsToOffer(uri, {
       restoring: AnnotationStore.stored(scope).length > 0,
     })
+    // See the browser path: asked for, or merely brought along.
+    const wanted = published.length > 0 && shelfWasAsked(uri)
     // Contact maps first, and that is the change of mind this card's eyes made
     // necessary: while it was only "load a second file to compare against" it
     // belonged under the tracks, as the rarest thing in the column. It is now
@@ -4233,7 +4247,7 @@ export class Session {
         // with itself, so the location control keeps the shape it has always
         // had until there is more than one map to choose between.
         maps: () => this.deck?.mapList ?? [{ id: LEAD_MAP, label: fileLabel(this.file?.uri ?? '') }],
-        ...(published.length === 0
+        ...(published.length === 0 || wanted
           ? {}
           : {
               demo: {
@@ -4260,6 +4274,14 @@ export class Session {
     // What a previous visit to this file left in session storage (§8.6). After
     // the cards are mounted, so the restored rows land in a list that exists.
     loader.restore(AnnotationStore.stored(scope))
+    // The tracks the reader asked for, put on. After the cards are mounted and
+    // after `restore`, for `restore`'s own reason: a row landing in a list that
+    // does not exist yet is a row nobody draws, and a row landing *before* the
+    // restored ones would reorder a lane stack the reader arranged last time.
+    if (wanted) {
+      for (const entry of published) loader.addUrl(entry.url, entry.label)
+    }
+
     // Where the tracks were *drawn*, when the answer is not "on the lead".
     // Seeded rather than placed: the lanes go into the store's parking, and
     // `adoptHome` — which already runs once per render for every live cell —

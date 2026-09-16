@@ -143,9 +143,9 @@ export class ResultList {
       const count = lead.tracks?.length ?? 0
       return [
         withNewMark(
-          button(label, () => this.props.host.open(lead), {
+          button(label, () => this.props.host.openWithTracks(lead), {
             class: 'btn btn-quiet portal-session',
-            title: `${lead.label} — opens with ${count} ${count === 1 ? 'track' : 'tracks'} on the shelf beside it`,
+            title: `${lead.label} — opens with its ${count} ${count === 1 ? 'track' : 'tracks'} already on`,
           }),
         ),
       ]

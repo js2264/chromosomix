@@ -16,7 +16,7 @@
 
 import { button, el } from '../dom'
 import { canonicalUrl } from '../../sources/rewrite'
-import { fetchStore, type StoreFile } from '../../state/store'
+import { fetchStore, storeFromText, type StoreFile } from '../../state/store'
 import { addStoreRow, readStoreRows, removeStoreRow } from '../../state/stores'
 import type { StoreView } from '../../state/facets'
 import { PortalView, storeFailure } from './PortalView'
@@ -51,6 +51,9 @@ export interface CustomViewProps {
 export class CustomView {
   readonly el: HTMLElement
   private readonly urlInput: HTMLInputElement
+  /** The paste box, and the base its relative names hang off. */
+  private readonly textInput: HTMLTextAreaElement
+  private readonly baseInput: HTMLInputElement
   private readonly statusEl = el('p', { class: 'hint portal-status hidden' })
   private readonly keepSlot = el('span', { class: 'custom-keep' })
   private readonly body = el('div', { class: 'custom-body' })
@@ -70,6 +73,28 @@ export class CustomView {
     })
     this.urlInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') void this.loadTyped()
+    })
+
+    // The other way in: the text itself. A host that will not allow a
+    // cross-origin GET — `genome.ucsc.edu` among them — cannot be read by any
+    // browser-only viewer, and a lab writing its own shelf wants to edit and
+    // re-read without publishing between each try (`state/store.ts`).
+    this.textInput = el('textarea', {
+      class: 'input custom-text',
+      attrs: {
+        rows: '10',
+        spellcheck: 'false',
+        'aria-label': hub ? 'the text of a hub' : 'the text of a store file',
+        placeholder: hub
+          ? 'hub myHub\nshortLabel My hub\n\ngenome hg38\n\ntrack signal\nbigDataUrl https://…/signal.bw\ntype bigWig'
+          : '{ "kind": "metacooler.store", "name": "My shelf", "entries": [ … ] }',
+      },
+    }) as HTMLTextAreaElement
+    this.baseInput = el('input', {
+      class: 'input custom-base',
+      type: 'url',
+      placeholder: 'https://lab.example.org/data/  (only if the names above are relative)',
+      attrs: { 'aria-label': 'the base URL relative names hang off' },
     })
     const remembered = props.front.rows?.url
     const head =
@@ -91,6 +116,29 @@ export class CustomView {
                 class: 'btn btn-primary',
                 title: hub ? 'Read the hub at this URL.' : 'Read the store at this URL.',
               }),
+            ),
+            // Folded, because a URL is the ordinary way in and a box of text is
+            // the answer to a problem most readers will not have.
+            el(
+              'details',
+              { class: 'custom-paste' },
+              el('summary', { text: hub ? 'or paste the hub' : 'or paste the store' }),
+              el('p', {
+                class: 'hint',
+                text: hub
+                  ? 'Paste the whole hub: a one-file hub, or the hub.txt, genomes.txt and trackDb.txt one after another — concatenated, they are the same file. Use this when the host will not allow a cross-origin GET (genome.ucsc.edu does not), or while you are still writing one.'
+                  : 'Paste the store’s JSON. Use this when the host will not allow a cross-origin GET, or while you are still writing one.',
+              }),
+              this.textInput,
+              el('div', { class: 'custom-row' }, this.baseInput),
+              el(
+                'div',
+                { class: 'custom-row' },
+                button('open what is pasted', () => void this.loadPasted(), {
+                  class: 'btn btn-primary',
+                  title: hub ? 'Read this text as a hub.' : 'Read this text as a store.',
+                }),
+              ),
             ),
           )
         : el(
@@ -126,6 +174,37 @@ export class CustomView {
       return
     }
     await this.load(url)
+  }
+
+  /**
+   * Read what is in the paste box.
+   *
+   * No URL to remember afterwards and none to put in the address bar: a pasted
+   * shelf exists in this tab and nowhere else, which is why `onTarget` is not
+   * called and *remember this store* is not offered. A store worth keeping is a
+   * store with an address, and the honest way to get one is to publish the file.
+   */
+  private async loadPasted(): Promise<void> {
+    const token = ++this.pending
+    this.portal?.destroy()
+    this.portal = null
+    this.props.onLoaded?.()
+    this.body.replaceChildren()
+    this.keepSlot.replaceChildren()
+    this.say('Reading what you pasted…', false)
+    const result = await storeFromText(this.textInput.value, canonicalUrl(this.baseInput.value.trim()))
+    if (token !== this.pending || this.destroyed) return
+    if (!result.ok) {
+      this.say(
+        result.reason === 'refused' && result.message === ''
+          ? storeFailure(result, { id: 'pasted', label: 'what you pasted', builtin: false })
+          : result.message,
+        true,
+      )
+      return
+    }
+    this.say('', false)
+    this.show(result.store, '')
   }
 
   /** Whatever the portal inside is holding — this view reads, it does not keep. */
@@ -166,9 +245,14 @@ export class CustomView {
       file,
     })
     this.body.replaceChildren(this.portal.el)
-    this.props.onTarget?.(url)
-    this.props.onName?.(front.label, file.description ?? url)
-    this.offerRemember(file, url)
+    // A pasted shelf has no address, so there is nothing to put in the address
+    // bar and nothing to remember: both of those are a URL, and the one this
+    // was read from is the box above.
+    if (url !== '') {
+      this.props.onTarget?.(url)
+      this.offerRemember(file, url)
+    }
+    this.props.onName?.(front.label, file.description ?? (url === '' ? 'read from pasted text' : url))
   }
 
   /** Offer to keep a store reached by URL, or to forget one already kept. */

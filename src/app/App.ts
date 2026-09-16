@@ -371,6 +371,10 @@ export class App implements SessionHost {
               this.openStoreEntry(entry)
               this.storeDrawer?.close()
             },
+            openWithTracks: (entry) => {
+              this.openStoreEntry(entry, { tracks: true })
+              this.storeDrawer?.close()
+            },
             add: (entry) => this.addStoreEntry(entry),
             openTogether: (entries) => {
               void this.openStoreEntries(entries)
@@ -963,8 +967,8 @@ export class App implements SessionHost {
    * road whatever the tab holds, because `openWorkspaceFile` already appends
    * its tabs beside what is open and consumes only an empty one.
    */
-  private openStoreEntry(entry: StoreEntry): void {
-    this.noteShelf(entry)
+  private openStoreEntry(entry: StoreEntry, options: { tracks?: boolean } = {}): void {
+    this.noteShelf(entry, options.tracks === true)
     const source = { kind: 'remote', url: splitUri(entry.uri).path } as const
     if (entry.kind === 'workspace') {
       void this.current?.openPicked(entry.uri, source)
@@ -1038,9 +1042,9 @@ export class App implements SessionHost {
    * before the open, because the Tracks card is built while the file is
    * opening.
    */
-  private noteShelf(entry: StoreEntry): void {
+  private noteShelf(entry: StoreEntry, asked = false): void {
     if (entry.tracks !== undefined && entry.tracks.length > 0) {
-      registerShelf(splitUri(entry.uri).path, entry.tracks)
+      registerShelf(splitUri(entry.uri).path, entry.tracks, { asked })
     }
   }
 
