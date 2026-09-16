@@ -38,8 +38,9 @@
  * A **db hub** names an assembly UCSC already hosts (`genome hg38`) and carries
  * no sequence at all. There is then nothing to open as the genome — so the row
  * falls back, in order, to the `chromSizes` the hub declares, and failing that
- * to the **first drawable bigWig or bigBed in its own trackDb**, whose header
- * carries every sequence and its exact length (§5.8). That last is not a
+ * to the **first drawable bbi file in its own trackDb** — any `big*` type, all
+ * of which are bigBeds or bigWigs underneath — whose header carries every
+ * sequence and its exact length (§5.8). That last is not a
  * guess: it is the same door a dropped bigWig opens a browser through, and it
  * keeps the whole arrangement inside files the hub itself names. What this
  * deliberately does *not* do is reach for `hgdownload.soe.ucsc.edu` to fetch a
@@ -420,9 +421,24 @@ export function hubFormat(type: string): string | null {
   return HUB_TYPES[type] ?? null
 }
 
-/** `true` for the two types whose header carries an assembly (§5.8). */
+/**
+ * `true` for a type whose own header carries the assembly (§5.8).
+ *
+ * Every `big*` type in {@link HUB_TYPES} is a bbi file — a bigBarChart, a
+ * bigMethyl and a bigInteract are each a bigBed with a particular autoSql and
+ * nothing else (`annotations/barchart.ts`) — so each one's header holds the
+ * whole chrom B-tree, every sequence with its exact length. That is what a db
+ * hub's genome row falls back to, and excluding any of them means a hub whose
+ * tracks happen to all be one kind gets no genome row at all: the miRNAome hub
+ * is two bigBarCharts on hg38 and nothing else.
+ *
+ * The types that do *not* qualify are the ones with no bbi header to read:
+ * `bam`, `vcfTabix`, `longTabix`, `hic` and the three text formats. A BAM does
+ * declare its sequences, in `@SQ` lines, but the genome row has to be a file the
+ * 1D browser opens a genome *on*, and that is not one.
+ */
 function declaresAssembly(type: string): boolean {
-  return type.startsWith('big') && type !== 'bigmethyl' && type !== 'bigbarchart'
+  return type.startsWith('big')
 }
 
 // ---------------------------------------------------------------------------

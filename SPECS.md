@@ -6608,9 +6608,12 @@ now recommends for a hub of a handful of tracks — and nothing further is fetch
 which is why §8.21 is in this release rather than being a separate nicety: without it, every assembly
 hub opens as tracks over coordinates nothing can read. A **db hub** names an assembly UCSC hosts
 (`genome hg38`) and carries no sequence, so the row falls back to the `chromSizes` the hub declares,
-and failing that to the **first bigWig or bigBed in its own trackDb**, whose header carries every
-sequence and its exact length (§5.8) — the same door a dropped bigWig opens a browser through, and
-it says so in the row's note. What this deliberately does **not** do is reach for `hgdownload` to
+and failing that to the **first bbi file in its own trackDb** — any `big*` type, since a bigBarChart,
+a bigMethyl and a bigInteract are each a bigBed with a particular autoSql and nothing else — whose
+header carries every sequence and its exact length (§5.8), the same door a dropped bigWig opens a
+browser through, and it says so in the row's note. Narrowing that to bigWig and bigBed would leave a
+hub whose tracks happen to be all one kind with no genome row at all, which is not hypothetical: the
+Human cellular microRNAome hub is two bigBarCharts on hg38 and nothing else. What this deliberately does **not** do is reach for `hgdownload` to
 fetch a `chrom.sizes` nobody asked for: C1 says nothing leaves the machine that the reader did not
 ask for, and a third-party request invented by a translation layer is exactly that. A hub of nothing
 but BAMs against `hg38` therefore gets no genome row, and keeps every track row it has.

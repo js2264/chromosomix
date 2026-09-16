@@ -617,6 +617,89 @@ describe('a published db hub', () => {
   })
 })
 
+/**
+ * The Human cellular microRNAome hub, pasted rather than fetched.
+ *
+ * Two things here are not in any other fixture. It is three files **pasted one
+ * after another** — a `hub.txt` naming a `genomes.txt` naming a `trackDb.txt`,
+ * none of which are fetched because all three are in the box — which is the
+ * road a reader takes when the hub's own host will not allow a cross-origin
+ * GET. And every one of its tracks is a `bigBarChart`, which is the case that
+ * showed the genome-row fallback was excluding bbi types it had no reason to.
+ */
+const MIRNA_HUB = `hub miRNAome
+shortLabel Human cellular microRNAome barCharts
+longLabel Evaluation of >10 billion small RNA-seq reads
+genomesFile genomes.txt
+email somebody@example.org
+
+genome hg38
+trackDb hg38/trackDb.txt
+
+track primary_cells
+type bigBarChart
+barChartBars Astrocyte Schwann_cell
+shortLabel Primary cells
+longLabel miRNA expression of primary cells
+bigDataUrl https://raw.githubusercontent.com/example/repo/master/miRNA_primary_barchart.bb
+barChartUnit RPM
+visibility pack
+
+track cancer_cells
+type bigBarChart
+barChartBars HAF1608_cell HELF977_cell
+shortLabel Cancer cells
+longLabel miRNA expression of cancer cells
+bigDataUrl https://raw.githubusercontent.com/example/repo/master/miRNA_cancer_barchart.bb
+barChartUnit RPM
+visibility pack
+`
+
+describe('a hub of nothing but bar charts', () => {
+  async function pasted() {
+    const got = await storeFromText(MIRNA_HUB)
+    if (!got.ok) throw new Error(`refused: ${got.message}`)
+    return got.store
+  }
+
+  it('reads three files pasted one after another, fetching nothing', async () => {
+    const store = await pasted()
+    // No `useOneFile on` and a `genomesFile` that is never fetched: what makes
+    // this read is that all three files are in the box, which is the whole
+    // point of the box.
+    expect(store.kind).toBe(STORE_KIND)
+    expect(store.name).toBe('Human cellular microRNAome barCharts')
+    expect(store.entries.map((entry) => entry.label)).toEqual([
+      'hg38',
+      'Primary cells',
+      'Cancer cells',
+    ])
+  })
+
+  it('opens hg38 on a bar chart’s header, every big* type being a bbi', async () => {
+    const store = await pasted()
+    const genome = entryNamed(store.entries, 'hg38')
+    // A bigBarChart is a bigBed with a particular autoSql and nothing else, so
+    // its header carries the chrom B-tree like any other. Excluding it left a
+    // hub whose tracks are all one kind with no genome row at all — no row to
+    // open the assembly on, and nowhere for the shelf to hang.
+    expect(genome.fields?.['role']).toBe('sequence')
+    expect(genome.uri).toBe(
+      'https://raw.githubusercontent.com/example/repo/master/miRNA_primary_barchart.bb',
+    )
+    expect(genome.note).toContain('names no sequence of its own')
+    expect(genome.tracks?.map((track) => track.label)).toEqual(['Primary cells', 'Cancer cells'])
+  })
+
+  it('keeps both, `visibility pack` being a density and not a refusal', async () => {
+    const store = await pasted()
+    // The switched-off rule reads `hide` and `none`. Every other visibility
+    // word — `pack`, `full`, `squish`, `dense` — says how to draw a track that
+    // is on, and must not be mistaken for the track being off.
+    expect(store.description).not.toContain('on by default')
+  })
+})
+
 describe('the demo hub', () => {
   const dir = join(process.cwd(), 'demo/yeast')
   const read = async (url: string): Promise<string | null> => {

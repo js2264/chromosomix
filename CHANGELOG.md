@@ -189,7 +189,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   with its tracks* on every assembly's heading. An **assembly hub** opens its own `.2bit` as the
   genome — which is why that format is in the same release, since without it every assembly hub opens
   as tracks over coordinates nothing can read — and a **db hub**, which carries no sequence, falls
-  back to its `chromSizes` and then to the first bigWig or bigBed in its own trackDb, whose header
+  back to its `chromSizes` and then to the first bbi file in its own trackDb — any `big*` type, a
+  bigBarChart and a bigMethyl being bigBeds with a particular autoSql and nothing else — whose header
   carries the lengths. It never reaches for a `chrom.sizes` nobody asked for.
 
   A hub is recognised from its **content** at the one function every store URL already goes through,
