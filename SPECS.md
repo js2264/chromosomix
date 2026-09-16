@@ -6117,10 +6117,14 @@ the only door to a folder; it is now there exactly while a place is connected, l
 columns beside it (§16.5, §8.5). Mounting one opens it on the folder, which is the only thing a
 reader who has just connected one wants next.
 
-**The two doors are named for what they add, and carry the marks of what they add.** *Add a UCSC
-hub* takes a `hub.txt`; *Add a custom store config* takes a store file — and each says *add* because
-that is the errand, where *A track hub* and *Your own store* named a category and left the verb to
-be guessed. The first wears UCSC's own logo, which is the one word a reader holding a hub is looking
+**The two doors are named for the errand, and carry the marks of what they open.** *Connect to a
+UCSC hub* takes a `hub.txt`; *Add a custom store* takes a store file — each leads with a verb, where
+*A track hub* and *Your own store* named a category and left the verb to be guessed. The verbs are
+not the same one, because the errands are not: a hub is somebody else's shelf, reached where it
+stands and read across the network, which is what *connect* means everywhere else on the landing
+page (§24.2) and in the Files column; a store config is a file this viewer takes a copy of and
+remembers. Naming both *add* was the earlier answer and made the first of them promise the second's
+gesture. The first wears UCSC's own logo, which is the one word a reader holding a hub is looking
 for, and so does every hub the reader remembers. Roadmap beside it wears its own emblem over UCSC's
 colour, so that the sentence *this is a UCSC hub* is what shows if the image ever fails. The second wears **this viewer's own icon**,
 because the file behind that door is the one format in the grid written *for* this viewer rather

@@ -39,6 +39,7 @@ iconset beside it is a second copy to keep in step with this one.
 
 from __future__ import annotations
 
+import colorsys
 import re
 from pathlib import Path
 
@@ -98,7 +99,7 @@ SS        = 4                # supersampling factor for antialiasing
 C         = OUT * SS         # working canvas
 ICON      = int(C * 824 / 1024)   # Apple's large-icon footprint in the canvas
 R_FRAC    = 0.2237           # corner radius as a fraction of the plate width
-SPAN      = 0.845            # field width as a fraction of the plate width
+SPAN      = 0.845            # the map's width as a fraction of the plate width
 CELL_GAP  = 0.085            # gap around each cell, as a fraction of the pitch
 CELL_ROUND = 0.17            # cell corner radius, as a fraction of cell size
 RIM_W     = 0.0085           # edge hairline width, as a fraction of the plate
@@ -115,6 +116,108 @@ FLOOR_IN  = 0.30     # minimum intensity within a block
 BG_LEVEL  = 0.15     # background level between blocks
 DECAY_OUT = 2.4      # intensity falloff between blocks
 CUTOFF    = 0.06     # cells fainter than this are not drawn
+
+# ----------------------------------------------------------- the two tracks
+# A row of seven under the map and a column of seven to the left of it, which
+# is where this application puts a track: the lanes grow towards the matrix
+# from the bottom and the left edges, and a reader who has opened a bigWig
+# beside a cooler has seen exactly this picture.
+#
+# The grid is therefore 8 x 8 rather than 7 x 7 — one lane, the map, and one
+# lane — with the corner where the two lanes would meet left empty, because
+# nothing is plotted against both axes at once.
+#
+# Each lane is a **hue and a saturation of its own**, which is the one thing a
+# reader has to be able to do with two tracks on one screen: tell them apart at
+# a glance and without a legend. Neither is the map's ember, and neither is the
+# other's. Written as HSV rather than as hex for that reason — the two knobs
+# that matter are named, and a hue can be turned without recomputing a triple
+# by hand. Value falls on the light plate, where ink is dark on paper, and
+# rises on the dark one; saturation stays put, because it is the identity.
+# **One hue, two readings of it, and neither of them a cell.**
+#
+# The first attempt gave each lane a whole row of the grid and a hue of its
+# own, and it cost more than it bought. Three hues on one plate is a generic
+# analytics icon and breaks the rule the application is built on — colour means
+# something here, and the map owns it. A full row of seven solid cells also
+# outlasts a sparse diagonal at every downsample, so at 24 px the decoration
+# became the identity and the matrix did not survive. And the 8 x 8 grid it
+# needed took an eighth off the map, which is the subject.
+#
+# So the lanes are **slivers in the margin the plate already had**: a third of a
+# pitch wide, a fifth of a pitch clear of the map, laid in the 7.75% of the
+# plate that the 0.845 span leaves on every side. The map goes back to the size
+# and the position it has always had — this is additive now, in the literal
+# sense that nothing else moved.
+#
+# The two are one hue at two saturations and two values, which is how a browser
+# draws two tracks that are not the same measurement, and is enough to read as
+# two at any size a lane is still visible at. Beside ember they are the cool
+# end of the same picture rather than a second and third opinion about it.
+LANE_HUE = 202
+LANE_W   = 0.30      # a lane's thickness, as a fraction of the map's pitch
+LANE_GAP = 0.20      # clear air between the map's edge and the lane, likewise
+LANE_ROUND = 0.34    # a sliver's corner radius, as a fraction of its thickness
+
+TRACKS = {
+    #                sat    value-on-dark / value-on-light
+    "left":   {"s": 0.58, "v": {"dark": 0.88, "light": 0.58}},
+    "bottom": {"s": 0.30, "v": {"dark": 0.60, "light": 0.38}},
+}
+
+# What each lane reads, as seven levels.
+#
+# Not a mirror of each other, because two tracks that agree everywhere are one
+# track drawn twice. Both rise at the first bin of each block — 0, 3 and 5, the
+# starts of the three genomes — so the lanes and the blocks are visibly about
+# the same thing, and they disagree in between, which is what having two of
+# them is for.
+TRACK_LEVELS = {
+    "left":   [1.00, 0.52, 0.30, 0.86, 0.44, 0.74, 0.36],
+    "bottom": [0.82, 0.38, 0.55, 1.00, 0.34, 0.68, 0.46],
+}
+
+
+def mark_origin(extent, span, pitch):
+    """Where the map's top-left corner goes, given that it is not alone.
+
+    Centring the map centres the *map*, and the mark is now a map with a lane
+    off its left edge and another off its bottom one — so the ink runs from the
+    left lane to the map's right edge and from the map's top edge to the bottom
+    lane, and centring the square inside that leaves the two lanes hard against
+    the rim with a margin twice their size on the other two sides.
+
+    So the map is nudged half a lane's footprint right and half of it up, which
+    puts the *whole mark* in the middle: both margins come out at 4.6% of the
+    plate instead of 1.7% and 7.8%. It is optical centring, and it is the one
+    thing the lanes ask of the map — the size and the spacing of the field are
+    untouched, which is what this drawing of the lanes was for.
+    """
+    half = pitch * (LANE_W + LANE_GAP) / 2
+    base = (extent - span) / 2
+    return (base + half, base - half)
+
+
+def lane_geometry(which, ox, oy, span, pitch, n=N):
+    """Yield (x0, y0, x1, y1, level) for one lane, in canvas units.
+
+    A sliver per bin, on the bin's own extent, so a lane lines up with the map
+    cell it is about — which is the whole claim the mark is making. The gap
+    between bins is the map's own `CELL_GAP`, for the same reason.
+    """
+    w = pitch * LANE_W
+    gap = pitch * LANE_GAP
+    pad = pitch * CELL_GAP
+    size = pitch - 2 * pad
+    for k, level in enumerate(TRACK_LEVELS[which]):
+        if which == "left":
+            x0 = ox - gap - w
+            y = oy + k * pitch + pad
+            yield (x0, y, x0 + w, y + size, level)
+        else:
+            y0 = oy + span + gap
+            x = ox + k * pitch + pad
+            yield (x, y0, x + size, y0 + w, level)
 
 # ----------------------------------------------------------------- targets
 # (path relative to the repository root, pixel size, full bleed).
@@ -182,6 +285,13 @@ def field_cells(n=N):
             if a >= CUTOFF:
                 cells.append((i, j, float(min(a, 1.0))))
     return cells
+
+
+def track_rgb(which, variant):
+    """One lane's colour on one plate, from the hue and the two knobs above."""
+    spec = TRACKS[which]
+    r, g, b = colorsys.hsv_to_rgb(LANE_HUE / 360.0, spec["s"], spec["v"][variant])
+    return (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
 def clip_to(layer, mask):
@@ -263,20 +373,26 @@ def build(variant=SHIPPED, n=N, bleed=False):
     plate.putalpha(mask)
     img = Image.alpha_composite(img, plate)
 
-    # the contact map
+    # the contact map, with a lane down its left side and another under it
     art = Image.new("RGBA", (C, C), (0, 0, 0, 0))
     draw = ImageDraw.Draw(art)
     span = extent * SPAN
-    origin = (C - span) / 2
     pitch = span / n
+    ox, oy = mark_origin(C, span, pitch)
     pad = pitch * CELL_GAP
     size = pitch - 2 * pad
     for i, j, a in field_cells(n):
-        x = origin + j * pitch + pad
-        y = origin + i * pitch + pad
+        x = ox + j * pitch + pad
+        y = oy + i * pitch + pad
         draw.rounded_rectangle([x, y, x + size, y + size],
                                radius=size * CELL_ROUND,
                                fill=(*cell_col, int(round(a * 255))))
+    for which in TRACKS:
+        colour = track_rgb(which, variant)
+        r = pitch * LANE_W * LANE_ROUND
+        for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch, n):
+            draw.rounded_rectangle([x0, y0, x1, y1], radius=r,
+                                   fill=(*colour, int(round(level * 255))))
     img = Image.alpha_composite(img, clip_to(art, mask))
 
     # the edge: highlight first, hairline over it, both inside the silhouette
@@ -327,8 +443,8 @@ def favicon_svg(variant=SHIPPED, n=N):
     (plate_hi, plate_lo), cells = spec["plate"], spec["cells"]
     (rim_hi, rim_lo) = spec["rim"]
     span = OUT * SPAN
-    origin = (OUT - span) / 2
     pitch = span / n
+    ox, oy = mark_origin(OUT, span, pitch)
     cell = 1 - 2 * CELL_GAP                      # in grid units, so `<use>` is integral
     rim_w = OUT * FAVICON_RIM_W
     uses = "".join(
@@ -336,6 +452,28 @@ def favicon_svg(variant=SHIPPED, n=N):
         + ("" if a > 0.995 else f" opacity='{_num(a)}'")
         + "/>"
         for i, j, a in field_cells(n)
+    )
+
+    # The lanes are in canvas units rather than grid units: they are a third of
+    # a pitch across, which is not a whole number of anything, so a `<use>` of
+    # the square in `<defs>` would need a second scale per lane to undo.
+    lanes = "".join(
+        f"<g fill='#{'%02x%02x%02x' % track_rgb(which, variant)}'>"
+        + "".join(
+            f"<rect x='{_num(x0)}' y='{_num(y0)}'"
+            f" width='{_num(x1 - x0)}' height='{_num(y1 - y0)}'"
+            f" rx='{_num(pitch * LANE_W * LANE_ROUND)}'"
+            + ("" if level > 0.995 else f" opacity='{_num(level)}'")
+            + "/>"
+            for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch, n)
+        )
+        + "</g>"
+        for which in TRACKS
+    )
+    grid = (
+        f"<g fill='#{'%02x%02x%02x' % cells}'"
+        f" transform='translate({_num(ox)} {_num(oy)}) scale({_num(pitch)})'>"
+        f"{uses}</g>{lanes}"
     )
     return (
         f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {OUT} {OUT}'>"
@@ -354,9 +492,7 @@ def favicon_svg(variant=SHIPPED, n=N):
         f" rx='{_num(cell * CELL_ROUND)}'/>"
         "</defs>"
         f"<rect width='{OUT}' height='{OUT}' rx='{_num(OUT * R_FRAC)}' fill='url(#p)'/>"
-        f"<g fill='#{'%02x%02x%02x' % cells}'"
-        f" transform='translate({_num(origin)} {_num(origin)}) scale({_num(pitch)})'>"
-        f"{uses}</g>"
+        f"{grid}"
         # Inset by half its width, because an SVG stroke straddles the path and
         # the outer half would be clipped away by the viewBox.
         f"<rect x='{_num(rim_w / 2)}' y='{_num(rim_w / 2)}'"

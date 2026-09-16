@@ -4,7 +4,7 @@ A **store** is one JSON file that names the maps, genome files and saved session
 columns to filter on, so a reader can choose one without opening any. The app draws it as a page
 in the store drawer — the lab's and IGV's as cards of pre-configured sessions, 4DN's and ENCODE's
 as a faceted search with a matrix, a lab's own as that search over its rows; a lab connects one by
-pasting its URL under *Add a custom store config* or arrives on it with `?store=<url>`. SPECS §24 is the
+pasting its URL under *Add a custom store* or arrives on it with `?store=<url>`. SPECS §24 is the
 specification; this is the operator's page: how to write one, how to generate one, and how the
 four public stores the app ships are kept fresh.
 

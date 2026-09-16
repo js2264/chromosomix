@@ -16,10 +16,13 @@
  * things it does — drop, or click — and the URL box is under it behind a rule
  * reading *or a URL*, which is the one genuinely different way in.
  *
- * The paragraph about what opens as what is inside the target, where it has
- * always been. It is the one place a reader holding a bigWig and no contact
- * map can be told this application is for them too, and the target is what
- * they are looking at while they decide.
+ * What the target says is two lines and no more. It carried a paragraph about
+ * what opens as what — a map opens as a map, a bigWig as a browser over its
+ * genome — and a file glyph above them, and between the three the landing page
+ * did not fit on one screen. A reader who has to scroll to find out that there
+ * are three ways in has been told there is one. The sentence is not lost: the
+ * About dialog states it, and dropping a bigWig demonstrates it in less time
+ * than reading about it takes.
  *
  * The privacy claim is on the landing page rather than here, because it is
  * about the application and not about this control; and the stores are not
@@ -33,7 +36,6 @@
 
 import { IS_STANDALONE } from '../version'
 import { button, el } from './dom'
-import { icon } from './icons'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { dragHasFileRow, readFileDrag } from './fileDrag'
 import { canonicalUrl } from '../sources/rewrite'
@@ -62,20 +64,8 @@ export class LoadBox {
     this.drop = el(
       'div',
       { class: `dropzone${props.compact === true ? ' dropzone-compact' : ''}`, attrs: { tabindex: '0', role: 'button' } },
-      icon('file', { size: 22, class: 'dropzone-mark' }),
-      el('div', { class: 'dropzone-title', text: 'Drop files here' }),
+      el('div', { class: 'dropzone-title', text: 'Drop genomic files here' }),
       el('div', { class: 'dropzone-sub', text: 'or click to choose' }),
-      // What opens as what, said where the reader is already looking: a
-      // contact map is not the only thing this application is for, and a
-      // reader who thinks it is leaves without trying.
-      el('div', {
-        class: 'dropzone-note',
-        text:
-          'A contact map opens as a map; a chrom.sizes, a FASTA, a bigWig, a BED or a BAM opens ' +
-          'as a browser over its genome. Drop several at once and they come up together: the ' +
-          'first map is the tab, every other map a panel beside it, and everything else a track ' +
-          'on top.',
-      }),
     )
     const choose = async (): Promise<void> => {
       const files = await chooseFiles({ multiple: true })
@@ -146,7 +136,7 @@ export class LoadBox {
         { class: 'load-row' },
         this.urlInput,
         button('open', () => this.openRemote(), {
-          class: 'btn btn-primary',
+          class: 'btn',
           title:
             'Open a file by its address. The host must serve byte ranges and allow a ' +
             'cross-origin GET; a Dropbox, Drive, gs:// or s3:// address is rewritten to the ' +

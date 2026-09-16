@@ -33,9 +33,9 @@
  * patient-derived metagenomes and not.
  */
 
-import { IS_DESKTOP } from '../desktop'
 import { IS_STANDALONE } from '../version'
-import { iconButton, markButton } from './icons'
+import { icon, iconButton, markButton } from './icons'
+import type { IconName } from './icons'
 import { button, el } from './dom'
 import { LoadBox } from './LoadBox'
 import { appMark } from './mark'
@@ -104,6 +104,24 @@ export interface FilePickerProps {
   onConnected?(id: string): void
 }
 
+/**
+ * One of the three headings, with the mark of the thing it heads.
+ *
+ * The page names three separate ways in and drew all three the same way, so
+ * what a reader saw was one column of text with three bold lines in it rather
+ * than three doors. Each mark is the one that thing already wears elsewhere in
+ * the application — `folder-tree` is the Files column's, `library` the store
+ * drawer's — so the heading is a second sighting rather than a new symbol.
+ */
+function pickerHeading(text: string, mark: IconName): HTMLElement {
+  return el(
+    'h2',
+    { class: 'picker-heading' },
+    icon(mark, { size: 18, class: 'picker-heading-mark' }),
+    el('span', { text }),
+  )
+}
+
 export class FilePicker {
   readonly el: HTMLElement
   private readonly entryBox: HTMLElement
@@ -126,18 +144,11 @@ export class FilePicker {
         'div',
         { class: 'picker-brand' },
         el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: '(meta)cooler' })),
-        el('p', {
-          class: 'picker-tagline',
-          text:
-            IS_DESKTOP || IS_STANDALONE
-              ? '(multi-genome) cool files, on your machine'
-              : '(multi-genome) cool files, in the browser',
-        }),
       ),
       el(
         'section',
         { class: 'picker-section' },
-        el('h2', { class: 'picker-heading', text: 'Load files' }),
+        pickerHeading('Load files', 'file'),
         load.el,
       ),
       this.placesSection(),
@@ -146,7 +157,7 @@ export class FilePicker {
         : el(
             'section',
             { class: 'picker-section' },
-            el('h2', { class: 'picker-heading', text: 'Connect to a data store' }),
+            pickerHeading('Connect to a data store', 'library'),
             this.tilesSlot,
           ),
       this.entryBox,
@@ -202,12 +213,12 @@ export class FilePicker {
     return el(
       'section',
       { class: 'picker-section' },
-      el('h2', {
-        class: 'picker-heading',
-        // The standalone build reaches no remote place at all (§19), so it
-        // does not offer a heading naming two kinds and a row holding one.
-        text: IS_STANDALONE ? 'Mount a folder' : 'Mount a local or remote folder',
-      }),
+      // The standalone build reaches no remote place at all (§19), so it does
+      // not offer a heading naming two kinds and a row holding one.
+      pickerHeading(
+        IS_STANDALONE ? 'Mount a folder' : 'Mount a local or remote folder',
+        'folder-tree',
+      ),
       el(
         'div',
         { class: 'picker-providers' },
@@ -217,7 +228,7 @@ export class FilePicker {
             front.mark,
             front.id === 'local' ? () => void this.pickDirectory() : () => onConnect(front.id),
             {
-              class: 'btn btn-primary btn-mark picker-provider',
+              class: 'btn btn-mark picker-provider',
               title: `${front.label}, listed one level at a time in the Files column.`,
             },
           )

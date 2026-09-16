@@ -219,7 +219,7 @@ export function markButton(
 ): HTMLButtonElement {
   const node = document.createElement('button')
   node.type = 'button'
-  node.className = options.class ?? 'btn btn-primary btn-mark'
+  node.className = options.class ?? 'btn btn-mark'
   const title = options.disabled === true ? options.reason ?? options.title : options.title
   if (title !== undefined) node.title = title
   node.appendChild(icon(mark, { size: 18 }))

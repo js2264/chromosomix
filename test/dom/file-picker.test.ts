@@ -89,6 +89,12 @@ describe('the landing page', () => {
       'Mount a local or remote folder',
       'Connect to a data store',
     ])
+    // Each heading leads with a mark, because three bold lines in one column
+    // read as one section with emphasis in it rather than as three doors.
+    expect(all(el, '.picker-heading > .picker-heading-mark')).toHaveLength(3)
+    // And the masthead is the name alone: the tagline said in eight words what
+    // the three headings under it say in nine, and cost a line of the fold.
+    expect(all(el, '.picker-tagline')).toHaveLength(0)
     expect(all(el, '.dropzone')).toHaveLength(1)
     expect(all(el, '.input-url')).toHaveLength(1)
     expect(buttonNamed(el, 'open')).not.toBeNull()
@@ -100,18 +106,20 @@ describe('the landing page', () => {
     expect(buttonNamed(el, 'private buckets…')).toBeNull()
   })
 
-  it('is one target with the URL box under it, and says inside what opens as what', () => {
+  it('is one target with the URL box under it, and says two things and no more', () => {
     const { el } = build()
     const drop = el.querySelector('.dropzone') as HTMLElement
     expect(drop).not.toBeNull()
     // Both things the target does are written on it, because it is the only
     // control here: a click opens the file dialog a *choose files* button used
     // to, and that button is gone rather than duplicating it.
-    expect(textsOf(drop, '.dropzone-title')).toEqual(['Drop files here'])
+    expect(textsOf(drop, '.dropzone-title')).toEqual(['Drop genomic files here'])
     expect(textsOf(drop, '.dropzone-sub')).toEqual(['or click to choose'])
-    // The sentence a reader holding a bigWig and no contact map needs, inside
-    // the target they are looking at while they decide.
-    expect(textsOf(drop, '.dropzone-note')[0]).toMatch(/opens as a browser over its genome/)
+    // And nothing else. The paragraph about what opens as what, and the glyph
+    // over it, are what kept the three ways in from fitting on one screen.
+    expect(drop.querySelector('.dropzone-note')).toBeNull()
+    expect(drop.querySelector('.dropzone-mark')).toBeNull()
+    expect(drop.children).toHaveLength(2)
     // The URL box is the other way in, under the rule that says so.
     const box = el.querySelector('.load-box') as HTMLElement
     const parts = [...box.children].map((node) => node.className)
@@ -207,8 +215,8 @@ describe('the landing page', () => {
       // The two doors, always last and always in this order: far more of the
       // world's published data is behind a hub than behind a store file
       // written for this viewer (§24.10).
-      'Add a UCSC hub',
-      'Add a custom store config',
+      'Connect to a UCSC hub',
+      'Add a custom store',
     ])
     // Every tile is a mark and a line, not a request.
     expect(all(el, '.store-tile .store-mark')).toHaveLength(8)
@@ -281,10 +289,11 @@ describe('the load box on its own', () => {
     expect(box.el.querySelector('.dropzone-compact')).not.toBeNull()
     expect(all(box.el, '.input-url')).toHaveLength(1)
     expect(all(box.el, '.store-tile')).toHaveLength(0)
-    // The dialogs get the same two ways in, and the same sentence about what
-    // opens as what: it is the box's, so every door a file is asked for
-    // carries it.
-    expect(box.el.querySelector('.dropzone > .dropzone-note')).not.toBeNull()
+    // The dialogs get the same two ways in, and the same two lines on the
+    // target: it is the box's, so every door a file is asked for is the one
+    // door drawn once.
+    expect(box.el.querySelector('.dropzone > .dropzone-note')).toBeNull()
+    expect(textsOf(box.el, '.dropzone-title')).toEqual(['Drop genomic files here'])
     expect(textsOf(box.el, '.load-or')).toEqual(['or a URL'])
     // No places and no stores here: this box is the *load* half alone.
     expect(all(box.el, '.picker-provider')).toHaveLength(0)

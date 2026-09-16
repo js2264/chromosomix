@@ -19,7 +19,15 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { builtinStores, customStore, encodeShards, frontById, initialsOf, storeFronts } from '@/ui/stores/registry'
+import {
+  builtinStores,
+  customStore,
+  encodeShards,
+  frontById,
+  hubStoreFront,
+  initialsOf,
+  storeFronts,
+} from '@/ui/stores/registry'
 import { addStoreRow } from '@/state/stores'
 
 // `process.cwd()` rather than `import.meta.url`: this suite runs in jsdom,
@@ -72,6 +80,22 @@ describe('the shipped stores, on a page', () => {
       // let a hub be shipped as a store with no front of its own (§24.10).
       'portal',
     ])
+  })
+
+  it('gives every tile a line short enough for the two it is drawn on', () => {
+    // A large tile is 10.5rem wide and its subtitle is two lines of
+    // `--step--2`, which is about fifty characters. Longer than that and the
+    // tile either clipped a word or grew a third line and pushed the row under
+    // it off the screen, and it did both before these existed.
+    //
+    // A character budget rather than a measurement, for the reason every CSS
+    // test in this suite gives: jsdom has no layout. Fifty is the count that
+    // fits at the narrowest the tile is ever drawn — the budget is the whole
+    // point, so it is stated here rather than discovered in a screenshot.
+    const long = [...storeFronts(), hubStoreFront(), customStore()]
+      .map((front) => ({ id: front.id, line: front.tagline ?? front.blurb }))
+      .filter((front) => front.line.length > 50)
+    expect(long).toEqual([])
   })
 
   it('read the generated files from this site, under stores/', () => {
