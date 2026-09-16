@@ -14,6 +14,46 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A bacterial GFF arrived as 87 features out of 5,870.** A 6.4 Mb *Pseudomonas aeruginosa* PAK
+  annotation — 5,783 CDS, 74 tRNA, 12 rRNA, one tmRNA — opened as 87 anonymous boxes: every RNA in
+  the file and not one of its proteins, each drawn with no name and no accession. The count is the
+  diagnosis. 74 + 12 + 1 = 87, so what came through was exactly the rows whose feature type ends in
+  the letters `rna`.
+
+  The parser only knew the hierarchy GTF and an Ensembl GFF3 are built from — gene, transcript, and
+  the exons and CDS underneath — and it keyed every row that was not a gene or a transcript by its
+  `Parent`, because in that world such a row is a *fragment* and the parent is the thing being drawn.
+  A row naming no parent could not be placed, and was skipped. **A bacterial annotation has no
+  hierarchy in it at all**: Prokka, Bakta and DFAST write one row per feature, each with its own `ID`
+  and `locus_tag` and not one `Parent` anywhere in the file, because a bacterial gene is a single
+  uninterrupted CDS and the gene and mRNA rows Ensembl writes would each be a second copy of the same
+  span. So all 5,783 CDS rows went looking for a transcript they had never named and were dropped,
+  while the tRNAs and rRNAs matched the "is this a transcript" test on their type and came through on
+  their own `ID`s. That the survivors were a plausible-looking 87 features rather than an error is why
+  this read as a file that had loaded.
+
+  A row that names no parent is now read as the whole feature it is. It is keyed on its own `ID` — so
+  two rows sharing one, which is GFF3's way of writing a feature with a gap in it, are one glyph — and
+  a row carrying no `ID` at all is drawn keyless rather than collected with every other such row into
+  one feature stretching across the file. Where a file *does* say what a row belongs to, that still
+  decides and nothing changes: a CDS with a `Parent` still folds into its transcript and is not drawn
+  beside it.
+
+  Three things that were being thrown away come with it, because 5,870 nameless boxes is not much
+  better than 87. `locus_tag` now counts as an accession — it is assigned per gene by definition, and
+  it is the only one a Prokka file writes — so the 2,643 `hypothetical protein` rows that carry no
+  symbol are labelled `IMMMIJEE_00005` instead of nothing, and the search box can find them. A bare
+  `gene` attribute now counts as a symbol, which is how NCBI and Prokka both spell one, so `dnaA`,
+  `gyrB` and 3,139 others are drawn under their own names. And `product` joins `biotype` and `source`
+  in the detail string: it is the whole of what a bacterial annotation has to say, the feature card
+  had been showing `source Prodigal:002006` and stopping, and the colour picker (§8.16) can only
+  offer a column that is written there.
+
+  One row type had to be turned away deliberately as a result. NCBI opens every contig with a
+  `region` spanning it end to end, and a GFF converted from GenBank writes `source` for the same
+  thing; both name no parent, so both used to fall off the same end the CDS rows did. Drawn, each
+  would be a box the width of the chromosome sitting on top of the genes.
+
 - **A species with no `README.json` no longer fails the whole Stores run.** `--readme optional` is
   the default precisely because those files are hand-maintained across hundreds of species, and it
   promises that a species without one keeps every file it has and loses two columns. Against
