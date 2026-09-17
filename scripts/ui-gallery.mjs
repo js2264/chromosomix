@@ -196,8 +196,8 @@ try {
   await sleep(600)
   await shot('13-model-picker')
 
-  // The key as a control: ghost a sequence, then the reader's own colour.
-  await page.click('.structure-menu-toggle')
+  // The key as a control (the menu is still open from the picker): colour by
+  // sequence, then a double-click on a name shows that sequence alone.
   await page.locator('.structure-menu .structure-field').filter({ hasText: 'colour by' }).locator('select').selectOption('sequence')
   await sleep(1500)
   const names = page.locator('.structure-key-name')
@@ -210,11 +210,11 @@ try {
     await names.nth(1).dblclick()
     await sleep(1200)
   }
-  // The centre of rotation and the axes, from the menu's toggle.
-  await page.click('.structure-menu-toggle')
+  // The centre of rotation and the axes, from the menu's toggle; the menu closed for the shot.
   await page.locator('.structure-menu .structure-field').filter({ hasText: 'centre and axes' }).locator('input').check()
   await sleep(1200)
   await page.click('.structure-menu-toggle')
+  await sleep(400)
   await shot('15-centre-axes')
   // Hover a bead: the maps draw the place as lines across the heatmap.
   const cv = page.locator('.structure-wrap canvas').first()
@@ -235,12 +235,15 @@ try {
   await sleep(300)
   if (bb) {
     const hits = []
-    for (let j = 3; j < 30 && hits.length < 2; j += 3) for (let i = 3; i < 30 && hits.length < 2; i += 3) {
-      await page.mouse.move(bb.x + (bb.width * i) / 32, bb.y + (bb.height * j) / 32)
-      await sleep(40)
+    for (let j = 2; j < 62 && hits.length < 2; j += 1) for (let i = 2; i < 62 && hits.length < 2; i += 2) {
+      await page.mouse.move(bb.x + (bb.width * i) / 64, bb.y + (bb.height * j) / 64)
+      await sleep(25)
       const text = await readout()
-      if (/bead \d+ of/.test(text) && !hits.some((h) => h.text === text)) hits.push({ x: bb.x + (bb.width * i) / 32, y: bb.y + (bb.height * j) / 32, text })
+      if (/bead \d+ of/.test(text) && !hits.some((h) => h.text.slice(0, 30) === text.slice(0, 30))) {
+        hits.push({ x: bb.x + (bb.width * i) / 64, y: bb.y + (bb.height * j) / 64, text })
+      }
     }
+    console.log('select-mode beads:', hits.length)
     for (const hit of hits) { await page.mouse.click(hit.x, hit.y); await sleep(500) }
     await sleep(2000)
   }
