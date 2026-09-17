@@ -158,7 +158,10 @@ try {
   await shot('09-spatial-tracks')
 
   // A model from the map: the loaded block as drawn, or one sequence where
-  // the block has more beads than the tab solves.
+  // the block has more beads than the tab solves. The drawer floats over the
+  // panel, so it is closed first or the row cannot be pressed.
+  await page.keyboard.press('Escape')
+  await sleep(600)
   await page.locator('text=Model from the map').first().click()
   await sleep(800)
   const refused = /more than the 2,500/.test(await page.evaluate(() => document.body.textContent ?? ''))
@@ -172,6 +175,10 @@ try {
   await page.waitForFunction(() => /Spearman ρ/.test(document.body.textContent ?? ''), null, { timeout: 180000 }).catch(() => console.log('no reconstruction'))
   await sleep(4000)
   await shot('11-reconstructed')
+  // The drawer floats over the deck: closed, the cell shows the model it drew.
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+  await shot('11b-reconstructed-cell')
 
   // The Structures card: both models, the computed one shown in the deck.
   await fold('Fold the Analysis panel')

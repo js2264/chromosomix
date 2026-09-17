@@ -54,7 +54,7 @@ const STRUCTURE_PARAM: ParamSpec = {
   kind: 'featureSet',
   key: 'structure',
   label: 'Structure',
-  hint: 'The model to read: a structure row of the Tracks card.',
+  hint: 'The model to read: a row of the Structures card.',
 }
 
 const VERSUS_PARAMS: readonly ParamSpec[] = [

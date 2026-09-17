@@ -212,6 +212,8 @@ export class StructurePanel implements DeckCell {
   private structure: Structure | null = null
   /** The payload the scene was built from, so a rebuild waits for a new one. */
   private builtFrom: unknown = null
+  /** The row the scene was built from, so a change of row reframes the camera. */
+  private builtRow: string | null = null
   private colours: BeadColours | null = null
   private colouredBy: string | null = null
   private camera: Camera
@@ -468,8 +470,10 @@ export class StructurePanel implements DeckCell {
       this.colours = null
       this.chords = null
       if (this.builtFrom !== payload.data) {
+        const switched = this.builtRow !== null && this.builtRow !== entry.id
         this.structure = buildStructure(payload.data)
         this.builtFrom = payload.data
+        this.builtRow = entry.id
         this.colours = null
         this.colouredBy = null
         this.pinned = -1
@@ -477,8 +481,12 @@ export class StructurePanel implements DeckCell {
         this.chord = null
         this.relight()
         // A model that has never been looked at opens fitted; one the reader
-        // has framed keeps the camera they left it with.
-        if (recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === null) this.frameAll()
+        // has framed keeps the camera they left it with. A *different* row —
+        // the picker, the Structures card, a model that has just landed — is
+        // framed afresh: its beads are in their own units around their own
+        // centre, and the camera that framed the last model shows a corner of
+        // this one, or nothing.
+        if (switched || recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === null) this.frameAll()
       }
       this.say(this.structure === null || this.structure.placed === 0 ? WAITING.empty : '')
     }
