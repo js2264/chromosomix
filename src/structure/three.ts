@@ -45,9 +45,7 @@ import {
   Fog,
   FrontSide,
   InstancedMesh,
-  Line,
   LineBasicMaterial,
-  LineDashedMaterial,
   LineSegments,
   Matrix4,
   Mesh,
@@ -69,7 +67,6 @@ import {
 import { basis, eyeOf, halfHeight, project } from './camera'
 import { hexOf, parseColour } from './colour'
 import type { StructureView } from './painter'
-import { GHOST_OPACITY } from './painter'
 
 /** What the renderer clears to and writes labels in, read off the page. */
 export interface RenderPalette {
@@ -100,9 +97,12 @@ export class StructureRenderer {
   private halos: InstancedMesh | null = null
   private sticks: InstancedMesh | null = null
   private tubes: Mesh[] = []
-  private chord: Line | null = null
-  /** Loops as chords (§25.5), one segment per pair. */
-  private chords: LineSegments | null = null
+  /** The dashes across the gaps of every chain: ink, always drawn. */
+  private gapDashes: InstancedMesh | null = null
+  /** The hovered contact's chord: dashes of ink between its two beads. */
+  private chord: InstancedMesh | null = null
+  /** The loops as chords (§25.5): one cylinder of ink per pair. */
+  private chords: InstancedMesh | null = null
   private chordsFrom: ReadonlyArray<readonly [number, number]> | null = null
   /** The centre of rotation — a ball at the camera's target with the three axes through it. */
   private readonly centre = new Object3D()
@@ -264,7 +264,7 @@ export class StructureRenderer {
     const d = view.camera.distance
     const f = view.style.fog
     const near = d * (1.7 - 1.33 * f)
-    this.scene.fog = view.style.lit && f > 0 ? new Fog(background, near, near + d * (2.9 - 2 * f)) : null
+    this.scene.fog = view.style.fogOn && f > 0 ? new Fog(background, near, near + d * (2.9 - 2 * f)) : null
     this.placeCentre(view)
     renderer.render(this.scene, camera)
   }
@@ -327,18 +327,15 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
-    if (this.chords !== null) {
-      this.root.remove(this.chords)
-      this.chords.geometry.dispose()
-      ;(this.chords.material as LineBasicMaterial).dispose()
-      this.chords = null
-      this.chordsFrom = null
+    for (const ink of [this.chords, this.chord, this.gapDashes]) {
+      if (ink === null) continue
+      this.root.remove(ink)
+      ink.geometry.dispose()
+      ;(ink.material as MeshBasicMaterial).dispose()
     }
-    if (this.chord !== null) {
-      this.root.remove(this.chord)
-      this.chord.geometry.dispose()
-      ;(this.chord.material as LineDashedMaterial).dispose()
-    }
+    this.chords = null
+    this.chordsFrom = null
+    this.gapDashes = null
     this.beads = null
     this.picks = null
     this.halos = null
@@ -357,12 +354,12 @@ export class StructureRenderer {
     for (let i = 0; i < n; i++) count += shown[i]
     const beadRadius = structure.step * style.beadRadius
     const stickRadius = structure.step * style.tubeRadius
-    const lit = style.lit
+    const lit = true
 
     // The pick instances, always: one sphere per shown bead at the bead radius
     // or, under a tube, at the tube's, so a pick on the tube lands on the bead
     // the surface belongs to.
-    const pickRadius = style.representation === 'tube' || style.representation === 'sticks' ? Math.max(stickRadius, beadRadius * 0.6) : beadRadius
+    const pickRadius = style.beads ? beadRadius : Math.max(stickRadius, beadRadius * 0.6)
     this.pickBeads = new Int32Array(count)
     this.picks = new InstancedMesh(new SphereGeometry(1, 8, 6), new MeshBasicMaterial(), Math.max(1, count))
     this.picks.count = count
@@ -389,9 +386,9 @@ export class StructureRenderer {
     this.root.add(this.picks)
     this.picks.frustumCulled = false
 
-    const drawBeads = style.representation === 'beads' || style.representation === 'beads+sticks'
-    const drawSticks = style.representation === 'sticks' || style.representation === 'beads+sticks'
-    const drawTube = style.representation === 'tube'
+    const drawBeads = style.beads
+    const drawSticks = style.sticks
+    const drawTube = style.tube
 
     if (drawBeads) {
       this.beads = new InstancedMesh(new SphereGeometry(1, 16, 12), surface(lit), Math.max(1, count))
@@ -409,11 +406,33 @@ export class StructureRenderer {
       this.beads.frustumCulled = false
     }
 
+    // The dashes across every gap, whatever else is drawn: ink, a little
+    // wider than a stick, so a chain that stops where a bead is missing reads
+    // as one chain with a hole in it rather than as two chains.
+    const gaps = gapPairsOf(view, shown)
+    if (gaps.length > 0) {
+      const segments: Array<[Vector3, Vector3]> = []
+      const dash = stickRadius * 3
+      const gap = stickRadius * 2
+      for (const [a, b] of gaps) {
+        const from = new Vector3(structure.x[a], structure.y[a], structure.z[a])
+        const to = new Vector3(structure.x[b], structure.y[b], structure.z[b])
+        const length = from.distanceTo(to)
+        const dir = to.clone().sub(from).normalize()
+        for (let at = 0; at < length; at += dash + gap) {
+          const end = Math.min(length, at + dash)
+          segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, end)])
+        }
+      }
+      this.gapDashes = cylinders(segments, stickRadius * 0.7, inkMaterial(this.palette.ink, 1))
+      this.root.add(this.gapDashes)
+    }
+
     if (drawSticks || drawTube) {
-      // Sticks between neighbours on a run, and dashed ones across gaps where
-      // asked — as instanced cylinders, each turned from the y axis onto its
-      // pair. A tube's runs of one bead have no tube and are given a stick's
-      // worth of nothing, which is what a lone bead is.
+      // Sticks between neighbours on a run, as instanced cylinders, each
+      // turned from the y axis onto its pair. A tube's runs of one bead have
+      // no tube and are given a stick's worth of nothing, which is what a lone
+      // bead is.
       const pairs = pairsOf(view, shown)
       if (drawSticks && pairs.length > 0) {
         this.sticks = new InstancedMesh(
@@ -500,23 +519,11 @@ export class StructureRenderer {
     this.root.add(this.halos)
     this.halos.frustumCulled = false
 
-    const chordGeometry = new BufferGeometry()
-    chordGeometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3))
-    this.chord = new Line(
-      chordGeometry,
-      new LineDashedMaterial({ color: hexOf(this.palette.ink), dashSize: stickRadius * 3, gapSize: stickRadius * 2 }),
-    )
-    this.chord.visible = false
-    this.root.add(this.chord)
-    this.chord.frustumCulled = false
-
-    this.chords = new LineSegments(
-      new BufferGeometry(),
-      new LineBasicMaterial({ color: hexOf(this.palette.ink), transparent: true, opacity: 0.55 }),
-    )
-    this.chords.visible = false
-    this.root.add(this.chords)
-    this.chords.frustumCulled = false
+    // The chords are cylinders rather than GL lines, which are one pixel
+    // wide on every platform that matters: a line that says *these two touch*
+    // has to be seen at the size of the tube it crosses. Placed by `mark`.
+    this.chord = null
+    this.chords = null
     this.chordsFrom = null
 
     this.recolour()
@@ -531,8 +538,11 @@ export class StructureRenderer {
     const rgb = view.colours.rgb
     const background = parseColour(this.palette.background)
     const colourOf = (i: number, out: Color): void => {
+      // A ghosted bead is its colour mixed towards the page by the style's
+      // ghost opacity — 0.15 leaves a trace — which reads as transparency on
+      // a page with nothing behind the model.
       const ghost = view.lit !== null && view.lit[i] === 0
-      const mix = ghost ? 1 - GHOST_OPACITY : 0
+      const mix = ghost ? 1 - view.style.opacity : 0
       out.setRGB(
         rgb[i * 3] + (background[0] - rgb[i * 3]) * mix,
         rgb[i * 3 + 1] + (background[1] - rgb[i * 3 + 1]) * mix,
@@ -577,8 +587,8 @@ export class StructureRenderer {
     if (this.halos !== null) {
       ;(this.halos.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
     }
-    if (this.chord !== null) {
-      ;(this.chord.material as LineDashedMaterial).color.setHex(hexOf(this.palette.ink))
+    for (const ink of [this.chord, this.chords, this.gapDashes]) {
+      if (ink !== null) (ink.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
     }
     void n
   }
@@ -586,15 +596,15 @@ export class StructureRenderer {
   /** Place the halos and the chord for what is hovered and pinned. */
   private mark(): void {
     const view = this.view
-    if (view === null || this.halos === null || this.chord === null) return
+    if (view === null || this.halos === null) return
     const { structure, style } = view
     const marked = [...new Set([...view.hovered, ...(view.pinned >= 0 ? [view.pinned] : [])])].filter(
       (i) => i >= 0 && i < structure.set.length && this.shown[i] === 1,
     )
+    const stickRadius = structure.step * style.tubeRadius
     const radius =
-      (style.representation === 'tube' || style.representation === 'sticks'
-        ? Math.max(structure.step * style.tubeRadius, structure.step * style.beadRadius * 0.6)
-        : structure.step * style.beadRadius) * 1.45
+      (style.beads ? structure.step * style.beadRadius : Math.max(stickRadius, structure.step * style.beadRadius * 0.6)) *
+      1.45
     const matrix = new Matrix4()
     const count = Math.min(marked.length, 8)
     for (let at = 0; at < count; at++) {
@@ -606,43 +616,52 @@ export class StructureRenderer {
     this.halos.count = count
     this.halos.instanceMatrix.needsUpdate = true
 
-    if (this.chords !== null && this.chordsFrom !== view.chords) {
-      // Rebuilt only when the list is a new one: the panel hands the same
-      // array back frame after frame while nothing about the loops changed.
-      this.chordsFrom = view.chords
-      const kept = view.chords.filter(([a, b]) => this.shown[a] === 1 && this.shown[b] === 1)
-      const array = new Float32Array(kept.length * 6)
-      kept.forEach(([a, b], at) => {
-        array[at * 6] = structure.x[a]
-        array[at * 6 + 1] = structure.y[a]
-        array[at * 6 + 2] = structure.z[a]
-        array[at * 6 + 3] = structure.x[b]
-        array[at * 6 + 4] = structure.y[b]
-        array[at * 6 + 5] = structure.z[b]
-      })
-      this.chords.geometry.dispose()
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(array, 3))
-      this.chords.geometry = geometry
-      this.chords.visible = kept.length > 0
+    // The loops as chords, rebuilt only when the list is a new one: the panel
+    // hands the same array back frame after frame while nothing changed.
+    const wanted = style.chords ? view.chords : NO_CHORDS
+    if (this.chordsFrom !== wanted) {
+      this.chordsFrom = wanted
+      if (this.chords !== null) {
+        this.root.remove(this.chords)
+        this.chords.geometry.dispose()
+        this.chords = null
+      }
+      const kept = wanted.filter(([a, b]) => this.shown[a] === 1 && this.shown[b] === 1)
+      if (kept.length > 0) {
+        const segments = kept.map(
+          ([a, b]) =>
+            [
+              new Vector3(structure.x[a], structure.y[a], structure.z[a]),
+              new Vector3(structure.x[b], structure.y[b], structure.z[b]),
+            ] as [Vector3, Vector3],
+        )
+        this.chords = cylinders(segments, stickRadius * 0.6, inkMaterial(this.palette.ink, 0.9))
+        this.root.add(this.chords)
+      }
     }
 
+    // The hovered contact's chord: dashes of ink, wider than the loops', on
+    // top of everything else that is a line.
+    if (this.chord !== null) {
+      this.root.remove(this.chord)
+      this.chord.geometry.dispose()
+      this.chord = null
+    }
     const chord = view.chord
     if (chord !== null && this.shown[chord[0]] === 1 && this.shown[chord[1]] === 1) {
-      const position = this.chord.geometry.getAttribute('position') as BufferAttribute
-      const array = position.array as Float32Array
       const [a, b] = chord
-      array[0] = structure.x[a]
-      array[1] = structure.y[a]
-      array[2] = structure.z[a]
-      array[3] = structure.x[b]
-      array[4] = structure.y[b]
-      array[5] = structure.z[b]
-      position.needsUpdate = true
-      this.chord.computeLineDistances()
-      this.chord.visible = true
-    } else {
-      this.chord.visible = false
+      const from = new Vector3(structure.x[a], structure.y[a], structure.z[a])
+      const to = new Vector3(structure.x[b], structure.y[b], structure.z[b])
+      const length = from.distanceTo(to)
+      const dir = to.clone().sub(from).normalize()
+      const dash = stickRadius * 3
+      const gap = stickRadius * 2
+      const segments: Array<[Vector3, Vector3]> = []
+      for (let at = 0; at < length; at += dash + gap) {
+        segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, Math.min(length, at + dash))])
+      }
+      this.chord = cylinders(segments, stickRadius * 0.8, inkMaterial(this.palette.ink, 1))
+      this.root.add(this.chord)
     }
   }
 
@@ -709,9 +728,9 @@ function shownBeads(view: StructureView): Uint8Array {
   return shown
 }
 
-/** The bead pairs a stick joins: neighbours on a run, and gap ends where dashed. */
+/** The bead pairs a stick joins: neighbours on a run. */
 function pairsOf(view: StructureView, shown: Uint8Array): Array<[number, number]> {
-  const { structure, style } = view
+  const { structure } = view
   const pairs: Array<[number, number]> = []
   for (const chain of structure.chains) {
     if (view.haplotype >= 0 && chain.hap !== view.haplotype) continue
@@ -722,15 +741,59 @@ function pairsOf(view: StructureView, shown: Uint8Array): Array<[number, number]
         if (shown[a] === 1 && shown[b] === 1) pairs.push([a, b])
       }
     }
-    if (style.gaps === 'dashed') {
-      for (let r = 2; r < chain.runs.length; r += 2) {
-        const a = chain.beads[chain.runs[r - 1] - 1]
-        const b = chain.beads[chain.runs[r]]
-        if (shown[a] === 1 && shown[b] === 1) pairs.push([a, b])
-      }
+  }
+  return pairs
+}
+
+/** The two beads either side of each gap in a chain: the last of one run, the first of the next. */
+function gapPairsOf(view: StructureView, shown: Uint8Array): Array<[number, number]> {
+  const { structure } = view
+  const pairs: Array<[number, number]> = []
+  for (const chain of structure.chains) {
+    if (view.haplotype >= 0 && chain.hap !== view.haplotype) continue
+    for (let r = 2; r < chain.runs.length; r += 2) {
+      const a = chain.beads[chain.runs[r - 1] - 1]
+      const b = chain.beads[chain.runs[r]]
+      if (shown[a] === 1 && shown[b] === 1) pairs.push([a, b])
     }
   }
   return pairs
+}
+
+const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
+
+/** A flat material of the page's ink, for every line the model carries. */
+function inkMaterial(ink: string, opacity: number): MeshBasicMaterial {
+  return opacity >= 1
+    ? new MeshBasicMaterial({ color: hexOf(ink) })
+    : new MeshBasicMaterial({ color: hexOf(ink), transparent: true, opacity })
+}
+
+/**
+ * One instanced mesh of cylinders, one per segment, each turned from the y
+ * axis onto its two ends. Never culled: a segment placed after the sphere
+ * was computed was culled as out of view and never drawn.
+ */
+function cylinders(
+  segments: ReadonlyArray<readonly [Vector3, Vector3]>,
+  radius: number,
+  material: MeshBasicMaterial,
+): InstancedMesh {
+  const mesh = new InstancedMesh(new CylinderGeometry(1, 1, 1, 8, 1, true), material, Math.max(1, segments.length))
+  mesh.count = segments.length
+  const matrix = new Matrix4()
+  const q = new Quaternion()
+  const up = new Vector3(0, 1, 0)
+  segments.forEach(([from, to], at) => {
+    const dir = to.clone().sub(from)
+    const length = dir.length()
+    q.setFromUnitVectors(up, length > 0 ? dir.normalize() : up)
+    matrix.compose(from.clone().add(to).multiplyScalar(0.5), q, new Vector3(radius, Math.max(length, 1e-6), radius))
+    mesh.setMatrixAt(at, matrix)
+  })
+  mesh.instanceMatrix.needsUpdate = true
+  mesh.frustumCulled = false
+  return mesh
 }
 
 /** Cumulative polyline length at each point, from zero. */
@@ -754,11 +817,11 @@ function buildKey(view: StructureView): string {
   return [
     structure.set.length,
     structure.placed,
-    style.representation,
+    style.beads,
+    style.sticks,
+    style.tube,
     style.beadRadius,
     style.tubeRadius,
-    style.gaps,
-    style.lit,
     view.haplotype,
     style.others,
     litKey,

@@ -65,8 +65,8 @@ export interface PainterPalette {
 const DEPTH_FADE = 0.45
 const DEPTH_SHRINK = 0.35
 
-/** The opacity of a bead outside the window, under `others: 'ghost'`. */
-export const GHOST_OPACITY = 0.3
+/** The opacity of a bead outside the window, under `others: 'ghost'`, where a style says nothing. */
+export const GHOST_OPACITY = 0.15
 
 /** How much wider than a bead the halo round a hovered or pinned one is. */
 const HALO = 1.8
@@ -114,8 +114,10 @@ export function drawStructure(
   const span = farthest > nearest ? farthest - nearest : 1
   const fade = (i: number): number => (depth[i] - nearest) / span
 
-  const drawBeads = style.representation !== 'sticks' && style.representation !== 'tube'
-  const drawSticks = style.representation !== 'beads'
+  const drawBeads = style.beads
+  // A tube is paths here: the run as a thick line, which is what a tube is
+  // seen from far enough away.
+  const drawSticks = style.sticks || style.tube
   const beadRadius = structure.step * style.beadRadius
   const stickRadius = structure.step * style.tubeRadius
 
@@ -133,8 +135,10 @@ export function drawStructure(
           marks.push({ depth: (depth[a] + depth[b]) / 2, kind: 0, a, b })
         }
       }
-      // A dashed run across each gap, where the style asks for one.
-      if (style.gaps === 'dashed') {
+      // A dashed run across each gap, always: a gap is a fact about the
+      // model, and a chain that seems to end where a bead is missing is a
+      // model that looks like two.
+      {
         for (let r = 2; r < chain.runs.length; r += 2) {
           const a = chain.beads[chain.runs[r - 1] - 1]
           const b = chain.beads[chain.runs[r]]
@@ -155,14 +159,17 @@ export function drawStructure(
   for (const mark of marks) {
     const i = mark.a
     const ghost = view.lit !== null && view.lit[i] === 0
-    const alpha = (ghost ? GHOST_OPACITY : 1) * style.opacity
+    const alpha = ghost ? style.opacity : 1
     if (mark.b >= 0) {
       const j = mark.b
       const t = (fade(i) + fade(j)) / 2
       const width = Math.max(0.5, stickRadius * 2 * ((size[i] + size[j]) / 2) * (1 - DEPTH_SHRINK * t))
-      ctx.strokeStyle = paled(view.colours.css[i], background, DEPTH_FADE * t)
+      // A gap's dashes are ink, not the bead's colour, and a little wider
+      // than the sticks: a line that says *nothing is here* has to be read
+      // as such from across the room.
+      ctx.strokeStyle = mark.kind === 1 ? palette.ink : paled(view.colours.css[i], background, DEPTH_FADE * t)
       ctx.globalAlpha = alpha
-      ctx.lineWidth = width
+      ctx.lineWidth = mark.kind === 1 ? Math.max(1.5, width * 0.8) : width
       ctx.setLineDash(mark.kind === 1 ? [width * 2, width * 2] : [])
       ctx.beginPath()
       ctx.moveTo(px[i], py[i])
@@ -199,10 +206,10 @@ export function drawStructure(
 
   // Loops as chords, under the hovered one: thin, so a hundred of them read
   // as a texture of the model rather than a cage round it.
-  if (view.chords.length > 0) {
-    ctx.globalAlpha = 0.55
+  if (view.chords.length > 0 && style.chords) {
+    ctx.globalAlpha = 0.9
     ctx.strokeStyle = palette.ink
-    ctx.lineWidth = Math.max(0.5, stickRadius * 0.5)
+    ctx.lineWidth = Math.max(1.2, stickRadius * 1.2)
     ctx.beginPath()
     for (const [a, b] of view.chords) {
       if (shown[a] !== 1 || shown[b] !== 1) continue
@@ -218,8 +225,8 @@ export function drawStructure(
     if (shown[a] === 1 && shown[b] === 1) {
       ctx.globalAlpha = 1
       ctx.strokeStyle = palette.ink
-      ctx.lineWidth = Math.max(1, stickRadius * size[a])
-      ctx.setLineDash([4, 3])
+      ctx.lineWidth = Math.max(2, stickRadius * size[a] * 1.4)
+      ctx.setLineDash([6, 4])
       ctx.beginPath()
       ctx.moveTo(px[a], py[a])
       ctx.lineTo(px[b], py[b])

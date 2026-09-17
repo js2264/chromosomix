@@ -36,7 +36,7 @@ function view(overrides: Partial<StructureView> = {}): StructureView {
   if (structure === null) throw new Error('no model')
   const all = centroidOf(structure, Array.from({ length: structure.set.length }, (_, i) => i))
   const camera = all === null ? defaultCamera() : fitCamera(defaultCamera(), all)
-  const style = { ...defaultStructureStyle(), representation: 'beads+sticks' as const }
+  const style = { ...defaultStructureStyle(), beads: true, sticks: true, tube: false }
   return {
     structure,
     camera,
@@ -70,32 +70,32 @@ describe('the painter', () => {
     expect(drawn.length).toBeGreaterThan(blank.length + 200)
   })
 
-  it('draws sticks only along runs, never across a gap unless asked', async () => {
-    const plain = await streamOf(view({ style: { ...defaultStructureStyle(), representation: 'sticks' } }))
-    const dashed = await streamOf(
-      view({ style: { ...defaultStructureStyle(), representation: 'sticks', gaps: 'dashed' } }),
-    )
-    // The gap between 20 kb and 40 kb on chrA is one more stroked segment
-    // under `dashed`, drawn with a dash pattern, which the plain figure lacks —
-    // and a deflated stream with more operators in it is a longer one.
-    expect(dashed.length).toBeGreaterThan(plain.length)
+  it('draws a dashed run across a gap, always', async () => {
+    const sticks = { ...defaultStructureStyle(), beads: false, sticks: true, tube: false }
+    const dashed = await streamOf(view({ style: sticks }))
+    // The gap between 20 kb and 40 kb on chrA is a dashed segment of ink. With
+    // the far side of the gap hidden there is no gap to dash and one stick
+    // fewer — and a deflated stream with fewer operators in it is a shorter one.
+    const lit = new Uint8Array([1, 1, 1, 0, 1, 1])
+    const cut = await streamOf(view({ lit, style: { ...sticks, others: 'hide' } }))
+    expect(dashed.length).toBeGreaterThan(cut.length)
   })
 
   it('hides beads outside the window under `hide`, and keeps them under `ghost`', async () => {
     const lit = new Uint8Array([1, 1, 0, 0, 0, 0])
     const ghosted = await streamOf(view({ lit }))
     const hidden = await streamOf(
-      view({ lit, style: { ...defaultStructureStyle(), representation: 'beads', others: 'hide' } }),
+      view({ lit, style: { ...defaultStructureStyle(), beads: true, sticks: false, tube: false, others: 'hide' } }),
     )
-    const beadsOnly = await streamOf(view({ style: { ...defaultStructureStyle(), representation: 'beads' } }))
+    const beadsOnly = await streamOf(view({ style: { ...defaultStructureStyle(), beads: true, sticks: false, tube: false } }))
     expect(hidden.length).toBeLessThan(beadsOnly.length)
     expect(ghosted.length).toBeGreaterThanOrEqual(beadsOnly.length)
   })
 
   it('draws a haloed bead for the pointer and a chord between two', async () => {
-    const bare = await streamOf(view({ style: { ...defaultStructureStyle(), representation: 'beads' } }))
+    const bare = await streamOf(view({ style: { ...defaultStructureStyle(), beads: true, sticks: false, tube: false } }))
     const marked = await streamOf(
-      view({ style: { ...defaultStructureStyle(), representation: 'beads' }, hovered: [0], chord: [0, 3] }),
+      view({ style: { ...defaultStructureStyle(), beads: true, sticks: false, tube: false }, hovered: [0], chord: [0, 3] }),
     )
     expect(marked.length).toBeGreaterThan(bare.length)
   })

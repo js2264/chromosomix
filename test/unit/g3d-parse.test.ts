@@ -308,27 +308,36 @@ describe('the structure style', () => {
       tubeRadius: -1,
       opacity: 7,
       others: 'nothing',
-      gaps: 'dashed',
       labels: false,
       axes: true,
-      projection: 'orthographic',
-      lit: false,
       haplotype: 'paternal',
+      fogOn: false,
+      chords: false,
     })
-    expect(read.representation).toBe('tube')
+    // A representation this build has never heard of is the default drawing.
+    expect([read.beads, read.sticks, read.tube]).toEqual([false, false, true])
     expect(read.colourBy).toBe('track:abc')
     expect(read.beadRadius).toBe(3)
     expect(read.tubeRadius).toBe(0.02)
     expect(read.opacity).toBe(1)
     expect(read.others).toBe('ghost')
-    expect(read.gaps).toBe('dashed')
     expect(read.labels).toBe(false)
     expect(read.axes).toBe(true)
-    expect(read.projection).toBe('orthographic')
-    expect(read.lit).toBe(false)
     expect(read.haplotype).toBe('paternal')
+    expect(read.fogOn).toBe(false)
+    expect(read.chords).toBe(false)
     expect(structureStyleOf(null)).toEqual(defaultStructureStyle())
     expect(structureStyleOf('tube')).toEqual(defaultStructureStyle())
+  })
+
+  it('reads a representation stored before the three toggles into them', () => {
+    const both = structureStyleOf({ representation: 'beads+sticks' })
+    expect([both.beads, both.sticks, both.tube]).toEqual([true, true, false])
+    const beads = structureStyleOf({ representation: 'beads' })
+    expect([beads.beads, beads.sticks, beads.tube]).toEqual([true, false, false])
+    // The toggles themselves win over the word beside them.
+    const mixed = structureStyleOf({ representation: 'beads', tube: true })
+    expect([mixed.beads, mixed.sticks, mixed.tube]).toEqual([true, false, true])
   })
 })
 

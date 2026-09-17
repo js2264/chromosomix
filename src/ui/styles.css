@@ -10536,3 +10536,24 @@ span.deck-name {
 .structure-side.hidden {
   display: none;
 }
+
+/* The cell's on/off settings as icon toggles, in rows; a field with a toggle
+   beside its control (the chords' set, the fog's depth). */
+.structure-toggle-row {
+  display: inline-flex;
+  gap: 2px;
+}
+.structure-toggle.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.structure-field-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.structure-field-with-toggle > .select,
+.structure-field-with-toggle > .structure-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}

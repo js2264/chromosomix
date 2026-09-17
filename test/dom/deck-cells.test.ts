@@ -749,10 +749,12 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     expect(options).toContain('manual')
     const fog = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) => f.textContent?.startsWith('fog'))
     expect(fog?.querySelector('input')?.value).toBe('0.6')
-    const centre = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) =>
-      f.textContent?.includes('centre and axes'),
-    )
-    expect(centre).toBeDefined()
+    const centre = cell.querySelector('.structure-menu .structure-toggle[title*="centre and axes"]')
+    expect(centre).not.toBeNull()
+    // Drawn as: three toggles that combine, the tube on by default.
+    const drawn = Array.from(all<HTMLButtonElement>(cell, '.structure-toggles .structure-toggle')).slice(0, 3)
+    expect(drawn.map((b) => b.classList.contains('is-on'))).toEqual([false, false, true])
+    expect(all(cell, '.structure-menu select').map((s) => s.previousElementSibling?.textContent)).not.toContain('drawn as')
   })
 
   it('hides and shows the dialog\'s settings from the corner', () => {

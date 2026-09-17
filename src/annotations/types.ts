@@ -1053,15 +1053,11 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
 // ---------------------------------------------------------------------------
 
 /** How the beads of a model are drawn. */
+/**
+ * A representation a model was stored with before the three were toggles
+ * (§25.3): read back into them by {@link structureStyleOf}, written by nothing.
+ */
 export type StructureRepresentation = 'beads' | 'sticks' | 'beads+sticks' | 'tube'
-
-/** Every representation, in the order the picker offers them. */
-export const STRUCTURE_REPRESENTATIONS: readonly StructureRepresentation[] = [
-  'tube',
-  'beads+sticks',
-  'beads',
-  'sticks',
-]
 
 /**
  * What the beads outside the deck's window are drawn as (§25).
@@ -1113,8 +1109,15 @@ export const STRUCTURE_COLOUR_FEATURES = 'features:'
  * as the reader left it, tube and colouring and all.
  */
 export interface StructureStyle {
-  representation: StructureRepresentation
   /** See the `STRUCTURE_COLOUR_*` constants and `structure/colour.ts`. */
+  /**
+   * What the model is drawn as — any of the three together (§25.3): beads
+   * at each place, sticks between neighbours, a tube through the run. A model
+   * with none of them is its gaps, chords and halos alone, which is a choice.
+   */
+  beads: boolean
+  sticks: boolean
+  tube: boolean
   colourBy: string
   /**
    * Bead radius, as a fraction of the typical distance between neighbouring
@@ -1125,16 +1128,17 @@ export interface StructureStyle {
   /** Tube and stick radius, on the same scale. */
   tubeRadius: number
   /** Opacity of the lit beads, `0..1`. */
+  /**
+   * How much of a **ghosted** bead is left (§25.5): 0 gone, 1 as drawn. The
+   * beads inside the window and the sequences not ghosted are always drawn
+   * whole; this is the one opacity there is.
+   */
   opacity: number
   others: StructureOthers
-  gaps: StructureGaps
   /** Chain names at each chain's midpoint. */
   labels: boolean
   /** The little axes gizmo in a corner. */
   axes: boolean
-  projection: StructureProjection
-  /** Whether the tube and beads are shaded, or drawn flat in their colour. */
-  lit: boolean
   /**
    * The one haplotype shown, or `''` for every one.
    *
@@ -1160,26 +1164,31 @@ export interface StructureStyle {
    * in the cell, or the slider. 0.6 is the depth cue the cell always had.
    */
   fog: number
+  /** Whether the fog is drawn at all; {@link fog} keeps its depth while it is off. */
+  fogOn: boolean
+  /** Whether the chords of {@link loops} are drawn; the choice of set is kept while they are off. */
+  chords: boolean
 }
 
 export function defaultStructureStyle(): StructureStyle {
   return {
-    representation: 'tube',
+    beads: false,
+    sticks: false,
+    tube: true,
     colourBy: STRUCTURE_COLOUR_SEQUENCE,
     beadRadius: 0.35,
     tubeRadius: 0.2,
-    opacity: 1,
+    opacity: 0.15,
     others: 'ghost',
-    gaps: 'break',
     labels: true,
     axes: false,
-    projection: 'perspective',
-    lit: true,
     haplotype: '',
     loops: '',
     ghosted: [],
     sequenceColours: {},
     fog: 0.6,
+    fogOn: true,
+    chords: true,
   }
 }
 
@@ -1212,14 +1221,20 @@ export function structureStyleOf(value: unknown): StructureStyle {
   const fallback = defaultStructureStyle()
   if (typeof value !== 'object' || value === null) return fallback
   const row = value as Record<string, unknown>
-  const representation = row['representation']
+  const stored = row['representation']
+  const representation: StructureRepresentation | undefined =
+    stored === 'beads' || stored === 'sticks' || stored === 'beads+sticks' || stored === 'tube' ? stored : undefined
   const others = row['others']
   const colourBy = row['colourBy']
   const haplotype = row['haplotype']
+  // The three toggles, or a representation stored before there were three;
+  // a word this build has never heard of is the default drawing.
+  const flag = (key: 'beads' | 'sticks' | 'tube', legacy: boolean): boolean =>
+    typeof row[key] === 'boolean' ? (row[key] as boolean) : representation !== undefined ? legacy : fallback[key]
   return {
-    representation: STRUCTURE_REPRESENTATIONS.includes(representation as StructureRepresentation)
-      ? (representation as StructureRepresentation)
-      : fallback.representation,
+    beads: flag('beads', representation === 'beads' || representation === 'beads+sticks'),
+    sticks: flag('sticks', representation === 'sticks' || representation === 'beads+sticks'),
+    tube: flag('tube', representation === 'tube'),
     colourBy:
       typeof colourBy === 'string' && colourBy.length <= 200 ? colourBy : fallback.colourBy,
     beadRadius: bounded(row['beadRadius'], 0.02, 3, fallback.beadRadius),
@@ -1228,11 +1243,8 @@ export function structureStyleOf(value: unknown): StructureStyle {
     others: STRUCTURE_OTHERS.includes(others as StructureOthers)
       ? (others as StructureOthers)
       : fallback.others,
-    gaps: row['gaps'] === 'dashed' ? 'dashed' : 'break',
     labels: row['labels'] !== false,
     axes: row['axes'] === true,
-    projection: row['projection'] === 'orthographic' ? 'orthographic' : 'perspective',
-    lit: row['lit'] !== false,
     haplotype: typeof haplotype === 'string' && haplotype.length <= 64 ? haplotype : '',
     loops: typeof row['loops'] === 'string' && (row['loops'] as string).length <= 200 ? (row['loops'] as string) : '',
     ghosted: Array.isArray(row['ghosted'])
@@ -1240,6 +1252,8 @@ export function structureStyleOf(value: unknown): StructureStyle {
       : [],
     sequenceColours: sequenceColoursOf(row['sequenceColours']),
     fog: bounded(row['fog'], 0, 1, fallback.fog),
+    fogOn: row['fogOn'] !== false,
+    chords: row['chords'] !== false,
   }
 }
 

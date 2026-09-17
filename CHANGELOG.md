@@ -14,6 +14,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The structure cell's settings, settled (§25.3).** Drawn as is three icon toggles that combine
+  (beads, sticks, tube); every gap in a chain is a dashed run of ink, always, and the *gaps* option
+  is gone; chords and the hovered contact's chord are thick ink cylinders rather than one-pixel
+  lines; the cell is always orthographic and always lit, so those two options are gone; the fog,
+  the chords, the names and the centre are icon toggles; the *ghost opacity* slider (0.15 by
+  default) is the one opacity, applied to what is outside the window or ghosted from the key; the
+  map's *legend* switch hides the key of the structure cell too. A stored style still reads back:
+  the old representation becomes the three toggles.
 - **The structure cell, in the hand (§25.3–25.5).** The sequence box of the three structure tasks
   is seeded from what the map shows: the locus inside one sequence, every sequence on screen when
   the view spans several (`IV, V`), and empty — every sequence — for the whole genome. A model

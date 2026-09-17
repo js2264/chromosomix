@@ -211,7 +211,7 @@ try {
     await sleep(1200)
   }
   // The centre of rotation and the axes, from the menu's toggle; the menu closed for the shot.
-  await page.locator('.structure-menu .structure-field').filter({ hasText: 'centre and axes' }).locator('input').check()
+  await page.click('.structure-menu .structure-toggle[title*="centre and axes"]')
   await sleep(1200)
   await page.click('.structure-menu-toggle')
   await sleep(400)

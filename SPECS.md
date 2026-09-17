@@ -6830,9 +6830,17 @@ none was chosen; a model that has just arrived, dropped, computed, or **computed
 same row**, is the one it draws; and a row the reader picked and then removed from the card
 **empties the cell**, which says so, rather than quietly showing the next model (a remembered
 choice whose row is gone by the next session falls back to the first) — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
-on the web, folded into the one file of the standalone build. Beads, sticks, both, or a tube; a
-halo on the hovered bead; a dashed chord across a hovered contact; a fog for depth; lit or flat;
-perspective or orthographic; the camera remembered per file. A phased file draws both homologues,
+on the web, folded into the one file of the standalone build. **Beads, sticks and a tube as three
+toggles that combine** (the tube alone by default); a **dashed run of ink across every gap** in a
+chain, always, so a chain with a missing bead reads as one chain with a hole and not as two; a halo
+on the hovered bead; a **dashed chord of ink** across a hovered contact and the loops as chords of
+ink, both drawn as cylinders rather than one-pixel lines so they are seen at the size of the tube
+they cross; a fog for depth, on by default, with a toggle and a depth; lit, always; **orthographic,
+always** — a model has no horizon, and perspective made the same distance read shorter at the back;
+the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
+the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
+everything else is drawn whole. The map's *legend* switch (§7) hides the key here too, so one switch
+says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it; the cell's own canvas, key, labels and menu are

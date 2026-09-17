@@ -36,7 +36,6 @@ import {
   STRUCTURE_COLOUR_SCORE,
   STRUCTURE_COLOUR_SEQUENCE,
   STRUCTURE_OTHERS,
-  STRUCTURE_REPRESENTATIONS,
   structureOf,
 } from '../annotations/types'
 import type { AnnotationStore } from '../annotations/store'
@@ -1178,8 +1177,10 @@ export class StructurePanel implements DeckCell {
     const entry = this.entry
     if (structure === null || entry === null) return null
     const style = this.style()
-    const projection = style.projection
-    if (this.camera.projection !== projection) this.camera = { ...this.camera, projection }
+    // Orthographic, always: a model has no horizon, and a perspective view of
+    // a fibre made distances at the back read shorter than the same at the
+    // front, which is a lie about the one thing the model says.
+    if (this.camera.projection !== 'orthographic') this.camera = { ...this.camera, projection: 'orthographic' }
     // Keyed on the reader's own sequence colours too: a swatch changed on
     // the key is a colouring changed.
     const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}`
@@ -1307,8 +1308,9 @@ export class StructurePanel implements DeckCell {
     // The key first, before the renderer is asked for anything: it is DOM,
     // it says what the colours mean, and its rows are controls — a sequence
     // ghosted from it, a colour picked on it — that should work while the
-    // GPU is still loading, or gave no context at all.
-    this.paintKey(view.colours.key)
+    // GPU is still loading, or gave no context at all. The map's *legend*
+    // switch hides it here too: one switch for what the figure carries.
+    this.paintKey(getPlotOptions().legend ? view.colours.key : { kind: 'none', title: '' })
     if (this.renderer === null) {
       this.say(WAITING.renderer)
       return
@@ -1581,12 +1583,6 @@ export class StructurePanel implements DeckCell {
       node.addEventListener('input', () => onChange(Number(node.value)))
       return el('label', { class: 'structure-field' }, el('span', { text: label }), node)
     }
-    const toggle = (label: string, on: boolean, onChange: (on: boolean) => void): HTMLElement => {
-      const node = el('input', { type: 'checkbox' })
-      node.checked = on
-      node.addEventListener('change', () => onChange(node.checked))
-      return el('label', { class: 'structure-field structure-toggle' }, node, el('span', { text: label }))
-    }
     const colourings: Array<{ value: string; text: string }> = [
       { value: STRUCTURE_COLOUR_SEQUENCE, text: 'sequence' },
       ...(structure !== null && structure.haplotypes.length > 1
@@ -1645,6 +1641,10 @@ export class StructurePanel implements DeckCell {
     // cell's side. Left off with one row, since a picker with one option is a
     // label that pretends to be a control.
     const models = (store?.entries ?? []).filter((row) => row.kind === 'structure')
+    const toggleIcon = (name: Parameters<typeof icon>[0], title: string, on: boolean, onChange: (on: boolean) => void): HTMLElement =>
+      iconButton(name, title, () => onChange(!on), { class: `btn btn-icon structure-toggle${on ? ' is-on' : ''}`, size: 14 })
+    const toggles = (label: string, ...buttons: HTMLElement[]): HTMLElement =>
+      el('div', { class: 'structure-field structure-toggles' }, el('span', { text: label }), el('span', { class: 'structure-toggle-row' }, ...buttons))
     this.menu.replaceChildren(
       ...(models.length > 1
         ? [
@@ -1656,50 +1656,63 @@ export class StructurePanel implements DeckCell {
             ),
           ]
         : []),
-      select(
+      // What the model is drawn as: any of the three together.
+      toggles(
         'drawn as',
-        STRUCTURE_REPRESENTATIONS.map((r) => ({ value: r, text: r })),
-        style.representation,
-        (value) => this.restyle({ representation: value as StructureStyle['representation'] }),
+        toggleIcon('circle-dot', 'Beads at each place', style.beads, (on) => this.restyle({ beads: on })),
+        toggleIcon('minus', 'Sticks between neighbours', style.sticks, (on) => this.restyle({ sticks: on })),
+        toggleIcon('spline', 'A tube through each run', style.tube, (on) => this.restyle({ tube: on })),
       ),
       select('colour by', colourings, style.colourBy, (value) => this.restyle({ colourBy: value })),
       ...(loopRows.length > 0 || hasMarks || style.loops !== ''
-        ? [select('loops as chords', loopChoices, style.loops, (value) => this.restyle({ loops: value }))]
+        ? [
+            el(
+              'div',
+              { class: 'structure-field structure-field-with-toggle' },
+              el('span', { text: 'loops as chords' }),
+              toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on })),
+              (() => {
+                const node = el('select', { class: 'select select-tiny' })
+                for (const option of loopChoices) node.append(el('option', { value: option.value, text: option.text }))
+                node.value = style.loops
+                node.addEventListener('change', () => this.restyle({ loops: node.value }))
+                return node
+              })(),
+            ),
+          ]
         : []),
       range('bead radius', style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v })),
       range('tube radius', style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v })),
-      range('opacity', style.opacity, 0.1, 1, 0.05, (v) => this.restyle({ opacity: v })),
-      range('fog', style.fog, 0, 1, 0.05, (v) => this.restyle({ fog: v })),
+      range('ghost opacity', style.opacity, 0, 1, 0.05, (v) => this.restyle({ opacity: v })),
+      el(
+        'div',
+        { class: 'structure-field structure-field-with-toggle' },
+        el('span', { text: 'fog' }),
+        toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
+        (() => {
+          const node = el('input', { class: 'structure-range', type: 'range' })
+          node.min = '0'
+          node.max = '1'
+          node.step = '0.05'
+          node.value = String(style.fog)
+          node.addEventListener('input', () => this.restyle({ fog: Number(node.value) }))
+          return node
+        })(),
+      ),
       select(
         'outside the window',
         STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })),
         style.others,
         (value) => this.restyle({ others: value as StructureStyle['others'] }),
       ),
-      select(
-        'gaps',
-        [
-          { value: 'break', text: 'break the tube' },
-          { value: 'dashed', text: 'dashed' },
-        ],
-        style.gaps,
-        (value) => this.restyle({ gaps: value as StructureStyle['gaps'] }),
-      ),
-      select(
-        'projection',
-        [
-          { value: 'perspective', text: 'perspective' },
-          { value: 'orthographic', text: 'orthographic' },
-        ],
-        style.projection,
-        (value) => this.restyle({ projection: value as StructureStyle['projection'] }),
-      ),
       ...(structure !== null && structure.haplotypes.length > 1
         ? [select('show', haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))]
         : []),
-      toggle('lit', style.lit, (on) => this.restyle({ lit: on })),
-      toggle('centre and axes', style.axes, (on) => this.restyle({ axes: on })),
-      toggle('sequence names', style.labels, (on) => this.restyle({ labels: on })),
+      toggles(
+        'show',
+        toggleIcon('tag', style.labels ? 'Hide the sequence names' : 'Show the sequence names', style.labels, (on) => this.restyle({ labels: on })),
+        toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
+      ),
       el(
         'div',
         { class: 'structure-export' },
@@ -1739,7 +1752,7 @@ export class StructurePanel implements DeckCell {
     const width = Math.max(1, this.wrap.clientWidth)
     const height = Math.max(1, this.wrap.clientHeight)
     const page = new VectorPage(width, height)
-    if (view.style.representation === 'tube') {
+    if (view.style.tube) {
       const raster = this.exportCanvas(300, now)
       if (raster === null) return
       page.ctx.drawImage(raster, 0, 0, width, height)
