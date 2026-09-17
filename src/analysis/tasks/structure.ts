@@ -172,6 +172,22 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     max: 6,
   },
   {
+    kind: 'choice',
+    key: 'weights',
+    label: 'Weight pairs by',
+    default: 'contacts',
+    hint:
+      'How much each counted pair holds its beads at the distance its count implies. By the ' +
+      'count, a pair seen a thousand times is a thousand times as sure as one seen once; by its ' +
+      'square root, a weak pair is still heard on a deep map; equally, every counted pair is one ' +
+      'vote, which lets the far, weak pairs outvote the near diagonal.',
+    options: [
+      { value: 'contacts', label: 'the contact count' },
+      { value: 'sqrt', label: 'its square root' },
+      { value: 'equal', label: 'nothing: every counted pair alike' },
+    ],
+  },
+  {
     kind: 'number',
     key: 'iterations',
     label: 'Refinement steps',

@@ -6908,16 +6908,26 @@ toolkit ends with: a contact count `c` is read as a distance `d = c^(−1/α)` �
 map* assumes the other way round, `α` exposed and 3 by default; the pairs the map never counted
 (a zero, a `NaN`) are filled so the matrix is complete; classical MDS (Torgerson: double-centred
 squared distances, three leading eigenvectors by subspace iteration) gives a start; **SMACOF** (de
-Leeuw's majorisation, the unweighted Guttman transform) moves the beads until the model's
-distances match the map's over the pairs the map counted — a filled pair carries no weight, its
-target being whatever distance the model has, so it neither pulls nor pushes — stopping at the
-step count asked for or once a step improves the stress by less than a millionth. Two departures
-from ShRec3D are deliberate and named here: its shortest-path filling is cubic in the bead count
-and would not finish in a tab, so the filling is the mean observed distance at the same
-separation on the same sequence, walking outward to the nearest separation with an observation,
-and the mean observed trans distance across two; and ShRec3D stops at the classical solution,
-which honours the filled pairs as much as the counted ones. The model is centred and scaled to a
-unit root-mean-square radius: a map carries no physical unit and `c^(−1/α)` is in none (§25.8).
+Leeuw's majorisation, taken one bead at a time as Gansner, Koren and North's localised stress
+majorisation) moves the beads until the model's distances match the map's over the pairs the map
+counted, **each pair weighted by how often the map counted it** — a filled pair weighs nothing
+— stopping at the step count asked for or once a step improves the weighted stress by less than a
+millionth. The weighting is the point of refining at all: the count sets a pair's target, but with
+every pair weighing the same the stress is the far, weak, noisy pairs' and the near diagonal, where
+the map is most certain, is fitted worst. **Weight pairs by** offers the count (a pair seen a
+thousand times is a thousand times as sure as one seen once, which is what a Poisson count's
+precision says; the default), its square root (a weak pair is still heard on a deep map), or
+nothing (every counted pair one vote: the plain SMACOF of every toolkit, kept so a reader can see
+what the weighting changes). Three departures from ShRec3D are deliberate and named here: its
+shortest-path filling is cubic in the bead count and would not finish in a tab, so the filling is
+the mean observed distance at the same separation on the same sequence, walking outward to the
+nearest separation with an observation, and the mean observed trans distance across two; ShRec3D
+stops at the classical solution, which honours the filled pairs as much as the counted ones; and it
+has no refinement to weight. The bead-at-a-time form is what makes the weighting affordable: the
+full weighted Guttman transform is a linear solve in the weight Laplacian, and the localised one
+costs a pass over the pairs like the unweighted one does, and never raises the stress. The model
+is centred and scaled to a unit root-mean-square radius: a map carries no physical unit and
+`c^(−1/α)` is in none (§25.8).
 
 **What it is solved over** is what the reader is looking at: the view's block **as drawn** — the
 loaded locus at its drawn resolution, pooled cells included, which is the one task that honours
@@ -6930,7 +6940,8 @@ out of the model, and the run says how many were. More beads than `RECONSTRUCT_M
 (2,500) is refused in the estimate with the way out — zoom out so the block is drawn coarser, or
 name a sequence — because every refinement step is a pass over every pair. The run's other output
 is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
-the steps taken, the final stress and Spearman's ρ between `1/d` in the model and the contacts —
+the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
+model and the contacts —
 the same number *Model versus map* would give the row, so a reader can see how well the model
 honours the map before believing it.
 
@@ -6943,8 +6954,9 @@ what *Model versus map* and *Spatial tracks* read, persists as a recipe and come
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
 Synthetic-card export road. The golden is the one a reconstruction can honestly have
 (`structure-reconstruct.test.ts`): a helix whose contacts were made from it by the law comes back
-as itself up to a rigid motion, and a chain with most far pairs uncounted comes back with ρ above
-0.9.
+as itself up to a rigid motion, a chain with most far pairs uncounted comes back with ρ above 0.9,
+and a helix whose weak far pairs were corrupted keeps its near pairs when weighted by the count
+and loses them when every pair weighs the same.
 
 ### 25.7 Export
 

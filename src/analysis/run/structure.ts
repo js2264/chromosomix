@@ -42,7 +42,9 @@ import {
   spearman,
   stressOf,
   subMatrix,
+  weightsFromContacts,
   type Coordinates,
+  type WeightMode,
 } from '../../structure/reconstruct'
 import {
   agreement,
@@ -459,6 +461,8 @@ export const runReconstruct: TaskRunner = async (job) => {
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const alpha = Math.max(0.5, numParam(job.params, 'alpha', 3))
   const iterations = Math.max(0, Math.round(numParam(job.params, 'iterations', 150)))
+  const weightText = strParam(job.params, 'weights', 'contacts')
+  const weightMode: WeightMode = weightText === 'sqrt' || weightText === 'equal' ? weightText : 'contacts'
   const regionText = strParam(job.params, 'region', '').trim()
   const span = regionSpan(job, regionText)
   if (span === undefined) {
@@ -526,19 +530,22 @@ export const runReconstruct: TaskRunner = async (job) => {
     return []
   }
   const kept = subMatrix(distances, m, keep)
+  // The weights from the same counts the distances came from, over the same
+  // beads: how often the map saw a pair is how hard the pair holds its beads.
+  const weights = subMatrix(weightsFromContacts(placedValues, m, weightMode), m, keep)
   const keptGroup = Int32Array.from(keep, (i) => placedGroup[i])
   const keptIndex = Int32Array.from(keep, (i) => placedIndex[i])
   const n = keep.length
   job.progress(1, iterations + 2, 'classical scaling')
   await job.breathe()
   const coords = classicalMds(fillDistances(kept, n, keptGroup, keptIndex), n)
-  let stress = stressOf(kept, n, coords)
+  let stress = stressOf(kept, n, coords, weights)
   let steps = 0
   for (; steps < iterations; steps++) {
     // Between every step, not inside: the cancel lands here (`job.breathe`).
     await job.breathe()
-    const before = smacofStep(kept, n, coords)
-    const after = stressOf(kept, n, coords)
+    const before = smacofStep(kept, n, coords, weights)
+    const after = stressOf(kept, n, coords, weights)
     stress = after
     job.progress(2 + steps, iterations + 2, `refining · stress ${after.toExponential(2)}`)
     if (before - after < 1e-6 * before) {
@@ -592,8 +599,17 @@ export const runReconstruct: TaskRunner = async (job) => {
       { what: 'Sequences', value: `${sequences.size.toLocaleString()}` },
       { what: 'Pairs counted', value: `${fit.pairs.toLocaleString()} of ${((n * (n - 1)) / 2).toLocaleString()}` },
       { what: 'Distance law', value: `d = c^(−1/${alpha})` },
+      {
+        what: 'Pairs weighted by',
+        value:
+          weightMode === 'contacts'
+            ? 'the contact count'
+            : weightMode === 'sqrt'
+              ? 'the square root of the contact count'
+              : 'nothing: every counted pair alike',
+      },
       { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
-      { what: 'Stress', value: stress.toExponential(3) },
+      { what: 'Weighted stress', value: stress.toExponential(3) },
       { what: 'Spearman ρ (1/d vs contacts)', value: Number.isNaN(fit.rho) ? '—' : fit.rho.toFixed(3) },
     ],
   }

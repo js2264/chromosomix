@@ -8,9 +8,19 @@
  * so the matrix is complete, classical MDS (Torgerson) turns the completed
  * matrix into three coordinates per bead, and SMACOF (de Leeuw's majorisation)
  * moves the beads until the distances the model has match the distances the
- * map implied, over the pairs the map counted and no other.
+ * map implied, over the pairs the map counted and no other — each pair
+ * **weighted by how often the map counted it**, so a pair seen ten thousand
+ * times holds the beads where it says and a pair seen once barely moves them.
  *
- * Two departures from ShRec3D, both deliberate and both named in SPECS §25.6.
+ * That weighting is the point of refining at all. The count sets a pair's
+ * target distance, but with every pair weighing the same the stress is
+ * dominated by the far, weak, noisy pairs — a zero-count neighbour of a
+ * 10,000-count pair is not a pair the model should honour equally — and the
+ * near diagonal, where the map is most certain, is the part fitted worst.
+ * `weightsFromContacts` turns the counts into weights; `smacofStep` takes
+ * them; a pair the map never counted weighs nothing.
+ *
+ * Three departures from ShRec3D, all deliberate and all named in SPECS §25.6.
  * Its filling is a shortest-path closure over every pair, which is cubic in
  * the bead count and the one step that would not finish in a tab; the filling
  * here is the **mean observed distance at the same separation** for a pair on
@@ -18,9 +28,9 @@
  * which is what the closure converges towards on a map that decays with
  * distance and costs a pass over the matrix. And ShRec3D stops at the classical
  * solution; the refinement is what makes the model honour the counted pairs
- * rather than the filled ones, because a filled pair carries **no weight** in it:
- * its target is whatever distance the model currently has, so it neither pulls
- * nor pushes (the EM reading of a missing datum in a Guttman transform).
+ * rather than the filled ones, because a filled pair carries **no weight** in
+ * it. And the refinement is weighted by the counts, where ShRec3D has no
+ * refinement to weight.
  *
  * Everything here is arrays in and arrays out — no worker, no store, no DOM —
  * so the runner can breathe between iterations and the test can hold the
@@ -172,6 +182,38 @@ export function fillDistances(
   return out
 }
 
+/** How a pair's contact count becomes its weight in the fit. */
+export type WeightMode = 'contacts' | 'sqrt' | 'equal'
+
+/**
+ * A weight per pair from the counts, `0` where the map counted nothing.
+ *
+ * `contacts` is the count itself — a pair counted a thousand times is a
+ * thousand times as sure as a pair counted once, which is what a Poisson
+ * count's precision says. `sqrt` is the count's standard deviation's worth,
+ * the gentler reading that lets a weak pair still be heard on a deep map.
+ * `equal` is one per counted pair: the plain SMACOF of every toolkit, kept
+ * so a reader can see what the weighting changes. Symmetrised as the
+ * distances are, by the mean of the two triangles.
+ */
+export function weightsFromContacts(values: Float32Array, n: number, mode: WeightMode): Float64Array {
+  const out = new Float64Array(n * n)
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = values[i * n + j]
+      const b = values[j * n + i]
+      const okA = Number.isFinite(a) && a > 0
+      const okB = Number.isFinite(b) && b > 0
+      if (!okA && !okB) continue
+      const count = okA && okB ? (a + b) / 2 : okA ? a : b
+      const w = mode === 'contacts' ? count : mode === 'sqrt' ? Math.sqrt(count) : 1
+      out[i * n + j] = w
+      out[j * n + i] = w
+    }
+  }
+  return out
+}
+
 /**
  * Torgerson's classical scaling: the three leading eigenvectors of the
  * double-centred squared distances, scaled by the roots of their eigenvalues.
@@ -273,65 +315,79 @@ function orthonormalise(vectors: Float64Array[]): void {
 }
 
 /**
- * One SMACOF step: the Guttman transform of the configuration towards the
- * target distances, over the pairs that have one.
+ * One SMACOF sweep: every bead moved to where the weighted majorant of the
+ * stress puts it, given the others (Gansner, Koren & North's localised
+ * stress majorisation, which is de Leeuw's Guttman transform taken one bead
+ * at a time).
  *
- * Unweighted, so the transform is a closed form (`X ← B(X) X / n`) rather than
- * a linear solve. A pair with no target is given its current distance, which
- * makes its term `(x_i − x_j)` exactly — the term a satisfied pair contributes
- * — so it moves nothing. Returns the normalised stress **before** the step,
- * over the counted pairs: `Σ (δ − d)² / Σ δ²`, 0 for a perfect fit.
+ * `x_i ← Σ_j w_ij (x_j + δ_ij (x_i − x_j) / d_ij) / Σ_j w_ij`, in place, so a
+ * bead moved early in the sweep is where its later neighbours see it — the
+ * Gauss–Seidel reading, which converges faster than moving all at once and
+ * never raises the stress: each move minimises a function that sits above
+ * the stress and touches it where the bead was. Weighted, and the weights are
+ * what make this a closed form: the full weighted Guttman transform is a
+ * linear solve in the weight Laplacian, which is a pseudo-inverse of a
+ * 2,500² matrix or a conjugate-gradient inner loop, and the bead-at-a-time
+ * form costs one pass over the pairs like the unweighted one does.
+ *
+ * `weights` is `null` for one per counted pair. A pair with no target, or a
+ * zero weight, contributes nothing. Returns the weighted normalised stress
+ * **before** the sweep: `Σ w (δ − d)² / Σ w δ²`, 0 for a perfect fit.
  */
-export function smacofStep(target: Float64Array, n: number, coords: Coordinates): number {
+export function smacofStep(
+  target: Float64Array,
+  n: number,
+  coords: Coordinates,
+  weights: Float64Array | null = null,
+): number {
+  const before = stressOf(target, n, coords, weights)
   const { x, y, z } = coords
-  const nx = new Float64Array(n)
-  const ny = new Float64Array(n)
-  const nz = new Float64Array(n)
-  let raw = 0
-  let norm = 0
   for (let i = 0; i < n; i++) {
     let sx = 0
     let sy = 0
     let sz = 0
+    let sw = 0
     const row = i * n
+    const xi = x[i]
+    const yi = y[i]
+    const zi = z[i]
     for (let j = 0; j < n; j++) {
       if (j === i) continue
-      const dx = x[i] - x[j]
-      const dy = y[i] - y[j]
-      const dz = z[i] - z[j]
-      const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
       const delta = target[row + j]
-      let ratio: number
-      if (Number.isNaN(delta)) ratio = 1
-      else if (d > 1e-12) {
-        ratio = delta / d
-        const gap = delta - d
-        raw += gap * gap
-        norm += delta * delta
-      } else {
-        // Two beads on one point with a distance to keep: push along nothing
-        // in particular rather than divide by zero; the next step separates
-        // them once any other pair has moved one.
-        ratio = 1
-        raw += delta * delta
-        norm += delta * delta
-      }
-      sx += ratio * dx
-      sy += ratio * dy
-      sz += ratio * dz
+      if (Number.isNaN(delta)) continue
+      const w = weights === null ? 1 : weights[row + j]
+      if (!(w > 0)) continue
+      const dx = xi - x[j]
+      const dy = yi - y[j]
+      const dz = zi - z[j]
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      // Two beads on one point with a distance to keep have no direction to
+      // keep it along: this term pulls onto the other bead and the next
+      // sweep separates them once any other pair has moved one.
+      const ratio = d > 1e-12 ? delta / d : 0
+      sx += w * (x[j] + ratio * dx)
+      sy += w * (y[j] + ratio * dy)
+      sz += w * (z[j] + ratio * dz)
+      sw += w
     }
-    nx[i] = sx / n
-    ny[i] = sy / n
-    nz[i] = sz / n
+    if (sw <= 0) continue
+    x[i] = sx / sw
+    y[i] = sy / sw
+    z[i] = sz / sw
   }
-  x.set(nx)
-  y.set(ny)
-  z.set(nz)
-  return norm > 0 ? raw / norm : 0
+  return before
 }
 
-/** The stress of a configuration against its targets, without moving it. */
-export function stressOf(target: Float64Array, n: number, coords: Coordinates): number {
+/**
+ * The weighted stress of a configuration against its targets, without
+ * moving it: `Σ w (δ − d)² / Σ w δ²` over the counted pairs.
+ */
+export function stressOf(
+  target: Float64Array,
+  n: number,
+  coords: Coordinates,
+  weights: Float64Array | null = null,
+): number {
   const { x, y, z } = coords
   let raw = 0
   let norm = 0
@@ -339,12 +395,14 @@ export function stressOf(target: Float64Array, n: number, coords: Coordinates): 
     for (let j = i + 1; j < n; j++) {
       const delta = target[i * n + j]
       if (Number.isNaN(delta)) continue
+      const w = weights === null ? 1 : weights[i * n + j]
+      if (!(w > 0)) continue
       const dx = x[i] - x[j]
       const dy = y[i] - y[j]
       const dz = z[i] - z[j]
       const gap = delta - Math.sqrt(dx * dx + dy * dy + dz * dz)
-      raw += gap * gap
-      norm += delta * delta
+      raw += w * gap * gap
+      norm += w * delta * delta
     }
   }
   return norm > 0 ? raw / norm : 0
@@ -443,16 +501,17 @@ export function reconstruct(
   n: number,
   group: Int32Array,
   index: Int32Array,
-  options: { iterations?: number; tolerance?: number } = {},
+  options: { iterations?: number; tolerance?: number; weights?: Float64Array | null } = {},
 ): { coords: Coordinates; stress: number; steps: number } {
   const iterations = options.iterations ?? 200
   const tolerance = options.tolerance ?? 1e-6
+  const weights = options.weights ?? null
   const coords = classicalMds(fillDistances(distances, n, group, index), n)
-  let stress = stressOf(distances, n, coords)
+  let stress = stressOf(distances, n, coords, weights)
   let steps = 0
   for (; steps < iterations; steps++) {
-    const before = smacofStep(distances, n, coords)
-    const after = stressOf(distances, n, coords)
+    const before = smacofStep(distances, n, coords, weights)
+    const after = stressOf(distances, n, coords, weights)
     stress = after
     if (before - after < tolerance * before) {
       steps++

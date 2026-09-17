@@ -21,6 +21,7 @@ import {
   spearman,
   stressOf,
   subMatrix,
+  weightsFromContacts,
   type Coordinates,
 } from '@/structure/reconstruct'
 
@@ -178,6 +179,66 @@ describe('the solver', () => {
       expect(after).toBeLessThanOrEqual(before + 1e-12)
       stress = after
     }
+  })
+
+  it('weights a pair by its count, so a noisy weak pair cannot pull a strong one off', () => {
+    const n = 40
+    const truth = helix(n)
+    const group = new Int32Array(n)
+    const index = Int32Array.from({ length: n }, (_, i) => i)
+    // Contacts by the law, then every pair further than six beads apart
+    // corrupted: their counts are small and their distances are wrong.
+    const values = contactsOf(truth, ALPHA, () => false)
+    let seed = 7
+    const noise = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return 0.3 + (seed / 2147483648) * 2.4
+    }
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i !== j && Math.abs(i - j) > 6) values[i * n + j] *= noise()
+      }
+    }
+    const d = distancesFromContacts(values, n, ALPHA)
+    const nearError = (c: Coordinates): number => {
+      let sum = 0
+      let count = 0
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j <= Math.min(n - 1, i + 3); j++) {
+          const want = Math.hypot(truth.x[i] - truth.x[j], truth.y[i] - truth.y[j], truth.z[i] - truth.z[j])
+          const have = Math.hypot(c.x[i] - c.x[j], c.y[i] - c.y[j], c.z[i] - c.z[j])
+          sum += Math.abs(have / want - 1)
+          count++
+        }
+      }
+      return sum / count
+    }
+    // Compared at the truth's scale: each model is scaled so its mean
+    // consecutive-bead distance is the truth's.
+    const rescale = (c: Coordinates): Coordinates => {
+      let want = 0
+      let have = 0
+      for (let i = 0; i + 1 < n; i++) {
+        want += Math.hypot(truth.x[i] - truth.x[i + 1], truth.y[i] - truth.y[i + 1], truth.z[i] - truth.z[i + 1])
+        have += Math.hypot(c.x[i] - c.x[i + 1], c.y[i] - c.y[i + 1], c.z[i] - c.z[i + 1])
+      }
+      const k = want / have
+      return { x: c.x.map((v) => v * k), y: c.y.map((v) => v * k), z: c.z.map((v) => v * k) }
+    }
+    const equal = reconstruct(d, n, group, index, { iterations: 300, weights: weightsFromContacts(values, n, 'equal') })
+    const byCount = reconstruct(d, n, group, index, { iterations: 300, weights: weightsFromContacts(values, n, 'contacts') })
+    const equalNear = nearError(rescale(equal.coords))
+    const countNear = nearError(rescale(byCount.coords))
+    expect(countNear).toBeLessThan(equalNear)
+    expect(countNear).toBeLessThan(0.05)
+  })
+
+  it('reads the counts as weights: the count, its root, or one per counted pair, and nothing for a gap', () => {
+    const values = Float32Array.from([0, 16, 0, 16, 0, 0, 0, 4, 0])
+    // (1,2) is counted one way only, so it is that count, not half of it.
+    expect(Array.from(weightsFromContacts(values, 3, 'contacts'))).toEqual([0, 16, 0, 16, 0, 4, 0, 4, 0])
+    expect(Array.from(weightsFromContacts(values, 3, 'sqrt'))).toEqual([0, 4, 0, 4, 0, 2, 0, 2, 0])
+    expect(Array.from(weightsFromContacts(values, 3, 'equal'))).toEqual([0, 1, 0, 1, 0, 1, 0, 1, 0])
   })
 
   it('is deterministic: the same map gives the same model twice', () => {

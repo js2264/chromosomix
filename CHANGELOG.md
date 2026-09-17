@@ -18,9 +18,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   makes a structure from the contacts the view is holding — the whole loaded block at the
   resolution it is drawn at, cis and trans together — by ShRec3D's pipeline (contacts read as
   distances `c^(−1/α)`, the uncounted pairs filled, classical MDS) with SMACOF refinement over the
-  pairs the map counted; `α` and the step count are exposed, a sequence or a typed range restricts
-  it, more than 2,500 beads is refused with the way out, and a table reports the fit (stress and
-  Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
+  pairs the map counted, **each pair weighted by how often the map counted it** (the count, its
+  square root, or every pair alike — a choice on the form, the count by default), so the near
+  diagonal the map is surest of is what the model honours first; `α` and the step count are
+  exposed, a sequence or a typed range restricts it, more than 2,500 beads is refused with the way
+  out, and a table reports the fit (weighted stress and Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
   holds — dropped, named by URL or computed — is now listed on a **Structures** card of its own
   under the Tracks card, with *show in the deck* (which opens the structure cell where there is
   none and says which row it is drawing), a **bed3d** download, the provenance of a computed row

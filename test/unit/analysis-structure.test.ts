@@ -200,11 +200,19 @@ describe('model from the map', () => {
     expect(d(0, 1)).toBeLessThan(d(0, 5))
     expect(d(0, 5)).toBeLessThan(d(0, 19))
     const table = outputs.find((o): o is TableOutput => o.kind === 'table')
-    // 1/(1+s) read as (1+s)^(1/3) is a chain no three axes hold exactly, so
-    // the fit is good rather than perfect.
+    // 1/(1+s) read as (1+s)^(1/3) is a chain no three axes hold exactly, and
+    // weighting by the count puts the fit where the counts are — the near
+    // diagonal — so the rank agreement over *every* pair is good rather than
+    // perfect. Every counted pair weighed alike orders the far pairs better
+    // and the near ones worse.
     const rho = table?.rows.find((row) => String(row.what).startsWith('Spearman'))?.value
-    expect(Number(rho)).toBeGreaterThan(0.85)
+    expect(Number(rho)).toBeGreaterThan(0.75)
+    expect(table?.rows.find((row) => row.what === 'Pairs weighted by')?.value).toBe('the contact count')
     expect(notes).toEqual([])
+    const equal = await runReconstruct(blockJob({ alpha: 3, iterations: 100, weights: 'equal' }, []))
+    const equalTable = equal.find((o): o is TableOutput => o.kind === 'table')
+    expect(Number(equalTable?.rows.find((row) => String(row.what).startsWith('Spearman'))?.value)).toBeGreaterThan(0.85)
+    expect(equalTable?.rows.find((row) => row.what === 'Pairs weighted by')?.value).toMatch(/alike/)
   })
 
   it('takes the block as drawn: pooled cells make wider beads', async () => {
