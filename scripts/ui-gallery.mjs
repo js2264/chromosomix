@@ -1,0 +1,156 @@
+/**
+ * Drive the app in headless Chromium and write a gallery of screenshots.
+ *
+ * What a reviewer wants after a change to the UI: the real page, not a
+ * test's idea of it. Opens the yeast demo through the dev server, adds the
+ * demo structure beside the map, hovers both ways, colours the model by a
+ * track, opens a tracks cell, runs the spatial-tracks task, and saves one
+ * PNG per step. Software WebGL, so it runs in a container with no GPU.
+ *
+ *   npm run dev -- --host 127.0.0.1 --port 5173 &
+ *   node scripts/ui-gallery.mjs [out-dir]
+ *
+ * Playwright is resolved from the global install when it is not a dev
+ * dependency (`npm root -g`); Chromium from PLAYWRIGHT_BROWSERS_PATH.
+ */
+
+import { createRequire } from 'node:module'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+const require = createRequire(import.meta.url)
+function playwright() {
+  try {
+    return require('playwright')
+  } catch {
+    const root = execSync('npm root -g').toString().trim()
+    return require(join(root, 'playwright'))
+  }
+}
+const { chromium } = playwright()
+
+const OUT = process.argv[2] ?? 'gallery'
+const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
+mkdirSync(OUT, { recursive: true })
+const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
+const executablePath = browsers !== undefined && existsSync(join(browsers, 'chromium')) ? join(browsers, 'chromium') : undefined
+
+const browser = await chromium.launch({
+  ...(executablePath === undefined ? {} : { executablePath }),
+  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+})
+const page = await (await browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: 1 })).newPage()
+const errors = []
+page.on('pageerror', (e) => errors.push(String(e)))
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const shot = async (name) => { await page.screenshot({ path: `${OUT}/${name}.png` }); console.log('shot', name) }
+const fold = async (title) => { const b = await page.$(`button[title^="${title}"]`); if (b) { await b.click(); await sleep(600) } }
+const readout = () => page.evaluate(() => document.querySelector('.status-readout, .statusbar, footer')?.textContent ?? '')
+
+try {
+  await page.goto(`${BASE}/?config=${BASE}/demo/yeast/Yeast_microC.metacooler.json`)
+  await page.waitForFunction(() => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null, null, { timeout: 180000 })
+  await sleep(2500)
+  await fold('Show the Annotations panel')
+  const square = await page.$('button[title*="square" i]')
+  if (square) { await square.click(); await sleep(2500) }
+  await shot('01-map')
+  await fold('Fold the General panel')
+  await fold('Fold the Aesthetics panel')
+
+  // The structure, by URL through the Tracks card's box.
+  const card = page.locator('.card.annotation-card')
+  await card.locator('details.ann-url summary').first().click()
+  await card.locator('details.ann-url input').first().fill(`${BASE}/demo/yeast/Yeast_structure.g3d.gz`)
+  await card.locator('details.ann-url button', { hasText: 'add' }).first().click()
+  await page.waitForSelector('.deck-structure', { timeout: 60000 })
+  await page.waitForFunction(() => { const n = document.querySelector('.structure-note'); return n === null || n.classList.contains('hidden') }, null, { timeout: 90000 }).catch(() => {})
+  await sleep(5000)
+  await fold('Fold the Annotations panel')
+  await sleep(1000)
+  await shot('02-structure')
+  await page.click('.structure-frame')
+  await sleep(1500)
+  await shot('03-structure-framed')
+
+  // Hover a bead: sweep the canvas until the status bar names one.
+  const canvas = page.locator('.structure-wrap canvas').first()
+  const b = await canvas.boundingBox()
+  if (b) {
+    let found = false
+    for (let j = 3; j < 30 && !found; j += 2) for (let i = 3; i < 30 && !found; i += 2) {
+      await page.mouse.move(b.x + (b.width * i) / 32, b.y + (b.height * j) / 32)
+      await sleep(40)
+      if (/bead \d+ of/.test(await readout())) found = true
+    }
+    console.log('hovered bead:', found ? (await readout()).slice(0, 60) : 'none found')
+    await sleep(600)
+    await shot('04-hover-bead')
+  }
+
+  // Hover the map: the beads light and the chord joins the two ends.
+  const map = await page.locator('.heatmap-canvas').first().boundingBox()
+  if (map) {
+    await page.mouse.move(map.x + map.width * 0.6, map.y + map.height * 0.35)
+    await sleep(700)
+    await shot('05-hover-map')
+    await page.mouse.move(10, 10)
+  }
+
+  // The menu: colour by the first track.
+  await page.click('.structure-menu-toggle')
+  await sleep(300)
+  const options = await page.evaluate(() => Array.from(document.querySelectorAll('.structure-menu select option')).map((o) => o.value))
+  const track = options.find((o) => o.startsWith('track:'))
+  if (track) {
+    await page.locator('.structure-menu .structure-field').filter({ hasText: 'colour by' }).locator('select').selectOption(track)
+    await sleep(4000)
+  }
+  await shot('06-colour-by-track')
+  await page.click('.structure-menu-toggle')
+
+  // A tracks cell, with two tracks placed on it from the location control.
+  await page.click('.deck-add-toggle')
+  await page.click('.deck-add-tracks')
+  await page.waitForSelector('.deck-tracks', { timeout: 20000 })
+  await fold('Show the Annotations panel')
+  for (const id of ['demo-atac', 'demo-pol2']) {
+    const more = await page.$(`.ann-row[data-id="${id}"] .ann-more`)
+    if (more) { await more.click(); await sleep(300) }
+  }
+  await page.evaluate(() => {
+    let n = 0
+    for (const row of document.querySelectorAll('.annotation-card .ann-place-map')) {
+      if (row.querySelector('.ann-place-name')?.textContent !== 'tracks') continue
+      const bottom = Array.from(row.querySelectorAll('button.ann-place')).find((x) => x.textContent === 'bottom')
+      if (bottom && !bottom.disabled && bottom.getAttribute('aria-pressed') !== 'true' && n < 2) { bottom.click(); n++ }
+    }
+  })
+  await sleep(2000)
+  await fold('Fold the Annotations panel')
+  await sleep(2500)
+  await shot('07-tracks-cell')
+
+  // The Analysis panel, and the spatial-tracks task run on the model.
+  await fold('Show the Analysis panel')
+  await sleep(800)
+  const row = page.locator('text=Model versus map').first()
+  if (await row.count()) await row.scrollIntoViewIfNeeded()
+  await sleep(400)
+  await shot('08-analysis-tasks')
+  await page.locator('text=Spatial tracks').first().click()
+  await sleep(800)
+  const select = page.locator('select').filter({ has: page.locator('option', { hasText: 'Yeast_structure' }) }).first()
+  if (await select.count()) await select.selectOption({ label: 'Yeast_structure' })
+  await page.locator('button', { hasText: /^run$/i }).first().click()
+  await page.waitForFunction(() => /Radial position/.test(document.body.textContent ?? ''), null, { timeout: 60000 }).catch(() => console.log('no radial track'))
+  await sleep(2500)
+  await shot('09-spatial-tracks')
+} catch (e) {
+  console.log('FAILED', String(e).slice(0, 500))
+  await shot('99-failure')
+}
+console.log('page errors:', errors.length === 0 ? 'none' : errors.slice(0, 5))
+await browser.close()
