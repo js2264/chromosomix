@@ -781,7 +781,12 @@ export class Session {
    */
   private assembly: Assembly | null = null
   /** Structure rows already seen, so a new one opens its cell (§25.3); `null` until the watch begins. */
-  private knownStructures: Set<string> | null = null
+  /**
+   * The structure rows seen so far, by id, with the payload each held — so a
+   * row that is *replaced* under its id (a reconstruction run again lands on
+   * the same row, §25.6) reads as a fresh model too, and the cell draws it.
+   */
+  private knownStructures: Map<string, unknown> | null = null
   /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
   private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
@@ -3482,16 +3487,21 @@ export class Session {
    */
   private watchStructureRows(store: AnnotationStore): void {
     const seen = this.knownStructures
-    const now = store.entries.filter((entry) => entry.kind === 'structure').map((entry) => entry.id)
+    const now = store.entries.filter((entry) => entry.kind === 'structure')
     if (seen === null) {
-      this.knownStructures = new Set(now)
+      this.knownStructures = new Map(now.map((entry) => [entry.id, entry.payload]))
       return
     }
     let fresh: string | null = null
-    for (const id of now) {
-      if (seen.has(id)) continue
-      seen.add(id)
-      fresh = id
+    for (const entry of now) {
+      const known = seen.has(entry.id)
+      const held = seen.get(entry.id)
+      // New, or the same id with a payload it did not have before: a row
+      // that is still loading is noted and not shown until it can be.
+      const replaced = known && entry.payload !== undefined && held !== undefined && held !== entry.payload
+      seen.set(entry.id, entry.payload)
+      if (known && !replaced) continue
+      fresh = entry.id
     }
     // …and it is the one the cell draws: a model that has just arrived — a
     // file dropped, a reconstruction landing — is the one the reader is

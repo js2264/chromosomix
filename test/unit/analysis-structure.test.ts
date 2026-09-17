@@ -266,3 +266,60 @@ describe('model from the map', () => {
     expect(notes.some((note) => /1 of 20 cells had no counted pair/.test(note))).toBe(true)
   })
 })
+
+describe('model from the map, over several sequences', () => {
+  /** Two sequences of 10 bins, one block over both, as the view would hold it. */
+  function twoJob(params: Params, notes: string[] = []): JobContext {
+    const base = job(params, notes)
+    const n = BINS
+    const values = new Float32Array(n * n)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) values[r * n + c] = r === c ? 0 : 100 / (1 + Math.abs(r - c))
+    }
+    const mc = base.mc as unknown as Record<string, unknown>
+    mc['nContigs'] = 2
+    mc['chromnames'] = ['I', 'II']
+    mc['chromsizes'] = new Map([['I', 10 * BINSIZE], ['II', 10 * BINSIZE]])
+    mc['contigExtent'] = (cid: number) => (cid === 0 ? [0, 10] : [10, 20]) as [number, number]
+    mc['hasContig'] = (name: string) => name === 'I' || name === 'II'
+    mc['contigId'] = (name: string) => (name === 'I' ? 0 : 1)
+    const block = { nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n], binsPerCell: 1 }
+    return { ...base, inputs: { ...base.inputs, block } } as unknown as JobContext
+  }
+
+  it('models every sequence in the block when the box is empty, cis and trans together', async () => {
+    const outputs = await runReconstruct(twoJob({ iterations: 20 }))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.contigs).toEqual(['I', 'II'])
+    expect(model.payload.data.length).toBe(BINS)
+    expect(model.label).toBe('3D model · 2 sequences')
+  })
+
+  it('takes a comma-separated list, and the sequences named alone', async () => {
+    const outputs = await runReconstruct(twoJob({ region: 'II', iterations: 20 }))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.contigs).toEqual(['II'])
+    expect(model.payload.data.length).toBe(10)
+    const both = await runReconstruct(twoJob({ region: 'I, II', iterations: 20 }))
+    const set = both.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (set === undefined || set.payload.kind !== 'features') throw new Error('no model')
+    expect(set.payload.data.length).toBe(BINS)
+    expect(set.label).toBe('3D model · I, II')
+  })
+
+  it('leaves the cells between two named stretches out', async () => {
+    const outputs = await runReconstruct(twoJob({ region: 'I:0-30000, II:70000-100000', iterations: 20 }))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.length).toBe(6)
+    expect(Array.from(model.payload.data.start)).toEqual([0, 10000, 20000, 70000, 80000, 90000])
+  })
+
+  it('names the sequence the file lacks, among several', async () => {
+    const notes: string[] = []
+    expect(await runReconstruct(twoJob({ region: 'I, chrZ' }, notes))).toEqual([])
+    expect(notes[0]).toMatch(/no sequence called chrZ/)
+  })
+})

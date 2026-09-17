@@ -1148,6 +1148,18 @@ export interface StructureStyle {
    * cell because it is a fact about how the model reads, like its colouring.
    */
   loops: string
+  /**
+   * Sequences drawn ghosted whatever the window says (§25.5): the key's
+   * click. By name, so the choice survives a re-read of the same file.
+   */
+  ghosted: string[]
+  /** A colour the reader chose for a sequence, by name, over the palette's. */
+  sequenceColours: Record<string, string>
+  /**
+   * How deep the fog sits, 0 (none) to 1 (the far side gone): space + scroll
+   * in the cell, or the slider. 0.6 is the depth cue the cell always had.
+   */
+  fog: number
 }
 
 export function defaultStructureStyle(): StructureStyle {
@@ -1165,6 +1177,9 @@ export function defaultStructureStyle(): StructureStyle {
     lit: true,
     haplotype: '',
     loops: '',
+    ghosted: [],
+    sequenceColours: {},
+    fog: 0.6,
   }
 }
 
@@ -1220,7 +1235,22 @@ export function structureStyleOf(value: unknown): StructureStyle {
     lit: row['lit'] !== false,
     haplotype: typeof haplotype === 'string' && haplotype.length <= 64 ? haplotype : '',
     loops: typeof row['loops'] === 'string' && (row['loops'] as string).length <= 200 ? (row['loops'] as string) : '',
+    ghosted: Array.isArray(row['ghosted'])
+      ? (row['ghosted'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 200).slice(0, 10000)
+      : [],
+    sequenceColours: sequenceColoursOf(row['sequenceColours']),
+    fog: bounded(row['fog'], 0, 1, fallback.fog),
   }
+}
+
+/** The reader's own sequence colours, kept only where both halves are strings. */
+function sequenceColoursOf(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null) return {}
+  const out: Record<string, string> = {}
+  for (const [name, colour] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(colour) && name.length <= 200) out[name] = colour
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

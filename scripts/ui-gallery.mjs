@@ -195,6 +195,57 @@ try {
   await page.click('.structure-menu-toggle')
   await sleep(600)
   await shot('13-model-picker')
+
+  // The key as a control: ghost a sequence, then the reader's own colour.
+  await page.click('.structure-menu-toggle')
+  await page.locator('.structure-menu .structure-field').filter({ hasText: 'colour by' }).locator('select').selectOption('sequence')
+  await sleep(1500)
+  const names = page.locator('.structure-key-name')
+  if (await names.count() > 2) {
+    await names.nth(1).dblclick()
+    await sleep(2000)
+  }
+  await shot('14-key-solo')
+  if (await names.count() > 2) {
+    await names.nth(1).dblclick()
+    await sleep(1200)
+  }
+  // The centre of rotation and the axes, from the menu's toggle.
+  await page.click('.structure-menu-toggle')
+  await page.locator('.structure-menu .structure-field').filter({ hasText: 'centre and axes' }).locator('input').check()
+  await sleep(1200)
+  await page.click('.structure-menu-toggle')
+  await shot('15-centre-axes')
+  // Hover a bead: the maps draw the place as lines across the heatmap.
+  const cv = page.locator('.structure-wrap canvas').first()
+  const bb = await cv.boundingBox()
+  if (bb) {
+    let found = false
+    for (let j = 3; j < 30 && !found; j += 2) for (let i = 3; i < 30 && !found; i += 2) {
+      await page.mouse.move(bb.x + (bb.width * i) / 32, bb.y + (bb.height * j) / 32)
+      await sleep(40)
+      if (/bead \d+ of/.test(await readout())) found = true
+    }
+    await sleep(600)
+    await shot('16-hover-echo-on-map')
+    await page.mouse.move(10, 10)
+  }
+  // Select mode: two beads become a loop mark, drawn as a chord.
+  await page.click('.structure-select')
+  await sleep(300)
+  if (bb) {
+    const hits = []
+    for (let j = 3; j < 30 && hits.length < 2; j += 3) for (let i = 3; i < 30 && hits.length < 2; i += 3) {
+      await page.mouse.move(bb.x + (bb.width * i) / 32, bb.y + (bb.height * j) / 32)
+      await sleep(40)
+      const text = await readout()
+      if (/bead \d+ of/.test(text) && !hits.some((h) => h.text === text)) hits.push({ x: bb.x + (bb.width * i) / 32, y: bb.y + (bb.height * j) / 32, text })
+    }
+    for (const hit of hits) { await page.mouse.click(hit.x, hit.y); await sleep(500) }
+    await sleep(2000)
+  }
+  await shot('17-select-loop-mark')
+  await page.click('.structure-select')
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 500))
   await shot('99-failure')

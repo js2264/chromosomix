@@ -6997,10 +6997,18 @@ export class MatrixPanel {
   showLocusEcho(locus: { contig: string; bp: number } | null): void {
     if (locus === null) {
       this.showLaneEcho(null)
+      this.heatmap.setLocusEcho(null)
       return
     }
     const units = this.locusAxes.cols?.locusToUnits(locus.contig, locus.bp) ?? []
     this.showLaneEcho(units.length === 0 ? null : { axis: 'cols', unit: units[0] })
+    // …and across the heatmap itself, on both axes the place is on: a bead
+    // pointed at in the structure cell is a line down and a line across the
+    // map, where the tick at the edge alone left the reader to find it.
+    const rows = this.locusAxes.rows?.locusToUnits(locus.contig, locus.bp) ?? []
+    this.heatmap.setLocusEcho(
+      units.length === 0 && rows.length === 0 ? null : { rows: rows[0] ?? null, cols: units[0] ?? null },
+    )
   }
 
   /**

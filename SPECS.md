@@ -6826,8 +6826,10 @@ the drawer, as the Synthetic card does (§18.5).
 
 **The structure cell** draws **one** structure row — the one the reader chose from the Structures
 card or from the cell's own **model** picker, remembered per file, or the first of the list where
-none was chosen or the chosen one is gone; a model that has just arrived, dropped or computed, is
-the one it draws — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
+none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
+same row**, is the one it draws; and a row the reader picked and then removed from the card
+**empties the cell**, which says so, rather than quietly showing the next model (a remembered
+choice whose row is gone by the next session falls back to the first) — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
 on the web, folded into the one file of the standalone build. Beads, sticks, both, or a tube; a
 halo on the hovered bead; a dashed chord across a hovered contact; a fog for depth; lit or flat;
 perspective or orthographic; the camera remembered per file. A phased file draws both homologues,
@@ -6835,7 +6837,15 @@ and the key's chips solo one. The picture takes the whole cell — a map's cell 
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it; the cell's own canvas, key, labels and menu are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
-what the cell shows afterwards. It opens when a structure is dropped or named by URL while a map or
+what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
+back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
+*move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
+elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
+the fog forward or pushes it back, which the menu's *fog* slider also sets, 0 to 1, 0.6 the depth the
+cell always had), or *select* (§25.4). A **tap** of the centre key alone shows or hides the **centre
+of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
+which the menu's *centre and axes* toggle also does; the keys act only while the pointer is over the
+cell, its canvas is focused or its dialog is open. It opens when a structure is dropped or named by URL while a map or
 the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
 link's `3d`; a second structure replaces the picture rather than adding a cell.
 
@@ -6856,6 +6866,22 @@ map a link names is held as the cell it would have been, under its name.
 
 ### 25.4 Hover, both ways
 
+A bead under the pointer is a place on every map and every lane: the maps draw it as a **dashed line
+down and across the heatmap** on each axis the place is on (one line on a turned map, whose rows are
+separation), and as the tick at the edge of the stacks the lanes already give a pointer on another
+panel's track; the status bar names the bead. The other way, a place pointed at on a map or a lane
+lights its beads and, for a contact, joins the two with a chord; the **ball** on a lit bead is
+translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
+of the model nearer the eye, as a ball at that place would.
+
+**Select mode** (the pointer-click button in the corner, the badge reading *select*) turns clicks
+into the reader's own marks (§8.1's manual annotations): the first bead clicked is held and named in
+the status bar; the same bead again is a **line** at its locus on both axes, another bead is an
+**arrowhead** — the map's loop mark — between the two; Esc lets the held bead go. The marks land in
+the Manual annotations card and are drawn by every map, lane and the tracks cell; an arrowhead made
+here is drawn on the model as a chord, since *loops as chords* switches to *your marks* when nothing
+else is chosen.
+
 A store of one place (`ui/hoverLocus.ts`): one locus from a track, a bead or the browser's axis,
 two from a map's cell, each saying which surface it came from, every subscriber ignoring its own.
 A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
@@ -6871,6 +6897,15 @@ by the marks card or an analysis form takes a click on a bead as the place, on b
 as a track's does.
 
 ### 25.5 Colour, chords, names
+
+**The key is a control.** Under *colour by sequence*, each sequence's row carries its swatch as a
+colour picker — click it to choose the sequence's colour, kept with the row by name over the
+palette's — and its name as a button: a **click ghosts** that sequence (drawn as the beads outside
+the window are, and hidden with them under *outside the window: hide*), a **double-click shows it
+alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
+window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
+**arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
+sets, so a loop marked on the map or in select mode is a chord on the model.
 
 One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
 own **score** and any column it carries; and, from the session, **a track's values** at each

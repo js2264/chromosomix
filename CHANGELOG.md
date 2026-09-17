@@ -14,6 +14,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The structure cell, in the hand (§25.3–25.5).** The sequence box of the three structure tasks
+  is seeded from what the map shows: the locus inside one sequence, every sequence on screen when
+  the view spans several (`IV, V`), and empty — every sequence — for the whole genome. A model
+  computed again onto the same row replaces the one the cell draws, and removing the model the
+  cell shows empties the cell. Under *colour by sequence* the key is a control: a click ghosts a
+  sequence, a double-click shows it alone, and the swatch is a colour picker. A badge in the
+  cell's top-left corner says what a drag or a click does — turn, move (Shift), centre (⌘ on a
+  Mac, Ctrl elsewhere: click a bead to turn about it; a tap alone shows or hides the centre ball
+  and axes), fog (Space + scroll moves the fog, which the menu's slider also sets), select. The
+  dialog's sidebar hides and shows from a button in the stage's corner. The halo on a lit bead is a
+  translucent ball in front of the bead it marks and behind what is nearer the eye. A bead under
+  the pointer is drawn as a dashed line down and across every map. **Select mode** turns clicks
+  into manual marks: a bead clicked twice is a line at its locus on both axes, two beads an
+  arrowhead between them; the reader's arrowheads are offered as chords under *your marks*.
 - **A 3D model from the map, and a Structures card.** A third map task, **Model from the map**,
   makes a structure from the contacts the view is holding — the whole loaded block at the
   resolution it is drawn at, cis and trans together — by ShRec3D's pipeline (contacts read as

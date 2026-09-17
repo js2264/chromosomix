@@ -10454,3 +10454,85 @@ span.deck-name {
     display: none;
   }
 }
+
+/* The structure cell's mode badge (§25.3): what a drag or a click does now,
+   in the top-left corner; the readout sits under it. */
+.structure-mode {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text-muted, var(--text));
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  pointer-events: none;
+  z-index: 2;
+}
+.structure-mode[data-mode='centre'],
+.structure-mode[data-mode='select'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.structure-wrap > .structure-readout {
+  top: 30px;
+}
+.structure-select.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+/* A sequence's row on the key: a picker for its colour, a button for its name. */
+.structure-key-seq {
+  padding: 1px 6px 1px 3px;
+  cursor: default;
+}
+.structure-key-seq.is-off {
+  opacity: 0.45;
+}
+.structure-key-swatch {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.structure-key-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.structure-key-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.structure-key-name {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.structure-key-name:hover {
+  text-decoration: underline;
+}
+/* The dialog's sidebar toggle, in the stage's bottom corner. */
+.structure-modal {
+  position: relative;
+}
+.structure-side-toggle {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+}
+.structure-side.hidden {
+  display: none;
+}

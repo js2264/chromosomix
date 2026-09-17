@@ -158,6 +158,15 @@ export type StructureCellProps = Omit<
 const CAMERA_SCOPE = 'structure:camera'
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
+/** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
+export const MANUAL_CHORDS = 'manual'
+/**
+ * The key that names the centre of rotation: Cmd on a Mac, Ctrl elsewhere,
+ * which is the modifier each platform's hand already holds for "act on the
+ * thing under the pointer". A tap toggles the centre and axes; held, a click
+ * moves the centre to the bead under the pointer.
+ */
+const CENTRE_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control'
 
 /** How far a press may travel and still be a click. */
 const CLICK_SLOP = 4
@@ -169,6 +178,7 @@ const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
 const WAITING = {
   renderer: 'loading the 3D renderer…',
   none: 'No structure loaded. Drop a g3d here — the text g3dtools takes, or the container it writes.',
+  removed: 'The model this cell was showing was removed. Pick another on the Structures card, or from the menu here.',
   loading: 'reading the structure…',
   empty: 'The structure has no bead on any sequence of this map.',
   lost: 'The GPU took its context away; the model comes back when it is returned.',
@@ -183,6 +193,20 @@ export class StructurePanel implements DeckCell {
   private readonly wrap = el('div', { class: 'structure-wrap' })
   private readonly keyEl = el('div', { class: 'structure-key hidden' })
   private readonly readoutEl = el('div', { class: 'structure-readout hidden' })
+  /** The badge in the top-left corner: what a drag or a click does right now. */
+  private readonly modeEl = el('div', { class: 'structure-mode' })
+  /** The modifiers held, while the pointer is over this cell or its dialog is open. */
+  private readonly keys = { shift: false, centre: false, space: false }
+  /** A press of the centre key that no click has used yet: released, it toggles the display. */
+  private centreTap = false
+  private overCanvas = false
+  /** Select mode (§25.4): a click marks a bead, two clicks mark a loop. */
+  private selecting = false
+  private selectFirst = -1
+  private selectButton: HTMLButtonElement | null = null
+  private fogFrame = 0
+  private fogPending: number | null = null
+  private keyClickTimer: number | null = null
   private readonly labelsEl = el('div', { class: 'structure-labels' })
   private readonly menu = el('div', { class: 'structure-menu hidden' })
   private readonly menuToggle: HTMLButtonElement
@@ -253,13 +277,33 @@ export class StructurePanel implements DeckCell {
       class: 'btn btn-icon structure-expand',
       size: 14,
     })
+    this.selectButton = iconButton(
+      'mouse-pointer-click',
+      'Select: click a bead to mark its locus, or two beads to mark a loop',
+      () => this.toggleSelecting(),
+      { class: 'btn btn-icon structure-select', size: 14 },
+    )
     this.wrap.append(
       this.labelsEl,
       this.keyEl,
+      this.modeEl,
       this.readoutEl,
       this.menu,
-      el('div', { class: 'structure-corner' }, this.menuToggle, frameButton, expandButton),
+      el('div', { class: 'structure-corner' }, this.selectButton, this.menuToggle, frameButton, expandButton),
     )
+    this.paintMode()
+    // The modifiers are read off the window, since a key goes down wherever
+    // the focus is; they are acted on only while this cell is engaged — the
+    // pointer over it, its canvas focused, or its dialog open — so Cmd+C in a
+    // box somewhere else toggles nothing here.
+    window.addEventListener('keydown', this.onKeyDown)
+    window.addEventListener('keyup', this.onKeyUp)
+    window.addEventListener('blur', this.onWindowBlur)
+    this.unsubscribes.push(() => {
+      window.removeEventListener('keydown', this.onKeyDown)
+      window.removeEventListener('keyup', this.onKeyUp)
+      window.removeEventListener('blur', this.onWindowBlur)
+    })
     this.body = el('div', { class: 'deck-body structure-body' }, this.wrap)
     this.el = el(
       'section',
@@ -288,7 +332,14 @@ export class StructurePanel implements DeckCell {
     // The marks and the bookmarks are drawn on the model, so a change to
     // either is a repaint; the marks are also a colouring (§25.5).
     const manual = props.manual?.()
-    if (manual !== undefined) this.unsubscribes.push(manual.subscribe(() => this.recolour()))
+    if (manual !== undefined) {
+      this.unsubscribes.push(
+        manual.subscribe(() => {
+          this.chords = null
+          this.recolour()
+        }),
+      )
+    }
     const bookmarks = props.bookmarks?.()
     if (bookmarks !== undefined) this.unsubscribes.push(bookmarks.subscribe(() => this.schedule()))
     this.unsubscribes.push(
@@ -415,6 +466,13 @@ export class StructurePanel implements DeckCell {
 
   /** The row the reader asked for, or `null` for whichever is first. */
   private chosen: string | null = null
+  /**
+   * How the choice was made. A row *picked* this session and then removed
+   * leaves the cell empty rather than quietly showing another model; a row
+   * *remembered* from an earlier session that is gone falls back to the first,
+   * since the reader has not chosen anything yet today.
+   */
+  private chosenHow: 'picked' | 'remembered' | null = null
 
   /**
    * Draw this row: the Structures card's *show in the deck*, and the picker.
@@ -424,6 +482,7 @@ export class StructurePanel implements DeckCell {
    */
   showModel(id: string): void {
     this.chosen = id
+    this.chosenHow = 'picked'
     remember(this.props.memoryKey(), MODEL_SCOPE, id)
     this.sync()
   }
@@ -446,16 +505,30 @@ export class StructurePanel implements DeckCell {
     const rows = (store?.entries ?? []).filter((held) => held.kind === 'structure')
     if (this.chosen === null) {
       const remembered = recall<unknown>(this.props.memoryKey(), MODEL_SCOPE)
-      if (typeof remembered === 'string') this.chosen = remembered
+      if (typeof remembered === 'string') {
+        this.chosen = remembered
+        this.chosenHow = 'remembered'
+      }
     }
-    const entry = rows.find((held) => held.id === this.chosen) ?? rows[0] ?? null
+    const chosenRow = rows.find((held) => held.id === this.chosen)
+    // A row the reader picked and then removed from the Structures card
+    // empties the cell (§25.3): drawing whichever model is next would be a
+    // picture nobody asked for, wearing the place of the one they closed.
+    const emptied = chosenRow === undefined && this.chosen !== null && this.chosenHow === 'picked'
+    const entry = chosenRow ?? (emptied ? null : (rows[0] ?? null))
+    if (emptied && this.entry !== null) {
+      this.chosen = null
+      this.chosenHow = null
+      remember(this.props.memoryKey(), MODEL_SCOPE, null)
+    }
     this.entry = entry
     this.syncName()
     const payload = entry?.payload
     if (entry === null) {
-      this.say(WAITING.none)
+      this.say(rows.length > 0 ? WAITING.removed : WAITING.none)
       this.structure = null
       this.builtFrom = null
+      this.builtRow = null
     } else if (entry.status === 'error') {
       this.say(entry.error ?? 'the structure could not be read')
       this.structure = null
@@ -489,8 +562,144 @@ export class StructurePanel implements DeckCell {
         if (switched || recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === null) this.frameAll()
       }
       this.say(this.structure === null || this.structure.placed === 0 ? WAITING.empty : '')
+      // The ghosted sequences are part of the style, so a change to the row
+      // — the key's click — is a change to what is lit.
+      this.relight()
     }
     this.paintMenu()
+    this.schedule()
+  }
+
+  // -------------------------------------------------------------------------
+  // The keys: what a drag or a click does, said in the corner
+  // -------------------------------------------------------------------------
+
+  /** Whether the reader's hand is on this cell: the pointer over it, its canvas focused, or its dialog open. */
+  private engaged(): boolean {
+    return (
+      this.overCanvas ||
+      this.expanded !== null ||
+      (document.activeElement !== null && this.wrap.contains(document.activeElement))
+    )
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.engaged()) return
+    if (event.key === 'Shift') this.keys.shift = true
+    else if (event.key === CENTRE_KEY) {
+      if (!this.keys.centre) this.centreTap = true
+      this.keys.centre = true
+    } else if (event.key === ' ' || event.code === 'Space') {
+      // Space with the pointer on the model: the fog's key. Held rather than
+      // toggled, so the page does not scroll while the hand is here.
+      if (this.overCanvas) event.preventDefault()
+      this.keys.space = true
+    } else if (event.key === 'Escape' && this.selecting && this.selectFirst >= 0) {
+      this.selectFirst = -1
+      this.pinned = -1
+      setReadout('')
+      this.schedule()
+    } else if (this.keys.centre) {
+      // Cmd with another key is a shortcut, not a tap.
+      this.centreTap = false
+    }
+    this.paintMode()
+  }
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (event.key === 'Shift') this.keys.shift = false
+    else if (event.key === CENTRE_KEY) {
+      const tap = this.centreTap && this.keys.centre && this.engaged()
+      this.keys.centre = false
+      this.centreTap = false
+      // A tap of the key alone shows or hides the centre of rotation and the
+      // axes through it; a click while it was held has already used it.
+      if (tap) this.restyle({ axes: !this.style().axes })
+    } else if (event.key === ' ' || event.code === 'Space') this.keys.space = false
+    this.paintMode()
+  }
+
+  private readonly onWindowBlur = (): void => {
+    this.keys.shift = false
+    this.keys.centre = false
+    this.keys.space = false
+    this.centreTap = false
+    this.paintMode()
+  }
+
+  /** The badge: which of the four things the hand is about to do. */
+  private paintMode(): void {
+    const mode = this.selecting
+      ? { icon: 'mouse-pointer-click', text: 'select', title: 'Click a bead to mark its locus; click a second for a loop; Esc to cancel' }
+      : this.keys.centre
+        ? { icon: 'locate-fixed', text: 'centre', title: `Click a bead to turn about it; tap ${CENTRE_KEY === 'Meta' ? '⌘' : 'Ctrl'} alone to show or hide the centre` }
+        : this.keys.shift
+          ? { icon: 'move', text: 'move', title: 'Drag to move the whole model' }
+          : this.keys.space
+            ? { icon: 'layers', text: 'fog', title: 'Scroll to bring the fog forward or push it back' }
+            : { icon: 'rotate-3d', text: 'turn', title: 'Drag to turn the model; Shift-drag moves it; scroll zooms' }
+    this.modeEl.replaceChildren(icon(mode.icon as Parameters<typeof icon>[0], { size: 13 }), el('span', { text: mode.text }))
+    this.modeEl.title = mode.title
+    this.modeEl.dataset['mode'] = mode.text
+  }
+
+  private toggleSelecting(): void {
+    this.selecting = !this.selecting
+    this.selectFirst = -1
+    this.selectButton?.classList.toggle('is-on', this.selecting)
+    this.selectButton?.setAttribute('aria-pressed', String(this.selecting))
+    if (!this.selecting) setReadout('')
+    this.paintMode()
+  }
+
+  /**
+   * A click in select mode: the first bead is held; the same bead again is a
+   * line mark at its locus on both axes; another bead is an arrowhead — the
+   * map's loop mark — between the two (§25.4). The marks are the reader's
+   * own (`annotations/manual.ts`), so every map, lane and the tracks cell
+   * draws them, and the model draws its arrowheads as chords.
+   */
+  private selectClick(bead: number): void {
+    const structure = this.structure
+    const manual = this.props.manual?.()
+    if (structure === null || manual === undefined) return
+    if (bead < 0) {
+      this.selectFirst = -1
+      this.pinned = -1
+      setReadout('')
+      this.schedule()
+      return
+    }
+    if (this.selectFirst < 0) {
+      this.selectFirst = bead
+      this.pinned = bead
+      const at = lociOf(structure, bead)
+      setReadout(
+        `${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click it again for a line, another bead for a loop, Esc to cancel`,
+      )
+      this.schedule()
+      return
+    }
+    const first = this.selectFirst
+    this.selectFirst = -1
+    this.pinned = -1
+    setReadout('')
+    if (first === bead) {
+      this.markAt(bead)
+    } else {
+      const a = lociOf(structure, first)
+      const b = lociOf(structure, bead)
+      manual.add({
+        id: mintMarkId(),
+        kind: 'arrowhead',
+        a: { contig: a.contig, bp: Math.round((a.start + a.end) / 2) },
+        b: { contig: b.contig, bp: Math.round((b.start + b.end) / 2) },
+        colour: manual.nextColour(),
+      })
+      // The loop drawn where it was made: the marks become the chords unless
+      // a loop set already is.
+      if (this.style().loops === '') this.restyle({ loops: MANUAL_CHORDS })
+    }
     this.schedule()
   }
 
@@ -518,16 +727,19 @@ export class StructurePanel implements DeckCell {
   /** Recompute which beads are inside the lead's window. */
   private relight(): void {
     const structure = this.structure
+    if (structure === null) {
+      this.lit = null
+      return
+    }
+    this.lit = this.ghostSequences(structure, this.windowLit(structure))
+  }
+
+  /** The beads inside the lead's window, or `null` where nothing is said. */
+  private windowLit(structure: Structure): Uint8Array | null {
     const windows = this.windows
-    if (structure === null || windows === null) {
-      this.lit = null
-      return
-    }
+    if (windows === null) return null
     const all = [...windows.rows, ...windows.cols]
-    if (all.length === 0) {
-      this.lit = null
-      return
-    }
+    if (all.length === 0) return null
     const lit = new Uint8Array(structure.set.length)
     let any = 0
     for (const window of all) {
@@ -539,7 +751,25 @@ export class StructurePanel implements DeckCell {
     // A window on sequences the model does not have lights nothing, and a
     // model with nothing lit is a model drawn as though nothing were said —
     // the honest picture, rather than everything ghosted.
-    this.lit = any === 0 ? null : lit
+    return any === 0 ? null : lit
+  }
+
+  /**
+   * The sequences the reader ghosted from the key (§25.5), taken out of the
+   * lit mask — on top of the window's, or alone where there is no window.
+   * A ghosted sequence is drawn as the beads outside the window are, so
+   * `outside the window: hide` hides it too, which is the reading a reader
+   * who chose *hide* wants of a sequence they put away.
+   */
+  private ghostSequences(structure: Structure, lit: Uint8Array | null): Uint8Array | null {
+    const ghosted = new Set(this.style().ghosted)
+    if (ghosted.size === 0) return lit
+    const n = structure.set.length
+    const out = lit === null ? new Uint8Array(n).fill(1) : Uint8Array.from(lit)
+    for (let i = 0; i < n; i++) {
+      if (ghosted.has(structure.contigs[structure.set.contig[i]] ?? '')) out[i] = 0
+    }
+    return out
   }
 
   // -------------------------------------------------------------------------
@@ -672,6 +902,7 @@ export class StructurePanel implements DeckCell {
       }
       const drag = this.drag
       if (drag === null) {
+        this.overCanvas = true
         this.hoverOwn(this.renderer?.pick(at.x, at.y) ?? -1)
         return
       }
@@ -704,16 +935,30 @@ export class StructurePanel implements DeckCell {
       const at = local(event)
       const bead = this.renderer?.pick(at.x, at.y) ?? -1
       if (bead < 0) {
-        if (this.pinned >= 0) {
+        if (this.selecting) this.selectClick(-1)
+        else if (this.pinned >= 0) {
           this.pinned = -1
           this.schedule()
         }
         return
       }
-      // A picking mode first: the click names a place for the card that asked
-      // (a mark's form, an analysis's locus box) rather than pinning.
       const model = this.structure
       if (model === null) return
+      // The centre key held: the click puts the centre of rotation on the
+      // bead, and the tap that would have toggled the display is spent.
+      if (event.metaKey || event.ctrlKey) {
+        this.centreTap = false
+        this.camera = { ...this.camera, target: [model.x[bead], model.y[bead], model.z[bead]] }
+        this.rememberCamera()
+        this.schedule()
+        return
+      }
+      if (this.selecting) {
+        this.selectClick(bead)
+        return
+      }
+      // A picking mode first: the click names a place for the card that asked
+      // (a mark's form, an analysis's locus box) rather than pinning.
       const picked = lociOf(model, bead)
       if (this.picking !== null) {
         const point = { contig: picked.contig, bp: Math.round((picked.start + picked.end) / 2) }
@@ -735,7 +980,11 @@ export class StructurePanel implements DeckCell {
     }
     canvas.addEventListener('pointerup', release)
     canvas.addEventListener('pointercancel', release)
+    canvas.addEventListener('pointerenter', () => {
+      this.overCanvas = true
+    })
     canvas.addEventListener('pointerleave', () => {
+      this.overCanvas = false
       if (this.drag === null) this.hoverOwn(-1)
     })
     canvas.addEventListener('contextmenu', (event) => event.preventDefault())
@@ -743,6 +992,21 @@ export class StructurePanel implements DeckCell {
       'wheel',
       (event) => {
         event.preventDefault()
+        // Space held: the wheel moves the fog rather than the camera —
+        // forward to read the front of a dense model, back to see it all.
+        if (this.keys.space) {
+          const held = this.fogPending ?? this.style().fog
+          this.fogPending = Math.max(0, Math.min(1, held + event.deltaY * 0.0012))
+          if (this.fogFrame === 0) {
+            this.fogFrame = requestAnimationFrame(() => {
+              this.fogFrame = 0
+              const fog = this.fogPending
+              this.fogPending = null
+              if (fog !== null) this.restyle({ fog })
+            })
+          }
+          return
+        }
         const factor = Math.exp(event.deltaY * 0.0015)
         // About the pointer: the point under the hand stays under the hand, which
         // is what a zoom on the map does and what a hand expects.
@@ -916,9 +1180,12 @@ export class StructurePanel implements DeckCell {
     const style = this.style()
     const projection = style.projection
     if (this.camera.projection !== projection) this.camera = { ...this.camera, projection }
-    if (this.colours === null || this.colouredBy !== style.colourBy) {
+    // Keyed on the reader's own sequence colours too: a swatch changed on
+    // the key is a colouring changed.
+    const colourKey = `${style.colourBy}|${JSON.stringify(style.sequenceColours)}`
+    if (this.colours === null || this.colouredBy !== colourKey) {
       this.colours = resolveColours(structure, style, this.colourSource(structure, style.colourBy))
-      this.colouredBy = style.colourBy
+      this.colouredBy = colourKey
     }
     const haplotype = style.haplotype === '' ? -1 : structure.haplotypes.indexOf(style.haplotype)
     return {
@@ -1005,6 +1272,21 @@ export class StructurePanel implements DeckCell {
   /** The loops row drawn as chords, or none; kept while nothing about it changed. */
   private loopsOf(structure: Structure, loops: string): ReadonlyArray<readonly [number, number]> {
     if (loops === '') return NO_CHORDS
+    if (loops === MANUAL_CHORDS) {
+      const marks = this.props.manual?.()?.marks ?? []
+      const key = `${MANUAL_CHORDS}:${marks.length}:${marks.map((mark) => mark.id).join(',')}`
+      if (this.chords === null || this.chords.key !== key) {
+        const list: Array<readonly [number, number]> = []
+        for (const mark of marks) {
+          if (mark.kind !== 'arrowhead') continue
+          const a = beadsAt(structure, mark.a.contig, mark.a.bp)[0]
+          const b = beadsAt(structure, mark.b.contig, mark.b.bp)[0]
+          if (a !== undefined && b !== undefined && a !== b) list.push([a, b])
+        }
+        this.chords = { key, list }
+      }
+      return this.chords.list
+    }
     const entry = this.props.store()?.entries.find((row) => row.id === loops)
     const payload = entry?.payload
     if (entry === undefined || payload === undefined || payload.kind !== 'pairs') return NO_CHORDS
@@ -1022,6 +1304,11 @@ export class StructurePanel implements DeckCell {
       this.labelsEl.replaceChildren()
       return
     }
+    // The key first, before the renderer is asked for anything: it is DOM,
+    // it says what the colours mean, and its rows are controls — a sequence
+    // ghosted from it, a colour picked on it — that should work while the
+    // GPU is still loading, or gave no context at all.
+    this.paintKey(view.colours.key)
     if (this.renderer === null) {
       this.say(WAITING.renderer)
       return
@@ -1033,7 +1320,6 @@ export class StructurePanel implements DeckCell {
     if (this.renderer.lost) this.say(WAITING.lost)
     else if (this.note.textContent === WAITING.renderer || this.note.textContent === WAITING.lost) this.say('')
     this.renderer.setView(view)
-    this.paintKey(view.colours.key)
     this.paintLabels(view)
   }
 
@@ -1056,6 +1342,10 @@ export class StructurePanel implements DeckCell {
     }
     const structure = this.structure
     const style = this.style()
+    if (key.title === 'sequence' && structure !== null) {
+      for (const level of key.levels.slice(0, 48)) this.keyEl.append(this.sequenceChip(structure, style, level))
+      return
+    }
     for (const level of key.levels.slice(0, 24)) {
       const chip = el(
         'button',
@@ -1064,7 +1354,7 @@ export class StructurePanel implements DeckCell {
         el('span', { text: level.label }),
       )
       // A haplotype chip solos its homologue, which is the one solo a model
-      // keeps (`StructureStyle.haplotype`); a sequence chip is a legend only.
+      // keeps (`StructureStyle.haplotype`).
       if (key.title === 'haplotype' && structure !== null && structure.haplotypes.includes(level.label)) {
         chip.classList.toggle('is-on', style.haplotype === level.label)
         chip.addEventListener('click', () =>
@@ -1073,6 +1363,64 @@ export class StructurePanel implements DeckCell {
       }
       this.keyEl.append(chip)
     }
+  }
+
+  /**
+   * A sequence's row on the key (§25.5): its swatch is a colour picker, a
+   * click on its name ghosts it, a double-click shows it alone.
+   *
+   * The two gestures are told apart by a short wait, since a double-click is
+   * two clicks first; the wait is the cost of not needing a second control.
+   */
+  private sequenceChip(
+    structure: Structure,
+    style: StructureStyle,
+    level: { label: string; colour: string },
+  ): HTMLElement {
+    const name = level.label
+    const ghosted = new Set(style.ghosted)
+    const swatch = el('input', {
+      class: 'structure-key-swatch',
+      type: 'color',
+      value: level.colour,
+      title: `Colour for ${name}`,
+    })
+    swatch.addEventListener('click', (event) => event.stopPropagation())
+    swatch.addEventListener('input', () =>
+      this.restyle({ sequenceColours: { ...style.sequenceColours, [name]: swatch.value } }),
+    )
+    const button = el('button', {
+      class: 'structure-key-name',
+      type: 'button',
+      text: name,
+      title: ghosted.has(name)
+        ? `${name} is ghosted: click to draw it again; double-click to show it alone`
+        : `Click to ghost ${name}; double-click to show it alone`,
+    })
+    button.addEventListener('click', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = window.setTimeout(() => {
+        this.keyClickTimer = null
+        const next = new Set(ghosted)
+        if (next.has(name)) next.delete(name)
+        else next.add(name)
+        this.restyle({ ghosted: [...next] })
+      }, 220)
+    })
+    button.addEventListener('dblclick', () => {
+      if (this.keyClickTimer !== null) clearTimeout(this.keyClickTimer)
+      this.keyClickTimer = null
+      const others = structure.contigs.filter((other) => other !== name)
+      const alreadySolo = others.length > 0 && others.every((other) => ghosted.has(other)) && !ghosted.has(name)
+      // Solo again is "all back": the second double-click undoes the first.
+      this.restyle({ ghosted: alreadySolo ? [] : others })
+    })
+    return el(
+      'span',
+      { class: `structure-key-level structure-key-seq${ghosted.has(name) ? ' is-off' : ''}` },
+      swatch,
+      button,
+    )
   }
 
   /** Chain names over their midpoint beads, as DOM so they scale with the page's text. */
@@ -1173,7 +1521,16 @@ export class StructurePanel implements DeckCell {
           el('span', { class: 'structure-side-title', text: 'drawn' }),
           this.menu,
         )
-        return el('div', { class: 'structure-modal' }, stage, side)
+        // The sidebar's own toggle, in the stage's bottom corner: the settings
+        // out of the way for a look at the model, and back.
+        const sideToggle = iconButton('panel-right-close', 'Hide the settings', () => {
+          const hidden = side.classList.toggle('hidden')
+          sideToggle.replaceChildren(icon(hidden ? 'panel-right-open' : 'panel-right-close', { size: 14 }))
+          sideToggle.title = hidden ? 'Show the settings' : 'Hide the settings'
+          sideToggle.setAttribute('aria-label', sideToggle.title)
+          requestAnimationFrame(() => this.remeasure())
+        }, { class: 'btn btn-icon structure-side-toggle', size: 14 })
+        return el('div', { class: 'structure-modal' }, stage, side, sideToggle)
       },
       onClose: () => this.collapse(),
     })
@@ -1268,9 +1625,13 @@ export class StructurePanel implements DeckCell {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
     const loopRows = (store?.entries ?? []).filter((row) => row.kind === 'pairs' && row.status === 'ready')
+    const hasMarks = this.props.manual?.() !== undefined
     const loopChoices: Array<{ value: string; text: string }> = [
       { value: '', text: 'none' },
       ...loopRows.map((row) => ({ value: row.id, text: row.label })),
+      // The reader's own arrowheads (§25.5): a loop marked on the map, or
+      // marked here in select mode, drawn as a chord.
+      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks (arrowheads)' }] : []),
     ]
     if (style.loops !== '' && !loopRows.some((row) => row.id === style.loops)) {
       loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
@@ -1302,12 +1663,13 @@ export class StructurePanel implements DeckCell {
         (value) => this.restyle({ representation: value as StructureStyle['representation'] }),
       ),
       select('colour by', colourings, style.colourBy, (value) => this.restyle({ colourBy: value })),
-      ...(loopRows.length > 0 || style.loops !== ''
+      ...(loopRows.length > 0 || hasMarks || style.loops !== ''
         ? [select('loops as chords', loopChoices, style.loops, (value) => this.restyle({ loops: value }))]
         : []),
       range('bead radius', style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v })),
       range('tube radius', style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v })),
       range('opacity', style.opacity, 0.1, 1, 0.05, (v) => this.restyle({ opacity: v })),
+      range('fog', style.fog, 0, 1, 0.05, (v) => this.restyle({ fog: v })),
       select(
         'outside the window',
         STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })),
@@ -1336,6 +1698,7 @@ export class StructurePanel implements DeckCell {
         ? [select('show', haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))]
         : []),
       toggle('lit', style.lit, (on) => this.restyle({ lit: on })),
+      toggle('centre and axes', style.axes, (on) => this.restyle({ axes: on })),
       toggle('sequence names', style.labels, (on) => this.restyle({ labels: on })),
       el(
         'div',

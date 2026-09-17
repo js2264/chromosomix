@@ -63,9 +63,11 @@ const VERSUS_PARAMS: readonly ParamSpec[] = [
     kind: 'region',
     key: 'region',
     label: 'Sequence',
+    many: true,
     hint:
-      'The sequence to draw the matrices for — one, because a distance matrix is a picture of ' +
-      'one sequence. Empty takes the first the model and the map share; the table covers them all.',
+      'The sequence to draw the matrices for — the first named, because a distance matrix is a ' +
+      'picture of one sequence. Seeded from what the map shows; empty takes the first the model ' +
+      'and the map share. The table covers them all.',
   },
   {
     kind: 'number',
@@ -154,9 +156,11 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    label: 'Sequences',
+    many: true,
     hint:
-      'One sequence to model on its own. Empty models everything the view has loaded — every ' +
+      'What to model, seeded from what the map shows: a locus, one sequence, or several ' +
+      'comma-separated (chrIV, chrV). Empty models everything the view has loaded — every ' +
       'sequence in the block, cis and trans together — at the resolution it is drawn at.',
   },
   {
@@ -212,8 +216,13 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
             Math.max(1, framing.binsPerCell),
         )
   const region = typeof params.region === 'string' ? params.region.trim() : ''
-  const named = region === '' ? null : context.contigs.find((contig) => contig.name === region.split(':')[0].trim())
-  const beads = named === null || named === undefined ? cells : Math.min(cells, named.bins)
+  const names = region === '' ? [] : region.split(',').map((part) => part.split(':')[0].trim())
+  const named = context.contigs.filter((contig) => names.includes(contig.name))
+  const k = Math.max(1, framing?.binsPerCell ?? 1)
+  const beads =
+    named.length === 0
+      ? cells
+      : Math.min(cells, named.reduce((sum, contig) => sum + Math.ceil(contig.bins / k), 0))
   const pairs = beads * beads
   const note =
     beads === 0

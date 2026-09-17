@@ -92,12 +92,12 @@ export function resolveColours(
   source: ColourSource | null = null,
 ): BeadColours {
   const by = style.colourBy
-  if (by === STRUCTURE_COLOUR_SEQUENCE || by === '') return bySequence(structure)
+  if (by === STRUCTURE_COLOUR_SEQUENCE || by === '') return bySequence(structure, style.sequenceColours)
   if (by === STRUCTURE_COLOUR_HAPLOTYPE) return byHaplotype(structure)
   if (by === STRUCTURE_COLOUR_POSITION) return byPosition(structure)
   if (by === STRUCTURE_COLOUR_SCORE) return byField(structure, STRUCTURE_COLOUR_SCORE)
   if (source !== null) return bySource(structure, source)
-  if (by.includes(':')) return bySequence(structure)
+  if (by.includes(':')) return bySequence(structure, style.sequenceColours)
   return byField(structure, by)
 }
 
@@ -108,21 +108,28 @@ export function resolveColours(
  * other set, and so the day one palette per genome is wanted (a `.metacool`'s
  * MAGs) the signature already has what it needs.
  */
-export function sequenceColour(structure: Structure, contig: number): string {
+export function sequenceColour(
+  structure: Structure,
+  contig: number,
+  /** The reader's own colours by sequence name (§25.5), over the palette's. */
+  chosen: Readonly<Record<string, string>> = {},
+): string {
+  const own = chosen[structure.contigs[contig] ?? '']
+  if (own !== undefined) return own
   return categoryColour(contig % Math.max(1, structure.contigs.length))
 }
 
-function bySequence(structure: Structure): BeadColours {
+function bySequence(structure: Structure, chosen: Readonly<Record<string, string>> = {}): BeadColours {
   const set = structure.set
   const css = new Array<string>(set.length)
-  for (let i = 0; i < set.length; i++) css[i] = sequenceColour(structure, set.contig[i])
+  for (let i = 0; i < set.length; i++) css[i] = sequenceColour(structure, set.contig[i], chosen)
   return {
     rgb: rgbOf(css),
     css,
     key: {
       kind: 'levels',
       title: 'sequence',
-      levels: structure.contigs.map((name, at) => ({ label: name, colour: sequenceColour(structure, at) })),
+      levels: structure.contigs.map((name, at) => ({ label: name, colour: sequenceColour(structure, at, chosen) })),
     },
   }
 }

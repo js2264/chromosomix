@@ -36,7 +36,6 @@
 
 import {
   AmbientLight,
-  BackSide,
   BufferAttribute,
   BufferGeometry,
   CatmullRomCurve3,
@@ -44,6 +43,7 @@ import {
   CylinderGeometry,
   DirectionalLight,
   Fog,
+  FrontSide,
   InstancedMesh,
   Line,
   LineBasicMaterial,
@@ -104,6 +104,10 @@ export class StructureRenderer {
   /** Loops as chords (§25.5), one segment per pair. */
   private chords: LineSegments | null = null
   private chordsFrom: ReadonlyArray<readonly [number, number]> | null = null
+  /** The centre of rotation — a ball at the camera's target with the three axes through it. */
+  private readonly centre = new Object3D()
+  private centreBall: Mesh | null = null
+  private centreAxes: LineSegments | null = null
   private readonly raycaster = new Raycaster()
   private width = 1
   private height = 1
@@ -134,6 +138,8 @@ export class StructureRenderer {
     this.el.addEventListener('webglcontextrestored', this.onRestored)
     this.scene.add(this.root)
     this.scene.add(this.lights)
+    this.scene.add(this.centre)
+    this.centre.visible = false
     const ambient = new AmbientLight(0xffffff, 0.9)
     const key = new DirectionalLight(0xffffff, 1.6)
     key.position.set(1, 1.2, 1.5)
@@ -252,9 +258,52 @@ export class StructureRenderer {
     this.scene.background = background
     // The depth cue: the far side of the model fades towards the page. Set from
     // the camera's distance so it reads the same at every zoom.
-    const near = view.camera.distance
-    this.scene.fog = view.style.lit ? new Fog(background, near * 0.9, near * 2.6) : null
+    // …and from the style's depth — space + scroll in the cell — so a reader
+    // can bring the fog forward to read the front of a dense model, or push
+    // it away. 0.6 is the depth the cell always had; 0 is none.
+    const d = view.camera.distance
+    const f = view.style.fog
+    const near = d * (1.7 - 1.33 * f)
+    this.scene.fog = view.style.lit && f > 0 ? new Fog(background, near, near + d * (2.9 - 2 * f)) : null
+    this.placeCentre(view)
     renderer.render(this.scene, camera)
+  }
+
+  /**
+   * The centre of rotation, when the style shows it: a ball at the camera's
+   * target and the three axes through it, sized to the view so they read the
+   * same at every zoom, drawn over the model since a centre inside a tube is
+   * still the centre. Rebuilt only when the size changes by more than a
+   * little.
+   */
+  private placeCentre(view: StructureView): void {
+    const show = view.style.axes
+    this.centre.visible = show
+    if (!show) return
+    const size = view.camera.distance * 0.12
+    if (this.centreBall === null || Math.abs(this.centre.scale.x - size) / size > 0.01) {
+      this.centre.clear()
+      this.centreBall?.geometry.dispose()
+      this.centreAxes?.geometry.dispose()
+      this.centreBall = new Mesh(
+        new SphereGeometry(0.06, 16, 12),
+        new MeshBasicMaterial({ color: hexOf(this.palette.ink), transparent: true, opacity: 0.7, depthTest: false }),
+      )
+      const axes = new Float32Array([-1, 0, 0, 1, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, -1, 0, 0, 1])
+      const colours = new Float32Array([
+        0.85, 0.2, 0.2, 0.85, 0.2, 0.2, 0.2, 0.7, 0.2, 0.2, 0.7, 0.2, 0.2, 0.4, 0.9, 0.2, 0.4, 0.9,
+      ])
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(axes, 3))
+      geometry.setAttribute('color', new BufferAttribute(colours, 3))
+      this.centreAxes = new LineSegments(geometry, new LineBasicMaterial({ vertexColors: true, depthTest: false }))
+      this.centreBall.renderOrder = 10
+      this.centreAxes.renderOrder = 10
+      this.centre.add(this.centreBall, this.centreAxes)
+      this.centre.scale.setScalar(size)
+    }
+    const [x, y, z] = view.camera.target
+    this.centre.position.set(x, y, z)
   }
 
   destroy(): void {
@@ -431,9 +480,20 @@ export class StructureRenderer {
 
     // The halo behind a hovered or pinned bead: a copy of the sphere, a little
     // larger, drawn back faces only, which reads as an outline round it.
+    // Translucent and depth-tested rather than back faces only: it sits **in
+    // front of** the bead or tube it marks, which it encloses, and **behind**
+    // any part of the model nearer the eye, as a ball at that place would.
+    // The outline it used to be read through a tube in front of it and was
+    // swallowed by one behind.
     this.halos = new InstancedMesh(
       new SphereGeometry(1, 16, 12),
-      new MeshBasicMaterial({ color: hexOf(this.palette.ink), side: BackSide }),
+      new MeshBasicMaterial({
+        color: hexOf(this.palette.ink),
+        side: FrontSide,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+      }),
       8,
     )
     this.halos.count = 0

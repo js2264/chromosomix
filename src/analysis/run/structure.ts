@@ -113,7 +113,9 @@ export const runStructureMap: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const alpha = numParam(job.params, 'alpha', 3)
-  const wanted = strParam(job.params, 'region', '').split(':')[0].trim()
+  // The first of what the box names: the box is seeded with every sequence
+  // on screen (§25.6), and the picture is of one.
+  const wanted = strParam(job.params, 'region', '').split(',')[0].split(':')[0].trim()
   const pictured = sequences.find((sequence) => sequence.name === wanted) ?? sequences[0]
   const haplotypes = haplotypesOf(model)
   const binsize = job.mc.binsize
@@ -368,6 +370,12 @@ interface Cells {
   k: number
   n: number
   values: Float32Array
+  /**
+   * Which cell of the square each kept cell is, where several sequences
+   * were asked for and the ones between them left out; absent when every
+   * cell of the square is a bead.
+   */
+  cellOf?: Int32Array
 }
 
 /** The sequences of the file as bin runs, for placing a cell on one. */
@@ -393,7 +401,7 @@ function contigRuns(job: JobContext): Array<{ cid: number; from: number; to: num
  */
 async function contactCells(
   job: JobContext,
-  span: Span | null,
+  spans: Span[] | null,
   balance: boolean,
   value: string,
 ): Promise<{ cells: Cells; how: string } | { refusal: string }> {
@@ -404,34 +412,57 @@ async function contactCells(
     block.rowExtent[1] === block.colExtent[1] &&
     block.nrows === block.ncols &&
     job.framing.balance === balance
+  // Several sequences are the square over all of them — the trans contacts
+  // between them are what puts them beside each other — with the cells of
+  // the sequences in between left out afterwards (`keep`).
+  const union: Span | null =
+    spans === null
+      ? null
+      : { from: Math.min(...spans.map((s) => s.from)), to: Math.max(...spans.map((s) => s.to)) }
+  const keep = (cells: Cells): Cells => {
+    if (spans === null || spans.length <= 1) return cells
+    const kept: number[] = []
+    for (let i = 0; i < cells.n; i++) {
+      const binFrom = cells.from + i * cells.k
+      const binTo = binFrom + cells.k
+      if (spans.some((s) => binFrom < s.to && binTo > s.from)) kept.push(i)
+    }
+    if (kept.length === cells.n) return cells
+    const index = Int32Array.from(kept)
+    return { ...cells, n: kept.length, values: subMatrixOf(cells.values, cells.n, index), cellOf: index }
+  }
   if (square && block !== undefined) {
     const k = Math.max(1, block.binsPerCell)
-    const wanted: Span = span ?? { from: block.rowExtent[0], to: block.rowExtent[1] }
-    if (blockCovers(block, wanted) || span === null) {
+    const wanted: Span = union ?? { from: block.rowExtent[0], to: block.rowExtent[1] }
+    if (blockCovers(block, wanted) || union === null) {
       const first = Math.floor((wanted.from - block.rowExtent[0]) / k)
       const last = Math.min(block.nrows, Math.ceil((wanted.to - block.rowExtent[0]) / k))
       const n = last - first
-      if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n) }
       const values = new Float32Array(n * n)
       for (let r = 0; r < n; r++) {
         const at = (first + r) * block.ncols + first
         values.set(block.values.subarray(at, at + n), r * n)
       }
+      const cells = keep({ from: block.rowExtent[0] + first * k, k, n, values })
+      if (cells.n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(cells.n) }
       return {
-        cells: { from: block.rowExtent[0] + first * k, k, n, values },
+        cells,
         how: k > 1 ? `the block as drawn, ${k} bins to a cell` : 'the block as drawn',
       }
     }
   }
-  const wanted: Span = span ?? {
+  const wanted: Span = union ?? {
     from: Math.min(job.framing.rows[0], job.framing.cols[0]),
     to: Math.max(job.framing.rows[1], job.framing.cols[1]),
   }
   const n = wanted.to - wanted.from
   if (n <= 0) return { refusal: 'The framing holds no bins to model.' }
+  // The read is the union, so it is the union that has to fit: sequences
+  // far apart in the file with little between them are read as one square.
   if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n) }
   const read = await squareFor(job, wanted, { block: null, balance, value })
-  return { cells: { from: wanted.from, k: 1, n: read.nrows, values: read.values }, how: 'read at the file’s bin size' }
+  const cells = keep({ from: wanted.from, k: 1, n: read.nrows, values: read.values })
+  return { cells, how: 'read at the file’s bin size' }
 }
 
 function tooMany(n: number): string {
@@ -441,7 +472,25 @@ function tooMany(n: number): string {
   )
 }
 
-/** The span a typed region names, or `null` for everything; `undefined` for a name the file lacks. */
+/**
+ * The spans a typed region names — one per comma-separated part, a sequence
+ * or a locus — or `null` for everything; the missing name where the file
+ * lacks one.
+ */
+function regionSpans(job: JobContext, text: string): Span[] | null | { missing: string } {
+  if (text === '') return null
+  const out: Span[] = []
+  for (const part of text.split(',')) {
+    const trimmed = part.trim()
+    if (trimmed === '') continue
+    const span = regionSpan(job, trimmed)
+    if (span === undefined) return { missing: parseRegionString(trimmed)[0] }
+    if (span !== null) out.push(span)
+  }
+  return out.length === 0 ? null : out
+}
+
+/** The span one typed part names, or `null` for everything; `undefined` for a name the file lacks. */
 function regionSpan(job: JobContext, text: string): Span | null | undefined {
   if (text === '') return null
   const [name, start, end] = parseRegionString(text)
@@ -464,16 +513,16 @@ export const runReconstruct: TaskRunner = async (job) => {
   const weightText = strParam(job.params, 'weights', 'contacts')
   const weightMode: WeightMode = weightText === 'sqrt' || weightText === 'equal' ? weightText : 'contacts'
   const regionText = strParam(job.params, 'region', '').trim()
-  const span = regionSpan(job, regionText)
-  if (span === undefined) {
+  const spans = regionSpans(job, regionText)
+  if (spans !== null && !Array.isArray(spans)) {
     job.note(
-      `This file has no sequence called ${parseRegionString(regionText)[0]}, under that spelling or ` +
+      `This file has no sequence called ${spans.missing}, under that spelling or ` +
         `any this viewer knows of (§5.9). It has ` +
         `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
     )
     return []
   }
-  const source = await contactCells(job, span, balance, value)
+  const source = await contactCells(job, spans, balance, value)
   if ('refusal' in source) {
     job.note(source.refusal)
     return []
@@ -496,7 +545,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   const beads: ModelBead[] = []
   const perRun = new Map<number, number>()
   for (let i = 0; i < cells.n; i++) {
-    const binFrom = cells.from + i * cells.k
+    const binFrom = cells.from + (cells.cellOf === undefined ? i : cells.cellOf[i]) * cells.k
     const run = runs.find((r) => r.from <= binFrom && binFrom < r.to)
     if (run === undefined) continue
     const name = job.mc.chromnames[run.cid]
@@ -564,7 +613,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   const set = structureFromBeads(placed, cells.k * binsize)
   const sequences = new Set(placed.map((bead) => bead.contig))
   const subject =
-    span === null
+    spans === null
       ? sequences.size === 1
         ? [...sequences][0]
         : `${sequences.size} sequences`

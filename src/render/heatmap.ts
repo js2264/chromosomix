@@ -1637,6 +1637,13 @@ export class HeatmapView {
    * {@link setLaneEcho}.
    */
   private laneEcho: number | null = null
+  /**
+   * A place named by a cell that is not a map — a bead of the structure cell
+   * (§25.4) — as full lines across the plot on the axes that carry it, so a
+   * reader looking at the map sees *where* the bead is, not a tick at the
+   * edge. `null` on an axis the place is not on.
+   */
+  private locusEcho: { rows: number | null; cols: number | null } | null = null
   /** The cell under the pointer, for the crosshair. `null` when outside. */
   private hoverCell: Cell | null = null
   /**
@@ -3463,6 +3470,7 @@ export class HeatmapView {
       this.drawCrosshair()
       this.drawEcho()
       this.drawLaneEcho()
+      this.drawLocusEcho()
     }
     this.drawSelection()
     this.drawPlotBorder()
@@ -4162,6 +4170,50 @@ export class HeatmapView {
     if (this.laneEcho === unit) return
     this.laneEcho = unit
     this.changed()
+  }
+
+  /** See {@link locusEcho}. */
+  setLocusEcho(at: { rows: number | null; cols: number | null } | null): void {
+    const held = this.locusEcho
+    if (held === null && at === null) return
+    if (held !== null && at !== null && held.rows === at.rows && held.cols === at.cols) return
+    this.locusEcho = at
+    this.changed()
+  }
+
+  /** The lines of {@link locusEcho}: dashed, the crosshair's colour, the plot's height and width. */
+  private drawLocusEcho(): void {
+    const at = this.locusEcho
+    if (at === null || this.matrix === null) return
+    const plot = this.dataRect
+    if (plot.width <= 0 || plot.height <= 0) return
+    const origin = this.plotRect
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(plot.x, plot.y, plot.width, plot.height)
+    ctx.clip()
+    ctx.strokeStyle = this.opts.crosshairColor
+    ctx.lineWidth = Math.max(1 / this.dpr, 0.75)
+    ctx.setLineDash([4, 3])
+    ctx.beginPath()
+    if (at.cols !== null) {
+      const x = this.snap(origin.x + this.colScale.toPixel(at.cols))
+      if (x >= plot.x && x <= plot.x + plot.width) {
+        ctx.moveTo(x, plot.y)
+        ctx.lineTo(x, plot.y + plot.height)
+      }
+    }
+    // A turned map has one axis of position; its rows are separation.
+    if (at.rows !== null && this.turn === null) {
+      const y = this.snap(origin.y + this.rowScale.toPixel(at.rows))
+      if (y >= plot.y && y <= plot.y + plot.height) {
+        ctx.moveTo(plot.x, y)
+        ctx.lineTo(plot.x + plot.width, y)
+      }
+    }
+    ctx.stroke()
+    ctx.restore()
   }
 
   /**

@@ -293,6 +293,15 @@ export interface RegionParam extends ParamBase {
    */
   sequences?: boolean
   /**
+   * The box takes **several sequences**, comma-separated, and is seeded from
+   * what the map shows (§25.6): every sequence on screen when the view spans
+   * more than one, the locus when it is inside one, and **empty for the whole
+   * file**, since empty means every sequence and a list of all of them is the
+   * same answer said the long way. The structure tasks take it; a task that
+   * reads one sequence leaves it off and gets the first on screen.
+   */
+  many?: boolean
+  /**
    * Empty is not an answer, so the list says *choose one* rather than *every*.
    *
    * Compartments is the case: a correlation matrix is a property of one

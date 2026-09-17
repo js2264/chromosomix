@@ -550,18 +550,23 @@ describe('what the model can be coloured by', () => {
     expect(values).not.toContain('track:f1')
   })
 
-  it('offers a loops row as chords only where the list has one', () => {
+  it('offers a loops row as chords only where the list has one, beside the reader\'s own marks', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
     structureCells(without.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const labels = (deck: PanelDeck): string[] =>
-      all<HTMLElement>(deck.el, '.structure-menu .structure-field > span').map((node) => node.textContent ?? '')
-    expect(labels(without.deck)).not.toContain('loops as chords')
+    const choices = (deck: PanelDeck): string[] => {
+      const field = Array.from(all<HTMLElement>(deck.el, '.structure-menu .structure-field')).find((f) =>
+        f.textContent?.startsWith('loops as chords'),
+      )
+      return Array.from(field?.querySelectorAll('option') ?? []).map((o) => o.value)
+    }
+    // The marks are always there to draw (the deck has a manual store), a loops row only when loaded.
+    expect(choices(without.deck)).toEqual(['', 'manual'])
     const store = fakeStore([structureEntry(), trackEntry('l1', 'loops.bedpe', 'pairs')])
     const withLoops = make(store)
     withLoops.deck.add({ kind: 'structure' })
     structureCells(withLoops.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    expect(labels(withLoops.deck)).toContain('loops as chords')
+    expect(choices(withLoops.deck)).toEqual(['', 'l1', 'manual'])
   })
 
   it('takes part in a picking mode armed on the deck, and is let go with it', () => {
@@ -672,5 +677,94 @@ describe('which model the cell draws (§25.6)', () => {
       field.textContent?.startsWith('model'),
     )
     expect(single).toBeUndefined()
+  })
+})
+
+describe('the cell empties when the model it shows is removed (§25.3)', () => {
+  const second = Array.from({ length: 8 }, (_, i) => `chr2\t${i * 5000}\t${-i}\t${i}\t0`).join('\n')
+
+  it('shows nothing, and says so, after the picked row goes; a remembered row that is gone falls back', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const store = fakeStore([structureEntry(), two])
+    const { deck } = make(store)
+    deck.showStructure('a2')
+    expect(deck.shownStructure()).toBe('a2')
+    store.entries.splice(1, 1)
+    store.notify()
+    expect(deck.shownStructure()).toBeNull()
+    expect(deck.el.querySelector('.structure-note')?.textContent).toMatch(/was removed/)
+    deck.destroy()
+    // The next deck on the same file: the choice was forgotten with the row.
+    const again = make(fakeStore([structureEntry()]))
+    again.deck.add({ kind: 'structure' })
+    expect(again.deck.shownStructure()).toBe('a1')
+  })
+})
+
+describe('the key (§25.5)', () => {
+  it('ghosts a sequence on a click, shows it alone on a double-click, and offers its colour', async () => {
+    const twoSeq = [structureEntry(), { ...structureEntry(G3D.replace(/chr1/g, 'chr2')), id: 'a2' }]
+    const store = fakeStore(twoSeq)
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    // The key is painted on the next frame.
+    await new Promise((r) => setTimeout(r, 60))
+    const names = all<HTMLButtonElement>(cell, '.structure-key-name')
+    expect(names.map((b) => b.textContent)).toEqual(['chr1'])
+    names[0].click()
+    await new Promise((r) => setTimeout(r, 260))
+    expect(store.restyled.at(-1)?.patch.structure?.ghosted).toEqual(['chr1'])
+    names[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    // One sequence has no others to ghost: solo of the only one is everything back.
+    expect(store.restyled.at(-1)?.patch.structure?.ghosted).toEqual([])
+    const swatch = cell.querySelector<HTMLInputElement>('.structure-key-swatch')
+    expect(swatch).not.toBeNull()
+    swatch!.value = '#112233'
+    swatch!.dispatchEvent(new Event('input'))
+    expect(store.restyled.at(-1)?.patch.structure?.sequenceColours).toEqual({ chr1: '#112233' })
+  })
+})
+
+describe('select mode and the reader\'s marks (§25.4)', () => {
+  it('has a badge for the mode, and a select button that arms it', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
+    cell.querySelector<HTMLButtonElement>('.structure-select')?.click()
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('select')
+    expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(true)
+  })
+
+  it('offers the reader\'s arrowheads as chords in the menu', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    cell.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
+    const field = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) =>
+      f.textContent?.startsWith('loops as chords'),
+    )
+    const options = Array.from(field?.querySelectorAll('option') ?? []).map((o) => o.value)
+    expect(options).toContain('manual')
+    const fog = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) => f.textContent?.startsWith('fog'))
+    expect(fog?.querySelector('input')?.value).toBe('0.6')
+    const centre = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) =>
+      f.textContent?.includes('centre and axes'),
+    )
+    expect(centre).toBeDefined()
+  })
+
+  it('hides and shows the dialog\'s settings from the corner', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    const toggle = document.querySelector<HTMLButtonElement>('.modal-structure .structure-side-toggle')
+    expect(toggle).not.toBeNull()
+    toggle?.click()
+    expect(document.querySelector('.modal-structure .structure-side')?.classList.contains('hidden')).toBe(true)
+    toggle?.click()
+    expect(document.querySelector('.modal-structure .structure-side')?.classList.contains('hidden')).toBe(false)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   })
 })
