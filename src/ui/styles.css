@@ -1739,6 +1739,20 @@ p {
   flex: 0 0 auto;
 }
 
+/* The Aesthetics column with a structure cell's card after the view's own
+   aside (§25.3): the aside is `flex: 1 1 auto; min-height: 0` so a contig list
+   can take the space the cards leave, but beside a second flex item that
+   shrinks it under its own cards, which then lie over the structure card. With
+   a card after it the aside keeps its height and the column scrolls as a
+   whole, the way every other column of cards does. */
+.panel-column-body > .panel-host > .side:has(+ .structure-settings) {
+  flex: 0 0 auto;
+}
+
+.panel-column-body > .panel-host > .structure-settings {
+  flex: 0 0 auto;
+}
+
 /* The drag handle: the column's inner edge, six pixels of it.
 
    Absolute against the column, which is why the column does not scroll. It was
