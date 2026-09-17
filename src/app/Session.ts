@@ -1236,6 +1236,11 @@ export class Session {
    * the shell's own list is built the same way and for the same reason.
    */
   commands(): Command[] {
+    // The cells' own, after the session's: a structure cell's keys (§25.3).
+    return [...this.ownCommands(), ...(this.deck?.cellCommands() ?? [])]
+  }
+
+  private ownCommands(): Command[] {
     const state = this.store.state
     const file = this.file
     const isMetacool = this.isMetacool
@@ -7255,7 +7260,12 @@ export class Session {
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.
-    this.setAesthetics(view?.sideEl === undefined ? [] : [view.sideEl])
+    // The structure cell's card beside the map's (§25.3): its settings are a
+    // view's settings, and a view's settings are in this column.
+    this.setAesthetics([
+      ...(view?.sideEl === undefined ? [] : [view.sideEl]),
+      ...(this.deck?.structureSettings() === null || this.deck === null ? [] : [this.deck.structureSettings() as HTMLElement]),
+    ])
     // After the view is mounted, because the framing and the block a task runs
     // on are read off whatever is on screen *now* (§18.4) — and because a table
     // view has neither, which is a state the panel has to be able to show.

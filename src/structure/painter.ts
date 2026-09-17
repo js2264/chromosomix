@@ -50,6 +50,23 @@ export interface StructureView {
   chord: readonly [number, number] | null
   /** Loops drawn as chords (§25.5): each pair's anchors, as beads. */
   chords: ReadonlyArray<readonly [number, number]>
+  /**
+   * A size per bead, as a factor of the bead radius, or `null` for every
+   * bead the same (`StructureStyle.sizeBy`).
+   */
+  sizes: Float32Array | null
+  /**
+   * The map's contacts from the pinned bead as chords: the bead at the far
+   * end, the contact's weight (0–1 of the strongest) and its colour on the
+   * map's scale.
+   */
+  contactChords: ReadonlyArray<{ bead: number; weight: number; colour: string }>
+  /** The reader's measurements: pairs of beads joined by a dashed line, with the distance written at the middle. */
+  measures: ReadonlyArray<readonly [number, number]>
+  /** The genomic ruler: beads that carry a tick, and what the tick says. */
+  ruler: ReadonlyArray<{ bead: number; label: string }>
+  /** Another model in this one's frame (`StructureStyle.compare`), or `null`. */
+  overlay: { structure: Structure; colours: BeadColours } | null
   /** The one haplotype shown, as an index, or `-1` for all of them. */
   haplotype: number
 }
@@ -151,11 +168,39 @@ export function drawStructure(
   if (drawBeads) {
     for (let i = 0; i < n; i++) if (shown[i] === 1) marks.push({ depth: depth[i], kind: 0, a: i, b: -1 })
   }
+  const sizeOf = (i: number): number => (view.sizes === null ? 1 : view.sizes[i])
   marks.sort((m, o) => o.depth - m.depth)
 
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   const background = parseColour(palette.background)
+
+  // The compared model under this one: its runs as thin lines in its own
+  // colours, projected through the same camera, so the two read as one
+  // picture and this model is the one on top.
+  const overlay = view.overlay
+  if (overlay !== null) {
+    ctx.globalAlpha = 0.7
+    ctx.lineWidth = Math.max(0.6, stickRadius * 0.9)
+    const o = overlay.structure
+    for (const chain of o.chains) {
+      for (let r = 0; r < chain.runs.length; r += 2) {
+        for (let k = chain.runs[r] + 1; k < chain.runs[r + 1]; k++) {
+          const a = chain.beads[k - 1]
+          const b = chain.beads[k]
+          if (o.present[a] === 0 || o.present[b] === 0) continue
+          const pa = project(view.camera, box, o.x[a], o.y[a], o.z[a])
+          const pb = project(view.camera, box, o.x[b], o.y[b], o.z[b])
+          if (pa === null || pb === null) continue
+          ctx.strokeStyle = overlay.colours.css[a]
+          ctx.beginPath()
+          ctx.moveTo(pa.px, pa.py)
+          ctx.lineTo(pb.px, pb.py)
+          ctx.stroke()
+        }
+      }
+    }
+  }
   for (const mark of marks) {
     const i = mark.a
     const ghost = view.lit !== null && view.lit[i] === 0
@@ -188,7 +233,7 @@ export function drawStructure(
       continue
     }
     const t = fade(i)
-    const radius = Math.max(0.4, beadRadius * size[i] * (1 - DEPTH_SHRINK * t))
+    const radius = Math.max(0.4, beadRadius * sizeOf(i) * size[i] * (1 - DEPTH_SHRINK * t))
     const marked = view.hovered.includes(i) || view.pinned === i
     if (marked) {
       ctx.globalAlpha = 1
@@ -217,6 +262,44 @@ export function drawStructure(
       ctx.lineTo(px[b], py[b])
     }
     ctx.stroke()
+  }
+
+  // The map's contacts from the pinned bead: a line per contact, as wide as
+  // the contact is strong, in the map's colour for it.
+  if (view.pinned >= 0 && view.contactChords.length > 0 && shown[view.pinned] === 1) {
+    const p = view.pinned
+    ctx.globalAlpha = 0.85
+    for (const contact of view.contactChords) {
+      if (shown[contact.bead] !== 1) continue
+      ctx.strokeStyle = contact.colour
+      ctx.lineWidth = Math.max(0.8, stickRadius * (0.5 + 2 * contact.weight))
+      ctx.beginPath()
+      ctx.moveTo(px[p], py[p])
+      ctx.lineTo(px[contact.bead], py[contact.bead])
+      ctx.stroke()
+    }
+  }
+
+  // The reader's measurements: dashed ink, the distance written at the middle.
+  if (view.measures.length > 0) {
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = palette.ink
+    ctx.fillStyle = palette.ink
+    ctx.font = '10px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.lineWidth = Math.max(1.2, stickRadius * 1.2)
+    ctx.setLineDash([5, 4])
+    for (const [a, b] of view.measures) {
+      if (shown[a] !== 1 || shown[b] !== 1) continue
+      ctx.beginPath()
+      ctx.moveTo(px[a], py[a])
+      ctx.lineTo(px[b], py[b])
+      ctx.stroke()
+      const d = Math.hypot(structure.x[a] - structure.x[b], structure.y[a] - structure.y[b], structure.z[a] - structure.z[b])
+      ctx.fillText(d.toFixed(2), (px[a] + px[b]) / 2, (py[a] + py[b]) / 2 - 3)
+    }
+    ctx.setLineDash([])
   }
 
   // The chord on top of everything: the one line that says *these two*.

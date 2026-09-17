@@ -14,7 +14,7 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
-node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 17-select-loop-mark.png
+node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
 ```
 
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and

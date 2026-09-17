@@ -18,6 +18,7 @@
 import type { LocusWindow } from '../render/locus'
 import type { ViewState } from '../types'
 import type { PickHandlers } from '../ui/mapPick'
+import type { Command } from '../ui/commands'
 
 export type DeckCellKind = 'structure' | 'tracks'
 
@@ -53,6 +54,10 @@ export interface DeckCell {
   showModel?(id: string): void
   /** The structure row the cell is drawing, or `null`. A structure cell only. */
   shownModel?(): string | null
+  /** The cell's settings as a card for the Aesthetics panel (§25.3). A structure cell only. */
+  settings?(): HTMLElement
+  /** What the cell can be told to do, with keys, for the palette (§25.3). */
+  commands?(): Command[]
   /**
    * Take part in a picking mode (`ui/mapPick.ts`): a click names a place for
    * the card that armed it, until it is cancelled. Optional, for a cell that

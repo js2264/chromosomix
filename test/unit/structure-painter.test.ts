@@ -47,6 +47,11 @@ function view(overrides: Partial<StructureView> = {}): StructureView {
     pinned: -1,
     chord: null,
     chords: [],
+    sizes: null,
+    contactChords: [],
+    measures: [],
+    ruler: [],
+    overlay: null,
     haplotype: -1,
     ...overrides,
   }

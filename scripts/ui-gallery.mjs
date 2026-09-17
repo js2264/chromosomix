@@ -99,17 +99,17 @@ try {
     await page.mouse.move(10, 10)
   }
 
-  // The menu: colour by the first track.
-  await page.click('.structure-menu-toggle')
-  await sleep(300)
-  const options = await page.evaluate(() => Array.from(document.querySelectorAll('.structure-menu select option')).map((o) => o.value))
+  // The settings card, in the Aesthetics panel: colour by the first track.
+  const row = (label) => page.locator('.structure-settings .field').filter({ has: page.locator('.field-label', { hasText: new RegExp(`^${label}$`) }) }).first()
+  await fold('Show the Aesthetics panel')
+  await sleep(500)
+  const options = await page.evaluate(() => Array.from(document.querySelectorAll('.structure-settings select option')).map((o) => o.value))
   const track = options.find((o) => o.startsWith('track:'))
   if (track) {
-    await page.locator('.structure-menu .structure-field').filter({ hasText: 'colour by' }).locator('select').selectOption(track)
+    await row('colour by').locator('select').selectOption(track)
     await sleep(4000)
   }
   await shot('06-colour-by-track')
-  await page.click('.structure-menu-toggle')
 
   // Enlarged: the model in a dialog with the settings beside it, then back.
   await page.click('.structure-expand')
@@ -192,13 +192,12 @@ try {
   const show = structures.locator('.structure-show').first()
   if (await show.count()) { await show.click(); await sleep(3000) }
   await fold('Fold the Annotations panel')
-  await page.click('.structure-menu-toggle')
   await sleep(600)
   await shot('13-model-picker')
 
-  // The key as a control (the menu is still open from the picker): colour by
-  // sequence, then a double-click on a name shows that sequence alone.
-  await page.locator('.structure-menu .structure-field').filter({ hasText: 'colour by' }).locator('select').selectOption('sequence')
+  // The key as a control: colour by sequence, then a double-click on a name
+  // shows that sequence alone.
+  await row('colour by').locator('select').selectOption('sequence')
   await sleep(1500)
   const names = page.locator('.structure-key-name')
   if (await names.count() > 2) {
@@ -210,12 +209,11 @@ try {
     await names.nth(1).dblclick()
     await sleep(1200)
   }
-  // The centre of rotation and the axes, from the menu's toggle; the menu closed for the shot.
-  await page.click('.structure-menu .structure-toggle[title*="centre and axes"]')
+  // The centre of rotation and the axes, and the ruler, from the card's toggles.
+  await page.click('.structure-settings .structure-toggle[title*="centre and axes"]')
+  await page.click('.structure-settings .structure-toggle[title*="ruler"]')
   await sleep(1200)
-  await page.click('.structure-menu-toggle')
-  await sleep(400)
-  await shot('15-centre-axes')
+  await shot('15-centre-axes-ruler')
   // Hover a bead: the maps draw the place as lines across the heatmap.
   const cv = page.locator('.structure-wrap canvas').first()
   const bb = await cv.boundingBox()
@@ -249,6 +247,37 @@ try {
   }
   await shot('17-select-loop-mark')
   await page.click('.structure-select')
+
+  // Contacts from the pin: pin a bead, turn the chords on.
+  if (bb) {
+    let pinned = false
+    for (let j = 2; j < 62 && !pinned; j += 2) for (let i = 2; i < 62 && !pinned; i += 2) {
+      await page.mouse.move(bb.x + (bb.width * i) / 64, bb.y + (bb.height * j) / 64)
+      await sleep(25)
+      if (/bead \d+ of/.test(await readout())) { await page.mouse.click(bb.x + (bb.width * i) / 64, bb.y + (bb.height * j) / 64); pinned = true }
+    }
+    await page.mouse.move(10, 10)
+  }
+  await page.click('.structure-settings .structure-toggle[title*="contact chords"]')
+  await sleep(2500)
+  await shot('18-contact-chords')
+  await page.click('.structure-settings .structure-toggle[title*="contact chords"]')
+
+  // Compare: the reconstruction against the loaded model, coloured by displacement.
+  const compare = row('compare with').locator('select')
+  if (await compare.count()) {
+    const values = await compare.locator('option').allTextContents()
+    const other = values.find((v) => v.startsWith('3D model'))
+    if (other) {
+      await compare.selectOption({ label: other })
+      await sleep(1500)
+      await row('colour by').locator('select').selectOption('displacement')
+      await sleep(2500)
+      await page.click('.structure-frame')
+      await sleep(1500)
+      await shot('19-compare-models')
+    }
+  }
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 500))
   await shot('99-failure')

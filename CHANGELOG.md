@@ -14,6 +14,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The 3D viewer, as a view of the app (§25.3–25.5).** Its settings are now a *3D structure* card
+  of the Aesthetics panel beside the map's cards, built from the same fields, borrowed by the enlarge
+  dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
+  **depth slab** into a dense model, a **genomic ruler** along each chain, camera presets, a
+  turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `e`,
+  `m`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
+  threshold, as thick as the contact and in the map's colours. **Compare with** superposes another
+  structure row by a similarity fit over the beads the two share, reports the RMSD, and *colour by
+  displacement* shows where they differ. **Measure mode** turns two clicks into a distance kept on
+  the card and written on the model.
 - **The structure cell's settings, settled (§25.3).** Drawn as is three icon toggles that combine
   (beads, sticks, tube); every gap in a chain is a dashed run of ink, always, and the *gaps* option
   is gone; chords and the hovered contact's chord are thick ink cylinders rather than one-pixel

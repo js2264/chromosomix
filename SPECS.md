@@ -6840,7 +6840,22 @@ always** — a model has no horizon, and perspective made the same distance read
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
 the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
 everything else is drawn whole. The map's *legend* switch (§7) hides the key here too, so one switch
-says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre. A phased file draws both homologues,
+says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
+
+**The settings are a card of the Aesthetics panel** — *3D structure*, beside the map's *Map* and
+*Export* cards, built from the same field primitives, mounted by the session whenever the deck has a
+structure cell — and not a menu in the cell: a view's settings are in that column, and the model is a
+view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
+borrows the card into its sidebar and gives it back where it was. The card also carries **size by**
+(a track whose value at each bead sets its size, half to nearly twice the radius over the track's
+robust range — a second channel beside the colour), a **depth slab** (two clipping planes either side
+of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
+dense globule), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
+the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide — labelled, at most eighty labels),
+**camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
+**frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` select, `m`
+measure, `r` turntable — enabled while a structure cell is on screen. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it; the cell's own canvas, key, labels and menu are
@@ -6882,7 +6897,11 @@ lights its beads and, for a contact, joins the two with a chord; the **ball** on
 translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
 of the model nearer the eye, as a ball at that place would.
 
-**Select mode** (the pointer-click button in the corner, the badge reading *select*) turns clicks
+**Measure mode** (the ruler button in the corner, the badge reading *measure*) makes two clicks a
+measurement: the first bead is held, the second closes it, and the card lists it — the two loci, the
+distance in the model's units and the genomic separation along the sequence, or *across sequences* —
+until its × removes it; each is drawn on the model as dashed ink with the distance written at the
+middle, and in the figure the same. **Select mode** (the pointer-click button in the corner, the badge reading *select*) turns clicks
 into the reader's own marks (§8.1's manual annotations): the first bead clicked is held and named in
 the status bar; the same bead again is a **line** at its locus on both axes, another bead is an
 **arrowhead** — the map's loop mark — between the two; Esc lets the held bead go. The marks land in
@@ -6914,6 +6933,22 @@ alone** (every other ghosted; a second double-click brings all back). Ghosting s
 window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
 **arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
 sets, so a loop marked on the map or in select mode is a chord on the model.
+
+**Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
+contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact is at least
+the threshold slider's fraction of the strongest (the strongest four hundred where more pass), each
+as thick as its contact and coloured on the map's own scale for the value: the virtual 4C of the pin,
+read in space. A toggle beside the slider turns them off without losing the threshold.
+
+**Compare with.** Another structure row — the loaded model against the reconstruction, or two
+solvers' models of one map — is **superposed** on this one: the beads the two share are matched by
+locus (and haplotype where both are phased), the other is rotated, scaled and moved onto this by a
+similarity fit (Horn's closed form for the rotation, Umeyama's scale; `structure/align.ts`, held
+still by a model asked back from a turned, scaled and shifted copy of itself), drawn in grey as a thin
+tube in this model's frame, and the card says how many beads matched and the root-mean-square
+distance between them. *Colour by displacement* colours each bead of this model by its distance to
+its bead in the other, on a ramp, which is where the two disagree. Fewer than four shared beads is
+no fit, and the card says so.
 
 One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
 own **score** and any column it carries; and, from the session, **a track's values** at each

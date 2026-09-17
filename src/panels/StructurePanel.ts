@@ -67,6 +67,11 @@ import {
   trackSource,
 } from '../structure/sources'
 import type { ColourSource } from '../structure/colour'
+import { robustRangeOf, rgbOf } from '../structure/colour'
+import { alignTo, displacements, type Alignment } from '../structure/align'
+import { transformValue } from '../render/scale'
+import { settingsField } from '../ui/laneSettings'
+import type { Command } from '../ui/commands'
 import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
 import type { LocusWindow } from '../render/locus'
 import { colormapCss } from '../render/colormaps'
@@ -96,7 +101,7 @@ import {
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { button, el, fmt } from '../ui/dom'
-import { icon, iconButton } from '../ui/icons'
+import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import { Modal } from '../ui/Modal'
 import { getPlotOptions } from '../ui/plotOptions'
@@ -159,6 +164,14 @@ const CAMERA_SCOPE = 'structure:camera'
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
 export const MANUAL_CHORDS = 'manual'
+/** The colouring by each bead's distance to its bead in the compared model (§25.5). */
+export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
+/** The most contact chords drawn from a pinned bead: the strongest, when more pass the threshold. */
+const MAX_CONTACT_CHORDS = 400
+/** The ruler's steps, in base pairs: the first at least ten beads wide is the one used. */
+const RULER_STEPS = [1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7]
+const NO_CONTACT_CHORDS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
+const NO_TICKS: ReadonlyArray<{ bead: number; label: string }> = []
 /**
  * The key that names the centre of rotation: Cmd on a Mac, Ctrl elsewhere,
  * which is the modifier each platform's hand already holds for "act on the
@@ -207,8 +220,27 @@ export class StructurePanel implements DeckCell {
   private fogPending: number | null = null
   private keyClickTimer: number | null = null
   private readonly labelsEl = el('div', { class: 'structure-labels' })
-  private readonly menu = el('div', { class: 'structure-menu hidden' })
-  private readonly menuToggle: HTMLButtonElement
+  /**
+   * The cell's settings, as a card of the Aesthetics panel (§25.3): built
+   * here, mounted by the session beside the map's cards, borrowed by the
+   * dialog's sidebar and given back. One set of controls, one parent at a
+   * time.
+   */
+  private readonly settingsEl = el('div', { class: 'controls-card structure-settings' })
+  private settingsHome: { parent: HTMLElement; next: Node | null } | null = null
+  /** Measure mode (§25.4): two clicks are a distance, kept in a list. */
+  private measuring = false
+  private measureFirst = -1
+  private measureButton: HTMLButtonElement | null = null
+  private measures: Array<readonly [number, number]> = []
+  /** The turntable: the model turned slowly by itself until stopped. */
+  private turning = false
+  private turnFrame = 0
+  /** The compared model (§25.5), aligned once per pair of rows. */
+  private compared: { key: string; overlay: { structure: Structure; colours: BeadColours }; fit: Alignment } | null = null
+  private contactCache: { key: string; list: ReadonlyArray<{ bead: number; weight: number; colour: string }> } | null = null
+  private rulerCache: { key: string; list: ReadonlyArray<{ bead: number; label: string }> } | null = null
+  private sizeCache: { key: string; samples: TrackSampleSet; sizes: Float32Array | null } | null = null
   /** The cell's body, where the picture lives when it is not enlarged. */
   private readonly body: HTMLElement
   /** The modal the picture is enlarged into, while it is (§25.3). */
@@ -264,10 +296,12 @@ export class StructurePanel implements DeckCell {
     })
     this.nameEl.readOnly = true
     this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
-    this.menuToggle = iconButton('sliders-horizontal', 'How this model is drawn', () => this.toggleMenu(), {
-      class: 'btn btn-icon structure-menu-toggle',
-      size: 14,
-    })
+    this.measureButton = iconButton(
+      'ruler',
+      'Measure: click two beads for the distance between them, kept in the card',
+      () => this.toggleMeasuring(),
+      { class: 'btn btn-icon structure-measure', size: 14 },
+    )
     const frameButton = iconButton('scan', 'Frame what the maps are looking at', () => this.frameLit(), {
       class: 'btn btn-icon structure-frame',
       size: 14,
@@ -287,10 +321,10 @@ export class StructurePanel implements DeckCell {
       this.keyEl,
       this.modeEl,
       this.readoutEl,
-      this.menu,
-      el('div', { class: 'structure-corner' }, this.selectButton, this.menuToggle, frameButton, expandButton),
+      el('div', { class: 'structure-corner' }, this.selectButton, this.measureButton, frameButton, expandButton),
     )
     this.paintMode()
+    this.paintSettings()
     // The modifiers are read off the window, since a key goes down wherever
     // the focus is; they are acted on only while this cell is engaged — the
     // pointer over it, its canvas focused, or its dialog open — so Cmd+C in a
@@ -411,6 +445,7 @@ export class StructurePanel implements DeckCell {
 
   destroy(): void {
     this.destroyed = true
+    if (this.turnFrame !== 0) cancelAnimationFrame(this.turnFrame)
     this.expanded?.close()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.rememberTimer !== null) clearTimeout(this.rememberTimer)
@@ -565,8 +600,34 @@ export class StructurePanel implements DeckCell {
       // — the key's click — is a change to what is lit.
       this.relight()
     }
-    this.paintMenu()
+    this.paintSettings()
     this.schedule()
+  }
+
+  /** The card of settings, for the Aesthetics panel (`PanelDeck.structureSettings`). */
+  settings(): HTMLElement {
+    return this.settingsEl
+  }
+
+  /**
+   * What the cell can be told to do, with a key each (§25.3): listed in the
+   * palette and bound through it, like every other command of the app.
+   */
+  commands(): Command[] {
+    const style = this.style()
+    const has = this.structure !== null
+    const on = (flag: boolean): string => (flag ? 'on' : 'off')
+    return [
+      { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', keys: 'f', enabled: has, run: () => this.frameLit() },
+      { id: 'structure-all', group: 'Structure', title: 'Show the whole model', keys: 'a', enabled: has, run: () => this.frameAll() },
+      { id: 'structure-beads', group: 'Structure', title: `Beads (${on(style.beads)})`, keys: '1', enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
+      { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, keys: '2', enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
+      { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, keys: '3', enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
+      { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, keys: 'l', enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
+      { id: 'structure-select', group: 'Structure', title: `Select mode (${on(this.selecting)})`, hint: 'Click a bead to mark its locus, two beads for a loop', keys: 'e', enabled: has, run: () => this.toggleSelecting() },
+      { id: 'structure-measure', group: 'Structure', title: `Measure mode (${on(this.measuring)})`, hint: 'Click two beads for the distance between them', keys: 'm', enabled: has, run: () => this.toggleMeasuring() },
+      { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', keys: 'r', enabled: has, run: () => this.toggleTurning() },
+    ]
   }
 
   // -------------------------------------------------------------------------
@@ -593,8 +654,9 @@ export class StructurePanel implements DeckCell {
       // toggled, so the page does not scroll while the hand is here.
       if (this.overCanvas) event.preventDefault()
       this.keys.space = true
-    } else if (event.key === 'Escape' && this.selecting && this.selectFirst >= 0) {
+    } else if (event.key === 'Escape' && ((this.selecting && this.selectFirst >= 0) || (this.measuring && this.measureFirst >= 0))) {
       this.selectFirst = -1
+      this.measureFirst = -1
       this.pinned = -1
       setReadout('')
       this.schedule()
@@ -628,7 +690,9 @@ export class StructurePanel implements DeckCell {
 
   /** The badge: which of the four things the hand is about to do. */
   private paintMode(): void {
-    const mode = this.selecting
+    const mode = this.measuring
+      ? { icon: 'ruler', text: 'measure', title: 'Click two beads for the distance between them; Esc to cancel' }
+      : this.selecting
       ? { icon: 'mouse-pointer-click', text: 'select', title: 'Click a bead to mark its locus; click a second for a loop; Esc to cancel' }
       : this.keys.centre
         ? { icon: 'locate-fixed', text: 'centre', title: `Click a bead to turn about it; tap ${CENTRE_KEY === 'Meta' ? '⌘' : 'Ctrl'} alone to show or hide the centre` }
@@ -645,10 +709,91 @@ export class StructurePanel implements DeckCell {
   private toggleSelecting(): void {
     this.selecting = !this.selecting
     this.selectFirst = -1
+    if (this.selecting && this.measuring) this.toggleMeasuring()
     this.selectButton?.classList.toggle('is-on', this.selecting)
     this.selectButton?.setAttribute('aria-pressed', String(this.selecting))
     if (!this.selecting) setReadout('')
     this.paintMode()
+  }
+
+  private toggleMeasuring(): void {
+    this.measuring = !this.measuring
+    this.measureFirst = -1
+    if (this.measuring && this.selecting) this.toggleSelecting()
+    this.measureButton?.classList.toggle('is-on', this.measuring)
+    this.measureButton?.setAttribute('aria-pressed', String(this.measuring))
+    if (!this.measuring) setReadout('')
+    this.paintMode()
+  }
+
+  /**
+   * A click in measure mode: the first bead is held, the second closes a
+   * measurement — the distance in the model's units and the genomic
+   * separation, kept in the card until removed, drawn as dashed ink with the
+   * distance written at the middle.
+   */
+  private measureClick(bead: number): void {
+    const structure = this.structure
+    if (structure === null) return
+    if (bead < 0) {
+      this.measureFirst = -1
+      this.pinned = -1
+      setReadout('')
+      this.schedule()
+      return
+    }
+    if (this.measureFirst < 0 || this.measureFirst === bead) {
+      this.measureFirst = bead
+      this.pinned = bead
+      const at = lociOf(structure, bead)
+      setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click a second bead to measure to it`)
+      this.schedule()
+      return
+    }
+    const pair: readonly [number, number] = [this.measureFirst, bead]
+    this.measureFirst = -1
+    this.pinned = -1
+    this.measures = [...this.measures, pair]
+    setReadout(this.measureLine(pair))
+    this.paintSettings()
+    this.schedule()
+  }
+
+  /** `IV:1,000,001–1,005,000 → IV:1,200,001–1,205,000 · 3.21 apart · 200 kb along` */
+  private measureLine([a, b]: readonly [number, number]): string {
+    const structure = this.structure
+    if (structure === null) return ''
+    const la = lociOf(structure, a)
+    const lb = lociOf(structure, b)
+    const d = distanceBetween(structure, a, b)
+    const along =
+      la.contig === lb.contig ? `${fmt.bp(Math.abs((la.start + la.end) / 2 - (lb.start + lb.end) / 2))} along` : 'across sequences'
+    return `${la.contig}:${fmt.int(la.start + 1)}–${fmt.int(la.end)} → ${lb.contig}:${fmt.int(lb.start + 1)}–${fmt.int(lb.end)} · ${fmt.num(d)} apart · ${along}`
+  }
+
+  private toggleTurning(): void {
+    this.turning = !this.turning
+    if (this.turning) {
+      const step = (): void => {
+        if (!this.turning || this.destroyed) return
+        this.camera = orbit(this.camera, 0.004, 0)
+        this.schedule()
+        this.turnFrame = requestAnimationFrame(step)
+      }
+      this.turnFrame = requestAnimationFrame(step)
+    } else if (this.turnFrame !== 0) {
+      cancelAnimationFrame(this.turnFrame)
+      this.turnFrame = 0
+      this.rememberCamera()
+    }
+    this.paintSettings()
+  }
+
+  /** A view from a side: the camera's angles set, its distance and target kept. */
+  private lookFrom(azimuth: number, elevation: number): void {
+    this.camera = { ...this.camera, azimuth, elevation }
+    this.rememberCamera()
+    this.schedule()
   }
 
   /**
@@ -935,6 +1080,7 @@ export class StructurePanel implements DeckCell {
       const bead = this.renderer?.pick(at.x, at.y) ?? -1
       if (bead < 0) {
         if (this.selecting) this.selectClick(-1)
+        else if (this.measuring) this.measureClick(-1)
         else if (this.pinned >= 0) {
           this.pinned = -1
           this.schedule()
@@ -954,6 +1100,10 @@ export class StructurePanel implements DeckCell {
       }
       if (this.selecting) {
         this.selectClick(bead)
+        return
+      }
+      if (this.measuring) {
+        this.measureClick(bead)
         return
       }
       // A picking mode first: the click names a place for the card that asked
@@ -1200,7 +1350,143 @@ export class StructurePanel implements DeckCell {
       chord: getPlotOptions().crosshair ? this.chord : null,
       chords: this.loopsOf(structure, style.loops),
       haplotype,
+      sizes: this.sizesOf(structure, style),
+      contactChords: style.contactChords ? this.contactChordsOf(structure, style) : NO_CONTACT_CHORDS,
+      measures: this.measures,
+      ruler: style.ruler ? this.rulerOf(structure) : NO_TICKS,
+      overlay: this.overlayOf(structure, style),
     }
+  }
+
+  /**
+   * A size per bead from a track (§25.5): the track's value at the bead,
+   * scaled between half and nearly twice the bead radius over its robust
+   * range, so one outlier does not make every other bead a dot. `null` for
+   * every bead the same, and while the samples are on their way.
+   */
+  private sizesOf(structure: Structure, style: StructureStyle): Float32Array | null {
+    if (style.sizeBy === '') return null
+    const entry = this.props.store()?.entries.find((row) => row.id === style.sizeBy)
+    if (entry === undefined || !hasTrackControls(entry.kind)) return null
+    const samples = this.samplesOf(structure, entry)
+    if (samples === null) return null
+    // Keyed on the samples object itself: the cache hands back a new one
+    // when a fetch lands, which is when the sizes have to be read again.
+    const key = `${entry.id}:${structure.set.length}`
+    if (this.sizeCache !== null && this.sizeCache.key === key && this.sizeCache.samples === samples) return this.sizeCache.sizes
+    const source = trackSource(structure, samples, entry.label, entry.style.limits)
+    const values = source.values ?? new Float32Array(structure.set.length).fill(Number.NaN)
+    const range = source.range ?? robustRangeOf(values)
+    const span = range.max > range.min ? range.max - range.min : 1
+    const sizes = new Float32Array(values.length)
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i]
+      sizes[i] = Number.isNaN(v) ? 0.7 : 0.5 + 1.3 * Math.max(0, Math.min(1, (v - range.min) / span))
+    }
+    this.sizeCache = { key, samples, sizes }
+    return sizes
+  }
+
+  /**
+   * The map's contacts from the pinned bead as chords (§25.5): every bead
+   * whose contact with it is at least the threshold of the strongest, the
+   * weight that fraction, the colour the map's own for the value — so the
+   * chords are the pinned bead's row of the map, read in space.
+   */
+  private contactChordsOf(structure: Structure, style: StructureStyle): ReadonlyArray<{ bead: number; weight: number; colour: string }> {
+    const contacts = this.props.contacts
+    if (contacts === undefined || this.pinned < 0) return NO_CONTACT_CHORDS
+    const key = `${this.pinned}:${style.contactThreshold}:${structure.set.length}`
+    if (this.contactCache !== null && this.contactCache.key === key) return this.contactCache.list
+    const from = lociOf(structure, this.pinned)
+    const values = contacts({ contig: from.contig, bp: (from.start + from.end) / 2 }, midpointsOf(structure))
+    const scale = this.props.contactsScale?.() ?? null
+    if (values === null) return NO_CONTACT_CHORDS
+    let max = 0
+    for (let i = 0; i < values.length; i++) {
+      if (i === this.pinned || !Number.isFinite(values[i])) continue
+      if (values[i] > max) max = values[i]
+    }
+    if (max <= 0) return NO_CONTACT_CHORDS
+    const ink = this.palette().ink
+    const list: Array<{ bead: number; weight: number; colour: string }> = []
+    for (let i = 0; i < values.length; i++) {
+      if (i === this.pinned || !Number.isFinite(values[i])) continue
+      const weight = values[i] / max
+      if (weight < style.contactThreshold) continue
+      let colour = ink
+      if (scale !== null && scale.vmax > scale.vmin) {
+        const t = (transformValue(values[i], scale.transform) - scale.vmin) / (scale.vmax - scale.vmin)
+        colour = colormapCss(scale.colormap, Math.max(0, Math.min(1, t)))
+      }
+      list.push({ bead: i, weight, colour })
+    }
+    list.sort((p, q) => q.weight - p.weight)
+    const kept = list.slice(0, MAX_CONTACT_CHORDS)
+    this.contactCache = { key, list: kept }
+    return kept
+  }
+
+  /**
+   * The genomic ruler (§25.5): a tick at the first bead of every step along
+   * each chain, the step the first nice one at least ten beads wide, labelled
+   * in the shortest unit that says it.
+   */
+  private rulerOf(structure: Structure): ReadonlyArray<{ bead: number; label: string }> {
+    const key = `${structure.set.length}:${structure.width}`
+    if (this.rulerCache !== null && this.rulerCache.key === key) return this.rulerCache.list
+    const step = RULER_STEPS.find((candidate) => candidate >= structure.width * 10) ?? RULER_STEPS[RULER_STEPS.length - 1]
+    const list: Array<{ bead: number; label: string }> = []
+    const set = structure.set
+    for (const chain of structure.chains) {
+      let last = -1
+      for (let k = 0; k < chain.beads.length; k++) {
+        const i = chain.beads[k]
+        if (structure.present[i] === 0) continue
+        const tick = Math.floor(set.start[i] / step)
+        if (tick === last) continue
+        last = tick
+        list.push({ bead: i, label: fmt.bp(tick * step) })
+      }
+    }
+    this.rulerCache = { key, list }
+    return list
+  }
+
+  /**
+   * The compared model (§25.5): another structure row, aligned onto this one
+   * over the beads they share (`structure/align.ts`), drawn in one muted
+   * colour so this model reads as the one in colour. Aligned once per pair
+   * of rows and kept until either changes.
+   */
+  private overlayOf(structure: Structure, style: StructureStyle): { structure: Structure; colours: BeadColours } | null {
+    if (style.compare === '' || style.compare === this.entry?.id) {
+      this.compared = null
+      return null
+    }
+    const entry = this.props.store()?.entries.find((row) => row.id === style.compare)
+    const payload = entry?.payload
+    if (entry === undefined || payload === undefined || payload.kind !== 'features' || payload.data.model === undefined) {
+      this.compared = null
+      return null
+    }
+    const key = `${this.entry?.id ?? ''}:${entry.id}:${structure.set.length}`
+    if (this.compared !== null && this.compared.key === key) return this.compared.overlay
+    const other = buildStructure(payload.data)
+    if (other === null) {
+      this.compared = null
+      return null
+    }
+    const fit = alignTo(structure, other)
+    if (fit === null) {
+      this.compared = null
+      return null
+    }
+    const moved: Structure = { ...other, x: fit.x, y: fit.y, z: fit.z }
+    const css = new Array<string>(moved.set.length).fill('#8c8c8c')
+    const colours: BeadColours = { rgb: rgbOf(css), css, key: { kind: 'none', title: '' } }
+    this.compared = { key, overlay: { structure: moved, colours }, fit }
+    return this.compared.overlay
   }
 
   /**
@@ -1236,6 +1522,14 @@ export class StructurePanel implements DeckCell {
     }
     if (by === STRUCTURE_COLOUR_MARKS) {
       return marksSource(structure, this.props.manual?.()?.marks ?? [])
+    }
+    if (by === STRUCTURE_COLOUR_DISPLACEMENT) {
+      // The overlay first, so the alignment exists; then each bead's distance
+      // to its bead in the compared model, on a ramp.
+      this.overlayOf(structure, this.style())
+      const fit = this.compared?.fit ?? null
+      if (fit === null) return { label: 'displacement — choose a model to compare with' }
+      return { label: 'displacement from the compared model', values: displacements(structure, fit), colormap: 'viridis' }
     }
     if (by === STRUCTURE_COLOUR_DISTANCE) return distanceSource(structure, this.pinned)
     if (by === STRUCTURE_COLOUR_CONTACTS) {
@@ -1428,9 +1722,36 @@ export class StructurePanel implements DeckCell {
   /** Chain names over their midpoint beads, as DOM so they scale with the page's text. */
   private paintLabels(view: StructureView): void {
     this.labelsEl.replaceChildren()
-    if (!view.style.labels) return
     const structure = view.structure
     const box = { width: this.wrap.clientWidth, height: this.wrap.clientHeight }
+    // The ruler's labels, at most eighty of them so a whole genome is not a
+    // cloud of numbers: every k-th tick where there are more.
+    if (view.ruler.length > 0) {
+      const every = Math.max(1, Math.ceil(view.ruler.length / 80))
+      view.ruler.forEach((tick, index) => {
+        if (index % every !== 0) return
+        if (view.lit !== null && view.lit[tick.bead] === 0 && view.style.others === 'hide') return
+        const at = projectInto(view, box, tick.bead)
+        if (at === null) return
+        this.labelsEl.append(
+          el('span', { class: 'structure-label is-tick', text: tick.label, style: { left: `${at.px}px`, top: `${at.py}px` } }),
+        )
+      })
+    }
+    // The measurements' distances, at the middle of each.
+    for (const [a, b] of view.measures) {
+      const pa = projectInto(view, box, a)
+      const pb = projectInto(view, box, b)
+      if (pa === null || pb === null) continue
+      this.labelsEl.append(
+        el('span', {
+          class: 'structure-label is-measure',
+          text: fmt.num(distanceBetween(structure, a, b)),
+          style: { left: `${(pa.px + pb.px) / 2}px`, top: `${(pa.py + pb.py) / 2}px` },
+        }),
+      )
+    }
+    if (!view.style.labels) return
     // The reader's bookmarks, at the bead in the middle of each (§25.5).
     for (const mark of this.props.bookmarks?.()?.marks ?? []) {
       const bead = beadsAt(structure, mark.contig, (mark.start + mark.end) / 2)[0]
@@ -1471,12 +1792,6 @@ export class StructurePanel implements DeckCell {
   // The menu
   // -------------------------------------------------------------------------
 
-  private toggleMenu(): void {
-    const open = this.menu.classList.toggle('hidden')
-    this.menuToggle.classList.toggle('is-on', !open)
-    if (!open) this.paintMenu()
-  }
-
   // -------------------------------------------------------------------------
   // Enlarged
   // -------------------------------------------------------------------------
@@ -1513,16 +1828,11 @@ export class StructurePanel implements DeckCell {
             title: 'Put the camera on the whole model, from the front',
           }),
         )
-        this.menu.classList.remove('hidden')
-        this.menuToggle.classList.add('is-on')
-        this.paintMenu()
-        const side = el(
-          'aside',
-          { class: 'structure-side' },
-          camera,
-          el('span', { class: 'structure-side-title', text: 'drawn' }),
-          this.menu,
-        )
+        // The settings card, borrowed from the Aesthetics panel for as long
+        // as the dialog is up, and given back where it was.
+        const parent = this.settingsEl.parentElement
+        this.settingsHome = parent === null ? null : { parent, next: this.settingsEl.nextSibling }
+        const side = el('aside', { class: 'structure-side' }, camera, this.settingsEl)
         // The sidebar's own toggle, in the stage's bottom corner: the settings
         // out of the way for a look at the model, and back.
         const sideToggle = iconButton('panel-right-close', 'Hide the settings', () => {
@@ -1545,184 +1855,273 @@ export class StructurePanel implements DeckCell {
   /** The picture back in its cell, as the reader left it in the dialog. */
   private collapse(): void {
     this.expanded = null
-    // The menu goes back inside the picture, folded, and the picture back
-    // into the cell's body; the order of the corner's children is kept by
-    // putting the menu before the corner.
-    this.menu.classList.add('hidden')
-    this.menuToggle.classList.remove('is-on')
-    const corner = this.wrap.querySelector('.structure-corner')
-    if (corner !== null) this.wrap.insertBefore(this.menu, corner)
-    else this.wrap.append(this.menu)
+    // The card goes back where the dialog took it from, and the picture
+    // back into the cell's body.
+    const home = this.settingsHome
+    this.settingsHome = null
+    if (home !== null && home.parent.isConnected) home.parent.insertBefore(this.settingsEl, home.next)
     if (!this.destroyed) this.body.append(this.wrap)
     requestAnimationFrame(() => this.remeasure())
   }
 
-  /** The controls, rebuilt from the row's style each time something changes. */
-  private paintMenu(): void {
-    if (this.menu.classList.contains('hidden')) return
+  /**
+   * The settings card, rebuilt from the row's style each time something
+   * changes — the map's own card's shape (`MatrixPanel`'s *Map* card): a
+   * heading, then labelled fields, with every on/off setting an icon toggle
+   * and every choice a select, from the same primitives the lanes' settings
+   * are built with, so the column reads as one column.
+   */
+  private paintSettings(): void {
     const style = this.style()
     const structure = this.structure
+    const store = this.props.store()
     const select = (
-      label: string,
       options: Array<{ value: string; text: string }>,
       value: string,
       onChange: (value: string) => void,
-    ): HTMLElement => {
-      const node = el('select', { class: 'select select-tiny' })
+    ): HTMLSelectElement => {
+      const node = el('select', { class: 'select' })
       for (const option of options) node.append(el('option', { value: option.value, text: option.text }))
       node.value = value
       node.addEventListener('change', () => onChange(node.value))
-      return el('label', { class: 'structure-field' }, el('span', { text: label }), node)
+      return node
     }
-    const range = (label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void): HTMLElement => {
+    const range = (value: number, min: number, max: number, step: number, onChange: (v: number) => void): HTMLInputElement => {
       const node = el('input', { class: 'structure-range', type: 'range' })
       node.min = String(min)
       node.max = String(max)
       node.step = String(step)
       node.value = String(value)
       node.addEventListener('input', () => onChange(Number(node.value)))
-      return el('label', { class: 'structure-field' }, el('span', { text: label }), node)
+      return node
     }
+    const toggleIcon = (name: Parameters<typeof icon>[0], title: string, on: boolean, onChange: (on: boolean) => void): HTMLElement => {
+      const node = iconButton(name, title, () => onChange(!on), { class: 'btn btn-icon btn-toggle structure-toggle', size: 15 })
+      node.setAttribute('aria-pressed', String(on))
+      return node
+    }
+    const row = (...nodes: HTMLElement[]): HTMLElement => el('div', { class: 'plot-icon-row' }, ...nodes)
+    const rows: HTMLElement[] = []
+
+    // Which model, where there is more than one to choose between.
+    const models = (store?.entries ?? []).filter((held) => held.kind === 'structure')
+    if (models.length > 1) {
+      rows.push(
+        settingsField(
+          'model',
+          select(models.map((held) => ({ value: held.id, text: held.label })), this.entry?.id ?? '', (value) => this.showModel(value)),
+          'Which structure row this cell draws; the Structures card says the same from its side.',
+        ),
+      )
+    }
+
+    // Drawn as: any of the three together.
+    rows.push(
+      settingsField(
+        'drawn as',
+        row(
+          toggleIcon('circle-dot', 'Beads at each place (1)', style.beads, (on) => this.restyle({ beads: on })),
+          toggleIcon('minus', 'Sticks between neighbours (2)', style.sticks, (on) => this.restyle({ sticks: on })),
+          toggleIcon('spline', 'A tube through each run (3)', style.tube, (on) => this.restyle({ tube: on })),
+        ),
+      ),
+    )
+
+    // Colour by, and size by.
     const colourings: Array<{ value: string; text: string }> = [
       { value: STRUCTURE_COLOUR_SEQUENCE, text: 'sequence' },
-      ...(structure !== null && structure.haplotypes.length > 1
-        ? [{ value: STRUCTURE_COLOUR_HAPLOTYPE, text: 'haplotype' }]
-        : []),
+      ...(structure !== null && structure.haplotypes.length > 1 ? [{ value: STRUCTURE_COLOUR_HAPLOTYPE, text: 'haplotype' }] : []),
       { value: STRUCTURE_COLOUR_POSITION, text: 'position along the sequence' },
       { value: STRUCTURE_COLOUR_SCORE, text: 'score column' },
     ]
     if (structure !== null) {
       for (const field of featureFields(structure.set, 'structure')) {
-        if (field.key === FIELD_LANE || field.key === FIELD_STRAND || field.key === 'score') continue
-        if (field.key === 'haplotype') continue
+        if (field.key === FIELD_LANE || field.key === FIELD_STRAND || field.key === 'score' || field.key === 'haplotype') continue
         colourings.push({ value: field.key, text: `${field.label} (from the file)` })
       }
     }
-    // The session's rows, as colourings (§25.5): a track's values at each
-    // bead, a feature set's colours where a bead overlaps one — and the
-    // reader's marks, the pinned bead's distances, the map's row through it.
-    const store = this.props.store()
-    const tracks = (store?.entries ?? []).filter((row) => hasTrackControls(row.kind) && row.status === 'ready')
+    const tracks = (store?.entries ?? []).filter((held) => hasTrackControls(held.kind) && held.status === 'ready')
     const featureSets = (store?.entries ?? []).filter(
-      (row) => row.kind !== 'structure' && isIntervalSet(row.kind) && row.status === 'ready',
+      (held) => held.kind !== 'structure' && isIntervalSet(held.kind) && held.status === 'ready',
     )
-    for (const row of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${row.id}`, text: `${row.label} (track)` })
-    for (const row of featureSets) {
-      colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${row.id}`, text: `${row.label} (features)` })
-    }
+    for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} (track)` })
+    for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} (features)` })
     if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
     colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
-    if (this.props.contacts !== undefined) {
-      colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
-    }
-    // A colouring the list no longer has stays selectable, so the picker
-    // says what is chosen rather than quietly showing the first option.
+    if (this.props.contacts !== undefined) colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
+    if (style.compare !== '') colourings.push({ value: STRUCTURE_COLOUR_DISPLACEMENT, text: 'displacement from the compared model' })
     if (!colourings.some((option) => option.value === style.colourBy)) {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
-    const loopRows = (store?.entries ?? []).filter((row) => row.kind === 'pairs' && row.status === 'ready')
+    rows.push(settingsField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
+    const sizeChoices = [{ value: '', text: 'the same everywhere' }, ...tracks.map((held) => ({ value: held.id, text: held.label }))]
+    if (style.sizeBy !== '' && !sizeChoices.some((choice) => choice.value === style.sizeBy)) {
+      sizeChoices.push({ value: style.sizeBy, text: `${style.sizeBy} (no longer in the list)` })
+    }
+    rows.push(
+      settingsField(
+        'size by',
+        select(sizeChoices, style.sizeBy, (value) => this.restyle({ sizeBy: value })),
+        'A track whose value at each bead sets the bead’s size — a second channel beside the colour.',
+      ),
+    )
+    rows.push(settingsField('bead radius', range(style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v }))))
+    rows.push(settingsField('tube radius', range(style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v }))))
+
+    // Chords: a loop set or the reader's marks, and the map's contacts from the pin.
+    const loopRows = (store?.entries ?? []).filter((held) => held.kind === 'pairs' && held.status === 'ready')
     const hasMarks = this.props.manual?.() !== undefined
     const loopChoices: Array<{ value: string; text: string }> = [
       { value: '', text: 'none' },
-      ...loopRows.map((row) => ({ value: row.id, text: row.label })),
-      // The reader's own arrowheads (§25.5): a loop marked on the map, or
-      // marked here in select mode, drawn as a chord.
+      ...loopRows.map((held) => ({ value: held.id, text: held.label })),
       ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks (arrowheads)' }] : []),
     ]
-    if (style.loops !== '' && !loopRows.some((row) => row.id === style.loops)) {
+    if (style.loops !== '' && !loopChoices.some((choice) => choice.value === style.loops)) {
       loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
     }
-    const haplotypes: Array<{ value: string; text: string }> = [
-      { value: '', text: 'both homologues' },
-      ...(structure?.haplotypes.map((name) => ({ value: name, text: name })) ?? []),
-    ]
-    // Which model, first, where there is more than one to choose between:
-    // the Structures card lists them and this says the same thing from the
-    // cell's side. Left off with one row, since a picker with one option is a
-    // label that pretends to be a control.
-    const models = (store?.entries ?? []).filter((row) => row.kind === 'structure')
-    const toggleIcon = (name: Parameters<typeof icon>[0], title: string, on: boolean, onChange: (on: boolean) => void): HTMLElement =>
-      iconButton(name, title, () => onChange(!on), { class: `btn btn-icon structure-toggle${on ? ' is-on' : ''}`, size: 14 })
-    const toggles = (label: string, ...buttons: HTMLElement[]): HTMLElement =>
-      el('div', { class: 'structure-field structure-toggles' }, el('span', { text: label }), el('span', { class: 'structure-toggle-row' }, ...buttons))
-    this.menu.replaceChildren(
-      ...(models.length > 1
-        ? [
-            select(
-              'model',
-              models.map((row) => ({ value: row.id, text: row.label })),
-              this.entry?.id ?? '',
-              (value) => this.showModel(value),
-            ),
-          ]
-        : []),
-      // What the model is drawn as: any of the three together.
-      toggles(
-        'drawn as',
-        toggleIcon('circle-dot', 'Beads at each place', style.beads, (on) => this.restyle({ beads: on })),
-        toggleIcon('minus', 'Sticks between neighbours', style.sticks, (on) => this.restyle({ sticks: on })),
-        toggleIcon('spline', 'A tube through each run', style.tube, (on) => this.restyle({ tube: on })),
-      ),
-      select('colour by', colourings, style.colourBy, (value) => this.restyle({ colourBy: value })),
-      ...(loopRows.length > 0 || hasMarks || style.loops !== ''
-        ? [
-            el(
-              'div',
-              { class: 'structure-field structure-field-with-toggle' },
-              el('span', { text: 'loops as chords' }),
-              toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on })),
-              (() => {
-                const node = el('select', { class: 'select select-tiny' })
-                for (const option of loopChoices) node.append(el('option', { value: option.value, text: option.text }))
-                node.value = style.loops
-                node.addEventListener('change', () => this.restyle({ loops: node.value }))
-                return node
-              })(),
-            ),
-          ]
-        : []),
-      range('bead radius', style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v })),
-      range('tube radius', style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v })),
-      range('ghost opacity', style.opacity, 0, 1, 0.05, (v) => this.restyle({ opacity: v })),
+    rows.push(
       el(
         'div',
-        { class: 'structure-field structure-field-with-toggle' },
-        el('span', { text: 'fog' }),
-        toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
-        (() => {
-          const node = el('input', { class: 'structure-range', type: 'range' })
-          node.min = '0'
-          node.max = '1'
-          node.step = '0.05'
-          node.value = String(style.fog)
-          node.addEventListener('input', () => this.restyle({ fog: Number(node.value) }))
-          return node
-        })(),
+        { class: 'field ann-field structure-field-with-toggle' },
+        el('span', { class: 'field-label', text: 'loops as chords' }),
+        toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on })),
+        select(loopChoices, style.loops, (value) => this.restyle({ loops: value })),
       ),
-      select(
+    )
+    if (this.props.contacts !== undefined) {
+      rows.push(
+        el(
+          'div',
+          { class: 'field ann-field structure-field-with-toggle', title: 'The map’s contacts from the pinned bead, as chords to every bead above the threshold — as thick as the contact, in the map’s colour for it. Pin a bead with a click.' },
+          el('span', { class: 'field-label', text: 'contacts from the pin' }),
+          toggleIcon('waypoints', style.contactChords ? 'Hide the contact chords' : 'Show the contact chords', style.contactChords, (on) => this.restyle({ contactChords: on })),
+          range(style.contactThreshold, 0, 1, 0.02, (v) => this.restyle({ contactThreshold: v })),
+        ),
+      )
+    }
+
+    // What is outside the window, and how much of it is left.
+    rows.push(settingsField('ghost opacity', range(style.opacity, 0, 1, 0.05, (v) => this.restyle({ opacity: v }))))
+    rows.push(
+      settingsField(
         'outside the window',
-        STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })),
-        style.others,
-        (value) => this.restyle({ others: value as StructureStyle['others'] }),
+        select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyle({ others: value as StructureStyle['others'] })),
       ),
-      ...(structure !== null && structure.haplotypes.length > 1
-        ? [select('show', haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))]
-        : []),
-      toggles(
+    )
+    if (structure !== null && structure.haplotypes.length > 1) {
+      const haplotypes = [{ value: '', text: 'both homologues' }, ...structure.haplotypes.map((name) => ({ value: name, text: name }))]
+      rows.push(settingsField('show', select(haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))))
+    }
+
+    // Depth: the fog and the slab.
+    rows.push(
+      el(
+        'div',
+        { class: 'field ann-field structure-field-with-toggle', title: 'The fog for depth: Space + scroll on the model moves it too.' },
+        el('span', { class: 'field-label', text: 'fog' }),
+        toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
+        range(style.fog, 0, 1, 0.05, (v) => this.restyle({ fog: v })),
+      ),
+    )
+    rows.push(
+      settingsField(
+        'depth slab',
+        range(style.slab, 0.02, 1, 0.02, (v) => this.restyle({ slab: v })),
+        'Keep only what lies within this fraction of the model’s reach of the centre of rotation, front and back — a way into a dense model. All the way right is everything.',
+      ),
+    )
+
+    // Overlays: the names, the ruler, the centre.
+    rows.push(
+      settingsField(
         'show',
-        toggleIcon('tag', style.labels ? 'Hide the sequence names' : 'Show the sequence names', style.labels, (on) => this.restyle({ labels: on })),
-        toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
+        row(
+          toggleIcon('tag', style.labels ? 'Hide the sequence names (l)' : 'Show the sequence names (l)', style.labels, (on) => this.restyle({ labels: on })),
+          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
+          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
+        ),
       ),
+    )
+
+    // Compare: another model on this one.
+    const others = models.filter((held) => held.id !== this.entry?.id && held.status === 'ready')
+    if (others.length > 0 || style.compare !== '') {
+      const choices = [{ value: '', text: 'none' }, ...others.map((held) => ({ value: held.id, text: held.label }))]
+      if (style.compare !== '' && !choices.some((choice) => choice.value === style.compare)) {
+        choices.push({ value: style.compare, text: `${style.compare} (no longer in the list)` })
+      }
+      rows.push(
+        settingsField(
+          'compare with',
+          select(choices, style.compare, (value) => this.restyle({ compare: value })),
+          'Another structure row, aligned onto this one over the beads the two share and drawn in grey beside it; colour by displacement shows where they differ.',
+        ),
+      )
+      const fit = style.compare === '' ? null : (this.overlayOf(structure ?? ({} as Structure), style), this.compared?.fit ?? null)
+      if (style.compare !== '' && structure !== null) {
+        rows.push(
+          el('p', { class: 'clip-note structure-note-line', text: fit === null ? 'the two models share fewer than four beads' : `${fmt.int(fit.matched)} beads matched · RMSD ${fmt.num(fit.rmsd)} model units` }),
+        )
+      }
+    }
+
+    // Camera: presets, the turntable, framing.
+    rows.push(
+      settingsField(
+        'camera',
+        row(
+          button('front', () => this.lookFrom(0, 0), { class: 'btn btn-quiet', title: 'Look from the front' }),
+          button('top', () => this.lookFrom(0, Math.PI / 2 - 0.01), { class: 'btn btn-quiet', title: 'Look from above' }),
+          button('side', () => this.lookFrom(Math.PI / 2, 0), { class: 'btn btn-quiet', title: 'Look from the side' }),
+          toggleIcon('rotate-cw', this.turning ? 'Stop the turntable (r)' : 'Turn the model slowly by itself (r)', this.turning, () => this.toggleTurning()),
+        ),
+      ),
+    )
+    rows.push(
+      settingsField(
+        'frame',
+        row(
+          button('the window', () => this.frameLit(), { class: 'btn btn-quiet', title: 'Put the camera on what the maps are looking at (f)' }),
+          button('everything', () => this.frameAll(), { class: 'btn btn-quiet', title: 'Put the camera on the whole model (a)' }),
+        ),
+      ),
+    )
+
+    // Measurements: the list, each removable.
+    if (this.measures.length > 0) {
+      const list = el('div', { class: 'structure-measures' })
+      this.measures.forEach((pair, index) => {
+        list.append(
+          el(
+            'div',
+            { class: 'structure-measure-row' },
+            el('span', { class: 'structure-measure-text', text: this.measureLine(pair) }),
+            iconButton('x', 'Remove this measurement', () => {
+              this.measures = this.measures.filter((_, at) => at !== index)
+              this.paintSettings()
+              this.schedule()
+            }, { class: 'btn-close', size: 12 }),
+          ),
+        )
+      })
+      rows.push(el('div', { class: 'field field-block' }, el('span', { class: 'field-label', text: 'measurements' }), list))
+    }
+
+    rows.push(
       el(
         'div',
         { class: 'structure-export' },
         button('PNG', () => void this.savePng(), { class: 'btn btn-quiet', title: 'Save this picture at 300 dpi' }),
         button('PDF', () => void this.savePdf(), {
           class: 'btn btn-quiet',
-          title:
-            'Save this picture as a PDF: beads and sticks as paths, a tube as a 300 dpi raster — a lit surface is not a path',
+          title: 'Save this picture as a PDF: beads and sticks as paths, a tube as a 300 dpi raster — a lit surface is not a path',
         }),
       ),
+    )
+
+    this.settingsEl.replaceChildren(
+      cardTitle('3D structure', 'box', 'controls-title'),
+      el('div', { class: 'panel-controls' }, ...rows),
     )
   }
 

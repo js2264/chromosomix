@@ -52,6 +52,7 @@
  * the dark theme without a rule being written here (`ui/styles.css`).
  */
 
+import type { Command } from '../ui/commands'
 import type { NameContext } from '../genome/naming'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
@@ -2681,6 +2682,22 @@ export class PanelDeck {
   showStructure(id: string): void {
     if (!this.hasStructure()) this.add({ kind: 'structure' })
     for (const slot of this.slots) slot.cell?.showModel?.(id)
+  }
+
+  /** The structure cell's settings card, for the Aesthetics panel, or `null` where there is no cell. */
+  structureSettings(): HTMLElement | null {
+    for (const slot of this.slots) {
+      const settings = slot.cell?.settings?.()
+      if (settings !== undefined) return settings
+    }
+    return null
+  }
+
+  /** The cells' commands, for the palette and its keys. */
+  cellCommands(): Command[] {
+    const out: Command[] = []
+    for (const slot of this.slots) out.push(...(slot.cell?.commands?.() ?? []))
+    return out
   }
 
   /** The structure row the structure cell is drawing, or `null` where there is no cell. */

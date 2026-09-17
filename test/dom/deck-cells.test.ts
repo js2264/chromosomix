@@ -209,6 +209,13 @@ function structureCells(deck: PanelDeck): HTMLElement[] {
   return all<HTMLElement>(deck.el, '.deck-grid > .deck-structure')
 }
 
+/** The row of the settings card (§25.3) whose label is `label`, or undefined. */
+function settingsRow(deck: PanelDeck, label: string): HTMLElement | undefined {
+  const card = deck.structureSettings()
+  if (card === null) return undefined
+  return all<HTMLElement>(card, '.field').find((f) => f.querySelector('.field-label')?.textContent === label)
+}
+
 // ---------------------------------------------------------------------------
 // The deck's side
 // ---------------------------------------------------------------------------
@@ -318,15 +325,17 @@ describe('what the cell says', () => {
     expect(note?.textContent).toMatch(/WebGL|renderer/)
   })
 
-  it('offers the menu of how the model is drawn, writing through the store', () => {
+  it('offers a card of how the model is drawn, for the Aesthetics panel, writing through the store', () => {
     const store = fakeStore([structureEntry()])
     const { deck } = make(store)
+    expect(deck.structureSettings()).toBeNull()
     deck.add({ kind: 'structure' })
-    const cell = structureCells(deck)[0]
-    cell?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const menu = cell?.querySelector('.structure-menu')
-    expect(menu?.classList.contains('hidden')).toBe(false)
-    const select = menu?.querySelector<HTMLSelectElement>('select')
+    const card = deck.structureSettings()
+    expect(card).not.toBeNull()
+    expect(card?.querySelector('.controls-title')?.textContent).toContain('3D structure')
+    // No menu in the cell any more: the corner keeps its four buttons.
+    expect(structureCells(deck)[0]?.querySelector('.structure-menu')).toBeNull()
+    const select = settingsRow(deck, 'colour by')?.querySelector<HTMLSelectElement>('select')
     expect(select).not.toBeNull()
     if (select === null || select === undefined) return
     select.value = select.options[select.options.length - 1]?.value ?? ''
@@ -535,12 +544,7 @@ describe('what the model can be coloured by', () => {
     const store = fakeStore([structureEntry(), trackEntry('t1', 'ATAC', 'track'), trackEntry('f1', 'peaks', 'segments')])
     const { deck } = make(store)
     deck.add({ kind: 'structure' })
-    const cell = structureCells(deck)[0]
-    cell?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const field = all<HTMLElement>(cell ?? document.body, '.structure-menu .structure-field').find(
-      (node) => node.querySelector('span')?.textContent === 'colour by',
-    )
-    const select = field?.querySelector<HTMLSelectElement>('select')
+    const select = settingsRow(deck, 'colour by')?.querySelector<HTMLSelectElement>('select')
     const values = Array.from(select?.options ?? []).map((option) => option.value)
     expect(values).toContain('track:t1')
     expect(values).toContain('features:f1')
@@ -553,19 +557,13 @@ describe('what the model can be coloured by', () => {
   it('offers a loops row as chords only where the list has one, beside the reader\'s own marks', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
-    structureCells(without.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const choices = (deck: PanelDeck): string[] => {
-      const field = Array.from(all<HTMLElement>(deck.el, '.structure-menu .structure-field')).find((f) =>
-        f.textContent?.startsWith('loops as chords'),
-      )
-      return Array.from(field?.querySelectorAll('option') ?? []).map((o) => o.value)
-    }
+    const choices = (deck: PanelDeck): string[] =>
+      Array.from(settingsRow(deck, 'loops as chords')?.querySelectorAll('option') ?? []).map((o) => o.value)
     // The marks are always there to draw (the deck has a manual store), a loops row only when loaded.
     expect(choices(without.deck)).toEqual(['', 'manual'])
     const store = fakeStore([structureEntry(), trackEntry('l1', 'loops.bedpe', 'pairs')])
     const withLoops = make(store)
     withLoops.deck.add({ kind: 'structure' })
-    structureCells(withLoops.deck)[0]?.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
     expect(choices(withLoops.deck)).toEqual(['', 'l1', 'manual'])
   })
 
@@ -597,14 +595,14 @@ describe('the model, enlarged', () => {
     cell?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
     const modal = document.querySelector('.modal-structure')
     expect(modal).not.toBeNull()
-    // The same element, not a copy — in the dialog's stage, with the menu in its sidebar.
+    // The same element, not a copy — in the dialog's stage, with the settings card in its sidebar.
     expect(modal?.querySelector('.structure-stage > .structure-wrap')).toBe(wrap)
-    const menu = modal?.querySelector('.structure-side > .structure-menu')
-    expect(menu).not.toBeNull()
-    expect(menu?.classList.contains('hidden')).toBe(false)
+    const card = modal?.querySelector('.structure-side > .structure-settings')
+    expect(card).not.toBeNull()
+    expect(card).toBe(deck.structureSettings())
     expect(modal?.querySelector('.structure-side-camera button')).not.toBeNull()
-    // A setting changed in the sidebar writes through the store, as in the cell.
-    const select = menu?.querySelector<HTMLSelectElement>('select')
+    // A setting changed in the sidebar writes through the store, as in the panel.
+    const select = card?.querySelector<HTMLSelectElement>('select')
     if (select) {
       select.value = select.options[select.options.length - 1]?.value ?? ''
       select.dispatchEvent(new Event('change'))
@@ -614,7 +612,9 @@ describe('the model, enlarged', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(document.querySelector('.modal-structure')).toBeNull()
     expect(cell?.querySelector('.structure-body > .structure-wrap')).toBe(wrap)
-    expect(cell?.querySelector('.structure-wrap > .structure-menu')?.classList.contains('hidden')).toBe(true)
+    // The card is the deck's again, out of the dialog.
+    expect(document.querySelector('.modal-structure .structure-settings')).toBeNull()
+    expect(deck.structureSettings()?.classList.contains('structure-settings')).toBe(true)
   })
 
   it('closes its dialog when the cell is destroyed', () => {
@@ -648,10 +648,7 @@ describe('which model the cell draws (§25.6)', () => {
     deck.showStructure('a2')
     expect(deck.hasStructure()).toBe(true)
     expect(deck.shownStructure()).toBe('a2')
-    deck.el.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const picker = Array.from(all<HTMLElement>(deck.el, '.structure-menu .structure-field')).find((field) =>
-      field.textContent?.startsWith('model'),
-    )
+    const picker = settingsRow(deck, 'model')
     expect(picker).toBeDefined()
     const select = picker?.querySelector<HTMLSelectElement>('select')
     expect(select?.value).toBe('a2')
@@ -673,10 +670,7 @@ describe('which model the cell draws (§25.6)', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
     expect(without.deck.shownStructure()).toBe('a1')
-    const single = Array.from(all<HTMLElement>(without.deck.el, '.structure-menu .structure-field')).find((field) =>
-      field.textContent?.startsWith('model'),
-    )
-    expect(single).toBeUndefined()
+    expect(settingsRow(without.deck, 'model')).toBeUndefined()
   })
 })
 
@@ -737,24 +731,32 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(true)
   })
 
-  it('offers the reader\'s arrowheads as chords in the menu', () => {
+  it('offers the reader\'s arrowheads as chords, the fog, the centre and the three drawings on the card', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const options = Array.from(settingsRow(deck, 'loops as chords')?.querySelectorAll('option') ?? []).map((o) => o.value)
+    expect(options).toContain('manual')
+    expect(settingsRow(deck, 'fog')?.querySelector('input')?.value).toBe('0.6')
+    expect(deck.structureSettings()?.querySelector('.structure-toggle[title*="centre and axes"]')).not.toBeNull()
+    // Drawn as: three toggles that combine, the tube on by default.
+    const drawn = Array.from(settingsRow(deck, 'drawn as')?.querySelectorAll<HTMLButtonElement>('.structure-toggle') ?? [])
+    expect(drawn.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true'])
+    // The new channels and tools are on the card too.
+    for (const label of ['size by', 'depth slab', 'camera', 'frame', 'ghost opacity']) {
+      expect(settingsRow(deck, label), label).toBeDefined()
+    }
+  })
+
+  it('measures: two clicks are a distance kept on the card, and the cell offers its commands', () => {
     const { deck } = make(fakeStore([structureEntry()]))
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
-    cell.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
-    const field = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) =>
-      f.textContent?.startsWith('loops as chords'),
-    )
-    const options = Array.from(field?.querySelectorAll('option') ?? []).map((o) => o.value)
-    expect(options).toContain('manual')
-    const fog = Array.from(all<HTMLElement>(cell, '.structure-menu .structure-field')).find((f) => f.textContent?.startsWith('fog'))
-    expect(fog?.querySelector('input')?.value).toBe('0.6')
-    const centre = cell.querySelector('.structure-menu .structure-toggle[title*="centre and axes"]')
-    expect(centre).not.toBeNull()
-    // Drawn as: three toggles that combine, the tube on by default.
-    const drawn = Array.from(all<HTMLButtonElement>(cell, '.structure-toggles .structure-toggle')).slice(0, 3)
-    expect(drawn.map((b) => b.classList.contains('is-on'))).toEqual([false, false, true])
-    expect(all(cell, '.structure-menu select').map((s) => s.previousElementSibling?.textContent)).not.toContain('drawn as')
+    cell.querySelector<HTMLButtonElement>('.structure-measure')?.click()
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('measure')
+    const ids = deck.cellCommands().map((c) => c.id)
+    expect(ids).toEqual(expect.arrayContaining(['structure-frame', 'structure-all', 'structure-measure', 'structure-turn', 'structure-tube']))
+    const turn = deck.cellCommands().find((c) => c.id === 'structure-turn')
+    expect(turn?.keys).toBe('r')
   })
 
   it('hides and shows the dialog\'s settings from the corner', () => {

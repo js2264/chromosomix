@@ -78,6 +78,7 @@ const LUCIDE = [
   'spline',
   'link-2',
   'cloud-fog',
+  'waypoints',
   'list',
   'align-end-horizontal',
   'chevrons-up-down',

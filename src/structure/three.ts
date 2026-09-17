@@ -54,6 +54,7 @@ import {
   Object3D,
   OrthographicCamera,
   PerspectiveCamera,
+  Plane,
   Quaternion,
   Raycaster,
   Scene,
@@ -67,6 +68,8 @@ import {
 import { basis, eyeOf, halfHeight, project } from './camera'
 import { hexOf, parseColour } from './colour'
 import type { StructureView } from './painter'
+import type { Structure } from './scene'
+import type { BeadColours } from './colour'
 
 /** What the renderer clears to and writes labels in, read off the page. */
 export interface RenderPalette {
@@ -103,6 +106,21 @@ export class StructureRenderer {
   private chord: InstancedMesh | null = null
   /** The loops as chords (§25.5): one cylinder of ink per pair. */
   private chords: InstancedMesh | null = null
+  /** The map's contacts from the pinned bead, one coloured cylinder each. */
+  private contactChords: InstancedMesh | null = null
+  private contactChordsFrom: ReadonlyArray<{ bead: number; weight: number; colour: string }> | null = null
+  /** The reader's measurements, as dashed ink. */
+  private measures: InstancedMesh | null = null
+  private measuresFrom: ReadonlyArray<readonly [number, number]> | null = null
+  /** The genomic ruler's ticks: small ink beads. */
+  private ticks: InstancedMesh | null = null
+  private ticksFrom: ReadonlyArray<{ bead: number; label: string }> | null = null
+  /** The compared model, in this one's frame: its own group, rebuilt when it changes. */
+  private readonly overlayRoot = new Object3D()
+  private overlayFrom: Structure | null = null
+  private overlayKey = ''
+  /** The two clipping planes of the depth slab, kept and re-aimed each frame. */
+  private readonly slabPlanes = [new Plane(), new Plane()]
   private chordsFrom: ReadonlyArray<readonly [number, number]> | null = null
   /** The centre of rotation — a ball at the camera's target with the three axes through it. */
   private readonly centre = new Object3D()
@@ -140,6 +158,7 @@ export class StructureRenderer {
     this.scene.add(this.lights)
     this.scene.add(this.centre)
     this.centre.visible = false
+    this.scene.add(this.overlayRoot)
     const ambient = new AmbientLight(0xffffff, 0.9)
     const key = new DirectionalLight(0xffffff, 1.6)
     key.position.set(1, 1.2, 1.5)
@@ -193,6 +212,7 @@ export class StructureRenderer {
     } else if (previous === null || previous.colours !== view.colours || previous.lit !== view.lit) {
       this.recolour()
     }
+    this.rebuildOverlay(view)
     this.mark()
     this.render()
   }
@@ -256,6 +276,24 @@ export class StructureRenderer {
     const camera = this.applyCamera(view)
     const background = new Color(hexOf(this.palette.background))
     this.scene.background = background
+    // The depth slab: two planes facing each other along the line of sight,
+    // either side of the centre of rotation, at a fraction of the model's
+    // reach — everything nearer than the front one or farther than the back
+    // one is cut away, which is how the inside of a globule is looked at.
+    if (view.style.slab < 1) {
+      const { forward } = basis(view.camera)
+      const [tx, ty, tz] = view.camera.target
+      const half = Math.max(1e-3, view.structure.scale * 2 * view.style.slab)
+      const f = new Vector3(forward[0], forward[1], forward[2])
+      const t = new Vector3(tx, ty, tz)
+      // Keep what is on the far side of the front plane (normal along
+      // forward) and the near side of the back plane (normal against it).
+      this.slabPlanes[0].setFromNormalAndCoplanarPoint(f, t.clone().addScaledVector(f, -half))
+      this.slabPlanes[1].setFromNormalAndCoplanarPoint(f.clone().negate(), t.clone().addScaledVector(f, half))
+      renderer.clippingPlanes = this.slabPlanes
+    } else if (renderer.clippingPlanes.length > 0) {
+      renderer.clippingPlanes = []
+    }
     // The depth cue: the far side of the model fades towards the page. Set from
     // the camera's distance so it reads the same at every zoom.
     // …and from the style's depth — space + scroll in the cell — so a reader
@@ -327,7 +365,7 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
-    for (const ink of [this.chords, this.chord, this.gapDashes]) {
+    for (const ink of [this.chords, this.chord, this.gapDashes, this.contactChords, this.measures, this.ticks]) {
       if (ink === null) continue
       this.root.remove(ink)
       ink.geometry.dispose()
@@ -336,6 +374,12 @@ export class StructureRenderer {
     this.chords = null
     this.chordsFrom = null
     this.gapDashes = null
+    this.contactChords = null
+    this.contactChordsFrom = null
+    this.measures = null
+    this.measuresFrom = null
+    this.ticks = null
+    this.ticksFrom = null
     this.beads = null
     this.picks = null
     this.halos = null
@@ -396,7 +440,8 @@ export class StructureRenderer {
       at = 0
       for (let i = 0; i < n; i++) {
         if (shown[i] === 0) continue
-        matrix.makeScale(beadRadius, beadRadius, beadRadius)
+        const r = beadRadius * (view.sizes === null ? 1 : view.sizes[i])
+        matrix.makeScale(r, r, r)
         matrix.setPosition(structure.x[i], structure.y[i], structure.z[i])
         this.beads.setMatrixAt(at, matrix)
         at++
@@ -587,7 +632,7 @@ export class StructureRenderer {
     if (this.halos !== null) {
       ;(this.halos.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
     }
-    for (const ink of [this.chord, this.chords, this.gapDashes]) {
+    for (const ink of [this.chord, this.chords, this.gapDashes, this.measures, this.ticks]) {
       if (ink !== null) (ink.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
     }
     void n
@@ -640,6 +685,95 @@ export class StructureRenderer {
       }
     }
 
+    // The map's contacts from the pinned bead: a cylinder per contact, as
+    // thick as the contact is strong, in the map's colour for it.
+    const contacts = style.contactChords && view.pinned >= 0 && this.shown[view.pinned] === 1 ? view.contactChords : NO_CONTACTS
+    if (this.contactChordsFrom !== contacts) {
+      this.contactChordsFrom = contacts
+      if (this.contactChords !== null) {
+        this.root.remove(this.contactChords)
+        this.contactChords.geometry.dispose()
+        this.contactChords = null
+      }
+      const kept = contacts.filter((c) => this.shown[c.bead] === 1)
+      if (kept.length > 0) {
+        const p = view.pinned
+        const from = new Vector3(structure.x[p], structure.y[p], structure.z[p])
+        const mesh = new InstancedMesh(new CylinderGeometry(1, 1, 1, 8, 1, true), new MeshBasicMaterial({ transparent: true, opacity: 0.85 }), kept.length)
+        const matrix = new Matrix4()
+        const q = new Quaternion()
+        const up = new Vector3(0, 1, 0)
+        const colour = new Color()
+        kept.forEach((c, at) => {
+          const to = new Vector3(structure.x[c.bead], structure.y[c.bead], structure.z[c.bead])
+          const dir = to.clone().sub(from)
+          const length = dir.length()
+          q.setFromUnitVectors(up, length > 0 ? dir.normalize() : up)
+          const r = stickRadius * (0.3 + 1.2 * c.weight)
+          matrix.compose(from.clone().add(to).multiplyScalar(0.5), q, new Vector3(r, Math.max(length, 1e-6), r))
+          mesh.setMatrixAt(at, matrix)
+          mesh.setColorAt(at, colour.setHex(hexOf(c.colour)))
+        })
+        mesh.instanceMatrix.needsUpdate = true
+        if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
+        mesh.frustumCulled = false
+        this.contactChords = mesh
+        this.root.add(mesh)
+      }
+    }
+
+    // The reader's measurements: dashes of ink between the two beads.
+    if (this.measuresFrom !== view.measures) {
+      this.measuresFrom = view.measures
+      if (this.measures !== null) {
+        this.root.remove(this.measures)
+        this.measures.geometry.dispose()
+        this.measures = null
+      }
+      const segments: Array<[Vector3, Vector3]> = []
+      for (const [a, b] of view.measures) {
+        if (this.shown[a] !== 1 || this.shown[b] !== 1) continue
+        const from = new Vector3(structure.x[a], structure.y[a], structure.z[a])
+        const to = new Vector3(structure.x[b], structure.y[b], structure.z[b])
+        const length = from.distanceTo(to)
+        const dir = to.clone().sub(from).normalize()
+        const dash = stickRadius * 2.5
+        const gap = stickRadius * 1.5
+        for (let at = 0; at < length; at += dash + gap) {
+          segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, Math.min(length, at + dash))])
+        }
+      }
+      if (segments.length > 0) {
+        this.measures = cylinders(segments, stickRadius * 0.6, inkMaterial(this.palette.ink, 1))
+        this.root.add(this.measures)
+      }
+    }
+
+    // The ruler's ticks: a small bead of ink at each, over the model.
+    if (this.ticksFrom !== view.ruler) {
+      this.ticksFrom = view.ruler
+      if (this.ticks !== null) {
+        this.root.remove(this.ticks)
+        this.ticks.geometry.dispose()
+        this.ticks = null
+      }
+      const kept = view.ruler.filter((tick) => this.shown[tick.bead] === 1)
+      if (kept.length > 0) {
+        const r = Math.max(stickRadius * 1.6, structure.step * style.beadRadius * 0.8)
+        const mesh = new InstancedMesh(new SphereGeometry(1, 10, 8), inkMaterial(this.palette.ink, 1), kept.length)
+        const matrix = new Matrix4()
+        kept.forEach((tick, at) => {
+          matrix.makeScale(r, r, r)
+          matrix.setPosition(structure.x[tick.bead], structure.y[tick.bead], structure.z[tick.bead])
+          mesh.setMatrixAt(at, matrix)
+        })
+        mesh.instanceMatrix.needsUpdate = true
+        mesh.frustumCulled = false
+        this.ticks = mesh
+        this.root.add(mesh)
+      }
+    }
+
     // The hovered contact's chord: dashes of ink, wider than the loops', on
     // top of everything else that is a line.
     if (this.chord !== null) {
@@ -662,6 +796,85 @@ export class StructureRenderer {
       }
       this.chord = cylinders(segments, stickRadius * 0.8, inkMaterial(this.palette.ink, 1))
       this.root.add(this.chord)
+    }
+  }
+
+  /**
+   * The compared model (§25.5), in this model's frame: its runs as a thin
+   * tube in its own colours, rebuilt only when the model or the radius
+   * changes. Ghosting and the window do not apply to it — it is the other
+   * model, whole, beside this one — and it is drawn a little thinner so the
+   * two read apart where they cross.
+   */
+  private rebuildOverlay(view: StructureView): void {
+    const overlay = view.overlay
+    const key = overlay === null ? '' : `${view.style.tubeRadius}|${view.style.tube}|${view.style.sticks}`
+    if (overlay?.structure === this.overlayFrom && key === this.overlayKey) {
+      if (overlay !== null) this.recolourOverlay(overlay.colours)
+      return
+    }
+    this.overlayFrom = overlay?.structure ?? null
+    this.overlayKey = key
+    for (const child of [...this.overlayRoot.children]) {
+      this.overlayRoot.remove(child)
+      const mesh = child as Mesh
+      mesh.geometry?.dispose()
+      const material = mesh.material
+      if (Array.isArray(material)) material.forEach((m) => m.dispose())
+      else material?.dispose()
+    }
+    if (overlay === null) return
+    const o = overlay.structure
+    const radius = view.structure.step * view.style.tubeRadius * 0.7
+    for (const chain of o.chains) {
+      for (let r = 0; r < chain.runs.length; r += 2) {
+        const run: number[] = []
+        for (let k = chain.runs[r]; k < chain.runs[r + 1]; k++) if (o.present[chain.beads[k]] === 1) run.push(chain.beads[k])
+        if (run.length < 2) continue
+        const points = run.map((i) => new Vector3(o.x[i], o.y[i], o.z[i]))
+        const curve = new CatmullRomCurve3(points, false, 'catmullrom', 0.5)
+        const segments = Math.max(1, (run.length - 1) * TUBE_PER_BEAD)
+        const geometry = new TubeGeometry(curve, segments, radius, RADIAL, false)
+        const owner = new Int32Array(segments + 1)
+        const lengths = cumulative(points)
+        const total = lengths[lengths.length - 1]
+        for (let sgm = 0; sgm <= segments; sgm++) {
+          const along = (sgm / segments) * total
+          let k = 0
+          while (k + 1 < lengths.length - 1 && lengths[k + 1] <= along) k++
+          const span = lengths[k + 1] - lengths[k]
+          const t = span > 0 ? (along - lengths[k]) / span : 0
+          owner[sgm] = run[t < 0.5 ? k : k + 1]
+        }
+        geometry.setAttribute('color', new BufferAttribute(new Float32Array(geometry.attributes.position.count * 3), 3))
+        const mesh = new Mesh(geometry, surface(true, true))
+        mesh.userData['owner'] = owner
+        mesh.userData['radial'] = RADIAL
+        mesh.frustumCulled = false
+        this.overlayRoot.add(mesh)
+      }
+    }
+    this.recolourOverlay(overlay.colours)
+  }
+
+  private recolourOverlay(colours: BeadColours): void {
+    const rgb = colours.rgb
+    for (const child of this.overlayRoot.children) {
+      const mesh = child as Mesh
+      const owner = mesh.userData['owner'] as Int32Array | undefined
+      const radial = mesh.userData['radial'] as number | undefined
+      const attribute = mesh.geometry.getAttribute('color') as BufferAttribute | undefined
+      if (owner === undefined || radial === undefined || attribute === undefined) continue
+      const array = attribute.array as Float32Array
+      const perRing = radial + 1
+      for (let v = 0; v < attribute.count; v++) {
+        const ring = Math.min(owner.length - 1, Math.floor(v / perRing))
+        const i = owner[ring]
+        array[v * 3] = rgb[i * 3]
+        array[v * 3 + 1] = rgb[i * 3 + 1]
+        array[v * 3 + 2] = rgb[i * 3 + 2]
+      }
+      attribute.needsUpdate = true
     }
   }
 
@@ -761,6 +974,7 @@ function gapPairsOf(view: StructureView, shown: Uint8Array): Array<[number, numb
 }
 
 const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
+const NO_CONTACTS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
 
 /** A flat material of the page's ink, for every line the model carries. */
 function inkMaterial(ink: string, opacity: number): MeshBasicMaterial {
@@ -796,6 +1010,13 @@ function cylinders(
   return mesh
 }
 
+/** A short hash of a size array, so the key changes when the sizes do. */
+function sizesKey(sizes: Float32Array): string {
+  let hash = 0
+  for (let i = 0; i < sizes.length; i++) hash = (hash * 31 + Math.round(sizes[i] * 100)) | 0
+  return `${sizes.length}:${hash}`
+}
+
 /** Cumulative polyline length at each point, from zero. */
 function cumulative(points: Vector3[]): number[] {
   const out = [0]
@@ -822,6 +1043,8 @@ function buildKey(view: StructureView): string {
     style.tube,
     style.beadRadius,
     style.tubeRadius,
+    // The sizes are part of the geometry: a new array is a new set of beads.
+    view.sizes === null ? '' : sizesKey(view.sizes),
     view.haplotype,
     style.others,
     litKey,
