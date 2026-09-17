@@ -576,3 +576,48 @@ describe('what the model can be coloured by', () => {
     expect(ended).toBe(1)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Enlarged into a dialog, and back (§25.3)
+// ---------------------------------------------------------------------------
+
+describe('the model, enlarged', () => {
+  it('moves the cell’s own picture and menu into a dialog and back, keeping what was changed', () => {
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    const cell = structureCells(deck)[0]
+    const wrap = cell?.querySelector('.structure-wrap')
+    expect(wrap).not.toBeNull()
+    cell?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    const modal = document.querySelector('.modal-structure')
+    expect(modal).not.toBeNull()
+    // The same element, not a copy — in the dialog's stage, with the menu in its sidebar.
+    expect(modal?.querySelector('.structure-stage > .structure-wrap')).toBe(wrap)
+    const menu = modal?.querySelector('.structure-side > .structure-menu')
+    expect(menu).not.toBeNull()
+    expect(menu?.classList.contains('hidden')).toBe(false)
+    expect(modal?.querySelector('.structure-side-camera button')).not.toBeNull()
+    // A setting changed in the sidebar writes through the store, as in the cell.
+    const select = menu?.querySelector<HTMLSelectElement>('select')
+    if (select) {
+      select.value = select.options[select.options.length - 1]?.value ?? ''
+      select.dispatchEvent(new Event('change'))
+    }
+    expect(store.restyled.length).toBeGreaterThan(0)
+    // Escape closes it; the picture is back in the cell with the menu folded.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector('.modal-structure')).toBeNull()
+    expect(cell?.querySelector('.structure-body > .structure-wrap')).toBe(wrap)
+    expect(cell?.querySelector('.structure-wrap > .structure-menu')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('closes its dialog when the cell is destroyed', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    expect(document.querySelector('.modal-structure')).not.toBeNull()
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.btn-close')?.click()
+    expect(document.querySelector('.modal-structure')).toBeNull()
+  })
+})

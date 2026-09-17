@@ -111,6 +111,14 @@ try {
   await shot('06-colour-by-track')
   await page.click('.structure-menu-toggle')
 
+  // Enlarged: the model in a dialog with the settings beside it, then back.
+  await page.click('.structure-expand')
+  await page.waitForSelector('.modal-structure .structure-wrap', { timeout: 10000 })
+  await sleep(2500)
+  await shot('06b-structure-enlarged')
+  await page.keyboard.press('Escape')
+  await sleep(1200)
+
   // A tracks cell, with two tracks placed on it from the location control.
   await page.click('.deck-add-toggle')
   await page.click('.deck-add-tracks')

@@ -99,6 +99,7 @@ import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { button, el, fmt } from '../ui/dom'
 import { icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
+import { Modal } from '../ui/Modal'
 import { getPlotOptions } from '../ui/plotOptions'
 import { setReadout } from '../ui/readout'
 import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
@@ -183,6 +184,10 @@ export class StructurePanel implements DeckCell {
   private readonly labelsEl = el('div', { class: 'structure-labels' })
   private readonly menu = el('div', { class: 'structure-menu hidden' })
   private readonly menuToggle: HTMLButtonElement
+  /** The cell's body, where the picture lives when it is not enlarged. */
+  private readonly body: HTMLElement
+  /** The modal the picture is enlarged into, while it is (§25.3). */
+  private expanded: Modal | null = null
   /**
    * The GPU side, once its module has arrived.
    *
@@ -240,13 +245,18 @@ export class StructurePanel implements DeckCell {
       class: 'btn btn-icon structure-frame',
       size: 14,
     })
+    const expandButton = iconButton('maximize', 'Enlarge the model, with every setting beside it', () => this.expand(), {
+      class: 'btn btn-icon structure-expand',
+      size: 14,
+    })
     this.wrap.append(
       this.labelsEl,
       this.keyEl,
       this.readoutEl,
       this.menu,
-      el('div', { class: 'structure-corner' }, this.menuToggle, frameButton),
+      el('div', { class: 'structure-corner' }, this.menuToggle, frameButton, expandButton),
     )
+    this.body = el('div', { class: 'deck-body structure-body' }, this.wrap)
     this.el = el(
       'section',
       { class: 'deck-panel deck-structure' },
@@ -261,7 +271,7 @@ export class StructurePanel implements DeckCell {
         }),
       ),
       this.note,
-      el('div', { class: 'deck-body structure-body' }, this.wrap),
+      this.body,
     )
     this.watchDrops()
     void this.loadRenderer()
@@ -347,6 +357,7 @@ export class StructurePanel implements DeckCell {
 
   destroy(): void {
     this.destroyed = true
+    this.expanded?.close()
     if (this.frame !== 0) cancelAnimationFrame(this.frame)
     if (this.rememberTimer !== null) clearTimeout(this.rememberTimer)
     for (const off of this.unsubscribes.splice(0)) off()
@@ -1078,6 +1089,77 @@ export class StructurePanel implements DeckCell {
     const open = this.menu.classList.toggle('hidden')
     this.menuToggle.classList.toggle('is-on', !open)
     if (!open) this.paintMenu()
+  }
+
+  // -------------------------------------------------------------------------
+  // Enlarged
+  // -------------------------------------------------------------------------
+
+  /**
+   * The model in a modal, with every setting in a sidebar beside it (§25.3).
+   *
+   * The same picture, not a second one: the cell's own canvas, key, labels
+   * and menu are **moved** into the dialog and moved back when it closes, so
+   * the camera the reader left it at, the colouring they chose and the pin
+   * they set are what the cell shows afterwards — there is nothing to copy
+   * across because nothing was duplicated. The renderer follows the box it
+   * is in through its resize observer, and the settings write through the
+   * store as they do in the cell, so what is changed here is changed there.
+   */
+  private expand(): void {
+    if (this.expanded !== null) return
+    const label = this.entry?.label ?? 'structure'
+    this.expanded = new Modal({
+      title: label,
+      variant: 'modal-structure',
+      body: () => {
+        const stage = el('div', { class: 'structure-stage' }, this.wrap)
+        const camera = el(
+          'div',
+          { class: 'structure-side-camera' },
+          el('span', { class: 'structure-side-title', text: 'camera' }),
+          button('frame the window', () => this.frameLit(), {
+            class: 'btn btn-quiet',
+            title: 'Put the camera on what the maps are looking at',
+          }),
+          button('show everything', () => this.frameAll(), {
+            class: 'btn btn-quiet',
+            title: 'Put the camera on the whole model, from the front',
+          }),
+        )
+        this.menu.classList.remove('hidden')
+        this.menuToggle.classList.add('is-on')
+        this.paintMenu()
+        const side = el(
+          'aside',
+          { class: 'structure-side' },
+          camera,
+          el('span', { class: 'structure-side-title', text: 'drawn' }),
+          this.menu,
+        )
+        return el('div', { class: 'structure-modal' }, stage, side)
+      },
+      onClose: () => this.collapse(),
+    })
+    // Sized once the dialog is laid out, not before: the observer answers
+    // the box's new size, and the first frame should not be drawn at the
+    // cell's.
+    requestAnimationFrame(() => this.remeasure())
+  }
+
+  /** The picture back in its cell, as the reader left it in the dialog. */
+  private collapse(): void {
+    this.expanded = null
+    // The menu goes back inside the picture, folded, and the picture back
+    // into the cell's body; the order of the corner's children is kept by
+    // putting the menu before the corner.
+    this.menu.classList.add('hidden')
+    this.menuToggle.classList.remove('is-on')
+    const corner = this.wrap.querySelector('.structure-corner')
+    if (corner !== null) this.wrap.insertBefore(this.menu, corner)
+    else this.wrap.append(this.menu)
+    if (!this.destroyed) this.body.append(this.wrap)
+    requestAnimationFrame(() => this.remeasure())
   }
 
   /** The controls, rebuilt from the row's style each time something changes. */

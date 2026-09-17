@@ -8829,15 +8829,16 @@ span.deck-name {
    --------------------------------------------------------------------------- */
 .structure-wrap {
   position: relative;
-  width: var(--deck-plot, var(--map-size, 20rem));
-  max-width: 100%;
-  /* A square of the deck's width, and not `--deck-plot-h`: beside a turned map
-     that number is the band's height, and a model in a band is a model
-     nobody can read. Width is what the cells share; a picture with no axis
-     has no height to share. */
-  aspect-ratio: 1 / 1;
-  min-height: 12rem;
-  max-height: 60vh;
+  /* The whole cell, not a square of the lead's plot: a map's cell is its plot
+     and its lanes together, and a model has neither a plot to match nor an
+     axis to line up, so the picture takes all the room the cell has and is
+     as tall as the row. Beside a turned map that is still a real picture,
+     where a band's height was not. */
+  /* A basis of zero, so the row's height is the maps' and not this cell's
+     content: the picture fills what the row gives it and asks for nothing. */
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 16rem;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -9064,17 +9065,107 @@ span.deck-name {
    of twelve tracks is as tall as the map next to it and a grid row stays a row.
    --------------------------------------------------------------------------- */
 .tracks-wrap {
-  width: var(--deck-plot, var(--map-size, 20rem));
-  max-width: 100%;
-  /* The same square, for the same reason as `.structure-wrap`'s: a stack of
-     tracks beside a turned map needs room for its lanes, not the band's. */
-  aspect-ratio: 1 / 1;
-  min-height: 12rem;
-  max-height: 60vh;
+  /* The whole cell, as `.structure-wrap` takes it: the stack scrolls inside
+     the room the row gives it. */
+  /* The same basis of zero: a stack of tracks would otherwise ask the row
+     for its whole height, and the maps beside it would be pushed off screen. */
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 16rem;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
+}
+
+.deck-structure > .structure-body,
+.deck-tracks > .tracks-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The model, enlarged (§25.3): the picture on the left with the room a
+   dialog can give it, every setting in a sidebar on the right. The elements
+   are the cell's own, moved in and moved back. */
+.modal-structure {
+  width: min(96vw, 110rem);
+  height: 90vh;
+  max-height: 90vh;
+}
+
+.modal-backdrop:has(> .modal-structure) {
+  padding: 4vh 1rem 1rem;
+}
+
+.structure-modal {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.structure-stage {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.5rem;
+}
+
+.structure-stage > .structure-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.structure-side {
+  flex: 0 0 20rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+
+.structure-side-title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+}
+
+.structure-side-camera {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.structure-side-camera > .structure-side-title {
+  flex-basis: 100%;
+}
+
+/* In the sidebar the menu is a form, not a fold-out over the picture. */
+.structure-side > .structure-menu {
+  position: static;
+  width: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  overflow: visible;
+}
+
+.structure-side .structure-field > .select,
+.structure-side .structure-field > .structure-range {
+  flex-basis: 11rem;
+}
+
+/* The two corner buttons that open what the dialog already shows. */
+.structure-stage .structure-menu-toggle,
+.structure-stage .structure-expand {
+  display: none;
 }
 
 .deck-tracks .view-browser {

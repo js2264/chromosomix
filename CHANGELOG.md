@@ -229,7 +229,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   reader written here; a `.3dg`; and `bed3d`, the same file with the end column — becomes a row of
   the Tracks card and a **cell of the deck**, drawn with three.js loaded on the first cell only:
   beads, sticks or a tube, both homologues of a phased file, a camera remembered per file, vector PDF
-  of beads and sticks. Hover links every surface: a pointer on a map lights the beads at both ends
+  of beads and sticks, and a button that enlarges the model into a dialog with every setting in a
+  sidebar, the cell taking back the camera and colouring the reader left it with. Hover links every surface: a pointer on a map lights the beads at both ends
   and joins them, a pointer on a bead marks every map and tracks cell, the lead's window ghosts what
   the maps are not looking at. A click pins, Shift-click marks, a double-click goes. Colour by
   sequence, haplotype, position, the file's columns, **a loaded track on the lane's own limits, a

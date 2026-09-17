@@ -6819,7 +6819,11 @@ three.js, which is loaded when the first cell is built and never with the page: 
 on the web, folded into the one file of the standalone build. Beads, sticks, both, or a tube; a
 halo on the hovered bead; a dashed chord across a hovered contact; a fog for depth; lit or flat;
 perspective or orthographic; the camera remembered per file. A phased file draws both homologues,
-and the key's chips solo one. It opens when a structure is dropped or named by URL while a map or
+and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
+lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
+a dialog with every setting in a sidebar beside it; the cell's own canvas, key, labels and menu are
+moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
+what the cell shows afterwards. It opens when a structure is dropped or named by URL while a map or
 the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
 link's `3d`; a second structure replaces the picture rather than adding a cell.
 
