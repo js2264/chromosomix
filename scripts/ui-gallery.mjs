@@ -46,7 +46,13 @@ page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const shot = async (name) => { await page.screenshot({ path: `${OUT}/${name}.png` }); console.log('shot', name) }
-const fold = async (title) => { const b = await page.$(`button[title^="${title}"]`); if (b) { await b.click(); await sleep(600) } }
+// The first *visible* button with that title: a folded column's button and its
+// strip's are two elements, and only one of them can be pressed.
+const fold = async (title) => {
+  for (const b of await page.$$(`button[title^="${title}"]`)) {
+    if (await b.isVisible()) { await b.click(); await sleep(600); return }
+  }
+}
 const readout = () => page.evaluate(() => document.querySelector('.status-readout, .statusbar, footer')?.textContent ?? '')
 
 try {
@@ -144,8 +150,8 @@ try {
   // The Analysis panel, and the spatial-tracks task run on the model.
   await fold('Show the Analysis panel')
   await sleep(800)
-  const row = page.locator('text=Model versus map').first()
-  if (await row.count()) await row.scrollIntoViewIfNeeded()
+  const versusRow = page.locator('text=Model versus map').first()
+  if (await versusRow.count()) await versusRow.scrollIntoViewIfNeeded()
   await sleep(400)
   await shot('08-analysis-tasks')
   await page.locator('text=Spatial tracks').first().click()
@@ -196,7 +202,9 @@ try {
   await shot('13-model-picker')
 
   // The key as a control: colour by sequence, then a double-click on a name
-  // shows that sequence alone.
+  // shows that sequence alone. The card is in the Aesthetics panel, shown again.
+  await fold('Show the Aesthetics panel')
+  await sleep(500)
   await row('colour by').locator('select').selectOption('sequence')
   await sleep(1500)
   const names = page.locator('.structure-key-name')

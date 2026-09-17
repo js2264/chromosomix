@@ -651,6 +651,8 @@ export class Session {
   private current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
+    /** The view's own controls, for the Aesthetics column. */
+    sideEl?: HTMLElement
     /**
      * Move to a saved place without being rebuilt (§8.10).
      *
@@ -5231,7 +5233,14 @@ export class Session {
       // history entry rather than five that each undo a file — the same rule
       // the colour controls follow, and for the same reason: adding a map to
       // what is on screen is not a navigation away from it.
-      onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
+      onMapsChange: (maps) => {
+        this.store.patch({ maps }, { replace: true })
+        // A structure cell can arrive or go after the view was mounted — a g3d
+        // dropped, a reconstruction landing, the cell's heading closed — and
+        // its card in the Aesthetics column (§25.3) follows the cell, not the
+        // view.
+        this.refreshAesthetics()
+      },
       memoryKey: () => this.memoryKey(this.file?.uri ?? this.assembly?.uri ?? ''),
       // The browser as lead is named for its assembly (§25 stage D); a map for
       // its file, under whatever the reader called it.
@@ -7262,10 +7271,7 @@ export class Session {
     // with it — the same rule the other two follow.
     // The structure cell's card beside the map's (§25.3): its settings are a
     // view's settings, and a view's settings are in this column.
-    this.setAesthetics([
-      ...(view?.sideEl === undefined ? [] : [view.sideEl]),
-      ...(this.deck?.structureSettings() === null || this.deck === null ? [] : [this.deck.structureSettings() as HTMLElement]),
-    ])
+    this.refreshAesthetics()
     // After the view is mounted, because the framing and the block a task runs
     // on are read off whatever is on screen *now* (§18.4) — and because a table
     // view has neither, which is a state the panel has to be able to show.
@@ -7790,6 +7796,21 @@ export class Session {
     }
     this.annotationsHost.replaceChildren(...out)
     this.setAvailability('annotations', out.length > 0)
+  }
+
+  /**
+   * The Aesthetics column as it should be now: the view's own controls, then
+   * the structure cell's card where the deck has one (§25.3). Called when a
+   * view is mounted and whenever the deck's cells change, because either can
+   * happen after the other.
+   */
+  private refreshAesthetics(): void {
+    const side = this.current?.sideEl
+    const card = this.deck?.structureSettings() ?? null
+    // A card the enlarged dialog has borrowed stays where it is: the dialog
+    // gives it back when it closes.
+    const borrowed = card !== null && card.isConnected && !this.aestheticsHost.contains(card)
+    this.setAesthetics([...(side === undefined ? [] : [side]), ...(card === null || borrowed ? [] : [card])])
   }
 
   private setAesthetics(nodes: readonly HTMLElement[]): void {

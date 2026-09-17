@@ -6839,19 +6839,24 @@ they cross; a fog for depth, on by default, with a toggle and a depth; lit, alwa
 always** — a model has no horizon, and perspective made the same distance read shorter at the back;
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
 the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
-everything else is drawn whole. The map's *legend* switch (§7) hides the key here too, so one switch
+everything else is drawn whole. *Outside the window* has three answers: *ghost* (the default),
+*hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
+how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
 says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, beside the map's *Map* and
 *Export* cards, built from the same field primitives, mounted by the session whenever the deck has a
 structure cell — and not a menu in the cell: a view's settings are in that column, and the model is a
 view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
-borrows the card into its sidebar and gives it back where it was. The card also carries **size by**
+borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
+camera controls — and gives it back where it was. The card also carries **size by**
 (a track whose value at each bead sets its size, half to nearly twice the radius over the track's
 robust range — a second channel beside the colour), a **depth slab** (two clipping planes either side
 of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
 dense globule), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
-the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide — labelled, at most eighty labels),
+the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more than about forty
+ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
+at most eighty labels, and no zero tick: a chain's start is where its name is),
 **camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
 **frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
 `f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` select, `m`
@@ -6935,10 +6940,12 @@ window's: a ghosted sequence stays ghosted whatever the maps look at. The reader
 sets, so a loop marked on the map or in select mode is a chord on the model.
 
 **Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
-contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact is at least
-the threshold slider's fraction of the strongest (the strongest four hundred where more pass), each
-as thick as its contact and coloured on the map's own scale for the value: the virtual 4C of the pin,
-read in space. A toggle beside the slider turns them off without losing the threshold.
+contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
+least the threshold slider's fraction of the way up the map's own colour scale — the transformed
+value between the scale's ends, half by default, because a Hi-C row read raw is its two neighbours
+and nothing else (the strongest four hundred where more pass) — each as thick as its place on that
+scale and coloured on it: the virtual 4C of the pin, read in space. A toggle beside the slider turns
+them off without losing the threshold.
 
 **Compare with.** Another structure row — the loaded model against the reconstruction, or two
 solvers' models of one map — is **superposed** on this one: the beads the two share are matched by
@@ -7007,16 +7014,20 @@ costs a pass over the pairs like the unweighted one does, and never raises the s
 is centred and scaled to a unit root-mean-square radius: a map carries no physical unit and
 `c^(−1/α)` is in none (§25.8).
 
-**What it is solved over** is what the reader is looking at: the view's block **as drawn** — the
-loaded locus at its drawn resolution, pooled cells included, which is the one task that honours
-`binsPerCell > 1` rather than refusing it — cis and trans together, one bead per cell, filed under
-the sequence holding its first bin and cut at that sequence's end. A block whose rows are not its
-columns, or balanced the other way from what the run asks, is declined for the square over the
-framing read at the file's own bin size. **Sequence** restricts the model to one sequence or a
-typed range of it. A cell whose row the map counted nothing on — a filtered bin, a gap — is left
+**What it is solved over** is what the **Sequences** box names, seeded from what the map shows
+(a locus, or every sequence on screen): where the view's block **as drawn** covers it — the loaded
+locus at its drawn resolution, pooled cells included, which is the one task that honours
+`binsPerCell > 1` rather than refusing it — the block is taken as it is, cis and trans together, one
+bead per cell, filed under the sequence holding its first bin and cut at that sequence's end. Where
+it does not — several sequences, a whole file, a block balanced the other way or not square — the
+file is **read span by span**, one rectangle per pair of named spans (two sequences far apart cost
+their two squares and the rectangle between them, never the sequences in between), and **pooled
+bins-per-bead to a bead as it is read**, the mean of the counted bins, so a whole genome at 1 kb
+becomes a model at 5 kb with *bins per bead* 5 and no 12,000² block ever exists. The box **empty is
+the whole file**. A cell whose row the map counted nothing on — a filtered bin, a gap — is left
 out of the model, and the run says how many were. More beads than `RECONSTRUCT_MAX_BEADS`
-(2,500) is refused in the estimate with the way out — zoom out so the block is drawn coarser, or
-name a sequence — because every refinement step is a pass over every pair. The run's other output
+(2,500) is refused in the estimate with the way out — pool more bins to a bead, and how many would
+do, or name fewer sequences — because every refinement step is a pass over every pair. The run's other output
 is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
 the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
 model and the contacts —

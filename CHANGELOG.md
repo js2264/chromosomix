@@ -20,7 +20,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   **depth slab** into a dense model, a **genomic ruler** along each chain, camera presets, a
   turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `e`,
   `m`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
-  threshold, as thick as the contact and in the map's colours. **Compare with** superposes another
+  threshold on the map's colour scale, as thick as the contact and in the map's colours. **Compare with** superposes another
   structure row by a similarity fit over the beads the two share, reports the RMSD, and *colour by
   displacement* shows where they differ. **Measure mode** turns two clicks into a distance kept on
   the card and written on the model.
@@ -29,8 +29,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is gone; chords and the hovered contact's chord are thick ink cylinders rather than one-pixel
   lines; the cell is always orthographic and always lit, so those two options are gone; the fog,
   the chords, the names and the centre are icon toggles; the *ghost opacity* slider (0.15 by
-  default) is the one opacity, applied to what is outside the window or ghosted from the key; the
-  map's *legend* switch hides the key of the structure cell too. A stored style still reads back:
+  default) is the one opacity, applied to what is outside the window or ghosted from the key, and
+  *outside the window: show* draws a whole genome in colour while the maps look at one window of it;
+  the map's *legend* switch hides the key of the structure cell too. A stored style still reads back:
   the old representation becomes the three toggles.
 - **The structure cell, in the hand (§25.3–25.5).** The sequence box of the three structure tasks
   is seeded from what the map shows: the locus inside one sequence, every sequence on screen when

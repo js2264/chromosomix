@@ -9141,24 +9141,6 @@ span.deck-name {
   font-size: calc(var(--step--1) * var(--text-scale, 1));
 }
 
-.structure-side-title {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-  font-size: var(--step--2);
-}
-
-.structure-side-camera {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-
-.structure-side-camera > .structure-side-title {
-  flex-basis: 100%;
-}
-
 /* In the sidebar the menu is a form, not a fold-out over the picture. */
 .structure-side > .structure-menu {
   position: static;

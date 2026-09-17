@@ -170,6 +170,13 @@ export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 const MAX_CONTACT_CHORDS = 400
 /** The ruler's steps, in base pairs: the first at least ten beads wide is the one used. */
 const RULER_STEPS = [1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7]
+
+/** A ruler tick's label: `300 kb`, `1.2 Mb` — no trailing zero, since a tick is a round number. */
+function tickLabel(bp: number): string {
+  if (bp >= 1e6) return `${+(bp / 1e6).toFixed(2)} Mb`
+  if (bp >= 1e3) return `${+(bp / 1e3).toFixed(1)} kb`
+  return `${bp} bp`
+}
 const NO_CONTACT_CHORDS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
 const NO_TICKS: ReadonlyArray<{ bead: number; label: string }> = []
 /**
@@ -875,7 +882,10 @@ export class StructurePanel implements DeckCell {
       this.lit = null
       return
     }
-    this.lit = this.ghostSequences(structure, this.windowLit(structure))
+    // Under `outside the window: show` the window ghosts nothing; the key's
+    // own ghosting still does.
+    const window = this.style().others === 'show' ? null : this.windowLit(structure)
+    this.lit = this.ghostSequences(structure, window)
   }
 
   /** The beads inside the lead's window, or `null` where nothing is said. */
@@ -1251,7 +1261,9 @@ export class StructurePanel implements DeckCell {
   private frameLit(): void {
     const structure = this.structure
     if (structure === null) return
-    const lit = this.lit
+    // The window's beads, whatever `outside the window` says about the rest:
+    // under `show` nothing is ghosted, and the frame is still the window's.
+    const lit = this.windowLit(structure)
     const beads: number[] = []
     for (let i = 0; i < structure.set.length; i++) {
       if (lit === null || lit[i] === 1) beads.push(i)
@@ -1402,6 +1414,14 @@ export class StructurePanel implements DeckCell {
     const values = contacts({ contig: from.contig, bp: (from.start + from.end) / 2 }, midpointsOf(structure))
     const scale = this.props.contactsScale?.() ?? null
     if (values === null) return NO_CONTACT_CHORDS
+    // A contact's weight is where it sits on the map's own colour scale —
+    // the transformed value between the scale's ends — because that is the
+    // scale a reader is looking at, and because on a Hi-C row read raw the
+    // two neighbours of the pin are the whole picture: everything a few
+    // beads away is under a hundredth of them, and a fraction of the
+    // strongest reaches nothing. Without a scale, the fraction of the
+    // strongest is all there is.
+    const onScale = scale !== null && scale.vmax > scale.vmin
     let max = 0
     for (let i = 0; i < values.length; i++) {
       if (i === this.pinned || !Number.isFinite(values[i])) continue
@@ -1412,13 +1432,11 @@ export class StructurePanel implements DeckCell {
     const list: Array<{ bead: number; weight: number; colour: string }> = []
     for (let i = 0; i < values.length; i++) {
       if (i === this.pinned || !Number.isFinite(values[i])) continue
-      const weight = values[i] / max
-      if (weight < style.contactThreshold) continue
-      let colour = ink
-      if (scale !== null && scale.vmax > scale.vmin) {
-        const t = (transformValue(values[i], scale.transform) - scale.vmin) / (scale.vmax - scale.vmin)
-        colour = colormapCss(scale.colormap, Math.max(0, Math.min(1, t)))
-      }
+      const weight = onScale
+        ? Math.max(0, Math.min(1, (transformValue(values[i], scale.transform) - scale.vmin) / (scale.vmax - scale.vmin)))
+        : values[i] / max
+      if (weight < style.contactThreshold || weight <= 0) continue
+      const colour = onScale ? colormapCss(scale.colormap, weight) : ink
       list.push({ bead: i, weight, colour })
     }
     list.sort((p, q) => q.weight - p.weight)
@@ -1435,9 +1453,17 @@ export class StructurePanel implements DeckCell {
   private rulerOf(structure: Structure): ReadonlyArray<{ bead: number; label: string }> {
     const key = `${structure.set.length}:${structure.width}`
     if (this.rulerCache !== null && this.rulerCache.key === key) return this.rulerCache.list
-    const step = RULER_STEPS.find((candidate) => candidate >= structure.width * 10) ?? RULER_STEPS[RULER_STEPS.length - 1]
-    const list: Array<{ bead: number; label: string }> = []
     const set = structure.set
+    // A tick every ten beads, and never more than about forty along the whole
+    // model: a genome of sixteen chromosomes at 5 kb is not read at 50 kb.
+    let total = 0
+    for (const chain of structure.chains) {
+      const last = chain.beads[chain.beads.length - 1]
+      if (last !== undefined) total += set.end[last] - set.start[chain.beads[0] ?? last]
+    }
+    const floor = Math.max(structure.width * 10, total / 40)
+    const step = RULER_STEPS.find((candidate) => candidate >= floor) ?? RULER_STEPS[RULER_STEPS.length - 1]
+    const list: Array<{ bead: number; label: string }> = []
     for (const chain of structure.chains) {
       let last = -1
       for (let k = 0; k < chain.beads.length; k++) {
@@ -1446,7 +1472,10 @@ export class StructurePanel implements DeckCell {
         const tick = Math.floor(set.start[i] / step)
         if (tick === last) continue
         last = tick
-        list.push({ bead: i, label: fmt.bp(tick * step) })
+        // Not the zero tick: a chain's start is where its name is, and
+        // sixteen "0 bp" labels on a genome say nothing sixteen times.
+        if (tick === 0) continue
+        list.push({ bead: i, label: tickLabel(tick * step) })
       }
     }
     this.rulerCache = { key, list }
@@ -1815,24 +1844,11 @@ export class StructurePanel implements DeckCell {
       variant: 'modal-structure',
       body: () => {
         const stage = el('div', { class: 'structure-stage' }, this.wrap)
-        const camera = el(
-          'div',
-          { class: 'structure-side-camera' },
-          el('span', { class: 'structure-side-title', text: 'camera' }),
-          button('frame the window', () => this.frameLit(), {
-            class: 'btn btn-quiet',
-            title: 'Put the camera on what the maps are looking at',
-          }),
-          button('show everything', () => this.frameAll(), {
-            class: 'btn btn-quiet',
-            title: 'Put the camera on the whole model, from the front',
-          }),
-        )
         // The settings card, borrowed from the Aesthetics panel for as long
         // as the dialog is up, and given back where it was.
         const parent = this.settingsEl.parentElement
         this.settingsHome = parent === null ? null : { parent, next: this.settingsEl.nextSibling }
-        const side = el('aside', { class: 'structure-side' }, camera, this.settingsEl)
+        const side = el('aside', { class: 'structure-side' }, this.settingsEl)
         // The sidebar's own toggle, in the stage's bottom corner: the settings
         // out of the way for a look at the model, and back.
         const sideToggle = iconButton('panel-right-close', 'Hide the settings', () => {
@@ -1859,7 +1875,11 @@ export class StructurePanel implements DeckCell {
     // back into the cell's body.
     const home = this.settingsHome
     this.settingsHome = null
-    if (home !== null && home.parent.isConnected) home.parent.insertBefore(this.settingsEl, home.next)
+    // …before the sibling it had, where that sibling is still there — the
+    // column may have been rebuilt while the dialog was up.
+    if (home !== null && home.parent.isConnected) {
+      home.parent.insertBefore(this.settingsEl, home.next !== null && home.next.parentNode === home.parent ? home.next : null)
+    }
     if (!this.destroyed) this.body.append(this.wrap)
     requestAnimationFrame(() => this.remeasure())
   }
@@ -1901,6 +1921,8 @@ export class StructurePanel implements DeckCell {
       return node
     }
     const row = (...nodes: HTMLElement[]): HTMLElement => el('div', { class: 'plot-icon-row' }, ...nodes)
+    const blockField = (label: string, control: HTMLElement, hint?: string): HTMLElement =>
+      el('label', { class: 'field ann-field field-block', title: hint ?? '' }, el('span', { class: 'field-label', text: label }), control)
     const rows: HTMLElement[] = []
 
     // Which model, where there is more than one to choose between.
@@ -2065,9 +2087,10 @@ export class StructurePanel implements DeckCell {
       }
     }
 
-    // Camera: presets, the turntable, framing.
+    // Camera: presets, the turntable, framing. Block fields — the label above
+    // the buttons — because three words and a toggle do not fit beside one.
     rows.push(
-      settingsField(
+      blockField(
         'camera',
         row(
           button('front', () => this.lookFrom(0, 0), { class: 'btn btn-quiet', title: 'Look from the front' }),
@@ -2078,7 +2101,7 @@ export class StructurePanel implements DeckCell {
       ),
     )
     rows.push(
-      settingsField(
+      blockField(
         'frame',
         row(
           button('the window', () => this.frameLit(), { class: 'btn btn-quiet', title: 'Put the camera on what the maps are looking at (f)' }),

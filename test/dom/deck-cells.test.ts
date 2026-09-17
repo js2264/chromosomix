@@ -600,7 +600,9 @@ describe('the model, enlarged', () => {
     const card = modal?.querySelector('.structure-side > .structure-settings')
     expect(card).not.toBeNull()
     expect(card).toBe(deck.structureSettings())
-    expect(modal?.querySelector('.structure-side-camera button')).not.toBeNull()
+    // The camera's rows are the card's own, so the sidebar carries nothing else.
+    expect(modal?.querySelector('.structure-side-camera')).toBeNull()
+    expect(modal?.querySelector('.structure-side .structure-settings button[title*="whole model"]')).not.toBeNull()
     // A setting changed in the sidebar writes through the store, as in the panel.
     const select = card?.querySelector<HTMLSelectElement>('select')
     if (select) {

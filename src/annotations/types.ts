@@ -1184,8 +1184,8 @@ export interface StructureStyle {
   ruler: boolean
   /**
    * The map's contacts from the pinned bead as chords (§25.5): to every bead
-   * whose contact is at least {@link contactThreshold} of the strongest,
-   * as thick as the contact and coloured on the map's scale.
+   * whose contact sits at least {@link contactThreshold} of the way up the
+   * map's colour scale, as thick as the contact and coloured on that scale.
    */
   contactChords: boolean
   contactThreshold: number
@@ -1220,7 +1220,7 @@ export function defaultStructureStyle(): StructureStyle {
     slab: 1,
     ruler: false,
     contactChords: false,
-    contactThreshold: 0.2,
+    contactThreshold: 0.5,
     compare: '',
   }
 }

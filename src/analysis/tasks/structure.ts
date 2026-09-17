@@ -165,6 +165,19 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
   },
   {
     kind: 'number',
+    key: 'binsPerBead',
+    label: 'Bins per bead',
+    hint:
+      'How many of the file’s bins one bead stands for when the file is read for this run — a ' +
+      'whole genome at 1 kb becomes a model at 5 kb with 5. Ignored when the block on screen is ' +
+      'taken as drawn, which is pooled the way the map is.',
+    default: 1,
+    min: 1,
+    max: 1000,
+    integer: true,
+  },
+  {
+    kind: 'number',
     key: 'alpha',
     label: 'Exponent α',
     hint:
@@ -206,39 +219,52 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
   BALANCE_PARAM,
 ]
 
+const plural = (n: number, noun: string): string => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`
+
 function reconstructEstimate(context: AnalysisContext, params: Params): CostEstimate {
   const framing = context.framing
-  const cells =
-    framing === null
-      ? 0
-      : Math.ceil(
-          Math.max(framing.rows[1] - framing.rows[0], framing.cols[1] - framing.cols[0]) /
-            Math.max(1, framing.binsPerCell),
-        )
   const region = typeof params.region === 'string' ? params.region.trim() : ''
+  const perBead = Math.max(1, Math.round(typeof params.binsPerBead === 'number' ? params.binsPerBead : 1))
   const names = region === '' ? [] : region.split(',').map((part) => part.split(':')[0].trim())
   const named = context.contigs.filter((contig) => names.includes(contig.name))
   const k = Math.max(1, framing?.binsPerCell ?? 1)
-  const beads =
-    named.length === 0
-      ? cells
-      : Math.min(cells, named.reduce((sum, contig) => sum + Math.ceil(contig.bins / k), 0))
+  // The block as drawn answers for what it covers; the file, read and pooled,
+  // answers for the rest — the whole file when the box is empty.
+  const framed =
+    framing === null
+      ? 0
+      : Math.ceil(Math.max(framing.rows[1] - framing.rows[0], framing.cols[1] - framing.cols[0]) / k)
+  const wholeFile = region === ''
+  const covered =
+    framing !== null &&
+    !wholeFile &&
+    named.every((contig) => contig.startBin >= framing.rows[0] && contig.startBin + contig.bins <= framing.rows[1])
+  const blocks = wholeFile ? context.contigs.length : Math.max(1, named.length)
+  const beads = wholeFile
+    ? Math.ceil(context.nBins / perBead)
+    : named.length === 0
+      ? framed
+      : covered
+        ? named.reduce((sum, contig) => sum + Math.ceil(contig.bins / k), 0)
+        : named.reduce((sum, contig) => sum + Math.ceil(contig.bins / perBead), 0)
+  const reads = wholeFile || (named.length > 0 && !covered)
   const pairs = beads * beads
   const note =
     beads === 0
       ? 'The block the view holds, at the resolution it is drawn at.'
       : `${beads.toLocaleString()} beads, ${pairs.toLocaleString()} pairs a step; ` +
-        (beads > 1200 ? 'a few seconds per hundred steps.' : 'well under a second per hundred steps.')
+        (beads > 1200 ? 'a few seconds per hundred steps' : 'well under a second per hundred steps') +
+        (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file and pooled ${perBead} to a bead.` : '.')
   return {
-    class: 'bounded',
-    requests: context.blockLoaded ? 0 : 1,
-    bytes: context.blockLoaded ? 0 : null,
+    class: reads ? 'scan' : 'bounded',
+    requests: reads ? (blocks * (blocks + 1)) / 2 : context.blockLoaded ? 0 : 1,
+    bytes: null,
     note,
     ...(beads > RECONSTRUCT_MAX_BEADS
       ? {
           refusal:
             `${beads.toLocaleString()} beads is more than the ${RECONSTRUCT_MAX_BEADS.toLocaleString()} ` +
-            'this solves in a tab. Zoom out so the block is drawn coarser, or name one sequence.',
+            `this solves in a tab. Pool more bins to a bead (${Math.ceil((beads * perBead) / RECONSTRUCT_MAX_BEADS).toLocaleString()} would do), or name fewer sequences.`,
         }
       : {}),
   }

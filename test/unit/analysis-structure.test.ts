@@ -165,17 +165,25 @@ describe('model from the map', () => {
     expect(RECONSTRUCT_TASK.availability({ hasMap: true, entries: [] } as never).state).toBe('ready')
   })
 
-  it('prices the block as drawn, and refuses one with more beads than it solves', () => {
+  it('prices what will be read, and refuses more beads than it solves', () => {
+    // The box empty is the whole file: every bin, pooled by bins per bead.
     const context = {
       framing: { ...FRAMING, rows: [0, 6000], cols: [0, 6000], binsPerCell: 2 },
-      contigs: [],
+      contigs: [{ name: 'I', startBin: 0, bins: 6000, length: 6000 * BINSIZE, genome: -1 }],
+      nBins: 6000,
       blockLoaded: true,
     } as never
     const estimate = RECONSTRUCT_TASK.estimate(context, {})
-    expect(estimate.refusal).toMatch(/3,000 beads/)
-    const coarser = { ...(context as object), framing: { ...FRAMING, rows: [0, 6000], cols: [0, 6000], binsPerCell: 4 } } as never
-    expect(RECONSTRUCT_TASK.estimate(coarser, {}).refusal).toBeUndefined()
-    expect(RECONSTRUCT_TASK.estimate(coarser, {}).note).toMatch(/1,500 beads/)
+    expect(estimate.refusal).toMatch(/6,000 beads/)
+    expect(estimate.refusal).toMatch(/3 would do/)
+    const pooled = RECONSTRUCT_TASK.estimate(context, { binsPerBead: 4 })
+    expect(pooled.refusal).toBeUndefined()
+    expect(pooled.note).toMatch(/1,500 beads/)
+    expect(pooled.note).toMatch(/pooled 4 to a bead/)
+    // A sequence the block covers is priced as the block draws it: 2 bins to a cell.
+    const covered = RECONSTRUCT_TASK.estimate(context, { region: 'I' })
+    expect(covered.note).toMatch(/3,000 beads/)
+    expect(covered.refusal).toMatch(/3,000 beads/)
   })
 
   it('makes a structure row from the block, one bead per cell, that orders the pairs as the map does', async () => {

@@ -359,23 +359,21 @@ function anchorPoint(
 // ---------------------------------------------------------------------------
 
 /**
- * The contacts a model is solved over: one cell per bead, in absolute bins.
+ * The contacts a model is solved over: one cell per bead, each a run of
+ * bins, with the square of contacts between every two.
  *
- * `k` bins to a cell, which is the block's own pooling when the view's block
- * is taken as it is — the resolution the reader is looking at — and 1 when the
- * square was read for this run.
+ * `binFrom`/`binTo` name each cell's bins, since the cells need not be one
+ * contiguous run — several sequences named leave the ones between them out,
+ * and the whole file is every sequence's run one after the other. `k` is
+ * the bins to a cell: the block's own pooling when the view's block is taken
+ * as it is, or the *bins per bead* the run asked for when the file is read.
  */
 interface Cells {
-  from: number
   k: number
   n: number
+  binFrom: Int32Array
+  binTo: Int32Array
   values: Float32Array
-  /**
-   * Which cell of the square each kept cell is, where several sequences
-   * were asked for and the ones between them left out; absent when every
-   * cell of the square is a bead.
-   */
-  cellOf?: Int32Array
 }
 
 /** The sequences of the file as bin runs, for placing a cell on one. */
@@ -389,19 +387,24 @@ function contigRuns(job: JobContext): Array<{ cid: number; from: number; to: num
 }
 
 /**
- * Where the contacts come from: the view's block as drawn, or a square read.
+ * Where the contacts come from: the view's block as drawn, or the file read
+ * and pooled.
  *
- * The block is what the reader is looking at and what the task is *about* —
- * the loaded locus at its drawn resolution, pooled cells included, which is
- * the one place `binsPerCell > 1` is honoured rather than refused. It is
- * declined only where it cannot honestly answer: a rectangle whose rows are
- * not its columns has no diagonal to model, and a block balanced the other
- * way is a different matrix. Then the square over the framing is read at the
- * file's own bin size, within the cap.
+ * The block is what the reader is looking at, and it is taken as it is —
+ * pooled cells included, which is the one place `binsPerCell > 1` is
+ * honoured rather than refused — whenever it can honestly answer: it is
+ * square, balanced the way the run asks, and covers every span asked for.
+ * Otherwise the file is **read span by span**, one rectangle per pair of
+ * spans (so two sequences far apart in the file cost their two squares and
+ * the rectangle between them, never the sequences in between), and pooled
+ * `k` bins to a bead as it is read — which is how a whole genome at 1 kb
+ * becomes a model at 5 kb without a 12,000² block ever existing. The mean
+ * of the counted bins, so a balanced matrix pools as a balanced one.
  */
 async function contactCells(
   job: JobContext,
   spans: Span[] | null,
+  k: number,
   balance: boolean,
   value: string,
 ): Promise<{ cells: Cells; how: string } | { refusal: string }> {
@@ -412,63 +415,103 @@ async function contactCells(
     block.rowExtent[1] === block.colExtent[1] &&
     block.nrows === block.ncols &&
     job.framing.balance === balance
-  // Several sequences are the square over all of them — the trans contacts
-  // between them are what puts them beside each other — with the cells of
-  // the sequences in between left out afterwards (`keep`).
-  const union: Span | null =
-    spans === null
-      ? null
-      : { from: Math.min(...spans.map((s) => s.from)), to: Math.max(...spans.map((s) => s.to)) }
-  const keep = (cells: Cells): Cells => {
-    if (spans === null || spans.length <= 1) return cells
-    const kept: number[] = []
-    for (let i = 0; i < cells.n; i++) {
-      const binFrom = cells.from + i * cells.k
-      const binTo = binFrom + cells.k
-      if (spans.some((s) => binFrom < s.to && binTo > s.from)) kept.push(i)
+  const wholeFile = spans === null
+  const wanted: Span[] = wholeFile ? contigRuns(job).map((run) => ({ from: run.from, to: run.to })) : spans
+  if (wanted.length === 0) return { refusal: 'The file has no sequence to model.' }
+
+  // The block, where it covers what was asked for. The whole file is the
+  // block only where the block *is* the whole file.
+  if (square && block !== undefined && wanted.every((span) => blockCovers(block, span))) {
+    const bk = Math.max(1, block.binsPerCell)
+    const rows: number[] = []
+    const binFrom: number[] = []
+    const binTo: number[] = []
+    for (let r = 0; r < block.nrows; r++) {
+      const from = block.rowExtent[0] + r * bk
+      const to = Math.min(block.rowExtent[1], from + bk)
+      if (!wanted.some((span) => from < span.to && to > span.from)) continue
+      rows.push(r)
+      binFrom.push(from)
+      binTo.push(to)
     }
-    if (kept.length === cells.n) return cells
-    const index = Int32Array.from(kept)
-    return { ...cells, n: kept.length, values: subMatrixOf(cells.values, cells.n, index), cellOf: index }
-  }
-  if (square && block !== undefined) {
-    const k = Math.max(1, block.binsPerCell)
-    const wanted: Span = union ?? { from: block.rowExtent[0], to: block.rowExtent[1] }
-    if (blockCovers(block, wanted) || union === null) {
-      const first = Math.floor((wanted.from - block.rowExtent[0]) / k)
-      const last = Math.min(block.nrows, Math.ceil((wanted.to - block.rowExtent[0]) / k))
-      const n = last - first
-      const values = new Float32Array(n * n)
-      for (let r = 0; r < n; r++) {
-        const at = (first + r) * block.ncols + first
-        values.set(block.values.subarray(at, at + n), r * n)
-      }
-      const cells = keep({ from: block.rowExtent[0] + first * k, k, n, values })
-      if (cells.n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(cells.n) }
-      return {
-        cells,
-        how: k > 1 ? `the block as drawn, ${k} bins to a cell` : 'the block as drawn',
-      }
+    const n = rows.length
+    if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n, bk) }
+    const values = new Float32Array(n * n)
+    for (let a = 0; a < n; a++) {
+      const at = rows[a] * block.ncols
+      for (let b = 0; b < n; b++) values[a * n + b] = block.values[at + rows[b]]
+    }
+    return {
+      cells: { k: bk, n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
+      how: bk > 1 ? `the block as drawn, ${bk} bins to a cell` : 'the block as drawn',
     }
   }
-  const wanted: Span = union ?? {
-    from: Math.min(job.framing.rows[0], job.framing.cols[0]),
-    to: Math.max(job.framing.rows[1], job.framing.cols[1]),
+
+  // The file, read and pooled.
+  const binFrom: number[] = []
+  const binTo: number[] = []
+  const cellsOfSpan: number[][] = []
+  for (const span of wanted) {
+    const own: number[] = []
+    for (let from = span.from; from < span.to; from += k) {
+      own.push(binFrom.length)
+      binFrom.push(from)
+      binTo.push(Math.min(span.to, from + k))
+    }
+    cellsOfSpan.push(own)
   }
-  const n = wanted.to - wanted.from
-  if (n <= 0) return { refusal: 'The framing holds no bins to model.' }
-  // The read is the union, so it is the union that has to fit: sequences
-  // far apart in the file with little between them are read as one square.
-  if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n) }
-  const read = await squareFor(job, wanted, { block: null, balance, value })
-  const cells = keep({ from: wanted.from, k: 1, n: read.nrows, values: read.values })
-  return { cells, how: 'read at the file’s bin size' }
+  const n = binFrom.length
+  if (n === 0) return { refusal: 'The framing holds no bins to model.' }
+  if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n, k) }
+  const values = new Float32Array(n * n)
+  const counts = new Float32Array(n * n)
+  const total = (wanted.length * (wanted.length + 1)) / 2
+  let done = 0
+  for (let a = 0; a < wanted.length; a++) {
+    for (let b = a; b < wanted.length; b++) {
+      await job.breathe()
+      job.progress(done++, total + 2, `reading ${done} of ${total} blocks`)
+      const rowSpan = wanted[a]
+      const colSpan = wanted[b]
+      const dense = await job.mc.matrix({
+        rows: [rowSpan.from, rowSpan.to],
+        cols: [colSpan.from, colSpan.to],
+        balance,
+        value,
+      })
+      const rowCells = cellsOfSpan[a]
+      const colCells = cellsOfSpan[b]
+      for (let r = 0; r < dense.nrows; r++) {
+        const rc = rowCells[Math.floor(r / k)]
+        if (rc === undefined) continue
+        const rowAt = r * dense.ncols
+        for (let c = 0; c < dense.ncols; c++) {
+          const v = dense.values[rowAt + c]
+          if (!Number.isFinite(v)) continue
+          const cc = colCells[Math.floor(c / k)]
+          if (cc === undefined) continue
+          values[rc * n + cc] += v
+          counts[rc * n + cc] += 1
+          if (rc !== cc) {
+            values[cc * n + rc] += v
+            counts[cc * n + rc] += 1
+          }
+        }
+      }
+    }
+  }
+  for (let at = 0; at < values.length; at++) values[at] = counts[at] > 0 ? values[at] / counts[at] : Number.NaN
+  return {
+    cells: { k, n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
+    how: k > 1 ? `read from the file, ${k} bins to a bead` : 'read at the file’s bin size',
+  }
 }
 
-function tooMany(n: number): string {
+function tooMany(n: number, k: number): string {
+  const enough = Math.ceil((n * k) / RECONSTRUCT_MAX_BEADS)
   return (
     `${n.toLocaleString()} beads is more than the ${RECONSTRUCT_MAX_BEADS.toLocaleString()} this ` +
-    'solves in a tab. Zoom out so the block is drawn coarser, or name one sequence.'
+    `solves in a tab. Pool more bins to a bead (${enough.toLocaleString()} would do), or name fewer sequences.`
   )
 }
 
@@ -512,6 +555,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   const iterations = Math.max(0, Math.round(numParam(job.params, 'iterations', 150)))
   const weightText = strParam(job.params, 'weights', 'contacts')
   const weightMode: WeightMode = weightText === 'sqrt' || weightText === 'equal' ? weightText : 'contacts'
+  const binsPerBead = Math.max(1, Math.round(numParam(job.params, 'binsPerBead', 1)))
   const regionText = strParam(job.params, 'region', '').trim()
   const spans = regionSpans(job, regionText)
   if (spans !== null && !Array.isArray(spans)) {
@@ -522,7 +566,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     )
     return []
   }
-  const source = await contactCells(job, spans, balance, value)
+  const source = await contactCells(job, spans, binsPerBead, balance, value)
   if ('refusal' in source) {
     job.note(source.refusal)
     return []
@@ -545,13 +589,13 @@ export const runReconstruct: TaskRunner = async (job) => {
   const beads: ModelBead[] = []
   const perRun = new Map<number, number>()
   for (let i = 0; i < cells.n; i++) {
-    const binFrom = cells.from + (cells.cellOf === undefined ? i : cells.cellOf[i]) * cells.k
+    const binFrom = cells.binFrom[i]
     const run = runs.find((r) => r.from <= binFrom && binFrom < r.to)
     if (run === undefined) continue
     const name = job.mc.chromnames[run.cid]
     const length = job.mc.chromsizes.get(name) ?? (run.to - run.from) * binsize
     const start = (binFrom - run.from) * binsize
-    const end = Math.min(length, (Math.min(run.to, binFrom + cells.k) - run.from) * binsize)
+    const end = Math.min(length, (Math.min(run.to, cells.binTo[i]) - run.from) * binsize)
     group[i] = run.cid
     const ordinal = perRun.get(run.cid) ?? 0
     index[i] = ordinal
