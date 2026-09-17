@@ -42,12 +42,47 @@ function availability(context: AnalysisContext) {
 /**
  * The most beads a model is solved over in the tab.
  *
- * Every step of the refinement is a pass over every pair, and 2,500 beads is
- * six million pairs — a few seconds per hundred steps — where 10,000 would be
- * a hundred million and a minute a step. The way out is the one the note
- * names: zoom out so the block is drawn coarser, or name a sequence.
+ * Not a round number picked for caution: it is where the two quadratics stop
+ * being affordable. Every step of the refinement is a pass over every pair, so
+ * 10,000 beads is a hundred million pairs a step and the refinement is minutes
+ * rather than seconds; and the run holds dense `n × n` matrices, so the same
+ * 10,000 is about a gigabyte of them. Both are what {@link reconstructEstimate}
+ * prints before the reader presses *run*, in seconds and in megabytes, so the
+ * ceiling is the point where a tab is at risk rather than the point where the
+ * wait gets long — the reader decides about the wait.
+ *
+ * It was 2,500 while the solver allocated six matrices for a job that needs
+ * two. At 10,000 those six were four gigabytes and the tab died; the two are
+ * under one, which is what moved the ceiling.
  */
-export const RECONSTRUCT_MAX_BEADS = 2500
+export const RECONSTRUCT_MAX_BEADS = 10000
+
+/**
+ * Pair visits a second, measured in this tab: a 5,709-bead genome took about a
+ * hundred seconds for its classical start and 150 refinement steps, which is
+ * some seventeen billion of them. Wrong by a factor of two on a slower machine
+ * and the note still says *minutes* where minutes is the answer, which is the
+ * decision it is there to inform.
+ */
+const PAIRS_PER_SECOND = 160e6
+
+/** How long a hundred refinement steps take at that rate: the step and its stress, both a pass over every pair. */
+function refineWords(beads: number): string {
+  const seconds = (100 * 2 * beads * beads) / PAIRS_PER_SECOND
+  if (seconds < 1) return 'well under a second per hundred steps'
+  if (seconds < 90) return `about ${Math.round(seconds)} seconds per hundred steps`
+  return `about ${Math.round(seconds / 60)} minutes per hundred steps`
+}
+
+/**
+ * The dense matrices a run holds, in bytes: the counts, the distances they
+ * imply and the weights, each `n²` singles, the counts let go once the other
+ * two are read from them.
+ */
+function matrixWords(beads: number): string {
+  const bytes = 3 * 4 * beads * beads
+  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB of matrices` : `${Math.round(bytes / 1e6)} MB of matrices`
+}
 
 /** The structure row, offered as the feature set it also is. */
 const STRUCTURE_PARAM: ParamSpec = {
@@ -253,7 +288,7 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
     beads === 0
       ? 'The block the view holds, at the resolution it is drawn at.'
       : `${beads.toLocaleString()} beads, ${pairs.toLocaleString()} pairs a step; ` +
-        (beads > 1200 ? 'a few seconds per hundred steps' : 'well under a second per hundred steps') +
+        `${refineWords(beads)}, ${matrixWords(beads)}` +
         (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file and pooled ${perBead} to a bead.` : '.')
   return {
     class: reads ? 'scan' : 'bounded',

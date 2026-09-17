@@ -50,6 +50,7 @@ function view(overrides: Partial<StructureView> = {}): StructureView {
     sizes: null,
     contactChords: [],
     measures: [],
+  marks: [],
     ruler: [],
     overlay: null,
     haplotype: -1,

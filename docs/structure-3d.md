@@ -725,6 +725,61 @@ is a known model whose contacts were made by the law and are asked for it back. 
 the view's block as drawn — cis and trans together, pooled cells honoured — and lands as a
 structure row on the Structures card, which the cell draws and a bed3d carries away.
 
+### 8.5 Where it sits among the published solvers
+
+Worth writing down, because "ShRec3D with SMACOF" names a family rather than a method, and the
+three departures below are the ones a reader comparing a model here against one from pastis or from
+`ShRec3D.m` will notice.
+
+**What the contact count is taken to mean.** Three positions exist in the literature. ShRec3D and
+every classical-MDS descendant treat a count as a *measurement of a distance*, through a power law
+`d = c^(−1/α)`, and then fit distances. pastis' MDS modes do the same. pastis' **PM1/PM2 and its
+negative-binomial mode** take the opposite position: a count is a *count*, Poisson- or
+NB-distributed with a mean that falls off as a power of the distance, and the structure is the one
+that maximises that likelihood. The likelihood view is the better statistics — it says, correctly,
+that a zero is weak evidence rather than an infinite distance, and it needs no filling step at all —
+and it is also the one that needs a real optimiser, a dispersion parameter fitted per dataset, and
+several restarts to avoid local optima. This solver takes the first position, and pays for it in the
+two places below.
+
+**What is done about the pairs the map never counted.** This is where ShRec3D's cost lives: it
+completes the distance matrix by a **shortest-path closure** (Floyd–Warshall), which is cubic in
+the bead count and is the step that makes ShRec3D a script you run rather than a thing a tab does.
+The closure is also what makes ShRec3D's models famously *round*: a metric completed by shortest
+paths obeys the triangle inequality everywhere, and the result is the most Euclidean structure
+consistent with the observations. Here the filling is the **mean observed distance at the same
+separation** for a cis pair — walking outward to the nearest separation that has observations — and
+the mean observed trans distance for a trans pair. That is a pass over the matrix rather than a
+cube, and it converges to what the closure gives on a map whose contacts decay with separation,
+which is every Hi-C map. It is a worse answer on a map with a strong, isolated long-range
+structure, where the closure would have propagated the evidence and the mean does not.
+
+**What the refinement is held to.** ShRec3D stops at the classical solution, which is a
+least-squares fit to the *completed* matrix — meaning the filled-in pairs, which are guesses, pull
+on the beads exactly as hard as the counted ones. The refinement here is SMACOF over the **counted
+pairs only**, and it is **weighted by the counts**: a pair the map saw ten thousand times holds its
+beads where it says, a pair it saw once barely moves them, a pair it never saw weighs nothing.
+That weighting is the substantive difference from a plain "ShRec3D + SMACOF" and the reason the
+near diagonal, where a Hi-C map is surest, is fitted first. pastis' MDS mode is unweighted SMACOF
+on the distances; its NB mode gets the same effect through the likelihood, where a high count is
+automatically a tighter constraint. So the weighting is this solver's way of buying the one property
+of the likelihood view that matters most, without the optimiser the likelihood view needs.
+
+**What is given up, and said plainly.** One consensus structure, not an ensemble; no restarts, so
+one deterministic answer rather than a distribution over local optima; no per-dataset dispersion
+fitted; no explicit constraints (Chrom3D's lamina, Hi-C-Spector's or 3DMax's priors). The two
+numbers the run reports — the final weighted stress and Spearman's ρ between `1/d` in the model and
+the counts — are there because a single consensus model with no ensemble around it should at least
+say how well it did.
+
+**Why classical MDS at all, when the refinement is what the model is held to.** As an
+initialisation. SMACOF is a majorisation and finds a local optimum; started from noise it finds a
+bad one. The classical solution is the standard start in every MDS toolkit, and it is where the
+filling earns its keep: the fill exists to give classical scaling a complete matrix, not to be
+fitted. Three eigenvectors are taken by subspace iteration rather than a full decomposition, and
+the double-centred matrix is never written down — the centring is rank-two plus a constant, so it
+folds into the multiplication — which is what keeps a ten-thousand-bead model inside a tab's memory.
+
 ---
 
 ## 9. What the change looks like in the repository

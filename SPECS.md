@@ -6835,7 +6835,8 @@ toggles that combine** (the tube alone by default); a **dashed run of ink across
 chain, always, so a chain with a missing bead reads as one chain with a hole and not as two; a halo
 on the hovered bead; a **dashed chord of ink** across a hovered contact and the loops as chords of
 ink, both drawn as cylinders rather than one-pixel lines so they are seen at the size of the tube
-they cross; a fog for depth, on by default, with a toggle and a depth; lit, always; **orthographic,
+they cross, at **half its radius**, since a line drawn *about* the model that is as thick as the
+model reads as a piece of it; a fog for depth, on by default, with a toggle and a depth; lit, always; **orthographic,
 always** — a model has no horizon, and perspective made the same distance read shorter at the back;
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
 the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
@@ -6864,7 +6865,8 @@ at most eighty labels, and no zero tick: a chain's start is where its name is),
 measure, `r` turntable — enabled while a structure cell is on screen. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
-a dialog with every setting in a sidebar beside it; the cell's own canvas, key, labels and menu are
+a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
+them** and remembered per file, as a panel column is; the cell's own canvas, key, labels and menu are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
 what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
 back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
@@ -6903,20 +6905,41 @@ lights its beads and, for a contact, joins the two with a chord; the **ball** on
 translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
 of the model nearer the eye, as a ball at that place would.
 
-**Measure mode** (the ruler button in the corner, the badge reading *measure*) makes two clicks a
-measurement: the first bead is held, the second closes it, and the card lists it — the two loci, the
-distance in the model's units and the genomic separation along the sequence, or *across sequences* —
-until its × removes it; each is drawn on the model as dashed ink with the distance written at the
-middle, and in the figure the same. **Select mode** (the pointer-click button in the corner, the badge reading *select*) turns clicks
-into the reader's own marks (§8.1's manual annotations): the first bead clicked is held and named in
-the status bar; the same bead again is a **line** at its locus on both axes, another bead is an
-**arrowhead** — the map's loop mark — between the two; Esc lets the held bead go. The marks land in
-the Manual annotations card and are drawn by every map, lane and the tracks cell; an arrowhead made
-here is drawn on the model as a chord, since *loops as chords* switches to *your marks* when nothing
-else is chosen.
+**Three modes, a button each**, in the cell's corner and in the palette with a key: *mark a bead*
+(`e`), *mark a loop* (`o`) and *measure* (`m`). One is on at a time — arming the next disarms the
+one that was on, pressing the one that is on turns it off — and the badge in the top-left corner
+says which. They are three buttons and not one mode that counts clicks because marking a place and
+marking a loop are two things a reader means, and a mode whose first click might be either is a
+mode whose first click cannot be taken back by stopping.
+
+**Mark a bead** turns every click into one of the reader's own marks (§8.1's manual annotations):
+a **line** at the bead's locus on both axes, kept in the Manual annotations card and drawn by every
+map, lane and tracks cell. On the model it is the bead again, **twice the radius, in the mark's own
+colour** — a place is a thing on the model, so it is drawn as a bigger bead rather than as one more
+line over one. **Mark a loop** holds the first bead clicked, names it in the status bar and closes
+an **arrowhead** — the map's loop mark — on the second; Esc lets the held bead go. An arrowhead made
+here is a chord on the model, since *loops as chords* switches to *your marks* when nothing else is
+chosen. **Measure** is a **drag**: press on one bead, travel to another, let go, and the
+measurement is made — the line follows the pointer on the way, so what is about to be measured is
+what is drawn. The model does not turn under a measuring drag, because the hand is pointing rather
+than steering; a press that lands on nothing turns it as ever. A press and release on the same bead
+holds it instead, so the two-click gesture still closes a measurement for a reader who prefers it.
+The card lists each one — the two loci, the distance in the model's units and the genomic separation
+along the sequence, or *across sequences* — until its × removes it; each is drawn on the model as
+dashed ink with the distance written at the middle, and in the figure the same.
+
+**A card under the pointer** names the bead's sequence and where along it, in the same shape the
+map's card has and under the same switch (§7's *tooltip*): a reader who turned the card off beside
+the map meant it off. The line in the corner and the status bar are not gated, exactly as they are
+not beside the map.
 
 A store of one place (`ui/hoverLocus.ts`): one locus from a track, a bead or the browser's axis,
-two from a map's cell, each saying which surface it came from, every subscriber ignoring its own.
+two from a map's cell — **one** while a span modifier is held, because that is the gesture the hand
+is in the middle of: the crosshair has already stood up as a single line and the readout has already
+stopped naming a contact, so a model still joining two beads would be the one surface left answering
+a question the pointer stopped asking. The one place is the position along the diagonal, which is
+what the line is drawn at and what the readout names. Each saying which surface it came from, every
+subscriber ignoring its own.
 A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
 bead is a mark on every map's column axis and a guide on every tracks cell; a pointer on a tracks
 cell is the same on the maps and the structure. The deck's own cell-to-cell echo between maps is
@@ -6938,7 +6961,7 @@ the window are, and hidden with them under *outside the window: hide*), a **doub
 alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
 window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
 **arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
-sets, so a loop marked on the map or in select mode is a chord on the model.
+sets, so a loop marked on the map or in loop mode is a chord on the model.
 
 **Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
 contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
@@ -7027,8 +7050,14 @@ bins-per-bead to a bead as it is read**, the mean of the counted bins, so a whol
 becomes a model at 5 kb with *bins per bead* 5 and no 12,000² block ever exists. The box **empty is
 the whole file**. A cell whose row the map counted nothing on — a filtered bin, a gap — is left
 out of the model, and the run says how many were. More beads than `RECONSTRUCT_MAX_BEADS`
-(2,500) is refused in the estimate with the way out — pool more bins to a bead, and how many would
-do, or name fewer sequences — because every refinement step is a pass over every pair. The run's other output
+(10,000) is refused in the estimate with the way out — pool more bins to a bead, and how many would
+do, or name fewer sequences — and short of that the estimate prints **what the wait and the memory
+will be**, in seconds per hundred steps and in megabytes of matrices, because both are quadratic in
+the bead count and a reader deciding between 3,000 and 9,000 beads is deciding between a minute and
+ten. The ceiling is where a tab is at risk rather than where the wait gets long: the run holds two
+dense `n × n` matrices of singles — the distances, filled over themselves, and the pairs' weights,
+the counts let go once both are read from them — which at 10,000 beads is under a gigabyte, where
+the six matrices the solver used to allocate for the same job were four. The run's other output
 is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
 the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
 model and the contacts —

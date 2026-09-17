@@ -34,16 +34,15 @@ import type {
 } from '../types'
 import {
   classicalMds,
-  constrainedBeads,
   distancesFromContacts,
-  fillDistances,
+  fillDistancesInPlace,
   normaliseCoordinates,
   smacofStep,
   spearman,
   stressOf,
-  subMatrix,
   weightsFromContacts,
   type Coordinates,
+  type DenseMatrix,
   type WeightMode,
 } from '../../structure/reconstruct'
 import {
@@ -608,36 +607,52 @@ export const runReconstruct: TaskRunner = async (job) => {
     job.note('Fewer than four cells of the block lie on a sequence of this file; nothing to model.')
     return []
   }
-  const placedValues = subMatrixOf(cells.values, cells.n, cellOf)
   const m = cellOf.length
-  const placedGroup = Int32Array.from(cellOf, (i) => group[i])
-  const placedIndex = Int32Array.from(cellOf, (i) => index[i])
+  // Which bead a cell became, for reading the walk's beads back by cell.
+  const beadOfCell = new Int32Array(cells.n).fill(-1)
+  for (let b = 0; b < cellOf.length; b++) beadOfCell[cellOf[b]] = b
 
   job.progress(0, iterations + 2, 'contacts to distances')
   await job.breathe()
-  const distances = distancesFromContacts(placedValues, m, alpha)
-  const keep = constrainedBeads(distances, m)
-  const dropped = m - keep.length
-  if (keep.length < 4) {
+  // The cells that are on a sequence **and** have a counted pair, in one list,
+  // and every matrix built once at that size.
+  //
+  // It used to take two subsets in turn — the counts over the placed cells,
+  // the distances over those, then the constrained ones out of *both* — which
+  // is six dense matrices for a job that needs two. Each is `n²`, so at ten
+  // thousand beads each is four hundred megabytes, and the difference is the
+  // difference between a model and a tab that dies making one.
+  const pick = constrainedIn(cells.values, cells.n, cellOf)
+  const dropped = m - pick.length
+  if (pick.length < 4) {
     job.note('Fewer than four beads have any counted pair; nothing to model.')
     return []
   }
-  const kept = subMatrix(distances, m, keep)
-  // The weights from the same counts the distances came from, over the same
-  // beads: how often the map saw a pair is how hard the pair holds its beads.
-  const weights = subMatrix(weightsFromContacts(placedValues, m, weightMode), m, keep)
-  const keptGroup = Int32Array.from(keep, (i) => placedGroup[i])
-  const keptIndex = Int32Array.from(keep, (i) => placedIndex[i])
-  const n = keep.length
+  const n = pick.length
+  const keptGroup = Int32Array.from(pick, (i) => group[i])
+  const keptIndex = Int32Array.from(pick, (i) => index[i])
+  const counts = subMatrixOf(cells.values, cells.n, pick)
+  // The counts are wanted twice and never again: as the distances they imply,
+  // and as the weight each pair carries in the fit — how often the map saw a
+  // pair is how hard the pair holds its beads. Read into both, then let go, so
+  // the refinement runs with two matrices in memory rather than four.
+  const kept = distancesFromContacts(counts, n, alpha)
+  const weights = weightsFromContacts(counts, n, weightMode)
+  cells.values = new Float32Array(0)
   job.progress(1, iterations + 2, 'classical scaling')
   await job.breathe()
-  const coords = classicalMds(fillDistances(kept, n, keptGroup, keptIndex), n)
+  // Filled over itself: which pairs the map counted is what the `NaN`s said,
+  // and the weights say it too — zero for a pair it never saw — so the copy
+  // that kept them was a second matrix holding a fact already held.
+  fillDistancesInPlace(kept, n, keptGroup, keptIndex)
+  const coords = classicalMds(kept, n)
   let stress = stressOf(kept, n, coords, weights)
   let steps = 0
   for (; steps < iterations; steps++) {
     // Between every step, not inside: the cancel lands here (`job.breathe`).
     await job.breathe()
-    const before = smacofStep(kept, n, coords, weights)
+    const before = stress
+    smacofStep(kept, n, coords, weights, before)
     const after = stressOf(kept, n, coords, weights)
     stress = after
     job.progress(2 + steps, iterations + 2, `refining · stress ${after.toExponential(2)}`)
@@ -651,7 +666,7 @@ export const runReconstruct: TaskRunner = async (job) => {
 
   const placed: ModelBead[] = []
   for (let b = 0; b < n; b++) {
-    const bead = beads[keep[b]]
+    const bead = beads[beadOfCell[pick[b]]]
     placed.push({ ...bead, x: coords.x[b], y: coords.y[b], z: coords.z[b] })
   }
   const set = structureFromBeads(placed, cells.k * binsize)
@@ -662,7 +677,7 @@ export const runReconstruct: TaskRunner = async (job) => {
         ? [...sequences][0]
         : `${sequences.size} sequences`
       : regionText
-  const fit = fitOf(kept, n, coords)
+  const fit = fitOf(kept, n, coords, weights)
 
   if (dropped > 0) {
     job.note(
@@ -710,6 +725,32 @@ export const runReconstruct: TaskRunner = async (job) => {
 }
 
 /** The rows and columns of a square at `keep`, as a smaller square of counts. */
+/**
+ * The cells of `within` that have a counted pair with another of them.
+ *
+ * Asked of the counts rather than of the distances, which is what lets the
+ * distance matrix be built once at its final size: the power law turns a
+ * positive count into a distance and everything else into `NaN`, so "has a
+ * counted pair" is a question about the counts and needs no matrix to answer.
+ */
+function constrainedIn(values: Float32Array, n: number, within: Int32Array): Int32Array {
+  const out: number[] = []
+  for (const i of within) {
+    let any = false
+    for (const j of within) {
+      if (j === i) continue
+      const a = values[i * n + j]
+      const b = values[j * n + i]
+      if ((Number.isFinite(a) && a > 0) || (Number.isFinite(b) && b > 0)) {
+        any = true
+        break
+      }
+    }
+    if (any) out.push(i)
+  }
+  return Int32Array.from(out)
+}
+
 function subMatrixOf(values: Float32Array, n: number, keep: Int32Array): Float32Array {
   const m = keep.length
   const out = new Float32Array(m * m)
@@ -725,9 +766,15 @@ function subMatrixOf(values: Float32Array, n: number, keep: Int32Array): Float32
  * `1/d` in the model and the contact each pair had, over at most 200,000 pairs
  * taken at an even stride so a big block does not sort millions.
  */
-function fitOf(target: Float64Array, n: number, coords: Coordinates): { rho: number; pairs: number } {
+function fitOf(
+  target: DenseMatrix,
+  n: number,
+  coords: Coordinates,
+  /** Which pairs the map counted: non-zero where it did. The filled matrix no longer says. */
+  weights: DenseMatrix,
+): { rho: number; pairs: number } {
   let pairs = 0
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!Number.isNaN(target[i * n + j])) pairs++
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (weights[i * n + j] > 0) pairs++
   const stride = Math.max(1, Math.ceil(pairs / 200000))
   const a: number[] = []
   const b: number[] = []
@@ -735,7 +782,7 @@ function fitOf(target: Float64Array, n: number, coords: Coordinates): { rho: num
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const delta = target[i * n + j]
-      if (Number.isNaN(delta)) continue
+      if (!(weights[i * n + j] > 0)) continue
       if (seen++ % stride !== 0) continue
       const d = Math.hypot(coords.x[i] - coords.x[j], coords.y[i] - coords.y[j], coords.z[i] - coords.z[j])
       a.push(d > 0 ? 1 / d : Number.POSITIVE_INFINITY)

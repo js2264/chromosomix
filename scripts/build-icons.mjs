@@ -71,6 +71,7 @@ const LUCIDE = [
   'move',
   'locate-fixed',
   'mouse-pointer-click',
+  'map-pin',
   // The cell's menu as toggles: beads, sticks, a tube; the chords; the fog;
   // the names.
   'circle-dot',

@@ -8990,6 +8990,16 @@ span.deck-name {
   z-index: 2;
 }
 
+/* The card under the pointer on a model: the same card the map puts up, in the
+   cell's own box. Placed by a transform from the pointer, like the map's. */
+.structure-tip {
+  z-index: 4;
+}
+
+.structure-tip > .cell-tip-pair {
+  font-weight: 600;
+}
+
 /* The two buttons in the top-right corner: the menu, and "frame the window". */
 .structure-corner {
   position: absolute;
@@ -9139,7 +9149,10 @@ span.deck-name {
 }
 
 .structure-side {
-  flex: 0 0 20rem;
+  /* Wider than a panel column, because it is every setting the model has and
+     the dialog has the room a cell did not; and a starting width only — the
+     grip beside it is what decides. */
+  flex: 0 0 26rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -9147,6 +9160,26 @@ span.deck-name {
   border-left: 1px solid var(--border);
   overflow-y: auto;
   font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+
+/* The grip between the picture and the settings, six pixels of it, with a
+   wider invisible target either side: the same gesture and the same size as
+   the panel columns' own. */
+.structure-side-grip {
+  flex: 0 0 6px;
+  align-self: stretch;
+  cursor: col-resize;
+  background: var(--border);
+  border: 0;
+  padding: 0;
+  touch-action: none;
+}
+
+.structure-side-grip:hover,
+.structure-side-grip:focus-visible,
+.structure-side-grip.is-dragging {
+  background: var(--accent, var(--border-strong));
+  outline: none;
 }
 
 /* In the sidebar the menu is a form, not a fold-out over the picture. */

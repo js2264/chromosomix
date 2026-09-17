@@ -39,6 +39,16 @@
  * reconstruction can honestly have (§18.9).
  */
 
+/**
+ * A dense `n × n` matrix this module reads but does not own.
+ *
+ * Both widths are accepted because the matrices it *makes* are `Float32Array`
+ * — see {@link distancesFromContacts} — while a caller holding a `Float64Array`
+ * (a test with a hand-written matrix) should not have to convert one to ask a
+ * question of it.
+ */
+export type DenseMatrix = Float32Array | Float64Array
+
 /** A configuration: one coordinate array per axis, one entry per bead. */
 export interface Coordinates {
   x: Float64Array
@@ -55,8 +65,8 @@ export interface Coordinates {
  * is a pair the experiment did not sample, and `0^(−1/α)` would put the bead
  * at infinity and every other pair at nothing.
  */
-export function distancesFromContacts(values: Float32Array, n: number, alpha: number): Float64Array {
-  const out = new Float64Array(n * n).fill(Number.NaN)
+export function distancesFromContacts(values: DenseMatrix, n: number, alpha: number): Float32Array {
+  const out = new Float32Array(n * n).fill(Number.NaN)
   const power = -1 / alpha
   for (let i = 0; i < n; i++) {
     out[i * n + i] = 0
@@ -85,7 +95,7 @@ export function distancesFromContacts(values: Float32Array, n: number, alpha: nu
  * and the caller says how many; the alternative was a model with beads in it
  * nothing supports.
  */
-export function constrainedBeads(distances: Float64Array, n: number): Int32Array {
+export function constrainedBeads(distances: DenseMatrix, n: number): Int32Array {
   const keep: number[] = []
   for (let i = 0; i < n; i++) {
     let any = false
@@ -96,9 +106,9 @@ export function constrainedBeads(distances: Float64Array, n: number): Int32Array
 }
 
 /** The rows and columns of `distances` at `keep`, as a smaller square. */
-export function subMatrix(distances: Float64Array, n: number, keep: Int32Array): Float64Array {
+export function subMatrix(distances: DenseMatrix, n: number, keep: Int32Array): Float32Array {
   const m = keep.length
-  const out = new Float64Array(m * m)
+  const out = new Float32Array(m * m)
   for (let a = 0; a < m; a++) {
     const row = keep[a] * n
     for (let b = 0; b < m; b++) out[a * m + b] = distances[row + keep[b]]
@@ -119,12 +129,38 @@ export function subMatrix(distances: Float64Array, n: number, keep: Int32Array):
  * were counted.
  */
 export function fillDistances(
-  distances: Float64Array,
+  distances: DenseMatrix,
   n: number,
   group: Int32Array,
   index: Int32Array,
-): Float64Array {
-  const out = Float64Array.from(distances)
+): Float32Array {
+  const out = Float32Array.from(distances)
+  fillDistancesInPlace(out, n, group, index)
+  return out
+}
+
+/**
+ * The same filling, written over the matrix it reads.
+ *
+ * What the copy above exists to protect is the record of *which pairs the map
+ * counted*, which the `NaN`s are — and a caller that has the counts' weights
+ * beside the distances has that record already, since a weight is zero exactly
+ * where the count was missing. That caller is the runner, and it is the one
+ * whose matrix is large enough for a second copy to matter: at ten thousand
+ * beads a matrix is four hundred megabytes, and the run needs the distances,
+ * the weights and the counts in memory at once.
+ *
+ * Safe in place because the two passes are separate: every observed distance
+ * is read into the per-separation means *before* a single missing one is
+ * written, so nothing this fills is read as evidence for what it fills.
+ */
+export function fillDistancesInPlace(
+  out: Float32Array,
+  n: number,
+  group: Int32Array,
+  index: Int32Array,
+): void {
+  const distances = out
   // Mean observed distance per cis separation, and the mean of every trans pair.
   let maxSeparation = 0
   for (let i = 0; i < n; i++) maxSeparation = Math.max(maxSeparation, index[i])
@@ -179,7 +215,6 @@ export function fillDistances(
       out[j * n + i] = d
     }
   }
-  return out
 }
 
 /** How a pair's contact count becomes its weight in the fit. */
@@ -196,8 +231,8 @@ export type WeightMode = 'contacts' | 'sqrt' | 'equal'
  * so a reader can see what the weighting changes. Symmetrised as the
  * distances are, by the mean of the two triangles.
  */
-export function weightsFromContacts(values: Float32Array, n: number, mode: WeightMode): Float64Array {
-  const out = new Float64Array(n * n)
+export function weightsFromContacts(values: DenseMatrix, n: number, mode: WeightMode): Float32Array {
+  const out = new Float32Array(n * n)
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const a = values[i * n + j]
@@ -224,33 +259,33 @@ export function weightsFromContacts(values: Float32Array, n: number, mode: Weigh
  * can be two and a half thousand a side. The result is only an initialisation;
  * the refinement below is what the model is held to.
  */
-export function classicalMds(full: Float64Array, n: number, sweeps = 80): Coordinates {
-  const b = new Float64Array(n * n)
-  // B = −½ J D² J: the squared distances, centred by row, by column and overall.
+export function classicalMds(full: DenseMatrix, n: number, sweeps = 80): Coordinates {
+  // B = −½ J D² J: the squared distances, centred by row, by column and
+  // overall. **Never written down.** Only three vectors are ever wanted of it,
+  // and every one of them is reached by multiplying B into a vector — which
+  // the identity below does from the distances and two row sums, at the same
+  // arithmetic and without the second `n × n` array. At ten thousand beads
+  // that array is four hundred megabytes standing beside the matrix it was
+  // copied from.
   const rowMean = new Float64Array(n)
   let grand = 0
   for (let i = 0; i < n; i++) {
     let sum = 0
+    const row = i * n
     for (let j = 0; j < n; j++) {
-      const d = full[i * n + j]
-      const sq = d * d
-      b[i * n + j] = sq
-      sum += sq
+      const d = full[row + j]
+      sum += d * d
     }
     rowMean[i] = sum / n
     grand += sum
   }
   grand /= n * n
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      b[i * n + j] = -0.5 * (b[i * n + j] - rowMean[i] - rowMean[j] + grand)
-    }
-  }
+  const apply = (v: Float64Array, out: Float64Array): void => multiplyCentred(full, n, rowMean, grand, v, out)
   const q = [seeded(n, 1), seeded(n, 2), seeded(n, 3)]
   orthonormalise(q)
   const z = [new Float64Array(n), new Float64Array(n), new Float64Array(n)]
   for (let sweep = 0; sweep < sweeps; sweep++) {
-    for (let k = 0; k < 3; k++) multiply(b, n, q[k], z[k])
+    for (let k = 0; k < 3; k++) apply(q[k], z[k])
     for (let k = 0; k < 3; k++) q[k].set(z[k])
     orthonormalise(q)
   }
@@ -258,7 +293,7 @@ export function classicalMds(full: Float64Array, n: number, sweeps = 80): Coordi
   // that is not quite Euclidean, which a filled one never quite is — is an
   // axis the data does not support, drawn flat rather than imaginary.
   const axes = q.map((vector, k) => {
-    multiply(b, n, vector, z[k])
+    apply(vector, z[k])
     let lambda = 0
     for (let i = 0; i < n; i++) lambda += vector[i] * z[k][i]
     const scale = Math.sqrt(Math.max(0, lambda))
@@ -267,6 +302,41 @@ export function classicalMds(full: Float64Array, n: number, sweeps = 80): Coordi
     return out
   })
   return { x: axes[0], y: axes[1], z: axes[2] }
+}
+
+/**
+ * `out = B v`, where `B` is the double-centred squared distances of `full`.
+ *
+ * Centring is rank-two plus a constant — `B = −½ (D² − r 1ᵀ − 1 rᵀ + g 11ᵀ)`
+ * for row means `r` and grand mean `g` — so each of those three terms folds
+ * into a scalar times a vector the loop already has, and B never has to exist
+ * as an array. Exactly the matrix a materialised B would have given, to the
+ * last bit of the arithmetic order.
+ */
+function multiplyCentred(
+  full: DenseMatrix,
+  n: number,
+  rowMean: Float64Array,
+  grand: number,
+  v: Float64Array,
+  out: Float64Array,
+): void {
+  let sumV = 0
+  let dotR = 0
+  for (let j = 0; j < n; j++) {
+    sumV += v[j]
+    dotR += rowMean[j] * v[j]
+  }
+  const tail = grand * sumV - dotR
+  for (let i = 0; i < n; i++) {
+    const row = i * n
+    let sum = 0
+    for (let j = 0; j < n; j++) {
+      const d = full[row + j]
+      sum += d * d * v[j]
+    }
+    out[i] = -0.5 * (sum - rowMean[i] * sumV + tail)
+  }
 }
 
 /** A deterministic pseudo-random unit vector, so two runs give one answer. */
@@ -280,15 +350,6 @@ function seeded(n: number, seed: number): Float64Array {
     out[i] = ((state >>> 0) / 4294967296) * 2 - 1
   }
   return out
-}
-
-function multiply(m: Float64Array, n: number, v: Float64Array, out: Float64Array): void {
-  for (let i = 0; i < n; i++) {
-    let sum = 0
-    const row = i * n
-    for (let j = 0; j < n; j++) sum += m[row + j] * v[j]
-    out[i] = sum
-  }
 }
 
 /** Gram–Schmidt in place; a vector that collapses is reseeded so three stay three. */
@@ -335,12 +396,21 @@ function orthonormalise(vectors: Float64Array[]): void {
  * **before** the sweep: `Σ w (δ − d)² / Σ w δ²`, 0 for a perfect fit.
  */
 export function smacofStep(
-  target: Float64Array,
+  target: DenseMatrix,
   n: number,
   coords: Coordinates,
-  weights: Float64Array | null = null,
+  weights: DenseMatrix | null = null,
+  /**
+   * The stress of `coords` before this step, where the caller has it already.
+   *
+   * A refinement loop measures the stress after every step to know when to
+   * stop, and that number *is* the stress before the next one — so recomputing
+   * it here costs a third of the whole refinement for an answer already in
+   * hand. Left out, it is measured as before.
+   */
+  stressBefore?: number,
 ): number {
-  const before = stressOf(target, n, coords, weights)
+  const before = stressBefore ?? stressOf(target, n, coords, weights)
   const { x, y, z } = coords
   for (let i = 0; i < n; i++) {
     let sx = 0
@@ -383,10 +453,10 @@ export function smacofStep(
  * moving it: `Σ w (δ − d)² / Σ w δ²` over the counted pairs.
  */
 export function stressOf(
-  target: Float64Array,
+  target: DenseMatrix,
   n: number,
   coords: Coordinates,
-  weights: Float64Array | null = null,
+  weights: DenseMatrix | null = null,
 ): number {
   const { x, y, z } = coords
   let raw = 0
@@ -497,11 +567,11 @@ function ranks(values: ArrayLike<number>): Float64Array {
  * the stress by less than `tolerance` of itself.
  */
 export function reconstruct(
-  distances: Float64Array,
+  distances: DenseMatrix,
   n: number,
   group: Int32Array,
   index: Int32Array,
-  options: { iterations?: number; tolerance?: number; weights?: Float64Array | null } = {},
+  options: { iterations?: number; tolerance?: number; weights?: DenseMatrix | null } = {},
 ): { coords: Coordinates; stress: number; steps: number } {
   const iterations = options.iterations ?? 200
   const tolerance = options.tolerance ?? 1e-6
@@ -510,7 +580,8 @@ export function reconstruct(
   let stress = stressOf(distances, n, coords, weights)
   let steps = 0
   for (; steps < iterations; steps++) {
-    const before = smacofStep(distances, n, coords, weights)
+    const before = stress
+    smacofStep(distances, n, coords, weights, before)
     const after = stressOf(distances, n, coords, weights)
     stress = after
     if (before - after < tolerance * before) {

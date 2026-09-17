@@ -63,6 +63,16 @@ export interface StructureView {
   contactChords: ReadonlyArray<{ bead: number; weight: number; colour: string }>
   /** The reader's measurements: pairs of beads joined by a dashed line, with the distance written at the middle. */
   measures: ReadonlyArray<readonly [number, number]>
+  /**
+   * The reader's marked places (§25.4): a bead drawn in the mark's own colour
+   * at {@link MARKED_BEAD} times the radius, so a place stands out of the
+   * fibre it is on whether or not anything else is coloured by the marks.
+   *
+   * Places only. A loop is two places and a chord, and it is the chord that
+   * says *these two*; two fat beads at its ends would be a third way of
+   * saying what the chord and the colouring already do.
+   */
+  marks: ReadonlyArray<{ bead: number; colour: string }>
   /** The genomic ruler: beads that carry a tick, and what the tick says. */
   ruler: ReadonlyArray<{ bead: number; label: string }>
   /** Another model in this one's frame (`StructureStyle.compare`), or `null`. */
@@ -87,6 +97,12 @@ export const GHOST_OPACITY = 0.15
 
 /** How much wider than a bead the halo round a hovered or pinned one is. */
 const HALO = 1.8
+
+/** How much wider than a bead a marked place is drawn: twice, which is four times the ink. */
+export const MARKED_BEAD = 2
+
+/** Ink drawn along or across the fibre — a gap's dashes, a loop's chord — as a share of a stick's width. */
+const INK_SHARE = 0.5
 
 /**
  * Draw the view into a box.
@@ -214,8 +230,11 @@ export function drawStructure(
       // as such from across the room.
       ctx.strokeStyle = mark.kind === 1 ? palette.ink : paled(view.colours.css[i], background, DEPTH_FADE * t)
       ctx.globalAlpha = alpha
-      ctx.lineWidth = mark.kind === 1 ? Math.max(1.5, width * 0.8) : width
-      ctx.setLineDash(mark.kind === 1 ? [width * 2, width * 2] : [])
+      // A gap's dashes are ink at half the stick's width: the line says
+      // *nothing is here*, and a line about the fibre that outweighs the fibre
+      // reads as part of it.
+      ctx.lineWidth = mark.kind === 1 ? Math.max(1, width * INK_SHARE) : width
+      ctx.setLineDash(mark.kind === 1 ? [width * 1.5, width * 1.5] : [])
       ctx.beginPath()
       ctx.moveTo(px[i], py[i])
       // Two-tone sticks, each half in its own bead's colour, so a colouring by
@@ -249,12 +268,27 @@ export function drawStructure(
     ctx.fill()
   }
 
+  // The reader's marked places: the bead again, twice the size, in the mark's
+  // own colour. Over the fibre and under every line, so a marked place reads
+  // as a place on the model rather than as another line across it.
+  for (const mark of view.marks) {
+    if (shown[mark.bead] !== 1) continue
+    const i = mark.bead
+    const t = fade(i)
+    const radius = Math.max(0.8, beadRadius * sizeOf(i) * size[i] * MARKED_BEAD * (1 - DEPTH_SHRINK * t))
+    ctx.globalAlpha = view.lit !== null && view.lit[i] === 0 ? style.opacity : 1
+    ctx.fillStyle = paled(mark.colour, background, DEPTH_FADE * t)
+    ctx.beginPath()
+    ctx.arc(px[i], py[i], radius, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
   // Loops as chords, under the hovered one: thin, so a hundred of them read
   // as a texture of the model rather than a cage round it.
   if (view.chords.length > 0 && style.chords) {
     ctx.globalAlpha = 0.9
     ctx.strokeStyle = palette.ink
-    ctx.lineWidth = Math.max(1.2, stickRadius * 1.2)
+    ctx.lineWidth = Math.max(1, stickRadius * 2 * INK_SHARE)
     ctx.beginPath()
     for (const [a, b] of view.chords) {
       if (shown[a] !== 1 || shown[b] !== 1) continue

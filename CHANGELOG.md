@@ -14,6 +14,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
+  with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
+  where one mode used to count clicks and guess which was meant. A marked place is drawn on the
+  model as **the bead again at twice the radius in the mark's own colour**; a measurement is a
+  **drag** from one bead to another, the line following the pointer, the model holding still while
+  it does. A **card under the pointer** names the bead's sequence and coordinate, under the map's
+  own *tooltip* switch. A pointer on a map with the span modifier held now lights **one bead**
+  rather than joining two, which is what the crosshair and the readout had already switched to.
+  The black lines over the model — a gap's dashes, a loop's chord — are **half the tube's radius**,
+  so a line about the model no longer reads as part of it. The enlarge dialog's settings are wider
+  and **dragged to any width** by the grip beside them, remembered per file.
+- **Ten thousand beads (§25.6).** *Model from the map* solves up to 10,000 beads where it stopped
+  at 2,500, because the run now builds two dense matrices where it built six: each is made once at
+  its final size, the distances are filled over themselves, the counts are let go once the
+  distances and the weights have been read from them, and classical scaling multiplies through the
+  centred matrix without ever writing it down. The estimate says what the reader is choosing —
+  seconds per hundred refinement steps and megabytes of matrices, both quadratic in the bead count
+  — so the ceiling is where a tab is at risk rather than where the wait gets long.
 - **The 3D viewer, as a view of the app (§25.3–25.5).** Its settings are now a *3D structure* card
   of the Aesthetics panel right after the *Map* card, built from the same fields, borrowed by the enlarge
   dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
@@ -54,7 +72,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   pairs the map counted, **each pair weighted by how often the map counted it** (the count, its
   square root, or every pair alike — a choice on the form, the count by default), so the near
   diagonal the map is surest of is what the model honours first; `α` and the step count are
-  exposed, a sequence or a typed range restricts it, more than 2,500 beads is refused with the way
+  exposed, a sequence or a typed range restricts it, more than 10,000 beads is refused with the way
   out, and a table reports the fit (weighted stress and Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
   holds — dropped, named by URL or computed — is now listed on a **Structures** card of its own
   under the Tracks card, with *show in the deck* (which opens the structure cell where there is

@@ -76,8 +76,10 @@ describe('contacts to distances', () => {
     expect(d[0]).toBe(0)
     expect(d[1]).toBeCloseTo(0.5, 9)
     expect(d[3]).toBeCloseTo(0.5, 9)
-    // (1,2): 1 one way and 3 the other → the mean, 2.
-    expect(d[5]).toBeCloseTo(Math.pow(2, -1 / 3), 9)
+    // (1,2): 1 one way and 3 the other → the mean, 2. To seven places and not
+    // nine: the matrices are `Float32Array` so that ten thousand beads' worth
+    // of them fit beside each other, and seven places is what that width has.
+    expect(d[5]).toBeCloseTo(Math.pow(2, -1 / 3), 7)
     expect(d[2]).toBeNaN()
     expect(d[6]).toBeNaN()
   })

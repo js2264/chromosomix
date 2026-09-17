@@ -236,8 +236,8 @@ try {
     await shot('16-hover-echo-on-map')
     await page.mouse.move(10, 10)
   }
-  // Select mode: two beads become a loop mark, drawn as a chord.
-  await page.click('.structure-select')
+  // Loop mode: two beads become a loop mark, drawn as a chord.
+  await page.click('.structure-loop')
   await sleep(300)
   if (bb) {
     const hits = []
@@ -254,6 +254,22 @@ try {
     await sleep(2000)
   }
   await shot('17-select-loop-mark')
+  await page.click('.structure-loop')
+  // Mark mode: one click is a place, drawn as a bead twice the size in the
+  // mark's own colour.
+  await page.click('.structure-select')
+  await sleep(300)
+  if (bb) {
+    for (let j = 6; j < 40; j += 2) {
+      const x = bb.x + bb.width * 0.5
+      const y = bb.y + (bb.height * j) / 64
+      await page.mouse.move(x, y)
+      await sleep(30)
+      if (/bead \d+ of/.test(await readout())) { await page.mouse.click(x, y); break }
+    }
+    await sleep(1500)
+  }
+  await shot('17b-marked-bead')
   await page.click('.structure-select')
 
   // Contacts from the pin: pin a bead, turn the chords on.

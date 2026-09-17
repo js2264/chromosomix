@@ -723,14 +723,25 @@ describe('the key (§25.5)', () => {
 })
 
 describe('select mode and the reader\'s marks (§25.4)', () => {
-  it('has a badge for the mode, and a select button that arms it', () => {
+  it('has a badge for the mode, and a button each for a bead, a loop and a measurement', () => {
     const { deck } = make(fakeStore([structureEntry()]))
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
+    const press = (which: string): void => cell.querySelector<HTMLButtonElement>(which)?.click()
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
-    cell.querySelector<HTMLButtonElement>('.structure-select')?.click()
-    expect(cell.querySelector('.structure-mode')?.textContent).toBe('select')
+    press('.structure-select')
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('mark')
     expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(true)
+    // One mode at a time: arming the next disarms the one that was on.
+    press('.structure-loop')
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('loop')
+    expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(false)
+    press('.structure-measure')
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('measure')
+    expect(cell.querySelector('.structure-loop')?.classList.contains('is-on')).toBe(false)
+    // …and pressing the one that is on turns it off.
+    press('.structure-measure')
+    expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
   })
 
   it('offers the reader\'s arrowheads as chords, the fog, the centre and the three drawings on the card', () => {

@@ -210,7 +210,7 @@ import {
 import { openMenu, type MenuItem } from './Menu'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
-import { setHoverPlace } from './hoverLocus'
+import { setHoverPlace, type HoverPlace } from './hoverLocus'
 
 /** What a contact map calls itself when it publishes the place under its pointer. */
 export const HOVER_SOURCE_MAP = 'map'
@@ -7746,6 +7746,39 @@ export class MatrixPanel {
     return { label: group.label, range: [start, end] }
   }
 
+  /**
+   * The place under the pointer, for whatever is not a map (§25.4).
+   *
+   * Two loci ordinarily — a contact is a pair, and the structure cell lights
+   * both of its beads and draws the chord between them. **One** while the span
+   * modifier is held, because that is the gesture the reader is in the middle
+   * of: the crosshair has already stood up as a single line and the readout has
+   * already stopped naming a contact, so a model still joining two beads is the
+   * one surface left answering the question the pointer stopped asking. The one
+   * place is the position along the diagonal, which is what the line is drawn
+   * at and what the readout names.
+   */
+  private hoverPlaceFor(cell: Cell | null, span: boolean): HoverPlace | null {
+    if (cell === null || this.data === null) return null
+    if (span) {
+      const along = alongAxis(this.squareCell(cell))
+      const one = cellLoci(this.squareAxes, null, { row: along, col: along })
+      return one === null
+        ? null
+        : { loci: [{ contig: one.rows.contig, bp: Math.round(one.rows.bp) }], source: HOVER_SOURCE_MAP }
+    }
+    const at = this.locusOf(cell)
+    return at === null
+      ? null
+      : {
+          loci: [
+            { contig: at.rows.contig, bp: at.rows.bp },
+            { contig: at.cols.contig, bp: at.cols.bp },
+          ],
+          source: HOVER_SOURCE_MAP,
+        }
+  }
+
   private describe(cell: Cell | null, at?: { x: number; y: number; span?: boolean }): void {
     // Recorded whatever happens: the lanes continue the crosshair through the
     // hovered column, and they can only do that if they are told it has moved.
@@ -7763,20 +7796,7 @@ export class MatrixPanel {
     // loci rather than cells because a bead has no cell to be converted into,
     // and through the square block so a turned map names the contact it is
     // over rather than a band row and a half-bin.
-    if (moved) {
-      const at = cell === null || this.data === null ? null : this.locusOf(cell)
-      setHoverPlace(
-        at === null
-          ? null
-          : {
-              loci: [
-                { contig: at.rows.contig, bp: at.rows.bp },
-                { contig: at.cols.contig, bp: at.cols.bp },
-              ],
-              source: HOVER_SOURCE_MAP,
-            },
-      )
-    }
+    if (moved) setHoverPlace(this.hoverPlaceFor(cell, at?.span === true))
 
     if (cell === null || this.data === null) {
       setReadout('')

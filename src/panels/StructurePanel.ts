@@ -160,6 +160,13 @@ export type StructureCellProps = Omit<
 
 /** Where a cell's camera is remembered in the session's memory. */
 const CAMERA_SCOPE = 'structure:camera'
+/** Where the enlarged dialog's sidebar width is kept, so a reader sets it once. */
+const SIDE_SCOPE = 'structure:side'
+/** Narrowest and widest the sidebar may be dragged, in pixels. */
+const SIDE_MIN = 240
+const SIDE_MAX = 760
+
+const clamp = (value: number, low: number, high: number): number => Math.min(high, Math.max(low, value))
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
@@ -178,6 +185,7 @@ function tickLabel(bp: number): string {
   return `${bp} bp`
 }
 const NO_CONTACT_CHORDS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
+const NO_MARKS: ReadonlyArray<{ bead: number; colour: string }> = []
 const NO_TICKS: ReadonlyArray<{ bead: number; label: string }> = []
 /**
  * The key that names the centre of rotation: Cmd on a Mac, Ctrl elsewhere,
@@ -204,6 +212,9 @@ const WAITING = {
   noGl: 'This browser gave no WebGL context, so the model cannot be drawn here.',
 }
 
+/** What a click on a bead does, and what the badge in the corner says it does. */
+type StructureMode = 'none' | 'mark' | 'loop' | 'measure'
+
 export class StructurePanel implements DeckCell {
   readonly kind = 'structure' as const
   readonly el: HTMLElement
@@ -212,6 +223,23 @@ export class StructurePanel implements DeckCell {
   private readonly wrap = el('div', { class: 'structure-wrap' })
   private readonly keyEl = el('div', { class: 'structure-key hidden' })
   private readonly readoutEl = el('div', { class: 'structure-readout hidden' })
+  /**
+   * The card under the pointer, naming the bead's sequence and coordinate.
+   *
+   * The map's card and this one are the same instrument and answer to the same
+   * switch (§7's *tooltip*): a reader who turned the card off beside the map
+   * meant it off, and a model that went on putting one up would be the app
+   * disagreeing with itself. The line in the corner and the status bar say the
+   * same thing and are not gated, exactly as they are not beside the map.
+   */
+  private readonly tipEl = el(
+    'div',
+    { class: 'cell-tip structure-tip hidden' },
+    el('div', { class: 'cell-tip-pair' }),
+    el('div', { class: 'cell-tip-pos' }),
+  )
+  /** Where the pointer last was on this cell's canvas, for placing the card. */
+  private pointerAt: { x: number; y: number } | null = null
   /** The badge in the top-left corner: what a drag or a click does right now. */
   private readonly modeEl = el('div', { class: 'structure-mode' })
   /** The modifiers held, while the pointer is over this cell or its dialog is open. */
@@ -219,10 +247,19 @@ export class StructurePanel implements DeckCell {
   /** A press of the centre key that no click has used yet: released, it toggles the display. */
   private centreTap = false
   private overCanvas = false
-  /** Select mode (§25.4): a click marks a bead, two clicks mark a loop. */
-  private selecting = false
+  /**
+   * What a click on a bead does (§25.4): nothing but pin it, mark its locus,
+   * begin or close a loop, or begin or close a measurement.
+   *
+   * One field rather than a flag each, because the four are exclusive and two
+   * flags that must never both be true is a state a reader can reach and the
+   * type cannot forbid.
+   */
+  private mode: StructureMode = 'none'
+  /** The first bead of a loop, while one is half made. */
   private selectFirst = -1
-  private selectButton: HTMLButtonElement | null = null
+  private markButton: HTMLButtonElement | null = null
+  private loopButton: HTMLButtonElement | null = null
   private fogFrame = 0
   private fogPending: number | null = null
   private keyClickTimer: number | null = null
@@ -235,8 +272,7 @@ export class StructurePanel implements DeckCell {
    */
   private readonly settingsEl = el('div', { class: 'controls-card structure-settings' })
   private settingsHome: { parent: HTMLElement; next: Node | null } | null = null
-  /** Measure mode (§25.4): two clicks are a distance, kept in a list. */
-  private measuring = false
+  /** The first bead of a measurement, while one is half made. */
   private measureFirst = -1
   private measureButton: HTMLButtonElement | null = null
   private measures: Array<readonly [number, number]> = []
@@ -286,7 +322,7 @@ export class StructurePanel implements DeckCell {
   private chord: [number, number] | null = null
   private frame = 0
   private drag:
-    | { mode: 'orbit' | 'pan'; x: number; y: number; x0: number; y0: number; moved: boolean; shift: boolean }
+    | { mode: 'orbit' | 'pan' | 'measure'; x: number; y: number; x0: number; y0: number; moved: boolean; shift: boolean }
     | null = null
   private pinchDistance: number | null = null
   private readonly pointers = new Map<number, { x: number; y: number }>()
@@ -305,8 +341,8 @@ export class StructurePanel implements DeckCell {
     this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
     this.measureButton = iconButton(
       'ruler',
-      'Measure: click two beads for the distance between them, kept in the card',
-      () => this.toggleMeasuring(),
+      'Measure (m): drag from one bead to another for the distance between them, kept in the card',
+      () => this.setMode('measure'),
       { class: 'btn btn-icon structure-measure', size: 14 },
     )
     const frameButton = iconButton('scan', 'Frame what the maps are looking at', () => this.frameLit(), {
@@ -317,18 +353,37 @@ export class StructurePanel implements DeckCell {
       class: 'btn btn-icon structure-expand',
       size: 14,
     })
-    this.selectButton = iconButton(
-      'mouse-pointer-click',
-      'Select: click a bead to mark its locus, or two beads to mark a loop',
-      () => this.toggleSelecting(),
+    // Two buttons, not one mode that counts clicks: marking a place and
+    // marking a loop are two things a reader means, and a mode where the first
+    // click might be either is a mode whose first click cannot be undone by
+    // stopping.
+    this.markButton = iconButton(
+      'map-pin',
+      'Mark a bead (e): each click marks that bead’s locus, on every map and track',
+      () => this.setMode('mark'),
       { class: 'btn btn-icon structure-select', size: 14 },
+    )
+    this.loopButton = iconButton(
+      'link-2',
+      'Mark a loop (o): click two beads for a loop between their loci, drawn as a chord',
+      () => this.setMode('loop'),
+      { class: 'btn btn-icon structure-loop', size: 14 },
     )
     this.wrap.append(
       this.labelsEl,
       this.keyEl,
       this.modeEl,
+      this.tipEl,
       this.readoutEl,
-      el('div', { class: 'structure-corner' }, this.selectButton, this.measureButton, frameButton, expandButton),
+      el(
+        'div',
+        { class: 'structure-corner' },
+        this.markButton,
+        this.loopButton,
+        this.measureButton,
+        frameButton,
+        expandButton,
+      ),
     )
     this.paintMode()
     this.paintSettings()
@@ -631,8 +686,9 @@ export class StructurePanel implements DeckCell {
       { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, keys: '2', enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
       { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, keys: '3', enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
       { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, keys: 'l', enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      { id: 'structure-select', group: 'Structure', title: `Select mode (${on(this.selecting)})`, hint: 'Click a bead to mark its locus, two beads for a loop', keys: 'e', enabled: has, run: () => this.toggleSelecting() },
-      { id: 'structure-measure', group: 'Structure', title: `Measure mode (${on(this.measuring)})`, hint: 'Click two beads for the distance between them', keys: 'm', enabled: has, run: () => this.toggleMeasuring() },
+      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', keys: 'e', enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', keys: 'o', enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', keys: 'm', enabled: has, run: () => this.setMode('measure') },
       { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', keys: 'r', enabled: has, run: () => this.toggleTurning() },
     ]
   }
@@ -661,7 +717,7 @@ export class StructurePanel implements DeckCell {
       // toggled, so the page does not scroll while the hand is here.
       if (this.overCanvas) event.preventDefault()
       this.keys.space = true
-    } else if (event.key === 'Escape' && ((this.selecting && this.selectFirst >= 0) || (this.measuring && this.measureFirst >= 0))) {
+    } else if (event.key === 'Escape' && (this.selectFirst >= 0 || this.measureFirst >= 0)) {
       this.selectFirst = -1
       this.measureFirst = -1
       this.pinned = -1
@@ -697,10 +753,12 @@ export class StructurePanel implements DeckCell {
 
   /** The badge: which of the four things the hand is about to do. */
   private paintMode(): void {
-    const mode = this.measuring
-      ? { icon: 'ruler', text: 'measure', title: 'Click two beads for the distance between them; Esc to cancel' }
-      : this.selecting
-      ? { icon: 'mouse-pointer-click', text: 'select', title: 'Click a bead to mark its locus; click a second for a loop; Esc to cancel' }
+    const mode = this.mode === 'measure'
+      ? { icon: 'ruler', text: 'measure', title: 'Drag from one bead to another for the distance between them; Esc to cancel' }
+      : this.mode === 'mark'
+      ? { icon: 'map-pin', text: 'mark', title: 'Click a bead to mark its locus on every map and track' }
+      : this.mode === 'loop'
+      ? { icon: 'link-2', text: 'loop', title: 'Click two beads for a loop between their loci; Esc to cancel' }
       : this.keys.centre
         ? { icon: 'locate-fixed', text: 'centre', title: `Click a bead to turn about it; tap ${CENTRE_KEY === 'Meta' ? '⌘' : 'Ctrl'} alone to show or hide the centre` }
         : this.keys.shift
@@ -713,24 +771,21 @@ export class StructurePanel implements DeckCell {
     this.modeEl.dataset['mode'] = mode.text
   }
 
-  private toggleSelecting(): void {
-    this.selecting = !this.selecting
+  /** Turn a mode on, or off where it is the one already on. Half-made work is dropped either way. */
+  private setMode(next: Exclude<StructureMode, 'none'>): void {
+    this.mode = this.mode === next ? 'none' : next
     this.selectFirst = -1
-    if (this.selecting && this.measuring) this.toggleMeasuring()
-    this.selectButton?.classList.toggle('is-on', this.selecting)
-    this.selectButton?.setAttribute('aria-pressed', String(this.selecting))
-    if (!this.selecting) setReadout('')
-    this.paintMode()
-  }
-
-  private toggleMeasuring(): void {
-    this.measuring = !this.measuring
     this.measureFirst = -1
-    if (this.measuring && this.selecting) this.toggleSelecting()
-    this.measureButton?.classList.toggle('is-on', this.measuring)
-    this.measureButton?.setAttribute('aria-pressed', String(this.measuring))
-    if (!this.measuring) setReadout('')
+    const sync = (button: HTMLButtonElement | null, which: StructureMode): void => {
+      button?.classList.toggle('is-on', this.mode === which)
+      button?.setAttribute('aria-pressed', String(this.mode === which))
+    }
+    sync(this.markButton, 'mark')
+    sync(this.loopButton, 'loop')
+    sync(this.measureButton, 'measure')
+    if (this.mode === 'none') setReadout('')
     this.paintMode()
+    this.schedule()
   }
 
   /**
@@ -739,30 +794,33 @@ export class StructurePanel implements DeckCell {
    * separation, kept in the card until removed, drawn as dashed ink with the
    * distance written at the middle.
    */
-  private measureClick(bead: number): void {
+  /** The line under the model while one end of a measurement is held. */
+  private sayMeasureFrom(bead: number): void {
     const structure = this.structure
     if (structure === null) return
-    if (bead < 0) {
-      this.measureFirst = -1
-      this.pinned = -1
-      setReadout('')
-      this.schedule()
-      return
-    }
-    if (this.measureFirst < 0 || this.measureFirst === bead) {
-      this.measureFirst = bead
-      this.pinned = bead
-      const at = lociOf(structure, bead)
-      setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click a second bead to measure to it`)
-      this.schedule()
-      return
-    }
-    const pair: readonly [number, number] = [this.measureFirst, bead]
+    const at = lociOf(structure, bead)
+    setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   drag to a second bead, or click one, to measure to it`)
+  }
+
+  /** The second end: the measurement is kept in the card and drawn on the model. */
+  private closeMeasure(bead: number): void {
+    const first = this.measureFirst
+    if (first < 0 || first === bead) return
+    const pair: readonly [number, number] = [first, bead]
     this.measureFirst = -1
     this.pinned = -1
     this.measures = [...this.measures, pair]
     setReadout(this.measureLine(pair))
     this.paintSettings()
+    this.schedule()
+  }
+
+  /** The end held, let go: a press on nothing, or Escape. */
+  private cancelMeasure(): void {
+    if (this.measureFirst < 0) return
+    this.measureFirst = -1
+    this.pinned = -1
+    setReadout('')
     this.schedule()
   }
 
@@ -810,7 +868,14 @@ export class StructurePanel implements DeckCell {
    * own (`annotations/manual.ts`), so every map, lane and the tracks cell
    * draws them, and the model draws its arrowheads as chords.
    */
-  private selectClick(bead: number): void {
+  /**
+   * A click in loop mode: the first bead is held, the second closes a loop.
+   *
+   * Only a loop — a click that would have marked a single place is its own
+   * mode now, so neither gesture has to guess which the reader meant from how
+   * many clicks they have made so far.
+   */
+  private loopClick(bead: number): void {
     const structure = this.structure
     const manual = this.props.manual?.()
     if (structure === null || manual === undefined) return
@@ -821,13 +886,11 @@ export class StructurePanel implements DeckCell {
       this.schedule()
       return
     }
-    if (this.selectFirst < 0) {
+    if (this.selectFirst < 0 || this.selectFirst === bead) {
       this.selectFirst = bead
       this.pinned = bead
       const at = lociOf(structure, bead)
-      setReadout(
-        `${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click it again for a line, another bead for a loop, Esc to cancel`,
-      )
+      setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click a second bead for the loop, Esc to cancel`)
       this.schedule()
       return
     }
@@ -835,22 +898,18 @@ export class StructurePanel implements DeckCell {
     this.selectFirst = -1
     this.pinned = -1
     setReadout('')
-    if (first === bead) {
-      this.markAt(bead)
-    } else {
-      const a = lociOf(structure, first)
-      const b = lociOf(structure, bead)
-      manual.add({
-        id: mintMarkId(),
-        kind: 'arrowhead',
-        a: { contig: a.contig, bp: Math.round((a.start + a.end) / 2) },
-        b: { contig: b.contig, bp: Math.round((b.start + b.end) / 2) },
-        colour: manual.nextColour(),
-      })
-      // The loop drawn where it was made: the marks become the chords unless
-      // a loop set already is.
-      if (this.style().loops === '') this.restyle({ loops: MANUAL_CHORDS })
-    }
+    const a = lociOf(structure, first)
+    const b = lociOf(structure, bead)
+    manual.add({
+      id: mintMarkId(),
+      kind: 'arrowhead',
+      a: { contig: a.contig, bp: Math.round((a.start + a.end) / 2) },
+      b: { contig: b.contig, bp: Math.round((b.start + b.end) / 2) },
+      colour: manual.nextColour(),
+    })
+    // The loop drawn where it was made: the marks become the chords unless
+    // a loop set already is.
+    if (this.style().loops === '') this.restyle({ loops: MANUAL_CHORDS })
     this.schedule()
   }
 
@@ -956,6 +1015,36 @@ export class StructurePanel implements DeckCell {
     this.schedule()
   }
 
+  /**
+   * The card under the pointer: the bead's sequence, and where along it.
+   *
+   * Placed from the pointer's own position rather than from the bead's, and
+   * on the side of it with room, so the card never covers the thing it is
+   * about or leaves the cell.
+   */
+  private paintTip(at: { contig: string; start: number; end: number; haplotype: string }): void {
+    const point = this.pointerAt
+    if (point === null || !getPlotOptions().tooltip) {
+      this.tipEl.classList.add('hidden')
+      return
+    }
+    const structure = this.structure
+    const [name, pos] = this.tipEl.children as unknown as [HTMLElement, HTMLElement]
+    name.textContent =
+      structure !== null && structure.haplotypes.length > 1 ? `${at.contig} · ${at.haplotype}` : at.contig
+    pos.textContent = `${fmt.int(at.start + 1)}–${fmt.int(at.end)}`
+    this.tipEl.classList.remove('hidden')
+    // Measured after it is shown, so a card that just grew is placed at its
+    // new size rather than at the one it had while it was empty.
+    const pad = 14
+    const box = this.wrap.getBoundingClientRect()
+    const width = this.tipEl.offsetWidth
+    const height = this.tipEl.offsetHeight
+    const left = point.x + pad + width > box.width ? point.x - pad - width : point.x + pad
+    const top = point.y + pad + height > box.height ? point.y - pad - height : point.y + pad
+    this.tipEl.style.transform = `translate(${Math.max(0, Math.round(left))}px, ${Math.max(0, Math.round(top))}px)`
+  }
+
   /** The line in the corner: the place under the pointer, and a distance for a contact. */
   private paintReadout(loci: ReadonlyArray<{ contig: string; bp: number }>): void {
     const structure = this.structure
@@ -982,6 +1071,7 @@ export class StructurePanel implements DeckCell {
     const structure = this.structure
     if (structure === null) return
     if (bead < 0) {
+      this.tipEl.classList.add('hidden')
       if (this.hovered.length > 0 || this.chord !== null) {
         this.hovered = []
         this.chord = null
@@ -992,8 +1082,9 @@ export class StructurePanel implements DeckCell {
       }
       return
     }
-    if (this.hovered.length === 1 && this.hovered[0] === bead && this.chord === null) return
     const at = lociOf(structure, bead)
+    this.paintTip(at)
+    if (this.hovered.length === 1 && this.hovered[0] === bead && this.chord === null) return
     // Every homologue at that locus lights, so the pair reads as a pair; the
     // place published is one, since a bead is one genomic place.
     this.hovered = beadsAt(structure, at.contig, (at.start + at.end) / 2)
@@ -1031,6 +1122,22 @@ export class StructurePanel implements DeckCell {
         return
       }
       canvas.setPointerCapture(event.pointerId)
+      // In measure mode a press that lands on a bead is the start of a
+      // measurement, not of an orbit: the reader is pointing at one end of a
+      // distance and the model must hold still while they travel to the other.
+      // A press that lands on nothing still turns the model, because a mode is
+      // not a reason to lose the camera.
+      if (this.mode === 'measure' && event.button === 0 && !event.shiftKey) {
+        const bead = this.renderer?.pick(at.x, at.y) ?? -1
+        if (bead >= 0) {
+          this.measureFirst = bead
+          this.pinned = bead
+          this.sayMeasureFrom(bead)
+          this.drag = { mode: 'measure', x: at.x, y: at.y, x0: at.x, y0: at.y, moved: false, shift: false }
+          this.schedule()
+          return
+        }
+      }
       this.drag = {
         mode: event.button === 2 || event.shiftKey ? 'pan' : 'orbit',
         x: at.x,
@@ -1055,6 +1162,7 @@ export class StructurePanel implements DeckCell {
         return
       }
       const drag = this.drag
+      this.pointerAt = at
       if (drag === null) {
         this.overCanvas = true
         this.hoverOwn(this.renderer?.pick(at.x, at.y) ?? -1)
@@ -1063,6 +1171,14 @@ export class StructurePanel implements DeckCell {
       const dx = at.x - drag.x
       const dy = at.y - drag.y
       if (Math.hypot(at.x - drag.x0, at.y - drag.y0) > CLICK_SLOP) drag.moved = true
+      if (drag.mode === 'measure') {
+        // The bead under the pointer, so the line follows the hand and the
+        // reader can see what they are about to measure to.
+        this.hoverOwn(this.renderer?.pick(at.x, at.y) ?? -1)
+        drag.x = at.x
+        drag.y = at.y
+        return
+      }
       if (drag.mode === 'orbit') {
         this.camera = orbit(this.camera, -dx * 0.008, dy * 0.008)
       } else {
@@ -1080,6 +1196,14 @@ export class StructurePanel implements DeckCell {
       this.drag = null
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       if (drag === null) return
+      // A measuring drag let go on a second bead closes the measurement; let
+      // go where it began, or on nothing, it leaves the first end held so a
+      // second click can still close it. Two gestures, one state.
+      if (drag.mode === 'measure') {
+        const to = this.renderer?.pick(local(event).x, local(event).y) ?? -1
+        if (to >= 0 && to !== this.measureFirst) this.closeMeasure(to)
+        return
+      }
       if (drag.moved) {
         this.rememberCamera()
         return
@@ -1089,8 +1213,8 @@ export class StructurePanel implements DeckCell {
       const at = local(event)
       const bead = this.renderer?.pick(at.x, at.y) ?? -1
       if (bead < 0) {
-        if (this.selecting) this.selectClick(-1)
-        else if (this.measuring) this.measureClick(-1)
+        if (this.mode === 'loop') this.loopClick(-1)
+        else if (this.mode === 'measure') this.cancelMeasure()
         else if (this.pinned >= 0) {
           this.pinned = -1
           this.schedule()
@@ -1108,12 +1232,21 @@ export class StructurePanel implements DeckCell {
         this.schedule()
         return
       }
-      if (this.selecting) {
-        this.selectClick(bead)
+      if (this.mode === 'mark') {
+        this.markAt(bead)
+        const at = lociOf(model, bead)
+        setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   marked`)
+        this.schedule()
         return
       }
-      if (this.measuring) {
-        this.measureClick(bead)
+      if (this.mode === 'loop') {
+        this.loopClick(bead)
+        return
+      }
+      if (this.mode === 'measure') {
+        // The press already held this bead as the first end; a click on a
+        // second closes the measurement the drag would have.
+        if (this.measureFirst >= 0 && this.measureFirst !== bead) this.closeMeasure(bead)
         return
       }
       // A picking mode first: the click names a place for the card that asked
@@ -1144,6 +1277,8 @@ export class StructurePanel implements DeckCell {
     })
     canvas.addEventListener('pointerleave', () => {
       this.overCanvas = false
+      this.pointerAt = null
+      this.tipEl.classList.add('hidden')
       if (this.drag === null) this.hoverOwn(-1)
     })
     canvas.addEventListener('contextmenu', (event) => event.preventDefault())
@@ -1364,10 +1499,36 @@ export class StructurePanel implements DeckCell {
       haplotype,
       sizes: this.sizesOf(structure, style),
       contactChords: style.contactChords ? this.contactChordsOf(structure, style) : NO_CONTACT_CHORDS,
-      measures: this.measures,
+      // The measurement being made, drawn with the ones already made: the
+      // line follows the pointer from the bead the press landed on, so a drag
+      // shows what it is about to measure rather than what it measured.
+      measures:
+        this.measureFirst >= 0 && this.hovered.length > 0 && this.hovered[0] !== this.measureFirst
+          ? [...this.measures, [this.measureFirst, this.hovered[0]] as const]
+          : this.measures,
+      marks: this.markedBeads(structure),
       ruler: style.ruler ? this.rulerOf(structure) : NO_TICKS,
       overlay: this.overlayOf(structure, style),
     }
+  }
+
+  /**
+   * The reader's marked *places* as beads (§25.4), in each mark's own colour.
+   *
+   * A line mark names one place, which is one bead — or the two homologues of
+   * one place on a phased model, which are two beads of the same place. A loop
+   * and a rectangle are not places and are not here: the chord says the one,
+   * the colouring says the other.
+   */
+  private markedBeads(structure: Structure): ReadonlyArray<{ bead: number; colour: string }> {
+    const marks = this.props.manual?.()?.marks ?? []
+    if (marks.length === 0) return NO_MARKS
+    const out: Array<{ bead: number; colour: string }> = []
+    for (const mark of marks) {
+      if (mark.kind !== 'line') continue
+      for (const bead of beadsAt(structure, mark.at.contig, mark.at.bp)) out.push({ bead, colour: mark.colour })
+    }
+    return out.length === 0 ? NO_MARKS : out
   }
 
   /**
@@ -1849,6 +2010,54 @@ export class StructurePanel implements DeckCell {
         const parent = this.settingsEl.parentElement
         this.settingsHome = parent === null ? null : { parent, next: this.settingsEl.nextSibling }
         const side = el('aside', { class: 'structure-side' }, this.settingsEl)
+        // The width the reader last dragged it to, remembered with the camera:
+        // a column of controls is a thing a reader sets once for their screen,
+        // not once per dialog.
+        const stored = recall<unknown>(this.props.memoryKey(), SIDE_SCOPE)
+        if (typeof stored === 'number' && Number.isFinite(stored)) {
+          side.style.flexBasis = `${Math.round(clamp(stored, SIDE_MIN, SIDE_MAX))}px`
+        }
+        // The grip between the picture and the settings: the same gesture the
+        // panel columns have, for the same reason — a card of two dozen fields
+        // beside a picture is a split nobody else can choose for the reader.
+        const grip = el('div', {
+          class: 'structure-side-grip',
+          attrs: { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0' },
+          title: 'Drag to make the settings wider or narrower',
+        })
+        const width = (clientX: number, modal: HTMLElement): number =>
+          clamp(modal.getBoundingClientRect().right - clientX, SIDE_MIN, Math.min(SIDE_MAX, modal.clientWidth * 0.8))
+        grip.addEventListener('pointerdown', (event) => {
+          const modal = grip.parentElement
+          if (modal === null) return
+          grip.setPointerCapture(event.pointerId)
+          grip.classList.add('is-dragging')
+          event.preventDefault()
+          const move = (moved: PointerEvent): void => {
+            side.style.flexBasis = `${Math.round(width(moved.clientX, modal))}px`
+            this.remeasure()
+          }
+          const up = (ended: PointerEvent): void => {
+            grip.removeEventListener('pointermove', move)
+            grip.removeEventListener('pointerup', up)
+            grip.classList.remove('is-dragging')
+            if (grip.hasPointerCapture(ended.pointerId)) grip.releasePointerCapture(ended.pointerId)
+            remember(this.props.memoryKey(), SIDE_SCOPE, width(ended.clientX, modal))
+          }
+          grip.addEventListener('pointermove', move)
+          grip.addEventListener('pointerup', up)
+        })
+        // …and by the keyboard, for a reader who does not drag.
+        grip.addEventListener('keydown', (event) => {
+          const step = event.key === 'ArrowLeft' ? 24 : event.key === 'ArrowRight' ? -24 : 0
+          if (step === 0) return
+          event.preventDefault()
+          const now = side.getBoundingClientRect().width
+          const next = clamp(now + step, SIDE_MIN, SIDE_MAX)
+          side.style.flexBasis = `${Math.round(next)}px`
+          remember(this.props.memoryKey(), SIDE_SCOPE, next)
+          this.remeasure()
+        })
         // The sidebar's own toggle, in the stage's bottom corner: the settings
         // out of the way for a look at the model, and back.
         const sideToggle = iconButton('panel-right-close', 'Hide the settings', () => {
@@ -1858,7 +2067,7 @@ export class StructurePanel implements DeckCell {
           sideToggle.setAttribute('aria-label', sideToggle.title)
           requestAnimationFrame(() => this.remeasure())
         }, { class: 'btn btn-icon structure-side-toggle', size: 14 })
-        return el('div', { class: 'structure-modal' }, stage, side, sideToggle)
+        return el('div', { class: 'structure-modal' }, stage, grip, side, sideToggle)
       },
       onClose: () => this.collapse(),
     })

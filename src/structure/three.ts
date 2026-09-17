@@ -67,6 +67,7 @@ import {
 
 import { basis, eyeOf, halfHeight, project } from './camera'
 import { hexOf, parseColour } from './colour'
+import { MARKED_BEAD } from './painter'
 import type { StructureView } from './painter'
 import type { Structure } from './scene'
 import type { BeadColours } from './colour'
@@ -115,6 +116,8 @@ export class StructureRenderer {
   /** The genomic ruler's ticks: small ink beads. */
   private ticks: InstancedMesh | null = null
   private ticksFrom: ReadonlyArray<{ bead: number; label: string }> | null = null
+  private marks: InstancedMesh | null = null
+  private marksFrom: ReadonlyArray<{ bead: number; colour: string }> | null = null
   /** The compared model, in this one's frame: its own group, rebuilt when it changes. */
   private readonly overlayRoot = new Object3D()
   private overlayFrom: Structure | null = null
@@ -365,7 +368,7 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
-    for (const ink of [this.chords, this.chord, this.gapDashes, this.contactChords, this.measures, this.ticks]) {
+    for (const ink of [this.chords, this.chord, this.gapDashes, this.contactChords, this.measures, this.ticks, this.marks]) {
       if (ink === null) continue
       this.root.remove(ink)
       ink.geometry.dispose()
@@ -380,6 +383,8 @@ export class StructureRenderer {
     this.measuresFrom = null
     this.ticks = null
     this.ticksFrom = null
+    this.marks = null
+    this.marksFrom = null
     this.beads = null
     this.picks = null
     this.halos = null
@@ -469,7 +474,7 @@ export class StructureRenderer {
           segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, end)])
         }
       }
-      this.gapDashes = cylinders(segments, stickRadius * 0.7, inkMaterial(this.palette.ink, 1))
+      this.gapDashes = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 1))
       this.root.add(this.gapDashes)
     }
 
@@ -680,7 +685,7 @@ export class StructureRenderer {
               new Vector3(structure.x[b], structure.y[b], structure.z[b]),
             ] as [Vector3, Vector3],
         )
-        this.chords = cylinders(segments, stickRadius * 0.6, inkMaterial(this.palette.ink, 0.9))
+        this.chords = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 0.9))
         this.root.add(this.chords)
       }
     }
@@ -770,6 +775,41 @@ export class StructureRenderer {
         mesh.instanceMatrix.needsUpdate = true
         mesh.frustumCulled = false
         this.ticks = mesh
+        this.root.add(mesh)
+      }
+    }
+
+    // The reader's marked places: the bead again at twice the radius, in the
+    // mark's own colour. A place is a thing on the model, so it is drawn as a
+    // bigger bead rather than as one more line over it.
+    if (this.marksFrom !== view.marks) {
+      this.marksFrom = view.marks
+      if (this.marks !== null) {
+        this.root.remove(this.marks)
+        this.marks.geometry.dispose()
+        this.marks = null
+      }
+      const kept = view.marks.filter((mark) => this.shown[mark.bead] === 1)
+      if (kept.length > 0) {
+        const mesh = new InstancedMesh(
+          new SphereGeometry(1, 16, 12),
+          new MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 }),
+          kept.length,
+        )
+        const matrix = new Matrix4()
+        const colour = new Color()
+        kept.forEach((mark, at) => {
+          const r = structure.step * style.beadRadius * (view.sizes === null ? 1 : view.sizes[mark.bead]) * MARKED_BEAD
+          matrix.makeScale(r, r, r)
+          matrix.setPosition(structure.x[mark.bead], structure.y[mark.bead], structure.z[mark.bead])
+          mesh.setMatrixAt(at, matrix)
+          colour.set(mark.colour)
+          mesh.setColorAt(at, colour)
+        })
+        mesh.instanceMatrix.needsUpdate = true
+        if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
+        mesh.frustumCulled = false
+        this.marks = mesh
         this.root.add(mesh)
       }
     }
@@ -975,6 +1015,16 @@ function gapPairsOf(view: StructureView, shown: Uint8Array): Array<[number, numb
 
 const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
 const NO_CONTACTS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
+
+/**
+ * A black line along or across the fibre — a gap's dashes, a loop's chord — as
+ * a share of the tube's own radius.
+ *
+ * Half. These lines are *about* the model rather than part of it, and one as
+ * thick as the fibre it crosses reads as a piece of fibre; at half it reads as
+ * a line drawn over one, which is what it is.
+ */
+const INK_SHARE = 0.5
 
 /** A flat material of the page's ink, for every line the model carries. */
 function inkMaterial(ink: string, opacity: number): MeshBasicMaterial {
