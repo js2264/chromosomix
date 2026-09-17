@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 66,
-      "commit": "795877d",
+      "commit": "c0bdce2",
       "title": "A 3D structure beside the map: structure cells, a model from the map, and the cell in the hand (§25)",
       "branch": "js/gallant-knuth-u0cylb",
-      "date": "2026-09-17T16:03:45Z"
+      "date": "2026-09-17T19:56:21Z"
     }
   ]
 }
