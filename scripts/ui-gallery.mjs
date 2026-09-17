@@ -4,7 +4,7 @@
  * What a reviewer wants after a change to the UI: the real page, not a
  * test's idea of it. Opens the yeast demo through the dev server, adds the
  * demo structure beside the map, hovers both ways, colours the model by a
- * track, opens a tracks cell, runs the spatial-tracks task, and saves one
+ * track, opens a tracks cell, runs the spatial-tracks task and the reconstruction, and saves one
  * PNG per step. Software WebGL, so it runs in a container with no GPU.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
@@ -156,6 +156,38 @@ try {
   await page.waitForFunction(() => /Radial position/.test(document.body.textContent ?? ''), null, { timeout: 60000 }).catch(() => console.log('no radial track'))
   await sleep(2500)
   await shot('09-spatial-tracks')
+
+  // A model from the map: the loaded block as drawn, or one sequence where
+  // the block has more beads than the tab solves.
+  await page.locator('text=Model from the map').first().click()
+  await sleep(800)
+  const refused = /more than the 2,500/.test(await page.evaluate(() => document.body.textContent ?? ''))
+  if (refused) {
+    const seq = page.locator('select').filter({ has: page.locator('option', { hasText: /^IV$/ }) }).first()
+    if (await seq.count()) await seq.selectOption({ label: 'IV' })
+    await sleep(500)
+  }
+  await shot('10-reconstruct-form')
+  await page.locator('button', { hasText: /^run$/i }).first().click()
+  await page.waitForFunction(() => /Spearman ρ/.test(document.body.textContent ?? ''), null, { timeout: 180000 }).catch(() => console.log('no reconstruction'))
+  await sleep(4000)
+  await shot('11-reconstructed')
+
+  // The Structures card: both models, the computed one shown in the deck.
+  await fold('Fold the Analysis panel')
+  await fold('Show the Annotations panel')
+  await sleep(600)
+  const structures = page.locator('.structure-card').first()
+  if (await structures.count()) await structures.scrollIntoViewIfNeeded()
+  await sleep(400)
+  await shot('12-structures-card')
+  // Back to the loaded model from its row, then the cell's own picker.
+  const show = structures.locator('.structure-show').first()
+  if (await show.count()) { await show.click(); await sleep(3000) }
+  await fold('Fold the Annotations panel')
+  await page.click('.structure-menu-toggle')
+  await sleep(600)
+  await shot('13-model-picker')
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 500))
   await shot('99-failure')

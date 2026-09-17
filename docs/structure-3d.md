@@ -1,9 +1,11 @@
 # A 3D structure beside the map — survey and design
 
-> **Status: implemented**, through phase 2 plus the two analysis tasks of §8.1–8.2, as SPECS §25
-> and §16.11. Where this document and SPECS disagree, SPECS stands; the differences are named in
-> §25.8 (no inference, no ensembles, no map beside a browser lead, no resolution picker for a
-> binary g3d, no metadata colouring), and one of design: the tracks cell and the browser lead follow
+> **Status: implemented**, through phase 2 plus the analysis tasks of §8.1–8.2 **and the
+> inference of §8.4**, which is no longer refused: *Model from the map* (SPECS §25.6) is a port of
+> ShRec3D with SMACOF refinement, and every model — loaded or computed — is a row of a Structures
+> card of its own. Where this document and SPECS disagree, SPECS stands; the differences are named
+> in §25.8 (no ensembles, no map beside a browser lead, no resolution picker for a binary g3d, no
+> metadata colouring), and one of design: the tracks cell and the browser lead follow
 > the maps by loci rather than as one-axis members of the lock (§3.4 here), which reaches the same
 > picture with no change to the lock. `bed3d` (`chrom start end x y z`) took the place of the
 > bed6+xyz reader of §2.
@@ -712,13 +714,16 @@ The scene gains a `frame` index and the picture a slider and a play button; the 
 (a `Points` object, the one place three.js earns its size outright). Deliberately not in phase 1;
 nothing in phases 1–2 changes for it.
 
-### 8.4 Inference — not built
+### 8.4 Inference — built after phase 2
 
-Computing a structure from the map in the browser is refused for phases 1–2 under §18.9's rule: a
+Computing a structure from the map in the browser was refused for phases 1–2 under §18.9's rule: a
 second caller needs a second upstream, ported from a published method with its own goldens, never a
-variation that seemed reasonable. A port of `pastis-mds` for small genomes is a defensible later
-item; until then the refusal names the way out, which is `pastis-mds` and `g3dtools` on the command
-line and a drop.
+variation that seemed reasonable. It is now built as **Model from the map** (SPECS §25.6): ShRec3D's
+pipeline (contacts to distances by `c^(−1/α)`, a filled matrix, classical MDS) with SMACOF
+refinement over the counted pairs, in `src/structure/reconstruct.ts`, pure over arrays; the golden
+is a known model whose contacts were made by the law and are asked for it back. It is solved over
+the view's block as drawn — cis and trans together, pooled cells honoured — and lands as a
+structure row on the Structures card, which the cell draws and a bed3d carries away.
 
 ---
 
@@ -797,7 +802,7 @@ can be shared.
 
 ## 10. Refused inside this scope, and why
 
-- **No structure inference** in phases 1–2 (§8.4). The way out is a solver and `g3dtools`.
+- ~~**No structure inference** in phases 1–2 (§8.4).~~ Built after phase 2, as §8.4 now says.
 - **No declared resolution.** The width is the spacing of sorted starts, printed on the row; no
   header, no control and no map rung changes it. A file whose starts are irregular gets the mode
   and a summary that says how many beads are not at it, which is the fact the reader needs.
@@ -862,8 +867,8 @@ the door on them:
 The questions of revision 2 are answered and folded in above (resolution, the binary, haplotypes,
 the track list, one cell, the vector figure). Two remain, and neither blocks phase 0 or A:
 
-1. **Inference.** Would a port of `pastis-mds` for small genomes be wanted enough to pay the §18.9
-   bar for it? It stays in §13 until answered.
+1. ~~**Inference.**~~ Answered: wanted, and built as a port of ShRec3D with SMACOF refinement
+   rather than of `pastis-mds` (§8.4).
 2. **The words.** *Structure* (the file, the row), *model* (one set of coordinates), *chain* (one
    contig of one haplotype), *cell* widened to mean any occupant of the deck. Confirm before they
    are written into the glossary, because they are written in a great many places after that.

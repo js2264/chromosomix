@@ -9037,6 +9037,18 @@ span.deck-name {
   margin-top: 4px;
 }
 
+/* The Structures card (§25): a model's row says whether the cell is drawing it. */
+.structure-card .structure-actions {
+  gap: 6px;
+}
+.structure-card .ann-row.is-shown {
+  box-shadow: inset 3px 0 0 var(--accent, #1f5fa9);
+}
+.structure-card .structure-show.is-on {
+  color: var(--accent, #1f5fa9);
+  font-weight: 600;
+}
+
 .structure-note:empty {
   display: none;
 }

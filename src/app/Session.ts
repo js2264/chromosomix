@@ -118,6 +118,7 @@ import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
+import { StructureCard } from '../ui/StructureCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
@@ -816,6 +817,8 @@ export class Session {
   private mapOnly = false
   /** The map view's Tracks card, told when the lanes are put away (`V`). */
   private trackCard: AnnotationCard | null = null
+  /** The Structures card (§25), rebuilt with the Tracks card it sits under. */
+  private structureCard: StructureCard | null = null
   /**
    * The map/tracks button as it stands on screen, so it can be swapped in place.
    *
@@ -2903,6 +2906,7 @@ export class Session {
               },
             }),
       }).el,
+      this.structureCardFor(store, loader),
       this.manualCard.el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
@@ -3483,13 +3487,16 @@ export class Session {
       this.knownStructures = new Set(now)
       return
     }
-    let fresh = false
+    let fresh: string | null = null
     for (const id of now) {
       if (seen.has(id)) continue
       seen.add(id)
-      fresh = true
+      fresh = id
     }
-    if (fresh && this.deckIsPossible) this.ensureDeck().add({ kind: 'structure' })
+    // …and it is the one the cell draws: a model that has just arrived — a
+    // file dropped, a reconstruction landing — is the one the reader is
+    // waiting to see, whichever the cell was showing before (§25.6).
+    if (fresh !== null && this.deckIsPossible) this.ensureDeck().showStructure(fresh)
   }
 
   /**
@@ -3755,6 +3762,35 @@ export class Session {
     const card = new AnnotationCard(props)
     card.setMapOnly(this.mapOnly)
     this.trackCard = card
+    return card.el
+  }
+
+  /**
+   * The Structures card (§25): every model, loaded or computed, with the way
+   * into the deck's cell and the way out as a bed3d.
+   *
+   * Under the Tracks card at each of the three places one is mounted, so a
+   * model is found where a track is. *Show in the deck* opens the cell where
+   * there is none, which is the same road a dropped g3d takes.
+   */
+  private structureCardFor(store: AnnotationStore, loader: AnnotationLoader): HTMLElement {
+    this.structureCard?.destroy()
+    const card = new StructureCard({
+      store,
+      loader,
+      ...(this.deckIsPossible
+        ? {
+            onShow: (entry) => {
+              if (!this.deckIsPossible) return
+              this.ensureDeck().showStructure(entry.id)
+              this.structureCard?.refresh()
+            },
+            shown: () => this.deck?.shownStructure() ?? null,
+          }
+        : {}),
+      onRecompute: (entry) => this.analysis?.recompute(entry),
+    })
+    this.structureCard = card
     return card.el
   }
 
@@ -4056,6 +4092,7 @@ export class Session {
           context: 'browser',
           onPickDropped: (event) => this.pickDropped(event),
         }).el,
+        this.structureCardFor(held.store, held.loader),
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
     }
@@ -4327,6 +4364,7 @@ export class Session {
               },
             }),
       }),
+      this.structureCardFor(store, loader),
       this.metadataCard.el,
       this.manualCard.el,
       // Under the marks, because the two are the same kind of note made at

@@ -621,3 +621,56 @@ describe('the model, enlarged', () => {
     expect(document.querySelector('.modal-structure')).toBeNull()
   })
 })
+
+describe('which model the cell draws (§25.6)', () => {
+  const second = Array.from({ length: 8 }, (_, i) => `chr2\t${i * 5000}\t${-i}\t${i}\t0`).join('\n')
+
+  it('draws the first structure row until told otherwise, then the one it was shown', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const { deck } = make(fakeStore([structureEntry(), two]))
+    deck.add({ kind: 'structure' })
+    expect(deck.shownStructure()).toBe('a1')
+    deck.showStructure('a2')
+    expect(deck.shownStructure()).toBe('a2')
+    const cell = structureCells(deck)[0]
+    expect(cell.querySelector<HTMLInputElement>('.deck-name')?.value ?? cell.textContent).toContain('second.g3d')
+  })
+
+  it('opens the cell when there is none, and offers a picker only with two rows', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const { deck } = make(fakeStore([structureEntry(), two]))
+    expect(deck.hasStructure()).toBe(false)
+    deck.showStructure('a2')
+    expect(deck.hasStructure()).toBe(true)
+    expect(deck.shownStructure()).toBe('a2')
+    deck.el.querySelector<HTMLButtonElement>('.structure-menu-toggle')?.click()
+    const picker = Array.from(all<HTMLElement>(deck.el, '.structure-menu .structure-field')).find((field) =>
+      field.textContent?.startsWith('model'),
+    )
+    expect(picker).toBeDefined()
+    const select = picker?.querySelector<HTMLSelectElement>('select')
+    expect(select?.value).toBe('a2')
+    expect(Array.from(select?.options ?? []).map((o) => o.textContent)).toEqual(['model.g3d', 'second.g3d'])
+    select!.value = 'a1'
+    select!.dispatchEvent(new Event('change'))
+    expect(deck.shownStructure()).toBe('a1')
+  })
+
+  it('remembers the choice per file and falls back to the first when the row is gone', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const first = make(fakeStore([structureEntry(), two]))
+    first.deck.showStructure('a2')
+    first.deck.destroy()
+    const again = make(fakeStore([structureEntry(), two]))
+    again.deck.add({ kind: 'structure' })
+    expect(again.deck.shownStructure()).toBe('a2')
+    again.deck.destroy()
+    const without = make(fakeStore([structureEntry()]))
+    without.deck.add({ kind: 'structure' })
+    expect(without.deck.shownStructure()).toBe('a1')
+    const single = Array.from(all<HTMLElement>(without.deck.el, '.structure-menu .structure-field')).find((field) =>
+      field.textContent?.startsWith('model'),
+    )
+    expect(single).toBeUndefined()
+  })
+})

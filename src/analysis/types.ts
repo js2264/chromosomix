@@ -754,6 +754,16 @@ export interface IntervalsOutput {
   label: string
   payload: AnnotationPayload
   /**
+   * What the row *is*, where it is not a called interval set.
+   *
+   * A reconstructed model (§25.6) is a `FeatureSet` with a `model` on it —
+   * exactly what a bed3d parses to — and it lands through the same door as a
+   * called boundary set, but on the Structures card as a `structure` row that
+   * the deck's cell draws, never as an overlay on the map. Absent is the
+   * ordinary case: an overlay of segments or pairs.
+   */
+  entryKind?: 'structure'
+  /**
    * What one of these *is*, so the row can say how many there are.
    *
    * A called set is a number of things, and the number is the first thing a

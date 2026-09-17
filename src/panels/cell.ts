@@ -47,6 +47,13 @@ export interface DeckCell {
    */
   showLocusEcho?(locus: { contig: string; bp: number } | null): void
   /**
+   * Draw this structure row, of the several the session may hold (§25). Only
+   * a structure cell answers; the deck asks the one it has.
+   */
+  showModel?(id: string): void
+  /** The structure row the cell is drawing, or `null`. A structure cell only. */
+  shownModel?(): string | null
+  /**
    * Take part in a picking mode (`ui/mapPick.ts`): a click names a place for
    * the card that armed it, until it is cancelled. Optional, for a cell that
    * has places to click on.

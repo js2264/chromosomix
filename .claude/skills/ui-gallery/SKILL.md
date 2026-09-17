@@ -14,7 +14,7 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
-node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 09-spatial-tracks.png
+node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 13-model-picker.png
 ```
 
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
@@ -27,7 +27,8 @@ The yeast demo (`?config=…/demo/yeast/Yeast_microC.metacooler.json`), the squa
 side panels folded for room, then: the demo structure added by URL through the Tracks card,
 the cell framed on the maps' window, a hover on a bead (the status bar names it) and on the map
 (the chord), colour by the first track, a tracks cell with two tracks placed on it, the Analysis
-panel, and the spatial-tracks task run. **Look at every screenshot** — a blank cell, a stale
+panel, the spatial-tracks task run, the reconstruction (*Model from the map*) run and landing
+in the cell, the Structures card with both models, and the cell's model picker. **Look at every screenshot** — a blank cell, a stale
 note or a squashed plot is a bug the tests did not see, and this is where it shows.
 
 ## Gotchas met

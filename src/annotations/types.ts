@@ -111,7 +111,7 @@ export type AnnotationKind =
  * remembered nowhere. The 4C *task* answers the same question from the file, so
  * the lane and its card are gone and the gesture is a 1D zoom (§18.9).
  */
-export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata'
+export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata' | 'structure'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's

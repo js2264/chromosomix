@@ -98,6 +98,7 @@ import type { CurveOutput } from '../analysis/types'
  */
 const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
+import { writeBed3d } from '../annotations/g3d'
 import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText } from './AnalysisPanelCard'
 import {
@@ -1238,7 +1239,11 @@ export class AnalysisDrawer {
         ? 'one value per bin, so it is a lane rather than a picture: it is on the Synthetic ' +
           'tracks card in the Annotations panel, with the colour, limits, edges and figure ' +
           'every other track has.'
-        : lanes
+        : output.kind === 'intervals' && output.entryKind === 'structure'
+          ? 'a 3D model: it is on the Structures card in the Annotations panel, and the deck’s ' +
+            'structure cell shows it — open one from the deck’s bar if none is on screen. ' +
+            'Take it as a bed3d, which this app and g3dtools read back.'
+          : lanes
           ? 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
             'the map it was called from.'
           : 'a set of intervals. This file carries no annotation layer, so there is no overlay ' +
@@ -1272,21 +1277,30 @@ export class AnalysisDrawer {
    * for a tool.
    */
   private bedButton(output: IntervalsOutput, provenance: Provenance): HTMLButtonElement {
-    const format = output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
+    const structure = output.entryKind === 'structure'
+    const format = structure ? 'bed3d' : output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
     return button(format, () => this.saveIntervals(output, provenance), {
       class: 'btn btn-quiet',
-      title: `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
+      title: structure
+        ? 'The model as a bed3d — chrom, start, end, x, y, z — which this app and g3dtools read back'
+        : `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
     })
   }
 
   private saveIntervals(output: IntervalsOutput, provenance: Provenance): void {
     const stamp = fileStamp(new Date())
-    const text = formatIntervals(output.payload, {
+    const context = {
       label: output.label,
       file: provenance.framing.label,
       created: provenance.createdAt,
-    })
-    const suffix = output.payload.kind === 'pairs' ? 'bedpe' : 'bed'
+    }
+    const payload = output.payload
+    const structure = output.entryKind === 'structure' && payload.kind === 'features'
+    const text =
+      structure && payload.kind === 'features'
+        ? writeBed3d(payload.data, context)
+        : formatIntervals(payload, context)
+    const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
     downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),

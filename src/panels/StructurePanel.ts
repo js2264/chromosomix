@@ -156,6 +156,8 @@ export type StructureCellProps = Omit<
 
 /** Where a cell's camera is remembered in the session's memory. */
 const CAMERA_SCOPE = 'structure:camera'
+/** Where the row the cell was showing is remembered, so a reload draws the same model. */
+const MODEL_SCOPE = 'structure:model'
 
 /** How far a press may travel and still be a click. */
 const CLICK_SLOP = 4
@@ -409,16 +411,42 @@ export class StructurePanel implements DeckCell {
   // The row
   // -------------------------------------------------------------------------
 
+  /** The row the reader asked for, or `null` for whichever is first. */
+  private chosen: string | null = null
+
+  /**
+   * Draw this row: the Structures card's *show in the deck*, and the picker.
+   *
+   * Remembered per file, so the model the reader chose is the one a reload
+   * draws; a row that is gone by then falls back to the first (`sync`).
+   */
+  showModel(id: string): void {
+    this.chosen = id
+    remember(this.props.memoryKey(), MODEL_SCOPE, id)
+    this.sync()
+  }
+
+  shownModel(): string | null {
+    return this.entry?.id ?? null
+  }
+
   /**
    * Find the structure row and build its scene, if it has arrived.
    *
-   * The first `structure` row of the store: one structure cell per deck shows
-   * the one structure row the session has (§25). A row still loading, or one
-   * that refused, is a sentence in the cell rather than a picture.
+   * The row the reader chose — from the Structures card or the cell's own
+   * picker, remembered per file — or the first `structure` row of the store
+   * where none was chosen or the chosen one is gone: one structure cell per
+   * deck draws one model at a time (§25). A row still loading, or one that
+   * refused, is a sentence in the cell rather than a picture.
    */
   private sync(): void {
     const store = this.props.store()
-    const entry = store?.entries.find((held) => held.kind === 'structure') ?? null
+    const rows = (store?.entries ?? []).filter((held) => held.kind === 'structure')
+    if (this.chosen === null) {
+      const remembered = recall<unknown>(this.props.memoryKey(), MODEL_SCOPE)
+      if (typeof remembered === 'string') this.chosen = remembered
+    }
+    const entry = rows.find((held) => held.id === this.chosen) ?? rows[0] ?? null
     this.entry = entry
     this.syncName()
     const payload = entry?.payload
@@ -450,7 +478,7 @@ export class StructurePanel implements DeckCell {
         this.relight()
         // A model that has never been looked at opens fitted; one the reader
         // has framed keeps the camera they left it with.
-        if (recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === undefined) this.frameAll()
+        if (recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === null) this.frameAll()
       }
       this.say(this.structure === null || this.structure.placed === 0 ? WAITING.empty : '')
     }
@@ -1243,7 +1271,22 @@ export class StructurePanel implements DeckCell {
       { value: '', text: 'both homologues' },
       ...(structure?.haplotypes.map((name) => ({ value: name, text: name })) ?? []),
     ]
+    // Which model, first, where there is more than one to choose between:
+    // the Structures card lists them and this says the same thing from the
+    // cell's side. Left off with one row, since a picker with one option is a
+    // label that pretends to be a control.
+    const models = (store?.entries ?? []).filter((row) => row.kind === 'structure')
     this.menu.replaceChildren(
+      ...(models.length > 1
+        ? [
+            select(
+              'model',
+              models.map((row) => ({ value: row.id, text: row.label })),
+              this.entry?.id ?? '',
+              (value) => this.showModel(value),
+            ),
+          ]
+        : []),
       select(
         'drawn as',
         STRUCTURE_REPRESENTATIONS.map((r) => ({ value: r, text: r })),

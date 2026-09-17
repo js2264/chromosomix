@@ -294,6 +294,7 @@ describe('the map card', () => {
       // map is compared with rather than about the map alone.
       'structuremap',
       'spatialtracks',
+      'reconstruct3d',
     ])
   })
 })

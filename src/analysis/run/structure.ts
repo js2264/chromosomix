@@ -7,11 +7,43 @@
  * Everything numeric is `structure/versusMap.ts`, held still by its tests.
  */
 
+import { structureFromBeads, type ModelBead } from '../../annotations/g3d'
 import type { FeatureSet, StructureModel } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
+import { parseRegionString } from '../../metacooler/range'
 import { logBinCurve, logLogSlope } from '../expected'
-import { boolParam, chosenInput, missingInput, numParam, strParam, type JobContext, type TaskRunner } from '../job'
-import type { CurveOutput, CurveSeries, MatrixOutput, ProfileOutput, TableOutput, TaskOutput } from '../types'
+import {
+  boolParam,
+  chosenInput,
+  contigIdFor,
+  missingInput,
+  numParam,
+  strParam,
+  type JobContext,
+  type TaskRunner,
+} from '../job'
+import { RECONSTRUCT_MAX_BEADS } from '../tasks/structure'
+import type {
+  CurveOutput,
+  CurveSeries,
+  IntervalsOutput,
+  MatrixOutput,
+  ProfileOutput,
+  TableOutput,
+  TaskOutput,
+} from '../types'
+import {
+  classicalMds,
+  constrainedBeads,
+  distancesFromContacts,
+  fillDistances,
+  normaliseCoordinates,
+  smacofStep,
+  spearman,
+  stressOf,
+  subMatrix,
+  type Coordinates,
+} from '../../structure/reconstruct'
 import {
   agreement,
   beadsOf,
@@ -25,7 +57,7 @@ import {
   localCompaction,
   paintProfile,
 } from '../../structure/versusMap'
-import { squareFor, usableBlock, type Span } from './blocks'
+import { blockCovers, spanOfContig, squareFor, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
 
 const NO_STRUCTURE = {
@@ -316,4 +348,291 @@ function anchorPoint(
   const to = Math.max(start, end)
   const hit = beads.filter((i) => set.end[i] > from && set.start[i] < to)
   return centroid(model, hit.length > 0 ? hit : beads.filter((i) => set.start[i] <= from && set.end[i] > from))
+}
+
+// ---------------------------------------------------------------------------
+// A model from the map
+// ---------------------------------------------------------------------------
+
+/**
+ * The contacts a model is solved over: one cell per bead, in absolute bins.
+ *
+ * `k` bins to a cell, which is the block's own pooling when the view's block
+ * is taken as it is — the resolution the reader is looking at — and 1 when the
+ * square was read for this run.
+ */
+interface Cells {
+  from: number
+  k: number
+  n: number
+  values: Float32Array
+}
+
+/** The sequences of the file as bin runs, for placing a cell on one. */
+function contigRuns(job: JobContext): Array<{ cid: number; from: number; to: number }> {
+  const out: Array<{ cid: number; from: number; to: number }> = []
+  for (let cid = 0; cid < job.mc.nContigs; cid++) {
+    const [from, to] = job.mc.contigExtent(cid)
+    if (to > from) out.push({ cid, from, to })
+  }
+  return out
+}
+
+/**
+ * Where the contacts come from: the view's block as drawn, or a square read.
+ *
+ * The block is what the reader is looking at and what the task is *about* —
+ * the loaded locus at its drawn resolution, pooled cells included, which is
+ * the one place `binsPerCell > 1` is honoured rather than refused. It is
+ * declined only where it cannot honestly answer: a rectangle whose rows are
+ * not its columns has no diagonal to model, and a block balanced the other
+ * way is a different matrix. Then the square over the framing is read at the
+ * file's own bin size, within the cap.
+ */
+async function contactCells(
+  job: JobContext,
+  span: Span | null,
+  balance: boolean,
+  value: string,
+): Promise<{ cells: Cells; how: string } | { refusal: string }> {
+  const block = job.inputs.block
+  const square =
+    block !== undefined &&
+    block.rowExtent[0] === block.colExtent[0] &&
+    block.rowExtent[1] === block.colExtent[1] &&
+    block.nrows === block.ncols &&
+    job.framing.balance === balance
+  if (square && block !== undefined) {
+    const k = Math.max(1, block.binsPerCell)
+    const wanted: Span = span ?? { from: block.rowExtent[0], to: block.rowExtent[1] }
+    if (blockCovers(block, wanted) || span === null) {
+      const first = Math.floor((wanted.from - block.rowExtent[0]) / k)
+      const last = Math.min(block.nrows, Math.ceil((wanted.to - block.rowExtent[0]) / k))
+      const n = last - first
+      if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n) }
+      const values = new Float32Array(n * n)
+      for (let r = 0; r < n; r++) {
+        const at = (first + r) * block.ncols + first
+        values.set(block.values.subarray(at, at + n), r * n)
+      }
+      return {
+        cells: { from: block.rowExtent[0] + first * k, k, n, values },
+        how: k > 1 ? `the block as drawn, ${k} bins to a cell` : 'the block as drawn',
+      }
+    }
+  }
+  const wanted: Span = span ?? {
+    from: Math.min(job.framing.rows[0], job.framing.cols[0]),
+    to: Math.max(job.framing.rows[1], job.framing.cols[1]),
+  }
+  const n = wanted.to - wanted.from
+  if (n <= 0) return { refusal: 'The framing holds no bins to model.' }
+  if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n) }
+  const read = await squareFor(job, wanted, { block: null, balance, value })
+  return { cells: { from: wanted.from, k: 1, n: read.nrows, values: read.values }, how: 'read at the file’s bin size' }
+}
+
+function tooMany(n: number): string {
+  return (
+    `${n.toLocaleString()} beads is more than the ${RECONSTRUCT_MAX_BEADS.toLocaleString()} this ` +
+    'solves in a tab. Zoom out so the block is drawn coarser, or name one sequence.'
+  )
+}
+
+/** The span a typed region names, or `null` for everything; `undefined` for a name the file lacks. */
+function regionSpan(job: JobContext, text: string): Span | null | undefined {
+  if (text === '') return null
+  const [name, start, end] = parseRegionString(text)
+  const cid = contigIdFor(job.mc, name)
+  if (cid < 0) return undefined
+  const whole = spanOfContig(job.mc, cid)
+  if (whole === null) return undefined
+  if (start === null) return whole
+  const binsize = job.mc.binsize
+  const from = Math.max(whole.from, whole.from + Math.floor(start / binsize))
+  const to = end === null ? whole.to : Math.min(whole.to, whole.from + Math.ceil(end / binsize))
+  return to > from ? { from, to } : undefined
+}
+
+export const runReconstruct: TaskRunner = async (job) => {
+  const balance = boolParam(job.params, 'balance', false)
+  const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
+  const alpha = Math.max(0.5, numParam(job.params, 'alpha', 3))
+  const iterations = Math.max(0, Math.round(numParam(job.params, 'iterations', 150)))
+  const regionText = strParam(job.params, 'region', '').trim()
+  const span = regionSpan(job, regionText)
+  if (span === undefined) {
+    job.note(
+      `This file has no sequence called ${parseRegionString(regionText)[0]}, under that spelling or ` +
+        `any this viewer knows of (§5.9). It has ` +
+        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
+    )
+    return []
+  }
+  const source = await contactCells(job, span, balance, value)
+  if ('refusal' in source) {
+    job.note(source.refusal)
+    return []
+  }
+  const { cells, how } = source
+  if (job.framing.normalise !== null) {
+    job.note(
+      `The view is drawn ${job.framing.normalise}-normalised and the model is solved on the counts ` +
+        'underneath: no read can ask for that normalisation (§18.4).',
+    )
+  }
+
+  // Each cell to its sequence: the one holding its first bin. A pooled cell
+  // that straddles two sequences is filed under the first and cut at its end,
+  // which is the honest reading of a cell the block itself drew across them.
+  const runs = contigRuns(job)
+  const binsize = job.mc.binsize
+  const group = new Int32Array(cells.n).fill(-1)
+  const index = new Int32Array(cells.n)
+  const beads: ModelBead[] = []
+  const perRun = new Map<number, number>()
+  for (let i = 0; i < cells.n; i++) {
+    const binFrom = cells.from + i * cells.k
+    const run = runs.find((r) => r.from <= binFrom && binFrom < r.to)
+    if (run === undefined) continue
+    const name = job.mc.chromnames[run.cid]
+    const length = job.mc.chromsizes.get(name) ?? (run.to - run.from) * binsize
+    const start = (binFrom - run.from) * binsize
+    const end = Math.min(length, (Math.min(run.to, binFrom + cells.k) - run.from) * binsize)
+    group[i] = run.cid
+    const ordinal = perRun.get(run.cid) ?? 0
+    index[i] = ordinal
+    perRun.set(run.cid, ordinal + 1)
+    beads.push({ contig: name, start, end: Math.max(start + 1, end), x: 0, y: 0, z: 0 })
+  }
+  // Beads the walk placed, in cell order — `beads[b]` is cell `cellOf[b]`.
+  const cellOf = Int32Array.from({ length: cells.n }, (_, i) => i).filter((i) => group[i] >= 0)
+  if (cellOf.length < 4) {
+    job.note('Fewer than four cells of the block lie on a sequence of this file; nothing to model.')
+    return []
+  }
+  const placedValues = subMatrixOf(cells.values, cells.n, cellOf)
+  const m = cellOf.length
+  const placedGroup = Int32Array.from(cellOf, (i) => group[i])
+  const placedIndex = Int32Array.from(cellOf, (i) => index[i])
+
+  job.progress(0, iterations + 2, 'contacts to distances')
+  await job.breathe()
+  const distances = distancesFromContacts(placedValues, m, alpha)
+  const keep = constrainedBeads(distances, m)
+  const dropped = m - keep.length
+  if (keep.length < 4) {
+    job.note('Fewer than four beads have any counted pair; nothing to model.')
+    return []
+  }
+  const kept = subMatrix(distances, m, keep)
+  const keptGroup = Int32Array.from(keep, (i) => placedGroup[i])
+  const keptIndex = Int32Array.from(keep, (i) => placedIndex[i])
+  const n = keep.length
+  job.progress(1, iterations + 2, 'classical scaling')
+  await job.breathe()
+  const coords = classicalMds(fillDistances(kept, n, keptGroup, keptIndex), n)
+  let stress = stressOf(kept, n, coords)
+  let steps = 0
+  for (; steps < iterations; steps++) {
+    // Between every step, not inside: the cancel lands here (`job.breathe`).
+    await job.breathe()
+    const before = smacofStep(kept, n, coords)
+    const after = stressOf(kept, n, coords)
+    stress = after
+    job.progress(2 + steps, iterations + 2, `refining · stress ${after.toExponential(2)}`)
+    if (before - after < 1e-6 * before) {
+      steps++
+      break
+    }
+  }
+  normaliseCoordinates(coords)
+  job.progress(iterations + 2, iterations + 2)
+
+  const placed: ModelBead[] = []
+  for (let b = 0; b < n; b++) {
+    const bead = beads[keep[b]]
+    placed.push({ ...bead, x: coords.x[b], y: coords.y[b], z: coords.z[b] })
+  }
+  const set = structureFromBeads(placed, cells.k * binsize)
+  const sequences = new Set(placed.map((bead) => bead.contig))
+  const subject =
+    span === null
+      ? sequences.size === 1
+        ? [...sequences][0]
+        : `${sequences.size} sequences`
+      : regionText
+  const fit = fitOf(kept, n, coords)
+
+  if (dropped > 0) {
+    job.note(
+      `${dropped.toLocaleString()} of ${m.toLocaleString()} cells had no counted pair at all — ` +
+        'filtered bins, gaps — and are not in the model.',
+    )
+  }
+  const model: IntervalsOutput = {
+    kind: 'intervals',
+    id: 'reconstructed-model',
+    label: `3D model · ${subject}`,
+    payload: { kind: 'features', data: set },
+    entryKind: 'structure',
+    noun: { one: 'bead', many: 'beads' },
+  }
+  const table: TableOutput = {
+    kind: 'table',
+    id: 'reconstructed-fit',
+    label: `Model from the map · ${subject}`,
+    columns: [
+      { key: 'what', label: '', kind: 'text' },
+      { key: 'value', label: 'Value', kind: 'text' },
+    ],
+    rows: [
+      { what: 'Contacts', value: how },
+      { what: 'Beads', value: `${n.toLocaleString()} of ${cells.n.toLocaleString()} cells, ${formatBp(cells.k * binsize)} each` },
+      { what: 'Sequences', value: `${sequences.size.toLocaleString()}` },
+      { what: 'Pairs counted', value: `${fit.pairs.toLocaleString()} of ${((n * (n - 1)) / 2).toLocaleString()}` },
+      { what: 'Distance law', value: `d = c^(−1/${alpha})` },
+      { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
+      { what: 'Stress', value: stress.toExponential(3) },
+      { what: 'Spearman ρ (1/d vs contacts)', value: Number.isNaN(fit.rho) ? '—' : fit.rho.toFixed(3) },
+    ],
+  }
+  return [model, table]
+}
+
+/** The rows and columns of a square at `keep`, as a smaller square of counts. */
+function subMatrixOf(values: Float32Array, n: number, keep: Int32Array): Float32Array {
+  const m = keep.length
+  const out = new Float32Array(m * m)
+  for (let a = 0; a < m; a++) {
+    const row = keep[a] * n
+    for (let b = 0; b < m; b++) out[a * m + b] = values[row + keep[b]]
+  }
+  return out
+}
+
+/**
+ * How the model orders the counted pairs against the map: Spearman's ρ between
+ * `1/d` in the model and the contact each pair had, over at most 200,000 pairs
+ * taken at an even stride so a big block does not sort millions.
+ */
+function fitOf(target: Float64Array, n: number, coords: Coordinates): { rho: number; pairs: number } {
+  let pairs = 0
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!Number.isNaN(target[i * n + j])) pairs++
+  const stride = Math.max(1, Math.ceil(pairs / 200000))
+  const a: number[] = []
+  const b: number[] = []
+  let seen = 0
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const delta = target[i * n + j]
+      if (Number.isNaN(delta)) continue
+      if (seen++ % stride !== 0) continue
+      const d = Math.hypot(coords.x[i] - coords.x[j], coords.y[i] - coords.y[j], coords.z[i] - coords.z[j])
+      a.push(d > 0 ? 1 / d : Number.POSITIVE_INFINITY)
+      // The count is the distance undone; its rank is the count's rank.
+      b.push(-delta)
+    }
+  }
+  return { rho: spearman(a, b), pairs }
 }

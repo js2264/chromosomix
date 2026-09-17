@@ -12,6 +12,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **A 3D model from the map, and a Structures card.** A third map task, **Model from the map**,
+  makes a structure from the contacts the view is holding — the whole loaded block at the
+  resolution it is drawn at, cis and trans together — by ShRec3D's pipeline (contacts read as
+  distances `c^(−1/α)`, the uncounted pairs filled, classical MDS) with SMACOF refinement over the
+  pairs the map counted; `α` and the step count are exposed, a sequence or a typed range restricts
+  it, more than 2,500 beads is refused with the way out, and a table reports the fit (stress and
+  Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
+  holds — dropped, named by URL or computed — is now listed on a **Structures** card of its own
+  under the Tracks card, with *show in the deck* (which opens the structure cell where there is
+  none and says which row it is drawing), a **bed3d** download, the provenance of a computed row
+  and *recompute* after a reload; the structure cell gains a **model** picker, remembered per
+  file, and draws a model the moment it arrives. The same bed3d leaves from the drawer's result.
+  SPECS §25.1–25.3, §25.6–25.8.
+
 ### Changed
 
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you

@@ -442,15 +442,16 @@ several at once. A tracks cell has one edge, the bottom; the other three are gre
 ### structure, model, chain, bead
 
 A **structure** is a file of beads with a place in space (g3d, bed3d, §25) and the row it makes in
-the Tracks card — a row that is also a feature set, since every bead is an interval, and that is
-never a lane. A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
+the Structures card — a row that is also a feature set, since every bead is an interval, and that is
+never a lane. A model can also be *made* from the map (§25.6). A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
 haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
 file was modelled at, inferred from its starts and independent of the map's bin size.
 
 ### card
 
 Which list a track is listed in (`AnnotationCard`): `linear` (drawn beside the map), `overlay`
-(drawn on it), `metadata` (columns the file already carries), `synthetic` (computed). Each is absent —
+(drawn on it), `metadata` (columns the file already carries), `synthetic` (computed), `structure`
+(3D models, loaded or computed, drawn by the deck's cell). Each is absent —
 not disabled, not empty — on a file that cannot carry it (§8.1, §8.5).
 
 ### kind

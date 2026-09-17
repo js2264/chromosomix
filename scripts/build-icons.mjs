@@ -63,6 +63,8 @@ const LUCIDE = [
   'type',
   'chart-area',
   'chart-spline',
+  // The Structures card (§25): a model is a thing with a volume.
+  'box',
   'list',
   'align-end-horizontal',
   'chevrons-up-down',

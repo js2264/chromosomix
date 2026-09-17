@@ -46,7 +46,7 @@ import { DI_TASK } from "./tasks/di";
 import { HIC_SCORE_TASK } from "./tasks/hicscore";
 import { SCALOGRAM_TASK } from "./tasks/scalogram";
 import { EXPECTED_TASK } from "./tasks/ps";
-import { SPATIAL_TRACKS_TASK, STRUCTURE_MAP_TASK } from "./tasks/structure";
+import { RECONSTRUCT_TASK, SPATIAL_TRACKS_TASK, STRUCTURE_MAP_TASK } from "./tasks/structure";
 import type { AnalysisContext, AnalysisTask, TaskGroup } from "./types";
 
 export const TASKS: readonly AnalysisTask[] = [
@@ -90,6 +90,7 @@ export const TASKS: readonly AnalysisTask[] = [
   OVERLAP_TASK,
   STRUCTURE_MAP_TASK,
   SPATIAL_TRACKS_TASK,
+  RECONSTRUCT_TASK,
   MAG_QC_TASK,
   MAG_NETWORK_TASK,
   MAG_PURITY_TASK,

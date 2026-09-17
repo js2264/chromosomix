@@ -31,7 +31,9 @@ import {
   parseG3d,
   sniffBed3d,
   sniffG3d,
+  structureFromBeads,
   widthOf,
+  writeBed3d,
 } from '@/annotations/g3d'
 import { fieldLevels, featureFields } from '@/annotations/fields'
 import { featureRange } from '@/annotations/featureset'
@@ -182,9 +184,11 @@ describe('what a g3d is', () => {
     expect(set.model?.haplotypes).toEqual(['maternal', 'paternal'])
   })
 
-  it('lands on the tracks card as its own kind', () => {
-    expect(cardFor('structure')).toBe('linear')
-    expect(kindFor('linear', 'structure')).toBe('structure')
+  it('lands on the Structures card as its own kind', () => {
+    expect(cardFor('structure')).toBe('structure')
+    expect(kindFor('structure', 'structure')).toBe('structure')
+    expect(kindFor('structure', 'bed')).toBe(null)
+    expect(kindFor('linear', 'structure')).toBe(null)
     expect(kindFor('overlay', 'structure')).toBe(null)
     expect(isStructure('structure')).toBe(true)
     expect(isIntervalSet('structure')).toBe(true)
@@ -400,13 +404,55 @@ describe('bed3d', () => {
     expect(isStructureName('model.3dg.txt.gz')).toBe(true)
     expect(isStructureName('model.bed')).toBe(false)
     expect(isStructureName('model.bed3d.bw')).toBe(false)
-    expect(cardFor('structure')).toBe('linear')
-    expect(kindFor('linear', 'structure')).toBe('structure')
+    expect(cardFor('structure')).toBe('structure')
+    expect(kindFor('structure', 'structure')).toBe('structure')
   })
 
   it('cannot capture the sniffers asked before it', () => {
     expect(sniffBarChart(BED3D)).toBe(false)
     expect(sniffSignal(BED3D)).toBe(null)
     expect(sniffVcf(BED3D)).toBe(false)
+  })
+})
+
+describe('a structure written out (§25.7)', () => {
+  it('writes a bed3d that reads straight back, beads and places alike', () => {
+    const beads = [
+      { contig: 'chrII', start: 0, end: 5000, x: 0.5, y: -1.25, z: 2 },
+      { contig: 'chrI', start: 5000, end: 10000, x: 1, y: 2, z: 3.000000049 },
+      { contig: 'chrI', start: 0, end: 5000, x: -0.1234567, y: 0, z: 0 },
+    ]
+    const set = structureFromBeads(beads, 5000)
+    expect(set.length).toBe(3)
+    expect(set.contigs).toEqual(['chrII', 'chrI'])
+    expect(set.model?.width).toBe(5000)
+    expect(set.model?.haplotypes).toEqual(['shared'])
+    const text = writeBed3d(set, { label: '3D model · chrI', file: 'chrI at 5 kb' })
+    const lines = text.trimEnd().split('\n')
+    expect(lines[0]).toMatch(/^# metacooler 3D model · chrI from chrI at 5 kb · bed3d: chrom start end x y z$/)
+    expect(lines).toHaveLength(4)
+    expect(lines.slice(1)).toEqual([
+      'chrII\t0\t5000\t0.5\t-1.25\t2',
+      'chrI\t0\t5000\t-0.123457\t0\t0',
+      'chrI\t5000\t10000\t1\t2\t3',
+    ])
+    expect(sniffBed3d(text, 'model.bed3d')).toBe(true)
+    const back = parseBed3d(text, 'model.bed3d')
+    expect(back.length).toBe(3)
+    expect(Array.from(back.start)).toEqual(Array.from(set.start))
+    expect(Array.from(back.end)).toEqual(Array.from(set.end))
+    expect(back.model?.width).toBe(5000)
+    expect(back.model?.x[1]).toBeCloseTo(-0.123457, 6)
+    expect(back.model?.y[0]).toBeCloseTo(-1.25, 9)
+  })
+
+  it('writes the haplotype column for a phased model only', () => {
+    const phased = parseG3d('chr1 0 0 0 0 m\nchr1 0 1 1 1 p\nchr1 1000 2 2 2 m\nchr1 1000 3 3 3 p')
+    const text = writeBed3d(phased)
+    expect(text.split('\n')[0]).toMatch(/haplotype$/)
+    expect(text.split('\n')[1]).toBe('chr1\t0\t1000\t0\t0\t0\tmaternal')
+    expect(parseBed3d(text).model?.haplotypes).toEqual(['maternal', 'paternal'])
+    const plain = parseG3d('chr1 0 0 0 0\nchr1 1000 1 1 1')
+    expect(writeBed3d(plain).split('\n')[1].split('\t')).toHaveLength(6)
   })
 })

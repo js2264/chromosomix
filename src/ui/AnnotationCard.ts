@@ -895,11 +895,14 @@ export class AnnotationCard {
     // computed — where the exports are — rather than among the files it was
     // computed from, which is also where a reader looks for it when they want
     // the numbers out.
+    // …and a structure is a row of the Structures card (§25), whatever road
+    // it came by: it is never a lane and has nothing this card's controls do.
     return this.props.store.entries.filter(
       (entry) =>
         entry.source.kind !== 'computed' &&
         entry.source.kind !== 'metadata' &&
-        entry.source.kind !== 'derived',
+        entry.source.kind !== 'derived' &&
+        entry.kind !== 'structure',
     )
   }
 

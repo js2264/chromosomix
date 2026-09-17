@@ -2674,6 +2674,24 @@ export class PanelDeck {
     return this.slots.some((slot) => slot.ref.kind === 'structure')
   }
 
+  /**
+   * Draw this structure row in the structure cell, opening the cell if the
+   * deck has none. The Structures card's *show in the deck* lands here.
+   */
+  showStructure(id: string): void {
+    if (!this.hasStructure()) this.add({ kind: 'structure' })
+    for (const slot of this.slots) slot.cell?.showModel?.(id)
+  }
+
+  /** The structure row the structure cell is drawing, or `null` where there is no cell. */
+  shownStructure(): string | null {
+    for (const slot of this.slots) {
+      const shown = slot.cell?.shownModel?.()
+      if (shown !== undefined) return shown
+    }
+    return null
+  }
+
   /** Whether any cell beside the lead holds a map. */
   private hasCompanions(): boolean {
     return this.slots.some((slot) => slot.panel?.map !== undefined && slot.panel?.map !== null)

@@ -6779,8 +6779,8 @@ design it was built from, with the alternatives weighed and the sizes measured, 
 
 ### 25.1 Words
 
-A **structure** is the file and the row it makes in the Tracks card — a row of kind `structure`,
-which is also a feature set: every bead is an interval. A **model** is one set of coordinates; a
+A **structure** is the file and the row it makes in the Structures card — a row of kind
+`structure` on the card `structure`, which is also a feature set: every bead is an interval. A **model** is one set of coordinates; a
 **chain** is the beads of one sequence and one haplotype in genomic order; a **bead** is one row
 of the file. A **cell** is any occupant of the deck (§16.11).
 
@@ -6812,10 +6812,22 @@ has to be *named* to be read as a structure. The tests pin what a BED5, a BED6, 
 narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
+**The Structures card.** Every model the session holds — dropped, named by URL, or computed
+(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
+Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
+eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
+computed one, **show in the deck** — which puts the model in the structure cell, opening the cell
+where the deck has none, and reads *shown in the deck* on the row the cell is drawing — and
+**bed3d**, the model out (§25.7). The card's own load zone names the three formats. A computed
+row that came back from a reload is detached and offers **recompute**, which opens its recipe in
+the drawer, as the Synthetic card does (§18.5).
+
 ### 25.3 The deck of cells
 
-**The structure cell** draws the session's one structure row — the first of the list — with
-three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
+**The structure cell** draws **one** structure row — the one the reader chose from the Structures
+card or from the cell's own **model** picker, remembered per file, or the first of the list where
+none was chosen or the chosen one is gone; a model that has just arrived, dropped or computed, is
+the one it draws — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
 on the web, folded into the one file of the standalone build. Beads, sticks, both, or a tube; a
 halo on the hovered bead; a dashed chord across a hovered contact; a fog for depth; lit or flat;
 perspective or orthographic; the camera remembered per file. A phased file draws both homologues,
@@ -6878,7 +6890,8 @@ loops touching the window and capped at six hundred, past which a model is a cag
 
 ### 25.6 Analysis
 
-Two tasks under *map*, listed greyed until a map is open and a structure loaded. **Model versus
+Three tasks under *map*. The first two are listed greyed until a map is open and a structure
+loaded. **Model versus
 map** bins the beads to the map's bins per sequence and answers the validation picture: the
 model's distances as a matrix and as `1/d^α`, the mean distance at each separation beside the
 map's own P(s) over the same bins with the log-log slope, and a table of Spearman correlations
@@ -6888,6 +6901,51 @@ the map's bins — radial position, distance to a chosen locus, local compaction
 synthetic track is a track" (§18.5) makes lanes, colourings of the model itself, and inputs of
 every track task. Both are `structure/versusMap.ts`, pure over arrays, held still by tests.
 
+**Model from the map** needs no structure: it makes one. It is the reversal of §25.8's refusal, and
+the §18.9 bar is met the way it was met for chromosight — by porting a published method rather
+than inventing one. The pipeline is **ShRec3D** (Lesne et al. 2014) with the refinement every MDS
+toolkit ends with: a contact count `c` is read as a distance `d = c^(−1/α)` — the law *Model versus
+map* assumes the other way round, `α` exposed and 3 by default; the pairs the map never counted
+(a zero, a `NaN`) are filled so the matrix is complete; classical MDS (Torgerson: double-centred
+squared distances, three leading eigenvectors by subspace iteration) gives a start; **SMACOF** (de
+Leeuw's majorisation, the unweighted Guttman transform) moves the beads until the model's
+distances match the map's over the pairs the map counted — a filled pair carries no weight, its
+target being whatever distance the model has, so it neither pulls nor pushes — stopping at the
+step count asked for or once a step improves the stress by less than a millionth. Two departures
+from ShRec3D are deliberate and named here: its shortest-path filling is cubic in the bead count
+and would not finish in a tab, so the filling is the mean observed distance at the same
+separation on the same sequence, walking outward to the nearest separation with an observation,
+and the mean observed trans distance across two; and ShRec3D stops at the classical solution,
+which honours the filled pairs as much as the counted ones. The model is centred and scaled to a
+unit root-mean-square radius: a map carries no physical unit and `c^(−1/α)` is in none (§25.8).
+
+**What it is solved over** is what the reader is looking at: the view's block **as drawn** — the
+loaded locus at its drawn resolution, pooled cells included, which is the one task that honours
+`binsPerCell > 1` rather than refusing it — cis and trans together, one bead per cell, filed under
+the sequence holding its first bin and cut at that sequence's end. A block whose rows are not its
+columns, or balanced the other way from what the run asks, is declined for the square over the
+framing read at the file's own bin size. **Sequence** restricts the model to one sequence or a
+typed range of it. A cell whose row the map counted nothing on — a filtered bin, a gap — is left
+out of the model, and the run says how many were. More beads than `RECONSTRUCT_MAX_BEADS`
+(2,500) is refused in the estimate with the way out — zoom out so the block is drawn coarser, or
+name a sequence — because every refinement step is a pass over every pair. The run's other output
+is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
+the steps taken, the final stress and Spearman's ρ between `1/d` in the model and the contacts —
+the same number *Model versus map* would give the row, so a reader can see how well the model
+honours the map before believing it.
+
+**Its result is a row**, not a picture: a `structure` row on the Structures card, of kind
+`structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
+reconstructed-model` (per map on a deck, as every computed row is), labelled `3D model · chrIV`
+or `3D model · 16 sequences`, summarised as a loaded one is, carrying the task and the framing as
+provenance. It replaces the last run's row, is the model the cell draws the moment it lands, is
+what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
+`detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
+Synthetic-card export road. The golden is the one a reconstruction can honestly have
+(`structure-reconstruct.test.ts`): a helix whose contacts were made from it by the law comes back
+as itself up to a rigid motion, and a chain with most far pairs uncounted comes back with ρ above
+0.9.
+
 ### 25.7 Export
 
 Beads and sticks export as **paths** through `structure/painter.ts`, projected through the same
@@ -6895,10 +6953,16 @@ camera the screen was; a tube is a lit surface no `arc` can be and exports as th
 drew, at 300 dpi; the deck's figure takes the cell's canvas like any other. Both say which on
 the button.
 
+**A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
+`#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
+button of its row, from the drawer's result and from the export road a computed row shares with
+called intervals. It is the file §25.2 reads, so it reads straight back here and in `g3dtools`.
+
 ### 25.8 Refused, and not yet built
 
-- **Inference** — computing a structure from the map — under §18.9's rule: a second caller needs
-  a published upstream with its own goldens. The way out is `pastis` or `g3dtools` and a drop.
+- ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), a
+  port of ShRec3D with SMACOF refinement. What stays refused is a **physical unit** for it: the
+  model is in its own units at unit radius, and a nanometre would be invented.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one

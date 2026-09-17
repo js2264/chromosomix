@@ -79,7 +79,7 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
   // WashU's g3d, text or container, and Dip-C's `.3dg` which is the same text
   // with the haplotype folded into the chromosome's name (§25).
-  if (isStructureName(name)) return { card: 'linear', kind: 'structure' }
+  if (isStructureName(name)) return { card: 'structure', kind: 'structure' }
   return { card: 'linear', kind: 'segments' }
 }
 
@@ -752,11 +752,13 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'genepred':
     case 'bedmethyl':
     case 'twobit':
-    // A model's beads are intervals along one axis and its picture is a cell of
-    // the deck, which is neither card: the row lives with the tracks, where its
-    // lane of boxes is drawn, and the cell reads the row (§25).
-    case 'structure':
       return 'linear'
+    // A model's beads are intervals along one axis and its picture is a cell of
+    // the deck, which is neither of the two above: the row lives on the
+    // Structures card, which lists models and nothing else, and the cell reads
+    // the row (§25).
+    case 'structure':
+      return 'structure'
     default:
       return null
   }
@@ -770,6 +772,7 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
  * lanes is not, because there is no lane a pair belongs in.
  */
 export function kindFor(card: AnnotationCard, format: DetectedFormat): AnnotationKind | null {
+  if (card === 'structure') return format === 'structure' ? 'structure' : null
   if (card === 'linear') {
     // A bedGraph and a wig are a bigWig written out, and become the same kind
     // of thing: values sampled per view, with a range, a ceiling, an autoscale
@@ -800,9 +803,6 @@ export function kindFor(card: AnnotationCard, format: DetectedFormat): Annotatio
     // be a box — so it is a kind rather than a `segments` with a column nothing
     // reads.
     if (format === 'barchart') return 'barchart'
-    // A 3D model (§25): a set of intervals that carry a place in space, and its
-    // own kind because the picture that reads the place is a cell of the deck.
-    if (format === 'structure') return 'structure'
     // A bigBed is read whole and parsed as the BED it holds, so from here it is
     // one: boxes on a lane, and a BED12 with exons draws them.
     if (format === 'bed' || format === 'bigbed') return 'segments'

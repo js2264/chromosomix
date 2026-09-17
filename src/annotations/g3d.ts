@@ -441,3 +441,74 @@ function spacing(bp: number): string {
 function trim(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '')
 }
+
+// ---------------------------------------------------------------------------
+// A structure made here, and a structure written out
+// ---------------------------------------------------------------------------
+
+/** One bead of a model this app computed: where it is, and what it covers. */
+export interface ModelBead {
+  contig: string
+  start: number
+  end: number
+  x: number
+  y: number
+  z: number
+}
+
+/**
+ * A structure row's payload from beads this app placed (§25.6).
+ *
+ * The same builder and the same schema a parsed bed3d goes through, so the row
+ * a reconstruction makes is indistinguishable from one loaded from disk — the
+ * cell draws it, *Model versus map* reads it, `writeBed3d` writes it — which
+ * is the whole reason the task produces a row rather than a picture. Unphased:
+ * a map has one set of counts and gives one set of places.
+ */
+export function structureFromBeads(beads: readonly ModelBead[], width: number): FeatureSet {
+  const builder = new FeatureBuilder()
+  for (const bead of beads) {
+    builder.add(bead.contig, bead.start, bead.end, { xyz: [bead.x, bead.y, bead.z], hap: 0 })
+  }
+  const schema: StructureSchema = { width, haplotypes: [SHARED] }
+  return builder.finish(null, schema)
+}
+
+/**
+ * A structure row as a bed3d: `chrom start end x y z [haplotype]`.
+ *
+ * The haplotype column only for a phased model, as the reader (§25.2) treats
+ * it; the `#` header is skipped by every reader of the family, this app's
+ * included, so the file reads straight back. Six decimals: a model is in its
+ * own units and a coordinate written shorter than the solver's step would
+ * move beads on the way to disk.
+ */
+export function writeBed3d(
+  set: FeatureSet,
+  context: { label?: string; file?: string; created?: string } = {},
+): string {
+  const model = set.model
+  const what = context.label === undefined ? 'structure' : context.label
+  const from = context.file === undefined ? '' : ` from ${context.file}`
+  const when = context.created === undefined ? '' : ` on ${context.created}`
+  const lines = [`# metacooler ${what}${from}${when} · bed3d: chrom start end x y z${model !== undefined && model.haplotypes.length > 1 ? ' haplotype' : ''}`]
+  if (model === undefined) return lines.join('\n') + '\n'
+  const phased = model.haplotypes.length > 1
+  for (let i = 0; i < set.length; i++) {
+    const columns = [
+      set.contigs[set.contig[i]] ?? '.',
+      String(set.start[i]),
+      String(set.end[i]),
+      coordinate(model.x[i]),
+      coordinate(model.y[i]),
+      coordinate(model.z[i]),
+    ]
+    if (phased) columns.push(model.haplotypes[model.hap[i]] ?? SHARED)
+    lines.push(columns.join('\t'))
+  }
+  return lines.join('\n') + '\n'
+}
+
+function coordinate(value: number): string {
+  return Number.isFinite(value) ? String(Number(value.toFixed(6))) : '0'
+}

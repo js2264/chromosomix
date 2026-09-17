@@ -7,10 +7,10 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { runSpatialTracks, runStructureMap } from '@/analysis/run/structure'
+import { runReconstruct, runSpatialTracks, runStructureMap } from '@/analysis/run/structure'
 import type { JobContext } from '@/analysis/job'
-import type { AnalysisFraming, CurveOutput, MatrixOutput, Params, ProfileOutput, TableOutput } from '@/analysis/types'
-import { SPATIAL_TRACKS_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
+import type { AnalysisFraming, CurveOutput, IntervalsOutput, MatrixOutput, Params, ProfileOutput, TableOutput } from '@/analysis/types'
+import { RECONSTRUCT_TASK, SPATIAL_TRACKS_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { parseG3d } from '@/annotations/g3d'
 
 const BINSIZE = 10000
@@ -138,5 +138,123 @@ describe('spatial tracks', () => {
     const outputs = await runSpatialTracks(job({ structure: 's1', locus: 'II:1-100' }, notes))
     expect(outputs.map((o) => o.id)).toEqual(['structure-radial--1', 'structure-compaction--1'])
     expect(notes[0]).toMatch(/No bead of the model lies at II:1-100/)
+  })
+})
+
+describe('model from the map', () => {
+  /** A job over the block a view holds: `cells` pooled bins to a cell. */
+  function blockJob(params: Params, notes: string[], cells = 1, balance = false): JobContext {
+    const base = job(params, notes)
+    const n = Math.ceil(BINS / cells)
+    const values = new Float32Array(n * n)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) values[r * n + c] = r === c ? 0 : 100 / (1 + Math.abs(r - c))
+    }
+    const framing = { ...FRAMING, binsPerCell: cells, balance }
+    const block = { nrows: n, ncols: n, values, rowExtent: [0, BINS], colExtent: [0, BINS], binsPerCell: cells }
+    const mc = base.mc as unknown as Record<string, unknown>
+    mc['nContigs'] = 1
+    mc['hasContig'] = (name: string) => name === 'I'
+    mc['contigId'] = () => 0
+    return { ...base, framing, inputs: { ...base.inputs, block } } as unknown as JobContext
+  }
+
+  it('is listed under map and needs only a map', () => {
+    expect(RECONSTRUCT_TASK.group).toBe('map')
+    expect(RECONSTRUCT_TASK.availability({ hasMap: false, entries: [] } as never).state).toBe('waiting')
+    expect(RECONSTRUCT_TASK.availability({ hasMap: true, entries: [] } as never).state).toBe('ready')
+  })
+
+  it('prices the block as drawn, and refuses one with more beads than it solves', () => {
+    const context = {
+      framing: { ...FRAMING, rows: [0, 6000], cols: [0, 6000], binsPerCell: 2 },
+      contigs: [],
+      blockLoaded: true,
+    } as never
+    const estimate = RECONSTRUCT_TASK.estimate(context, {})
+    expect(estimate.refusal).toMatch(/3,000 beads/)
+    const coarser = { ...(context as object), framing: { ...FRAMING, rows: [0, 6000], cols: [0, 6000], binsPerCell: 4 } } as never
+    expect(RECONSTRUCT_TASK.estimate(coarser, {}).refusal).toBeUndefined()
+    expect(RECONSTRUCT_TASK.estimate(coarser, {}).note).toMatch(/1,500 beads/)
+  })
+
+  it('makes a structure row from the block, one bead per cell, that orders the pairs as the map does', async () => {
+    const notes: string[] = []
+    const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 100 }, notes))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    expect(model).toBeDefined()
+    expect(model?.entryKind).toBe('structure')
+    expect(model?.payload.kind).toBe('features')
+    if (model === undefined || model.payload.kind !== 'features') return
+    const set = model.payload.data
+    expect(set.length).toBe(BINS)
+    expect(set.model).toBeDefined()
+    expect(set.model?.width).toBe(BINSIZE)
+    expect(set.contigs).toEqual(['I'])
+    expect(set.start[0]).toBe(0)
+    expect(set.end[0]).toBe(BINSIZE)
+    expect(set.end[BINS - 1]).toBe(BINS * BINSIZE)
+    // The map falls as 1/(1+s): the model's distances rise with separation.
+    const m = set.model as NonNullable<typeof set.model>
+    const d = (i: number, j: number): number => Math.hypot(m.x[i] - m.x[j], m.y[i] - m.y[j], m.z[i] - m.z[j])
+    expect(d(0, 1)).toBeLessThan(d(0, 5))
+    expect(d(0, 5)).toBeLessThan(d(0, 19))
+    const table = outputs.find((o): o is TableOutput => o.kind === 'table')
+    // 1/(1+s) read as (1+s)^(1/3) is a chain no three axes hold exactly, so
+    // the fit is good rather than perfect.
+    const rho = table?.rows.find((row) => String(row.what).startsWith('Spearman'))?.value
+    expect(Number(rho)).toBeGreaterThan(0.85)
+    expect(notes).toEqual([])
+  })
+
+  it('takes the block as drawn: pooled cells make wider beads', async () => {
+    const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20 }, [], 2))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.length).toBe(BINS / 2)
+    expect(model.payload.data.model?.width).toBe(2 * BINSIZE)
+    expect(model.payload.data.end[0]).toBe(2 * BINSIZE)
+  })
+
+  it('reads the square itself when the block was balanced the other way', async () => {
+    const notes: string[] = []
+    const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20, balance: true }, notes, 2, false))
+    const table = outputs.find((o): o is TableOutput => o.kind === 'table')
+    expect(table?.rows[0]?.value).toMatch(/read at the file/)
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    // Read at the file's own bin size, so one bead per bin again.
+    expect(model.payload.data.length).toBe(BINS)
+  })
+
+  it('names a sequence the file lacks rather than modelling nothing', async () => {
+    const notes: string[] = []
+    const outputs = await runReconstruct(blockJob({ region: 'chrZ' }, notes))
+    expect(outputs).toEqual([])
+    expect(notes[0]).toMatch(/no sequence called chrZ/)
+  })
+
+  it('restricts to a typed range of the sequence', async () => {
+    const outputs = await runReconstruct(blockJob({ region: 'I:0-50000', iterations: 10 }, []))
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.length).toBe(5)
+    expect(model.label).toBe('3D model · I:0-50000')
+  })
+
+  it('leaves a bead with no counted pair out, and says so', async () => {
+    const notes: string[] = []
+    const held = blockJob({ iterations: 10 }, notes)
+    const block = (held.inputs as { block: { values: Float32Array; nrows: number } }).block
+    const n = block.nrows
+    for (let c = 0; c < n; c++) {
+      block.values[3 * n + c] = 0
+      block.values[c * n + 3] = 0
+    }
+    const outputs = await runReconstruct(held)
+    const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
+    if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
+    expect(model.payload.data.length).toBe(BINS - 1)
+    expect(notes.some((note) => /1 of 20 cells had no counted pair/.test(note))).toBe(true)
   })
 })

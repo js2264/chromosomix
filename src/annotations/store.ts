@@ -1175,7 +1175,7 @@ function samePlacement(a: Placement, b: Placement): boolean {
 
 /** Every kind, from the one place that lists them (`annotations/types.ts`). */
 const KINDS: readonly AnnotationKind[] = ANNOTATION_KINDS
-const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
+const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata', 'structure']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
   if (typeof value !== 'object' || value === null) return false
