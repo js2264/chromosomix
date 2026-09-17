@@ -10468,7 +10468,7 @@ span.deck-name {
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   border: 1px solid var(--border);
-  color: var(--text-muted, var(--text));
+  color: var(--text-dim);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   pointer-events: none;
   z-index: 2;
