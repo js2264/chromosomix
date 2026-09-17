@@ -1739,16 +1739,10 @@ p {
   flex: 0 0 auto;
 }
 
-/* The Aesthetics column with a structure cell's card after the view's own
-   aside (§25.3): the aside is `flex: 1 1 auto; min-height: 0` so a contig list
-   can take the space the cards leave, but beside a second flex item that
-   shrinks it under its own cards, which then lie over the structure card. With
-   a card after it the aside keeps its height and the column scrolls as a
-   whole, the way every other column of cards does. */
-.panel-column-body > .panel-host > .side:has(+ .structure-settings) {
-  flex: 0 0 auto;
-}
-
+/* The structure cell's card stands inside the view's own aside, after its
+   Map card (§25.3), so it is one of the aside's cards and the column scrolls
+   over all of them as one; on a view with no aside it is the column's only
+   card. */
 .panel-column-body > .panel-host > .structure-settings {
   flex: 0 0 auto;
 }

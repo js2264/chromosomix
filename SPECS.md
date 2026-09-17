@@ -6844,9 +6844,10 @@ everything else is drawn whole. *Outside the window* has three answers: *ghost* 
 how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
 says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
 
-**The settings are a card of the Aesthetics panel** — *3D structure*, beside the map's *Map* and
-*Export* cards, built from the same field primitives, mounted by the session whenever the deck has a
-structure cell — and not a menu in the cell: a view's settings are in that column, and the model is a
+**The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
+cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
+primitives, placed by the session whenever the deck has a structure cell and taken out when it has
+none, the column scrolling over all of them as one — and not a menu in the cell: a view's settings are in that column, and the model is a
 view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
 camera controls — and gives it back where it was. The card also carries **size by**

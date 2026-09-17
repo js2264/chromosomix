@@ -555,6 +555,8 @@ export class Session {
   readonly generalHost = el('div', { class: 'panel-host' })
   readonly annotationsHost = el('div', { class: 'panel-host' })
   readonly aestheticsHost = el('div', { class: 'panel-host' })
+  /** The structure cell's card as {@link refreshAesthetics} last placed it, so it can be taken out again. */
+  private placedStructureCard: HTMLElement | null = null
   /** The Analysis column's body: the list of tasks this file can be asked. */
   readonly analysisHost = el('div', { class: 'panel-host' })
   /**
@@ -7810,7 +7812,25 @@ export class Session {
     // A card the enlarged dialog has borrowed stays where it is: the dialog
     // gives it back when it closes.
     const borrowed = card !== null && card.isConnected && !this.aestheticsHost.contains(card)
-    this.setAesthetics([...(side === undefined ? [] : [side]), ...(card === null || borrowed ? [] : [card])])
+    // The card placed last time, taken out where the deck no longer has it.
+    const placed = this.placedStructureCard
+    if (placed !== null && placed !== card && this.aestheticsHost.contains(placed)) placed.remove()
+    this.placedStructureCard = null
+    if (side === undefined) {
+      this.setAesthetics(card === null || borrowed ? [] : [card])
+      return
+    }
+    if (card !== null && !borrowed) {
+      // Inside the view's own aside, right after its *Map* card and before
+      // the tracks and the groups (§25.3): the model is a view of the same
+      // thing the map is, so its card stands with the map's. A view without
+      // a map card takes it last.
+      const map = this.current?.panel?.controlsEl
+      if (map !== undefined && map.parentElement === side) map.after(card)
+      else side.append(card)
+      this.placedStructureCard = card
+    }
+    this.setAesthetics([side])
   }
 
   private setAesthetics(nodes: readonly HTMLElement[]): void {
