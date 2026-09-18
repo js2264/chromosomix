@@ -43,6 +43,7 @@ import {
   type Square,
 } from '../chromosight'
 import { boolParam, numParam, type JobContext, type TaskRunner } from '../job'
+import { loopSpectrum } from '../loopSpectrum'
 import { MAX_SCAN_CELLS, presetFor, scanCellsFor, threshold } from '../tasks/chromosight'
 import type { ChromosightPreset } from '../chromosightPresets'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
@@ -424,6 +425,25 @@ function outputsFor(
   } satisfies MatrixOutput)
 
   outputs.push(spectrumOf(calls, preset))
+  // The same scores against the one axis a loop set has and a histogram throws
+  // away (`analysis/loopSpectrum.ts`). Only off the diagonal, where there is a
+  // separation to plot against: a border's two anchors are one bin apart by
+  // construction, and a scatter over a single x is not a plot.
+  if (!shape.onDiagonal) {
+    const spectrum = loopSpectrum(
+      calls.map((call) => ({
+        separation: Math.abs(call.bin2 - call.bin1) * binsize,
+        score: call.score,
+      })),
+      {
+        id: 'chromosight-loop-spectrum',
+        label: `Loop spectrum · ${label}`,
+        noun: 'calls',
+        yLabel: 'Pearson correlation with the template',
+      },
+    )
+    if (spectrum !== null) outputs.push(spectrum)
+  }
   outputs.push(tableOf(calls, binsize))
   job.note(
     `${calls.length.toLocaleString()} ${label} across ${shape.sequences.toLocaleString()} ` +

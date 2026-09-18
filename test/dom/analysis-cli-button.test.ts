@@ -180,6 +180,9 @@ function runnerWith(finished: TaskResult): AnalysisRunner {
     // and it is one of the things under test here.
     resultOf: () => finished,
     resultsFor: () => [],
+    // One run, which is what a suite about the *command* for a result needs:
+    // the history stepper appears only past two and is `analysis-runs`'s.
+    runsOf: () => [finished],
     stateOf: () => ({ status: 'idle' }),
     run: () => {},
     runAll: () => {},

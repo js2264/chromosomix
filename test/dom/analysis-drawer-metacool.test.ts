@@ -138,6 +138,8 @@ function runnerWith(finished: TaskResult, deck: readonly FakeTarget[] = []): Ana
       taskId === finished.provenance.task && deck.length > 0
         ? [{ target: deck[0], result: finished }]
         : [],
+    // One run of it, so no history stepper — that control is `analysis-runs`'s.
+    runsOf: (taskId: string) => (taskId === finished.provenance.task ? [finished] : []),
     stateOf: () => ({ status: 'idle' }),
     run: () => {},
     runAll: () => {},

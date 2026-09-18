@@ -307,6 +307,57 @@ function takesEscape(node: HTMLElement): boolean {
  * all: the reader pressed the button, and a sentence telling them what they just
  * did is the kind of message that trains people to stop reading messages.
  */
+/**
+ * When a stored run finished, as a clock time.
+ *
+ * The time and not the date, because the history is this session's: eight runs
+ * of one task all happened this afternoon, and a date beside each of them would
+ * be eight copies of today. A provenance with no readable timestamp answers a
+ * dash rather than `Invalid Date`, which is the sort of thing a reader
+ * reasonably reports as a bug in the analysis.
+ */
+function runClock(result: TaskResult): string {
+  const at = new Date(result.provenance.createdAt)
+  return Number.isNaN(at.getTime())
+    ? '—'
+    : at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+/**
+ * What differs between two runs of one task, in the reader's own words.
+ *
+ * The sentence the history needs and nothing else on screen carries. Two pileups
+ * are two pictures *because* something was changed, and a stepper that offered
+ * `run 2 of 5` and no more would make a reader open the provenance of each in
+ * turn to find out which was which.
+ *
+ * Labels rather than keys — `Half-width`, not `window` — because those are the
+ * words the form used when the number was typed. Parameters the task no longer
+ * declares are skipped: a stored run may predate a rename, and a difference in a
+ * key nobody can see is not a difference a reader can act on.
+ */
+function runDifference(shown: TaskResult, latest: TaskResult, task: AnalysisTask): string {
+  if (shown === latest) return 'The run on screen'
+  const parts: string[] = []
+  for (const spec of task.params) {
+    const before = shown.provenance.params[spec.key]
+    const after = latest.provenance.params[spec.key]
+    if (paramText(before) === paramText(after)) continue
+    parts.push(`${spec.label}: ${paramText(before)} (latest: ${paramText(after)})`)
+  }
+  const when = `Finished ${runClock(shown)}.`
+  return parts.length === 0
+    ? `${when} The same parameters as the latest run.`
+    : `${when} ${parts.join(' · ')}`
+}
+
+/** One parameter value, as a string a reader recognises. */
+function paramText(value: ParamValue | undefined): string {
+  if (value === undefined || value === null || value === '') return '—'
+  if (Array.isArray(value)) return value.length === 0 ? '—' : value.join(', ')
+  return String(value)
+}
+
 function runNote(state: JobState): Array<HTMLElement | string> {
   switch (state.status) {
     case 'running':
@@ -398,6 +449,13 @@ export class AnalysisDrawer {
    * a tab strip over one thing is furniture.
    */
   private readonly mapsEl = el('div', { class: 'analysis-maps hidden' })
+  /**
+   * *Run 2 of 5* — the stepper back through earlier runs of this task.
+   *
+   * Hidden until there is more than one, like the map strip above it and for the
+   * same reason: a control offering a choice of one is furniture.
+   */
+  private readonly runsEl = el('div', { class: 'analysis-runs hidden' })
   /** Where an export that could not be written says so. */
   private readonly statusEl = el('div', { class: 'analysis-note hidden' })
 
@@ -426,6 +484,15 @@ export class AnalysisDrawer {
    * are comparing.
    */
   private readonly chosenMap = new Map<string, MapId | typeof ALL_MAPS>()
+  /**
+   * Which run of this task is on screen: 0 is the newest, held per task.
+   *
+   * Per task rather than per task and map, and reset by {@link syncMaps} when
+   * the map changes, because *the run before last* is a thing a reader means
+   * about one picture: carrying an index from panel one to panel four would land
+   * them on whichever of panel four's runs happened to be third.
+   */
+  private readonly chosenRun = new Map<string, number>()
   /** Set while the combined figure is drawn, so the exports know what they are. */
   private combined = false
   /** The dragged width, or `null` for "however wide the default says". */
@@ -522,6 +589,7 @@ export class AnalysisDrawer {
         this.recordEl,
         this.notesEl,
         this.mapsEl,
+        this.runsEl,
         this.outputsEl,
         this.statusEl,
       ),
@@ -611,12 +679,17 @@ export class AnalysisDrawer {
     const across = this.options.runner.resultsFor(task.id)
     this.syncMaps(task, across)
     const chosen = this.chosenMap.get(task.id)
-    const result =
-      chosen === ALL_MAPS
-        ? null
-        : (across.find((entry) => entry.target.map === chosen)?.result ??
-          this.options.runner.resultOf(task.id))
-    if (chosen === ALL_MAPS && across.length > 1) this.syncCombined(across)
+    const combined = chosen === ALL_MAPS && across.length > 1
+    // Every run of this task on the map that is on screen, newest first. The
+    // overlay has none: it is a fold of *one* result per map, so *the run before
+    // last* is a question about a different object.
+    const mapId = chosen === undefined || chosen === ALL_MAPS ? undefined : chosen
+    const own = mapId === undefined ? [] : this.options.runner.runsOf(task.id, mapId)
+    const runs = combined ? [] : own.length > 0 ? own : this.options.runner.runsOf(task.id)
+    const at = Math.min(Math.max(0, this.chosenRun.get(task.id) ?? 0), Math.max(0, runs.length - 1))
+    const result = combined ? null : (runs[at] ?? null)
+    this.syncRuns(task, runs, at)
+    if (combined) this.syncCombined(across)
     else this.syncOutputs(result)
     this.syncFraming(result ?? across[0]?.result ?? null)
     this.syncRun(task, context)
@@ -804,6 +877,10 @@ export class AnalysisDrawer {
     const task = this.current
     if (task === null) return
     this.setStatus('')
+    // Back to the newest, because the one about to arrive *is* the newest and a
+    // reader who pressed Run while reading run 3 would otherwise watch their
+    // result finish somewhere they are not looking.
+    this.chosenRun.delete(task.id)
     this.options.runner.run(task, this.params)
     this.refresh()
   }
@@ -820,6 +897,7 @@ export class AnalysisDrawer {
     const task = this.current
     if (task === null) return
     this.setStatus('')
+    this.chosenRun.delete(task.id)
     // **Awaited**, and this is the whole of the fix. A companion opens to draw a
     // picture; the two tables an analysis needs are a further pair of reads it
     // makes only when starred or batched (`panels/MapPanel.ts`). So the
@@ -929,6 +1007,8 @@ export class AnalysisDrawer {
     const chosen = this.chosenMap.get(task.id) ?? stops[0]
     const go = (to: MapId | typeof ALL_MAPS): void => {
       this.chosenMap.set(task.id, to)
+      // A different map is a different list of runs — see {@link chosenRun}.
+      this.chosenRun.delete(task.id)
       // Forced: the next `refresh` compares results by identity, and stepping
       // from one map to another can land on the *same* object where a composite
       // reused an upstream. Without this the tab lights up and the figures do
@@ -955,6 +1035,74 @@ export class AnalysisDrawer {
         title: 'Every map\u2019s curves on one axis — the comparison the deck was opened for',
       }),
       iconButton('chevron-right', 'The next map', () => step(1), { class: 'btn-quiet' }),
+    )
+  }
+
+  /**
+   * The stepper back through earlier runs of this task on this map.
+   *
+   * **Because a result is expensive and pressing Run used to destroy one.** A
+   * pileup over forty thousand anchors is a minute of range requests, and the
+   * commonest thing anybody does with this catalogue is run a task, change one
+   * number, run it again — at which point the first answer, and the parameters
+   * that produced it, were simply gone. There was nothing to compare against and
+   * nothing to go back to; the only way to see the previous figure again was to
+   * remember the settings and pay for it a second time.
+   *
+   * Newest first, so *the run on screen* is where the drawer opens and the
+   * stepper reads backwards from it — which is the direction the question is
+   * asked in. The buttons are named rather than bare chevrons because *left* has
+   * no meaning over a list ordered by time: `older` and `newer` are the two
+   * words a reader has in mind.
+   *
+   * The line between them says which run it is and when it finished, and its
+   * tooltip says **what differs** from the run on top — the reason the two
+   * pictures are two pictures, which nothing on screen would otherwise state.
+   */
+  private syncRuns(task: AnalysisTask, runs: readonly TaskResult[], at: number): void {
+    if (runs.length < 2) {
+      this.runsEl.classList.add('hidden')
+      this.runsEl.replaceChildren()
+      return
+    }
+    const go = (to: number): void => {
+      this.chosenRun.set(task.id, Math.max(0, Math.min(runs.length - 1, to)))
+      // Forced, for {@link syncMaps}'s reason: `refresh` compares results by
+      // identity, and a step that landed on the same object would light the
+      // button and leave the figures alone.
+      this.drawn = null
+      this.refresh()
+    }
+    const older = button('older', () => go(at + 1), {
+      class: 'btn btn-quiet',
+      title: 'The run before this one, with the figures it produced',
+    })
+    older.disabled = at >= runs.length - 1
+    const newer = button('newer', () => go(at - 1), {
+      class: 'btn btn-quiet',
+      title: 'Back towards the most recent run',
+    })
+    newer.disabled = at <= 0
+    const latest = button('latest', () => go(0), {
+      class: 'btn btn-quiet',
+      title: 'The most recent run of this task',
+    })
+    latest.disabled = at === 0
+
+    this.runsEl.classList.remove('hidden')
+    this.runsEl.replaceChildren(
+      icon('rotate-cw', { size: 13, class: 'analysis-runs-mark' }),
+      older,
+      el('span', {
+        class: 'analysis-run-at',
+        text:
+          at === 0
+            ? `latest of ${runs.length} runs`
+            : `run ${runs.length - at} of ${runs.length} · ${runClock(runs[at])}`,
+        title: runDifference(runs[at], runs[0], task),
+      }),
+      newer,
+      latest,
     )
   }
 

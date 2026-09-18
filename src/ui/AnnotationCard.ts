@@ -1103,7 +1103,14 @@ export class AnnotationCard {
       // where the bars get their names.
       const key = featureLegend(entry)
       if (entry.kind === 'barchart') {
-        out.push(barScaleToggle(this.props.store, entry), key)
+        // …and the value axis, which is the one control §8.17 left it without.
+        // Both readings a barChart had were *relative* — every chart against the
+        // file's tallest bar, or each against its own — so two lanes of two
+        // files could not be compared by eye however carefully they were laid
+        // out: the quieter file drew the taller bars. The limits row is the same
+        // control a bigWig has and means the same thing, and it is above the
+        // per-chart switch because it overrides it.
+        out.push(this.limits(entry), barScaleToggle(this.props.store, entry), key)
       } else {
         // The key is built first and handed to the picker, for the reason the
         // pile's is: this card defers its own rebuild while a control holds

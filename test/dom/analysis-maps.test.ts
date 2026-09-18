@@ -132,6 +132,13 @@ function runnerWith(entries: Array<{ target: RunTarget; result: TaskResult }>): 
     resultOf: (taskId: string) =>
       taskId === TASK_ID ? (entries[0]?.result ?? null) : null,
     resultsFor: (taskId: string) => (taskId === TASK_ID ? entries : []),
+    // One run per map, which is what a finished batch leaves: the history the
+    // stepper walks is per map and this fixture has no second run of any of them.
+    runsOf: (taskId: string, map?: string) => {
+      if (taskId !== TASK_ID) return []
+      const found = map === undefined ? entries[0] : entries.find((entry) => entry.target.map === map)
+      return found === undefined ? [] : [found.result]
+    },
     stateOf: () => ({ status: 'idle' }),
     run: () => {},
     runAll: () => {},

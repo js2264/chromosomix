@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   AnalysisRunner,
+  RUN_HISTORY,
   sameRecipe,
   type RunnerHost,
   type RunTarget,
@@ -1122,6 +1123,104 @@ describe('the console record of a job', () => {
     await settle()
     expect(lines()[0].status).toBe('cancelled')
     expect(lines()[0].error).toBeUndefined()
+    runner.destroy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs kept, so a reader can go back to a figure Run used to destroy.
+ *
+ * A pileup over forty thousand anchors is a minute of range requests, and until
+ * this the second press of Run overwrote the first result in place: the picture
+ * was gone, the parameters that produced it were gone, and the only way back was
+ * to remember the settings and pay the minute again. What is checked here is the
+ * three things that make the history usable rather than merely present — it is
+ * per map, it is newest first, and it is bounded.
+ */
+describe('the history of a task', () => {
+  it('is empty before anything has run, and one deep after the first run', async () => {
+    const { runner, fake } = harness()
+    expect(runner.runsOf('coverage')).toEqual([])
+    runner.run(task('coverage'), {})
+    await settle()
+    fake.finish({ window: 1 })
+    await settle()
+    expect(runner.runsOf('coverage')).toHaveLength(1)
+    runner.destroy()
+  })
+
+  it('keeps the run a second press of Run replaces, newest first', async () => {
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), { window: 1 })
+    await settle()
+    fake.finish({ window: 1 })
+    await settle()
+    runner.run(task('coverage'), { window: 2 })
+    await settle()
+    fake.finish({ window: 2 })
+    await settle()
+
+    const runs = runner.runsOf('coverage')
+    expect(runs).toHaveLength(2)
+    expect(runs[0].provenance.params).toEqual({ window: 2 })
+    expect(runs[1].provenance.params).toEqual({ window: 1 })
+    // The newest is still what `resultOf` answers: the history is a view over
+    // the same results, not a second store that can drift from them.
+    expect(runner.resultOf('coverage')).toBe(runs[0])
+    runner.destroy()
+  })
+
+  it('is per map, so a deck does not mix one panel’s runs into another’s', async () => {
+    const onScreen = { block: null, map: 'lead' }
+    const { runner, fake } = harness(FRAMING, null, DECK, onScreen)
+    runner.run(task('coverage'), { window: 1 })
+    await settle()
+    fake.finish({ window: 1 })
+    await settle()
+    onScreen.map = 'p1'
+    runner.run(task('coverage'), { window: 9 })
+    await settle()
+    fake.finish({ window: 9 })
+    await settle()
+
+    expect(runner.runsOf('coverage', 'lead')).toHaveLength(1)
+    expect(runner.runsOf('coverage', 'p1')).toHaveLength(1)
+    expect(runner.runsOf('coverage', 'lead')[0].provenance.params).toEqual({ window: 1 })
+    expect(runner.runsOf('coverage', 'p1')[0].provenance.params).toEqual({ window: 9 })
+    runner.destroy()
+  })
+
+  it('drops the oldest past the cap rather than growing all afternoon', async () => {
+    const { runner, fake } = harness()
+    for (let press = 0; press < RUN_HISTORY + 4; press++) {
+      runner.run(task('coverage'), { window: press })
+      await settle()
+      fake.finish({ window: press })
+      await settle()
+    }
+    const runs = runner.runsOf('coverage')
+    expect(runs).toHaveLength(RUN_HISTORY + 1)
+    // Newest first, and the oldest surviving run is the one `RUN_HISTORY` back.
+    expect(runs[0].provenance.params).toEqual({ window: RUN_HISTORY + 3 })
+    expect(runs[runs.length - 1].provenance.params).toEqual({ window: 3 })
+    runner.destroy()
+  })
+
+  it('files a cancelled run nowhere, because it produced no result', async () => {
+    const { runner, fake } = harness()
+    runner.run(task('coverage'), { window: 1 })
+    await settle()
+    fake.finish({ window: 1 })
+    await settle()
+    runner.run(task('coverage'), { window: 2 })
+    await settle()
+    runner.cancel('coverage')
+    await settle()
+    const runs = runner.runsOf('coverage')
+    expect(runs).toHaveLength(1)
+    expect(runs[0].provenance.params).toEqual({ window: 1 })
     runner.destroy()
   })
 })

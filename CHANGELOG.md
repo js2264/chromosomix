@@ -133,7 +133,110 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   file, and draws a model the moment it arrives. The same bed3d leaves from the drawer's result.
   SPECS §25.1–25.3, §25.6–25.8.
 
+- **Track aggregates along a pileup's two edges (§18.8).** The APA takes any number of bigWig or
+  synthetic tracks and averages each over the **same windows** the pileup is taken from — the real
+  ones, never the shifted controls, which are the denominator of the picture rather than the picture
+  — drawing them as profiles above it and beside it. That is the figure most papers using an APA
+  actually print: the aggregate contact map with the aggregate signal on its edges, which turns
+  *these places touch* into *these places touch, and this is what is bound where they do*. Until now
+  a reader had to run the 1D metaplot separately over anchors they re-derived by hand, and the two
+  aggregates were over different windows unless every setting happened to agree. Each profile is
+  normalised on its own — two tracks in two units have no common axis, and what a marginal promises
+  is the *shape* along the window — and is resampled by the window's **own** grid edges, so a cell of
+  the profile is the cell of the pileup above it by construction rather than by a second resampling
+  that could land a domain boundary a column out. `MatrixOutput.margins` is the general mechanism;
+  the figure counts the bands in the height it asks for, or the top one would be clipped away.
+
+- **The loop spectrum: a called set's score against how far apart its anchors are (§18.8).** The plot
+  neither of the two figures beside it can give, because both average the distance away — a pileup is
+  a mean over windows at every separation the scan covered, and the score histogram counts scores with
+  no regard to where they came from. So a set whose 30 kb calls are loops and whose 2 Mb calls are
+  noise is a plausible dot under a clean unimodal peak. Against distance the two commonest ways a loop
+  set is wrong are visible at a glance: scores that **fall away with separation** are a detector
+  reporting the distance decay it failed to remove, and scores **piled against the minimum-distance
+  cutoff** are calls made on the diagonal's own shoulder. A cloud of points with a median line through
+  it in log-spaced bands — the points are where the calls are, spread included; the line is the trend,
+  in bands rather than a fit because nothing claims the relationship has a shape, and a median because
+  a tail is exactly what is being looked for. Returned by the chromosight detector, by the chromosight
+  pileup and by the ordinary APA over a loop set, where the ordinate is each anchor's own P2LL.
+
+- **An APA window is cut about the point of the feature the reader chooses (§18.8)** — *start*,
+  *centre* or *end*, strand-aware, the same three the 1D metaplot has offered since it existed and
+  spelled the same way. It took the midpoint and never said so, which on a gene set is a pileup at
+  whatever is half way along a gene rather than the figure anybody draws, which is the one at the
+  transcription start site — and a metaplot set to *start* and a pileup beside it were then aggregates
+  of two different anchor sets under one caption. The chosen point is also what a *generated* pair's
+  separation is measured between, or the range and the picture would disagree about which pairs they
+  are of, and the axis label says which point it is: *bins from the centre* over a pileup of four
+  thousand TSSs is a caption for a figure nobody drew.
+
+- **Previous runs are kept, and there is a way back to them (§18.4).** Pressing Run used to replace a
+  result in place, taking the figure, the numbers and the parameters that produced them with it — and
+  nothing about a finished result makes it cheap to produce again: a pileup over forty thousand
+  anchors is a minute of range requests. The runner keeps the last **eight** runs of each task **on
+  each map**, and the drawer offers `older` / `newer` / `latest` over them with each run's clock time
+  and, in its tooltip, *which parameter differs from the latest*. Everything downstream follows the
+  run on screen — the framing line, **recompute**, the CLI command, the TSV and the vector export are
+  all that run's, because a result is a record and stepping back to one means stepping back to all of
+  it. Not persisted, for the reason the framing is a snapshot: a history restored against a file that
+  has since been re-binned would be a list of figures that no longer describe anything.
+
+- **Zoom out, beside the region box (§5.4).** The scroll wheel on the map zooms the *picture* — the
+  same block, drawn larger or smaller — and past the edge of what was read it stops. This is the other
+  thing a genome browser means by zooming out: a wider **range**, re-read, with the region string
+  updated to say so. One press widens the window on screen three times about its own centre, so what
+  you were looking at becomes the middle third. Against an end of the sequence the window slides in
+  rather than asking for a negative coordinate; once a press would cover the whole sequence it *is*
+  the whole sequence, named as such; and on a declared circle it wraps past the origin rather than
+  clamping. It greys itself when there is nothing further out to go to, and it navigates through the
+  ordinary road, so three presses and three presses of the back button are the same journey in
+  reverse.
+
+- **A barChart lane takes a fixed value axis (§8.17).** Both readings the format had were *relative* —
+  every chart against the file's tallest bar, or each against its own — so a GTEx lane and a
+  knockdown's lane laid side by side are each scaled to their own maximum, and the one with the
+  quieter tail draws the taller bars and looks like more expression. The lane now carries the same
+  **limits** row a signal track has, meaning the same thing: `auto` is what it always did, and a typed
+  pair is an axis the bars are drawn against. It overrides the per-chart switch rather than composing
+  with it, reaches the collapsed glyph so a lane zoomed out does not quietly change what its heights
+  mean, clamps at both ends, and states both of its ends in the line under the lane's name — which is
+  what makes the comparison it exists for possible.
+
+- **A window may be typed straight across a circular sequence's origin (§8.15).**
+  `chrom:2,900,000-100,000` is now a legal region on a declared sequence: cooler refuses an end below
+  its start, correctly, because on a line it is a typing mistake — and on a circle it is the 200 kb
+  either side of the origin, which is where the most local contacts are and is the one window a linear
+  reading cannot ask for at all. The refusal is lifted for exactly the sequences the reader has
+  declared; every other range keeps cooler's own error, now with a sentence on it saying where the
+  tick is, because a reader who typed one usually meant it. A bad range also stays inline over an
+  intact region box rather than reaching the full-screen error page, which was a long way back from a
+  missing comma.
+
 ### Changed
+
+- **A sequence is declared circular in the Chromosomes table, in a column of its own (§8.15).** It was
+  a tickbox in the Map card, which was the right card for what the flag *changes* and the wrong place
+  for what it *is*: a declaration about the assembly — which of these sequences is a plasmid, which is
+  the mitochondrion — asked one sequence at a time, of whichever one happened to be on screen.
+  Declaring three of them meant opening three maps, and there was nowhere at all to *read* which had
+  been declared. The column sits directly after the name, beside the lengths; the filter row's own
+  tick narrows to the sequences that carry it, which is what makes the question answerable on a draft
+  assembly with three declared contigs in a hundred thousand; and the **Sequences card in the General
+  panel wears a `↻` beside each declared name**, so a reader at work is told the answer rather than
+  offered a second place to click. A map already on screen adopts the change without being rebuilt, so
+  the reader keeps the zoom they needed in order to be somewhere the question was worth asking from.
+
+- **The resolution picker is a slider over labelled stops, at the far end of the top bar (§5.5).** It
+  was a dropdown of raw bin counts — `1000`, `5000`, `50000` — sitting second in the trail, between
+  the file name and the table. Three things were wrong with that. It read as a step of the trail,
+  which a rung of a `zoomify` ladder is not: it is the same file drawn more or less finely, and the
+  crumbs after it stay where they were. It was in bins, and `50000` is a number a reader has to divide
+  before it means anything. And a dropdown hides the ladder, where a slider over stops shows how many
+  rungs there are, which one you are on and which way is finer. The stops now say `1 kb`, `50 kb`,
+  `1 Mb`; they are real radio inputs, so the arrow keys and a screen reader get the list; and the
+  slider commits on release rather than per rung, since dragging across five rungs must not re-open
+  the file five times. An mmetacool's entry picker is untouched and stays before the root, because
+  switching to a different nested metacool genuinely does invalidate every crumb after it.
 
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you
   is marked and spaced.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are

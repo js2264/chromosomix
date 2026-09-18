@@ -72,7 +72,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
-import { barChartCaption } from '../render/barchart'
+import { barChartCaption, barLimitsOf } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type { OverlayAxes } from '../render/overlays'
@@ -1335,6 +1335,9 @@ export class AnnotationLanes {
         // colouring on both surfaces, because a lane that read one way under the
         // map and another in the browser would be two pictures of one file.
         const features = featuresOf(entry.style, entry.kind)
+        // A value axis the reader fixed by hand, which a barChart lane reads and
+        // every other feature kind ignores (§8.17).
+        const barLimits = barLimitsOf(entry.style.limits)
         const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
         const paint = {
           colour: entry.style.colour,
@@ -1347,6 +1350,7 @@ export class AnnotationLanes {
           labelBand: scaleLength(LABEL_BAND),
           arrows: features.arrows,
           barScale: features.bars,
+          ...(barLimits === undefined ? {} : { barLimits }),
           colourOf: ink.colourOf,
         }
         drawFeatures(ctx, frame, set, layout, paint, entry.kind)
@@ -1367,7 +1371,10 @@ export class AnnotationLanes {
               : // The browser's caption, on the lane beside the map (§8.17).
                 set.bars === undefined
                 ? null
-                : { kind: 'text', text: barChartCaption(set.bars, fmt.num, features.bars) },
+                : {
+                    kind: 'text',
+                    text: barChartCaption(set.bars, fmt.num, features.bars, barLimits),
+                  },
             at: 'near',
           }
         }

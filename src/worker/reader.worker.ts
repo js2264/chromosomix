@@ -1477,7 +1477,12 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       // Resolved against the rung the caller named, because a range is a bin
       // extent and bin extents are per level. Absent, it is the open map's, as
       // every call but a zoom-driven one leaves it.
-      return parseMetacoolerRange(await mapFor(request.rung), request.range, request.naming)
+      return parseMetacoolerRange(
+        await mapFor(request.rung),
+        request.range,
+        request.naming,
+        request.circular,
+      )
     case 'matrix':
       return handleMatrix(request)
     case 'aggregate':

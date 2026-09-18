@@ -25,6 +25,7 @@
 import type {
   CurveOutput,
   CurveSeries,
+  MarginProfile,
   MatrixOutput,
   ProfileOutput,
   TableColumn,
@@ -1038,6 +1039,119 @@ function formatStat(value: number, digits?: number): string {
 }
 
 /**
+ * One marginal profile, filled under a line, against an edge of the picture.
+ *
+ * Its colour comes from {@link SERIES_COLOURS}, deliberately the same list a
+ * curve draws from: a track above a pileup and the same track as a curve two
+ * blocks down the drawer are one quantity, and one colour for it in both is the
+ * difference between a figure a reader can follow and a page of unrelated
+ * pictures.
+ *
+ * **Normalised on its own**, from its own finite extent, and floored at zero
+ * wherever it never goes negative. Two tracks in two units have no common axis,
+ * so a shared one would be a claim the numbers do not support; what a marginal
+ * promises is the *shape* along the window, which is what it is read for. A
+ * profile with no variation in it draws flat on its own baseline rather than
+ * filling the band, which is what "no variation" looks like.
+ *
+ * `along: 'x'` runs left to right above the picture; `along: 'y'` runs top to
+ * bottom beside it, growing rightwards — the two edges the anchors of an
+ * off-diagonal pileup sit on.
+ *
+ * `NaN` is a gap and is drawn as one: the fill and the line both break, so a
+ * window with no coverage reads as missing rather than as zero.
+ */
+function drawMargin(
+  ctx: CanvasRenderingContext2D,
+  profile: MarginProfile,
+  fallback: string,
+  theme: PlotTheme,
+  layout: { along: 'x' | 'y'; plot: Rect; band: number; gap: number },
+): void {
+  const { values } = profile
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  for (const value of values) {
+    if (!Number.isFinite(value)) continue
+    if (value < lo) lo = value
+    if (value > hi) hi = value
+  }
+  if (!(lo <= hi)) return
+  // A track that never goes below zero is read against zero, which is what a
+  // coverage profile means; a signed one keeps its own floor.
+  const floor = lo >= 0 ? 0 : lo
+  const span = hi - floor
+  const colour = profile.colour ?? fallback
+  const { along, plot, band, gap: pad } = layout
+
+  // Where a value of `fraction` lands, and where the baseline is: above the
+  // picture the band grows upwards, beside it the band grows rightwards.
+  const base = along === 'x' ? plot.y - pad : plot.x + plot.width + pad
+  const depth = (fraction: number): number =>
+    along === 'x' ? base - fraction * band : base + fraction * band
+  const across = (index: number): number =>
+    along === 'x'
+      ? plot.x + ((index + 0.5) / values.length) * plot.width
+      : plot.y + ((index + 0.5) / values.length) * plot.height
+
+  const point = (index: number, fraction: number): [number, number] =>
+    along === 'x' ? [across(index), depth(fraction)] : [depth(fraction), across(index)]
+
+  // Runs of finite values, each filled and stroked on its own so a gap stays a
+  // gap.
+  let run: Array<[number, number]> = []
+  const flush = (): void => {
+    if (run.length === 0) return
+    if (run.length > 1) {
+      ctx.fillStyle = colour
+      ctx.globalAlpha = BAND_ALPHA
+      ctx.beginPath()
+      const last = run[run.length - 1]
+      // The fill is the run plus the two feet that drop it onto the band's own
+      // baseline, so a profile is an area under a line rather than a ribbon.
+      if (along === 'x') ctx.moveTo(run[0][0], base)
+      else ctx.moveTo(base, run[0][1])
+      for (const [x, y] of run) ctx.lineTo(x, y)
+      if (along === 'x') ctx.lineTo(last[0], base)
+      else ctx.lineTo(base, last[1])
+      ctx.closePath()
+      ctx.fill()
+      ctx.globalAlpha = 1
+    }
+    ctx.strokeStyle = colour
+    ctx.lineWidth = SERIES_WIDTH
+    ctx.beginPath()
+    run.forEach(([x, y], at) => (at === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)))
+    ctx.stroke()
+    run = []
+  }
+  for (let index = 0; index < values.length; index++) {
+    const value = values[index]
+    if (!Number.isFinite(value)) {
+      flush()
+      continue
+    }
+    run.push(point(index, span > 0 ? (value - floor) / span : 0))
+  }
+  flush()
+
+  // The band's own baseline, so a flat profile is visibly flat rather than
+  // absent, and so the two bands read as two plots rather than as decoration.
+  ctx.strokeStyle = theme.grid
+  ctx.lineWidth = RULE_WIDTH
+  ctx.beginPath()
+  if (along === 'x') {
+    ctx.moveTo(plot.x, base)
+    ctx.lineTo(plot.x + plot.width, base)
+  } else {
+    ctx.moveTo(base, plot.y)
+    ctx.lineTo(base, plot.y + plot.height)
+  }
+  ctx.stroke()
+  ctx.lineWidth = FRAME_WIDTH
+}
+
+/**
  * Draw a matrix output into `box`, from its own origin.
  *
  * Cells are filled rectangles rather than a raster, and that is forced rather
@@ -1083,14 +1197,26 @@ export function drawMatrix(
   for (const label of output.yTicks) widestY = Math.max(widestY, ctx.measureText(label).width)
 
   const barWidth = Math.round(size * 0.9)
+  // The marginal profiles, and the two bands they need. A band is three lines
+  // tall, which is enough for a shape to be a shape and little enough that the
+  // picture — which is the subject — keeps its size. See {@link MatrixMargins}.
+  const topMargins = (output.margins?.top ?? []).filter((profile) => profile.values.length > 0)
+  const rightMargins = (output.margins?.right ?? []).filter((profile) => profile.values.length > 0)
+  const band = Math.round(size * 3)
+  const topBand = topMargins.length > 0 ? band + gap : 0
+  const rightBand = rightMargins.length > 0 ? band + gap : 0
+  // One key line for however many profiles there are, above everything: with
+  // two tracks over one pileup a reader has to be told which line is which, and
+  // there is no room for a legend beside a band three lines tall.
+  const keyLine = topMargins.length + rightMargins.length > 0 ? line : 0
   const left =
     Math.ceil(widestY) +
     (widestY > 0 ? TICK_LENGTH + gap : gap) +
     (output.yLabel === '' ? 0 : line)
-  const right = gap * 2 + barWidth + TICK_LENGTH + Math.ceil(widestBar) + gap
+  const right = gap * 2 + barWidth + TICK_LENGTH + Math.ceil(widestBar) + gap + rightBand
   // Half a line, so the top row's tick label and the bar's `vmax` — both centred
   // on the top edge — sit inside the box rather than half out of it.
-  const top = Math.ceil(line / 2)
+  const top = Math.ceil(line / 2) + keyLine + topBand
   const stats = output.stats ?? []
   const bottom =
     (output.xTicks.length > 0 ? TICK_LENGTH + gap + line : gap) +
@@ -1144,6 +1270,41 @@ export function drawMatrix(
   ctx.lineWidth = FRAME_WIDTH
   ctx.strokeRect(plot.x, plot.y, plot.width, plot.height)
 
+  // The marginals, against the two edges they run along, and the one line of key
+  // above both. Drawn before the ticks so the axis furniture is painted over
+  // them rather than under.
+  //
+  // **A colour per name, not per profile.** The commonest case is one track
+  // drawn on both edges — the same aggregate along the rows and along the
+  // columns — and colouring by position would give the one quantity two colours
+  // and the key two rows, which is a legend asserting there are two of them.
+  const named = [...topMargins, ...rightMargins]
+  const order = [...new Set(named.map((profile) => profile.name))]
+  const colourOf = (profile: MarginProfile): string =>
+    profile.colour ?? SERIES_COLOURS[Math.max(0, order.indexOf(profile.name)) % SERIES_COLOURS.length]
+  for (const profile of topMargins) {
+    drawMargin(ctx, profile, colourOf(profile), theme, { along: 'x', plot, band, gap })
+  }
+  for (const profile of rightMargins) {
+    drawMargin(ctx, profile, colourOf(profile), theme, { along: 'y', plot, band, gap })
+  }
+  if (keyLine > 0) {
+    ctx.font = theme.font
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    let keyAt = gap
+    for (const name of order) {
+      const profile = named.find((one) => one.name === name)
+      if (profile === undefined) continue
+      ctx.fillStyle = colourOf(profile)
+      ctx.fillRect(keyAt, Math.round(size * 0.55), Math.round(size * 0.7), RULE_WIDTH * 2.5)
+      keyAt += Math.round(size * 0.7) + gap * 0.6
+      ctx.fillStyle = theme.muted
+      ctx.fillText(name, keyAt, 0)
+      keyAt += ctx.measureText(name).width + gap * 1.6
+    }
+  }
+
   ctx.fillStyle = theme.muted
   ctx.strokeStyle = theme.muted
   ctx.lineWidth = RULE_WIDTH
@@ -1185,7 +1346,9 @@ export function drawMatrix(
 
   // The colour bar, `vmin` at the bottom, matching every other vertical bar in
   // this application and matplotlib's own.
-  const barX = box.width - right + gap
+  // Past the right-hand band, not over it: `right` reserves both, and the bar is
+  // the outermost of the two.
+  const barX = box.width - right + gap + rightBand
   for (let i = 0; i < COLORMAP_SIZE; i++) {
     const y0 = plot.y + plot.height * (1 - (i + 1) / COLORMAP_SIZE)
     const y1 = plot.y + plot.height * (1 - i / COLORMAP_SIZE)
@@ -1409,12 +1572,21 @@ function curveHeight(width: number): number {
 function matrixHeight(output: MatrixOutput, width: number): number {
   const size = fontSizeOf(scaleFont(PLOT_FONT))
   const line = Math.round(size * 1.35)
+  // The marginal bands are furniture too: a picture asked for the height it
+  // needs without counting them comes back with its top band clipped, which is
+  // the one part of the figure a reader cannot reconstruct from the rest.
+  const gap = Math.round(size * 0.45)
+  const band = Math.round(size * 3)
+  const tops = output.margins?.top?.length ?? 0
+  const sides = output.margins?.right?.length ?? 0
   const furniture =
     Math.round(size * 0.9) +
     (output.xTicks.length > 0 ? TICK_LENGTH + line : 0) +
     (output.xLabel === '' ? 0 : line) +
-    (output.stats?.length ?? 0) * line
-  const cells = Math.max(40, width - size * 4 - size * 6)
+    (output.stats?.length ?? 0) * line +
+    (tops > 0 ? band + gap : 0) +
+    (tops + sides > 0 ? line : 0)
+  const cells = Math.max(40, width - size * 4 - size * 6 - (sides > 0 ? band + gap : 0))
   const aspect = output.ncols > 0 ? output.nrows / output.ncols : 1
   return Math.round(furniture + Math.max(80, Math.min(420, cells * aspect)))
 }

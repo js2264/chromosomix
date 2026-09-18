@@ -57,7 +57,7 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import { barChartCaption } from '../render/barchart'
+import { barChartCaption, barLimitsOf } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type {
@@ -2232,6 +2232,9 @@ export class BrowserView {
       // settings card's key, so the picture, the legend and the lane's own name
       // cannot disagree about what a colour means.
       const features = featuresOf(entry.style, entry.kind)
+      // A value axis the reader fixed by hand, which a barChart lane reads and
+      // every other feature kind ignores (§8.17).
+      const barLimits = barLimitsOf(entry.style.limits)
       const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
       const paint = {
         colour: entry.style.colour,
@@ -2244,6 +2247,7 @@ export class BrowserView {
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,
         barScale: features.bars,
+        ...(barLimits === undefined ? {} : { barLimits }),
         colourOf: ink.colourOf,
       }
       drawFeatures(ctx, frame, set, layout, paint, entry.kind)
@@ -2268,7 +2272,10 @@ export class BrowserView {
               // without an axis cannot say for itself (§8.17).
               set.bars === undefined
               ? null
-              : { kind: 'text', text: barChartCaption(set.bars, fmt.num, features.bars) },
+              : {
+                  kind: 'text',
+                  text: barChartCaption(set.bars, fmt.num, features.bars, barLimits),
+                },
           at: 'near',
         }
       }

@@ -136,7 +136,7 @@ import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
-import { ContigsTable } from '../ui/ContigsTable'
+import { ContigsTable, type CircularColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
@@ -3024,10 +3024,15 @@ export class Session {
     // left behind would navigate a session that has since opened something else.
     this.sequenceListener?.()
     this.sequenceListener = selection.subscribe(() => this.sequencesChosen())
+    const circular = this.circularColumn()
     panel.setSequences(
       sequenceCard({
         contigs: assembly.contigs,
         selection,
+        // Read-only here: the declaring is done in the Chromosomes table, and
+        // what this list owes a reader at work is the answer rather than a
+        // second place to click (§8.15).
+        ...(circular === null ? {} : { circular }),
         // The same destination a click on a row of the Chromosomes table
         // reaches, because it is the same act: show me that chromosome.
         onGoTo: (name) => this.navigate({ uri: file.uri, view: 'region', region: name }),
@@ -4643,13 +4648,58 @@ export class Session {
   }
 
   /**
-   * The *this sequence is circular* control, for a view that is a window on one.
+   * The declaration as the Chromosomes table takes it: read, write, watch.
+   *
+   * `null` before there is a file, which is the one state the table cannot be
+   * mounted in anyway. The write goes through the session rather than straight
+   * to the store so that a map already on screen adopts it — see
+   * {@link adoptCircular} — and the watch is the store's own, because the same
+   * fact is drawn in three places and none of them is the authority.
+   */
+  private circularColumn(): CircularColumn | null {
+    const store = this.circularStore()
+    if (store === null) return null
+    return {
+      has: (name) => store.has(name),
+      set: (name, on) => {
+        store.set(name, on)
+        this.adoptCircular(name, on)
+      },
+      subscribe: (listener) => store.subscribe(listener),
+    }
+  }
+
+  /**
+   * Let a map already on screen adopt a declaration made somewhere else.
+   *
+   * **Not a remount.** The declaration changes how the block is *read* — wrapped
+   * or not, with a ceiling or a lap — so the ladder has to be built again; but a
+   * remount would rebuild the view from its named region and throw away the
+   * reader's zoom. The view re-arms its ladder against the block already on
+   * screen instead.
+   *
+   * Guarded on the mounted view being a window on **this** sequence, because the
+   * declaration is now made from a table that lists every one of them: telling a
+   * region view of chrIV that chrI is circular would re-arm it with a wrap it
+   * has no business having.
+   */
+  private adoptCircular(name: string, on: boolean): void {
+    const state = this.store.state
+    if (state === null || state.view !== 'region' || state.region === undefined) return
+    if (state.region2 !== undefined) return
+    const names = this.contigNames()
+    if (names === null || contigOf(state.region, names) !== name) return
+    this.current?.setCircular?.(on)
+  }
+
+  /**
+   * The circular declaration for a view that is a window on one sequence.
    *
    * `undefined` on every other view, and each exclusion is a question the
-   * tickbox could not answer honestly: a two-contig block has no diagonal to
-   * slide along, a whole-genome picture is a list of sequences of which some may
-   * be circular and some not, and a name that is not a sequence of this file is
-   * a genome or a typo (SPECS §8.15).
+   * declaration could not answer honestly here: a two-contig block has no
+   * diagonal to slide along, a whole-genome picture is a list of sequences of
+   * which some may be circular and some not, and a name that is not a sequence
+   * of this file is a genome or a typo (SPECS §8.15).
    */
   private circularPresentation(state: ViewState): CircularPresentation | undefined {
     if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
@@ -4670,13 +4720,7 @@ export class Session {
       on: store.has(name),
       onChange: (on) => {
         store.set(name, on)
-        // **Not a remount.** The declaration changes how the block is *read* —
-        // wrapped or not, with a ceiling or a lap — so the ladder has to be
-        // built again; but a remount would rebuild the view from its named
-        // region and throw away the reader's zoom, which is the one thing they
-        // had to do to get somewhere worth asking the question from. The view
-        // re-arms its ladder against the block already on screen instead.
-        this.current?.setCircular?.(on)
+        this.adoptCircular(name, on)
       },
     }
   }
@@ -6655,6 +6699,14 @@ export class Session {
       ...(assembly === null ? {} : { assembly }),
       ...(this.annotations === null ? {} : { store: this.annotations.store }),
       ...(toggle === undefined ? {} : { extraControl: toggle }),
+      // *This sequence is circular* (§8.15), as a column of ticks beside the
+      // lengths. On a cooler alone, which is what {@link circularColumn} says
+      // and why: a metacool's contig list is a hundred thousand pieces of four
+      // thousand assemblies, and a declaration is made about a molecule somebody
+      // knows the shape of.
+      ...(cooler && this.circularColumn() !== null
+        ? { circular: this.circularColumn() as CircularColumn }
+        : {}),
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.navigate({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),

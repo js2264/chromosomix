@@ -37,6 +37,20 @@ import { ANNOTATION_KINDS, isIntervalSet } from '../../annotations/types'
  */
 const INTERVAL_KINDS = ANNOTATION_KINDS.filter(isIntervalSet)
 
+/**
+ * Which point of a feature a window is cut about.
+ *
+ * The same three the 1D metaplot offers, spelled the same way, because they are
+ * the same question asked of a different picture — and a reader who has set a
+ * metaplot to *start* and a pileup to *centre* is comparing two aggregates that
+ * are not of the same places. Defaulted to the centre, which is what this task
+ * did before there was a choice.
+ */
+export function anchorAt(params: Params): 'start' | 'centre' | 'end' {
+  const value = params.at
+  return value === 'start' || value === 'end' ? value : 'centre'
+}
+
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
   const value = typeof params.window === 'number' ? params.window : 12
@@ -176,6 +190,28 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'features',
     label: 'Features',
     when: (params) => params.anchors !== 'pairs',
+  },
+  {
+    kind: 'choice',
+    key: 'at',
+    label: 'Anchor on',
+    default: 'centre',
+    hint:
+      'Which point of each feature the window is cut about. Strand is respected, so the start of ' +
+      'a minus-strand gene is its 5′ end — the same rule the 1D aggregate follows.',
+    // **The same control the 1D metaplot has, and it was missing here alone.** A
+    // pileup at a set of genes centred on their midpoints is a pileup at
+    // whatever is half way along a gene, which is a different question from the
+    // one anybody asks of a gene set: what the contact map looks like at the
+    // TSS. Hidden where there is no point to choose — a loaded loop set brings
+    // its own two anchors, and a domain pileup's window *is* the feature, start
+    // to end, with a flank each side.
+    when: (params) => params.anchors !== 'pairs' && !isDomainPileup(params),
+    options: [
+      { value: 'centre', label: 'Centre', hint: 'Half way along the feature.' },
+      { value: 'start', label: 'Start', hint: 'Its 5′ end — a TSS, on a gene model.' },
+      { value: 'end', label: 'End', hint: 'Its 3′ end.' },
+    ],
   },
   {
     kind: 'choice',
@@ -431,6 +467,28 @@ const PARAMS: readonly ParamSpec[] = [
     slider: true,
     when: (params) => params.subset === 'groups',
     section: 'Ranking',
+  },
+  {
+    kind: 'track',
+    key: 'tracks',
+    label: 'Track aggregates',
+    multiple: true,
+    hint:
+      'bigWigs, and anything this panel has already computed. Each is averaged over the same ' +
+      'windows the pileup is taken from and drawn along its two edges — the aggregate signal ' +
+      'above and beside the aggregate map.',
+    // **The figure this task could not draw.** A pileup says *these places
+    // touch*; the marginal profiles say *and this is what is bound where they
+    // do*, which is the figure behind most of the literature APA is used in.
+    // Until this a reader had to run the 1D metaplot separately, over anchors
+    // they had to re-derive, and lay the two pictures out by hand — and the two
+    // aggregates were over different windows unless they got every setting to
+    // agree.
+    //
+    // Off the chromosight path, which reads whole sequences and answers with its
+    // own three outputs rather than with this runner's pileups.
+    when: (params) => params.norm !== 'chromosight',
+    section: 'Tracks',
   },
   // **There is no Quality section, and its two settings are not defaults — they
   // are gone.** *Most anchors to use* capped the read at five thousand, and

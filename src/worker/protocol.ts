@@ -773,6 +773,19 @@ export type WorkerRequest =
        * whole reason this field exists; a session of one file never sets it.
        */
       naming?: NameContext
+      /**
+       * Sequences the reader has declared circular, in **this file's** spelling
+       * (§8.15).
+       *
+       * Sent because nothing in a `.cool` can say it and this worker therefore
+       * cannot know it: the declaration is the reader's, made in the Chromosomes
+       * table and kept per file on the main thread. It changes exactly one
+       * answer here — a range whose end is below its start is a typo on a line
+       * and the window across the origin on a circle — so it travels with the
+       * range rather than being mounted with the file, and a request that omits
+       * it gets cooler's own refusal.
+       */
+      circular?: readonly string[]
     }
   // `balance` multiplies each cell by its two bin weights, which is cooler's
   // own definition of a balanced matrix (§6.4). Off by default, matching

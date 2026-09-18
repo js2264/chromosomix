@@ -307,7 +307,16 @@ export function opacityField(store: AnnotationStore, entry: AnnotationEntry): HT
  */
 export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
   const { limits } = entry.style
-  const seed = entry.fileExtent ?? { min: 0, max: 1 }
+  // A barChart has no `fileExtent` — that is filled by the signal readers, and a
+  // chart is a feature set — but it does carry the one number that is the same
+  // fact: the tallest bar anywhere in the file, which is precisely the ceiling
+  // the lane was drawing against before the reader touched this. Seeding from it
+  // means leaving auto starts on the picture that was already on screen, rather
+  // than on `0 to 1` and a lane of full-height bars (§8.17).
+  const bars = setOf(entry)?.bars
+  const seed =
+    entry.fileExtent ??
+    (bars !== undefined && bars.max > 0 ? { min: 0, max: bars.max } : { min: 0, max: 1 })
   const min = el('input', {
     class: 'input input-num',
     type: 'number',
