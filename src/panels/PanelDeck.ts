@@ -2684,6 +2684,19 @@ export class PanelDeck {
     for (const slot of this.slots) slot.cell?.showModel?.(id)
   }
 
+  /**
+   * Take the structure cell out of the deck, where there is one.
+   *
+   * The counterpart of {@link showStructure}, for the eye on a Structures row:
+   * showing a model opens the cell, hiding it closes the cell again. The deck
+   * publishes as ever, so a deck left with nothing in it goes with it.
+   */
+  hideStructure(): void {
+    for (const slot of [...this.slots]) {
+      if (slot.ref.kind === 'structure') this.remove(slot)
+    }
+  }
+
   /** The structure cell's settings card, for the Aesthetics panel, or `null` where there is no cell. */
   structureSettings(): HTMLElement | null {
     for (const slot of this.slots) {

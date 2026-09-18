@@ -28,8 +28,8 @@ import { g3dSummary, writeBed3d } from '../annotations/g3d'
 import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
-import { chooseFiles } from './chooseFiles'
-import { button, el } from './dom'
+import { chooseFiles, filesFrom } from './chooseFiles'
+import { button, dragHasFiles, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
 import { cardTitle, iconButton } from './icons'
 
@@ -43,6 +43,14 @@ export interface StructureCardOptions {
    * nothing.
    */
   onShow?(entry: AnnotationEntry): void
+  /**
+   * Take the structure cell out of the deck: the eye's other half.
+   *
+   * A structure row has no lane and no track to hide, so `visible` meant
+   * nothing on one — the eye toggled a flag no picture read. What a reader
+   * means by the eye on a model is *stop showing it*, which is the cell.
+   */
+  onHide?(): void
   /** Which model the cell is showing, if any, so its row can say so. */
   shown?(): string | null
   /** A detached computed row's way back: the task, with its recipe, in the drawer. */
@@ -64,6 +72,7 @@ export class StructureCard {
       ...zone,
       this.list,
     )
+    this.cardDrops(this.el, zone[0])
     this.list.addEventListener('focusout', () => {
       setTimeout(() => {
         if (this.pending) this.refresh()
@@ -75,6 +84,39 @@ export class StructureCard {
 
   destroy(): void {
     this.unsubscribe()
+  }
+
+  /**
+   * A file dropped anywhere on this card, as the Tracks card takes one.
+   *
+   * The zone said "drop one anywhere on this card" and nothing listened, so a
+   * `.g3d` had to be aimed at the *Tracks* card to be loaded at all — the card
+   * whose list it then does not join, since the loader files it as a structure
+   * either way. The sentence was right and the card was missing the handler.
+   *
+   * A file of any other kind dropped here still goes where its bytes say
+   * (§8.3): the loader decides by content, so the row lands where it should
+   * and the aim is only about which card a reader thinks to drop it on.
+   */
+  private cardDrops(host: HTMLElement, zone: HTMLElement): void {
+    host.addEventListener('dragover', (event) => {
+      if (!dragHasFiles(event)) return
+      event.preventDefault()
+      zone.classList.add('over')
+    })
+    host.addEventListener('dragleave', (event) => {
+      // Only when the pointer has left the card, not when it crosses onto a row
+      // inside it: `dragleave` fires at every child boundary.
+      if (event.relatedTarget instanceof Node && host.contains(event.relatedTarget)) return
+      zone.classList.remove('over')
+    })
+    host.addEventListener('drop', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      zone.classList.remove('over')
+      const files = filesFrom(event.dataTransfer)
+      if (files.length > 0) this.options.loader.addFiles(files)
+    })
   }
 
   /** Every structure row, loaded or computed — the store's order. */
@@ -218,13 +260,24 @@ export class StructureCard {
   }
 
   private visibility(entry: AnnotationEntry): HTMLElement {
+    // **The eye is the deck's cell**, not the row's `visible` flag: a model is
+    // drawn in one place and one place only, so "hide" can only mean take it
+    // out of there. On the way in it opens the cell, as *show in the deck*
+    // does; on the way out it closes it, and a deck left holding nothing goes
+    // with it.
+    const shown = this.options.shown?.() === entry.id
+    const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
     const node = iconButton(
-      entry.visible ? 'eye' : 'eye-off',
-      entry.visible ? 'Hide, keeping the settings' : 'Show again',
-      () => this.options.store.update(entry.id, { visible: !entry.visible }),
-      { class: `btn btn-icon ann-eye${entry.visible ? '' : ' is-off'}`, size: 14 },
+      shown ? 'eye' : 'eye-off',
+      shown ? 'Hide the model: take the structure cell out of the deck' : 'Show the model in the deck, opening the cell if there is none',
+      () => {
+        if (shown) this.options.onHide?.()
+        else this.options.onShow?.(entry)
+      },
+      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
     )
-    node.setAttribute('aria-pressed', String(entry.visible))
+    node.setAttribute('aria-pressed', String(shown))
+    node.disabled = !ready || this.options.onShow === undefined
     return node
   }
 }

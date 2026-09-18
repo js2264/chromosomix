@@ -14,6 +14,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The Structures card takes a drop, its eye is the deck's cell (§25.3).** A `.g3d` can be dropped
+  anywhere on the *Structures* card, where before it had to be aimed at the *Tracks* card — the one
+  whose list it does not join, since the loader files it as a structure either way. The eye on a
+  row now shows the model in the deck and takes it out again, opening the cell where there is none
+  and closing it on the way out; it used to toggle a `visible` flag that nothing drawing a model
+  ever read. And the **place under the pointer is always named in the cell's corner**, including
+  when the pointer is on the model itself — one locus there, where a contact from a map is a pair
+  — independent of the tooltip switch, which is about the card that follows the pointer.
+- **The pointer aims, the fog follows the slab, the letters stay in the dialog (§25.4–25.5).** The
+  pointer now **snaps to the nearest bead within fourteen pixels** where an exact ray misses, and
+  the **cursor becomes a cross** whenever a bead is being aimed at, so landing on a bead is no
+  longer a test of aim. The **fog is tied to the depth slab**: it starts at the centre of rotation
+  and reaches the page exactly where the slab cuts, rather than being measured from the camera —
+  which on a thin slab left every one of the few beads it kept already half dissolved. And the
+  **depth slab now clips at all** — it was measured with the factor back to the file's own units
+  against coordinates already normalised, so on a model whose radius of gyration was a thousand
+  nanometres the planes stood a thousand times too far apart and no setting of the slider did
+  anything. And the cell's **single-letter keys are bound only while the model is enlarged**, where the model is the
+  whole window; beside a map they took `f` from the Files panel and `a` from the Annotations panel
+  for as long as a model was on screen. The palette lists them either way, and `e`, `o` and `m`
+  for the three modes are back among them.
 - **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
   with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
   where one mode used to count clicks and guess which was meant; the three are in the palette with

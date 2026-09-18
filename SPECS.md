@@ -6838,7 +6838,12 @@ chain, always, so a chain with a missing bead reads as one chain with a hole and
 on the hovered bead; a **dashed chord of ink** across a hovered contact and the loops as chords of
 ink, both drawn as cylinders rather than one-pixel lines so they are seen at the size of the tube
 they cross, at **half its radius**, since a line drawn *about* the model that is as thick as the
-model reads as a piece of it; a fog for depth, on by default, with a toggle and a depth; lit, always; **orthographic,
+model reads as a piece of it; **a fog tied to the slab**: it begins at the centre of rotation — the plane the slab is centred on,
+which ⌘-click moves — and reaches the page exactly where the slab cuts, so what the fog says is
+*how close this is to being cut away*, its slider weakening it by pushing that plane out (at 1 the
+far face of the slab is the page, at a half it is half way there). Measured from the camera alone,
+as it was, a thin slab left every one of the few beads it kept already half dissolved: the fog was
+describing the whole model while the slab was showing a slice of it. Lit, always; lit, always; **orthographic,
 always** — a model has no horizon, and perspective made the same distance read shorter at the back;
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
 the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
@@ -6857,15 +6862,20 @@ camera controls — and gives it back where it was. The card also carries **size
 (a track whose value at each bead sets its size, half to nearly twice the radius over the track's
 robust range — a second channel beside the colour), a **depth slab** (two clipping planes either side
 of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
-dense globule), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
+dense globule, and **the depth the fog is measured against** — see below; measured in the scene's
+own units, against the model's reach, rather than in the file's), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
 the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more than about forty
 ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
 at most eighty labels, and no zero tick: a chain's start is where its name is),
 **camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
 **frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
-`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
-enabled while a structure cell is on screen. The three modes are in the palette with no key of
-their own (§25.4). A phased file draws both homologues,
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` mark a bead,
+`o` mark a loop, `m` measure, `r` turntable — **bound only while the model is enlarged**, and listed
+in the palette either way. They are single letters and so are the app's own (`f` folds the Files
+panel, `a` the Annotations panel); a cell sits *beside* a map and its commands come first in the
+palette's list, so binding them there took those letters from the panels for as long as a model was
+on screen. In the dialog the model is the whole window and there is nothing else a letter could
+mean. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
@@ -6903,7 +6913,10 @@ map a link names is held as the cell it would have been, under its name.
 A bead under the pointer is a place on every map and every lane: the maps draw it as a **dashed line
 down and across the heatmap** on each axis the place is on (one line on a turned map, whose rows are
 separation), and as the tick at the edge of the stacks the lanes already give a pointer on another
-panel's track; the status bar names the bead. The other way, a place pointed at on a map or a lane
+panel's track; the status bar names the bead, **and so does the cell's own corner**, which is where
+a reader looking at the model is looking — one place for a bead, the pair and their distance for a
+contact named by a map. The corner is not gated with the *tooltip* switch: that switch is about the
+card that follows the pointer, not the line in the corner. The other way, a place pointed at on a map or a lane
 lights its beads and, for a contact, joins the two with a chord; the **ball** on a lit bead is
 translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
 of the model nearer the eye, as a ball at that place would.
@@ -6951,8 +6964,13 @@ untouched, and a map's hover is not relayed to the maps twice.
 
 What the maps are looking at reaches the cell as loci on every pan; beads outside the window are
 ghosted, hidden or shown, at the reader's choice, and the frame button puts the camera on what is
-lit. A click pins a bead; Shift-click puts a mark at its locus that every map and track then
-draws; a double-click on a bead takes the maps there; on the air, it frames. A picking mode armed
+lit. **The pointer aims for you.** A bead is a few pixels across and a fibre is thinner, so the ray is
+cast first — exact, and respecting what is in front of what — and where it hits nothing the nearest
+bead whose centre falls within fourteen pixels is taken instead, the nearest to the eye winning
+where several do, and never one the slab has cut away. **The cursor becomes a cross** whenever a
+bead is being aimed at, either way, so the slack is visible rather than a surprise when the click
+lands somewhere the hand did not press. A click pins a bead; Shift-click puts a mark at its locus
+that every map and track then draws; a double-click on a bead takes the maps there; on the air, it frames. A picking mode armed
 by the marks card or an analysis form takes a click on a bead as the place, on both axes at once,
 as a track's does.
 

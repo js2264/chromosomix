@@ -3804,6 +3804,10 @@ export class Session {
               this.ensureDeck().showStructure(entry.id)
               this.structureCard?.refresh()
             },
+            onHide: () => {
+              this.deck?.hideStructure()
+              this.structureCard?.refresh()
+            },
             shown: () => this.deck?.shownStructure() ?? null,
           }
         : {}),

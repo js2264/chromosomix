@@ -175,6 +175,15 @@ export const MANUAL_CHORDS = 'manual'
 export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 /** The most contact chords drawn from a pinned bead: the strongest, when more pass the threshold. */
 const MAX_CONTACT_CHORDS = 400
+
+/**
+ * How far from a bead's centre, in pixels, still counts as pointing at it.
+ *
+ * About a finger's worth of slack at the sizes a model is drawn at, and small
+ * enough that in a dense globule the bead it snaps to is one the reader can
+ * see they are near.
+ */
+const AIM_RADIUS = 14
 /** The ruler's steps, in base pairs: the first at least ten beads wide is the one used. */
 const RULER_STEPS = [1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7]
 
@@ -341,7 +350,7 @@ export class StructurePanel implements DeckCell {
     this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
     this.measureButton = iconButton(
       'ruler',
-      'Measure: drag from one bead to another for the distance between them, kept in the card',
+      'Measure: drag from one bead to another for the distance between them, kept in the card (m, enlarged)',
       () => this.setMode('measure'),
       { class: 'btn btn-icon structure-measure', size: 14 },
     )
@@ -359,13 +368,13 @@ export class StructurePanel implements DeckCell {
     // stopping.
     this.markButton = iconButton(
       'map-pin',
-      'Mark a bead: each click marks that bead’s locus, on every map and track',
+      'Mark a bead: each click marks that bead’s locus, on every map and track (e, enlarged)',
       () => this.setMode('mark'),
       { class: 'btn btn-icon structure-select', size: 14 },
     )
     this.loopButton = iconButton(
       'link-2',
-      'Mark a loop: click two beads for a loop between their loci, drawn as a chord',
+      'Mark a loop: click two beads for a loop between their loci, drawn as a chord (o, enlarged)',
       () => this.setMode('loop'),
       { class: 'btn btn-icon structure-loop', size: 14 },
     )
@@ -681,20 +690,26 @@ export class StructurePanel implements DeckCell {
     const style = this.style()
     const has = this.structure !== null
     const on = (flag: boolean): string => (flag ? 'on' : 'off')
+    // **A key only while the model is enlarged.** These are single letters, and
+    // the app's own are too: `f` folds the Files panel, `a` the Annotations
+    // panel. A structure cell sits *beside* a map, and its commands come first
+    // in the palette's list, so binding them there took those letters away from
+    // the panels for as long as a model was on screen. In the dialog the model
+    // is the whole window and there is nothing else the letter could mean, so
+    // that is where they are bound; the palette lists them either way, which is
+    // how they are reached from the cell.
+    const key = (binding: string): { keys?: string } => (this.expanded === null ? {} : { keys: binding })
     return [
-      { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', keys: 'f', enabled: has, run: () => this.frameLit() },
-      { id: 'structure-all', group: 'Structure', title: 'Show the whole model', keys: 'a', enabled: has, run: () => this.frameAll() },
-      { id: 'structure-beads', group: 'Structure', title: `Beads (${on(style.beads)})`, keys: '1', enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
-      { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, keys: '2', enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
-      { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, keys: '3', enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
-      { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, keys: 'l', enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      // No keys on the three modes: they are corner buttons and palette
-      // entries, and a bare letter that arms a mode is a letter a reader
-      // presses by accident while the pointer happens to be over the model.
-      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', enabled: has, run: () => this.setMode('mark') },
-      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', enabled: has, run: () => this.setMode('loop') },
-      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', enabled: has, run: () => this.setMode('measure') },
-      { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', keys: 'r', enabled: has, run: () => this.toggleTurning() },
+      { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key('f'), enabled: has, run: () => this.frameLit() },
+      { id: 'structure-all', group: 'Structure', title: 'Show the whole model', ...key('a'), enabled: has, run: () => this.frameAll() },
+      { id: 'structure-beads', group: 'Structure', title: `Beads (${on(style.beads)})`, ...key('1'), enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
+      { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, ...key('2'), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
+      { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, ...key('3'), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
+      { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, ...key('l'), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
+      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', ...key('e'), enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', ...key('o'), enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', ...key('m'), enabled: has, run: () => this.setMode('measure') },
+      { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', ...key('r'), enabled: has, run: () => this.toggleTurning() },
     ]
   }
 
@@ -1071,12 +1086,28 @@ export class StructurePanel implements DeckCell {
     this.readoutEl.classList.remove('hidden')
   }
 
+  /**
+   * The bead the pointer is aiming at, with the slack a hand needs.
+   *
+   * A bead is a few pixels across and a tube is thinner than that, so an exact
+   * hit is a test of the reader's aim rather than of what they meant. Within
+   * {@link AIM_RADIUS} pixels the nearest bead is taken as the one aimed at,
+   * and the cursor says so by becoming a cross — so the slack is visible
+   * rather than a surprise.
+   */
+  private aimAt(x: number, y: number): number {
+    const bead = this.renderer?.pickNear(x, y, AIM_RADIUS) ?? -1
+    this.renderer?.el.classList.toggle('is-aimed', bead >= 0)
+    return bead
+  }
+
   /** The bead under this cell's own pointer, published for the maps and said in the bar. */
   private hoverOwn(bead: number): void {
     const structure = this.structure
     if (structure === null) return
     if (bead < 0) {
       this.tipEl.classList.add('hidden')
+      this.renderer?.el.classList.remove('is-aimed')
       if (this.hovered.length > 0 || this.chord !== null) {
         this.hovered = []
         this.chord = null
@@ -1103,7 +1134,13 @@ export class StructurePanel implements DeckCell {
         (structure.haplotypes.length > 1 ? `   ${at.haplotype}` : '') +
         `   bead ${fmt.int(along + 1)} of ${fmt.int(chain?.beads.length ?? 0)}`,
     )
-    this.readoutEl.classList.add('hidden')
+    // …and in the cell's own corner, which is where a reader looking at the
+    // model is looking. It used to appear only for a place named by another
+    // panel, so pointing at the model itself — the one gesture that is
+    // certainly about the model — was the case that said nothing. One place,
+    // never a pair: a bead is one locus. Not the tooltip and not gated with
+    // it; that switch is about the card that follows the pointer (§7).
+    this.paintReadout([{ contig: at.contig, bp: (at.start + at.end) / 2 }])
     this.schedule()
   }
 
@@ -1133,7 +1170,7 @@ export class StructurePanel implements DeckCell {
       // A press that lands on nothing still turns the model, because a mode is
       // not a reason to lose the camera.
       if (this.mode === 'measure' && event.button === 0 && !event.shiftKey) {
-        const bead = this.renderer?.pick(at.x, at.y) ?? -1
+        const bead = this.aimAt(at.x, at.y)
         if (bead >= 0) {
           this.measureFirst = bead
           this.pinned = bead
@@ -1170,7 +1207,7 @@ export class StructurePanel implements DeckCell {
       this.pointerAt = at
       if (drag === null) {
         this.overCanvas = true
-        this.hoverOwn(this.renderer?.pick(at.x, at.y) ?? -1)
+        this.hoverOwn(this.aimAt(at.x, at.y))
         return
       }
       const dx = at.x - drag.x
@@ -1179,7 +1216,7 @@ export class StructurePanel implements DeckCell {
       if (drag.mode === 'measure') {
         // The bead under the pointer, so the line follows the hand and the
         // reader can see what they are about to measure to.
-        this.hoverOwn(this.renderer?.pick(at.x, at.y) ?? -1)
+        this.hoverOwn(this.aimAt(at.x, at.y))
         drag.x = at.x
         drag.y = at.y
         return
@@ -1205,7 +1242,7 @@ export class StructurePanel implements DeckCell {
       // go where it began, or on nothing, it leaves the first end held so a
       // second click can still close it. Two gestures, one state.
       if (drag.mode === 'measure') {
-        const to = this.renderer?.pick(local(event).x, local(event).y) ?? -1
+        const to = this.aimAt(local(event).x, local(event).y)
         if (to >= 0 && to !== this.measureFirst) this.closeMeasure(to)
         return
       }
@@ -1216,7 +1253,7 @@ export class StructurePanel implements DeckCell {
       // A press that did not travel is a click: pin the bead, or with Shift
       // put a mark at its locus that every map and track then draws (§8.1).
       const at = local(event)
-      const bead = this.renderer?.pick(at.x, at.y) ?? -1
+      const bead = this.aimAt(at.x, at.y)
       if (bead < 0) {
         if (this.mode === 'loop') this.loopClick(-1)
         else if (this.mode === 'measure') this.cancelMeasure()
@@ -1284,6 +1321,7 @@ export class StructurePanel implements DeckCell {
       this.overCanvas = false
       this.pointerAt = null
       this.tipEl.classList.add('hidden')
+      canvas.classList.remove('is-aimed')
       if (this.drag === null) this.hoverOwn(-1)
     })
     canvas.addEventListener('contextmenu', (event) => event.preventDefault())
@@ -1326,7 +1364,7 @@ export class StructurePanel implements DeckCell {
     // air, it frames what they are looking at.
     canvas.addEventListener('dblclick', (event) => {
       const at = local(event)
-      const bead = this.renderer?.pick(at.x, at.y) ?? -1
+      const bead = this.aimAt(at.x, at.y)
       const model = this.structure
       if (bead >= 0 && model !== null) {
         const locus = lociOf(model, bead)

@@ -54,7 +54,7 @@ function seed(store: AnnotationStore, id: string, source: Parameters<AnnotationS
   })
 }
 
-function make(options: { onShow?: (entry: AnnotationEntry) => void; shown?: () => string | null; onRecompute?: (entry: AnnotationEntry) => void } = {}) {
+function make(options: { onShow?: (entry: AnnotationEntry) => void; onHide?: () => void; shown?: () => string | null; onRecompute?: (entry: AnnotationEntry) => void } = {}) {
   const store = new AnnotationStore(`structures-${Math.random()}.cool`, { persist: false })
   const added: string[] = []
   const loader = {
@@ -122,7 +122,7 @@ describe('the Structures card', () => {
     expect(recomputed).toEqual(['analysis:reconstruct3d:reconstructed-model'])
   })
 
-  it('renames, hides and removes through the store, like every other row', () => {
+  it('renames and removes through the store, like every other row', () => {
     const { store, card } = make()
     seed(store, 'model.g3d', { kind: 'detached', name: 'model.g3d' })
     const name = card.el.querySelector<HTMLInputElement>('.ann-name')
@@ -130,11 +130,42 @@ describe('the Structures card', () => {
     name.value = 'my model'
     name.dispatchEvent(new Event('change'))
     expect(store.byId('model.g3d')?.label).toBe('my model')
-    card.el.querySelector<HTMLButtonElement>('.ann-eye')?.click()
-    expect(store.byId('model.g3d')?.visible).toBe(false)
     card.el.querySelector<HTMLButtonElement>('.btn-close')?.click()
     expect(store.byId('model.g3d')).toBeUndefined()
     expect(all(card.el, '.ann-row')).toHaveLength(0)
+  })
+
+  it('shows and hides the model in the deck from the eye, not a flag nothing reads', () => {
+    let shown: string | null = null
+    const { store, card } = make({
+      onShow: (entry) => { shown = entry.id },
+      onHide: () => { shown = null },
+      shown: () => shown,
+    })
+    seed(store, 'model.g3d', COMPUTED)
+    const eye = (): HTMLButtonElement | null => card.el.querySelector<HTMLButtonElement>('.ann-eye')
+    expect(eye()?.getAttribute('aria-pressed')).toBe('false')
+    eye()?.click()
+    card.refresh()
+    expect(shown).toBe('model.g3d')
+    expect(eye()?.getAttribute('aria-pressed')).toBe('true')
+    // …and the same button takes it out of the deck again.
+    eye()?.click()
+    card.refresh()
+    expect(shown).toBeNull()
+    expect(eye()?.getAttribute('aria-pressed')).toBe('false')
+    // The row's own `visible` flag is untouched: a model has no lane to hide.
+    expect(store.byId('model.g3d')?.visible).toBe(true)
+  })
+
+  it('takes a file dropped anywhere on the card, not only on the Tracks card', () => {
+    const { card, added } = make()
+    const file = new File(['chr1\t0\t5000\t1\t2\t3\n'], 'model.g3d', { type: 'text/plain' })
+    const transfer = { files: [file], items: [{ kind: 'file', type: 'text/plain' }], types: ['Files'] }
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+    card.el.dispatchEvent(drop)
+    expect(added).toEqual(['model.g3d'])
   })
 
   it('loads by URL through the loader', () => {

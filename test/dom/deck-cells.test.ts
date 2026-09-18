@@ -798,7 +798,28 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     const ids = deck.cellCommands().map((c) => c.id)
     expect(ids).toEqual(expect.arrayContaining(['structure-frame', 'structure-all', 'structure-measure', 'structure-turn', 'structure-tube']))
     const turn = deck.cellCommands().find((c) => c.id === 'structure-turn')
-    expect(turn?.keys).toBe('r')
+    expect(turn?.keys).toBeUndefined()
+  })
+
+  it('binds its letters only while the model is enlarged, so the panels keep theirs', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const keyed = (): Array<string | undefined> => deck.cellCommands().map((c) => c.keys)
+    // Beside a map, the cell's commands are in the palette and bind nothing:
+    // `f` is the Files panel's and `a` the Annotations panel's.
+    expect(keyed().every((k) => k === undefined)).toBe(true)
+    expect(deck.cellCommands().length).toBeGreaterThan(6)
+    // Enlarged, the model is the window and the letters are its own.
+    structureCells(deck)[0]?.querySelector<HTMLButtonElement>('.structure-expand')?.click()
+    const bound = new Map(deck.cellCommands().map((c) => [c.id, c.keys]))
+    expect(bound.get('structure-frame')).toBe('f')
+    expect(bound.get('structure-all')).toBe('a')
+    expect(bound.get('structure-select')).toBe('e')
+    expect(bound.get('structure-loop')).toBe('o')
+    expect(bound.get('structure-measure')).toBe('m')
+    expect(bound.get('structure-turn')).toBe('r')
+    // …and given back on the way out.
+    document.querySelector<HTMLButtonElement>('.modal .modal-close, .modal button[title*="lose" i]')?.click()
   })
 
   it('hides and shows the dialog\'s settings from the corner', () => {

@@ -8990,6 +8990,13 @@ span.deck-name {
   z-index: 2;
 }
 
+/* Pointing at a bead — exactly, or within the aim radius — is a cross, so the
+   slack the aim is given is something the reader can see rather than a
+   surprise when the click lands somewhere they did not press. */
+.structure-wrap canvas.is-aimed {
+  cursor: crosshair;
+}
+
 /* The card under the pointer on a model: the same card the map puts up, in the
    cell's own box. Placed by a transform from the pointer, like the map's. */
 .structure-tip {

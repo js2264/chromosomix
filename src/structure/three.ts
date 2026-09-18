@@ -69,6 +69,7 @@ import { basis, eyeOf, halfHeight, project } from './camera'
 import { hexOf, parseColour } from './colour'
 import { MARKED_BEAD } from './painter'
 import type { StructureView } from './painter'
+import { centroidOf } from './scene'
 import type { Structure } from './scene'
 import type { BeadColours } from './colour'
 
@@ -122,6 +123,8 @@ export class StructureRenderer {
   private readonly overlayRoot = new Object3D()
   private overlayFrom: Structure | null = null
   private overlayKey = ''
+  /** The model's reach in scene units, measured once per model. */
+  private reach: { of: Structure; radius: number } | null = null
   /** The two clipping planes of the depth slab, kept and re-aimed each frame. */
   private readonly slabPlanes = [new Plane(), new Plane()]
   private chordsFrom: ReadonlyArray<readonly [number, number]> | null = null
@@ -283,10 +286,12 @@ export class StructureRenderer {
     // either side of the centre of rotation, at a fraction of the model's
     // reach — everything nearer than the front one or farther than the back
     // one is cut away, which is how the inside of a globule is looked at.
+    // Measured whether or not the slab clips, because it is also the depth the
+    // fog is read against — see below.
+    const half = this.slabHalf(view)
     if (view.style.slab < 1) {
       const { forward } = basis(view.camera)
       const [tx, ty, tz] = view.camera.target
-      const half = Math.max(1e-3, view.structure.scale * 2 * view.style.slab)
       const f = new Vector3(forward[0], forward[1], forward[2])
       const t = new Vector3(tx, ty, tz)
       // Keep what is on the far side of the front plane (normal along
@@ -297,17 +302,103 @@ export class StructureRenderer {
     } else if (renderer.clippingPlanes.length > 0) {
       renderer.clippingPlanes = []
     }
-    // The depth cue: the far side of the model fades towards the page. Set from
-    // the camera's distance so it reads the same at every zoom.
-    // …and from the style's depth — space + scroll in the cell — so a reader
-    // can bring the fog forward to read the front of a dense model, or push
-    // it away. 0.6 is the depth the cell always had; 0 is none.
+    // **The depth cue and the slab are one instrument.** The fog starts at the
+    // centre of rotation — the plane the slab is centred on, which ⌘-click
+    // moves — and reaches the page exactly where the slab cuts, so what the
+    // fog is saying is *how close this is to being cut away*. It used to be
+    // set from the camera distance alone, which on a thin slab left every one
+    // of the few beads it kept already half dissolved: the fog was measuring
+    // the whole model while the slab was showing a slice of it.
+    //
+    // The slider weakens it by pushing that plane out: at 1 the far side of
+    // the slab is the page, at a half it is half way there.
     const d = view.camera.distance
     const f = view.style.fog
-    const near = d * (1.7 - 1.33 * f)
-    this.scene.fog = view.style.fogOn && f > 0 ? new Fog(background, near, near + d * (2.9 - 2 * f)) : null
+    this.scene.fog = view.style.fogOn && f > 0 ? new Fog(background, d, d + half / f) : null
     this.placeCentre(view)
     renderer.render(this.scene, camera)
+  }
+
+  /**
+   * Half the slab's thickness, in scene units: how far either side of the
+   * centre of rotation the model is kept. The model's whole reach at slab 1,
+   * so the slider runs from a sheet to everything.
+   *
+   * **In the scene's units, not the file's.** It used to be
+   * `structure.scale * 2 * slab`, and `scale` is the factor back to the
+   * file's own units — nanometres, or whatever the solver worked in — while
+   * the coordinates it is stored beside are the *normalised* ones. On a model
+   * whose radius of gyration was a thousand nanometres the planes were put a
+   * thousand times too far apart, which is why the slab appeared to do
+   * nothing at any setting.
+   */
+  private slabHalf(view: StructureView): number {
+    return Math.max(1e-3, this.reachOf(view.structure) * view.style.slab)
+  }
+
+  /**
+   * How far the farthest present bead is from the model's centre, in scene
+   * units. Measured once per model: it is a fact about the coordinates, and
+   * they do not change under the camera.
+   */
+  private reachOf(structure: Structure): number {
+    if (this.reach !== null && this.reach.of === structure) return this.reach.radius
+    const all = centroidOf(structure, { [Symbol.iterator]: () => counting(structure.set.length) })
+    const radius = all === null ? 1 : Math.max(1e-3, all.radius)
+    this.reach = { of: structure, radius }
+    return radius
+  }
+
+  /**
+   * The bead under the pointer, or the nearest one within `radius` pixels.
+   *
+   * A bead is a few pixels across and a fibre is thinner; asking a reader to
+   * land a pointer exactly on one is asking them to aim at the picture rather
+   * than at the model. So the ray is cast first — which is exact, and respects
+   * what is in front of what — and only where it hits nothing does the search
+   * widen to the nearest bead whose centre falls within the radius, the
+   * nearest to the eye winning where several do.
+   *
+   * Screen space and one pass over the beads, rather than a fan of rays: a ray
+   * against an instanced mesh tests every instance, so eight of them is eight
+   * times the work for a worse answer.
+   */
+  pickNear(x: number, y: number, radius: number): number {
+    const exact = this.pick(x, y)
+    if (exact >= 0) return exact
+    const view = this.view
+    if (view === null || radius <= 0) return -1
+    const camera = this.applyCamera(view)
+    const { structure } = view
+    const point = new Vector3()
+    // The planes are the ones the last frame was clipped by, which is what the
+    // reader is looking at.
+    const clipped = view.style.slab < 1
+    let best = -1
+    let bestAway = Infinity
+    let bestDepth = Infinity
+    for (let i = 0; i < structure.set.length; i++) {
+      if (this.shown[i] !== 1) continue
+      point.set(structure.x[i], structure.y[i], structure.z[i])
+      // What the slab has cut away cannot be aimed at: it is not on screen.
+      if (clipped && (this.slabPlanes[0].distanceToPoint(point) < 0 || this.slabPlanes[1].distanceToPoint(point) < 0)) {
+        continue
+      }
+      point.project(camera)
+      if (point.z < -1 || point.z > 1) continue
+      const px = (point.x * 0.5 + 0.5) * this.width
+      const py = (0.5 - point.y * 0.5) * this.height
+      const away = Math.hypot(px - x, py - y)
+      if (away > radius) continue
+      // Nearest to the eye first, and only then nearest to the pointer: a bead
+      // behind another is not the one being aimed at.
+      if (point.z < bestDepth - 1e-6 || (point.z < bestDepth + 1e-6 && away < bestAway)) {
+        best = i
+        bestAway = away
+        bestDepth = point.z
+      }
+    }
+    return best
   }
 
   /**
@@ -1027,6 +1118,11 @@ const NO_CONTACTS: ReadonlyArray<{ bead: number; weight: number; colour: string 
 const INK_SHARE = 0.5
 
 /** A flat material of the page's ink, for every line the model carries. */
+/** `0, 1, … n − 1`, for a helper that wants an iterable of every bead. */
+function* counting(n: number): Generator<number, void, void> {
+  for (let i = 0; i < n; i++) yield i
+}
+
 function inkMaterial(ink: string, opacity: number): MeshBasicMaterial {
   return opacity >= 1
     ? new MeshBasicMaterial({ color: hexOf(ink) })
