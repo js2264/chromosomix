@@ -16,7 +16,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
   with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
-  where one mode used to count clicks and guess which was meant. A marked place is drawn on the
+  where one mode used to count clicks and guess which was meant; the three are in the palette with
+  no key of their own, a bare letter that arms a mode being one pressed by accident. A marked place is drawn on the
   model as **the bead again at twice the radius in the mark's own colour**; a measurement is a
   **drag** from one bead to another, the line following the pointer, the model holding still while
   it does. A **card under the pointer** names the bead's sequence and coordinate, under the map's
@@ -36,8 +37,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   of the Aesthetics panel right after the *Map* card, built from the same fields, borrowed by the enlarge
   dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
   **depth slab** into a dense model, a **genomic ruler** along each chain, camera presets, a
-  turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `e`,
-  `m`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
+  turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
   threshold on the map's colour scale, as thick as the contact and in the map's colours. **Compare with** superposes another
   structure row by a similarity fit over the beads the two share, reports the RMSD, and *colour by
   displacement* shows where they differ. **Measure mode** turns two clicks into a distance kept on

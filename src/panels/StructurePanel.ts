@@ -341,7 +341,7 @@ export class StructurePanel implements DeckCell {
     this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
     this.measureButton = iconButton(
       'ruler',
-      'Measure (m): drag from one bead to another for the distance between them, kept in the card',
+      'Measure: drag from one bead to another for the distance between them, kept in the card',
       () => this.setMode('measure'),
       { class: 'btn btn-icon structure-measure', size: 14 },
     )
@@ -359,13 +359,13 @@ export class StructurePanel implements DeckCell {
     // stopping.
     this.markButton = iconButton(
       'map-pin',
-      'Mark a bead (e): each click marks that bead’s locus, on every map and track',
+      'Mark a bead: each click marks that bead’s locus, on every map and track',
       () => this.setMode('mark'),
       { class: 'btn btn-icon structure-select', size: 14 },
     )
     this.loopButton = iconButton(
       'link-2',
-      'Mark a loop (o): click two beads for a loop between their loci, drawn as a chord',
+      'Mark a loop: click two beads for a loop between their loci, drawn as a chord',
       () => this.setMode('loop'),
       { class: 'btn btn-icon structure-loop', size: 14 },
     )
@@ -686,9 +686,12 @@ export class StructurePanel implements DeckCell {
       { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, keys: '2', enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
       { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, keys: '3', enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
       { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, keys: 'l', enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', keys: 'e', enabled: has, run: () => this.setMode('mark') },
-      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', keys: 'o', enabled: has, run: () => this.setMode('loop') },
-      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', keys: 'm', enabled: has, run: () => this.setMode('measure') },
+      // No keys on the three modes: they are corner buttons and palette
+      // entries, and a bare letter that arms a mode is a letter a reader
+      // presses by accident while the pointer happens to be over the model.
+      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', enabled: has, run: () => this.setMode('measure') },
       { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', keys: 'r', enabled: has, run: () => this.toggleTurning() },
     ]
   }

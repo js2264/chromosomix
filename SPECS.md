@@ -6861,8 +6861,9 @@ ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `
 at most eighty labels, and no zero tick: a chain's start is where its name is),
 **camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
 **frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
-`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` select, `m`
-measure, `r` turntable — enabled while a structure cell is on screen. A phased file draws both homologues,
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
+enabled while a structure cell is on screen. The three modes are in the palette with no key of
+their own (§25.4). A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
@@ -6905,8 +6906,9 @@ lights its beads and, for a contact, joins the two with a chord; the **ball** on
 translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
 of the model nearer the eye, as a ball at that place would.
 
-**Three modes, a button each**, in the cell's corner and in the palette with a key: *mark a bead*
-(`e`), *mark a loop* (`o`) and *measure* (`m`). One is on at a time — arming the next disarms the
+**Three modes, a button each**, in the cell's corner and in the palette — and **no key**, because a
+bare letter that arms a mode is a letter pressed by accident while the pointer happens to be over
+the model. One is on at a time — arming the next disarms the
 one that was on, pressing the one that is on turns it off — and the badge in the top-left corner
 says which. They are three buttons and not one mode that counts clicks because marking a place and
 marking a loop are two things a reader means, and a mode whose first click might be either is a
