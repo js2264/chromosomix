@@ -1312,15 +1312,21 @@ describe('showing a window that came from outside', () => {
     expect(shown.cols[0]).toBeGreaterThanOrEqual(0)
   })
 
-  it('leaves a frozen view alone, as every other gesture does', () => {
-    // Held while a finer block is being read: the picture must be exactly where
-    // the reader left it when the swap happens.
+  it('moves a view that has a read out for it, like any other', () => {
+    // This used to assert the opposite: a view being read for refused an
+    // incoming window along with every other gesture, so that the block landed
+    // against exactly the window it was asked for. `MatrixPanel.regrid` carries
+    // the window in base pairs and places a block correctly against one that has
+    // since moved, so the refusal was buying a guarantee the swap seam already
+    // gave — and paying for it with a map that stopped answering. A deck whose
+    // lead panel moves must take the rest with it whatever any of them is
+    // reading.
     const heatmap = view(400, 100)
     const before = heatmap.cellWindow()
-    heatmap.setFrozen(true)
+    heatmap.setStreaming(true)
     heatmap.showCellSpan([20, 40])
-    expect(heatmap.cellWindow()).toEqual(before)
-    heatmap.setFrozen(false)
+    expect(heatmap.cellWindow()).not.toEqual(before)
+    heatmap.setStreaming(false)
   })
 
   it('refuses a span of nothing rather than dividing by it', () => {

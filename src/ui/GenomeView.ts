@@ -136,6 +136,7 @@ export class GenomeView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      openBinsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
@@ -260,7 +261,13 @@ export class GenomeView {
       const [lo, hi] = this.extent
       const result: MatrixResult =
         this.level === 'bin'
-          ? await this.props.client.request<'matrix'>({ kind: 'matrix', rows: [lo, hi] })
+          ? await this.props.client.request<'matrix'>({
+              kind: 'matrix',
+              rows: [lo, hi],
+              // The picture's own size, not the raster's ceiling. The panel is
+              // built before this read is made, so there is a plot to measure.
+              cellCap: this.panel.cellCap,
+            })
           : await this.props.client.request<'aggregate'>({
               kind: 'aggregate',
               rows: [lo, hi],
@@ -300,15 +307,20 @@ export class GenomeView {
     this.ladder?.destroy()
     this.ladder = null
     if (this.level !== 'bin') return
+    // The coarse end of the resolution bar's scale: this view's whole world in
+    // one picture (`MatrixPanel.setResolutionDomain`). The same ceiling the
+    // ladder is given below, said once more to the thing that draws the scale.
+    this.panel.setResolutionDomain(ceiling[1] - ceiling[0])
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      read: (rows, cols, rung, cellCap) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          cellCap,
           rows,
           cols,
         })

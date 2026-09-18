@@ -146,6 +146,7 @@ import {
 } from '../render/heatmap'
 import { rasterStride } from '../render/heatmap'
 import {
+  REFINE_REACH,
   refineEnabled,
   setRefineEnabled,
   subscribeRefine,
@@ -180,6 +181,7 @@ import {
   colourInput,
 } from './LaneControls'
 import { LaneEditor } from './LaneEditor'
+import { ResolutionBar } from './ResolutionBar'
 import {
   fieldPair,
   heightThatFills,
@@ -280,12 +282,11 @@ const TURN_ICONS = { off: 'triangle', on: 'square' } as const
 const REFINE_ICON = 'bars-decreasing'
 
 const REFINE_HINT =
-  'Adaptive resolution. Off, the block is read once and zooming magnifies it — which is what ' +
-  'every map here has always done. On, zooming past what that block can show reads the same ' +
-  'window again at a finer grid, down to the file’s own bins: the map holds still while it does, ' +
-  'with a spinner in the corner, and Escape calls it off. Panning to the edge of what has been ' +
-  'read fetches the next stretch at the same resolution. Nothing is tiled and nothing is ' +
-  'stitched — every picture is one whole block.'
+  'Adaptive resolution. On, the picture follows the zoom: going in past what the block in hand ' +
+  'can show reads the same window again at a finer grid, down to the file’s own bins, and going ' +
+  'back out returns to a coarser one. Nothing is held up while it happens — the map stays live ' +
+  'and simply softens until the finer grid lands. Off pins the grid where it is, which is what a ' +
+  'figure wants. Nothing is tiled and nothing is stitched: every picture is one whole block.'
 
 const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
@@ -401,6 +402,24 @@ export interface SelectedRegion {
 export interface MatrixPanelOptions {
   /** Bin size in bp, for the coordinate readout. */
   binsize: number
+  /**
+   * The bin size of the map the session has **open**, where that is not
+   * {@link binsize}.
+   *
+   * The two differ whenever a view builds its panel against a block that was
+   * already pooled: the whole-genome view opens a 1 kb cooler and hands over
+   * `1000 × binsPerCell`, because a block of 3 kb cells is a block of 3 kb bins
+   * as far as every coordinate on screen is concerned. That is right for the
+   * readout and wrong for the two questions that are about the *file*: how fine
+   * a grid a zoom may ask for, and where the bottom of the resolution scale is.
+   * Both used to read `binsize` at construction and therefore believed a whole
+   * genome's floor was 3 kb — which made the ladder stop a rung early and the
+   * resolution bar hide itself, having been told the range was empty.
+   *
+   * Absent where the two are the same, which is every view that reads its own
+   * block at the file's own bins.
+   */
+  openBinsize?: number
   /** Offered aggregation levels; omit for views with no level toggle. */
   levels?: Array<'bin' | 'contig'>
   /**
@@ -1288,6 +1307,47 @@ export class MatrixPanel {
   private gaugeShown: DenseMatrix | null = null
   /** The open map's own bin size — see {@link openBinsize}. */
   private readonly baseBinsize: number
+  /**
+   * How many bins of the open map this view may ever show, per axis.
+   *
+   * The top of the resolution scale, and the reason it is declared rather than
+   * remembered: it used to be a running maximum over every grid the panel had
+   * been set to, which is right until one early reading is wrong — and one
+   * early reading *is* wrong, because a view plans its first block in the same
+   * breath as it reveals the panel, before the browser has laid it out. A
+   * single 22 kb answer measured against a 281 px canvas then sat at the top of
+   * the scale for the life of the view, with every real resolution crowded into
+   * its right-hand quarter. Declared, it is exact and it self-corrects.
+   *
+   * `0` until a view says; the running maximum is the fallback and is only ever
+   * reached by a panel nobody told.
+   */
+  private domainBins = 0
+  /**
+   * The resolution the reader last named on the bar, in bp per cell.
+   *
+   * Never cleared on a timer and never cleared by a navigation, because it does
+   * not need to be: it is only *acted on* while the block is coarser than it and
+   * the window could hold it ({@link resolutionReading}), and both of those stop
+   * being true the moment the reader zooms somewhere else. A stale ask is inert.
+   */
+  private askedResolution: number | null = null
+  /**
+   * How many blocks the outstanding ask has been re-applied across.
+   *
+   * The termination guard for {@link chaseResolution}. Going *coarser* cannot
+   * be done in one move: `clampView` treats the block in hand as the whole
+   * world, so a view asked to widen past it stops at its edge, and it is the
+   * ladder's widening read that gives the ground back — a block at a time, up
+   * to `WIDEN_REACH` of it. So the ask has to survive the block it was made
+   * against. A small count rather than a condition, because the honest stopping
+   * rule — *the ceiling is reached* — is a fact about the view rather than the
+   * panel, and four rounds of 4× is more than any ladder has.
+   */
+  private chases = 0
+  /** The fallback top of the scale, for a panel with no declared domain. */
+  private coarsestBinsize = 0
+  private resolutionBar: ResolutionBar | null = null
   /** A box being drawn on a turned map; see {@link previewRect}. */
   private pendingRect: ManualRect | null = null
   /** A picking mode in progress; see {@link armPicking}. */
@@ -1334,7 +1394,7 @@ export class MatrixPanel {
   private laneFloor: Record<LaneEdge, number> = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(private readonly options: MatrixPanelOptions) {
-    this.baseBinsize = Math.max(1, options.binsize)
+    this.baseBinsize = Math.max(1, options.openBinsize ?? options.binsize)
     this.transform = options.initial?.transform ?? 'log1p'
     this.colormap = options.initial?.colormap ?? DEFAULT_UI_COLORMAP
     this.manualVmin = options.initial?.vmin
@@ -1781,6 +1841,9 @@ export class MatrixPanel {
     // no extra columns has exactly one thing its cells can be, and a dropdown
     // with a single entry is a control that cannot be used — it says "you have a
     // choice here" and then refuses to make one.
+    // Held out here so the `picture` row built further down can place itself
+    // *after* it rather than in front of it — see the splice that reads this.
+    let scoreField: HTMLElement | null = null
     const scores = options.scores
     if (scores !== undefined && scores.choices.length > 1) {
       const select = el('select', { class: 'select' })
@@ -1807,7 +1870,7 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      const scoreField = field(
+      scoreField = field(
         'score',
         select,
         'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
@@ -1892,9 +1955,10 @@ export class MatrixPanel {
 
     // First of the three, because it is the one that decides what the other two
     // are *of*: the turn changes the geometry and `O/E` changes the units, and
-    // both of those are read off whatever grid the picture is on. Off by
-    // default (`ui/refine.ts`), so this is the control that turns it on rather
-    // than a light that happens to be lit.
+    // both of those are read off whatever grid the picture is on. On by
+    // default now (`ui/refine.ts`), so this is the control that pins the grid
+    // where it is — for a figure, or for a reader who wants one picture and not
+    // a stream of them.
     const refineButton = iconButton(
       REFINE_ICON,
       REFINE_HINT,
@@ -1905,13 +1969,9 @@ export class MatrixPanel {
     )
     this.refineButton = refineButton
     this.paintRefine(refineEnabled())
-    // **Not offered, for now.** The switch is built, painted and subscribed
-    // exactly as before — the preference is global, it is still honoured by
-    // every panel, and the palette and a stored `on` still reach it — it simply
-    // is not in the row. Built rather than skipped so that putting it back is
-    // one line rather than an unpicking, and so the machinery below cannot rot
-    // while it is out of sight.
-    const OFFER_REFINE = false
+    // Offered. It was built and withheld while a refine meant a held map; it is
+    // the switch on the app's ordinary way of moving now, so it is in the row.
+    const OFFER_REFINE = true
     // A global preference with several panels on screen: a deck of five maps
     // that disagreed about whether the zoom reads would be five answers to one
     // question. Unsubscribed with the panel.
@@ -1999,7 +2059,17 @@ export class MatrixPanel {
     }
 
     if (picture.length > 0) {
-      controls.unshift(
+      // **After `score`, not in front of it.** These three change what picture
+      // this is; `score` changes what the numbers in it are, and the comment on
+      // `scoreField` above states at length why that question leads both lists.
+      // Spliced rather than unshifted because this row is built last and would
+      // otherwise take the lead by order of construction — which was invisible
+      // for as long as the row only appeared where the score picker did not
+      // (a companion offers neither a turn nor a baseline), and became a
+      // companion whose five fields were in a different order from the Map
+      // card's the moment the adaptive-resolution switch joined it.
+      const lead = scoreField === null ? -1 : controls.indexOf(scoreField)
+      controls.splice(lead < 0 ? 0 : lead + 1, 0,
         el(
           'div',
           { class: 'field field-block' },
@@ -2222,7 +2292,19 @@ export class MatrixPanel {
     // strip that used to stand beside the plot took between 5.5 and 7 rem of
     // the column it was next to, which in a deck of four is four such margins
     // and maps a third narrower than the window could have drawn them.
-    const body = el('div', { class: 'panel-body' }, this.grid)
+    // Under the map rather than in the settings card, because it is a way of
+    // *moving* — the scale counterpart of the region box — and a navigation
+    // control behind a menu is one nobody finds. It hides itself where there is
+    // nothing to slide along (`ui/ResolutionBar.ts`).
+    this.resolutionBar = new ResolutionBar({ onPick: (bp) => this.showResolution(bp) })
+    // A sibling of the grid rather than a wrapper around it. `.panel-body` is a
+    // centring flex row whose one child is sized *by* that row — the grid's
+    // middle column shrinks against the lane stacks beside it, and its own
+    // `min-content` is whatever width the canvas was last given. Putting a
+    // wrapper between the two took that away and the map collapsed to 281 px,
+    // which is what a canvas sized from a box sized from the canvas resolves to.
+    // So the bar wraps onto its own line instead (`.res-bar`'s `flex-basis`).
+    const body = el('div', { class: 'panel-body' }, this.grid, this.resolutionBar.el)
 
     // The same card the 1D browser's column has, built from the same class:
     // beside a map a group could be *made* — from the row's own select, or the
@@ -3054,6 +3136,16 @@ export class MatrixPanel {
    * has to grow into the space and re-centre itself in it. The view's own
    * resizes still come through the observer; this is for the ones that arrive
    * from outside it.
+   *
+   * There is a second caller now, and it wants the same thing for a different
+   * reason: a view that **reveals** its panel and plans a read in the same
+   * breath (`WholeView.load`). A `hidden` element measures as nothing and the
+   * observer fires after layout, so a cap read between those two events is the
+   * cap of a panel that was not on screen — a 275 px answer for a 600 px plot,
+   * and therefore a first block two rungs coarser than the picture could show,
+   * on the one read in this application that walks every stored pixel in the
+   * file. Reading `clientWidth` forces the layout the observer is waiting for,
+   * which is what makes this a measurement rather than a guess.
    */
   remeasure(): void {
     this.hostSize = { width: this.grid.clientWidth, height: this.grid.clientHeight }
@@ -4928,6 +5020,11 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    // A navigation is a new question, so it cancels the old one. `regrid` is
+    // the path that *keeps* an outstanding ask, because a refined block is the
+    // same picture and the ask was made about it; this is a different picture.
+    this.askedResolution = null
+    this.chases = 0
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader
     // moving from balanced counts to raw ones is re-read on the identical grid,
@@ -5154,6 +5251,9 @@ export class MatrixPanel {
     this.heatmap.setScale(this.scale())
     this.setBusy(false)
     this.schedule()
+    // After the window has been carried over, because that is what decides
+    // whether the ask is still outstanding.
+    this.chaseResolution()
     return true
   }
 
@@ -5393,6 +5493,173 @@ export class MatrixPanel {
    */
   setResolution(binsize: number): void {
     if (binsize > 0) this.options.binsize = binsize
+    // The top of the resolution bar's scale, and the honest definition of it:
+    // the coarsest grid this view has actually shown is its whole domain in one
+    // picture, because that is the block every view reads first. Taken here
+    // rather than from a ceiling passed in, so that a view which never had a
+    // ceiling to declare still gets a scale, and so the bar cannot claim a
+    // range the panel has not been at.
+    this.coarsestBinsize = Math.max(this.coarsestBinsize, this.options.binsize)
+    this.syncResolutionBar()
+  }
+
+  /**
+   * Say how wide this view's world is, in bins of the open map.
+   *
+   * The ladder's own ceiling — a region view's sequence, a genome view's
+   * genome, a whole view's file — which every view already computes for
+   * `attachRefine` and which nothing else here has a way to know. It decides
+   * one thing: where the coarse end of the resolution scale is, which is the
+   * grid the whole of it takes to be drawn in one picture.
+   */
+  setResolutionDomain(spanBins: number): void {
+    if (!(spanBins > 0)) return
+    this.domainBins = Math.max(this.domainBins, Math.trunc(spanBins))
+    this.syncResolutionBar()
+  }
+
+  /**
+   * Show where the picture sits on the resolution scale, and where it is going.
+   *
+   * Called from the frame loop and from every block install. The two numbers it
+   * reports are deliberately different (`ui/ResolutionBar.ts`): `drawn` is the
+   * grid on screen and `wanted` is the grid the window on screen would be read
+   * at — equal at rest, a factor of two apart for as long as a read is out.
+   */
+  /**
+   * What is drawn, and what the window on screen could be drawn at.
+   *
+   * One computation for the two things that read it — the bar, which shows the
+   * pair, and {@link refineWindow}, which decides from it whether the reader's
+   * last named resolution is still outstanding. Split out so the two cannot
+   * drift, which they did while each kept its own copy of the arithmetic.
+   */
+  private resolutionReading(): { drawn: number; wanted: number } {
+    const drawn = Math.max(1, this.options.binsize)
+    const window = this.data === null ? null : this.heatmap.cellWindow()
+    if (window === null) return { drawn, wanted: drawn }
+    const cells = Math.max(
+      1,
+      Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0]),
+    )
+    // In bins of the open map, then divided by the cells the picture holds —
+    // and multiplied by the reach, because that is the window a read is
+    // actually planned for (`ui/refine.ts`). Without it this reports a grid
+    // twice as fine as any read will ever produce, which is a bar whose thumb
+    // never reaches its own label.
+    const spanBins = (cells * drawn) / this.baseBinsize
+    const wanted = (spanBins * REFINE_REACH * this.baseBinsize) / Math.max(1, this.heatmap.cellCap)
+    return { drawn, wanted: Math.max(this.baseBinsize, wanted) }
+  }
+
+  private syncResolutionBar(): void {
+    const bar = this.resolutionBar
+    if (bar === null) return
+    const { drawn, wanted } = this.resolutionReading()
+    // The coarse end: the whole domain in one picture. `drawn` is a floor on it
+    // rather than the definition, so a block that came back coarser than the
+    // arithmetic predicted — which the contig-aware partition can, since a cell
+    // never straddles a sequence — is still inside its own scale.
+    const cap = Math.max(1, this.heatmap.cellCap)
+    const whole =
+      this.domainBins > 0
+        ? Math.ceil(this.domainBins / cap) * this.baseBinsize
+        : this.coarsestBinsize
+    bar.update({
+      finest: this.baseBinsize,
+      coarsest: Math.max(whole, drawn),
+      drawn,
+      wanted,
+    })
+  }
+
+  /**
+   * Zoom so that the window on screen is the width `bp` per cell is read at.
+   *
+   * The resolution bar's whole action, and it is arithmetic rather than a new
+   * kind of navigation: the reader plans `k = ⌈span / cap⌉` for whatever window
+   * it is given, so the window that yields `bp` is `bp × cap` base pairs wide.
+   * Converted into cells of the block **currently** drawn, because that is the
+   * space `showCellWindow` speaks, and centred on what is on screen — a change
+   * of scale is not a change of place.
+   */
+  private showResolution(bp: number): void {
+    if (this.data === null) return
+    this.chases = 0
+    this.placeForResolution(bp)
+  }
+
+  /**
+   * Re-apply an outstanding ask against the block that has just arrived.
+   *
+   * Called from {@link regrid} and nowhere else, so it runs once per block
+   * rather than once per frame — a frame hook here would call
+   * `showCellWindow`, which schedules a frame, which would call this again.
+   *
+   * Only the **coarse** direction is chased. Going finer needs no chasing: the
+   * view can always zoom in, and what stands in the way is the ladder's
+   * tolerance rather than the clamp, which is what `RefineView.demand` is for.
+   */
+  private chaseResolution(): void {
+    const asked = this.askedResolution
+    if (asked === null || this.data === null) return
+    // **About the window, not about the grid.** The first version of this
+    // compared the drawn resolution against the ask, and it ended the chase on
+    // the wrong event: widening the view swaps in a coarse block that has been
+    // held all along, so for one frame the picture *is* coarser than was asked
+    // for — and the chase declared victory over a block that covered a window
+    // the reader had not reached yet, leaving the ladder to refine back down to
+    // where they started. What was asked for is a width; the grid follows it.
+    const want = (asked * this.heatmap.cellCap) / REFINE_REACH
+    if (this.viewSpanBp() >= want * 0.8) return
+    if (++this.chases > 4) {
+      this.askedResolution = null
+      return
+    }
+    this.placeForResolution(asked)
+  }
+
+  /** How much genome is on screen, in base pairs, on the wider axis. */
+  private viewSpanBp(): number {
+    const window = this.heatmap.cellWindow()
+    const cells = Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0])
+    return Math.max(1, cells) * Math.max(1, this.options.binsize)
+  }
+
+  /** The window `bp` per cell is read at, placed about the middle of the view. */
+  private placeForResolution(bp: number): void {
+    if (this.data === null) return
+    // **Snapped to a grid that exists.** The scale is continuous and the stops
+    // are not: the reader plans `⌈span / cap⌉` bins to a cell, so the only
+    // resolutions any read can produce are whole multiples of the file's own
+    // bin size. Asking for 1.05 kb unsnapped puts the window a percent too wide
+    // for a 1 kb read, which rounds up to 2 kb — so the top tenth of the bar's
+    // travel all landed on 2 kb and only the very end reached 1 kb.
+    const target = Math.max(1, Math.round(bp / this.baseBinsize)) * this.baseBinsize
+    this.askedResolution = target
+    // Divided by {@link REFINE_REACH}, and the division is the whole of what
+    // makes the control land where its own label says. A read is planned for
+    // the window *padded* — half a screen on each side, so twice as wide — so a
+    // window of `bp × cap` base pairs is read at `2 × bp` and the reader who
+    // dragged to 1 kb is handed 2 kb. Aim at half of it and the padded read
+    // comes back at the number under their finger.
+    //
+    // A hair under half, because the arithmetic lands exactly on the boundary
+    // the reader's own `⌈⌉` sits at, and a float a bit-width over it is a whole
+    // rung coarser.
+    const cells =
+      (target * this.heatmap.cellCap * 0.98) /
+      (REFINE_REACH * Math.max(1, this.options.binsize))
+    if (!(cells > 0) || !Number.isFinite(cells)) return
+    const window = this.heatmap.cellWindow()
+    const half = cells / 2
+    const midRow = (window.rows[0] + window.rows[1]) / 2
+    const midCol = (window.cols[0] + window.cols[1]) / 2
+    // A turned band's rows are distance from the diagonal rather than a place,
+    // so only the column span means anything there — the same asymmetry
+    // `showCellSpan` exists for.
+    if (this.turned !== null) this.heatmap.showCellSpan([midCol - half, midCol + half])
+    else this.heatmap.showCellWindow([midRow - half, midRow + half], [midCol - half, midCol + half])
   }
 
   /**
@@ -6759,22 +7026,41 @@ export class MatrixPanel {
         const view = this.refineWindow()
         if (view !== null) this.refineListener(view)
       }
+      // From the same frame and after it, so the thumb reports the window the
+      // ladder was just asked about rather than the one before it.
+      this.syncResolutionBar()
     })
   }
 
   /**
-   * Hold the map still while a finer block is read for it.
+   * Say that a finer block is on its way, and keep going.
    *
-   * Straight through to the view, because that is where both halves of it live
-   * — the gestures it refuses and the spinner it draws. It is a method rather
-   * than something the panel infers from its own busy state because the two are
-   * different waits: {@link setBusy} veils the map while a *navigation* fetches
-   * a different picture, and this holds the picture that is already there while
-   * a sharper version of it arrives.
+   * Straight through to the view, because that is where the spinner is drawn.
+   * It is a method rather than something the panel infers from its own busy
+   * state because the two are different waits: {@link setBusy} veils the map
+   * while a *navigation* fetches a different picture, and this leaves the
+   * picture that is already there completely usable while a sharper version of
+   * it arrives.
    */
-  setFrozen(on: boolean, onCancel?: () => void): void {
-    this.heatmap.setFrozen(on, onCancel)
+  setStreaming(on: boolean): void {
+    this.heatmap.setStreaming(on)
   }
+
+  /**
+   * How many cells per axis a block drawn here is worth reading at.
+   *
+   * Straight through to the view, which is where the plot is measured
+   * (`HeatmapView.cellCap`). Public because a view's **first** read is made
+   * before any of the ladder's, and it is the read that most wants the answer:
+   * a whole-genome block read at the raster's 4,096 for a 640 px plot is six
+   * cells behind every pixel, paid for in the accumulator and again in the
+   * raster, for detail no screen can show until the reader has zoomed six
+   * times.
+   */
+  get cellCap(): number {
+    return this.heatmap.cellCap
+  }
+
 
   /**
    * Follow this panel's window in **bins**, so somebody can read them.
@@ -6817,6 +7103,11 @@ export class MatrixPanel {
     if ((data.contigsPerCell ?? 1) > 1) return null
     const k = Math.max(1, data.binsPerCell ?? 1)
     const window = this.heatmap.cellWindow()
+    // The picture's own size, asked of the view every frame rather than held:
+    // a panel is resized, re-laid-out in a deck and moved between displays, and
+    // a cap captured at construction would keep reading for the size it used
+    // to be.
+    const cellCap = this.heatmap.cellCap
     // A block read from a sibling rung describes itself on *that* rung's grid,
     // and the caller of this is deciding what to ask for next in the space it
     // asks in — the open map's. `source` is the window that was asked for, so
@@ -6845,17 +7136,49 @@ export class MatrixPanel {
       // "is this coarse enough to be worth replacing" comparison is between two
       // numbers in one unit.
       const scale = Math.max(1, (data.binsize ?? 1) / Math.max(1, this.openBinsize()))
-      return { rows, cols, binsPerCell: Math.max(1, Math.round(k * scale)) }
+      return { rows, cols, binsPerCell: Math.max(1, Math.round(k * scale)), cellCap }
     }
     if (this.turned !== null) {
       const span = binsOf(window.cols, data.colExtent, k * BIN_FRACTION)
-      return { rows: span, cols: span, binsPerCell: k }
+      return { rows: span, cols: span, binsPerCell: k, cellCap }
     }
     return {
       rows: binsOf(window.rows, data.rowExtent, k),
       cols: binsOf(window.cols, data.colExtent, k),
       binsPerCell: k,
+      cellCap,
+      ...(this.demandingResolution() ? { demand: true } : {}),
     }
+  }
+
+  /**
+   * Whether the reader's last named resolution is still outstanding.
+   *
+   * Two conditions, and between them they are why the flag needs no clearing.
+   * The block has to be **coarser** than what was asked — so a block at the
+   * file's own bins can never demand anything, and neither can one that has
+   * already arrived at the ask — and the window has to be narrow enough that
+   * the ask is *reachable*, so a reader who zooms back out after naming 1 kb
+   * silently stops asking for it rather than dragging a demand around with them.
+   *
+   * The quarter is the slack: the ladder's grid is `⌈span / cap⌉`, which lands
+   * near what was asked rather than on it, and a demand that insisted on the
+   * exact number would be a demand that could never be met.
+   */
+  private demandingResolution(): boolean {
+    const asked = this.askedResolution
+    if (asked === null) return false
+    const { drawn, wanted } = this.resolutionReading()
+    // The window has to be able to produce what was asked for. Where it cannot
+    // — because the reader has since zoomed somewhere else, or because the
+    // chase above has not widened it yet — there is nothing to demand, and a
+    // stale ask is inert rather than needing to be cleared.
+    if (wanted > asked * 1.25 || wanted < asked / 1.25) return false
+    // Either direction. Coarsening needs this as much as sharpening does, and
+    // for the same reason: a block within `REFINE_FACTOR` of ideal is left
+    // alone, so a reader who asks for 5 kb over a window a held 10 kb block
+    // happens to cover is handed the 10 kb one and no read is ever made.
+    return drawn > asked * 1.25 || drawn < asked / 1.25
   }
 
   /**
@@ -8801,7 +9124,7 @@ export function poolingNote(
   if (strideX === 1 && strideY === 1) return null
   return {
     phrase: `aggregated ${strideX} × ${strideY} bins to a pixel${
-      refining ? ' · zoom in to sharpen' : ' · open a smaller block to sharpen'
+      refining ? '' : ' · adaptive resolution is off'
     }`,
   }
 }

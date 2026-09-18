@@ -1,9 +1,9 @@
 /**
  * What a view stops doing when it is taken off the page.
  *
- * `HeatmapView.setFrozen(true)` starts a `requestAnimationFrame` chain that
+ * `HeatmapView.setStreaming(true)` starts a `requestAnimationFrame` chain that
  * turns the spinner: `tick` re-arms itself and calls `draw()` for as long as
- * `frozen` is true. The only thing that ever stopped it was `setFrozen(false)`,
+ * `frozen` is true. The only thing that ever stopped it was `setStreaming(false)`,
  * and no teardown path calls that — the ladder holding the freeze is
  * *destroyed* rather than aborted, so the `onBusy(false)` that would have
  * released it never runs, and `detach()` cancelled only the view's own deferred
@@ -139,27 +139,27 @@ function block(n: number): DenseMatrix {
   return { nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] }
 }
 
-function frozenView(): HeatmapView {
+function streamingView(): HeatmapView {
   const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
   heatmap.setMatrix(block(64))
   heatmap.draw()
-  heatmap.setFrozen(true)
+  heatmap.setStreaming(true)
   return heatmap
 }
 
-describe('a view torn down while it is frozen', () => {
+describe('a view torn down while a read is out for it', () => {
   it('turns its spinner for as long as it is on the page', () => {
     // The control: without this the assertions below would pass against a view
     // that had simply never started a loop.
-    const heatmap = frozenView()
-    expect(heatmap.isFrozen).toBe(true)
+    const heatmap = streamingView()
+    expect(heatmap.isStreaming).toBe(true)
     pump(30)
     expect(queued.size, 'the loop re-arms itself every frame').toBe(1)
     expect(blits).toBeGreaterThan(0)
   })
 
   it('stops turning it on detach', () => {
-    const heatmap = frozenView()
+    const heatmap = streamingView()
     pump(5)
     expect(queued.size).toBe(1)
 
@@ -173,13 +173,13 @@ describe('a view torn down while it is frozen', () => {
     expect(blits, 'a detached view must not draw').toBe(0)
   })
 
-  it('ends the freeze itself, not just the timer it scheduled', () => {
+  it('ends the streaming state itself, not just the timer it scheduled', () => {
     // Cancelling `spinTimer` alone would leave `frozen` true, and any later
     // `draw()` on the same instance would take the frozen branch and paint a
     // spinner — so the flag has to go with it.
-    const heatmap = frozenView()
+    const heatmap = streamingView()
     heatmap.detach()
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isStreaming).toBe(false)
 
     heatmap.draw()
     pump(30)
@@ -187,14 +187,14 @@ describe('a view torn down while it is frozen', () => {
   })
 
   it('is idempotent, as its docblock says', () => {
-    const heatmap = frozenView()
+    const heatmap = streamingView()
     heatmap.detach()
     heatmap.detach()
     expect(queued.size).toBe(0)
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isStreaming).toBe(false)
   })
 
-  it('leaves an unfrozen view’s teardown exactly as it was', () => {
+  it('leaves a quiet view’s teardown exactly as it was', () => {
     const heatmap = new HeatmapView(stubCanvas(), { devicePixelRatio: 1 })
     heatmap.setMatrix(block(64))
     heatmap.draw()
@@ -204,6 +204,6 @@ describe('a view torn down while it is frozen', () => {
     expect(queued.size).toBe(1)
     heatmap.detach()
     expect(queued.size).toBe(0)
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isStreaming).toBe(false)
   })
 })

@@ -4,7 +4,8 @@
  * What a reviewer wants after a change to the UI: the real page, not a
  * test's idea of it. Opens the yeast demo through the dev server, adds the
  * demo structure beside the map, hovers both ways, colours the model by a
- * track, opens a tracks cell, runs the spatial-tracks task and the reconstruction, and saves one
+ * track, opens a tracks cell, runs the spatial-tracks task and the reconstruction, then opens the
+ * whole genome and zooms into it to show the resolution following the zoom, and saves one
  * PNG per step. Software WebGL, so it runs in a container with no GPU.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
@@ -301,6 +302,57 @@ try {
       await sleep(1500)
       await shot('19-compare-models')
     }
+  }
+  // ---------------------------------------------------------------------
+  // The whole genome, streaming (SPECS §2, §7.2).
+  //
+  // A tab of its own rather than more steps on the one above, because the
+  // feature is about a *genome-wide* map and the demo config lands on a
+  // region. Four pictures: the gate that says what the pass buys, the whole
+  // genome at the grid it fits in, the same map two zooms in at the grid *that*
+  // fits — read while the map stayed live — and the resolution bar driven by
+  // hand instead of by the wheel.
+  // ---------------------------------------------------------------------
+  //
+  // In a **fresh context**, because the session above left a deck behind: the
+  // structure cell's file cannot be pointed at again across a navigation, so
+  // the picture would be half a map and half an apology about it.
+  const solo = await (await browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: 1 })).newPage()
+  solo.on('pageerror', (e) => errors.push(String(e)))
+  const soloShot = async (name) => { await solo.screenshot({ path: `${OUT}/${name}.png` }); console.log('shot', name) }
+  const cellSize = () => solo.$eval(String.raw`.res-readout`, (n) => n.textContent ?? '').catch(() => '?')
+  await solo.goto(`${BASE}/#uri=${BASE}/demo/yeast/Yeast_microC_G2M_1kb.cool&view=whole`)
+  const gate = solo.locator('button', { hasText: 'compute whole genome' }).first()
+  await gate.waitFor({ timeout: 60000 })
+  await soloShot('20-whole-gate')
+  await gate.click()
+  await solo.waitForFunction(() => document.querySelector('.heatmap-canvas') !== null, null, { timeout: 180000 })
+  await sleep(9000)
+  console.log('whole genome at', await cellSize())
+  await soloShot('21-whole-fit')
+
+  // Two wheel bursts into the middle of the map. The picture is live
+  // throughout — nothing is refused and no frame is held — so this is a
+  // gesture, not a sequence of waits.
+  const plot = await solo.locator('.heatmap-canvas').first().boundingBox()
+  const cx = plot.x + plot.width / 2
+  const cy = plot.y + plot.height / 2
+  for (const name of ['22-whole-zoom-1', '23-whole-zoom-2']) {
+    await solo.mouse.move(cx, cy)
+    for (let i = 0; i < 8; i++) { await solo.mouse.wheel(0, -120); await sleep(60) }
+    await sleep(2500)
+    console.log(name, 'at', await cellSize())
+    await soloShot(name)
+  }
+
+  // …and the bar as a control: dragged back to the coarse end, which zooms the
+  // map out to the width that resolution is read at.
+  const slider = await solo.locator('.res-slider').boundingBox()
+  if (slider) {
+    await solo.mouse.click(slider.x + slider.width * 0.45, slider.y + slider.height / 2)
+    await sleep(3500)
+    console.log('24-resolution-bar at', await cellSize())
+    await soloShot('24-resolution-bar')
   }
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 500))

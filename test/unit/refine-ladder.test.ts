@@ -24,6 +24,7 @@ import { POOLED_CELL_CAP } from '@/metacooler/pooling'
 import {
   BlockLadder,
   REFINE_DEFAULT,
+  SUPERSEDE_AFTER_MS,
   chooseRung,
   clip,
   covers,
@@ -64,8 +65,10 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; lap?: number
   let settle: ((result: MatrixResult) => void) | null = null
   let refuse: ((err: unknown) => void) | null = null
   let cancels = 0
+  let clock = 0
 
   const it = new BlockLadder({
+    now: () => clock,
     ceiling: { rows: ceiling, cols: ceiling },
     ...(options.lap === undefined ? {} : { wrap: { rows: options.lap, cols: options.lap } }),
     read: (rows, cols) => {
@@ -95,6 +98,10 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; lap?: number
     get cancels() {
       return cancels
     },
+    /** Move the fake clock on, for the supersede rule. */
+    tick(ms: number): void {
+      clock += ms
+    },
     /** Land the outstanding read. */
     land(result: MatrixResult): Promise<void> {
       settle?.(result)
@@ -112,13 +119,14 @@ function ladder(options: { ceiling?: Extent; reads?: Array<Extent>; lap?: number
 const WHOLE: Extent = [0, 50_000]
 
 describe('the preference', () => {
-  it('is off until somebody asks for it', () => {
-    // §2's promise is that pan and zoom perform no I/O, and that is the promise
-    // the app has always made. A zoom that reads is a zoom that can wait, and on
-    // a large cooler the wait is real — a good trade when it is asked for and a
-    // surprising one when it is not. So the default is the behaviour that keeps
-    // the promise, and the switch is on the map's own controls.
-    expect(REFINE_DEFAULT).toBe(false)
+  it('is on, and pinning the grid is what the switch is for now', () => {
+    // It was off, and the argument was §2's: a zoom that reads is a zoom that
+    // can wait. Both halves of that have gone — nothing is held for a read
+    // (`HeatmapView.setStreaming`) and the pixels stay inflated between rungs
+    // (`metacooler/pixelCache.ts`), so the wait is a replay rather than a
+    // re-inflation. A genome-scale viewer whose zoom cannot change resolution
+    // is a viewer of one picture.
+    expect(REFINE_DEFAULT).toBe(true)
   })
 
   it('answers the default where there is no storage to read', () => {
@@ -255,7 +263,7 @@ describe('when the ladder reads', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     // The whole domain, drawn at the grid the whole domain gets.
-    l.it.consider({ rows: WHOLE, cols: WHOLE, binsPerCell: 13 })
+    l.it.consider({ rows: WHOLE, cols: WHOLE, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(0)
     expect(l.busy, 'and never freezes the map').toHaveLength(0)
   })
@@ -267,7 +275,7 @@ describe('when the ladder reads', () => {
     // which is finer — but not twice as fine, so the picture stays.
     const view: Extent = [0, 33_000]
     expect(gridFor(pad(view, 0.5), pad(view, 0.5))).toBeGreaterThan(13 / 2)
-    l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+    l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(0)
     expect(l.busy).toHaveLength(0)
   })
@@ -276,7 +284,7 @@ describe('when the ladder reads', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     const view: Extent = [10_000, 22_000]
-    l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+    l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     // Immediately, not after a settle: the freeze is what ends the gesture, so
     // there is no second frame to debounce and the reader sees the hold at the
     // moment they crossed the edge.
@@ -289,7 +297,7 @@ describe('when the ladder reads', () => {
   it('releases the map when the block lands', async () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.busy).toEqual([true])
     await l.land(block([4_000, 28_000], 6))
     expect(l.busy, 'held, then released').toEqual([true, false])
@@ -298,7 +306,7 @@ describe('when the ladder reads', () => {
   it('releases the map when the read is refused', async () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     await l.fail(new Error('too large'))
     // A refusal that left the view frozen would be an app that had stopped
     // responding, which is the worst way to report one.
@@ -318,6 +326,7 @@ describe('when the ladder reads', () => {
         rows: [25_000 - half, 25_000 + half],
         cols: [25_000 - half, 25_000 + half],
         binsPerCell: 13,
+        cellCap: POOLED_CELL_CAP,
       })
     }
     expect(l.asked, 'the inflight guard, not the timing').toHaveLength(1)
@@ -333,7 +342,7 @@ describe('when the ladder reads', () => {
     // pressed-against-the-edge cases below.
     for (const span of [800, 400, 100, 20, 4]) {
       const at = 21_000
-      l.it.consider({ rows: [at - span / 2, at + span / 2], cols: [at - span / 2, at + span / 2], binsPerCell: 1 })
+      l.it.consider({ rows: [at - span / 2, at + span / 2], cols: [at - span / 2, at + span / 2], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     }
     expect(l.asked).toHaveLength(0)
     expect(l.busy, 'and the map is never held for a read it will not make').toHaveLength(0)
@@ -344,7 +353,7 @@ describe('when the ladder reads', () => {
     l.it.adopt(block([24_000, 26_000], 1))
     // Zooming out hard: the reach is four windows on each side, which would run
     // to [-6000, 56000] and is clipped to what this view was allowed to read.
-    l.it.consider({ rows: [22_000, 28_000], cols: [22_000, 28_000], binsPerCell: 1 })
+    l.it.consider({ rows: [22_000, 28_000], cols: [22_000, 28_000], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
     expect(l.asked[0].rows).toEqual([0, 50_000])
   })
@@ -363,7 +372,7 @@ describe('panning against the edge of the block in hand', () => {
     l.it.adopt(block([0, 15_300], 4))
 
     // In, to the first stretch. One refine, to the file's own bins.
-    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4 })
+    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
     const fine = block(l.asked[0].rows, 1, l.asked[0].cols)
     await l.land(fine)
@@ -372,7 +381,7 @@ describe('panning against the edge of the block in hand', () => {
 
     // Now pan to that block's far edge — which is as far as the view can go.
     const asked = l.asked.length
-    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1 })
+    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked, 'the wall is a reason to read, not a place to stop').toHaveLength(asked + 1)
     // Recentred on where the reader is, with a whole window of room ahead.
     const next = l.asked[asked]
@@ -387,12 +396,12 @@ describe('panning against the edge of the block in hand', () => {
     // does. Panning is a change of place, not of scale.
     const l = ladder({ ceiling: [0, 15_300] })
     l.it.adopt(block([0, 15_300], 4))
-    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4 })
+    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4, cellCap: POOLED_CELL_CAP })
     const first = l.asked[0]
     await l.land(block(first.rows, 1, first.cols))
 
     const wall = first.rows[1]
-    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1 })
+    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     const next = l.asked[1]
     expect(next.rows[1] - next.rows[0], 'the same span, somewhere else').toBe(
       first.rows[1] - first.rows[0],
@@ -413,19 +422,19 @@ describe('panning against the edge of the block in hand', () => {
     // against them is not a request for anything, it is the end of the sequence.
     const l = ladder({ ceiling: [0, 15_300] })
     l.it.adopt(block([0, 15_300], 4))
-    l.it.consider({ rows: [0, 4000], cols: [0, 4000], binsPerCell: 4 })
+    l.it.consider({ rows: [0, 4000], cols: [0, 4000], binsPerCell: 4, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(0)
-    l.it.consider({ rows: [11_300, 15_300], cols: [11_300, 15_300], binsPerCell: 4 })
+    l.it.consider({ rows: [11_300, 15_300], cols: [11_300, 15_300], binsPerCell: 4, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(0)
   })
 
   it('settles rather than reading again once it has recentred', async () => {
     const l = ladder({ ceiling: [0, 15_300] })
     l.it.adopt(block([0, 15_300], 4))
-    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4 })
+    l.it.consider({ rows: [0, 350], cols: [0, 350], binsPerCell: 4, cellCap: POOLED_CELL_CAP })
     await l.land(block(l.asked[0].rows, 1, l.asked[0].cols))
     const wall = l.asked[0].rows[1]
-    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1 })
+    l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     const next = l.asked[1]
     await l.land(block(next.rows, 1, next.cols))
 
@@ -433,7 +442,7 @@ describe('panning against the edge of the block in hand', () => {
     // ask for another — that is the loop this whole rule could have become.
     const asked = l.asked.length
     for (let i = 0; i < 5; i++) {
-      l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1 })
+      l.it.consider({ rows: [wall - 350, wall], cols: [wall - 350, wall], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     }
     expect(l.asked).toHaveLength(asked)
   })
@@ -446,14 +455,14 @@ describe('what the ladder holds', () => {
     l.it.adopt(coarse)
 
     // In: a read, and the fine block is drawn.
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     const fine = block([4_000, 28_000], 6)
     await l.land(fine)
     expect(l.given.at(-1)).toBe(fine)
 
     // Out again, past what the fine block covers. The coarse one is still here.
     const asked = l.asked.length
-    l.it.consider({ rows: WHOLE, cols: WHOLE, binsPerCell: 6 })
+    l.it.consider({ rows: WHOLE, cols: WHOLE, binsPerCell: 6, cellCap: POOLED_CELL_CAP })
     expect(l.given.at(-1), 'zooming out is free').toBe(coarse)
     expect(l.asked, 'and costs no read').toHaveLength(asked)
   })
@@ -461,76 +470,69 @@ describe('what the ladder holds', () => {
   it('prefers the finest block that covers the window', async () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     const fine = block([4_000, 28_000], 6)
     await l.land(fine)
 
     // A window inside both: the finer one wins.
-    l.it.consider({ rows: [12_000, 14_000], cols: [12_000, 14_000], binsPerCell: 6 })
+    l.it.consider({ rows: [12_000, 14_000], cols: [12_000, 14_000], binsPerCell: 6, cellCap: POOLED_CELL_CAP })
     expect(l.given.at(-1)).toBe(fine)
   })
 })
 
-describe('the way out of a freeze', () => {
-  it('gives the map back and does not immediately ask again', () => {
+describe('a read the reader has outrun', () => {
+  it('is left to finish, because only a finished read warms the cache', () => {
+    // The rule that changed when the freeze went. A cancelled read inflates
+    // bytes and keeps none of them (`metacooler/pixelCache.ts` keeps a span,
+    // never half of one), so a gesture that cancels everything it starts pays
+    // the slow price for ever. The map is live throughout now, so there is
+    // nothing to be bought by calling one off.
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    const view = { rows: [10_000, 22_000] as Extent, cols: [10_000, 22_000] as Extent, binsPerCell: 13 }
-    l.it.consider(view)
-    expect(l.busy).toEqual([true])
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
+    expect(l.asked).toHaveLength(1)
 
-    l.it.abort()
+    l.tick(200)
+    l.it.consider({ rows: [40_000, 44_000], cols: [40_000, 44_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
+    expect(l.cancels, 'left alone').toBe(0)
+    expect(l.asked, 'and nothing new issued beside it').toHaveLength(1)
+  })
+
+  it('runs the window the reader ended on, once the first one lands', async () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 13))
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
+    l.tick(200)
+    const moved = { rows: [40_000, 44_000] as Extent, cols: [40_000, 44_000] as Extent, binsPerCell: 13, cellCap: POOLED_CELL_CAP }
+    l.it.consider(moved)
+    await l.land(block([10_000, 22_000], 3))
+
+    l.it.consider(moved)
+    expect(l.asked, 'the latest window wins in the end').toHaveLength(2)
+    expect(l.asked[1].rows[0]).toBeLessThanOrEqual(40_000)
+    expect(l.asked[1].rows[1]).toBeGreaterThanOrEqual(44_000)
+  })
+
+  it('calls off a read that has become a scan', () => {
+    // The valve: a read still going after `SUPERSEDE_AFTER_MS` is not a rung of
+    // a ladder, and the reader is somewhere else.
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 13))
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
+    l.tick(SUPERSEDE_AFTER_MS + 1)
+    l.it.consider({ rows: [40_000, 44_000], cols: [40_000, 44_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.cancels).toBe(1)
-    expect(l.busy, 'released').toEqual([true, false])
-
-    // The window they abandoned it at is the window they are still looking at,
-    // so without a memory of the abort the very next frame would re-freeze.
-    const asked = l.asked.length
-    for (let i = 0; i < 5; i++) l.it.consider(view)
-    expect(l.asked).toHaveLength(asked)
-    expect(l.busy).toEqual([true, false])
-  })
-
-  it('asks again once the reader moves', () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
-    l.it.abort()
-    const asked = l.asked.length
-    // Moving is asking again.
-    l.it.consider({ rows: [30_000, 42_000], cols: [30_000, 42_000], binsPerCell: 13 })
-    expect(l.asked).toHaveLength(asked + 1)
-  })
-
-  it('is a no-op when nothing is in flight', () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    l.it.abort()
-    expect(l.cancels).toBe(0)
-    expect(l.busy).toHaveLength(0)
+    expect(l.asked).toHaveLength(2)
   })
 })
 
 describe('reads in flight', () => {
-  it('calls off a read whose window the reader has already left', () => {
-    const l = ladder()
-    l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
-    expect(l.asked).toHaveLength(1)
-    expect(l.cancels).toBe(0)
-
-    // Somewhere else entirely, and still nothing has landed.
-    l.it.consider({ rows: [40_000, 44_000], cols: [40_000, 44_000], binsPerCell: 13 })
-    expect(l.cancels, 'the stale read is called off').toBe(1)
-    expect(l.asked).toHaveLength(2)
-  })
-
   it('lets a read finish when the reader is still inside it', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     // A nudge, still well inside the padded window that is being read.
-    l.it.consider({ rows: [11_000, 21_000], cols: [11_000, 21_000], binsPerCell: 13 })
+    l.it.consider({ rows: [11_000, 21_000], cols: [11_000, 21_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.cancels).toBe(0)
     expect(l.asked).toHaveLength(1)
   })
@@ -539,11 +541,11 @@ describe('reads in flight', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     const view: Extent = [10_000, 22_000]
-    l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+    l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     await l.fail(new Error('too large'))
 
     for (let i = 0; i < 5; i++) {
-      l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+      l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     }
     expect(l.asked, 'the same refused read, once').toHaveLength(1)
   })
@@ -552,22 +554,22 @@ describe('reads in flight', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
     const view: Extent = [10_000, 22_000]
-    l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+    l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     const abort = new Error('cancelled')
     abort.name = 'AbortError'
     await l.fail(abort)
 
-    l.it.consider({ rows: view, cols: view, binsPerCell: 13 })
+    l.it.consider({ rows: view, cols: view, binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.asked, 'the window is still worth reading').toHaveLength(2)
   })
 
   it('stops everything on destroy', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 22_000], cols: [10_000, 22_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     l.it.destroy()
     expect(l.cancels).toBe(1)
-    l.it.consider({ rows: [10_000, 12_000], cols: [10_000, 12_000], binsPerCell: 13 })
+    l.it.consider({ rows: [10_000, 12_000], cols: [10_000, 12_000], binsPerCell: 13, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
   })
 })
@@ -593,7 +595,7 @@ describe('BlockLadder, round a circular sequence', () => {
     // the end of the world and nothing more is read; on a circle it is a place
     // like any other.
     l.it.adopt(block([LAP - 2_000, LAP], 1))
-    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
     // Same width, moved: panning changes place, not scale.
     const asked = l.asked[0].rows
@@ -608,7 +610,7 @@ describe('BlockLadder, round a circular sequence', () => {
     l.it.adopt(block([0, 2_000], 1))
     // Pulling back hard from a small block: the widen would reach four windows
     // out, and on a circle there is nothing four windows out to reach.
-    l.it.consider({ rows: [0, 4_000], cols: [0, 4_000], binsPerCell: 1 })
+    l.it.consider({ rows: [0, 4_000], cols: [0, 4_000], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked.length).toBeGreaterThan(0)
     for (const ask of l.asked) {
       expect(ask.rows[1] - ask.rows[0]).toBeLessThanOrEqual(LAP)
@@ -623,7 +625,7 @@ describe('BlockLadder, round a circular sequence', () => {
     // Without the guard this recentres on itself, lands the block it already
     // had, finds itself pressed again, and reads once per frame for ever.
     for (let frame = 0; frame < 5; frame++) {
-      l.it.consider({ rows: [0, LAP], cols: [0, LAP], binsPerCell: 1 })
+      l.it.consider({ rows: [0, LAP], cols: [0, LAP], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
       await l.land(block([0, LAP], 1))
     }
     expect(l.asked).toHaveLength(0)
@@ -632,12 +634,12 @@ describe('BlockLadder, round a circular sequence', () => {
   it('stops asking once the reader is back in the middle of a block', async () => {
     const l = circle()
     l.it.adopt(block([LAP - 2_000, LAP], 1))
-    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
     const asked = l.asked[0]
     await l.land(block(asked.rows, 1, asked.cols))
     // The view now sits in the middle of what was read, so nothing is pressed.
-    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1 })
+    l.it.consider({ rows: [LAP - 500, LAP], cols: [LAP - 500, LAP], binsPerCell: 1, cellCap: POOLED_CELL_CAP })
     expect(l.asked).toHaveLength(1)
   })
 })

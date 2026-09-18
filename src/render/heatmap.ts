@@ -93,6 +93,46 @@ export function rasterStride(n: number, maxDim = RASTER_MAX_DIM): number {
 }
 
 /**
+ * The cells per axis a **picture of this many device pixels** is worth reading.
+ *
+ * `RASTER_MAX_DIM` is the raster's ceiling and is the right number for a read
+ * nobody is looking at — an export at 300 dpi, an analysis task, the CLI. It is
+ * the wrong number for a plot: a 1,400 px canvas drawn from a 4,096² block
+ * holds sixteen cells behind every pixel it shows, and the fifteen nobody sees
+ * are paid for three times over — in the accumulator, whose output array leaves
+ * cache; in `poolDisplay`; and in `colorize`, the last two on the main thread.
+ *
+ * Twice the plot, not once, and the factor is the zoom headroom: the ladder
+ * only re-reads when the grid is off by {@link REFINE_FACTOR}, so a block with
+ * one spare doubling in it is a block a reader can zoom into without waiting for
+ * anything. Past that they are magnifying cells, which is what the refine is
+ * for.
+ *
+ * The floor is there because a small cell of a deck is still a map: 512 cells is
+ * a picture that can be read even when the panel it is in is the size of a
+ * postage stamp.
+ */
+export function displayCellCap(cssPx: number, dpr = 1): number {
+  const device = Math.max(1, cssPx) * Math.max(1, dpr)
+  return Math.max(512, Math.min(RASTER_MAX_DIM, Math.round(device * 2)))
+}
+
+/**
+ * The cap for a read made **before there is a plot to measure**.
+ *
+ * A view reads and then draws, so its first block — the expensive one, the one
+ * that walks every stored pixel — is planned when the panel has no size. The
+ * window is the honest bound: no plot inside it is wider than it is, so this
+ * can only over-read, and it over-reads by the ratio of the window to the plot
+ * rather than by the ratio of the window to 4,096.
+ */
+export function firstReadCellCap(): number {
+  const g = globalThis as { innerWidth?: number; devicePixelRatio?: number }
+  const px = typeof g.innerWidth === 'number' && g.innerWidth > 0 ? g.innerWidth : 1280
+  return displayCellCap(px, typeof g.devicePixelRatio === 'number' ? g.devicePixelRatio : 1)
+}
+
+/**
  * Colour every cell of `matrix` into RGBA bytes.
  *
  * Either bound is honoured when finite and resolved by {@link autoRangeOf}
@@ -602,6 +642,12 @@ const SPINNER_INSET = 10
 /** `performance.now` where there is one, so a spinner turns evenly. */
 function now(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
+}
+
+/** How wide a plot could possibly be, for a view that has not been laid out. */
+function viewportWidth(): number {
+  const g = globalThis as { innerWidth?: number }
+  return typeof g.innerWidth === 'number' && g.innerWidth > 0 ? g.innerWidth : 1280
 }
 
 /**
@@ -1603,14 +1649,12 @@ export class HeatmapView {
    * How many times this view has built a raster — see {@link rasterisations}.
    */
   private rasterCount = 0
-  /** Whether gestures are held — see {@link setFrozen}. */
-  private frozen = false
-  /** When the current freeze began, for the spinner's grace period. */
-  private frozenAt = 0
+  /** Whether a finer block is out for this view — see {@link setStreaming}. */
+  private streaming = false
+  /** When the current read went out, for the spinner's grace period. */
+  private streamingAt = 0
   /** The animation loop that turns the spinner; `null` when it is not turning. */
   private spinTimer: number | null = null
-  /** What Escape calls, while frozen — see {@link setFrozen}. */
-  private onCancelFreeze: (() => void) | null = null
   private plot: PlotOptions
   /**
    * A cell being pointed at on **another** map, for a deck (§16).
@@ -1897,6 +1941,32 @@ export class HeatmapView {
   }
 
   /**
+   * How many cells per axis a block drawn here is worth reading at.
+   *
+   * The plot's own device pixels, doubled for zoom headroom — see
+   * {@link displayCellCap}, which is where the arithmetic and the argument are.
+   * Answered by the view rather than computed by whoever asks, because the plot
+   * rect is the view's and the margin it subtracts moves with the labels.
+   *
+   * The larger of the two axes: one number serves both because the block is
+   * planned on one grid, and taking the smaller would coarsen the long axis to
+   * suit the short one.
+   */
+  get cellCap(): number {
+    const plot = this.plotRect
+    // Before the first layout there is no plot to measure, and `plotRect`'s
+    // `Math.max(1, …)` would answer `1` — which `displayCellCap` floors to 512
+    // and which would make the *first* read of every view the coarsest one it
+    // ever makes. A view asks this before it has been laid out (it reads, then
+    // draws), so the fallback is not an edge case: it is the common path for
+    // the one read that matters most. The window is the honest upper bound on
+    // how wide a plot in it can be.
+    const laid = this.cssWidth > 0 && this.cssHeight > 0
+    const px = laid ? Math.max(plot.width, plot.height) : viewportWidth()
+    return displayCellCap(px, this.dpr)
+  }
+
+  /**
    * The part of the plot the data actually occupies.
    *
    * Zoomed in it is the plot rect; zoomed out the matrix is smaller than the
@@ -1969,7 +2039,7 @@ export class HeatmapView {
     separators: Separator[] | SeparatorSet = [],
     gauge?: DenseMatrix,
   ): void {
-    this.setFrozen(false)
+    this.setStreaming(false)
     this.matrix = matrix
     this.separators = Array.isArray(separators)
       ? { rows: separators, cols: separators }
@@ -2352,7 +2422,6 @@ export class HeatmapView {
    * edge {@link setAnchor} named, which is what a turned band asks for.
    */
   fit(): void {
-    if (this.frozen) return
     this.recomputeBaseZoom()
     this.zoom = this.baseZoom
     const plot = this.plotRect
@@ -2366,7 +2435,6 @@ export class HeatmapView {
 
   /** Pan by a screen distance in CSS pixels. Positive `dx` drags content right. */
   panBy(dx: number, dy: number): void {
-    if (this.frozen) return
     this.originX -= dx / this.zoom
     this.originY -= dy / this.zoom
     this.clampView()
@@ -2379,7 +2447,6 @@ export class HeatmapView {
    * under it fixed. `factor > 1` zooms in.
    */
   zoomAt(x: number, y: number, factor: number): void {
-    if (this.frozen) return
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
     const plot = this.plotRect
     const px = x - plot.x
@@ -2401,50 +2468,52 @@ export class HeatmapView {
   }
 
   /**
-   * Hold the view still, and say so.
+   * Say that a finer block is on its way, without stopping anything.
    *
-   * Set while a finer block is being read for the window on screen
-   * (`ui/refine.ts`). Two things happen and both are the point.
+   * This used to be `setFrozen`, and it used to do what the name said: pan, zoom
+   * and refit were refused for the duration of the read, so the block landed
+   * against exactly the window it was asked for. The argument was that a block
+   * arriving against a window that had moved would make the picture jump.
    *
-   * **The gestures stop.** Pan, zoom and refit are refused for the duration, so
-   * the picture is exactly where the reader left it when the new grid arrives
-   * and the swap is a change of *sharpness* and nothing else. Letting the zoom
-   * run on underneath would mean the block landed against a window that had
-   * moved since it was asked for — the reader would see it jump, and the jump
-   * would be the app catching up rather than anything in the data.
+   * It does not, and the reason is that {@link regrid} carries the window in
+   * **base pairs** rather than in cells — it reads where the picture is off the
+   * outgoing axes and places it through the incoming ones, so a window that
+   * moved during the read is placed correctly when the read lands. The freeze
+   * was buying a guarantee the swap seam already gave, and paying for it with
+   * the one thing a viewer cannot afford: a map that stops answering. On a
+   * whole-genome block that was a two-second hold, and a reader who had simply
+   * carried on scrolling got a dead canvas and a spinner.
    *
-   * **And it is visible.** The edge of what a block can show is a real boundary
-   * and until now it was an invisible one: the picture simply stopped improving,
-   * and whether that was the file's limit or the app's was not something the
-   * screen said. A held frame with a spinner in the corner says *this is the
-   * edge, and going past it costs a read* — at the moment it costs it.
+   * So the gestures stay live and the picture keeps moving — magnified, and
+   * therefore soft, until the finer grid arrives. That softening **is** the
+   * signal now, and it is a better one than a held frame: it says *this is as
+   * fine as what I have*, continuously and in the picture itself, rather than
+   * as a modal state with a way out.
    *
-   * The spinner does not appear for {@link SPINNER_DELAY_MS}, because most
-   * refines are served out of the chunk cache in a few milliseconds and a
-   * spinner that flashes on every wheel notch is worse than none. The freeze
-   * itself is immediate either way: a fast read is imperceptible, and a slow one
-   * is announced.
+   * The spinner stays, and still waits {@link SPINNER_DELAY_MS} before it shows:
+   * most reads are served out of the pixel cache in a few tens of milliseconds
+   * (`metacooler/pixelCache.ts`), and a spinner that flashes on every wheel
+   * notch is worse than none.
    */
-  setFrozen(on: boolean, onCancel?: () => void): void {
-    if (this.frozen === on) return
-    this.frozen = on
-    this.onCancelFreeze = on ? (onCancel ?? null) : null
-    this.frozenAt = on ? now() : 0
-    this.canvas.classList.toggle('is-frozen', on)
+  setStreaming(on: boolean): void {
+    if (this.streaming === on) return
+    this.streaming = on
+    this.streamingAt = on ? now() : 0
+    this.canvas.classList.toggle('is-streaming', on)
     if (on) this.spin()
     else this.stopSpin()
     this.changed()
   }
 
-  /** Whether gestures are currently held. */
-  get isFrozen(): boolean {
-    return this.frozen
+  /** Whether a finer block is out for this view. */
+  get isStreaming(): boolean {
+    return this.streaming
   }
 
   private spin(): void {
     if (this.spinTimer !== null) return
     const tick = (): void => {
-      if (!this.frozen) {
+      if (!this.streaming) {
         this.spinTimer = null
         return
       }
@@ -2471,8 +2540,8 @@ export class HeatmapView {
    * plot rather than beside it, because what it is about is the picture.
    */
   private drawSpinner(): void {
-    if (!this.frozen) return
-    const elapsed = now() - this.frozenAt
+    if (!this.streaming) return
+    const elapsed = now() - this.streamingAt
     if (elapsed < SPINNER_DELAY_MS) return
     const plot = this.plotRect
     const r = SPINNER_RADIUS
@@ -2553,7 +2622,6 @@ export class HeatmapView {
    * `ViewportLock` expects to come back.
    */
   showCellWindow(rows: [number, number], cols: [number, number]): void {
-    if (this.frozen) return
     this.placeCellWindow(rows, cols)
     this.clampView()
     this.syncScales()
@@ -2574,7 +2642,6 @@ export class HeatmapView {
    * magnification as the picture allows.
    */
   showCellSpan(cols: [number, number]): void {
-    if (this.frozen) return
     const plot = this.plotRect
     const span = Math.max(1e-6, cols[1] - cols[0])
     const wanted = plot.width / span
@@ -4883,20 +4950,10 @@ export class HeatmapView {
    * has already been prevented. The caller still has to redraw.
    */
   handleKeyDown(event: KeyboardEvent): boolean {
-    // Escape, while the map is held for a read, calls the read off and gives
-    // the gestures back. It is checked before anything else because it is the
-    // only key that means something *different* while frozen — and because a
-    // held map with no way out is the one failure mode this feature could
-    // plausibly have on a large file (see {@link setFrozen}).
-    if (this.frozen) {
-      if (event.key === 'Escape' && this.onCancelFreeze !== null) {
-        const cancel = this.onCancelFreeze
-        event.preventDefault()
-        cancel()
-        return true
-      }
-      return false
-    }
+    // There is no key that means something different while a read is out. There
+    // used to be — Escape, to call off the read that was holding the map still —
+    // and it went when the hold did: a map that never stops moving needs no way
+    // to make it start again (see {@link setStreaming}).
     const plot = this.plotRect
     const step = event.shiftKey ? 0.5 : 0.1
     const cx = plot.x + plot.width / 2
@@ -5509,23 +5566,22 @@ export class HeatmapView {
 
   /** Remove every listener {@link attach} installed. Idempotent. */
   detach(): void {
-    // End the freeze first, because a view torn down mid-freeze cannot escape
-    // one on its own: {@link stopSpin} is reachable only from
-    // `setFrozen(false)`, and no teardown path unfreezes — the ladder that
-    // froze this view is *destroyed* rather than aborted, so the `onBusy(false)`
-    // that would have released it never runs (`ui/refine.ts`). The spinner's
+    // Stop the spinner first, because a view torn down mid-read cannot stop it
+    // on its own: {@link stopSpin} is reachable only from
+    // `setStreaming(false)`, and no teardown path calls it — the ladder reading
+    // for this view is *destroyed* rather than aborted, so the `onBusy(false)`
+    // that would have stopped it never runs (`ui/refine.ts`). The spinner's
     // `tick` then re-armed `requestAnimationFrame` and called `draw()` on a
     // canvas no longer in the document, for the life of the tab, holding this
     // view's matrix, raster and offscreen canvas with it.
     //
-    // Cleared field by field rather than through `setFrozen(false)`, which
+    // Cleared field by field rather than through `setStreaming(false)`, which
     // would call `changed()` and schedule the very frame the lines below are
     // cancelling. The flag has to go too, not just the timer: left `true`, any
-    // later `draw()` on this instance would take the frozen branch again.
-    this.frozen = false
-    this.frozenAt = 0
-    this.onCancelFreeze = null
-    this.canvas.classList.remove('is-frozen')
+    // later `draw()` would draw a spinner over a detached canvas.
+    this.streaming = false
+    this.streamingAt = 0
+    this.canvas.classList.remove('is-streaming')
     this.stopSpin()
 
     for (const fn of this.detachFns) fn()

@@ -24,6 +24,12 @@ import {
 } from '../constants'
 import { yieldToEventLoop } from '../async'
 import { rasterStride } from '../render/heatmap'
+import {
+  BYTES_PER_PIXEL,
+  keepPixels,
+  pixelCacheBudgetBytes,
+  replayPixels,
+} from './pixelCache'
 import { ViewerError } from '../errors'
 import type { Hdf5Handle } from '../h5/api'
 import { dtypeKind } from '../h5/typed'
@@ -386,9 +392,31 @@ export function forEachPixelSpan(
   const range = pixelSpanRange(h, lo, hi)
   if (range === null) return
   const width = Math.max(1, Math.trunc(chunkSize))
-  for (let at = range[0]; at < range[1]; at += width) {
-    onChunk(readPixelWindow(h, at, Math.min(at + width, range[1]), value))
+  const [p0, p1] = range
+  if (replayPixels(h, value, p0, p1, onChunk)) return
+  const kept = collector(p1 - p0)
+  for (let at = p0; at < p1; at += width) {
+    const chunk = readPixelWindow(h, at, Math.min(at + width, p1), value)
+    kept?.push(chunk)
+    onChunk(chunk)
   }
+  if (kept !== null) keepPixels(h, value, p0, kept)
+}
+
+/**
+ * Somewhere to put the windows of a span worth keeping, or `null`.
+ *
+ * The whole of what the cache costs the read path: one array of references, and
+ * the decision — before anything is read — of whether the span is small enough
+ * to be worth holding. It used to be a pre-allocated destination that every
+ * window was copied into, which is 220 MB of allocation and 1.6 s of `set` on a
+ * whole-genome read: a tax on the first picture to make the second one cheap.
+ * The windows h5wasm returns are nobody else's, so keeping them is free.
+ */
+function collector(total: number): PixelChunk[] | null {
+  if (total <= 0) return null
+  if (total * BYTES_PER_PIXEL > pixelCacheBudgetBytes()) return null
+  return []
 }
 
 /** What a span asks for: the pixel range, or `null` when it holds none. */
@@ -464,13 +492,37 @@ export async function forEachPixelSpanAsync(
   const width = Math.max(1, Math.trunc(options.chunkSize ?? PIXEL_CHUNK))
   const total = p1 - p0
   const value = options.value ?? DEFAULT_COUNT_COLUMN
+  // Served from what is already inflated, and the whole difference between a
+  // zoom that reads and a zoom that sharpens (`metacooler/pixelCache.ts`).
+  // Still windowed, still yielding, still cancellable: a replay of 13.7 M
+  // pixels is a fifth of a second rather than two, which is short enough to be
+  // a frame and long enough that a reader who has moved on deserves to have it
+  // called off.
+  let stopped = false
+  if (
+    replayPixels(h, value, p0, p1, onChunk, () => {
+      stopped = options.cancelled?.() === true
+      return !stopped
+    })
+  ) {
+    if (stopped) return false
+    options.onProgress?.(total, total)
+    return true
+  }
+  const kept = collector(total)
   for (let at = p0; at < p1; at += width) {
     if (options.cancelled?.() === true) return false
     const end = Math.min(at + width, p1)
-    onChunk(readPixelWindow(h, at, end, value))
+    const chunk = readPixelWindow(h, at, end, value)
+    kept?.push(chunk)
+    onChunk(chunk)
     options.onProgress?.(end - p0, total)
     await yieldToEventLoop()
   }
+  // Only a span read to the end is kept: a cancelled read has a tail it never
+  // saw, and a run that claims a range it only half holds is the one way this
+  // cache could answer with numbers that are not in the file.
+  if (kept !== null) keepPixels(h, value, p0, kept)
   return true
 }
 
@@ -509,14 +561,40 @@ export async function forEachPixelRangesAsync(
   const value = options.value ?? DEFAULT_COUNT_COLUMN
   let done = 0
   for (const [p0, p1] of ranges) {
+    // Per band, because that is the unit the bands were merged into and the
+    // unit a second selection overlapping this one will ask for again.
+    let stopped = false
+    const served = replayPixels(
+      h,
+      value,
+      p0,
+      p1,
+      (chunk) => {
+        onChunk(chunk)
+        done += chunk.length
+        options.onProgress?.(done, total)
+      },
+      () => {
+        stopped = options.cancelled?.() === true
+        return !stopped
+      },
+    )
+    if (served) {
+      if (stopped) return false
+      continue
+    }
+    const kept = collector(p1 - p0)
     for (let at = p0; at < p1; at += width) {
       if (options.cancelled?.() === true) return false
       const end = Math.min(at + width, p1)
-      onChunk(readPixelWindow(h, at, end, value))
+      const chunk = readPixelWindow(h, at, end, value)
+      kept?.push(chunk)
+      onChunk(chunk)
       done += end - at
       options.onProgress?.(done, total)
       await yieldToEventLoop()
     }
+    if (kept !== null) keepPixels(h, value, p0, kept)
   }
   return true
 }

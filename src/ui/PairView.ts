@@ -141,6 +141,7 @@ export class PairView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      openBinsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       levels: ['bin', 'contig'],
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
@@ -261,15 +262,23 @@ export class PairView {
     this.ladder?.destroy()
     this.ladder = null
     if (this.level !== 'bin') return
+    // The coarse end of the resolution bar's scale: this view's whole world in
+    // one picture (`MatrixPanel.setResolutionDomain`). The wider of the two
+    // ceilings, because one grid is chosen for both axes of a block and the
+    // narrower axis follows it.
+    this.panel.setResolutionDomain(
+      Math.max(rowCeiling[1] - rowCeiling[0], colCeiling[1] - colCeiling[0]),
+    )
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling: { rows: rowCeiling, cols: colCeiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      read: (rows, cols, rung, cellCap) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          cellCap,
           rows,
           cols,
           balance: this.props.balance,
@@ -297,7 +306,11 @@ export class PairView {
       }
       const result: MatrixResult =
         this.level === 'bin'
-          ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
+          ? await this.props.client.request<'matrix'>({
+              kind: 'matrix',
+              ...query,
+              cellCap: this.panel.cellCap,
+            })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
       // The reader may have planned a coarser grid than the file's bins — a

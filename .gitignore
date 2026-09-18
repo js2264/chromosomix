@@ -46,3 +46,9 @@ data/*.tsv
 .claude/worktrees/
 dist-cli/
 dist-standalone/
+
+# The UI gallery's output (`scripts/ui-gallery.mjs`). Screenshots of a run, not
+# a build artefact and not a fixture: they are looked at once, in the review
+# they were taken for, and a committed set would be stale by the next change to
+# anything on screen.
+gallery/

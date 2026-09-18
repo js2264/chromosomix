@@ -61,6 +61,19 @@ import type { MatrixResult } from '../worker/protocol'
 export const REFINE_PAD = 0.5
 
 /**
+ * How much wider than the window on screen a refine actually reads.
+ *
+ * `REFINE_PAD` on each side, so twice the window — and it is stated as its own
+ * constant because one caller needs the product rather than the margin.
+ * `MatrixPanel.showResolution` has to answer *what window yields this
+ * resolution*, and the answer is set by what the read plans for rather than by
+ * what is on screen: aim at `bp × cap` base pairs and the padded read lands a
+ * rung coarser, which is a resolution control that misses by a factor of two
+ * every time it is used.
+ */
+export const REFINE_REACH = 1 + 2 * REFINE_PAD
+
+/**
  * How much wider a *widening* read reaches, as a multiple of the view.
  *
  * Bigger than {@link REFINE_PAD} because zooming out is a gesture rather than a
@@ -84,6 +97,20 @@ export const WIDEN_REACH = 4
  */
 export const REFINE_FACTOR = 2
 
+/**
+ * How long a read may run before a window that has left it calls it off.
+ *
+ * The one case the *let it finish* rule above is wrong about: a read that is
+ * still going after this is not a rung of a ladder — it is a scan of something
+ * large, or a network that has stalled — and the reader is somewhere else.
+ *
+ * Longer than any cached step (a replay of the whole yeast genome is ~430 ms)
+ * and longer than any uncached one that is not a genuine full pass, so the
+ * ordinary ladder never reaches it and the reads that do are the ones worth
+ * abandoning.
+ */
+export const SUPERSEDE_AFTER_MS = 1500
+
 /** Blocks kept so that zooming back out costs nothing. */
 export const HELD_BLOCKS = 3
 
@@ -104,6 +131,32 @@ export interface RefineView {
   cols: Extent
   /** Bins summed into one drawn cell — `MatrixResult.binsPerCell`, or 1. */
   binsPerCell: number
+  /**
+   * Cells per axis this panel is worth reading at — `HeatmapView.cellCap`.
+   *
+   * Reported with the window rather than fixed at `POOLED_CELL_CAP`, because it
+   * is a property of the panel and panels are resized, laid out in decks and
+   * opened on displays of different densities. It decides two things that must
+   * agree or the ladder oscillates: how coarse a grid the read comes back on,
+   * and — through {@link gridFor} — what counts as coarse enough to replace.
+   */
+  cellCap: number
+  /**
+   * The reader has **named** this resolution, so the tolerance does not apply.
+   *
+   * {@link REFINE_FACTOR} exists to stop a slow zoom from reading continuously
+   * for a difference the eye cannot find, and it is right for a gesture: a
+   * gesture asks for a magnification and lets the app choose a grid for it. It
+   * is wrong for the resolution bar, which asks for *a grid* — and a control
+   * that answers "1 kb" with 4 kb because 4 kb was within a factor of two of
+   * what it would have chosen anyway is a control that does not work.
+   *
+   * It cannot loop. The panel raises it only while the block is coarser than
+   * what was asked *and* the window could hold what was asked, so a block at
+   * the file's own bins lowers it by arithmetic; and {@link settled} below
+   * stops a window that has already been read from being read again for it.
+   */
+  demand?: boolean
 }
 
 /** What a ladder needs of the world. */
@@ -118,7 +171,7 @@ export interface LadderOptions {
    * (`worker/reader.worker.ts`), so a cancel that is never sent is a scan that
    * runs to the end for a picture nobody is waiting for.
    */
-  read(rows: Extent, cols: Extent): Cancellable<MatrixResult>
+  read(rows: Extent, cols: Extent, cellCap: number): Cancellable<MatrixResult>
   /**
    * The widest this ladder may ever ask for, per axis: the view's own domain.
    *
@@ -158,6 +211,13 @@ export interface LadderOptions {
   onBusy?(busy: boolean): void
   /** Told when a read fails, so the view can say so once rather than per frame. */
   onError?(err: unknown): void
+  /**
+   * The clock, for {@link SUPERSEDE_AFTER_MS}. `performance.now` by default.
+   *
+   * Injected so that "a read still going after a second and a half" is a rule a
+   * test can assert rather than a second and a half a test has to wait.
+   */
+  now?(): number
 }
 
 interface Held {
@@ -183,7 +243,7 @@ export class BlockLadder {
   private held: Held[] = []
   private current: MatrixResult | null = null
   private inflight: { key: string; rows: Extent; cols: Extent; cancel(): void } | null = null
-  private pending: { rows: Extent; cols: Extent; key: string } | null = null
+  private pending: { rows: Extent; cols: Extent; key: string; cellCap: number } | null = null
   /**
    * Reads that failed, by key.
    *
@@ -195,19 +255,25 @@ export class BlockLadder {
    */
   private readonly refused = new Set<string>()
   /**
-   * A read the reader called off, by key.
+   * The last window a read actually landed for.
    *
-   * Not the same thing as {@link refused}: that is the reader's *machine*
-   * declining, and it never changes its mind. This is the reader declining, and
-   * it must not be retried on the very next frame — which is what would happen,
-   * since the window they abandoned it at is the window they are still looking
-   * at. Cleared the moment they move, because moving is asking again.
+   * The termination guard for {@link RefineView.demand}: a demand that the
+   * reader's grid cannot satisfy — they asked for 1 kb, the window is wide, and
+   * the reader planned 2 kb for it — would otherwise re-ask for the same block
+   * on every frame for ever. One read per window is the most a demand can ever
+   * cost, and moving is what asks again.
    */
-  private abandoned: string | null = null
+  private settled: string | null = null
+  /** When the read in flight went out, for {@link SUPERSEDE_AFTER_MS}. */
+  private firedAt = 0
   private disposed = false
 
   constructor(options: LadderOptions) {
     this.options = options
+  }
+
+  private clock(): number {
+    return this.options.now?.() ?? now()
   }
 
   /**
@@ -269,26 +335,46 @@ export class BlockLadder {
       else this.drop(best.result)
     }
 
-    if (this.satisfied(view)) {
+    // A demand outranks the tolerance, but never the record of having already
+    // answered this very window.
+    if (this.satisfied(view) && (view.demand !== true || this.settled === key)) {
       this.pending = null
       return
     }
     if (this.refused.has(key)) return
-    if (this.abandoned === key) return
-    this.abandoned = null
 
-    // A read already going for this window, or for one that still contains what
-    // is on screen, is the read this frame wants. One that no longer contains it
-    // is finishing a picture of somewhere else, and is called off.
+    // **A read in flight is left to finish.** It used to be cancelled the
+    // moment the window left it, which was right when a read froze the map:
+    // nothing else could happen until it landed, so a read for somewhere the
+    // reader had left was pure waste.
+    //
+    // It is the wrong rule now, and for a reason that is not about politeness.
+    // A read only warms the pixel cache if it *completes*
+    // (`metacooler/pixelCache.ts` keeps a span, never half of one), so a
+    // gesture that cancels every read it starts inflates the same bytes over
+    // and over and never gets faster — the exact failure this whole change
+    // exists to remove. Letting it run costs nothing visible, because the map
+    // is live throughout, and the window it was for is usually one the reader
+    // is about to come back through anyway.
+    //
+    // The valve is time rather than distance: a read still going after
+    // {@link SUPERSEDE_AFTER_MS} is not a step of a ladder, it is a scan, and
+    // the reader has moved on. That one is called off.
     const flight = this.inflight
     if (flight !== null) {
       if (covers(flight.rows, view.rows) && covers(flight.cols, view.cols)) return
+      if (this.clock() - this.firedAt < SUPERSEDE_AFTER_MS) {
+        // Remembered, not dropped: `fire` runs it when the current read lands,
+        // so the latest window always wins in the end.
+        this.pending = { ...wanted, key, cellCap: view.cellCap }
+        return
+      }
       flight.cancel()
       this.inflight = null
       this.options.onBusy?.(false)
     }
 
-    this.pending = { ...wanted, key }
+    this.pending = { ...wanted, key, cellCap: view.cellCap }
     this.fire()
   }
 
@@ -373,7 +459,7 @@ export class BlockLadder {
     if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
     if (this.atEdge(view, block)) return false
     const wanted = this.plan(view)
-    return block.grid <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
+    return block.grid <= gridFor(wanted.rows, wanted.cols, view.cellCap) * REFINE_FACTOR
   }
 
   /**
@@ -418,14 +504,16 @@ export class BlockLadder {
     this.pending = null
     if (this.inflight !== null || this.refused.has(pending.key)) return
 
-    const { promise, cancel } = this.options.read(pending.rows, pending.cols)
+    const { promise, cancel } = this.options.read(pending.rows, pending.cols, pending.cellCap)
     this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, cancel }
+    this.firedAt = this.clock()
     this.options.onBusy?.(true)
     void promise
       .then((result) => {
         if (this.disposed || this.inflight?.key !== pending.key) return
         this.inflight = null
         this.options.onBusy?.(false)
+        this.settled = pending.key
         this.keep(result, pending.rows, pending.cols)
         if (this.options.onBlock(result)) this.current = result
         else {
@@ -473,29 +561,6 @@ export class BlockLadder {
     }
   }
 
-  /**
-   * Call off the read in flight, at the reader's request.
-   *
-   * The way out of a freeze. A refine is normally over before it is noticed, but
-   * *normally* is not a guarantee: a coarse window of a large cooler is a real
-   * scan, and a map held for a minute with no way to take it back is an app that
-   * has stopped working as far as anybody using it is concerned. Escape gives it
-   * back — the picture that was already there is still a complete picture, which
-   * is the whole reason this feature could be built without a tile server.
-   *
-   * The window is remembered as {@link abandoned} so the next frame does not
-   * simply ask again. Moving clears it, because moving is asking again.
-   */
-  abort(): void {
-    const flight = this.inflight
-    if (flight === null) return
-    this.abandoned = flight.key
-    flight.cancel()
-    this.inflight = null
-    this.pending = null
-    this.options.onBusy?.(false)
-  }
-
   destroy(): void {
     this.disposed = true
     this.pending = null
@@ -520,6 +585,11 @@ export class BlockLadder {
     this.current = null
     if (wasReading) this.options.onBusy?.(false)
   }
+}
+
+/** A clock that exists in a worker, in Node and in a browser. */
+function now(): number {
+  return typeof performance === 'undefined' ? Date.now() : performance.now()
 }
 
 /** `true` when `outer` contains `inner` — the coverage test, per axis. */
@@ -610,9 +680,9 @@ export function clip(extent: Extent, bounds: Extent): Extent {
  * never to ask for one — the plan is the reader's to choose, and a client that
  * sent its own would anchor the grid to the pan position (`reader.worker.ts`).
  */
-export function gridFor(rows: Extent, cols: Extent): number {
+export function gridFor(rows: Extent, cols: Extent, cap = POOLED_CELL_CAP): number {
   const widest = Math.max(rows[1] - rows[0], cols[1] - cols[0])
-  return Math.max(1, Math.ceil(widest / POOLED_CELL_CAP))
+  return Math.max(1, Math.ceil(widest / Math.max(1, cap)))
 }
 
 function keyOf(rows: Extent, cols: Extent): string {
@@ -644,17 +714,28 @@ function isAbort(err: unknown): boolean {
 const REFINE_KEY = 'metacooler-viewer:refine'
 
 /**
- * Off.
+ * On.
  *
- * A zoom that reads is a zoom that can *wait*, and on a large cooler the wait is
- * real: the map holds still, a spinner turns, and what the reader gets back is a
- * different grid from the one they were reading. That is a good trade when it is
- * asked for and a surprising one when it is not — and §2's promise, that pan and
- * zoom perform no I/O, is the promise the app has always made. So the default is
- * the behaviour that keeps it, and the feature is one press away on the map's own
- * controls, beside the two other switches that change what picture this is.
+ * It was off, and the paragraph here argued for that at length: *a zoom that
+ * reads is a zoom that can wait*, the map holds still, a spinner turns, and the
+ * reader gets back a grid they did not ask for. Every clause of that was true
+ * of what the feature was then.
+ *
+ * None of it is true of what it is now. The map does not hold still — nothing
+ * is refused for the duration of a read (`HeatmapView.setStreaming`). The wait
+ * is not real at the scale it was: the pixels stay inflated once they have been
+ * read, so a step of the ladder is a replay rather than a re-inflation, and on
+ * the yeast demo that is ~430 ms against 2.9 s (`metacooler/pixelCache.ts`).
+ * And the grid is not a surprise, because the picture softens as you cross the
+ * edge of what the block holds and sharpens when the finer one lands — which is
+ * the resolution *shown*, continuously, rather than announced.
+ *
+ * What is left of §2's promise is the part that was always the point: a gesture
+ * costs nothing, cannot be interrupted, and cannot be made to wait. A viewer of
+ * a genome-scale map whose zoom does not change resolution is a viewer of one
+ * picture, and that is not what this is any more.
  */
-export const REFINE_DEFAULT = false
+export const REFINE_DEFAULT = true
 
 let refining: boolean | null = null
 const refineListeners = new Set<(on: boolean) => void>()
@@ -782,7 +863,7 @@ export function chooseRung(
 export interface RefinablePanel {
   setRefineListener(listener: ((view: RefineView) => void) | null): void
   regrid(data: MatrixResult, binsize: number, second?: MatrixResult): boolean
-  setFrozen(on: boolean, onCancel?: () => void): void
+  setStreaming(on: boolean): void
 }
 
 /**
@@ -809,6 +890,7 @@ export function attachRefine(options: {
     rows: Extent,
     cols: Extent,
     rung: string | undefined,
+    cellCap: number,
   ): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
   ceiling: { rows: Extent; cols: Extent }
   /**
@@ -854,13 +936,14 @@ export function attachRefine(options: {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
   const ladder = new BlockLadder({
     ceiling: options.ceiling,
-    read: (rows, cols) => {
+    read: (rows, cols, cellCap) => {
       const rung = chooseRung(
         options.rungs ?? [],
         Math.max(rows[1] - rows[0], cols[1] - cols[0]),
         options.binsize,
+        cellCap,
       )
-      const { promise, cancel } = options.read(rows, cols, rung)
+      const { promise, cancel } = options.read(rows, cols, rung, cellCap)
       return {
         cancel,
         promise: promise.then(({ result, second }) => {
@@ -881,12 +964,13 @@ export function attachRefine(options: {
       if (placed) options.onInstalled?.(result)
       return placed
     },
-    // The freeze, and the caller's own hook after it. Wired here rather than
-    // left to each view because it is not a view's decision: a read is in
-    // flight for the window on screen, and the window on screen must therefore
-    // stop moving. A view that wants to say something as well still can.
+    // The spinner, and the caller's own hook after it. Wired here rather than
+    // left to each view because it is not a view's decision: a read is out for
+    // the window on screen, and every view says so the same way. Nothing is
+    // held — see `HeatmapView.setStreaming` for why the hold went and what
+    // replaced it.
     onBusy: (busy) => {
-      options.panel.setFrozen(busy, () => ladder.abort())
+      options.panel.setStreaming(busy)
       options.onBusy?.(busy)
     },
     ...(options.wrap === undefined ? {} : { wrap: options.wrap }),

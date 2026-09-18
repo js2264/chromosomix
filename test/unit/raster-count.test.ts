@@ -152,71 +152,64 @@ describe('what rebuilds the raster', () => {
     expect(heatmap.rasterisations).toBe(after + 1)
   })
 
-  it('refuses gestures while frozen, and takes them again after', () => {
+  it('takes every gesture while a read is out for it', () => {
+    // The inverse of the assertion this replaces. A read used to refuse pan,
+    // zoom, refit and an incoming window for its whole duration, and offered
+    // Escape as the way out. The map stays live now, so the five gestures that
+    // were refused are the five that have to work, and there is nothing left
+    // for Escape to cancel.
     const heatmap = view()
     heatmap.setMatrix(block(64))
     heatmap.draw()
-    heatmap.zoomAt(200, 200, 2)
-    const held = { zoom: heatmap.zoomLevel, window: heatmap.cellWindow() }
-
-    heatmap.setFrozen(true)
-    expect(heatmap.isFrozen).toBe(true)
-    // Everything a reader can do to move the picture, refused. The block that
-    // is about to arrive was asked for against *this* window, so a zoom that
-    // ran on underneath would land it against one that had moved — the reader
-    // would see a jump, and the jump would be the app catching up.
+    // Zoomed in, so there is somewhere to pan *to*: a block at fit zoom is
+    // clamped on every side and would hold still for reasons that have nothing
+    // to do with a read.
     heatmap.zoomAt(200, 200, 4)
+    heatmap.setStreaming(true)
+    expect(heatmap.isStreaming).toBe(true)
+
+    const start = heatmap.cellWindow()
     heatmap.panBy(50, 50)
-    heatmap.fit()
-    heatmap.showCellWindow([0, 8], [0, 8])
-    expect(heatmap.zoomLevel).toBe(held.zoom)
-    expect(heatmap.cellWindow()).toEqual(held.window)
-    // …and no re-colouring for any of it, frozen or not.
-    heatmap.draw()
+    expect(heatmap.cellWindow(), 'a drag still pans').not.toEqual(start)
 
-    heatmap.setFrozen(false)
+    const panned = heatmap.zoomLevel
     heatmap.zoomAt(200, 200, 2)
-    expect(heatmap.zoomLevel).toBeGreaterThan(held.zoom)
-  })
+    expect(heatmap.zoomLevel, 'a wheel still zooms').not.toBe(panned)
 
-  it('lets Escape out of a freeze, and refuses other keys while held', () => {
-    const heatmap = view()
-    heatmap.setMatrix(block(64))
-    heatmap.draw()
-    let cancelled = 0
-    heatmap.setFrozen(true, () => {
-      cancelled += 1
-    })
-    const held = heatmap.cellWindow()
+    heatmap.showCellWindow([0, 8], [0, 8])
+    expect(heatmap.cellWindow().cols[1], 'a locked deck still moves it').toBeLessThan(32)
 
-    // An arrow key is a pan, and a pan is refused like every other gesture.
+    heatmap.fit()
+    expect(heatmap.zoomLevel, 'and a double tap still refits').toBeLessThan(panned)
+
     heatmap.handleKeyDown({ key: 'ArrowRight', preventDefault: () => {} } as KeyboardEvent)
-    expect(heatmap.cellWindow()).toEqual(held)
-    expect(cancelled).toBe(0)
 
-    heatmap.handleKeyDown({ key: 'Escape', preventDefault: () => {} } as KeyboardEvent)
-    expect(cancelled, 'a held map must always have a way out').toBe(1)
+    // …and none of it re-coloured a single cell, which is the rule this file is
+    // about: every one of those is a transform, and a transform is a `drawImage`.
+    const after = heatmap.rasterisations
+    heatmap.draw()
+    expect(heatmap.rasterisations).toBe(after)
   })
 
-  it('a new block ends a freeze', () => {
-    // A navigation is a different question from the one the freeze was waiting
-    // on; leaving the map held for a read nobody is waiting for any more is how
-    // an app looks broken.
+  it('a new block ends the streaming state', () => {
+    // A navigation is a different question from the one the read was answering;
+    // a spinner left turning for a read nobody is waiting for any more is how an
+    // app looks broken.
     const heatmap = view()
     heatmap.setMatrix(block(64))
-    heatmap.setFrozen(true)
+    heatmap.setStreaming(true)
     heatmap.setMatrix(block(32))
-    expect(heatmap.isFrozen).toBe(false)
+    expect(heatmap.isStreaming).toBe(false)
   })
 
-  it('does not re-rasterise while a freeze is drawn', () => {
+  it('does not re-rasterise while the spinner turns', () => {
     const heatmap = view()
     heatmap.setMatrix(block(64))
     heatmap.draw()
     const after = heatmap.rasterisations
-    heatmap.setFrozen(true)
+    heatmap.setStreaming(true)
     for (let i = 0; i < 10; i++) heatmap.draw()
-    heatmap.setFrozen(false)
+    heatmap.setStreaming(false)
     heatmap.draw()
     // The spinner turns on a `requestAnimationFrame` loop that calls `draw`, so
     // a spinner that cost a raster would cost one sixty times a second while

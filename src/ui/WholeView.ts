@@ -33,7 +33,8 @@
  */
 
 import { WHOLE_VIEW_GATE_PIXELS, WHOLE_VIEW_GATE_BINS } from '../constants'
-import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
+import { IDENTITY_PLAN, poolPlan, type PoolPlan } from '../metacooler/pooling'
+import { firstReadCellCap } from '../render/heatmap'
 import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
@@ -304,12 +305,22 @@ export class WholeView {
     // A selection is pooled against *its own* size: four MAGs are a small
     // picture however large the file they came out of is, and pooling them by
     // the file's stride would throw away the detail they were chosen for.
+    // …and against the **picture's** size rather than the raster's ceiling.
+    // This is the one read in the application that walks every stored pixel in
+    // the file, and it used to ask for 4,096 cells per axis whatever it was
+    // going to be drawn in: on a 640 px plot that is six cells behind every
+    // pixel, paid for in the accumulator (whose output array leaves cache) and
+    // again in `poolDisplay` and `colorize` on the main thread, for detail the
+    // reader cannot see until they have zoomed six times — by which point the
+    // zoom has read the window again anyway. The panel is not built yet, so
+    // this is `displayCellCap`'s own pre-layout answer, which is the window:
+    // the honest upper bound on how wide a plot inside it can be.
     this.plan =
       props.level === 'bin'
         ? poolPlan(
             props.selection?.bins ?? props.displayExtent[1] - props.displayExtent[0],
             props.selection?.contigs ?? props.nContigs,
-            POOLED_CELL_CAP,
+            firstReadCellCap(),
           )
         : IDENTITY_PLAN
     this.summary = el('p', { class: 'summary' })
@@ -349,6 +360,7 @@ export class WholeView {
       // The bin size of the grid actually on screen. Pooling is not a mode the
       // panel has to know about: a block of 3 kb cells is a block of 3 kb bins.
       binsize: props.binsize * this.plan.binsPerCell,
+      openBinsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(presentationOf(props.compare) === undefined
@@ -603,8 +615,8 @@ export class WholeView {
         el('strong', {
           text: `Whole genome at ${fmt.bp(this.props.binsize)} reads every stored pixel of the file`,
         }),
-        `${counted} and sums them into ${this.resolutionPhrase()}. Once per file; the picture ` +
-          'is kept while it is open.' +
+        `${counted} and sums them into ${this.resolutionPhrase()}. Once per file: the pixels ` +
+          'stay unpacked, so every zoom after it re-draws from them rather than reading again.' +
           // A selection reads the whole file too: the sequences it wants are
           // scattered through the pixels, so there is no smaller span to walk.
           (this.props.selection === undefined
@@ -618,8 +630,8 @@ export class WholeView {
           'p',
           {},
           el('strong', { text: `Opening the file at ${fmt.bp(rung.binsize)} draws the same picture` }),
-          ` from far fewer pixels — the cells are ${this.resolutionPhrase().replace(/^cells of /, '')} ` +
-            'either way, and every region after it opens quicker too.',
+          ' from far fewer pixels — the cells come out the same size either way, since both are ' +
+            'summed to fit the same screen — and every region after it opens quicker too.',
         ),
       )
     }
@@ -680,10 +692,54 @@ export class WholeView {
    * a moment later.
    */
   private resolutionPhrase(): string {
+    // **The rule rather than the number.** This used to name the cell size the
+    // pass would produce, and it could, because both the phrase and the read
+    // planned against the same constant. The read is planned against the *plot*
+    // now, and the plot does not exist while the gate is up: a `hidden` element
+    // measures as nothing, the gate's own box is neither the column nor the
+    // plot — which is sized by the height budget rather than by the width it
+    // sits in — and showing the plot for the length of one measurement gets the
+    // 20rem floor of a `clamp` that has not resolved yet. Every proxy available
+    // here was out by a whole rung, in both directions, and a promise that is a
+    // rung out above a button that costs a pass over the file is worse than no
+    // promise. The size is stated exactly, in the summary line, the moment
+    // there is a picture to state it about.
     if (this.plan.contigsPerCell > 1) {
       return `cells of ${fmt.int(this.plan.contigsPerCell)} ${this.props.noun}s`
     }
-    return `cells of about ${fmt.bp(this.props.binsize * this.plan.binsPerCell)}`
+    return 'cells at the coarsest grid your screen can show'
+  }
+
+  /**
+   * The grid a read made **now** would be planned on.
+   *
+   * Against the cap this panel will be judged by rather than the one the
+   * constructor had to guess with. The plan is a *floor* the reader coarsens
+   * from, and it coarsens by doubling — so a plan aimed at a cap wider than the
+   * real one is a plan that loses a whole rung to rounding. On the demo yeast
+   * genome that was the difference between 4 kb and 8 kb cells at fit zoom, for
+   * a picture that could show either.
+   */
+  private readPlan(cap = this.plannedCap()): PoolPlan {
+    if (this.level !== 'bin') return IDENTITY_PLAN
+    return poolPlan(
+      this.props.selection?.bins ?? this.props.displayExtent[1] - this.props.displayExtent[0],
+      this.props.selection?.contigs ?? this.props.nContigs,
+      cap,
+    )
+  }
+
+  /**
+   * The cap the next read will be planned against: the plot's, where there is a
+   * plot to measure, and the window's before there is one.
+   *
+   * `load` measures the panel the moment it reveals it and before it calls
+   * this, so the fallback is only ever reached by a read made before the view
+   * is on screen at all.
+   */
+  private plannedCap(): number {
+    const measured = this.panel?.cellCap ?? 0
+    return measured > 512 ? measured : firstReadCellCap()
   }
 
   /**
@@ -693,10 +749,13 @@ export class WholeView {
    * unpooled read carries nothing rather than two ones — which is also what
    * keeps the request a caller can read.
    */
-  private wire(): { binsPerCell?: number; contigsPerCell?: number } {
+  private wire(): { binsPerCell?: number; contigsPerCell?: number; cellCap?: number } {
+    const cap = this.panel === undefined ? firstReadCellCap() : this.panel.cellCap
+    const plan = this.readPlan()
     return {
-      ...(this.plan.binsPerCell > 1 ? { binsPerCell: this.plan.binsPerCell } : {}),
-      ...(this.plan.contigsPerCell > 1 ? { contigsPerCell: this.plan.contigsPerCell } : {}),
+      ...(plan.binsPerCell > 1 ? { binsPerCell: plan.binsPerCell } : {}),
+      ...(plan.contigsPerCell > 1 ? { contigsPerCell: plan.contigsPerCell } : {}),
+      cellCap: cap,
     }
   }
 
@@ -709,6 +768,11 @@ export class WholeView {
     // been overridden — this is the read it was waiting for.
     this.gate.classList.add('hidden')
     this.panelHost.classList.remove('hidden')
+    // …and measure it, before `wire()` below plans a grid against its size. A
+    // panel that was `hidden` a statement ago measures as nothing until the
+    // browser has laid it out, and this read is the one that cannot be taken
+    // back: it walks every stored pixel in the file.
+    this.panel.remeasure()
     this.panel.setBusy(true)
     this.problem.replaceChildren()
     this.problem.classList.add('hidden')
@@ -857,15 +921,20 @@ export class WholeView {
     if ((result.contigsPerCell ?? 1) > 1) return
     const { client, balance, namesGenomes } = this.props
     const genomes = namesGenomes ? { genomes: true } : {}
+    // The coarse end of the resolution bar's scale: this view's whole world in
+    // one picture (`MatrixPanel.setResolutionDomain`). The same ceiling the
+    // ladder is given below, said once more to the thing that draws the scale.
+    this.panel.setResolutionDomain(ceiling[1] - ceiling[0])
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      read: (rows, cols, rung, cellCap) => {
         const own = client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          cellCap,
           rows,
           cols,
           balance,
@@ -879,6 +948,7 @@ export class WholeView {
               client2.request<'matrix'>({
                 kind: 'matrix',
                 ...(rung === undefined ? {} : { rung }),
+                cellCap,
                 rows,
                 cols,
                 balance,

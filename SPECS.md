@@ -52,33 +52,48 @@ nothing is composited, and no picture is ever assembled from parts.
 
 **The fourth clause used to be "no progressive refinement", and it is now bounded rather than
 absent.** What the app grew into is what changed it: §9 made whole-genome coolers a first-class view
-and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome now
-opens at a grid the reader can see is coarse — and, until this, could do nothing about but leave.
-Zooming past what the block in hand can show therefore reads the window again, at the grid the
-picture could show, **once the gesture has settled**. The properties that keep this inside §2 rather
-than beside it:
+and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome opened
+at a grid the reader could see was coarse and could do nothing about but leave. Zooming past what
+the block in hand can show therefore reads the window again, at the grid the picture could show.
+The properties that keep this inside §2 rather than beside it:
 
-- **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
-  block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
-  the plot — until the new grid lands. One crossing is one read, by construction rather than by
-  timing, and the reader is shown the moment their resolution changes instead of having it happen
-  under them. Escape calls the read off and gives the gestures back, because a picture that is
-  already complete is never worth locking the map for;
+- **a gesture still costs nothing, and is never interrupted.** It used to be the opposite: crossing
+  the edge of what a block could show *froze* the map — pan, zoom and refit refused, a spinner in
+  the corner, Escape the way out — so that the block landed against exactly the window it was asked
+  for. That guarantee was already being given by the swap seam, which carries the window in **base
+  pairs** and therefore places a block correctly against a window that moved while the read was out;
+  the freeze was buying it twice and paying with a map that stopped answering for two seconds. So
+  nothing is held. The picture magnifies, and therefore softens, until the finer grid lands — which
+  says *this is as fine as what I have* continuously and in the picture itself, rather than as a
+  modal state with a way out of it;
+- **the bytes are inflated once.** A read's cost is almost entirely HDF5 turning compressed chunks
+  back into numbers — on the yeast demo, 2,026 ms of a 2,930 ms whole-genome read, against 50 ms for
+  summing every count in it — and it used to be paid again on every rung, because nothing between
+  the decoder and the accumulator remembered anything. The inflated pixel columns are now kept,
+  keyed by the pixel index range they came from, and a ladder reads *nested* row bands: so the
+  widest read populates every read after it, in both directions, and a rung is a replay rather than
+  a re-inflation. Bounded in bytes, dropped least-recently-used, released with the file. A miss
+  costs exactly what the read cost before the cache existed;
 - **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Two or
   three are *retained* so that zooming back out is a swap rather than a request, which is a small
   bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
   stitched;
+- **a block is read at the size of the picture.** Not at `RASTER_MAX_DIM`, which is what the
+  renderer will draw at most and is the wrong number for a 650 px plot: it puts six cells behind
+  every pixel and pays for the five nobody sees in the accumulator and then twice more on the main
+  thread. Every view reads at twice its own device pixels, which leaves exactly one doubling of zoom
+  in hand before a read is wanted. Reads nobody is looking at — an export at 300 dpi, an analysis
+  task, the CLI — still ask for the full raster;
 - **it terminates.** There is no grid below the file's own bins, so the staircase from the widest
-  view to the finest data is `⌈log₂ k⌉` reads — one for a whole yeast genome at 1 kb, three for a
-  human chromosome at 5 kb, **none at all for a MAG**, whose block already is the finest data in the
-  file. §2's own case is untouched;
+  view to the finest data is `⌈log₂ k⌉` reads — **none at all for a MAG**, whose block already is
+  the finest data in the file. §2's own case is untouched;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
-- **it is a preference, and it is off.** The default is the behaviour that keeps this clause
-  absolute: a block read once, and a zoom that magnifies it. Refinement is one press away on the
-  map's own controls — first of the three switches that change *what picture this is*, before the
-  turn and the baseline — because a zoom that reads is a zoom that can wait, and a wait nobody asked
-  for is a surprise rather than a feature.
+- **it is on, and the switch pins rather than enables.** It was a preference defaulted off, and the
+  argument for that was this clause: a zoom that reads is a zoom that can wait. It does not wait
+  like that any more. The switch is still first of the three on the map's `picture` row, and what it
+  now does is *hold the grid where it is* — for a figure, or for a reader who wants one picture
+  rather than a stream of them.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
@@ -1207,12 +1222,39 @@ viewport.
 A block larger than the picture is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
 and never part of one sequence beside anything else: a sequence longer than the
 capacity keeps cells of its own, cut at its own start, and only the ones too small
-to fill a cell share. The capacity is searched for against `RASTER_MAX_DIM`, so the
-grid the reader builds is the grid the renderer draws and nothing pools a second
-time — the raster's own pooling is reached only by a block that already fits. The
-grid is anchored to the *sequence*, not to the request, so the same base pair falls
-in the same cell holding the same sum in every view of it, and a range is widened to
-those cell edges rather than starting a grid of its own.
+to fill a cell share. The grid the reader builds is the grid the renderer draws and
+nothing pools a second time — the raster's own pooling is reached only by a block
+that already fits. The grid is anchored to the *sequence*, not to the request, so the
+same base pair falls in the same cell holding the same sum in every view of it, and a
+range is widened to those cell edges rather than starting a grid of its own.
+
+**The capacity is the picture's, not the raster's.** `RASTER_MAX_DIM` is the widest
+raster the renderer will build and it is the ceiling here, never the target: a
+4,096² block drawn in a 650 px plot holds six cells behind every pixel, and the five
+nobody sees are paid for in the accumulator — whose output array stops fitting in
+cache — and then again in the two passes that colour it, both on the main thread,
+where 4,046² costs 531 ms and 391 ms against 126 ms for a block that fits the screen.
+A request carries the cells per axis the view wants, which is **twice its own device
+pixels**: one doubling of zoom in hand before a read is wanted, which is the ladder's
+own factor. The reader clamps it rather than trusting it, because a block above the
+ceiling would be pooled a second time — flat and contig-blind, the straddling this
+whole arrangement exists to prevent. A read nobody is looking at sends nothing and
+gets the ceiling: an export at a chosen DPI, an analysis task, the CLI.
+
+**The resolution is a control, and it is a slider.** A streaming map's resolution is
+a position on a continuous scale rather than one of a container's rung names, so the
+bar under the plot is two instruments at once: a readout whose thumb follows the zoom
+and whose label says what is actually drawn, and a control — drag it and the map
+zooms to the width that resolution is read at, about the middle of what is on screen.
+Logarithmic, because resolution is, with a tick at every doubling, which is where a
+read lands. It snaps to grids that exist, since the reader can only produce whole
+multiples of the file's own bins; a resolution named on it **outranks the ladder's
+factor-of-two tolerance**, or asking for 1 kb would be answered with the 4 kb that
+was within two of what the zoom would have chosen anyway; and it hides itself on a map
+with nothing to slide along, which is every MAG. It does not name rungs and it does
+not switch files — where a laddered container has a level that suits the window, §3.4
+takes it, which is a fact about where the numbers came from rather than about what the
+reader asked for.
 
 **What is accepted, and stated rather than fixed:** the raster is at most 4,096 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
@@ -3229,7 +3271,9 @@ Instrumented from the first commit and surfaced in a debug panel; these are also
 | Open + render genomes table (remote) | ≤ 20 range requests |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
-| Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
+| Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read — and **0 of either** where the span's pixels are already inflated, which the first read of a view makes true of every rung under it |
+| Every rung after the first read of a view | **0 decompression.** Measured on `demo/yeast/Yeast_microC_G2M_1kb.cool`: 2,843 ms for the whole genome, then 551 / 436 / 117 ms down the staircase and 429 ms back out to the whole genome, against 2,930 / 1,650 / 694 / 359 / 2,930 with nothing retained |
+| A gesture, while a read is out for it | **0 gestures refused, 0 frames dropped.** The map pans, zooms and refits throughout; the picture softens until the finer grid lands |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
 | Genome-pair block | ≤ 5 range requests |

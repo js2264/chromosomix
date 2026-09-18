@@ -2785,6 +2785,117 @@ p {
   justify-content: center;
   align-items: flex-start;
   gap: 0.6rem;
+  /* So the resolution bar can take a line of its own under the map without a
+     wrapper coming between the grid and this row — see `.res-bar`, and see
+     `MatrixPanel`'s note on what a wrapper did to the canvas. With one child,
+     which is every panel that has no bar, wrapping changes nothing. */
+  flex-wrap: wrap;
+}
+
+/* The resolution, as a thing you can take hold of (`ui/ResolutionBar.ts`).
+
+   Directly under the plot and as wide as it, because it is a second axis of the
+   same picture — position along the bottom, scale underneath. Quiet: it is a
+   readout most of the time and a control only when it is being dragged, and a
+   bar with a loud track would compete with the map for the eye every time the
+   reader looked at the data. */
+.res-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* A line of its own, under the map and its lanes. `100%` is what forces the
+     wrap; `max-width` is what keeps it from running the width of a wide window,
+     where a scale three times longer than the picture it describes reads as a
+     different instrument. `justify-content: center` on the row does the rest. */
+  flex: 0 0 100%;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0.35rem 0 0.1rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.res-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* The track holds the ticks behind the input, which is transparent apart from
+   its thumb — so the marks read as being *on* the scale rather than beside it. */
+.res-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 4rem;
+  display: flex;
+  align-items: center;
+  /* Room under the groove for the tick marks to hang in. */
+  padding-bottom: 6px;
+}
+
+/* Below the groove rather than behind it: a native range input paints its own
+   track over everything inside its box, so marks drawn there are marks nobody
+   sees — which is what the first version of this did. */
+.res-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 5px;
+  pointer-events: none;
+}
+
+/* One mark per doubling, which is the staircase a read actually lands on. The
+   translate is what puts the mark *on* its position rather than starting at it,
+   and it matters most at the two ends, where a 1 px bar hanging off the edge is
+   the one that looks like a mistake. */
+/* One mark per doubling, which is the staircase a read actually lands on. The
+   translate is what puts the mark *on* its position rather than starting at it,
+   and it matters most at the two ends, where a 1 px bar hanging off the edge is
+   the one that looks like a mistake. Inset by half a thumb at each end, because
+   a native thumb's centre cannot reach the box's own edges — without it the
+   marks and the thumb disagree by 6 px at the ends and by nothing in the
+   middle, which reads as the scale being wrong rather than as the geometry of a
+   slider. */
+.res-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 5px;
+  transform: translateX(-0.5px);
+  background: var(--text-dim);
+  opacity: 0.5;
+}
+
+.res-slider {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.res-readout {
+  font-family: var(--mono);
+  min-width: 4.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The number is behind the window: a finer block is on its way. Dimmed rather
+   than marked, because it is still the true reading of what is on screen — it
+   is simply about to be replaced, and a badge would make a 400 ms fact look
+   like a warning. */
+.res-bar.is-pending .res-readout {
+  opacity: 0.55;
+}
+
+/* Below the phone breakpoint the plot is as wide as the screen and every rem
+   counts; the bar keeps the slider and drops the word in front of it, since the
+   readout beside it already says what the number is. */
+@media (max-width: 34rem) {
+  .res-label {
+    display: none;
+  }
 }
 
 /* The map and its lanes, as one grid.
@@ -3407,11 +3518,16 @@ p {
    title says what the numbers are, this says what they are *of*, and run
    together on one line they read as one long name. Monospaced because it is a
    measurement, like the two bounds under it. */
-/* Held while a finer block is read for the window on screen (`ui/refine.ts`).
-   The pointer says the map is not taking gestures before the reader tries one
-   and finds out; the spinner in the corner says why. */
-canvas.is-frozen {
-  cursor: progress;
+/* A finer block is out for the window on screen (`ui/refine.ts`). The cursor is
+   deliberately *unchanged*: this used to be `cursor: progress`, which was right
+   when the map refused gestures for the duration and wrong the moment it
+   stopped — a progress cursor over a map that pans, zooms and answers the
+   pointer says the one thing that is not true. The spinner in the corner is the
+   whole of the tell, and the picture softening is the rest of it. The rule is
+   kept so the state is addressable from the DOM, and so a stylesheet that wants
+   to say more about it has somewhere to say it. */
+canvas.is-streaming {
+  cursor: inherit;
 }
 
 .map-key-note {

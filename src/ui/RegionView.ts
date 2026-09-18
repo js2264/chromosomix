@@ -220,6 +220,7 @@ export class RegionView {
 
     this.panel = new MatrixPanel({
       binsize: props.binsize,
+      openBinsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(presentationOf(props.compare) === undefined
@@ -443,15 +444,27 @@ export class RegionView {
     const wrap =
       cols === undefined && this.props.circular?.on === true ? ceiling.rows : undefined
     const lap = wrap === undefined ? undefined : wrap[1] - wrap[0]
-    const query = (rowExtent: [number, number], colExtent: [number, number], rung?: string) => ({
+    const query = (
+      rowExtent: [number, number],
+      colExtent: [number, number],
+      rung?: string,
+      cellCap?: number,
+    ) => ({
       kind: 'matrix' as const,
       ...(rung === undefined ? {} : { rung }),
+      ...(cellCap === undefined ? {} : { cellCap }),
       rows: rowExtent,
       ...(cols === undefined ? {} : { cols: colExtent }),
       ...(wrap === undefined ? {} : { wrap }),
       balance: this.props.balance,
       ...(this.props.value === undefined ? {} : { value: this.props.value }),
     })
+    // The coarse end of the resolution bar's scale: this view's whole world in
+    // one picture (`MatrixPanel.setResolutionDomain`). The same ceiling the
+    // ladder is given below, said once more to the thing that draws the scale.
+    this.panel.setResolutionDomain(
+      Math.max(ceiling.rows[1] - ceiling.rows[0], ceiling.cols[1] - ceiling.cols[0]),
+    )
     this.ladder = attachRefine({
       panel: this.panel,
       ceiling,
@@ -473,13 +486,15 @@ export class RegionView {
       ...(lap === undefined ? {} : { enabled: () => true }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rowExtent, colExtent, rung) => {
-        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent, rung))
+      read: (rowExtent, colExtent, rung, cellCap) => {
+        const own = this.props.client.cancellable<'matrix'>(
+          query(rowExtent, colExtent, rung, cellCap),
+        )
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
             const second = await secondBlock(this.props.compare, (client) =>
-              client.request<'matrix'>(query(rowExtent, colExtent, rung)),
+              client.request<'matrix'>(query(rowExtent, colExtent, rung, cellCap)),
             )
             return second === undefined ? { result: block } : { result: block, second }
           }),
@@ -548,6 +563,7 @@ export class RegionView {
         const result: MatrixResult = await this.props.client.request<'matrix'>({
           kind: 'matrix',
           rows: [lo, hi],
+          cellCap: this.panel.cellCap,
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         })
@@ -555,6 +571,7 @@ export class RegionView {
           client.request<'matrix'>({
             kind: 'matrix',
             rows: [lo, hi],
+            cellCap: this.panel.cellCap,
             balance: this.props.balance,
             ...(this.props.value === undefined ? {} : { value: this.props.value }),
           }),
@@ -587,6 +604,7 @@ export class RegionView {
         kind: 'matrix',
         rows: [lo, hi],
         cols: [lo2, hi2],
+        cellCap: this.panel.cellCap,
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       })
@@ -595,6 +613,7 @@ export class RegionView {
           kind: 'matrix',
           rows: [lo, hi],
           cols: [lo2, hi2],
+          cellCap: this.panel.cellCap,
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }),

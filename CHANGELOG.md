@@ -14,6 +14,61 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A genome-wide map that streams.** Zooming into a whole-genome picture now changes the
+  *resolution*, not just the magnification, and it does it without the map ever stopping. On the
+  demo yeast cooler that is 10 kb cells across all sixteen chromosomes, 3 kb over four of them and
+  1 kb over a quarter of a megabase, each one landing while the picture stays live under the hand.
+  Zooming back out returns to the coarse grid the same way. It is on by default — **§2's promise
+  that a gesture costs nothing is stronger than before, not weaker**, because crossing the edge of
+  what a block can show no longer stops the gesture.
+
+  Three things had to change, and the first is the one that made the other two affordable.
+
+  **The pixels stay unpacked.** A read's cost is almost entirely HDF5 turning compressed chunks
+  back into numbers: measured on `demo/yeast/Yeast_microC_G2M_1kb.cool` (13.7 M stored pixels), a
+  whole-genome pooled read is 2,930 ms of which a bare walk of `/pixels` with an empty callback is
+  2,026 ms, and summing every count in the callback adds 50 ms. The arithmetic was never the
+  problem. Worse, the identical read cost the identical two seconds every time it was made — three
+  consecutive reads of one window measured 854, 810 and 812 ms — because nothing between h5wasm and
+  the accumulator remembered anything, so every rung of a zoom re-inflated bytes the rung before it
+  had just inflated. `metacooler/pixelCache.ts` keeps the inflated columns, keyed by the pixel index
+  range they came from, and a ladder reads *nested* row bands — so the widest read populates every
+  read after it, in both directions. The staircase that used to cost 2,930 / 1,650 / 694 / 359 ms
+  now costs 2,843 / 551 / 436 / 117, and zooming back out to the whole genome is 429 ms rather than
+  another 2,930. It is a new allowance rather than one taken out of the block cache, bounded in
+  bytes and scaled by what the device admits to, and it holds the whole yeast demo at once. A miss
+  costs exactly what the read cost before it existed.
+
+  **Nothing is held while a read is out.** The map used to freeze — pan, zoom and refit refused, a
+  spinner in the corner, Escape the way out — so that a block landed against exactly the window it
+  was asked for. That guarantee was already being given by the swap seam: `MatrixPanel.regrid`
+  carries the window in **base pairs**, so it places a block correctly against a window that moved
+  while the read was out. The freeze was buying something it already had and paying for it with a
+  map that stopped answering for two seconds. Gestures now run throughout; the picture magnifies —
+  and therefore softens — until the finer grid arrives, which is a better signal than a held frame
+  because it is continuous and it is in the picture. Escape has nothing left to cancel and the key
+  is gone.
+
+  **A block is read at the size of the picture, not the size of the raster.** `POOLED_CELL_CAP` is
+  4,096 because that is the widest raster the renderer will build; it is the wrong number for a
+  650 px plot, where it puts six cells behind every pixel and pays for the five nobody sees three
+  times over — in the accumulator, whose output array stops fitting in cache, and then in
+  `poolDisplay` and `colorize`, both on the main thread, where 4,046² costs 531 ms and 391 ms
+  against 126 ms for a block that fits the screen. Every view now reads at twice its own device
+  pixels, which leaves exactly one doubling of zoom in hand before a read is wanted — the ladder's
+  own `REFINE_FACTOR`. Reads that nobody is looking at are unchanged: an export, an analysis task
+  and the CLI still ask for the full raster.
+
+- **A resolution slider, under the map (§7.2).** The resolution of a streaming map is a position on
+  a continuous scale rather than one of a file's five rung names, and a `<select>` cannot show that.
+  The bar under the plot is two instruments in one: a **readout**, whose thumb follows the zoom and
+  whose label says what is actually drawn, and a **control** — drag it and the map zooms to the
+  width that resolution is read at, about the middle of what is on screen. It is logarithmic,
+  because resolution is, with a tick at every doubling, which is where a read actually lands; it
+  snaps to grids that exist, since the reader can only produce whole multiples of the file's own
+  bins; and a resolution named on it **outranks the ladder's own tolerance**, so asking for 1 kb
+  gets 1 kb rather than the 4 kb that was within a factor of two of it. It hides itself on a map
+  with nothing to slide along, which is every MAG.
 - **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
   with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
   where one mode used to count clicks and guess which was meant; the three are in the palette with
@@ -83,6 +138,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Adaptive resolution is on by default, and its switch is on the map's `picture` row.** It was
+  built, defaulted off and withheld from the row, and the paragraph arguing for that was right about
+  what the feature was then: a zoom that reads is a zoom that can wait. It does not wait like that
+  any more, so the switch now does the opposite job — it *pins* the grid where it is, for a figure,
+  or for a reader who wants one picture rather than a stream of them.
+- **A read the reader has outrun is left to finish** rather than cancelled. Only a completed read
+  warms the pixel cache, so a gesture that cancelled everything it started would inflate the same
+  bytes for ever and never get faster. The latest window is queued and runs when the current read
+  lands; the valve is time — a read still going after 1.5 s is a scan rather than a rung, and that
+  one is called off.
+- **The whole-genome gate says what it now buys.** *"Once per file; the picture is kept while it is
+  open"* has become *"the pixels stay unpacked, so every zoom after it re-draws from them rather
+  than reading again"*, which is both stronger and the reason the pass is worth agreeing to.
+- The `picture` row sits **after** `score` in a panel's controls rather than in front of it. The two
+  lists have always been meant to hold the same five fields in the same order, and the row only
+  appeared where the score picker did not until the adaptive-resolution switch joined it.
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you
   is marked and spaced.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
   gone — between them a fifth of a laptop screen, and what was below the fold was the third of the

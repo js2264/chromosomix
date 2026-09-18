@@ -68,6 +68,7 @@ import {
   readDenseMatrix,
   resolveCountKind,
 } from './matrix'
+import { releasePixels } from './pixelCache'
 import { CoolerStore, type PixelStore, type ScanAllOptions } from './store'
 import { resolveCells, ScoolStore, type PerCellScanOptions } from './scool'
 import { HicFile } from '../hic/HicFile'
@@ -1190,7 +1191,18 @@ export class MetaCooler {
   async pooledMatrix(
     q: MatrixQuery,
     aim: PoolPlan,
-    options: SpanScanOptions = {},
+    options: SpanScanOptions & {
+      /**
+       * Cells per axis to aim for; `POOLED_CELL_CAP` when absent.
+       *
+       * The picture's own size where a view knows it (`displayCellCap`), the
+       * raster's ceiling where nobody is looking — an export, a task, the CLI.
+       * It is a *ceiling on the output*, so a smaller one can only make the grid
+       * coarser, never finer, and every rule about how a cell is cut is
+       * unchanged: still anchored to the sequence, still never straddling one.
+       */
+      cellCap?: number
+    } = {},
   ): Promise<
     Omit<AggregatedMatrix, 'level'> & {
       binsPerCell: number
@@ -1207,10 +1219,11 @@ export class MetaCooler {
     // cell of one genome's sequences (`pooling.ts`). Empty for a plain cooler,
     // where there is no coarser structure and a chromosome is the only unit.
     const groups = this.contigGenomeIds
-    const rowPool = poolBins(this.coords, rows[0], rows[1], aim, POOLED_CELL_CAP, groups)
+    const cap = Math.max(1, Math.min(POOLED_CELL_CAP, Math.trunc(options.cellCap ?? POOLED_CELL_CAP)))
+    const rowPool = poolBins(this.coords, rows[0], rows[1], aim, cap, groups)
     const colPool = onDiagonal
       ? rowPool
-      : poolBins(this.coords, cols[0], cols[1], aim, POOLED_CELL_CAP, groups)
+      : poolBins(this.coords, cols[0], cols[1], aim, cap, groups)
     const acc = pixelAccumulator(
       rows,
       cols,
@@ -1756,10 +1769,15 @@ export class MetaCooler {
     }
   }
 
-  /** Release the handle and its byte source. Idempotent. */
+  /** Release the handle, its byte source and its inflated pixels. Idempotent. */
   close(): void {
     if (this.closed) return
     this.closed = true
+    // The one invalidation the pixel cache has: its key is a byte range in a
+    // file that cannot change while it is open, so nothing else can make a run
+    // untrue — but a run holding a few hundred megabytes for a handle nobody
+    // has any more is the way this becomes a leak.
+    releasePixels(this.handle)
     this.handle.close()
   }
 }

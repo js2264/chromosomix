@@ -635,19 +635,20 @@ async function handleMatrix(
   const rows = crossRung(open, mc, request.rows)
   const asked = planOf(request.binsPerCell, request.contigsPerCell)
   const asked_ = { rows: request.rows, cols: request.cols ?? request.rows }
+  const cap = capOf(request.cellCap)
   // A circular window, and one that actually crosses the junction — a request
   // carrying `wrap` whose extents happen to lie inside the sequence takes the
   // ordinary road below, which reads the same bins onto the same grid.
   if (request.wrap !== undefined) {
     const wrap = crossRung(open, mc, request.wrap)
     if (needsWrapping(rows, wrap) || needsWrapping(cols, wrap)) {
-      return atRung(mc, open, asked_, await readWrapped(mc, request, rows, cols, wrap, wrapEnvFor(mc, request.id)))
+      return atRung(mc, open, asked_, await readWrapped(mc, request, rows, cols, wrap, wrapEnvFor(mc, request.id, cap)))
     }
   }
   if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
-    return atRung(mc, open, asked_, await pooledResult(mc, request, rows, cols, asked))
+    return atRung(mc, open, asked_, await pooledResult(mc, request, rows, cols, asked, cap))
   }
-  const planned = fitPlan(mc, rows, cols)
+  const planned = fitPlan(mc, rows, cols, cap)
   if (planned !== null) {
     return atRung(
       mc,
@@ -659,6 +660,7 @@ async function handleMatrix(
         snapToGrid(mc, rows, planned),
         snapToGrid(mc, cols, planned),
         planned,
+        cap,
       ),
     )
   }
@@ -683,7 +685,7 @@ async function handleMatrix(
  * closures. See `worker/wrappedMatrix.ts`, which is the half of the wrapped path
  * worth testing and therefore the half that is not in this file.
  */
-function wrapEnvFor(mc: MetaCooler, id: number): WrapEnv {
+function wrapEnvFor(mc: MetaCooler, id: number, cap = POOLED_CELL_CAP): WrapEnv {
   return {
     // A wrapped window has the same cell count as an unwrapped one of the same
     // width on the same sequence, so the plan is fitted against a real extent of
@@ -694,14 +696,17 @@ function wrapEnvFor(mc: MetaCooler, id: number): WrapEnv {
         const width = Math.max(1, Math.min(span, wrap[1] - wrap[0]))
         return [wrap[0], wrap[0] + width]
       }
-      return fitPlan(mc, lane(rowWidth), lane(colWidth))
+      return fitPlan(mc, lane(rowWidth), lane(colWidth), cap)
     },
     snap: (extent, plan) => snapToGrid(mc, extent, plan),
     hint: (rows, cols) => hintFor(rows, cols),
     throwIfCancelled: () => {
       if (cancelled.has(id)) throw abortError()
     },
-    hooks: scanHooks(id),
+    // The cap rides with the hooks because it is an option of the same pooled
+    // read: a circular window is drawn at the size of the same plot as a
+    // straight one.
+    hooks: { ...scanHooks(id), cellCap: cap },
   }
 }
 
@@ -745,6 +750,7 @@ async function pooledResult(
   rows: Extent,
   cols: Extent,
   aim: PoolPlan,
+  cap = POOLED_CELL_CAP,
 ): Promise<MatrixResult> {
   const id = request.id
   const pooled = await mc.pooledMatrix(
@@ -755,7 +761,7 @@ async function pooledResult(
       ...(request.value === undefined ? {} : { value: request.value }),
     },
     aim,
-    scanHooks(id),
+    { ...scanHooks(id), cellCap: cap },
   )
   if (cancelled.has(id)) throw abortError()
   const runs = (ids: Int32Array): AxisGroup[] =>
@@ -898,9 +904,14 @@ function contigSpan(mc: MetaCooler, [lo, hi]: Extent): number {
  * resolution, and taking a coarser rung of a laddered file where one exists, are
  * the real answers and are not attempted.
  */
-function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
+function fitPlan(
+  mc: MetaCooler,
+  rows: Extent,
+  cols: Extent,
+  cap = POOLED_CELL_CAP,
+): PoolPlan | null {
   const spans = rows[0] === cols[0] && rows[1] === cols[1] ? [rows] : [rows, cols]
-  if (spans.every((span) => fits(mc, span, 1))) return null
+  if (spans.every((span) => fits(mc, span, 1, cap))) return null
   // The smallest grid that fits, shared by both axes because the panel has one
   // bin size: the finer axis is coarsened to the other's cell rather than given
   // a resolution the labels down the side contradict. Exact rather than
@@ -908,14 +919,14 @@ function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
   // for a caller that has to name the resolution before anything is read.
   for (const [lo, hi] of spans) {
     const contigs = mc.coords.contigOfBin(hi - 1) - mc.coords.contigOfBin(lo) + 1
-    if (contigs > POOLED_CELL_CAP) {
-      return { binsPerCell: 1, contigsPerCell: Math.ceil(contigs / POOLED_CELL_CAP) }
+    if (contigs > cap) {
+      return { binsPerCell: 1, contigsPerCell: Math.ceil(contigs / cap) }
     }
   }
   let low = 2
   let high = 2
   const ok = (k: number): boolean =>
-    spans.every((span) => fits(mc, snapToGrid(mc, span, { binsPerCell: k, contigsPerCell: 1 }), k))
+    spans.every((span) => fits(mc, snapToGrid(mc, span, { binsPerCell: k, contigsPerCell: 1 }), k, cap))
   while (!ok(high)) high *= 2
   while (low < high) {
     const mid = (low + high) >> 1
@@ -926,8 +937,8 @@ function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
 }
 
 /** Whether an extent comes to at most a picture's worth of cells at `k`. */
-function fits(mc: MetaCooler, [lo, hi]: Extent, k: number): boolean {
-  return cellsIn(mc, [lo, hi], k) <= POOLED_CELL_CAP
+function fits(mc: MetaCooler, [lo, hi]: Extent, k: number, cap = POOLED_CELL_CAP): boolean {
+  return cellsIn(mc, [lo, hi], k) <= cap
 }
 
 /** Cells an extent needs, from the contig extents — no per-bin array. */
@@ -977,6 +988,20 @@ function planOf(binsPerCell?: number, contigsPerCell?: number): PoolPlan {
     binsPerCell: Math.max(1, Math.trunc(binsPerCell ?? 1)),
     contigsPerCell: Math.max(1, Math.trunc(contigsPerCell ?? 1)),
   }
+}
+
+/**
+ * The cell cap a request asked for, clamped to what the renderer can draw.
+ *
+ * Clamped here rather than trusted, for the reason every number off the wire is
+ * clamped here: a block above `POOLED_CELL_CAP` would be pooled a second time on
+ * the way to the screen — flat, contig-blind, two cells to a pixel — which is
+ * exactly the straddling the read goes to the trouble of avoiding. And a floor,
+ * because a cap of nought is a block of nothing.
+ */
+function capOf(asked?: number): number {
+  if (asked === undefined || !Number.isFinite(asked)) return POOLED_CELL_CAP
+  return Math.max(16, Math.min(POOLED_CELL_CAP, Math.trunc(asked)))
 }
 
 /**

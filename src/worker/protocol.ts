@@ -840,6 +840,26 @@ export type WorkerRequest =
       genomes?: boolean
       binsPerCell?: number
       contigsPerCell?: number
+      /**
+       * Cells per axis this block is wanted at — **the picture's own size**, not
+       * the raster's ceiling.
+       *
+       * `POOLED_CELL_CAP` when absent, which is what every read that is not
+       * driven from a viewport sends: an export, an analysis task, the CLI.
+       * A view that knows how many device pixels it has says so, and the reason
+       * it is worth saying is that the two numbers are far apart. A 1,400 px
+       * plot drawn from a 4,096² block holds sixteen cells per pixel, and the
+       * price of the fifteen nobody sees is paid three times — in the
+       * accumulator, whose output array stops fitting in cache; in
+       * `poolDisplay`; and in `colorize`, the last two on the main thread. At
+       * the plot's own size a whole-genome step is a fifth of what it was.
+       *
+       * Never larger than `POOLED_CELL_CAP`, and the reader clamps rather than
+       * trusting the client: the raster cannot draw more than that per axis, so
+       * a block above it would be pooled a second time — flat and contig-blind,
+       * which is the straddling `metacooler/pooling.ts` exists to prevent.
+       */
+      cellCap?: number
     }
   | {
       id: number
