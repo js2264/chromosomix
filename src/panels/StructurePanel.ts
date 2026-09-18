@@ -568,7 +568,6 @@ export class StructurePanel implements DeckCell {
    * *remembered* from an earlier session that is gone falls back to the first,
    * since the reader has not chosen anything yet today.
    */
-  private chosenHow: 'picked' | 'remembered' | null = null
 
   /**
    * Draw this row: the Structures card's *show in the deck*, and the picker.
@@ -578,7 +577,6 @@ export class StructurePanel implements DeckCell {
    */
   showModel(id: string): void {
     this.chosen = id
-    this.chosenHow = 'picked'
     remember(this.props.memoryKey(), MODEL_SCOPE, id)
     this.sync()
   }
@@ -603,18 +601,22 @@ export class StructurePanel implements DeckCell {
       const remembered = recall<unknown>(this.props.memoryKey(), MODEL_SCOPE)
       if (typeof remembered === 'string') {
         this.chosen = remembered
-        this.chosenHow = 'remembered'
       }
     }
     const chosenRow = rows.find((held) => held.id === this.chosen)
-    // A row the reader picked and then removed from the Structures card
-    // empties the cell (§25.3): drawing whichever model is next would be a
-    // picture nobody asked for, wearing the place of the one they closed.
-    const emptied = chosenRow === undefined && this.chosen !== null && this.chosenHow === 'picked'
-    const entry = chosenRow ?? (emptied ? null : (rows[0] ?? null))
-    if (emptied && this.entry !== null) {
+    // **The row this cell is drawing, removed from the Structures card, empties
+    // the cell** (§25.3) — however the cell came to be drawing it. Falling to
+    // whichever model is next would put a picture nobody asked for in the place
+    // of the one they closed, and it is the same picture whether the reader
+    // picked this row from the card, restored it with the session, or simply
+    // got it as the only one there was. The gate used to be the first of those
+    // three, which meant the commonest case — one model, loaded and shown —
+    // went on showing a stale name over an empty stage.
+    const shown = this.entry
+    const emptied = shown !== null && !rows.some((held) => held.id === shown.id)
+    const entry = emptied ? null : (chosenRow ?? rows[0] ?? null)
+    if (emptied) {
       this.chosen = null
-      this.chosenHow = null
       remember(this.props.memoryKey(), MODEL_SCOPE, null)
     }
     this.entry = entry

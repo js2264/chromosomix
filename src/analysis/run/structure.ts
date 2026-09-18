@@ -22,7 +22,6 @@ import {
   type JobContext,
   type TaskRunner,
 } from '../job'
-import { RECONSTRUCT_MAX_BEADS } from '../tasks/structure'
 import type {
   CurveOutput,
   CurveSeries,
@@ -33,14 +32,14 @@ import type {
   TaskOutput,
 } from '../types'
 import {
-  classicalMds,
-  distancesFromContacts,
+  classicalMdsSweeps,
+  compactInPlace,
+  distancesOverContacts,
   fillDistancesInPlace,
   normaliseCoordinates,
   smacofStep,
   spearman,
   stressOf,
-  weightsFromContacts,
   type Coordinates,
   type DenseMatrix,
   type WeightMode,
@@ -358,17 +357,17 @@ function anchorPoint(
 // ---------------------------------------------------------------------------
 
 /**
- * The contacts a model is solved over: one cell per bead, each a run of
- * bins, with the square of contacts between every two.
+ * The contacts a model is solved over: one cell per bead, each one bin, with
+ * the square of contacts between every two.
  *
  * `binFrom`/`binTo` name each cell's bins, since the cells need not be one
  * contiguous run — several sequences named leave the ones between them out,
- * and the whole file is every sequence's run one after the other. `k` is
- * the bins to a cell: the block's own pooling when the view's block is taken
- * as it is, or the *bins per bead* the run asked for when the file is read.
+ * and the whole file is every sequence's run one after the other. A cell is
+ * always exactly one bin of the selected resolution, whichever way the
+ * contacts arrive; the pair is kept rather than an index because the bins are
+ * not contiguous.
  */
 interface Cells {
-  k: number
   n: number
   binFrom: Int32Array
   binTo: Int32Array
@@ -403,13 +402,21 @@ function contigRuns(job: JobContext): Array<{ cid: number; from: number; to: num
 async function contactCells(
   job: JobContext,
   spans: Span[] | null,
-  k: number,
   balance: boolean,
   value: string,
 ): Promise<{ cells: Cells; how: string } | { refusal: string }> {
   const block = job.inputs.block
+  // **Never a pooled block**, which is `usableBlock`'s rule and every other
+  // task's (`run/blocks.ts`): a block drawn four bins to the cell is coarser
+  // than the file, and `binsPerCell` exists precisely so a task can decline to
+  // pretend otherwise. This one used to accept it, and so was the only task in
+  // the app whose answer came at the resolution of the *window* — a number out
+  // of a raster cap — rather than at the resolution the reader selected. A
+  // block at one bin to the cell is the file, so borrowing that one is free
+  // and changes nothing.
   const square =
     block !== undefined &&
+    block.binsPerCell === 1 &&
     block.rowExtent[0] === block.colExtent[0] &&
     block.rowExtent[1] === block.colExtent[1] &&
     block.nrows === block.ncols &&
@@ -421,28 +428,26 @@ async function contactCells(
   // The block, where it covers what was asked for. The whole file is the
   // block only where the block *is* the whole file.
   if (square && block !== undefined && wanted.every((span) => blockCovers(block, span))) {
-    const bk = Math.max(1, block.binsPerCell)
     const rows: number[] = []
     const binFrom: number[] = []
     const binTo: number[] = []
     for (let r = 0; r < block.nrows; r++) {
-      const from = block.rowExtent[0] + r * bk
-      const to = Math.min(block.rowExtent[1], from + bk)
-      if (!wanted.some((span) => from < span.to && to > span.from)) continue
+      const from = block.rowExtent[0] + r
+      if (!wanted.some((span) => from < span.to && from + 1 > span.from)) continue
       rows.push(r)
       binFrom.push(from)
-      binTo.push(to)
+      binTo.push(from + 1)
     }
     const n = rows.length
-    if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n, bk) }
-    const values = new Float32Array(n * n)
+    const values = allocate(n)
+    if (values === null) return { refusal: tooBig(n) }
     for (let a = 0; a < n; a++) {
       const at = rows[a] * block.ncols
       for (let b = 0; b < n; b++) values[a * n + b] = block.values[at + rows[b]]
     }
     return {
-      cells: { k: bk, n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
-      how: bk > 1 ? `the block as drawn, ${bk} bins to a cell` : 'the block as drawn',
+      cells: { n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
+      how: 'the block as drawn, one bin to a bead',
     }
   }
 
@@ -452,18 +457,18 @@ async function contactCells(
   const cellsOfSpan: number[][] = []
   for (const span of wanted) {
     const own: number[] = []
-    for (let from = span.from; from < span.to; from += k) {
+    for (let from = span.from; from < span.to; from++) {
       own.push(binFrom.length)
       binFrom.push(from)
-      binTo.push(Math.min(span.to, from + k))
+      binTo.push(from + 1)
     }
     cellsOfSpan.push(own)
   }
   const n = binFrom.length
   if (n === 0) return { refusal: 'The framing holds no bins to model.' }
-  if (n > RECONSTRUCT_MAX_BEADS) return { refusal: tooMany(n, k) }
-  const values = new Float32Array(n * n)
-  const counts = new Float32Array(n * n)
+  const values = allocate(n)
+  const counts = values === null ? null : allocate(n)
+  if (values === null || counts === null) return { refusal: tooBig(n) }
   const total = (wanted.length * (wanted.length + 1)) / 2
   let done = 0
   for (let a = 0; a < wanted.length; a++) {
@@ -481,13 +486,13 @@ async function contactCells(
       const rowCells = cellsOfSpan[a]
       const colCells = cellsOfSpan[b]
       for (let r = 0; r < dense.nrows; r++) {
-        const rc = rowCells[Math.floor(r / k)]
+        const rc = rowCells[r]
         if (rc === undefined) continue
         const rowAt = r * dense.ncols
         for (let c = 0; c < dense.ncols; c++) {
           const v = dense.values[rowAt + c]
           if (!Number.isFinite(v)) continue
-          const cc = colCells[Math.floor(c / k)]
+          const cc = colCells[c]
           if (cc === undefined) continue
           values[rc * n + cc] += v
           counts[rc * n + cc] += 1
@@ -501,16 +506,32 @@ async function contactCells(
   }
   for (let at = 0; at < values.length; at++) values[at] = counts[at] > 0 ? values[at] / counts[at] : Number.NaN
   return {
-    cells: { k, n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
-    how: k > 1 ? `read from the file, ${k} bins to a bead` : 'read at the file’s bin size',
+    cells: { n, binFrom: Int32Array.from(binFrom), binTo: Int32Array.from(binTo), values },
+    how: 'read from the file, one bin to a bead',
   }
 }
 
-function tooMany(n: number, k: number): string {
-  const enough = Math.ceil((n * k) / RECONSTRUCT_MAX_BEADS)
+/**
+ * An `n × n` matrix of singles, or `null` where the browser will not give one.
+ *
+ * The replacement for the bead ceiling. A ceiling was a number this file
+ * guessed about somebody else's machine; asking and being refused is the same
+ * machine answering for itself. A `RangeError` — the length is past what a
+ * typed array may be — and an out-of-memory both arrive here as a throw.
+ */
+function allocate(n: number): Float32Array | null {
+  try {
+    return new Float32Array(n * n)
+  } catch {
+    return null
+  }
+}
+
+function tooBig(n: number): string {
+  const gb = (2 * 4 * n * n) / 1e9
   return (
-    `${n.toLocaleString()} beads is more than the ${RECONSTRUCT_MAX_BEADS.toLocaleString()} this ` +
-    `solves in a tab. Pool more bins to a bead (${enough.toLocaleString()} would do), or name fewer sequences.`
+    `${n.toLocaleString()} beads needs about ${gb.toFixed(1)} GB of matrices, and this browser ` +
+    'would not give it. Select a coarser resolution, or name fewer sequences.'
   )
 }
 
@@ -554,7 +575,6 @@ export const runReconstruct: TaskRunner = async (job) => {
   const iterations = Math.max(0, Math.round(numParam(job.params, 'iterations', 150)))
   const weightText = strParam(job.params, 'weights', 'contacts')
   const weightMode: WeightMode = weightText === 'sqrt' || weightText === 'equal' ? weightText : 'contacts'
-  const binsPerBead = Math.max(1, Math.round(numParam(job.params, 'binsPerBead', 1)))
   const regionText = strParam(job.params, 'region', '').trim()
   const spans = regionSpans(job, regionText)
   if (spans !== null && !Array.isArray(spans)) {
@@ -565,7 +585,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     )
     return []
   }
-  const source = await contactCells(job, spans, binsPerBead, balance, value)
+  const source = await contactCells(job, spans, balance, value)
   if ('refusal' in source) {
     job.note(source.refusal)
     return []
@@ -631,21 +651,38 @@ export const runReconstruct: TaskRunner = async (job) => {
   const n = pick.length
   const keptGroup = Int32Array.from(pick, (i) => group[i])
   const keptIndex = Int32Array.from(pick, (i) => index[i])
-  const counts = subMatrixOf(cells.values, cells.n, pick)
-  // The counts are wanted twice and never again: as the distances they imply,
-  // and as the weight each pair carries in the fit — how often the map saw a
-  // pair is how hard the pair holds its beads. Read into both, then let go, so
-  // the refinement runs with two matrices in memory rather than four.
-  const kept = distancesFromContacts(counts, n, alpha)
-  const weights = weightsFromContacts(counts, n, weightMode)
-  cells.values = new Float32Array(0)
-  job.progress(1, iterations + 2, 'classical scaling')
+  // The counts are wanted twice and never again: as the weight each pair
+  // carries in the fit, and as the distance its count implies. **Two matrices
+  // and not three**: the weights are taken first, and the counts are then
+  // turned into the distances where they already lie — compacted onto the kept
+  // beads and put through the law, both over the buffer they are read from. At
+  // twelve thousand beads a matrix is half a gigabyte, so the third one is the
+  // difference between a model and a tab that dies making one.
+  const weights = weightsOf(cells.values, cells.n, pick, weightMode)
+  if (weights === null) return refuse(job, n)
+  compactInPlace(cells.values, cells.n, pick)
+  const kept = cells.values.subarray(0, n * n)
+  distancesOverContacts(kept, n, alpha)
+  // The whole of the work, as one scale the bar can walk: the sweeps of the
+  // classical start and then the refinement steps.
+  const sweeps = 80
+  const total = sweeps + iterations + 1
+  job.progress(0, total, 'classical scaling')
   await job.breathe()
   // Filled over itself: which pairs the map counted is what the `NaN`s said,
   // and the weights say it too — zero for a pair it never saw — so the copy
   // that kept them was a second matrix holding a fact already held.
   fillDistancesInPlace(kept, n, keptGroup, keptIndex)
-  const coords = classicalMds(kept, n)
+  const scaling = classicalMdsSweeps(kept, n, sweeps)
+  let sweep = scaling.next()
+  while (sweep.done !== true) {
+    // Between every sweep, for the same two reasons the refinement breathes
+    // between steps: the bar moves, and a cancel has somewhere to land.
+    await job.breathe()
+    job.progress(sweep.value.sweep, total, `classical scaling · sweep ${sweep.value.sweep} of ${sweep.value.sweeps}`)
+    sweep = scaling.next()
+  }
+  const coords = sweep.value
   let stress = stressOf(kept, n, coords, weights)
   let steps = 0
   for (; steps < iterations; steps++) {
@@ -655,21 +692,21 @@ export const runReconstruct: TaskRunner = async (job) => {
     smacofStep(kept, n, coords, weights, before)
     const after = stressOf(kept, n, coords, weights)
     stress = after
-    job.progress(2 + steps, iterations + 2, `refining · stress ${after.toExponential(2)}`)
+    job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toExponential(2)}`)
     if (before - after < 1e-6 * before) {
       steps++
       break
     }
   }
   normaliseCoordinates(coords)
-  job.progress(iterations + 2, iterations + 2)
+  job.progress(total, total)
 
   const placed: ModelBead[] = []
   for (let b = 0; b < n; b++) {
     const bead = beads[beadOfCell[pick[b]]]
     placed.push({ ...bead, x: coords.x[b], y: coords.y[b], z: coords.z[b] })
   }
-  const set = structureFromBeads(placed, cells.k * binsize)
+  const set = structureFromBeads(placed, binsize)
   const sequences = new Set(placed.map((bead) => bead.contig))
   const subject =
     spans === null
@@ -703,7 +740,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     ],
     rows: [
       { what: 'Contacts', value: how },
-      { what: 'Beads', value: `${n.toLocaleString()} of ${cells.n.toLocaleString()} cells, ${formatBp(cells.k * binsize)} each` },
+      { what: 'Beads', value: `${n.toLocaleString()} of ${cells.n.toLocaleString()} cells, ${formatBp(binsize)} each` },
       { what: 'Sequences', value: `${sequences.size.toLocaleString()}` },
       { what: 'Pairs counted', value: `${fit.pairs.toLocaleString()} of ${((n * (n - 1)) / 2).toLocaleString()}` },
       { what: 'Distance law', value: `d = c^(−1/${alpha})` },
@@ -725,6 +762,40 @@ export const runReconstruct: TaskRunner = async (job) => {
 }
 
 /** The rows and columns of a square at `keep`, as a smaller square of counts. */
+/**
+ * The pairs' weights over the kept beads, or `null` where the matrix will not fit.
+ *
+ * Read out of the counts at their *own* indices, because this is what has to
+ * happen before the counts are compacted and turned into distances over
+ * themselves.
+ */
+function weightsOf(values: Float32Array, n: number, keep: Int32Array, mode: WeightMode): Float32Array | null {
+  const m = keep.length
+  const out = allocate(m)
+  if (out === null) return null
+  for (let a = 0; a < m; a++) {
+    const row = keep[a] * n
+    for (let b = a + 1; b < m; b++) {
+      const p = values[row + keep[b]]
+      const q = values[keep[b] * n + keep[a]]
+      const okP = Number.isFinite(p) && p > 0
+      const okQ = Number.isFinite(q) && q > 0
+      if (!okP && !okQ) continue
+      const count = okP && okQ ? (p + q) / 2 : okP ? p : q
+      const w = mode === 'contacts' ? count : mode === 'sqrt' ? Math.sqrt(count) : 1
+      out[a * m + b] = w
+      out[b * m + a] = w
+    }
+  }
+  return out
+}
+
+/** The note a run leaves when the browser will not give it the matrices it needs. */
+function refuse(job: JobContext, n: number): TaskOutput[] {
+  job.note(tooBig(n))
+  return []
+}
+
 /**
  * The cells of `within` that have a counted pair with another of them.
  *
@@ -749,16 +820,6 @@ function constrainedIn(values: Float32Array, n: number, within: Int32Array): Int
     if (any) out.push(i)
   }
   return Int32Array.from(out)
-}
-
-function subMatrixOf(values: Float32Array, n: number, keep: Int32Array): Float32Array {
-  const m = keep.length
-  const out = new Float32Array(m * m)
-  for (let a = 0; a < m; a++) {
-    const row = keep[a] * n
-    for (let b = 0; b < m; b++) out[a * m + b] = values[row + keep[b]]
-  }
-  return out
 }
 
 /**

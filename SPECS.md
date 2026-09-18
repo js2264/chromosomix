@@ -6827,9 +6827,11 @@ the drawer, as the Synthetic card does (§18.5).
 **The structure cell** draws **one** structure row — the one the reader chose from the Structures
 card or from the cell's own **model** picker, remembered per file, or the first of the list where
 none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
-same row**, is the one it draws; and a row the reader picked and then removed from the card
-**empties the cell**, which says so, rather than quietly showing the next model (a remembered
-choice whose row is gone by the next session falls back to the first) — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
+same row**, is the one it draws; and **the row the cell is drawing, removed from the card, empties
+the cell**, which says so, rather than quietly showing the next model along — however the cell came
+to be drawing it, whether the reader picked it, the session restored it, or it was simply the only
+one there was (a remembered choice whose row is already gone when a session opens falls back to the
+first, since no cell was drawing it) — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
 on the web, folded into the one file of the standalone build. **Beads, sticks and a tube as three
 toggles that combine** (the tube alone by default); a **dashed run of ink across every gap** in a
 chain, always, so a chain with a missing bead reads as one chain with a hole and not as two; a halo
@@ -7047,19 +7049,28 @@ locus at its drawn resolution, pooled cells included, which is the one task that
 bead per cell, filed under the sequence holding its first bin and cut at that sequence's end. Where
 it does not — several sequences, a whole file, a block balanced the other way or not square — the
 file is **read span by span**, one rectangle per pair of named spans (two sequences far apart cost
-their two squares and the rectangle between them, never the sequences in between), and **pooled
-bins-per-bead to a bead as it is read**, the mean of the counted bins, so a whole genome at 1 kb
-becomes a model at 5 kb with *bins per bead* 5 and no 12,000² block ever exists. The box **empty is
-the whole file**. A cell whose row the map counted nothing on — a filtered bin, a gap — is left
-out of the model, and the run says how many were. More beads than `RECONSTRUCT_MAX_BEADS`
-(10,000) is refused in the estimate with the way out — pool more bins to a bead, and how many would
-do, or name fewer sequences — and short of that the estimate prints **what the wait and the memory
-will be**, in seconds per hundred steps and in megabytes of matrices, because both are quadratic in
-the bead count and a reader deciding between 3,000 and 9,000 beads is deciding between a minute and
-ten. The ceiling is where a tab is at risk rather than where the wait gets long: the run holds two
-dense `n × n` matrices of singles — the distances, filled over themselves, and the pairs' weights,
-the counts let go once both are read from them — which at 10,000 beads is under a gigabyte, where
-the six matrices the solver used to allocate for the same job were four. The run's other output
+their two squares and the rectangle between them, never the sequences in between). **One bin of the
+resolution the reader has selected is one bead** — never the drawn cell, whose width comes from a
+raster cap and the size of the window rather than from anything anybody chose. The block on screen
+is borrowed only when it is drawn *one bin to the cell*, where borrowing changes nothing and costs
+no read; a pooled block is declined, which is `usableBlock`'s rule and every other task's (§18.4).
+A coarser model is a coarser **rung**, selected in the view, which also reads far less: a genome at
+5 kb from the 5 kb rung reads a twenty-fifth of what the 1 kb rung does for the same model. The box
+**empty is the whole file**. A cell whose row the map counted nothing on — a filtered bin, a gap —
+is left out of the model, and the run says how many were.
+
+**There is no ceiling on the beads.** Both the time and the memory are quadratic in the count, and
+what the estimate does about it is *say so* — the bead count and its bin width, the seconds per
+hundred refinement steps and the gigabytes of matrices — for the reader to confirm before pressing
+run. A number chosen in the source could only be a guess about somebody else's machine. What is
+still refused is the allocation that cannot succeed: the matrices are asked for inside a `try` and a
+browser that will not give them leaves a note naming the size, rather than a tab that dies. The run
+holds **two** dense `n × n` matrices of singles and no more — the pairs' weights, and the counts
+turned into the distances they imply over the buffer they already occupy, compacted onto the kept
+beads in place and then filled over themselves — so twelve thousand beads is about a gigabyte.
+**Every phase reports progress and breathes between units of work**: each rectangle read, each of
+the eighty sweeps of the classical start, each refinement step, so the bar moves and a cancel always
+has somewhere to land. The run's other output
 is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
 the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
 model and the contacts —

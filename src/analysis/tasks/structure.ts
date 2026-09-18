@@ -40,22 +40,18 @@ function availability(context: AnalysisContext) {
 }
 
 /**
- * The most beads a model is solved over in the tab.
+ * No ceiling on the beads, and that is a decision rather than an oversight.
  *
- * Not a round number picked for caution: it is where the two quadratics stop
- * being affordable. Every step of the refinement is a pass over every pair, so
- * 10,000 beads is a hundred million pairs a step and the refinement is minutes
- * rather than seconds; and the run holds dense `n × n` matrices, so the same
- * 10,000 is about a gigabyte of them. Both are what {@link reconstructEstimate}
- * prints before the reader presses *run*, in seconds and in megabytes, so the
- * ceiling is the point where a tab is at risk rather than the point where the
- * wait gets long — the reader decides about the wait.
+ * There was one, at 2,500 and then at 10,000, on the ground that both the time
+ * and the memory are quadratic in the bead count. The reader's answer was that
+ * the wait is theirs to spend — so what the estimate does now is *say what it
+ * will cost*, in beads, in minutes and in gigabytes, and let them decide. A
+ * number chosen here could only ever be a guess about somebody else's machine.
  *
- * It was 2,500 while the solver allocated six matrices for a job that needs
- * two. At 10,000 those six were four gigabytes and the tab died; the two are
- * under one, which is what moved the ceiling.
+ * What is still refused is the allocation that cannot succeed: the matrices are
+ * asked for inside a `try`, and a browser that will not give them says so as a
+ * note naming the size rather than as a tab that dies (`run/structure.ts`).
  */
-export const RECONSTRUCT_MAX_BEADS = 10000
 
 /**
  * Pair visits a second, measured in this tab: a 5,709-bead genome took about a
@@ -75,12 +71,14 @@ function refineWords(beads: number): string {
 }
 
 /**
- * The dense matrices a run holds, in bytes: the counts, the distances they
- * imply and the weights, each `n²` singles, the counts let go once the other
- * two are read from them.
+ * The dense matrices a run holds, in bytes.
+ *
+ * **Two**, each `n²` singles: the pairs' weights, and the counts turned into
+ * the distances they imply over the buffer they already occupy. A third is
+ * what the run used to need and is the one the in-place passes removed.
  */
 function matrixWords(beads: number): string {
-  const bytes = 3 * 4 * beads * beads
+  const bytes = 2 * 4 * beads * beads
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB of matrices` : `${Math.round(bytes / 1e6)} MB of matrices`
 }
 
@@ -195,21 +193,9 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     many: true,
     hint:
       'What to model, seeded from what the map shows: a locus, one sequence, or several ' +
-      'comma-separated (chrIV, chrV). Empty models everything the view has loaded — every ' +
-      'sequence in the block, cis and trans together — at the resolution it is drawn at.',
-  },
-  {
-    kind: 'number',
-    key: 'binsPerBead',
-    label: 'Bins per bead',
-    hint:
-      'How many of the file’s bins one bead stands for when the file is read for this run — a ' +
-      'whole genome at 1 kb becomes a model at 5 kb with 5. Ignored when the block on screen is ' +
-      'taken as drawn, which is pooled the way the map is.',
-    default: 1,
-    min: 1,
-    max: 1000,
-    integer: true,
+      'comma-separated (chrIV, chrV). Empty models the whole file — every sequence, cis and ' +
+      'trans together. One bin of the resolution you have selected is one bead, whatever the ' +
+      'map is drawn at: pick a coarser rung for a coarser model.',
   },
   {
     kind: 'number',
@@ -256,53 +242,77 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
 
 const plural = (n: number, noun: string): string => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`
 
+/**
+ * What the model will cost, for the reader to confirm before pressing run.
+ *
+ * There is no refusal in here any more. One bin of the selected resolution is
+ * one bead, so the bead count is a fact about the file and the box rather than
+ * anything this can trade away, and the two things a reader wants to know
+ * before committing — how long and how much memory — are what it says.
+ */
 function reconstructEstimate(context: AnalysisContext, params: Params): CostEstimate {
   const framing = context.framing
   const region = typeof params.region === 'string' ? params.region.trim() : ''
-  const perBead = Math.max(1, Math.round(typeof params.binsPerBead === 'number' ? params.binsPerBead : 1))
-  const names = region === '' ? [] : region.split(',').map((part) => part.split(':')[0].trim())
-  const named = context.contigs.filter((contig) => names.includes(contig.name))
-  const k = Math.max(1, framing?.binsPerCell ?? 1)
-  // The block as drawn answers for what it covers; the file, read and pooled,
-  // answers for the rest — the whole file when the box is empty.
-  const framed =
-    framing === null
-      ? 0
-      : Math.ceil(Math.max(framing.rows[1] - framing.rows[0], framing.cols[1] - framing.cols[0]) / k)
+  // Each comma-separated part as the bins it names: a bare sequence is all of
+  // it, `IV:1,000,001-1,400,000` is the bins of that stretch. Pricing a locus
+  // as its whole sequence is what this used to do, and it reported 1,532 beads
+  // for a run that made 400.
+  const parts = region === '' ? [] : region.split(',').map((part) => part.trim()).filter((part) => part !== '')
+  const named = parts.flatMap((part) => {
+    const [name, range] = [part.split(':')[0].trim(), part.split(':')[1]]
+    const contig = context.contigs.find((held) => held.name === name)
+    if (contig === undefined) return []
+    const ends = range === undefined ? null : range.split('-').map((end) => Number(end.replace(/[,_\s]/g, '')))
+    if (ends === null || ends.length !== 2 || !ends.every((end) => Number.isFinite(end)) || !(context.binsize > 0)) {
+      return [{ contig, bins: contig.bins }]
+    }
+    const from = Math.max(0, Math.min(ends[0], ends[1]))
+    const to = Math.min(contig.length, Math.max(ends[0], ends[1]))
+    const bins = Math.max(1, Math.ceil((to - from) / context.binsize))
+    return [{ contig, bins: Math.min(contig.bins, bins) }]
+  })
   const wholeFile = region === ''
+  // **The file's own bins, never the drawn cell's.** What the map pooled into a
+  // cell is a decision about pixels — it comes from a raster cap and the size
+  // of the window — and a model built at it would be a model at a resolution
+  // nobody chose (§25.6). The only case the block is borrowed is the one where
+  // borrowing changes nothing, which is a block drawn one bin to the cell.
+  const framed = framing === null ? 0 : Math.max(framing.rows[1] - framing.rows[0], framing.cols[1] - framing.cols[0])
+  const blocks = wholeFile ? context.contigs.length : Math.max(1, named.length)
+  const beads = wholeFile ? context.nBins : named.length === 0 ? framed : named.reduce((sum, at) => sum + at.bins, 0)
+  // Borrowed only when the block is at the file's own resolution and holds
+  // everything asked for; otherwise every pair of sequences is a read.
+  const drawnAsRead = framing !== null && framing.binsPerCell === 1
   const covered =
+    drawnAsRead &&
     framing !== null &&
     !wholeFile &&
-    named.every((contig) => contig.startBin >= framing.rows[0] && contig.startBin + contig.bins <= framing.rows[1])
-  const blocks = wholeFile ? context.contigs.length : Math.max(1, named.length)
-  const beads = wholeFile
-    ? Math.ceil(context.nBins / perBead)
-    : named.length === 0
-      ? framed
-      : covered
-        ? named.reduce((sum, contig) => sum + Math.ceil(contig.bins / k), 0)
-        : named.reduce((sum, contig) => sum + Math.ceil(contig.bins / perBead), 0)
-  const reads = wholeFile || (named.length > 0 && !covered)
+    named.length > 0 &&
+    named.every(
+      (at) => at.contig.startBin >= framing.rows[0] && at.contig.startBin + at.contig.bins <= framing.rows[1],
+    )
+  const reads = !covered && !(drawnAsRead && named.length === 0 && !wholeFile)
   const pairs = beads * beads
   const note =
     beads === 0
       ? 'The block the view holds, at the resolution it is drawn at.'
-      : `${beads.toLocaleString()} beads, ${pairs.toLocaleString()} pairs a step; ` +
+      : `${beads.toLocaleString()} beads at ${binWords(context.binsize)}, ${pairs.toLocaleString()} pairs a step; ` +
         `${refineWords(beads)}, ${matrixWords(beads)}` +
-        (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file and pooled ${perBead} to a bead.` : '.')
+        (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file.` : '.')
   return {
     class: reads ? 'scan' : 'bounded',
     requests: reads ? (blocks * (blocks + 1)) / 2 : context.blockLoaded ? 0 : 1,
     bytes: null,
     note,
-    ...(beads > RECONSTRUCT_MAX_BEADS
-      ? {
-          refusal:
-            `${beads.toLocaleString()} beads is more than the ${RECONSTRUCT_MAX_BEADS.toLocaleString()} ` +
-            `this solves in a tab. Pool more bins to a bead (${Math.ceil((beads * perBead) / RECONSTRUCT_MAX_BEADS).toLocaleString()} would do), or name fewer sequences.`,
-        }
-      : {}),
   }
+}
+
+/** The bead's width: the resolution the reader has selected, which is the file's bin size. */
+function binWords(binsize: number): string {
+  if (!Number.isFinite(binsize) || binsize <= 0) return 'the file’s bin size'
+  if (binsize >= 1e6) return `${+(binsize / 1e6).toFixed(2)} Mb`
+  if (binsize >= 1e3) return `${+(binsize / 1e3).toFixed(1)} kb`
+  return `${binsize} bp`
 }
 
 export const RECONSTRUCT_TASK: AnalysisTask = {

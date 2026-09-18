@@ -165,28 +165,31 @@ describe('model from the map', () => {
     expect(RECONSTRUCT_TASK.availability({ hasMap: true, entries: [] } as never).state).toBe('ready')
   })
 
-  it('prices what will be read, and refuses more beads than it solves', () => {
-    // The box empty is the whole file: every bin, pooled by bins per bead.
+  it('says what the model will cost and refuses nothing for being large', () => {
+    // The box empty is the whole file, one bin of the selected resolution a bead
+    // — whatever the map is drawn at, which here is two bins to the cell.
     const context = {
       framing: { ...FRAMING, rows: [0, 24000], cols: [0, 24000], binsPerCell: 2 },
       contigs: [{ name: 'I', startBin: 0, bins: 24000, length: 24000 * BINSIZE, genome: -1 }],
       nBins: 24000,
+      binsize: BINSIZE,
       blockLoaded: true,
     } as never
     const estimate = RECONSTRUCT_TASK.estimate(context, {})
-    expect(estimate.refusal).toMatch(/24,000 beads/)
-    expect(estimate.refusal).toMatch(/3 would do/)
-    const pooled = RECONSTRUCT_TASK.estimate(context, { binsPerBead: 4 })
-    expect(pooled.refusal).toBeUndefined()
-    expect(pooled.note).toMatch(/6,000 beads/)
-    expect(pooled.note).toMatch(/pooled 4 to a bead/)
+    expect(estimate.refusal).toBeUndefined()
+    expect(estimate.note).toMatch(/24,000 beads/)
     // What the wait and the memory will be, in the words a reader decides on.
-    expect(pooled.note).toMatch(/per hundred steps/)
-    expect(pooled.note).toMatch(/MB of matrices/)
-    // A sequence the block covers is priced as the block draws it: 2 bins to a cell.
-    const covered = RECONSTRUCT_TASK.estimate(context, { region: 'I' })
-    expect(covered.note).toMatch(/12,000 beads/)
-    expect(covered.refusal).toMatch(/12,000 beads/)
+    expect(estimate.note).toMatch(/per hundred steps/)
+    expect(estimate.note).toMatch(/of matrices/)
+    expect(estimate.note).toMatch(/read from the file/)
+    // A sequence is its own bins, again at the file's resolution and not the
+    // screen's: the drawn cell of two bins never enters the arithmetic.
+    const one = RECONSTRUCT_TASK.estimate(context, { region: 'I' })
+    expect(one.note).toMatch(/24,000 beads/)
+    expect(one.refusal).toBeUndefined()
+    // …and a locus is the bins of *that stretch*, not of the whole sequence.
+    const locus = RECONSTRUCT_TASK.estimate(context, { region: `I:0-${400 * BINSIZE}` })
+    expect(locus.note).toMatch(/^400 beads/)
   })
 
   it('makes a structure row from the block, one bead per cell, that orders the pairs as the map does', async () => {
@@ -226,20 +229,25 @@ describe('model from the map', () => {
     expect(equalTable?.rows.find((row) => row.what === 'Pairs weighted by')?.value).toMatch(/alike/)
   })
 
-  it('takes the block as drawn: pooled cells make wider beads', async () => {
+  it('refuses a pooled block and reads the file instead, so a bead is a bin', async () => {
+    // The block on screen is drawn two bins to the cell. That is a decision
+    // about pixels, so the run declines it and reads the file at its own
+    // resolution — one bead per bin, one bin wide (§25.6).
     const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20 }, [], 2))
+    const table = outputs.find((o): o is TableOutput => o.kind === 'table')
+    expect(table?.rows[0]?.value).toMatch(/read from the file, one bin to a bead/)
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
-    expect(model.payload.data.length).toBe(BINS / 2)
-    expect(model.payload.data.model?.width).toBe(2 * BINSIZE)
-    expect(model.payload.data.end[0]).toBe(2 * BINSIZE)
+    expect(model.payload.data.length).toBe(BINS)
+    expect(model.payload.data.model?.width).toBe(BINSIZE)
+    expect(model.payload.data.end[0]).toBe(BINSIZE)
   })
 
   it('reads the square itself when the block was balanced the other way', async () => {
     const notes: string[] = []
     const outputs = await runReconstruct(blockJob({ alpha: 3, iterations: 20, balance: true }, notes, 2, false))
     const table = outputs.find((o): o is TableOutput => o.kind === 'table')
-    expect(table?.rows[0]?.value).toMatch(/read at the file/)
+    expect(table?.rows[0]?.value).toMatch(/read from the file/)
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
     // Read at the file's own bin size, so one bead per bin again.

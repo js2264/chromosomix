@@ -26,13 +26,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   The black lines over the model — a gap's dashes, a loop's chord — are **half the tube's radius**,
   so a line about the model no longer reads as part of it. The enlarge dialog's settings are wider
   and **dragged to any width** by the grip beside them, remembered per file.
-- **Ten thousand beads (§25.6).** *Model from the map* solves up to 10,000 beads where it stopped
-  at 2,500, because the run now builds two dense matrices where it built six: each is made once at
-  its final size, the distances are filled over themselves, the counts are let go once the
-  distances and the weights have been read from them, and classical scaling multiplies through the
-  centred matrix without ever writing it down. The estimate says what the reader is choosing —
-  seconds per hundred refinement steps and megabytes of matrices, both quadratic in the bead count
-  — so the ceiling is where a tab is at risk rather than where the wait gets long.
+- **One bin, one bead, and no ceiling (§25.6).** *Model from the map* now builds a bead per bin of
+  the resolution the reader has selected, and nothing else: the *bins per bead* control is gone, and
+  a block drawn pooled — four bins to the cell, because that is what fits the window — is declined
+  rather than borrowed, which is `usableBlock`'s rule and every other task's. This was the one task
+  in the app whose answer came at the resolution of the *window* rather than the one the reader
+  chose, and it silently capped a model at the raster cap of 4,096 cells. A coarser model is a
+  coarser rung, which also reads far less. The bead ceiling is gone with it: both the time and the
+  memory are quadratic, so the estimate *says so* — the beads and their width, the seconds per
+  hundred steps, the gigabytes of matrices — and the reader decides. What is refused is only the
+  allocation a browser will not give, as a note naming the size rather than as a dead tab. The run
+  holds two dense matrices where it held six: each made once at its final size, the counts turned
+  into the distances they imply over the buffer they already occupy, and classical scaling
+  multiplying through the centred matrix without writing it down. **Every phase reports progress
+  and breathes** — each rectangle read, each of the eighty sweeps of the classical start, each
+  refinement step — so the bar moves and a cancel always lands. A typed locus is priced as the bins
+  of *that stretch*, where the estimate used to count the whole sequence it named.
 - **The 3D viewer, as a view of the app (§25.3–25.5).** Its settings are now a *3D structure* card
   of the Aesthetics panel right after the *Map* card, built from the same fields, borrowed by the enlarge
   dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
@@ -55,7 +64,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   is seeded from what the map shows: the locus inside one sequence, every sequence on screen when
   the view spans several (`IV, V`), and empty — every sequence — for the whole genome. A model
   computed again onto the same row replaces the one the cell draws, and removing the model the
-  cell shows empties the cell. Under *colour by sequence* the key is a control: a click ghosts a
+  cell shows empties the cell — whichever way the cell came to be drawing it, where it used to empty
+  only for a row the reader had picked by hand. Under *colour by sequence* the key is a control: a click ghosts a
   sequence, a double-click shows it alone, and the swatch is a colour picker. A badge in the
   cell's top-left corner says what a drag or a click does — turn, move (Shift), centre (⌘ on a
   Mac, Ctrl elsewhere: click a bead to turn about it; a tap alone shows or hides the centre ball

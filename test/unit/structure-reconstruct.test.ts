@@ -12,8 +12,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   classicalMds,
+  classicalMdsSweeps,
+  compactInPlace,
   constrainedBeads,
   distancesFromContacts,
+  distancesOverContacts,
   fillDistances,
   normaliseCoordinates,
   reconstruct,
@@ -68,6 +71,45 @@ const N = 60
 const ALPHA = 3
 const GROUP = Int32Array.from({ length: N }, (_, i) => (i < 40 ? 0 : 1))
 const INDEX = Int32Array.from({ length: N }, (_, i) => (i < 40 ? i : i - 40))
+
+describe('the matrices, written over themselves', () => {
+  it('compacts onto the kept beads in place, and turns counts into distances where they lie', () => {
+    // Four cells, of which the middle two are kept: the compaction must land
+    // their square at the front of the same buffer.
+    const values = Float32Array.from([
+      0, 1, 2, 3,
+      4, 0, 8, 7,
+      6, 8, 0, 9,
+      3, 7, 9, 0,
+    ])
+    const keep = Int32Array.from([1, 2])
+    compactInPlace(values, 4, keep)
+    expect([...values.subarray(0, 4)]).toEqual([0, 8, 8, 0])
+    // …and the same buffer put through the law, symmetrised as ever.
+    const square = Float32Array.from([0, 8, 8, 0])
+    distancesOverContacts(square, 2, 3)
+    const both = distancesFromContacts(Float32Array.from([0, 8, 8, 0]), 2, 3)
+    expect([...square]).toEqual([...both])
+    expect(square[1]).toBeCloseTo(0.5, 7)
+  })
+
+  it('walks the classical start a sweep at a time, ending where the whole one does', () => {
+    const contacts = contactsOf(helix(N), ALPHA, () => false)
+    const full = fillDistances(distancesFromContacts(contacts, N, ALPHA), N, GROUP, INDEX)
+    const run = classicalMdsSweeps(full, N, 80)
+    let seen = 0
+    let step = run.next()
+    while (step.done !== true) {
+      seen++
+      expect(step.value.sweep).toBe(seen)
+      expect(step.value.sweeps).toBe(80)
+      step = run.next()
+    }
+    expect(seen).toBe(80)
+    const whole = classicalMds(full, N, 80)
+    expect([...step.value.x]).toEqual([...whole.x])
+  })
+})
 
 describe('contacts to distances', () => {
   it('reads a count as c^(−1/α), symmetrised, and a zero as a missing pair', () => {

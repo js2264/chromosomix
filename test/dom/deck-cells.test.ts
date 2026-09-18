@@ -695,6 +695,35 @@ describe('the cell empties when the model it shows is removed (§25.3)', () => {
     again.deck.add({ kind: 'structure' })
     expect(again.deck.shownStructure()).toBe('a1')
   })
+
+  it('empties for the row it simply fell into, not only one the reader picked', () => {
+    // The commonest shape by far: one model loaded, the cell drawing it
+    // because it is the only one there is. Removing it from the Structures
+    // card used to leave the cell showing the next model along, or the same
+    // name over an empty stage.
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const store = fakeStore([structureEntry(), two])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    expect(deck.shownStructure()).toBe('a1')
+    store.entries.splice(0, 1)
+    store.notify()
+    expect(deck.shownStructure()).toBeNull()
+    expect(deck.el.querySelector('.structure-note')?.textContent).toMatch(/was removed/)
+    // …and the cell is still usable: the other row can be shown in it.
+    deck.showStructure('a2')
+    expect(deck.shownStructure()).toBe('a2')
+  })
+
+  it('keeps drawing a row that was recomputed onto the same id', () => {
+    const store = fakeStore([structureEntry()])
+    const { deck } = make(store)
+    deck.add({ kind: 'structure' })
+    expect(deck.shownStructure()).toBe('a1')
+    store.entries[0] = { ...structureEntry(second), id: 'a1', label: 'first.g3d' }
+    store.notify()
+    expect(deck.shownStructure()).toBe('a1')
+  })
 })
 
 describe('the key (§25.5)', () => {

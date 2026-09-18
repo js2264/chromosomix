@@ -65,6 +65,49 @@ export interface Coordinates {
  * is a pair the experiment did not sample, and `0^(−1/α)` would put the bead
  * at infinity and every other pair at nothing.
  */
+/**
+ * Keep only `keep`'s rows and columns, written over the matrix they came from.
+ *
+ * {@link subMatrix}'s answer without {@link subMatrix}'s second matrix, for the
+ * caller whose matrix is large enough for a copy to matter.
+ */
+export function compactInPlace(values: Float32Array, n: number, keep: Int32Array): void {
+  const m = keep.length
+  // Forward and monotone, and safe for exactly that reason: the destination of
+  // a cell never runs ahead of its source, since `keep[a] >= a` and `m <= n`,
+  // so nothing is read after it has been written over.
+  for (let a = 0; a < m; a++) {
+    const row = keep[a] * n
+    const out = a * m
+    for (let b = 0; b < m; b++) values[out + b] = values[row + keep[b]]
+  }
+}
+
+/**
+ * The same law as {@link distancesFromContacts}, written over the counts.
+ *
+ * The counts are wanted twice — as distances and as weights — and never again,
+ * and at twelve thousand beads each matrix is half a gigabyte. So the weights
+ * are taken first and the counts are then *turned into* the distances where
+ * they lie, which is one matrix rather than two. Reads and writes touch only
+ * the two cells of the pair they are about, so the pass is safe in place.
+ */
+export function distancesOverContacts(values: Float32Array, n: number, alpha: number): void {
+  const power = -1 / alpha
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = values[i * n + j]
+      const b = values[j * n + i]
+      const okA = Number.isFinite(a) && a > 0
+      const okB = Number.isFinite(b) && b > 0
+      const d = !okA && !okB ? Number.NaN : Math.pow(okA && okB ? (a + b) / 2 : okA ? a : b, power)
+      values[i * n + j] = d
+      values[j * n + i] = d
+    }
+    values[i * n + i] = 0
+  }
+}
+
 export function distancesFromContacts(values: DenseMatrix, n: number, alpha: number): Float32Array {
   const out = new Float32Array(n * n).fill(Number.NaN)
   const power = -1 / alpha
@@ -260,6 +303,27 @@ export function weightsFromContacts(values: DenseMatrix, n: number, mode: Weight
  * the refinement below is what the model is held to.
  */
 export function classicalMds(full: DenseMatrix, n: number, sweeps = 80): Coordinates {
+  const run = classicalMdsSweeps(full, n, sweeps)
+  let step = run.next()
+  while (step.done !== true) step = run.next()
+  return step.value
+}
+
+/**
+ * The same, a sweep at a time.
+ *
+ * At twelve thousand beads one sweep is a hundred and fifty million pair
+ * visits and eighty of them are minutes, so a caller that runs this where
+ * somebody is watching needs somewhere to say how far along it is and
+ * somewhere to let a cancel land. Yielding after each sweep gives it both
+ * without making the arithmetic asynchronous: {@link classicalMds} drains it
+ * in a loop and is the same synchronous function it always was.
+ */
+export function* classicalMdsSweeps(
+  full: DenseMatrix,
+  n: number,
+  sweeps = 80,
+): Generator<{ sweep: number; sweeps: number }, Coordinates, void> {
   // B = −½ J D² J: the squared distances, centred by row, by column and
   // overall. **Never written down.** Only three vectors are ever wanted of it,
   // and every one of them is reached by multiplying B into a vector — which
@@ -288,6 +352,7 @@ export function classicalMds(full: DenseMatrix, n: number, sweeps = 80): Coordin
     for (let k = 0; k < 3; k++) apply(q[k], z[k])
     for (let k = 0; k < 3; k++) q[k].set(z[k])
     orthonormalise(q)
+    yield { sweep: sweep + 1, sweeps }
   }
   // Rayleigh quotients for the scale of each axis; a negative one — a matrix
   // that is not quite Euclidean, which a filled one never quite is — is an
