@@ -192,13 +192,27 @@ export function widenRegion(
   options: { factor?: number; circular?: boolean } = {},
 ): string | null {
   const { contig, length } = window
-  const span = window.end - window.start
+  // **A window across the origin is measured the long way round the outside.**
+  // It is the one window whose end is below its start, and subtracting them
+  // gives a negative span — which would refuse to widen exactly the view a
+  // reader most wants to widen, since a junction is a place you arrive at by
+  // zooming out (§8.15).
+  const round = options.circular === true
+  const span =
+    window.end > window.start
+      ? window.end - window.start
+      : round
+        ? length - window.start + window.end
+        : Number.NaN
   if (!(span > 0) || !(length > 0) || span >= length) return null
   const wanted = Math.round(span * (options.factor ?? ZOOM_OUT_FACTOR))
   // A press that would reach past the sequence lands *on* it, and the bare name
   // is how this application spells the whole of something everywhere else.
   if (wanted >= length) return contig
-  const centre = (window.start + window.end) / 2
+  // From the window's own start, so a wrapped one is centred on the middle of
+  // what is drawn rather than on the midpoint of two coordinates that run
+  // backwards past each other.
+  const centre = window.start + span / 2
   let start = Math.round(centre - wanted / 2)
   let end = start + wanted
 

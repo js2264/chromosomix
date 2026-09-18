@@ -45,7 +45,7 @@ interface Mounted {
   store: BookmarkStore
   went: Bookmark[]
   /** What the map claims to be showing; `null` is "not at one place". */
-  framed: { contig: string; start: number; end: number } | null
+  framed: { contig: string; start: number; end: number; wrapped?: boolean } | null
   binsize: number | null
   available: boolean
   rows(): string[]
@@ -194,6 +194,21 @@ describe('saving a place', () => {
     app.available = false
     app.card.saveFramed()
     expect(app.note()).toMatch(/No map is open/)
+  })
+
+  it('refuses a window across a circular sequence’s origin, and says which', () => {
+    // §8.15: on a declared circle the window on screen can run off the end of
+    // the sequence and back on at its start. That is one place and it cannot be
+    // written as one — a BED interval whose end is below its start is not a BED
+    // interval — so the sentence has to be about the junction rather than the
+    // "not at one place" one, which would tell a reader looking at a single
+    // sequence that they are not.
+    const app = mount()
+    app.framed = { contig: 'chr', start: 4_500_000, end: 150_000, wrapped: true }
+    app.press('this view')
+    expect(app.store.marks).toEqual([])
+    expect(app.note()).toMatch(/across the sequence/)
+    expect(app.note()).not.toMatch(/not at one place/)
   })
 
   it('says a place is already saved rather than saving it twice', () => {

@@ -84,6 +84,21 @@ describe('on a sequence the reader has declared circular (§8.15)', () => {
     ).toBe('chr')
   })
 
+  it('widens a window that already runs across the origin', () => {
+    // The end below the start is the whole point: on a circle that is one
+    // window, measured the long way round the outside — 2,950,000 to 3,000,000
+    // and on to 50,000, which is 100 kb. Three times that, about its own middle.
+    expect(
+      widenRegion({ contig: 'chr', start: 2_950_000, end: 50_000, length: CHR }, CIRCLE),
+    ).toBe('chr:2850000-150000')
+  })
+
+  it('refuses a backwards window on a sequence nobody declared', () => {
+    // Off a circle there is no long way round, and a negative span is not a
+    // window to widen.
+    expect(widenRegion({ contig: 'chr', start: 2_950_000, end: 50_000, length: CHR })).toBeNull()
+  })
+
   it('leaves a window clear of the junction alone', () => {
     expect(
       widenRegion({ contig: 'chr', start: 1_000_000, end: 1_100_000, length: CHR }, CIRCLE),

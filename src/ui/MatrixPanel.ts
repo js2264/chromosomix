@@ -592,6 +592,18 @@ export interface FramedRegion {
   end: number
   /** The whole sequence's length in base pairs, which is where coordinates stop. */
   length: number
+  /**
+   * The window runs across the sequence's own origin (§8.15), so `end` is
+   * **below** `start` and the window is what lies outside the two.
+   *
+   * A circular axis panned across its junction shows the same sequence twice —
+   * its tail, then its head — and that is one window written backwards rather
+   * than two places. Which is a legal region on a declared sequence and an error
+   * on every other, so it is flagged rather than left for a caller to notice
+   * from the arithmetic: the zoom-out widens it, and the Bookmarks card refuses
+   * it, because a BED interval cannot be written backwards.
+   */
+  wrapped?: boolean
 }
 
 /**
@@ -7437,6 +7449,22 @@ export class MatrixPanel {
   framedRegion(): FramedRegion | null {
     if (this.data === null) return null
     const windows = this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX)
+    // **Two runs of one sequence is one window on a circle**, not two places: a
+    // wrapped axis carries the sequence's tail and then its head, with the
+    // second run a lap along (§8.15). Reported as the window a reader would
+    // type — `chr:4,500,000-150,000` — and flagged, because that is a region
+    // only a declared sequence accepts.
+    if (windows.length === 2) {
+      const [tail, head] = windows
+      if (tail.contig !== head.contig || tail.segment === head.segment) return null
+      return {
+        contig: tail.contig,
+        start: tail.start,
+        end: head.end,
+        length: tail.segment.contigLength,
+        wrapped: true,
+      }
+    }
     if (windows.length !== 1) return null
     const only = windows[0]
     return only.end > only.start

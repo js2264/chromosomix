@@ -181,7 +181,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it. Not persisted, for the reason the framing is a snapshot: a history restored against a file that
   has since been re-binned would be a list of figures that no longer describe anything.
 
-- **Zoom out, beside the region box (§5.4).** The scroll wheel on the map zooms the *picture* — the
+- **Zoom out, beside the region box (§5.4).** Also the control that finally made a window across a
+  circular origin *reachable*: the panel refused to name one window where the axis showed a
+  sequence's tail and then its head, so the button greyed itself on exactly the view zooming out is
+  most interesting from. Two runs of one sequence is one window on a circle, and it is reported as
+  the region a reader would type — flagged as wrapped, because the Bookmarks card cannot write one
+  as a BED interval and now says so in those words rather than claiming the picture is not at one
+  place. The scroll wheel on the map zooms the *picture* — the
   same block, drawn larger or smaller — and past the edge of what was read it stops. This is the other
   thing a genome browser means by zooming out: a wider **range**, re-read, with the region string
   updated to say so. One press widens the window on screen three times about its own centre, so what
