@@ -173,6 +173,28 @@ describe('optionOf', () => {
     expect(label.formatter(400)).toBe('2.00 Mb')
   })
 
+  it('starts a bar’s axis at zero and fits a curve’s to the data', () => {
+    const axis = (mark: FigureStyle['mark']): boolean =>
+      (build(curve(), (style) => (style.mark = mark)).option['yAxis'] as Record<string, unknown>)[
+        'scale'
+      ] as boolean
+    // A bar is read as its own area, so a floor above zero is a lie about it.
+    expect(axis('bars')).toBe(false)
+    expect(axis('histogram')).toBe(false)
+    // A curve is read as a shape, and a forced zero under a P(s) spends the
+    // whole height on empty space.
+    expect(axis('line')).toBe(true)
+  })
+
+  it('names a histogram’s axes after the quantity and the count', () => {
+    const spec = specOf(curve()) as XyFigureSpec
+    spec.xLabel = 'rank'
+    spec.yLabel = 'completeness'
+    const option = optionOf(spec, { ...defaultStyle(spec), mark: 'histogram' }, THEME)
+    expect((option['xAxis'] as Record<string, unknown>)['name']).toBe('completeness')
+    expect((option['yAxis'] as Record<string, unknown>)['name']).toBe('count')
+  })
+
   it('shows a title only once the reader has typed one', () => {
     expect(build().option['title']).toBeUndefined()
     expect(build(curve(), (style) => (style.title = 'Yeast')).option['title']).toBeDefined()

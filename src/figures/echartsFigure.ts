@@ -104,6 +104,15 @@ export interface ChartFigureOptions {
 export interface ChartFigure extends PlotFigure {
   /** Redraw with a style the caller has changed. */
   update(style: FigureStyle): void
+  /**
+   * Take the height of the box instead of choosing one from the width.
+   *
+   * What the dialog turns on: in the drawer a figure decides how tall it is,
+   * because the column it is in has no height of its own; in a dialog the
+   * window decides, and a chart that kept its own answer would sit in the top
+   * half of it with the rest blank.
+   */
+  setFill(on: boolean): void
   /** The style as it now stands, zoom included. */
   current(): FigureStyle
   /**
@@ -124,15 +133,22 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
   })
   let style = options.style
   let chart: ECharts | null = null
+  let fill = options.fill === true
   let width = 0
+  let height = 0
+  /** Torn down: a chunk that arrives after this must not build anything. */
+  let dead = false
   /** Suppresses the write-back while the option we just built is being applied. */
   let settling = false
 
   const build = (): ChartOption => optionOf(options.spec, style, themeOf(host))
 
+  /** How tall the picture is: the box's height, or one chosen from the width. */
+  const tall = (): number => (fill ? host.clientHeight : chartHeight(width))
+
   const mount = (): void => {
     if (chart !== null || width <= 0 || core === null) return
-    const height = options.fill === true ? host.clientHeight : chartHeight(width)
+    height = tall()
     if (height <= 0) return
     chart = core.init(host, null, { renderer: 'svg', width, height })
     chart.on('legendselectchanged', (event: unknown) => {
@@ -185,8 +201,9 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
       mount()
       return
     }
-    const height = options.fill === true ? host.clientHeight : chartHeight(width)
-    if (height <= 0) return
+    const next = tall()
+    if (next <= 0) return
+    height = next
     chart.resize({ width, height })
   }
 
@@ -194,9 +211,15 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver((entries) => {
-          const next = entries[0]?.contentRect.width ?? 0
-          if (Math.abs(next - width) < 0.5 && chart !== null) return
-          width = next
+          const box = entries[0]?.contentRect
+          const nextWidth = box?.width ?? 0
+          // The height matters only when the box decides it; otherwise the
+          // chart sets it and observing it would be the classic feedback loop.
+          const settled =
+            Math.abs(nextWidth - width) < 0.5 &&
+            (!fill || Math.abs((box?.height ?? 0) - height) < 0.5)
+          if (settled && chart !== null) return
+          width = nextWidth
           resize()
         })
   observer?.observe(host)
@@ -215,9 +238,29 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
 
   // The library, then the first frame. A figure whose host has no width yet —
   // a folded drawer, a dialog not laid out — mounts on the resize instead.
-  const ready = load().then(() => {
-    if (width > 0) mount()
-  })
+  //
+  // The failure is *caught*, and says so on the figure rather than escaping as
+  // an unhandled rejection: a chunk that did not arrive is a network problem
+  // the reader can act on, and a figure that is merely blank is one they
+  // cannot. `ready` settles either way, so nothing waiting on it hangs.
+  const ready = load().then(
+    () => {
+      if (dead || typeof document === 'undefined') return
+      if (width > 0) mount()
+    },
+    () => {
+      // `dead` is not the only way this can arrive too late: a test tears the
+      // document down without destroying every figure it built, and there is
+      // then nothing left to say it to.
+      if (dead || typeof document === 'undefined') return
+      host.replaceChildren(
+        el('p', {
+          class: 'hint',
+          text: 'The chart library did not load. Check the connection and reopen this result.',
+        }),
+      )
+    },
+  )
 
   return {
     el: host,
@@ -258,11 +301,19 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
       apply()
     },
 
+    setFill(on: boolean): void {
+      if (fill === on) return
+      fill = on
+      host.classList.toggle('figure-chart-fill', on)
+      resize()
+    },
+
     current(): FigureStyle {
       return style
     },
 
     destroy(): void {
+      dead = true
       observer?.disconnect()
       watcher?.disconnect()
       media?.removeEventListener?.('change', onTheme)

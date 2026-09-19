@@ -79,9 +79,12 @@ export function figureBlock(props: FigureBlockProps): FigureBlock {
 
 function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
   let style = recallStyle(props.uri, props.task, spec)
-  let figure: PlotFigure | { el: HTMLElement; destroy(): void } = place(spec, style)
+  // Declared before the first `place`, which reads it: a `let` in the dead zone
+  // is a `ReferenceError` at the moment the first figure is built, and the
+  // drawer catches it and prints it where the picture should be.
   let dialog: Modal | null = null
   let settings: FigureSettings | null = null
+  let figure: PlotFigure | { el: HTMLElement; destroy(): void } = place(spec, style)
 
   const body = el('div', { class: 'figure-body' }, figure.el)
   const strip = el('div', { class: 'figure-strip' })
@@ -95,6 +98,9 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     'update' in figure ? (figure as ChartFigure) : null
 
   function place(built: FigureSpec, current: FigureStyle): PlotFigure | { el: HTMLElement; destroy(): void } {
+    // A figure built while the dialog is up takes the dialog's height, not the
+    // drawer column's — the reset that rebuilds it must not shrink it.
+    const fill = dialog !== null
     if (built.kind === 'matrix') return matrixFigure(styledMatrix(built, current))
     if (built.kind === 'table') {
       if (current.plot === null) {
@@ -106,11 +112,15 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
           : xyOfTable(built, current.plot.x, current.plot.y, current.plot.mark)
       return chartFigure({
         spec: derived,
-        style: { ...current, mark: current.plot.mark },
+        // A table drawn as a chart is one series, and a legend naming one
+        // series is a column of the figure's width spent on a word already in
+        // the axis title — the same rule `defaultStyle` applies to a curve.
+        style: { ...current, mark: current.plot.mark, legend: 'none' },
         onStyle: (next) => adopt(next),
+        fill,
       })
     }
-    return chartFigure({ spec: built, style: current, onStyle: (next) => adopt(next) })
+    return chartFigure({ spec: built, style: current, onStyle: (next) => adopt(next), fill })
   }
 
   /** A style the *chart* produced: already applied, so only stored and echoed. */
@@ -133,11 +143,21 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     else swap()
     settings?.refresh()
     paintStrip()
+    // The head carries the title, which is one of the things a control sets.
+    paintHead()
   }
 
+  /**
+   * Build the figure again and put the new one where the old one was.
+   *
+   * *Where it was*, not in the body: while the dialog is up the figure lives
+   * in the dialog's stage, and replacing it in the body throws — which is how
+   * a reset pressed in the dialog used to do nothing at all.
+   */
   function swap(): void {
     const next = place(spec, style)
-    body.replaceChild(next.el, figure.el)
+    const parent = figure.el.parentElement ?? body
+    parent.replaceChild(next.el, figure.el)
     figure.destroy()
     figure = next
   }
@@ -244,12 +264,16 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
       side: column.el,
       memoryKey: () => props.uri,
       scope: SIDE_SCOPE,
+      onResize: () => chart()?.setFill(true),
       onClose: () => {
         dialog = null
+        chart()?.setFill(false)
         body.replaceChildren(figure.el)
         paintHead()
       },
     })
+    // The window decides the height from here until the dialog closes.
+    chart()?.setFill(true)
   }
 
   function settingsColumn(): FigureSettings {

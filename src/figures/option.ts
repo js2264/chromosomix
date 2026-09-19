@@ -243,16 +243,22 @@ function xyOption(
   const histo = style.mark === 'histogram'
   const series: ChartOption[] = []
 
+  // How solid a fill is has to know how many there are: sixteen chromosomes
+  // filled at the opacity that suits one is a block of mud, and at the opacity
+  // that suits sixteen a single series is barely there.
+  const filled = Math.max(1, shown.filter((entry) => !entry.hidden).length)
+  const fillOpacity = Math.max(0.07, 0.35 / Math.sqrt(filled))
+
   for (const entry of shown) {
     if (histo) {
-      series.push(...histogramSeries(entry, style, theme))
+      series.push(...histogramSeries(entry, style, Math.min(1, 0.9 / Math.sqrt(filled) + 0.1)))
       continue
     }
     // The band goes in first, so the line it belongs to is drawn over it.
     if (style.bands && entry.series.low !== undefined && entry.series.high !== undefined) {
       series.push(...bandSeries(entry, style))
     }
-    series.push(lineSeries(entry, style))
+    series.push(lineSeries(entry, style, fillOpacity))
   }
 
   // A histogram's abscissa is the quantity itself and its ordinate is a count,
@@ -278,7 +284,11 @@ function xyOption(
       name: yName,
       nameLocation: 'middle',
       nameGap: style.fontSize * 4,
-      scale: true,
+      // A bar is read as its own area, so its axis has to start at zero; a
+      // curve is read as a shape, and a zero forced under a P(s) spends the
+      // whole height on empty space. `scale: true` is ECharts for "fit the
+      // data", which is right for everything but the bars.
+      scale: style.mark !== 'histogram' && style.mark !== 'bars',
       ...axisBase(theme, style, style.y.grid),
     },
     // Wheel zooms the abscissa and drags pan it, which is the gesture a curve
@@ -311,7 +321,7 @@ function xyOption(
   }
 }
 
-function lineSeries(entry: Entry, style: FigureStyle): ChartOption {
+function lineSeries(entry: Entry, style: FigureStyle, fillOpacity: number): ChartOption {
   const mark = markOf(entry.series, style)
   const data = pairs(entry.series, style)
   const common = {
@@ -340,7 +350,7 @@ function lineSeries(entry: Entry, style: FigureStyle): ChartOption {
     smooth: style.smooth,
     symbol: 'none',
     lineStyle: { width: style.lineWidth, color: entry.colour },
-    ...(area ? { areaStyle: { color: entry.colour, opacity: 0.2, origin: 'start' } } : {}),
+    ...(area ? { areaStyle: { color: entry.colour, opacity: fillOpacity, origin: 'start' } } : {}),
     // A gap is a gap: a bin with no value is not a line through zero.
     connectNulls: false,
     // Largest-triangle-three-buckets: a million-point profile is drawn as the
@@ -400,7 +410,7 @@ function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
 }
 
 /** One series as bars over its own bins. */
-function histogramSeries(entry: Entry, style: FigureStyle, theme: FigureTheme): ChartOption[] {
+function histogramSeries(entry: Entry, style: FigureStyle, opacity: number): ChartOption[] {
   const { edges, counts } = histogram(entry.series.y, style.bins)
   if (counts.length === 0) return []
   const data = counts.map((count, index) => [(edges[index] + edges[index + 1]) / 2, count])
@@ -416,7 +426,7 @@ function histogramSeries(entry: Entry, style: FigureStyle, theme: FigureTheme): 
       // two moves both of them half a bin apart from where they are.
       barGap: '-100%',
       barCategoryGap: '1%',
-      itemStyle: { color: entry.colour, opacity: theme.series.length > 0 ? 0.55 : 1 },
+      itemStyle: { color: entry.colour, opacity },
     },
   ]
 }

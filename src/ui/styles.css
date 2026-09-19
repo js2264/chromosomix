@@ -9151,6 +9151,22 @@ span.deck-name {
   padding: 0.5rem;
 }
 
+/* Whatever is on the stage takes the stage. Without this a picture that sizes
+   itself from its box — a canvas at `width: 100%`, a table — is laid out as a
+   shrink-to-fit flex item and collapses to its own intrinsic width, which is
+   how a matrix rebuilt inside the dialog came back two hundred pixels wide. */
+.stage-body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A table in the dialog scrolls to the window's height, not to the drawer's. */
+.stage-body > .analysis-figure-scroll {
+  max-height: none;
+  height: 100%;
+}
+
 .structure-stage > .structure-wrap {
   min-height: 0;
   height: 100%;
@@ -9821,7 +9837,10 @@ span.deck-name {
   color: var(--text-faint);
 }
 
-.figure-check {
+/* A checkbox and its name read as one thing, left-aligned — not a checkbox in
+   the label column with its word a field's width away in the other. Two
+   classes, because `.field` is a grid and one class would lose to it. */
+.field.figure-check {
   display: flex;
   align-items: center;
   gap: 0.35rem;

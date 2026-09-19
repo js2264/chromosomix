@@ -160,6 +160,10 @@ describe('a table as a chart', () => {
     const dist = distributionOfTable(spec as never, 'contamination', 'histogram')
     expect(dist.series[0].y).toEqual([1.1, 4.5, 0.2])
     expect(dist.mark).toBe('histogram')
+    // The column names the *ordinate*, since that is what a histogram counts;
+    // the abscissa is the row index and says nothing.
+    expect(dist.yLabel).toBe('Contamination')
+    expect(dist.xLabel).toBe('row')
   })
 })
 

@@ -15,7 +15,12 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
+node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 18-drawer.png
 ```
+
+The second script drives the part the first only passes through: the figures a task returns
+(§18.13) — the slim strip, the settings dialog, every mark, a table filtered and sorted and
+drawn as a chart, a matrix recoloured. Run it after any change to `src/figures/`.
 
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
 Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL

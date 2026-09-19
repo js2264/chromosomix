@@ -284,9 +284,11 @@ export function xyOfTable(
 /**
  * One numeric column as a distribution.
  *
- * `x` is left as the row index and carries no meaning: a histogram, a box and a
- * violin are all summaries of `y` alone, and pretending otherwise would put an
- * axis on the picture that says something untrue.
+ * `x` is the row index and carries no meaning: a histogram, a box and a violin
+ * are all summaries of `y` alone, and pretending otherwise would put an axis on
+ * the picture that says something untrue. The *column* is therefore the
+ * ordinate's name, not the abscissa's — which is what puts it on the right axis
+ * once a histogram turns it sideways and counts it.
  */
 export function distributionOfTable(
   spec: TableFigureSpec,
@@ -303,8 +305,8 @@ export function distributionOfTable(
     kind: 'xy',
     id: `${spec.id}:${key}`,
     label: spec.label,
-    xLabel: column?.label ?? key,
-    yLabel: 'count',
+    xLabel: 'row',
+    yLabel: column?.label ?? key,
     xScale: 'linear',
     yScale: 'linear',
     mark,
