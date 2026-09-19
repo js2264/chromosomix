@@ -428,7 +428,7 @@ async function measure(
  * The separations the figure opens on, in base pairs.
  *
  * A default view, not a limit: the marquee, the axis boxes and a double-click
- * all move it (`ui/interactivePlot.ts`), and the curve underneath runs from one
+ * all move it (`figures/FigureBlock.ts`), and the curve underneath runs from one
  * base pair to the length of the longest sequence whatever this says.
  *
  * It is here because the full extent is a bad picture of a good curve. The first

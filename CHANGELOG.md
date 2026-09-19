@@ -14,6 +14,27 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every figure a task produces is now restylable, and the PDF is still a drawing (§18.13).** A
+  slim strip over each plot carries the controls reached for constantly — the mark, the two log
+  axes, the legend, *Fit* — and one button beside it opens the figure **in the same dialog the 3D
+  model opens in**: the picture at the size of the window, every control in a resizable column
+  beside it. There are new marks to choose from (line, area, step, points, bars; histogram, box and
+  violin as summaries of the ordinate), per-series colours and visibility, typed axis windows, and
+  a title and type size that go into the export. A **table** is now a view rather than a printing —
+  filter it, sort it, choose its columns, or draw one numeric column as a distribution or against
+  another as a scatter. All of it is **remembered per file, per task and per output**, beside the
+  parameters the task was run with, and carried in an exported session.
+
+  **Contact maps and matrix outputs are drawn exactly as they were**, by the same rasteriser: a
+  matrix is a raster and the app already has the renderer for it. What a matrix gains is the dialog,
+  a colormap and the two ends of its scale.
+
+  The **PDF export is still a true vector page** — paths and text, restylable and scalable, not a
+  photograph. The chart library is asked for SVG rather than for a canvas, and the same picture is
+  replayed onto whatever context the export hands over, so the screen, the PNG and the PDF are one
+  drawing rather than three. The library itself arrives in a chunk of its own when the first figure
+  is built, so a reader who never runs an analysis never downloads it.
+
 - **The Structures card takes a drop, its eye is the deck's cell (§25.3).** A `.g3d` can be dropped
   anywhere on the *Structures* card, where before it had to be aimed at the *Tracks* card — the one
   whose list it does not join, since the loader files it as a structure either way. The eye on a

@@ -57,6 +57,16 @@ export const XY_MARKS: readonly MarkKind[] = ['line', 'area', 'step', 'points', 
 /** The marks that summarise a *distribution* and so ignore the x values. */
 export const DISTRIBUTION_MARKS: readonly MarkKind[] = ['histogram', 'box', 'violin']
 
+/**
+ * The marks that turn the *series* into the abscissa.
+ *
+ * A box and a violin are one shape per sample side by side, so the axis under
+ * them is a list of names. A histogram is not: it keeps a number line, and what
+ * it puts on it is the values themselves — which is why it summarises a
+ * distribution and still belongs on an ordinary pair of axes.
+ */
+export const CATEGORY_MARKS: readonly MarkKind[] = ['box', 'violin']
+
 export interface FigureSeries {
   /**
    * The key a style hangs on: a hidden series, a recoloured one.
@@ -305,6 +315,11 @@ export function distributionOfTable(
 /** Whether a mark ignores x and summarises y on its own. */
 export function isDistribution(mark: MarkKind): boolean {
   return DISTRIBUTION_MARKS.includes(mark)
+}
+
+/** Whether a mark puts the series' names on the abscissa. */
+export function isCategorical(mark: MarkKind): boolean {
+  return CATEGORY_MARKS.includes(mark)
 }
 
 /** The finite values of a series, for a domain or a summary. */

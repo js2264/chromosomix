@@ -456,7 +456,7 @@ function seriesColour(series: CurveSeries, index: number, theme: PlotTheme): str
  *
  * {@link seriesColour} colours by **position**, which is right when it is handed
  * the whole figure and wrong the moment anything filters the list first. Hiding
- * a series in `ui/interactivePlot.ts` used to do exactly that: with series
+ * a series in the drawer's figures used to do exactly that: with series
  * `A, B, C` and `A` switched off, `B` took `A`'s colour and `C` took `B`'s — the
  * lines, their confidence bands and their legend swatches all stepping one place
  * up the palette. It was silent, it survived into the PNG and the PDF, and its

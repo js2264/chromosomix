@@ -1,0 +1,564 @@
+/**
+ * A figure, as the chart library's option object.
+ *
+ * Pure: a spec, a style and a theme in, a plain object out, no DOM and no
+ * library. That is deliberate — this is where every decision about what the
+ * picture *is* now lives, and a decision inside a renderer is a decision nobody
+ * can test. `echartsFigure.ts` does nothing but hand the result to ECharts and
+ * take the SVG back.
+ *
+ * Two rules hold throughout:
+ *
+ * - **The style decides, the spec supplies.** Nothing here reads a colour or a
+ *   scale off the output; the style already resolved those from the task's
+ *   suggestions (`figures/style.ts`), so what a reader has set and what a task
+ *   proposed cannot disagree at this point.
+ * - **What is drawn is what is exported.** The window is in the style, not in a
+ *   zoom transform the export would have to reproduce — so a reader who zooms
+ *   into a shoulder and presses PDF gets that shoulder, with its axes
+ *   relabelled for the range they are actually showing.
+ */
+
+import { fmt } from '../ui/dom'
+import { boxSummary, density, histogram, sorted } from './stats'
+import {
+  isCategorical,
+  isDistribution,
+  type FigureSeries,
+  type MarkKind,
+  type XyFigureSpec,
+} from './spec'
+import type { FigureStyle } from './style'
+
+/** The colours and the type a figure borrows from the page it is drawn on. */
+export interface FigureTheme {
+  ink: string
+  muted: string
+  grid: string
+  background: string
+  /** The categorical palette, in order. */
+  series: string[]
+  fontFamily: string
+}
+
+/** What an option object is, without dragging the library's types in. */
+export type ChartOption = Record<string, unknown>
+
+/**
+ * The colour a series is drawn in.
+ *
+ * Three sources in order, and the order is the argument: what the reader set,
+ * then what the task said, then the palette — so a recolour survives a re-run
+ * and a task that has an opinion about which line is which keeps it.
+ *
+ * The **index into the full list**, never into a filtered one: a figure whose
+ * first series is switched off must not repaint every remaining line one place
+ * up the palette (`analysisPlots.resolveSeriesColours` learned this the hard
+ * way).
+ */
+export function seriesColour(
+  series: FigureSeries,
+  index: number,
+  style: FigureStyle,
+  theme: FigureTheme,
+): string {
+  const chosen = style.colours[series.id]
+  if (chosen !== undefined) return chosen
+  if (series.colour !== undefined) return series.colour
+  return theme.series[index % theme.series.length]
+}
+
+/** How a series is drawn: its own mark where it has one, else the figure's. */
+export function markOf(series: FigureSeries, style: FigureStyle): MarkKind {
+  return isDistribution(style.mark) ? style.mark : (series.mark ?? style.mark)
+}
+
+/**
+ * A log axis cannot show a zero, and pretending otherwise draws a false line.
+ *
+ * Non-positive values become `null`, which is a *gap* — the curve stops and
+ * starts again. Clamping them to the smallest positive value instead would put
+ * a point on the picture at a height nothing was measured at.
+ */
+function forAxis(value: number, log: boolean): number | null {
+  if (!Number.isFinite(value)) return null
+  if (log && value <= 0) return null
+  return value
+}
+
+function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number] | null> {
+  const xLog = style.x.scale === 'log'
+  const yLog = style.y.scale === 'log'
+  const out: Array<[number, number] | null> = []
+  for (let i = 0; i < series.y.length; i++) {
+    const x = forAxis(series.x[i] ?? i, xLog)
+    const y = forAxis(series.y[i], yLog)
+    out.push(x === null || y === null ? null : [x, y])
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Axes
+// ---------------------------------------------------------------------------
+
+/**
+ * The x axis label, in the units the reader navigates by.
+ *
+ * A profile's x is a bin index, which is a true number nobody thinks in: with a
+ * bin size to multiply by it becomes `1.22 Mb`, the same quantity written the
+ * way the map's own ruler writes it.
+ */
+function xFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined {
+  const binsize = spec.binsize
+  if (binsize === undefined) return undefined
+  return (value: number) => fmt.bp(value * binsize)
+}
+
+function axisBase(theme: FigureTheme, style: FigureStyle, grid: boolean): ChartOption {
+  return {
+    axisLine: { lineStyle: { color: theme.grid } },
+    axisTick: { lineStyle: { color: theme.grid } },
+    axisLabel: { color: theme.muted, fontSize: style.fontSize, fontFamily: theme.fontFamily },
+    nameTextStyle: { color: theme.ink, fontSize: style.fontSize, fontFamily: theme.fontFamily },
+    splitLine: { show: grid, lineStyle: { color: theme.grid, type: 'dashed' } },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The option
+// ---------------------------------------------------------------------------
+
+/** A domain as the zoom's own window, or the whole of the data. */
+function zoomWindow(domain: [number, number] | null): ChartOption {
+  return domain === null
+    ? { start: 0, end: 100 }
+    : { startValue: domain[0], endValue: domain[1] }
+}
+
+/** How much room a legend down one side or along an edge takes, in pixels. */
+const LEGEND_WIDTH = 132
+const LEGEND_HEIGHT = 28
+
+export function optionOf(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+  theme: FigureTheme,
+): ChartOption {
+  const shown = spec.series.map((series, index) => ({
+    series,
+    index,
+    colour: seriesColour(series, index, style, theme),
+    hidden: style.hidden.includes(series.id),
+  }))
+
+  const legend =
+    style.legend === 'none'
+      ? { show: false }
+      : {
+          show: true,
+          type: 'scroll',
+          data: shown.map((entry) => entry.series.name),
+          selected: Object.fromEntries(
+            shown.map((entry) => [entry.series.name, !entry.hidden]),
+          ),
+          textStyle: { color: theme.ink, fontSize: style.fontSize, fontFamily: theme.fontFamily },
+          ...(style.legend === 'right'
+            ? { orient: 'vertical', right: 8, top: 'middle' }
+            : style.legend === 'top'
+              ? { orient: 'horizontal', top: 4, left: 'center' }
+              : { orient: 'horizontal', bottom: 4, left: 'center' }),
+        }
+
+  const grid = {
+    left: 8,
+    right: style.legend === 'right' ? LEGEND_WIDTH : 16,
+    top: style.legend === 'top' ? LEGEND_HEIGHT + 8 : 16,
+    bottom: style.legend === 'bottom' ? LEGEND_HEIGHT + 8 : 8,
+    // The modern spelling of `containLabel`, and stricter than it was: `'all'`
+    // (the default under this mode) keeps the axis *names* inside the box too,
+    // so a figure whose ordinate is called "contact probability" does not push
+    // its own title off the left edge.
+    outerBoundsMode: 'same',
+  }
+
+  const categorical = isCategorical(style.mark)
+  const built = categorical
+    ? distributionOption(spec, style, theme, shown)
+    : xyOption(spec, style, theme, shown)
+
+  return {
+    backgroundColor: theme.background,
+    animation: false,
+    textStyle: { fontFamily: theme.fontFamily, fontSize: style.fontSize, color: theme.ink },
+    ...(style.title === null || style.title === ''
+      ? {}
+      : {
+          title: {
+            text: style.title,
+            left: 'center',
+            top: 4,
+            textStyle: {
+              color: theme.ink,
+              fontSize: style.fontSize + 4,
+              fontFamily: theme.fontFamily,
+            },
+          },
+        }),
+    grid: {
+      ...grid,
+      top: style.title === null || style.title === '' ? grid.top : grid.top + style.fontSize + 12,
+    },
+    legend,
+    tooltip: style.tooltip
+      ? {
+              trigger:
+            categorical || style.mark === 'points' || style.mark === 'histogram'
+              ? 'item'
+              : 'axis',
+          axisPointer: { type: 'cross', lineStyle: { color: theme.muted } },
+          backgroundColor: theme.background,
+          borderColor: theme.grid,
+          textStyle: { color: theme.ink, fontSize: style.fontSize },
+        }
+      : { show: false },
+    ...built,
+  }
+}
+
+interface Entry {
+  series: FigureSeries
+  index: number
+  colour: string
+  hidden: boolean
+}
+
+/** A figure of (x, y) pairs: lines, areas, steps, points, bars, histograms. */
+function xyOption(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+  theme: FigureTheme,
+  shown: Entry[],
+): ChartOption {
+  const histo = style.mark === 'histogram'
+  const series: ChartOption[] = []
+
+  for (const entry of shown) {
+    if (histo) {
+      series.push(...histogramSeries(entry, style, theme))
+      continue
+    }
+    // The band goes in first, so the line it belongs to is drawn over it.
+    if (style.bands && entry.series.low !== undefined && entry.series.high !== undefined) {
+      series.push(...bandSeries(entry, style))
+    }
+    series.push(lineSeries(entry, style))
+  }
+
+  // A histogram's abscissa is the quantity itself and its ordinate is a count,
+  // which is the one case where the figure's own axis names are not the axes.
+  const xName = style.x.label ?? (histo ? spec.yLabel : spec.xLabel)
+  const yName = style.y.label ?? (histo ? 'count' : spec.yLabel)
+  const formatter = histo ? undefined : xFormatter(spec)
+
+  return {
+    xAxis: {
+      type: style.x.scale === 'log' ? 'log' : 'value',
+      name: xName,
+      nameLocation: 'middle',
+      nameGap: style.fontSize * 2.4,
+      scale: true,
+      ...axisBase(theme, style, style.x.grid),
+      ...(formatter === undefined
+        ? {}
+        : { axisLabel: { ...(axisBase(theme, style, style.x.grid).axisLabel as object), formatter } }),
+    },
+    yAxis: {
+      type: style.y.scale === 'log' ? 'log' : 'value',
+      name: yName,
+      nameLocation: 'middle',
+      nameGap: style.fontSize * 4,
+      scale: true,
+      ...axisBase(theme, style, style.y.grid),
+    },
+    // Wheel zooms the abscissa and drags pan it, which is the gesture a curve
+    // is read with; the ordinate takes the same wheel with shift held, so a
+    // reader can go after a shoulder in both directions without a mode.
+    //
+    // The window lives *here* rather than in the axes' `min`/`max`, and that is
+    // the single-source rule this whole module is built on: a wheel gesture and
+    // a number typed into the sidebar are then the same change to the same
+    // place, and the export draws whichever of them happened last.
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        filterMode: 'none',
+        ...zoomWindow(style.x.domain),
+      },
+      {
+        type: 'inside',
+        yAxisIndex: 0,
+        zoomOnMouseWheel: 'shift',
+        moveOnMouseMove: false,
+        filterMode: 'none',
+        ...zoomWindow(style.y.domain),
+      },
+    ],
+    series,
+  }
+}
+
+function lineSeries(entry: Entry, style: FigureStyle): ChartOption {
+  const mark = markOf(entry.series, style)
+  const data = pairs(entry.series, style)
+  const common = {
+    id: entry.series.id,
+    name: entry.series.name,
+    data,
+    color: entry.colour,
+    emphasis: { focus: 'series' },
+  }
+  if (mark === 'points') {
+    return {
+      ...common,
+      type: 'scatter',
+      symbolSize: style.pointSize,
+      itemStyle: { color: entry.colour, opacity: 0.85 },
+    }
+  }
+  if (mark === 'bars') {
+    return { ...common, type: 'bar', itemStyle: { color: entry.colour }, barMaxWidth: 24 }
+  }
+  const area = mark === 'area' || style.fillArea
+  return {
+    ...common,
+    type: 'line',
+    step: mark === 'step' ? 'middle' : false,
+    smooth: style.smooth,
+    symbol: 'none',
+    lineStyle: { width: style.lineWidth, color: entry.colour },
+    ...(area ? { areaStyle: { color: entry.colour, opacity: 0.2, origin: 'start' } } : {}),
+    // A gap is a gap: a bin with no value is not a line through zero.
+    connectNulls: false,
+    // Largest-triangle-three-buckets: a million-point profile is drawn as the
+    // thousand points that keep its shape, which is the same reduction the
+    // painter this replaces did by hand.
+    sampling: 'lttb',
+  }
+}
+
+/**
+ * The task's own band, as two stacked lines with the space between them filled.
+ *
+ * The lower edge is invisible and the upper one carries the fill, which is how
+ * a stacked pair draws a ribbon; both are silent and neither is in the legend,
+ * because a band is part of the series it belongs to rather than a series of
+ * its own.
+ */
+function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
+  const low = entry.series.low as number[]
+  const high = entry.series.high as number[]
+  const yLog = style.y.scale === 'log'
+  const xLog = style.x.scale === 'log'
+  const base: Array<[number, number] | null> = []
+  const span: Array<[number, number] | null> = []
+  for (let i = 0; i < low.length; i++) {
+    const x = forAxis(entry.series.x[i] ?? i, xLog)
+    const lo = forAxis(low[i], yLog)
+    const hi = forAxis(high[i], yLog)
+    if (x === null || lo === null || hi === null) {
+      base.push(null)
+      span.push(null)
+      continue
+    }
+    base.push([x, lo])
+    span.push([x, hi - lo])
+  }
+  const stack = `band-${entry.series.id}`
+  const quiet = {
+    type: 'line',
+    stack,
+    symbol: 'none',
+    silent: true,
+    legendHoverLink: false,
+    lineStyle: { opacity: 0 },
+    tooltip: { show: false },
+  }
+  return [
+    { ...quiet, id: `${stack}-low`, name: `${entry.series.name} ${stack}-low`, data: base },
+    {
+      ...quiet,
+      id: `${stack}-high`,
+      name: `${entry.series.name} ${stack}-high`,
+      data: span,
+      areaStyle: { color: entry.colour, opacity: 0.18 },
+    },
+  ]
+}
+
+/** One series as bars over its own bins. */
+function histogramSeries(entry: Entry, style: FigureStyle, theme: FigureTheme): ChartOption[] {
+  const { edges, counts } = histogram(entry.series.y, style.bins)
+  if (counts.length === 0) return []
+  const data = counts.map((count, index) => [(edges[index] + edges[index + 1]) / 2, count])
+  return [
+    {
+      id: entry.series.id,
+      name: entry.series.name,
+      type: 'bar',
+      data,
+      color: entry.colour,
+      // Overlaid rather than side by side, at part opacity: two distributions
+      // compared are two shapes over the same axis, and splitting each bin in
+      // two moves both of them half a bin apart from where they are.
+      barGap: '-100%',
+      barCategoryGap: '1%',
+      itemStyle: { color: entry.colour, opacity: theme.series.length > 0 ? 0.55 : 1 },
+    },
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Distributions
+// ---------------------------------------------------------------------------
+
+/**
+ * A box or a violin: the series become categories and only `y` is read.
+ *
+ * `x` is dropped on purpose. These marks summarise a sample, and the sample has
+ * no abscissa — drawing one would put an axis on the figure that says something
+ * untrue about what was measured.
+ */
+function distributionOption(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+  theme: FigureTheme,
+  shown: Entry[],
+): ChartOption {
+  const visible = shown.filter((entry) => !entry.hidden)
+  const categories = visible.map((entry) => entry.series.name)
+  const yName = style.y.label ?? spec.yLabel
+
+  const series: ChartOption[] =
+    style.mark === 'box'
+      ? boxSeries(visible, style, theme)
+      : violinSeries(visible, style, theme)
+
+  if (style.jitter) {
+    series.push({
+      id: 'points',
+      name: 'points',
+      type: 'scatter',
+      symbolSize: Math.max(2, style.pointSize / 2),
+      itemStyle: { color: theme.muted, opacity: 0.4 },
+      silent: true,
+      data: visible.flatMap((entry, at) =>
+        sorted(entry.series.y).map((value) => [at, value]),
+      ),
+    })
+  }
+
+  return {
+    xAxis: {
+      type: 'category',
+      data: categories,
+      ...axisBase(theme, style, false),
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: style.y.scale === 'log' ? 'log' : 'value',
+      name: yName,
+      nameLocation: 'middle',
+      nameGap: style.fontSize * 4,
+      scale: true,
+      ...(style.y.domain === null ? {} : { min: style.y.domain[0], max: style.y.domain[1] }),
+      ...axisBase(theme, style, style.y.grid),
+    },
+    series,
+  }
+}
+
+function boxSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme): ChartOption[] {
+  const boxes = visible.map((entry) => boxSummary(entry.series.y))
+  return [
+    {
+      id: 'box',
+      name: 'box',
+      type: 'boxplot',
+      data: boxes.map((box, at) => ({
+        value: [box.low, box.q1, box.median, box.q3, box.high],
+        itemStyle: { color: visible[at].colour, borderColor: theme.ink, opacity: 0.55 },
+      })),
+      boxWidth: [10, 48],
+    },
+    {
+      id: 'outliers',
+      name: 'outliers',
+      type: 'scatter',
+      symbolSize: Math.max(3, style.pointSize / 1.5),
+      itemStyle: { color: theme.muted },
+      silent: true,
+      data: boxes.flatMap((box, at) => box.outliers.map((value) => [at, value])),
+    },
+  ]
+}
+
+/**
+ * A violin, drawn as a custom shape.
+ *
+ * ECharts has no violin, and the alternatives are worse than writing the
+ * polygon: a mirrored pair of area series needs a numeric axis the categories
+ * are not on, and a box with a density line beside it is two pictures. The
+ * density itself is `stats.density`, so the shape is a documented estimator
+ * rather than whatever a renderer happened to smooth.
+ *
+ * Every violin on one figure is scaled by the *same* peak, because two violins
+ * side by side each normalised to their own width say the two samples are
+ * equally concentrated, which is exactly the comparison they are there to make.
+ */
+function violinSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme): ChartOption[] {
+  const shapes = visible.map((entry) => density(entry.series.y))
+  const peak = Math.max(0, ...shapes.flatMap((shape) => shape.y))
+  if (!(peak > 0)) return boxSeries(visible, style, theme)
+
+  return visible.map((entry, at) => ({
+    id: `violin-${entry.series.id}`,
+    name: entry.series.name,
+    type: 'custom',
+    data: [[at, 0]],
+    renderItem: (
+      _params: unknown,
+      api: { coord: (point: [number, number]) => [number, number]; size?: unknown },
+    ) => {
+      const shape = shapes[at]
+      if (shape.at.length === 0) return { type: 'group', children: [] }
+      const size = (api.size as ((point: [number, number]) => [number, number]) | undefined)?.([
+        1, 0,
+      ]) ?? [24, 0]
+      const half = Math.min(48, size[0] * 0.42)
+      const points: Array<[number, number]> = []
+      for (let i = 0; i < shape.at.length; i++) {
+        const [cx, cy] = api.coord([at, shape.at[i]])
+        points.push([cx - (shape.y[i] / peak) * half, cy])
+      }
+      for (let i = shape.at.length - 1; i >= 0; i--) {
+        const [cx, cy] = api.coord([at, shape.at[i]])
+        points.push([cx + (shape.y[i] / peak) * half, cy])
+      }
+      return {
+        type: 'polygon',
+        shape: { points },
+        style: {
+          fill: entry.colour,
+          opacity: 0.55,
+          stroke: theme.ink,
+          lineWidth: style.lineWidth / 2,
+        },
+      }
+    },
+    encode: { x: 0, y: 1 },
+  }))
+}

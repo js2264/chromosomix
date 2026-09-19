@@ -1,0 +1,356 @@
+/**
+ * One output, as a figure with its controls: the strip, the dialog, the exports.
+ *
+ * This is what the drawer puts on screen for every result that is a picture.
+ * It owns four things and nothing else:
+ *
+ * - the **style**, recalled for this file, task and output and written back on
+ *   every change, so what a reader set survives a re-run and a reload;
+ * - the **figure**, which is a chart, a rasterised matrix or a table depending
+ *   on what the output is and what the reader has asked for;
+ * - the **slim strip** above it — the three or four controls that are reached
+ *   for constantly, inline, where they cost no gesture at all;
+ * - the **dialog**, which is the whole settings column beside the figure at the
+ *   size of the window. The same shell the 3D model opens in (`ui/StageDialog`),
+ *   because it is the same idea and a reader who has learned one has learned
+ *   both.
+ *
+ * The figure element is **moved** into the dialog and moved back, never copied.
+ * A chart that was rebuilt for the dialog would lose the window the reader had
+ * zoomed to and, worse, could differ from the one the export draws; moving it
+ * means there is only ever one figure and one answer.
+ */
+
+import { button, el } from '../ui/dom'
+import { icon, iconButton } from '../ui/icons'
+import { stageDialog } from '../ui/StageDialog'
+import type { Modal } from '../ui/Modal'
+import { matrixFigure, type PlotFigure } from '../ui/analysisPlots'
+import { chartFigure, themeOf, type ChartFigure } from './echartsFigure'
+import { figureSettings, type FigureSettings } from './settings'
+import { tableView } from './tableFigure'
+import {
+  distributionOfTable,
+  specOf,
+  xyOfTable,
+  type FigureSpec,
+  type MatrixFigureSpec,
+  type XyFigureSpec,
+} from './spec'
+import { defaultStyle, forgetStyle, recallStyle, rememberStyle, type FigureStyle } from './style'
+import type { MatrixOutput, TaskOutput } from '../analysis/types'
+
+/** Where the figure dialog's sidebar width is kept, so a reader sets it once. */
+const SIDE_SCOPE = 'figure:side'
+
+export interface FigureBlockProps {
+  output: TaskOutput
+  /** The task id, which with the output's id names this figure's memory. */
+  task: string
+  /** The file the style is remembered against. */
+  uri: string
+  /** Buttons the drawer owns — TSV, bigWig, bedGraph — for the head row. */
+  extras?: HTMLElement[]
+  /** The drawer's own exports, which carry the provenance this does not know. */
+  onPng?: (figure: PlotFigure) => void
+  onPdf?: (figure: PlotFigure) => void
+}
+
+export interface FigureBlock {
+  el: HTMLElement
+  /** The figure as it now stands, or `null` where it is a table. */
+  drawable(): PlotFigure | null
+  /**
+   * Settled once the figure can be drawn.
+   *
+   * The chart library arrives in a chunk of its own, so a caller that exports
+   * in the same tick as the block was built — a test — waits on this. A reader
+   * pressing PDF has waited by looking at the picture.
+   */
+  ready(): Promise<void>
+  destroy(): void
+}
+
+export function figureBlock(props: FigureBlockProps): FigureBlock {
+  const spec = specOf(props.output)
+  if (spec === null) throw new Error('this output is not a figure')
+  return blockOf(spec, props)
+}
+
+function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
+  let style = recallStyle(props.uri, props.task, spec)
+  let figure: PlotFigure | { el: HTMLElement; destroy(): void } = place(spec, style)
+  let dialog: Modal | null = null
+  let settings: FigureSettings | null = null
+
+  const body = el('div', { class: 'figure-body' }, figure.el)
+  const strip = el('div', { class: 'figure-strip' })
+  const head = el('div', { class: 'analysis-figure-head' })
+  const host = el('div', { class: 'analysis-figure figure-block' }, head, strip, body)
+
+  // -------------------------------------------------------------------------
+
+  /** Whether the figure on screen can be rebuilt in place rather than replaced. */
+  const chart = (): ChartFigure | null =>
+    'update' in figure ? (figure as ChartFigure) : null
+
+  function place(built: FigureSpec, current: FigureStyle): PlotFigure | { el: HTMLElement; destroy(): void } {
+    if (built.kind === 'matrix') return matrixFigure(styledMatrix(built, current))
+    if (built.kind === 'table') {
+      if (current.plot === null) {
+        return tableView(built, current, (key, down) => apply({ sortKey: key, sortDown: down }))
+      }
+      const derived =
+        current.plot.x === null
+          ? distributionOfTable(built, current.plot.y, current.plot.mark)
+          : xyOfTable(built, current.plot.x, current.plot.y, current.plot.mark)
+      return chartFigure({
+        spec: derived,
+        style: { ...current, mark: current.plot.mark },
+        onStyle: (next) => adopt(next),
+      })
+    }
+    return chartFigure({ spec: built, style: current, onStyle: (next) => adopt(next) })
+  }
+
+  /** A style the *chart* produced: already applied, so only stored and echoed. */
+  function adopt(next: FigureStyle): void {
+    style = next
+    rememberStyle(props.uri, props.task, spec.id, style)
+    settings?.refresh()
+    paintStrip()
+  }
+
+  /** A style a *control* produced: applied, stored, and the figure told. */
+  function apply(patch: Partial<FigureStyle>): void {
+    const before = style
+    style = { ...style, ...patch }
+    rememberStyle(props.uri, props.task, spec.id, style)
+    // A chart of the same data takes the change in place, which keeps the
+    // instance — and therefore the element the dialog may be holding.
+    const live = chart()
+    if (live !== null && sameFigure(spec, before, style)) live.update(style)
+    else swap()
+    settings?.refresh()
+    paintStrip()
+  }
+
+  function swap(): void {
+    const next = place(spec, style)
+    body.replaceChild(next.el, figure.el)
+    figure.destroy()
+    figure = next
+  }
+
+  function reset(): void {
+    forgetStyle(props.uri, props.task, spec.id)
+    style = defaultStyle(spec)
+    swap()
+    settings?.refresh()
+    paintStrip()
+    paintHead()
+  }
+
+  // -------------------------------------------------------------------------
+  // The strip: the two or three controls worth an inline row
+  // -------------------------------------------------------------------------
+
+  function paintStrip(): void {
+    const items: HTMLElement[] = []
+    if (spec.kind === 'xy') {
+      const marks = el('select', { class: 'select select-tight' })
+      for (const mark of ['line', 'area', 'step', 'points', 'bars', 'histogram', 'box', 'violin']) {
+        marks.appendChild(el('option', { value: mark, text: mark }))
+      }
+      marks.value = style.mark
+      marks.title = 'How the series are drawn'
+      marks.addEventListener('change', () => apply({ mark: marks.value as FigureStyle['mark'] }))
+      items.push(marks)
+      items.push(
+        axisToggle('x', style, apply),
+        axisToggle('y', style, apply),
+        pressed('list', style.legend !== 'none', 'legend', () =>
+          apply({ legend: style.legend === 'none' ? 'right' : 'none' }),
+        ),
+        button('Fit', () => apply({ x: { ...style.x, domain: null }, y: { ...style.y, domain: null } }), {
+          class: 'btn btn-quiet',
+          title: 'Both axes back to the whole of the data — the wheel zooms, this undoes it',
+        }),
+      )
+    } else if (spec.kind === 'matrix') {
+      const maps = el('select', { class: 'select select-tight' })
+      maps.appendChild(el('option', { value: '', text: 'auto' }))
+      for (const name of MATRIX_MAPS) maps.appendChild(el('option', { value: name, text: name }))
+      maps.value = style.colormap ?? ''
+      maps.title = 'The colours the values are drawn in'
+      maps.addEventListener('change', () => apply({ colormap: maps.value === '' ? null : maps.value }))
+      items.push(maps)
+    } else {
+      const box = el('input', {
+        class: 'input input-tight',
+        type: 'search',
+        placeholder: 'filter rows',
+        value: style.filter,
+      }) as HTMLInputElement
+      box.title = 'Rows whose text contains this, anywhere'
+      box.addEventListener('change', () => apply({ filter: box.value }))
+      items.push(box)
+    }
+    strip.replaceChildren(...items)
+  }
+
+  // -------------------------------------------------------------------------
+
+  function paintHead(): void {
+    const drawable = asDrawable(figure)
+    head.replaceChildren(
+      el('span', { class: 'analysis-figure-title', text: style.title ?? props.output.label }),
+      ...(props.extras ?? []),
+      ...(drawable === null || props.onPng === undefined
+        ? []
+        : [
+            button('PNG', () => props.onPng?.(drawable), {
+              class: 'btn btn-quiet',
+              title: 'The figure as a raster, redrawn at 300 dpi',
+            }),
+          ]),
+      ...(drawable === null || props.onPdf === undefined
+        ? []
+        : [
+            button('PDF', () => props.onPdf?.(drawable), {
+              class: 'btn btn-quiet',
+              title: 'The figure as a true vector page — restylable, recolourable, scalable',
+            }),
+          ]),
+      iconButton('sliders-horizontal', 'Customise this figure', () => enlarge(), {
+        class: 'btn btn-icon figure-enlarge',
+        size: 14,
+      }),
+    )
+  }
+
+  /**
+   * The figure at the size of the window, with every control beside it.
+   *
+   * The element is moved, not rebuilt — see the note at the top of this file —
+   * and put back wherever it was when the dialog closes.
+   */
+  function enlarge(): void {
+    if (dialog !== null) return
+    const column = settingsColumn()
+    dialog = stageDialog({
+      title: style.title ?? props.output.label,
+      stage: figure.el,
+      side: column.el,
+      memoryKey: () => props.uri,
+      scope: SIDE_SCOPE,
+      onClose: () => {
+        dialog = null
+        body.replaceChildren(figure.el)
+        paintHead()
+      },
+    })
+  }
+
+  function settingsColumn(): FigureSettings {
+    if (settings === null) {
+      settings = figureSettings({
+        spec,
+        style: () => style,
+        onChange: (next) => apply(next),
+        onReset: () => reset(),
+        theme: () => themeOf(host),
+      })
+    }
+    settings.refresh()
+    return settings
+  }
+
+  paintStrip()
+  paintHead()
+
+  return {
+    el: host,
+    drawable: () => asDrawable(figure),
+    ready: () => ('ready' in figure ? (figure as ChartFigure).ready : Promise.resolve()),
+    destroy(): void {
+      dialog?.close()
+      figure.destroy()
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function asDrawable(figure: { el: HTMLElement; destroy(): void }): PlotFigure | null {
+  return 'draw' in figure ? (figure as PlotFigure) : null
+}
+
+/**
+ * Whether two styles describe the same *kind* of figure.
+ *
+ * A chart can be told about a new style; a table that has become a scatter, or
+ * a matrix whose colormap changed, has to be built again. Asking here rather
+ * than rebuilding always is what lets a wheel zoom and a legend click leave the
+ * instance — and the element the dialog is holding — where it is.
+ */
+function sameFigure(spec: FigureSpec, before: FigureStyle, after: FigureStyle): boolean {
+  if (spec.kind === 'matrix') return false
+  if (spec.kind === 'table') {
+    if (before.plot === null || after.plot === null) return before.plot === after.plot
+    return before.plot.x === after.plot.x && before.plot.y === after.plot.y
+  }
+  return true
+}
+
+/** The matrix's colours, offered inline; the full list is in the dialog. */
+const MATRIX_MAPS = ['fall', 'viridis', 'magma', 'seismic', 'coolwarm', 'bwr']
+
+function axisToggle(which: 'x' | 'y', style: FigureStyle, apply: (patch: Partial<FigureStyle>) => void): HTMLElement {
+  const axis = style[which]
+  const on = axis.scale === 'log'
+  const node = button(`log ${which}`, () => apply({ [which]: { ...axis, scale: on ? 'linear' : 'log' } } as Partial<FigureStyle>), {
+    class: 'btn btn-quiet btn-toggle',
+    title: on ? `A linear ${which} axis` : `A log ${which} axis — values at or below zero become gaps`,
+  })
+  node.setAttribute('aria-pressed', String(on))
+  return node
+}
+
+function pressed(name: Parameters<typeof icon>[0], on: boolean, label: string, onPick: () => void): HTMLElement {
+  const node = iconButton(name, on ? `Hide the ${label}` : `Show the ${label}`, onPick, {
+    class: 'btn btn-icon btn-toggle',
+    size: 13,
+  })
+  node.setAttribute('aria-pressed', String(on))
+  return node
+}
+
+/**
+ * The matrix as the reader has set it: colours, and the two ends of the scale.
+ *
+ * A derived output rather than a second renderer, which is the rule the whole
+ * drawer is built on — the existing rasteriser draws it, exactly as it draws
+ * the contact map, and nothing about how a matrix is painted changes here.
+ */
+function styledMatrix(spec: MatrixFigureSpec, style: FigureStyle): MatrixOutput {
+  const output = { ...spec.output }
+  if (style.colormap !== null) output.colormap = style.colormap
+  if (style.vmin === null && style.vmax === null) return output
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  for (const value of spec.output.values) {
+    if (!Number.isFinite(value)) continue
+    if (value < lo) lo = value
+    if (value > hi) hi = value
+  }
+  const from = style.vmin ?? (Number.isFinite(lo) ? lo : 0)
+  const to = style.vmax ?? (Number.isFinite(hi) ? hi : 1)
+  if (from < to) output.range = [from, to]
+  return output
+}
+
+/** Re-exported so the drawer can keep one list of every figure it built. */
+export type { XyFigureSpec }

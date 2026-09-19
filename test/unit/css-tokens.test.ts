@@ -65,7 +65,7 @@ const SET_FROM_SCRIPT = [
 ] as const
 
 /** The light palette's selector, which four elements share. */
-const LIGHT = ":root,\n:root[data-theme='light'],\n.content,\n.analysis-figure"
+const LIGHT = ":root,\n:root[data-theme='light'],\n.content,\n.analysis-figure,\n.figure-chart"
 
 /** Every `--name` the sheet defines, anywhere in it. */
 function defined(): Set<string> {

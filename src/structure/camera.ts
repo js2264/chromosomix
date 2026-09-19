@@ -4,7 +4,7 @@
  * An orbit camera is four numbers and a point: an azimuth and an elevation
  * round a target, a distance from it, and which of two projections. That is
  * the whole of the state, and it is held as a plain object the panel owns —
- * the same rule `ui/interactivePlot.ts` states for a figure, *an interactive
+ * the same rule `figures/FigureBlock.ts` states for a figure, *an interactive
  * figure is a plain figure of a derived object*: the three.js adapter applies
  * this camera to its own, the vector painter projects through it, and the
  * export draws whatever object the controls built. There is no camera inside

@@ -5363,6 +5363,88 @@ by whichever bin reached furthest. A suggestion like the group and the style, wr
 style on the way in and the reader's from that moment, and a display scale and nothing else — the
 numbers behind the lane and every number that leaves it as a file stay as they were computed.
 
+### 18.13 A figure is a spec, a style and a renderer
+
+Every picture a task produces is now **restylable**, and the whole of how is one separation: what a
+figure is *of* is not what it *looks like*.
+
+- A **`FigureSpec`** (`src/figures/spec.ts`) is the output as the plainest thing that can be
+  plotted — numbers, names, axis titles, and the task's *suggestions* about scale and window. It
+  carries no colour, no line width, no legend and no hidden series. Three shapes, because there are
+  three genuinely different pictures: `xy` (one or more series over shared axes — a curve, a
+  profile, a scatter, a histogram and a box plot are all this), `matrix` (a small dense grid, which
+  keeps the `MatrixOutput` itself), and `table`.
+- A **`FigureStyle`** (`src/figures/style.ts`) is everything the reader has decided. One flat
+  record for every kind of figure, deliberately: a matrix has no line width and a curve has no
+  colormap, and a union would cost a migration on every new control and would stop a table that
+  became a scatter from carrying its own axis choice across.
+- A **renderer** turns the pair into a picture, and which renderer depends on the kind.
+
+**Contact maps are not drawn by a chart library, and never will be.** A `matrix` output stays with
+`ui/analysisPlots.ts` and the same rasteriser the contact maps use (§7): a matrix *is* a raster, the
+app already has the rasteriser, and a second answer to a question that has one is a way for two
+pictures of the same numbers to disagree. What a matrix gains here is the dialog, a colormap and the
+two ends of its scale — all of which produce a *derived* `MatrixOutput` for the existing painter,
+which is the same technique §18.5 uses everywhere else.
+
+**Everything else is ECharts, drawn as SVG, and the PDF is still a true vector page.** That last
+clause is the constraint the whole design was built to meet. Every figure meets the `PlotFigure`
+contract — an element, a `draw(ctx, box)` that paints into *any* canvas context, a `destroy` — and
+that contract is why the PNG is a redraw and the PDF is paths and text rather than a photograph
+(§18.7). A charting library paints into a canvas of its own and hands back an image, which would
+have cost exactly that. So the library is asked for **SVG**: on screen the SVG *is* the live chart,
+and for an export the same option is rendered once more, offscreen, at the size being exported to,
+and `figures/svgPaint.ts` replays it as canvas calls onto whatever context the caller passed —
+paths and text into a `VectorPage`, pixels onto a canvas. One implementation, two destinations,
+and no way for them to differ. `VectorPage` gained `bezierCurveTo` (a chart's curves are cubics),
+`transform` (a `<g transform>` composes with the caller's placement rather than replacing it) and
+`lineCap` for this.
+
+Three limits of the replay are stated rather than hidden: a gradient fill becomes its middle stop,
+because a page's `fillStyle` is a colour string and nothing here asks for a gradient; `<image>` is
+skipped, because nothing these charts draw is a raster; and `<style>` is ignored, because what the
+renderer puts there is `:hover` rules.
+
+**The library arrives in a chunk of its own**, fetched when the first figure is built, exactly as
+three.js is for the 3D cell (§25.1) — a reader who never runs an analysis never downloads a chart
+library. Only the charts these figures draw are registered, named statically in one module so the
+bundler can leave the rest out.
+
+**Controls are in two places, and the split is the point.** A **slim strip** sits over every figure
+with the two or three controls that are reached for constantly — the mark, the two log axes, the
+legend, *Fit*; a colormap for a matrix; a filter box for a table. Everything else is one button
+away, in the **same dialog the 3D model opens in**: the figure at the size of the window, every
+control in a resizable column beside it, the grip and the hide toggle behaving as they do there.
+That shell is `ui/StageDialog.ts` and the two are callers of it rather than two implementations of
+it. The figure's element is **moved** into the dialog and moved back, never copied, so the window a
+reader zoomed to is the window the export draws.
+
+**The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
+the sidebar are the same change to the same place, and the export draws whichever happened last —
+which is what §18.7's *what you export is what you see* means once a figure can be panned.
+
+**New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
+summaries of the ordinate. The last three are rules with parameters rather than plots of the data,
+so the rules are in `figures/stats.ts` where they can be read: Freedman–Diaconis for a bin width
+unless one is typed, Tukey's whiskers stopping at the furthest *observed* value within 1.5 IQR, and
+a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled
+by the same peak, because two violins each normalised to their own width say the two samples are
+equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
+one against another as a scatter.
+
+**A table is a view, not a printing.** Filter, sort and choose columns, which for four thousand MAGs
+is the difference between a record and a tool. The filter is a substring over each cell's *text*,
+because that is the search a reader means; a row missing a value sorts last whichever way the column
+runs, because a row with no value is not a row with the smallest one.
+
+**Every decision is remembered**, per file, per task and per output, in the `UiMemory` scope beside
+the task's parameters (§18.2) and carried in an exported session (§5.6). The argument is §18.2's one
+step further on: if the recipe is worth keeping then so is the picture the recipe was read from, and
+a session that came back with the parameters but with every log axis, hidden series and colour
+thrown away would reproduce the numbers and not the figure. What is stored is untrusted input like
+everything else that outlives the build that wrote it, and every field is validated against the spec
+it is about to be applied to.
+
 ---
 
 ## 19. Standalone target: one HTML file

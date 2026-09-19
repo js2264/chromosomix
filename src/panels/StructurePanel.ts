@@ -103,7 +103,8 @@ import type { RenderPalette, StructureRenderer } from '../structure/three'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
-import { Modal } from '../ui/Modal'
+import type { Modal } from '../ui/Modal'
+import { stageDialog } from '../ui/StageDialog'
 import { getPlotOptions } from '../ui/plotOptions'
 import { setReadout } from '../ui/readout'
 import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
@@ -162,11 +163,6 @@ export type StructureCellProps = Omit<
 const CAMERA_SCOPE = 'structure:camera'
 /** Where the enlarged dialog's sidebar width is kept, so a reader sets it once. */
 const SIDE_SCOPE = 'structure:side'
-/** Narrowest and widest the sidebar may be dragged, in pixels. */
-const SIDE_MIN = 240
-const SIDE_MAX = 760
-
-const clamp = (value: number, low: number, high: number): number => Math.min(high, Math.max(low, value))
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
@@ -2042,76 +2038,20 @@ export class StructurePanel implements DeckCell {
    */
   private expand(): void {
     if (this.expanded !== null) return
-    const label = this.entry?.label ?? 'structure'
-    this.expanded = new Modal({
-      title: label,
+    // The settings card is borrowed from the Aesthetics panel for as long as
+    // the dialog is up, and given back where it was.
+    const parent = this.settingsEl.parentElement
+    this.settingsHome = parent === null ? null : { parent, next: this.settingsEl.nextSibling }
+    this.expanded = stageDialog({
+      title: this.entry?.label ?? 'structure',
       variant: 'modal-structure',
-      body: () => {
-        const stage = el('div', { class: 'structure-stage' }, this.wrap)
-        // The settings card, borrowed from the Aesthetics panel for as long
-        // as the dialog is up, and given back where it was.
-        const parent = this.settingsEl.parentElement
-        this.settingsHome = parent === null ? null : { parent, next: this.settingsEl.nextSibling }
-        const side = el('aside', { class: 'structure-side' }, this.settingsEl)
-        // The width the reader last dragged it to, remembered with the camera:
-        // a column of controls is a thing a reader sets once for their screen,
-        // not once per dialog.
-        const stored = recall<unknown>(this.props.memoryKey(), SIDE_SCOPE)
-        if (typeof stored === 'number' && Number.isFinite(stored)) {
-          side.style.flexBasis = `${Math.round(clamp(stored, SIDE_MIN, SIDE_MAX))}px`
-        }
-        // The grip between the picture and the settings: the same gesture the
-        // panel columns have, for the same reason — a card of two dozen fields
-        // beside a picture is a split nobody else can choose for the reader.
-        const grip = el('div', {
-          class: 'structure-side-grip',
-          attrs: { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0' },
-          title: 'Drag to make the settings wider or narrower',
-        })
-        const width = (clientX: number, modal: HTMLElement): number =>
-          clamp(modal.getBoundingClientRect().right - clientX, SIDE_MIN, Math.min(SIDE_MAX, modal.clientWidth * 0.8))
-        grip.addEventListener('pointerdown', (event) => {
-          const modal = grip.parentElement
-          if (modal === null) return
-          grip.setPointerCapture(event.pointerId)
-          grip.classList.add('is-dragging')
-          event.preventDefault()
-          const move = (moved: PointerEvent): void => {
-            side.style.flexBasis = `${Math.round(width(moved.clientX, modal))}px`
-            this.remeasure()
-          }
-          const up = (ended: PointerEvent): void => {
-            grip.removeEventListener('pointermove', move)
-            grip.removeEventListener('pointerup', up)
-            grip.classList.remove('is-dragging')
-            if (grip.hasPointerCapture(ended.pointerId)) grip.releasePointerCapture(ended.pointerId)
-            remember(this.props.memoryKey(), SIDE_SCOPE, width(ended.clientX, modal))
-          }
-          grip.addEventListener('pointermove', move)
-          grip.addEventListener('pointerup', up)
-        })
-        // …and by the keyboard, for a reader who does not drag.
-        grip.addEventListener('keydown', (event) => {
-          const step = event.key === 'ArrowLeft' ? 24 : event.key === 'ArrowRight' ? -24 : 0
-          if (step === 0) return
-          event.preventDefault()
-          const now = side.getBoundingClientRect().width
-          const next = clamp(now + step, SIDE_MIN, SIDE_MAX)
-          side.style.flexBasis = `${Math.round(next)}px`
-          remember(this.props.memoryKey(), SIDE_SCOPE, next)
-          this.remeasure()
-        })
-        // The sidebar's own toggle, in the stage's bottom corner: the settings
-        // out of the way for a look at the model, and back.
-        const sideToggle = iconButton('panel-right-close', 'Hide the settings', () => {
-          const hidden = side.classList.toggle('hidden')
-          sideToggle.replaceChildren(icon(hidden ? 'panel-right-open' : 'panel-right-close', { size: 14 }))
-          sideToggle.title = hidden ? 'Show the settings' : 'Hide the settings'
-          sideToggle.setAttribute('aria-label', sideToggle.title)
-          requestAnimationFrame(() => this.remeasure())
-        }, { class: 'btn btn-icon structure-side-toggle', size: 14 })
-        return el('div', { class: 'structure-modal' }, stage, grip, side, sideToggle)
-      },
+      stage: this.wrap,
+      stageClass: 'structure-stage',
+      side: this.settingsEl,
+      sideClass: 'structure-side',
+      memoryKey: () => this.props.memoryKey(),
+      scope: SIDE_SCOPE,
+      onResize: () => this.remeasure(),
       onClose: () => this.collapse(),
     })
     // Sized once the dialog is laid out, not before: the observer answers

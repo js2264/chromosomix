@@ -37,7 +37,8 @@
 :root,
 :root[data-theme='light'],
 .content,
-.analysis-figure {
+.analysis-figure,
+.figure-chart {
   --bg: #ffffff;
   --bg-sunken: #f5f6f8;
   --bg-raised: #ffffff;
@@ -9123,26 +9124,26 @@ span.deck-name {
   min-height: 0;
 }
 
-/* The model, enlarged (§25.3): the picture on the left with the room a
-   dialog can give it, every setting in a sidebar on the right. The elements
-   are the cell's own, moved in and moved back. */
-.modal-structure {
+/* A picture with its settings beside it (`ui/StageDialog.ts`): the model
+   enlarged (§25.3), an analysis figure opened up (§18.13). The elements inside
+   are the caller's own, moved in and moved back. */
+.modal-stage {
   width: min(96vw, 110rem);
   height: 90vh;
   max-height: 90vh;
 }
 
-.modal-backdrop:has(> .modal-structure) {
+.modal-backdrop:has(> .modal-stage) {
   padding: 4vh 1rem 1rem;
 }
 
-.structure-modal {
+.stage-modal {
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
 }
 
-.structure-stage {
+.stage-body {
   flex: 1 1 auto;
   display: flex;
   min-width: 0;
@@ -9155,8 +9156,8 @@ span.deck-name {
   height: 100%;
 }
 
-.structure-side {
-  /* Wider than a panel column, because it is every setting the model has and
+.stage-side {
+  /* Wider than a panel column, because it is every setting the picture has and
      the dialog has the room a cell did not; and a starting width only — the
      grip beside it is what decides. */
   flex: 0 0 26rem;
@@ -9172,7 +9173,7 @@ span.deck-name {
 /* The grip between the picture and the settings, six pixels of it, with a
    wider invisible target either side: the same gesture and the same size as
    the panel columns' own. */
-.structure-side-grip {
+.stage-side-grip {
   flex: 0 0 6px;
   align-self: stretch;
   cursor: col-resize;
@@ -9182,9 +9183,9 @@ span.deck-name {
   touch-action: none;
 }
 
-.structure-side-grip:hover,
-.structure-side-grip:focus-visible,
-.structure-side-grip.is-dragging {
+.stage-side-grip:hover,
+.stage-side-grip:focus-visible,
+.stage-side-grip.is-dragging {
   background: var(--accent, var(--border-strong));
   outline: none;
 }
@@ -9699,6 +9700,11 @@ span.deck-name {
  * a vector PDF, its colormaps are built for ink on white, and what leaves the
  * app must be what was on screen. The drawer around it — the header, the form,
  * the buttons — follows the theme like the rest of the furniture.
+ *
+ * `.figure-chart` is on the light list at the top of this sheet for the same
+ * reason and one more: the dialog moves a chart *out* of `.analysis-figure`,
+ * and a figure that changed colour on being enlarged would be a different
+ * figure from the one the export draws.
  */
 .analysis-figure {
   border: 1px solid var(--border);
@@ -9740,6 +9746,169 @@ span.deck-name {
 .analysis-figure-scroll {
   overflow: auto;
   max-height: 26rem;
+}
+
+/* -------------------------------------------------------------------------
+   A figure that restyles (§18.13): the slim strip of controls over it, the
+   chart itself, and the settings column the dialog puts beside it.
+   ------------------------------------------------------------------------- */
+
+.figure-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step--2);
+}
+
+/* Tighter than a panel's controls, because this row sits *over the picture*
+   and every pixel it takes is a pixel the figure does not have. */
+.select-tight,
+.input-tight {
+  height: 1.55rem;
+  padding: 0 0.35rem;
+  font-size: var(--step--2);
+}
+
+.input-tight {
+  width: 9rem;
+}
+
+.figure-chart {
+  display: block;
+  width: 100%;
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* In the dialog the chart takes the room it is given rather than choosing a
+   height from its width. */
+.figure-chart-fill {
+  height: 100%;
+}
+
+.stage-body > .figure-chart {
+  height: 100%;
+}
+
+.figure-settings {
+  /* The card fills the sidebar it was put in; the sidebar scrolls. */
+  border: 0;
+  background: none;
+}
+
+.figure-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.figure-group:first-of-type {
+  border-top: 0;
+}
+
+.figure-group-head {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.figure-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* A range is two boxes and the word between them, on one row. */
+.figure-range {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.figure-range .input-num {
+  flex: 1 1 4rem;
+  min-width: 0;
+}
+
+.figure-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+
+.figure-series {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.figure-series-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.figure-series-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figure-series-n {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A colour is a thing you point at, so the control is a swatch. */
+.figure-swatch {
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.figure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.2rem;
+}
+
+/* A column head that sorts looks like one: a pointer and an accent on hover,
+   which is the promise every other sortable table in this app makes. */
+.figure-th {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.figure-th:hover,
+.figure-th:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.figure-th.is-sorted {
+  color: var(--accent);
 }
 
 /* The line under the locus box, while the pick is armed. Tighter than a hint
@@ -10554,16 +10723,16 @@ span.deck-name {
   text-decoration: underline;
 }
 /* The dialog's sidebar toggle, in the stage's bottom corner. */
-.structure-modal {
+.stage-modal {
   position: relative;
 }
-.structure-side-toggle {
+.stage-side-toggle {
   position: absolute;
   right: 8px;
   bottom: 8px;
   z-index: 4;
 }
-.structure-side.hidden {
+.stage-side.hidden {
   display: none;
 }
 

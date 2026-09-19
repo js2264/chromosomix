@@ -666,7 +666,7 @@ export interface CurveOutput {
    * not always its full extent: a P(s) runs from one base pair to a whole
    * chromosome and the decade at each end is a spike and a handful of noisy
    * points, so a curve drawn over all of it spends its height on the parts
-   * nobody reads. `ui/interactivePlot.ts` then treats them as the *initial*
+   * nobody reads. `figures/style.ts` then treats them as the *initial*
    * view — the marquee, the boxes and the reset all move them — so this is a
    * default rather than a limit, and it is on the output rather than in the
    * panel because which window is worth opening on is a fact about the
