@@ -155,7 +155,7 @@ import { RegionView } from '../ui/RegionView'
 import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
+import { KEYS, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
@@ -828,13 +828,6 @@ export class Session {
   private trackCard: AnnotationCard | null = null
   /** The Structures card (§25), rebuilt with the Tracks card it sits under. */
   private structureCard: StructureCard | null = null
-  /**
-   * The map/tracks button as it stands on screen, so it can be swapped in place.
-   *
-   * Held because one of the cycle's three steps rebuilds no view, and a control
-   * that is not rebuilt keeps the face it was given.
-   */
-  private mapSwitch: HTMLElement | null = null
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
@@ -3115,14 +3108,12 @@ export class Session {
     const assembly = this.assembly
     const held = this.annotations
     if (assembly === null || held === null) return
-    const toggle = this.mapToggleButton()
     const view = new BrowserView({
       assembly,
       store: held.store,
       client: held.client,
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
-      ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       // The deck's cells follow this view when it is their lead (§25 stage D);
       // by every road the window moves, a link included, which is why it is
@@ -3774,7 +3765,6 @@ export class Session {
       this.mapOnly = false
       this.current?.panel?.showLanes(true)
       this.trackCard?.setMapOnly(false)
-      this.refreshMapToggle()
       this.host.sessionChanged(this)
       return
     }
@@ -3848,69 +3838,17 @@ export class Session {
   }
 
   /**
-   * The control that swaps the map for the tracks, and back.
+   * **There is no map/tracks switch on the bars any more.**
    *
-   * Built here rather than in the six views that show it, because what it says
-   * depends on which of the two is on screen and only the session knows that.
-   * `undefined` where the swap is impossible — a browser with no map behind it,
-   * a metacool, a file whose contigs have not been read — so a view that gets
-   * nothing draws nothing rather than a button that does nothing.
+   * It was a button in six title bars whose face changed with the cycle's three
+   * stops, and the eye in the Contact maps card already says the same thing in
+   * the place a reader decides what is drawn: tick it and the map goes, untick
+   * it and it comes back. Two controls for one act cost a slot on every bar in
+   * the application and a second vocabulary for the state they shared.
    *
-   * The same act as the eye in the Contact maps card, and deliberately two
-   * controls: the card is where a reader decides *what is drawn*, and this is
-   * where their hand already is when they decide they would rather be reading
-   * the other picture.
+   * {@link cycleView} stays — the key still walks all three stops, and the
+   * command list still lists it — because a key costs no room.
    */
-  private mapToggleButton(): HTMLElement | undefined {
-    const node = this.buildMapToggle()
-    this.mapSwitch = node ?? null
-    return node
-  }
-
-  /**
-   * Put the button's *current* face on screen, without rebuilding the view.
-   *
-   * Two of the cycle's three steps mount another view and get a fresh button
-   * with it; the third — putting the tracks back beside the map — changes
-   * nothing but this panel's furniture, so nothing would have rebuilt the
-   * control that had just been pressed. It read `map + tracks` while showing
-   * exactly that, which is a button describing the state it is in rather than
-   * the one it offers, and only on one of the three steps.
-   */
-  private refreshMapToggle(): void {
-    const held = this.mapSwitch
-    if (held === null || !held.isConnected) return
-    const next = this.buildMapToggle()
-    if (next === undefined) return
-    held.replaceWith(next)
-    this.mapSwitch = next
-  }
-
-  private buildMapToggle(): HTMLElement | undefined {
-    // What the button offers is the **next** stop of the cycle, not the one on
-    // screen: it is a control rather than a status light, and a reader reads it
-    // to find out what pressing it will do. Three stops, three faces.
-    if (this.canShowMap) {
-      return keyedIconButton('grid-2x2', 'map only', KEYS.mapToggle, () => this.cycleView(), {
-        title: withKey(
-          'Back to the contact map on its own — it was never unloaded, and neither were the tracks',
-          KEYS.mapToggle,
-        ),
-      })
-    }
-    if (!this.canHideMap) return undefined
-    if (this.mapOnly) {
-      return keyedIconButton('layers', 'map + tracks', KEYS.mapToggle, () => this.cycleView(), {
-        title: withKey('Put the tracks back beside the map', KEYS.mapToggle),
-      })
-    }
-    return keyedIconButton('chart-line', 'tracks', KEYS.mapToggle, () => this.cycleView(), {
-      title: withKey(
-        'Read this genome as tracks. The map stays open — the same key comes back to it',
-        KEYS.mapToggle,
-      ),
-    })
-  }
 
   /**
    * The Contact maps card, for either shape of session.
@@ -5663,7 +5601,7 @@ export class Session {
   /**
    * *Bookmark this view*, on the title line beside `go`.
    *
-   * Built here rather than in the view for the reason {@link mapToggleButton} is:
+   * Built here rather than in the view for the reason the Sequences card is:
    * what it saves is the window the panel is showing and where it saves it is a
    * store the session owns, and neither is something a view mounted for one region
    * knows about.
@@ -6688,7 +6626,6 @@ export class Session {
     // metacool, where the same strip is a hundred thousand sub-pixel bands with
     // no name in any of them — see `ContigsTableOptions.assembly`.
     const assembly = cooler ? this.assemblyOfFile(file) : null
-    const toggle = assembly === null ? undefined : this.mapToggleButton()
     const view = new ContigsTable({
       data,
       hideColumns: cooler ? ['genome_id'] : [],
@@ -6698,7 +6635,6 @@ export class Session {
         : undefined,
       ...(assembly === null ? {} : { assembly }),
       ...(this.annotations === null ? {} : { store: this.annotations.store }),
-      ...(toggle === undefined ? {} : { extraControl: toggle }),
       // *This sequence is circular* (§8.15), as a column of ticks beside the
       // lengths. On a cooler alone, which is what {@link circularColumn} says
       // and why: a metacool's contig list is a hundred thousand pieces of four
@@ -6744,11 +6680,9 @@ export class Session {
       state,
       `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
       () => {
-        const mapSwitch = this.mapToggleButton()
         return new WholeView({
           client: this.clientOf(),
           caption: this.captionFor(state),
-          ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
           ...(picker
             ? {
                 wholeFileLevel: {
@@ -6846,11 +6780,9 @@ export class Session {
     }
     const bins = this.binsOfSelection(selection)
     const contigs = this.contigsOfSelection(selection)
-    const mapSwitch = this.mapToggleButton()
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
       nBins: file.info.nBins,
@@ -6998,12 +6930,10 @@ export class Session {
       this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
-    const mapSwitch = this.mapToggleButton()
     const view = new PairView({
       client: this.clientOf(),
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
       genomeNames: file.displayNames,
@@ -7043,12 +6973,10 @@ export class Session {
     // nothing afterwards.
     if (this.file?.contigs == null) await this.contigs().catch(() => null)
     if (this.destroyed || this.store.state !== state) return
-    const mapSwitch = this.mapToggleButton()
     const keep = this.bookmarkButton()
     const view = new RegionView({
       client: this.clientOf(),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       ...(keep === undefined ? {} : { boxControl: keep }),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,

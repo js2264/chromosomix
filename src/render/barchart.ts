@@ -32,7 +32,7 @@
  */
 
 import type { BarScale } from '../annotations/fields'
-import type { BarChartBars } from '../annotations/types'
+import type { AnnotationEntry, BarChartBars } from '../annotations/types'
 import { DEFAULT_HEATMAP_LANE_COLORMAP } from '../annotations/types'
 import { colormapCss } from './colormaps'
 import { CATEGORY_PALETTE } from './meta'
@@ -127,6 +127,40 @@ export function barLimitsOf(limits: {
   const { min, max } = limits
   if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return undefined
   return { min, max }
+}
+
+/**
+ * Where a barChart lane's axis **starts from**, before the reader has moved it.
+ *
+ * Zero to the tallest bar anywhere in the file, which is precisely what the lane
+ * was drawing against under the `file` reading — so a ceiling drag that begins
+ * on an autoscaled chart begins on the picture that is on screen, rather than on
+ * a stored `[0, 1]` nobody chose. The typed field seeds from the same number for
+ * the same reason, and this is the one place it is written down.
+ *
+ * `null` where the set carries no bars, or none above zero: an axis from zero to
+ * zero is not an axis, and a factor applied to it stays zero however far the
+ * hand travels.
+ */
+export function barExtentOf(
+  bars: { max: number } | undefined,
+): { min: number; max: number } | null {
+  return bars !== undefined && bars.max > 0 ? { min: 0, max: bars.max } : null
+}
+
+/**
+ * The bar heights a lane draws, or `undefined` where it draws something else.
+ *
+ * Asked by everything that has an *entry* and wants the chart's own axis — both
+ * views' ceiling gestures and the typed field — and it is a function because the
+ * two conditions have to be asked together: a set of features is not necessarily
+ * a chart, and a chart whose payload has not arrived yet has no bars to scale
+ * to. Spelled at three call sites it was the same pair of tests written three
+ * ways, and the way that shape fails is a drag that silently does nothing.
+ */
+export function barsOf(entry: AnnotationEntry): BarChartBars | undefined {
+  if (entry.kind !== 'barchart' || entry.payload?.kind !== 'features') return undefined
+  return entry.payload.data.bars
 }
 
 /**

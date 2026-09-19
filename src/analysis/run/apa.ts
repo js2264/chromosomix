@@ -73,6 +73,7 @@ import {
   isDomainPileup,
   isScaled,
   onDiagonal,
+  poolsAnchors,
   usesPairSet,
   allPairs,
   distanceBins,
@@ -294,6 +295,7 @@ export const runApa: TaskRunner = async (job) => {
   const tracks = marginTracks(job)
   const alongRows = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
   const alongCols = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
+  const pooled = poolsAnchors(job.params)
   const expected = new ExpectedAccumulator(job.mc.nBins)
   const perAnchor: Array<{ label: string; separation: number; score: number }> = []
 
@@ -336,12 +338,21 @@ export const runApa: TaskRunner = async (job) => {
       if (tracks.length > 0) {
         const edges = edgesFor(plan, layout)
         for (let t = 0; t < tracks.length; t++) {
-          alongRows[plan.group][t].add(
-            marginOf(tracks[t].values, plan.rect.rowFrom, plan.rect.rowTo, side, edges),
-          )
-          alongCols[plan.group][t].add(
-            marginOf(tracks[t].values, plan.rect.colFrom, plan.rect.colTo, side, edges),
-          )
+          const down = marginOf(tracks[t].values, plan.rect.rowFrom, plan.rect.rowTo, side, edges)
+          const across = marginOf(tracks[t].values, plan.rect.colFrom, plan.rect.colTo, side, edges)
+          alongRows[plan.group][t].add(down)
+          alongCols[plan.group][t].add(across)
+          // Pooled, every window contributes **both** of its anchors to **both**
+          // edges, so the two profiles come out one mean over twice as many
+          // anchors rather than two means over half as many each. Done here, a
+          // window at a time, rather than by averaging the two finished profiles
+          // at the end: the two accumulators count per cell, and a cell one of
+          // them never saw would be weighted as though it had. See
+          // {@link poolsAnchors}.
+          if (pooled) {
+            alongRows[plan.group][t].add(across)
+            alongCols[plan.group][t].add(down)
+          }
         }
       }
       if (plan.label !== undefined) {

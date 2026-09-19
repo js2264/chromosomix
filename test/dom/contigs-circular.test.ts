@@ -4,8 +4,9 @@
  *
  * The declaration used to be a tickbox on the map's own card, which could only
  * ever ask about the one sequence on screen and gave a reader no way to read
- * back which sequences had been declared. It is a column beside the lengths now,
- * where every sequence is a row — so what is worth checking is that the boxes
+ * back which sequences had been declared. It is a column of its own now, last
+ * after everything the file brought, on a table where every sequence is a row —
+ * so what is worth checking is that the boxes
  * are the store's, in both directions: a click writes, and a write from anywhere
  * else re-ticks them.
  */
@@ -85,10 +86,10 @@ describe('the circular column', () => {
     view.destroy()
   })
 
-  it('sits directly after the name, not at the end of the row', () => {
+  it('sits last, after every column the file brought', () => {
     const view = table(store())
     const heads = [...view.el.querySelectorAll('.th')].map((cell) => cell.textContent)
-    expect(heads).toEqual(['name', 'circular', 'length'])
+    expect(heads).toEqual(['name', 'length', 'circular'])
     view.destroy()
   })
 
@@ -150,6 +151,14 @@ describe('the circular column', () => {
       (row) => row.querySelector('.td')?.textContent,
     )
     expect(names).toEqual(['plasmid_A'])
+    view.destroy()
+  })
+
+  it('leaves the length where a reader expects it, beside the name', () => {
+    const view = table(store())
+    const first = view.el.querySelector('.tr')
+    const cells = [...(first?.querySelectorAll('.td') ?? [])].map((cell) => cell.textContent)
+    expect(cells.slice(0, 2)).toEqual(['chr', '4,000,000'])
     view.destroy()
   })
 })

@@ -38,7 +38,7 @@ import {
   type FramedRegion,
   type TurnPresentation,
 } from './MatrixPanel'
-import { iconButton } from './icons'
+import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -157,28 +157,43 @@ export interface RegionViewProps {
 }
 
 /**
- * How much wider one press of **zoom out** makes the window.
+ * The four steps the zoom buttons take, in the order they sit on the bar.
  *
- * Three, which is the factor a genome browser's own zoom-out button has used
- * since there were genome browsers: two is a press that barely changes the
- * picture, and ten is a press that loses where you were. What it buys is the
- * flank either side — a third of the new window is what you were looking at, and
- * a third each side is what it sits in.
+ * **Widest first, narrowest last**, so the row reads as one ruler rather than as
+ * two pairs of controls: every press moves the window along it in the direction
+ * the button is on, and a reader who wants *a bit* wider reaches for the one
+ * beside the box rather than aiming.
+ *
+ * Three and ten rather than one factor twice. Three is what a genome browser's
+ * zoom button has done since there were genome browsers — a third of the new
+ * window is what you were looking at and a third each side is what it sits in —
+ * and it is the wrong step when the answer is four chromosomes away. Ten gets
+ * there in one press and loses where you were, which is exactly the trade a
+ * reader should be able to make per press rather than per application.
  */
-export const ZOOM_OUT_FACTOR = 3
+export const ZOOM_STEPS: ReadonlyArray<{ factor: number; label: string; out: boolean }> = [
+  { factor: 10, label: '10×', out: true },
+  { factor: 3, label: '3×', out: true },
+  { factor: 1 / 3, label: '3×', out: false },
+  { factor: 1 / 10, label: '10×', out: false },
+]
 
 /**
- * The window on screen, widened about its own centre — as a region string.
+ * The window on screen, scaled about its own centre — as a region string.
  *
- * The button beside the box, written as a function because what it does is
- * arithmetic on coordinates and the interesting cases are all edges: a window
- * already at the end of a chromosome cannot be centred, a window three presses
- * from the whole sequence has to *become* the whole sequence rather than
- * `chrI:0-230218`, and on a circle there are no ends to be stopped by at all.
+ * `factor` is **how many times wider the window becomes**: above one widens,
+ * below one narrows, and one press of each button is one of {@link ZOOM_STEPS}.
+ * One function for both directions because it is one piece of arithmetic, and
+ * every interesting case is an edge it shares: a window against the end of a
+ * chromosome cannot be centred, a window one press from the whole sequence has
+ * to *become* the whole sequence rather than `chrI:0-230218`, and on a circle
+ * there are no ends to be stopped by at all.
  *
- * `null` when there is nothing further out to go to, which is what greys the
- * button: a window that already covers the sequence, and a span or a length that
- * is not a number.
+ * `null` when the press would change nothing, which is what greys the button: a
+ * window that already covers the sequence has nowhere wider to go, and one
+ * already down to a bin has nowhere finer. `floor` is the bin size where the
+ * caller knows it, because a window narrower than one bin is a window of one bin
+ * drawn with a coordinate nobody can act on.
  *
  * **On a circle the window wraps rather than clamping** (§8.15). Zooming out
  * from a window near the origin of a bacterial chromosome is how a reader gets
@@ -187,9 +202,10 @@ export const ZOOM_OUT_FACTOR = 3
  * declaration is for. Past one lap it is the whole sequence, because a window
  * wider than the circle would draw the same bins twice.
  */
-export function widenRegion(
+export function zoomedRegion(
   window: FramedRegion,
-  options: { factor?: number; circular?: boolean } = {},
+  factor: number,
+  options: { circular?: boolean; floor?: number } = {},
 ): string | null {
   const { contig, length } = window
   // **A window across the origin is measured the long way round the outside.**
@@ -204,11 +220,16 @@ export function widenRegion(
       : round
         ? length - window.start + window.end
         : Number.NaN
-  if (!(span > 0) || !(length > 0) || span >= length) return null
-  const wanted = Math.round(span * (options.factor ?? ZOOM_OUT_FACTOR))
+  if (!(span > 0) || !(length > 0) || !(factor > 0)) return null
+  // Already the whole of it. Only in the widening direction: a whole chromosome
+  // is a perfectly ordinary thing to zoom *into*.
+  if (factor > 1 && span >= length) return null
+  const floor = Math.max(1, Math.round(options.floor ?? 1))
+  const wanted = Math.round(span * factor)
+  if (wanted < floor || wanted === span) return null
   // A press that would reach past the sequence lands *on* it, and the bare name
   // is how this application spells the whole of something everywhere else.
-  if (wanted >= length) return contig
+  if (factor > 1 && wanted >= length) return contig
   // From the window's own start, so a wrapped one is centred on the middle of
   // what is drawn rather than on the midpoint of two coordinates that run
   // backwards past each other.
@@ -216,7 +237,7 @@ export function widenRegion(
   let start = Math.round(centre - wanted / 2)
   let end = start + wanted
 
-  if (options.circular === true) {
+  if (round) {
     const wrap = (at: number): number => ((at % length) + length) % length
     const from = wrap(start)
     const to = wrap(end)
@@ -233,6 +254,27 @@ export function widenRegion(
     start = length - wanted
   }
   return `${contig}:${start}-${end}`
+}
+
+/**
+ * One zoom step, as a button: the mark for the direction and the factor beside it.
+ *
+ * `btn-keyed`'s shape without its key badge — a mark, a word, one baseline —
+ * because four bare magnifiers in a row cannot be told apart and four words
+ * without marks cannot be told from the controls either side of them. Bordered
+ * like `go` next to it: these move the view.
+ */
+function zoomButton(
+  step: { factor: number; label: string; out: boolean },
+  onClick: () => void,
+): HTMLButtonElement {
+  const node = el('button', { class: 'btn btn-keyed btn-zoom', type: 'button' })
+  node.append(
+    icon(step.out ? 'zoom-out' : 'zoom-in', { size: 14 }),
+    el('span', { text: step.label }),
+  )
+  node.addEventListener('click', onClick)
+  return node
 }
 
 /** The whole sequence each axis is a window on, in bins. */
@@ -258,13 +300,14 @@ export class RegionView {
   readonly panel: MatrixPanel
   private readonly search: SearchBox
   /**
-   * Zoom out one step, and grey itself where there is no step to take.
+   * The four zoom steps, in {@link ZOOM_STEPS} order.
    *
-   * Built in the constructor rather than in the header, because its state is
+   * Built in the constructor rather than in the header, because their state is
    * written from the draw loop: {@link MatrixPanelOptions.onViewMoved} fires
-   * whenever the window changes and {@link syncZoomOut} reads the new one.
+   * whenever the window changes and {@link syncZoom} greys whichever of the four
+   * has nowhere to go.
    */
-  private readonly zoomOut: HTMLButtonElement
+  private readonly zooms: HTMLButtonElement[]
   private readonly matched: HTMLElement
   private readonly title: HTMLElement
   private readonly problem: HTMLElement
@@ -311,10 +354,10 @@ export class RegionView {
         ? {}
         : { suggest: (text: string) => featureSuggestions(store, text) }),
     })
-    this.zoomOut = iconButton('zoom-out', 'Zoom out', () => this.stepOut(), {
-      class: 'btn btn-icon btn-quiet',
-      size: 15,
-    })
+    // Ordinary bordered buttons, like `go` beside them: these move the view, and
+    // a control that moves the view reading as quietly as a label is a control
+    // nobody finds. The mark says which way and the number says how far.
+    this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.stepZoom(step.factor)))
     this.matched = el('span', { class: 'match-kind' })
     this.problem = el('p', { class: 'inline-error hidden' })
 
@@ -340,7 +383,7 @@ export class RegionView {
         onChange: (choice) => props.onScoreChange(choice),
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
-      onViewMoved: () => this.syncZoomOut(),
+      onViewMoved: () => this.syncZoom(),
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
@@ -389,31 +432,32 @@ export class RegionView {
           // same thing, and a hit list the button could not see would make them
           // disagree about what "go" is.
           button('go', () => this.search.submit()),
-          // **Zoom out, beside the box, because it writes into the box.** The
-          // scroll wheel on the map is a zoom of the *picture* — the same block,
-          // drawn larger or smaller — and past the edge of what was read it
-          // stops. This is the other thing "zoom out" means on a genome browser:
-          // a wider *range*, re-read, with the region string updated to say so.
-          // It sits here rather than on the map because that is where the
-          // coordinate it changes is written, and it is the only control on this
-          // line that moves the view without the reader typing.
-          this.zoomOut,
+          // **The zoom steps, beside the box, because they write into the box.**
+          // The scroll wheel on the map is a zoom of the *picture* — the same
+          // block, drawn larger or smaller — and past the edge of what was read
+          // it stops. These are the other thing "zoom" means on a genome
+          // browser: a different *range*, re-read, with the region string
+          // updated to say so. They sit here rather than on the map because this
+          // is where the coordinate they change is written.
+          //
+          // **No back button.** It was `window.history.back()` under an arrow,
+          // which is the browser's own back with a second face — the key, the
+          // trackpad gesture and the chrome all already reach it, and a fourth
+          // way to press it cost a slot on the one line every other control here
+          // is about *this* view.
+          //
+          // **One group, so the four wrap together or not at all.** They are a
+          // scale — widest out to widest in, with the window you are on in the
+          // middle — and a bar narrow enough to break the row was breaking it
+          // *between* them, leaving `10×` alone at the end of one line and the
+          // other three on the next. That reads as two controls rather than one
+          // axis, and which three happened to fit said nothing about anything.
+          el('div', { class: 'zoom-steps' }, ...this.zooms),
           // Beside `go`, because it is about the same thing `go` is: the box says
           // where to be and this says *remember this*. A bookmark button in the
           // sidebar would have been a card control, and the hand that has just
           // arrived somewhere worth keeping is up here.
           ...(props.boxControl === undefined ? [] : [props.boxControl]),
-          ...(props.extraControl === undefined ? [] : [props.extraControl]),
-          // Back, beside the box that got you here. Every navigation is a
-          // history entry (§5.5 puts the whole view state in the hash), so this
-          // is the browser's own back — the same button the keyboard and the
-          // trackpad already reach, put where a selection lands you. Selecting
-          // a box now *opens* something, and undoing that should not require
-          // knowing where you were.
-          button('← back', () => window.history.back(), {
-            class: 'btn btn-quiet',
-            title: 'Back to the previous view',
-          }),
         ),
         this.matched,
         this.problem,
@@ -423,10 +467,10 @@ export class RegionView {
 
     this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards)
 
-    // Greyed until there is a picture to widen. The draw loop takes it from here
-    // — {@link MatrixPanelOptions.onViewMoved} fires on the first frame of the
-    // first block, and on every pan and zoom after it.
-    this.syncZoomOut()
+    // Greyed until there is a picture to scale. The draw loop takes them from
+    // here — {@link MatrixPanelOptions.onViewMoved} fires on the first frame of
+    // the first block, and on every pan and zoom after it.
+    this.syncZoom()
     void this.load()
   }
 
@@ -448,15 +492,15 @@ export class RegionView {
   }
 
   /**
-   * One press of zoom out: a wider range, through the ordinary navigation.
+   * One press of a zoom step: a different range, through the ordinary navigation.
    *
-   * `onChangeRegion` rather than a read of its own, so the widened window is a
+   * `onChangeRegion` rather than a read of its own, so the new window is a
    * history entry and a shareable link like every other place this view goes
    * (§5.5) — pressing it three times and going back three times is the same
    * journey in reverse.
    */
-  private stepOut(): void {
-    const target = this.zoomOutTarget()
+  private stepZoom(factor: number): void {
+    const target = this.zoomTarget(factor)
     if (target !== null) this.props.onChangeRegion(target)
   }
 
@@ -464,24 +508,35 @@ export class RegionView {
    * Where a press would take the view, or `null` when it would take it nowhere.
    *
    * Refused off the diagonal for the reason the panel refuses to name one window
-   * there: a `contig × contig` block is a picture of two places, and widening
+   * there: a `contig × contig` block is a picture of two places, and scaling
    * "the" range would have to pick one of them.
    */
-  private zoomOutTarget(): string | null {
+  private zoomTarget(factor: number): string | null {
     if (this.props.region2 !== undefined) return null
     const framed = this.panel.framedRegion()
     if (framed === null) return null
-    return widenRegion(framed, { circular: this.props.circular?.on === true })
+    return zoomedRegion(framed, factor, {
+      circular: this.props.circular?.on === true,
+      // A window narrower than a bin is a window of one bin under a coordinate
+      // nobody can act on, so the file's own grain is where zooming in stops.
+      floor: this.props.binsize,
+    })
   }
 
-  /** Grey the button where the whole sequence is already on screen. */
-  private syncZoomOut(): void {
-    const target = this.zoomOutTarget()
-    this.zoomOut.disabled = target === null
-    this.zoomOut.title =
-      target === null
-        ? 'The whole sequence is on screen — there is nothing further out to go to'
-        : `Widen the range ${ZOOM_OUT_FACTOR}× about what is on screen: ${target}`
+  /** Grey whichever steps have nowhere to go, and say where the others lead. */
+  private syncZoom(): void {
+    ZOOM_STEPS.forEach((step, at) => {
+      const node = this.zooms[at]
+      if (node === undefined) return
+      const target = this.zoomTarget(step.factor)
+      node.disabled = target === null
+      node.title =
+        target === null
+          ? step.out
+            ? 'The whole sequence is on screen — there is nothing further out to go to'
+            : 'This window is already at the file’s own bin size'
+          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ${target}`
+    })
   }
 
   destroy(): void {

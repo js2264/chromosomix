@@ -1449,9 +1449,7 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', { class: 'ann-drop-label', text: 'Load a track' }),
     el('span', {
       class: 'ann-drop-hint',
-      text:
-        'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM. Click to choose, or drop one anywhere on ' +
-        'this card — what it is and where it is drawn come from the file itself.',
+      text: 'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM. Drop one anywhere on this card.',
     }),
   )
   zone.addEventListener('click', () => void choose())
@@ -1466,48 +1464,29 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
   // element while it happens — so the target the reader is looking at is the
   // one that reacts, and one gesture still has one handler.
 
-  const url = el('input', {
-    class: 'input',
-    type: 'url',
-    placeholder: 'https://bucket.example.org/ATAC.bw',
-  })
-  const submit = (): void => {
-    const value = url.value.trim()
-    if (value === '') return
-    loader.addUrl(value)
-    url.value = ''
-  }
-  url.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submit()
-  })
-
   return {
     zone,
     nodes: [
       zone,
+      // **No box to paste a URL into**, and a track's was the one that made the
+      // least sense of the four: a map is opened from a link or a store, and
+      // the bigWigs beside it are keys in a prefix whose names came off a run
+      // sheet — so the reader who reached for that box was the one who did not
+      // have the URL. What stays is the road that answers *where is the file*
+      // (§8.5). A picked local file goes the way a dropped one does, with the
+      // index found beside it.
       el(
-        'details',
-        { class: 'ann-url' },
-        el('summary', { text: 'or open one by URL' }),
-        el(
-          'div',
-          { class: 'ann-url-row' },
-          url,
-          button('add', submit, { class: 'btn' }),
-          // A track's URL is the one nobody has in their hand: a map is opened
-          // from a link or a store, and the bigWigs beside it are keys in a
-          // prefix whose names came off a run sheet. A picked local file goes
-          // the way a dropped one does, with the index found beside it.
-          folderPickButton((picked) => {
-            if (picked.source.kind === 'local') {
-              loader.addFiles(
-                picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index],
-              )
-              return
-            }
-            loader.addUrl(picked.uri)
-          }),
-        ),
+        'div',
+        { class: 'ann-url-row' },
+        folderPickButton((picked) => {
+          if (picked.source.kind === 'local') {
+            loader.addFiles(
+              picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index],
+            )
+            return
+          }
+          loader.addUrl(picked.uri)
+        }),
       ),
     ],
   }

@@ -104,18 +104,6 @@ describe('the bar', () => {
     view.bar.destroy()
   })
 
-  it('takes the switch the session hands it', () => {
-    const toggle = document.createElement('button')
-    toggle.textContent = 'tracks'
-    const bar = new SequenceBar({
-      assembly: GENOME,
-      extraControl: toggle,
-      onOpenContig: () => {},
-      onOpenRegion: () => {},
-    })
-    expect(buttonNamed(bar.el, 'tracks')).not.toBeNull()
-    bar.destroy()
-  })
 })
 
 describe('a drag across the strip', () => {

@@ -63,7 +63,7 @@ import {
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { folderPickButton } from '../ui/pickFromFolders'
-import { button, el, fmt } from '../ui/dom'
+import { el, fmt } from '../ui/dom'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
@@ -1561,48 +1561,25 @@ export class VacantPanel {
       if (file !== undefined) props.onOpen(file)
     })
 
-    // The Tracks card's own shape, and the same words: one gesture in this app
-    // for "I have a URL rather than a file", wherever it is asked for.
-    const url = el('input', {
-      class: 'input input-tiny',
-      type: 'url',
-      placeholder: 'https://bucket.example.org/other.cool',
-    })
-    const submit = (): void => {
-      const value = url.value.trim()
-      if (value === '') return
-      url.value = ''
-      props.onOpenUrl(value)
-    }
-    url.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') submit()
-    })
+    // **No box to paste a URL into**, and this cell is where that box made the
+    // least sense of all: a reader repairing a shared deck is exactly the one
+    // who does not have the URL in their hand, since what the link left here is
+    // a `~` where somebody else's file was. The road that answers *where is the
+    // file* stays (`ui/pickFromFolders.ts`, §8.5).
     const urlBox = el(
-      'details',
-      { class: 'ann-url deck-vacant-url' },
-      el('summary', { text: 'or open one by URL' }),
-      el(
-        'div',
-        { class: 'ann-url-row' },
-        url,
-        button('add', submit, { class: 'btn' }),
-        // The fourth box that asks for a file URL, and it gets the same answer
-        // the other three do (`ui/pickFromFolders.ts`): a reader repairing a
-        // shared deck is exactly the one who does not have the URL in their
-        // hand, since what the link left here is a `~` where somebody else's
-        // file was.
-        folderPickButton((picked) => {
-          if (picked.source.kind === 'local') props.onOpen(picked.source.file)
-          else props.onOpenUrl(picked.uri)
-        }),
-      ),
+      'div',
+      { class: 'ann-url-row deck-vacant-url' },
+      folderPickButton((picked) => {
+        if (picked.source.kind === 'local') props.onOpen(picked.source.file)
+        else props.onOpenUrl(picked.uri)
+      }),
     )
     // **Inside** the zone rather than under it, so the empty cell stays the size
     // of the map it stands in for: a strip added below would make this cell
     // taller than the pictures beside it, and a grid row is as tall as its
     // tallest cell. Which means the presses have to be stopped here — the zone
-    // opens the file chooser on any click, and a caret placed in the box would
-    // put a file dialog over the box the reader was about to type in.
+    // opens the file chooser on any click, and the button inside it opens a
+    // dialog of its own.
     urlBox.addEventListener('click', (event) => event.stopPropagation())
     urlBox.addEventListener('keydown', (event) => event.stopPropagation())
 
@@ -1616,18 +1593,12 @@ export class VacantPanel {
       el('span', {
         class: 'ann-drop-hint',
         text: drawn
-          ? 'An empty cell of the deck you drew. Drop a cooler on it, click to choose one, or ' +
-            'paste a URL below, and it opens in this position under the same navigation as the ' +
-            'maps beside it — same region, same level, its own colour scale. Leaving it empty is ' +
-            'fine; the link keeps it.'
+          ? 'Drop a cooler here, or click to choose. Leaving it empty is fine — the link keeps it.'
           : remembered
-            ? 'This cell held that file, and it could not be re-opened — it has been moved or ' +
-              'renamed, or this browser cannot remember files (§11). Drop it here again and the ' +
-              'panel comes back where it was, with the maps either side keeping their order.'
-            : 'The link that opened this deck has a cell here with no file a page can fetch by ' +
-              'name (§11) — either a local map the sender had open, or a cell they left empty on ' +
-              'purpose. Drop a file here, click to choose one, or paste the URL of a published ' +
-              'one; the panel fills in where it was and the maps either side keep their order.',
+            ? 'This cell held that file and it could not be re-opened (§11). Drop it here again ' +
+              'and the panel comes back where it was.'
+            : 'The link left this cell with no file a page can fetch by name (§11). Drop one ' +
+              'here, or click to choose.',
       }),
       urlBox,
       input,

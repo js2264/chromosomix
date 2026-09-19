@@ -82,8 +82,6 @@ export interface SequenceBarProps {
    * where nothing is loaded, and then the box takes coordinates only.
    */
   store?: AnnotationStore
-  /** The map/tracks switch, where the session has one to offer. */
-  extraControl?: HTMLElement
   /** A whole sequence: a click on a band, or a bare name typed. */
   onOpenContig(name: string): void
   /** A window inside one, 0-based half-open: a drag, or coordinates typed. */
@@ -157,9 +155,6 @@ export class SequenceBar {
         { class: 'title-bar seqbar-bar' },
         this.box.el,
         button('go', () => this.box.submit()),
-        // Whatever the session put here — on a cooler, the way through to the
-        // tracks and back. Absent on a file that has no second picture.
-        ...(props.extraControl === undefined ? [] : [props.extraControl]),
         // No zoom and no fit buttons. See the module docstring: this ruler is
         // the whole assembly and there is nothing under it to fit.
       ),

@@ -34,8 +34,6 @@ export interface PairViewProps {
   binsize: number
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
-  /** A control the session puts on the title line; see `RegionViewProps`. */
-  extraControl?: HTMLElement
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
   genomeNames: string[]
   rowGenome: string
@@ -187,7 +185,6 @@ export class PairView {
           { class: 'title-bar' },
           el('h2', { text: `${props.rowGenome} × ${props.colGenome}` }),
           this.search.el,
-          ...(props.extraControl === undefined ? [] : [props.extraControl]),
         ),
         this.summary,
       ),

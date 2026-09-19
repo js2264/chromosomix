@@ -528,30 +528,26 @@ describe('adding a map by URL', () => {
     expect(addRow(deck).classList.contains('hidden')).toBe(true)
   })
 
-  it('is offered on an empty cell too, and fills that cell rather than the first', () => {
-    const { deck, published } = make()
-    // Two empty cells; the URL is typed into the second.
+  it('is the deck’s own row, and no longer a second box inside every vacancy', () => {
+    const { deck } = make()
     deck.grow('beside')
     deck.grow('beside')
     expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'empty'])
-    const boxes = all<HTMLInputElement>(deck.el, '.deck-vacant-url input[type="url"]')
-    expect(boxes).toHaveLength(2)
-    boxes[1].value = 'https://x.example.org/b.cool'
-    boxes[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'b.cool'])
-    // The vacancy is still published as `~`, in its own place, so the link says
-    // what is on screen.
-    expect(published[published.length - 1]).toBe('~|https://x.example.org/b.cool')
+    // An empty cell had a box of its own, folded away behind *or open one by
+    // URL*. It has gone, with the three others like it: a reader repairing a
+    // shared deck is precisely the one who does not have the URL in their hand,
+    // since what the link left here is a `~` where somebody else's file was.
+    expect(all(deck.el, '.deck-vacant-url input[type="url"]')).toHaveLength(0)
+    expect(all(deck.el, 'details.ann-url')).toHaveLength(0)
   })
 
-  it('ignores an empty box rather than opening a panel with no file', () => {
+  it('leaves each vacancy the road that answers where the file is', () => {
     const { deck } = make()
     deck.grow('beside')
-    const box = deck.el.querySelector<HTMLInputElement>('.deck-vacant-url input[type="url"]')
-    if (box === null) throw new Error('the empty cell has no URL box')
-    box.value = '   '
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(cellNames(deck)).toEqual(['lead.cool', 'empty'])
+    // One button per empty cell: the connected places this window can reach.
+    const buttons = all<HTMLButtonElement>(deck.el, '.deck-vacant-url .btn')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].textContent).toContain('connected place')
   })
 })
 

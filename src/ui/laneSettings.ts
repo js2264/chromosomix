@@ -22,6 +22,7 @@ import {
   fieldFor,
   type FeatureStyle,
 } from '../annotations/fields'
+import { barExtentOf } from '../render/barchart'
 import { featureColouring, rampStops } from '../render/featureInk'
 import {
   COLOUR_BY,
@@ -313,10 +314,7 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
   // the lane was drawing against before the reader touched this. Seeding from it
   // means leaving auto starts on the picture that was already on screen, rather
   // than on `0 to 1` and a lane of full-height bars (§8.17).
-  const bars = setOf(entry)?.bars
-  const seed =
-    entry.fileExtent ??
-    (bars !== undefined && bars.max > 0 ? { min: 0, max: bars.max } : { min: 0, max: 1 })
+  const seed = entry.fileExtent ?? barExtentOf(setOf(entry)?.bars) ?? { min: 0, max: 1 }
   const min = el('input', {
     class: 'input input-num',
     type: 'number',

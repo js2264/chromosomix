@@ -36,7 +36,15 @@ import { sniffFormat } from '@/annotations/parse'
 import { sniffVcf } from '@/annotations/vcf'
 import { sniffSignal } from '@/annotations/signal'
 import type { FeatureSet } from '@/annotations/types'
-import { barChartCaption, barColours, barLimitsOf, dominantOf, peakOf } from '@/render/barchart'
+import {
+  barChartCaption,
+  barColours,
+  barExtentOf,
+  barLimitsOf,
+  barsOf,
+  dominantOf,
+  peakOf,
+} from '@/render/barchart'
 import { drawBarCharts, featureLayoutFor, layoutFeatures } from '@/render/features'
 import { featureColouring } from '@/render/featureInk'
 import type { LaneFrame } from '@/render/lane'
@@ -694,5 +702,34 @@ describe('the value axis a reader fixes', () => {
     expect(barLimitsOf({ auto: false, min: 50, max: 50 })).toBeUndefined()
     expect(barLimitsOf({ auto: false, min: 80, max: 20 })).toBeUndefined()
     expect(barLimitsOf({ auto: false, min: Number.NaN, max: 20 })).toBeUndefined()
+  })
+})
+
+describe('where a ceiling drag on a chart starts from', () => {
+  it('is zero to the tallest bar in the file — the axis already on screen', () => {
+    // 10.5, from YAL001C's liver column, which is what the `file` reading draws
+    // every chart on the lane against.
+    const axis = barExtentOf(parseBarChart(TOY).bars)
+    expect(axis?.min).toBe(0)
+    expect(axis?.max).toBeCloseTo(10.5, 5)
+  })
+
+  it('refuses a file with no bars above zero, which is not an axis to scale', () => {
+    expect(barExtentOf(undefined)).toBeNull()
+    expect(barExtentOf({ max: 0 })).toBeNull()
+  })
+
+  it('finds the bars through the entry, and only on a chart', () => {
+    const set = parseBarChart(TOY)
+    const entry = {
+      id: 'a',
+      kind: 'barchart',
+      payload: { kind: 'features', data: set },
+    } as never
+    expect(barsOf(entry)?.max).toBeCloseTo(10.5, 5)
+    // The same payload under any other kind is a feature set, not a chart, and
+    // a drag across it has no ceiling to move.
+    expect(barsOf({ ...(entry as object), kind: 'segments' } as never)).toBeUndefined()
+    expect(barsOf({ id: 'a', kind: 'barchart' } as never)).toBeUndefined()
   })
 })

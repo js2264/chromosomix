@@ -687,18 +687,34 @@ Within a genome, a `contig` or `contig:start-end` selection. Range parsing mirro
 Genome and contig namespaces can collide; genome wins, as in Python. The UI labels which kind a
 search matched.
 
-**Zoom out is a control beside the box**, because it changes the coordinate the box holds. The scroll
-wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller — and past the
-edge of what was read it stops. This is the other thing a genome browser means by zooming out: a
-wider **range**, re-read, with the region string updated to say so. One press widens the window on
-screen three times about its own centre, which leaves what you were looking at as the middle third
-and its surroundings either side. Against an end of the sequence the window slides in rather than
-asking for a negative coordinate; once a press would cover the whole sequence it *is* the whole
-sequence, named as such rather than spelled out in coordinates; and on a declared circle (§8.15) it
-wraps past the origin rather than clamping, because a clamp would shove the window sideways to fit
-inside a boundary the molecule has not got. The button greys itself the moment there is nothing
-further out to go to, and it navigates through the ordinary road, so three presses and three presses
-of the back button are the same journey in reverse (§5.5).
+**Zoom is four buttons beside the box**, because what they change is the coordinate the box holds.
+The scroll wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller —
+and past the edge of what was read it stops. This is the other thing a genome browser means by
+zooming: a different **range**, re-read, with the region string updated to say so. The four are
+`10×` and `3×` out and `3×` and `10×` in, widest first, so the row reads as one axis of scale
+with the current window in the middle of it; each one is the exact undo of the one opposite. Two
+sizes rather than one because a single step is always wrong twice — three presses to leave a gene,
+or one press past the locus — and they are ordinary bordered buttons like everything else in the
+bar, since a control that is styled differently from its neighbours is a control a reader wonders
+about.
+
+Every press moves the window about its own **centre**, which leaves what you were looking at in the
+middle of what comes back. Against an end of the sequence the window slides in rather than asking
+for a negative coordinate; once a press outward would cover the whole sequence it *is* the whole
+sequence, named as such rather than spelled out in coordinates; inward it stops at the file's own
+bin size, since a window narrower than a bin is a window the file cannot answer; and on a declared
+circle (§8.15) it wraps past the origin rather than clamping, because a clamp would shove the window
+sideways to fit inside a boundary the molecule has not got. Each button greys itself the moment
+there is nothing in its direction to go to, and they navigate through the ordinary road, so three
+presses and three presses of the back button are the same journey in reverse (§5.5).
+
+**And there is no back arrow in the bar, and no map/tracks cycle button.** Both were controls with
+a shorter road already beside them: going back is the browser's own back, which the bar's
+navigation has always fed, and *tracks only / map only / both* is the eye beside the map in the
+column that lists what is drawn — where every other thing on screen is shown and hidden, one row at
+a time, by the control that names it. A second way to do a thing is not a convenience when the
+first way is a row the reader is already looking at; it is a control to learn, in the bar that has
+to stay readable at a glance.
 
 ### 5.5 Navigation
 
@@ -819,8 +835,15 @@ not, which is why it is a cycle written in one place rather than a toggle in eac
 boundary between "another view" and "the same view drawn differently" falls is an implementation
 detail they should never meet. Tracks-only comes first because it answers "get this matrix out of my
 way", which is what a reader with six tracks open wants most often; the map alone follows because
-from there the next thing to ask is the opposite. The button offers the **next** stop rather than
-naming the current one: it is a control, and a reader reads it to find out what pressing it will do.
+from there the next thing to ask is the opposite.
+
+**The key alone, with no button beside it.** There was one in the region bar, offering the next
+stop, and it has gone: the same three states are reachable one row at a time from the eye beside
+the map in the column that lists what is drawn, which is where every other thing on screen is shown
+and hidden. A second way to do a thing is not a convenience when the first way is a row the reader
+is already looking at — it is another control in a bar that has to stay readable at a glance
+(§5.4). The cycle stays because a *key* costs the bar nothing and is the fastest road for the
+reader who has learnt it.
 
 Nothing is hidden, moved or restyled by any of it. The map alone is the stacks drawing no lanes for as
 long as it lasts, which is the same kind of presentation as the turn (§17.4) and reversible in the
@@ -2627,7 +2650,11 @@ nowhere at all to *read* which had been declared. In the table the question is
 asked about all of them at once, the filter row's own tick narrows to the ones
 that carry it, and the **Sequences card in the General panel wears a `↻` beside
 each declared name**, so a reader at work is told the answer rather than offered
-a second place to click. A metacool has no column: §8.5's argument about names
+a second place to click. It is the **last** column, after everything the file
+itself carries: it is the one column that is not in the file — a declaration the
+reader makes rather than a number somebody measured — so it goes where a reader's
+own additions go rather than interrupting the run of the file's own fields.
+A metacool has no column: §8.5's argument about names
 applies hardest to a hundred thousand contigs off four thousand independently
 assembled organisms, and a declaration is made about a molecule somebody knows
 the shape of.
@@ -2974,6 +3001,22 @@ the ceiling draws full height rather than out of the lane and into the one above
 floor draws nothing rather than downwards through the baseline. The line under the lane's label says
 both ends of the axis, which is what makes the comparison it exists for possible. It seeds itself
 from the file's own ceiling, so leaving `auto` starts on the picture that was already there.
+
+**And an axis is moved the way an axis is moved.** Typing two numbers is the precise way and the
+slow one; what a reader of a genome browser reaches for constantly is the **drag across the lane** —
+towards the signal's own growing direction to make it taller — with the ⌘-scroll beside it as the
+notched version of the same gesture. Both work on a barChart lane, on the map's stacks and in the
+1D browser, and they start from the axis on screen: zero to the file's own tallest bar, the same
+number the typed field seeds from, so a notch and a drag on one lane cannot begin from two different
+places. The drag is the one thing here that is not about the format at all — a lane that answers a
+drag across it with a pan, while every lane above and below it moves its ceiling, is a lane the
+reader has to be told about.
+
+This is where the four kind predicates come apart, and it is worth stating because they had agreed
+until now. A barChart **draws no profile**, gets **no row of track controls** — no autoscale group,
+no mode or flip switch, because a chart is not a measurement in anybody else's units — and **has a
+value axis the reader may move**. *Has an axis* and *is drawn as a profile* are two questions; they
+were one function's worth of answer only for as long as nothing but a profile had an axis.
 
 **The rows are never banded by strand**, which is the one place §8.16's layout is overruled. Banding
 divides the lane's height, and a barChart's height *is* its value axis — so a sixty-pixel lane split
@@ -5044,6 +5087,20 @@ it by construction rather than by a second resampling that could land a domain b
 A track dropped between the form being filled in and Run being pressed is left out and said out loud,
 rather than drawn as a flat line.
 
+**The two edges show one profile unless the reader says otherwise.** Which anchor of a loop is
+written first in a BEDPE is whichever sits further left on the sequence, and nothing else: it is not
+upstream in any biological sense, not the cause of the contact, not the end with the factor on it.
+Profiled apart, the top edge is every pair's second anchor and the right edge every pair's first, so
+the two lines differ by whatever that arbitrary ordering happened to sort — and a reader comparing
+them reads a difference between the two ends of a loop that the file never claimed. So each window
+contributes **both** of its anchors to **both** edges, which is one mean over twice as many anchors:
+better estimated as well as honest. The pooling is done a window at a time rather than by averaging
+the two finished profiles, since the accumulators count per cell and a cell one of them never saw
+would otherwise be weighted as though it had. A tickbox turns it off, for the file where the ordering
+*is* the figure — a BEDPE whose left column is always the promoter, say — and it is offered only off
+the diagonal, where both axes cut the same window from the same feature and the two profiles are
+already the same numbers.
+
 **The scaled mode on a feature set is the domain pileup**, and it is the picture that sits beside a
 loop APA in every paper: TADs — insulation boundaries called, then the span from one to the next —
 piled up with the body of every domain resampled onto the same columns and a flank each side. Four
@@ -5802,13 +5859,24 @@ stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks 
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 
-**Every box that takes a URL has the same second door.** Beside the Tracks card's box, the Contact
-maps card's, the deck's add row and an empty cell of a deck stands *from a connected place…*
-(`ui/pickFromFolders.ts`): the Files column's own folder view in a dialog, over every place the
-window is connected to — a directory on this machine included — and a row that hands back the
-file, with the credential the listing used. It replaces a browser that could look at buckets and
-nothing else; with nothing connected it says so and names the Files column's *Open a local/remote folder*,
+**The door the cards keep is this one.** *From a connected place…* (`ui/pickFromFolders.ts`) stands
+under the Tracks card's load zone, under the Contact maps card's, inside an empty cell of a deck,
+and beside the deck's add row: the Files column's own folder view in a dialog, over every place the
+window is connected to — a directory on this machine included — and a row that hands back the file,
+with the credential the listing used. It replaces a browser that could look at buckets and nothing
+else; with nothing connected it says so and names the Files column's *Open a local/remote folder*,
 rather than offering an empty listing.
+
+The three cards used to keep a **box to paste a URL into** as well, folded away behind *or open one
+by URL*, and all three have gone. Each was the worse half of the pair it was in. A reader holding a
+URL can drop the link on the window or paste it into the landing page's own box, which is where
+this application says *open a file*; a reader **without** one was being asked to produce something
+they have not got — and that is not an edge case but the commonest state of the three places the
+boxes stood in. The bigWigs beside a map are keys in a prefix whose names came off a run sheet; a
+reader repairing a shared deck is looking at a `~` precisely because the sender's file had no
+address a page could fetch by name (§11). Both of those readers need to be shown what is there,
+which is the door above and not a text field. A disclosure triangle over a single button is
+furniture too, so the fold went with the box.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders

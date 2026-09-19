@@ -69,8 +69,6 @@ export interface WholeViewProps {
    * then offers only the read.
    */
   onOpenRung?(entry: string): void
-  /** A control the session puts on the title line; see `RegionViewProps`. */
-  extraControl?: HTMLElement
   /**
    * Present when this view is the `bin × bin` level of a metagenome's whole-file
    * picker (§7.3) rather than a view of its own.
@@ -86,8 +84,8 @@ export interface WholeViewProps {
    *   two levels do and what makes the three one picture at three depths;
    * - and so a label click opens a genome, since a genome name is not a region.
    *
-   * Passed in rather than derived for the reason {@link extraControl} is: this
-   * view does not know which of the three levels it is, and the shell does.
+   * Passed in rather than derived: this view does not know which of the three
+   * levels it is, and the shell does.
    */
   wholeFileLevel?: {
     /** The three-way level control, built by the shell (`ui/Overview.ts`). */
@@ -466,7 +464,6 @@ export class WholeView {
           // three pixels per chromosome arm, so "go to MYC" is a question this
           // view has to be able to answer without a click on a 3-pixel target.
           this.search.el,
-          ...(props.extraControl === undefined ? [] : [props.extraControl]),
         ),
         this.summary,
         this.problem,

@@ -181,22 +181,40 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it. Not persisted, for the reason the framing is a snapshot: a history restored against a file that
   has since been re-binned would be a list of figures that no longer describe anything.
 
-- **Zoom out, beside the region box (§5.4).** Also the control that finally made a window across a
-  circular origin *reachable*: the panel refused to name one window where the axis showed a
-  sequence's tail and then its head, so the button greyed itself on exactly the view zooming out is
-  most interesting from. Two runs of one sequence is one window on a circle, and it is reported as
-  the region a reader would type — flagged as wrapped, because the Bookmarks card cannot write one
-  as a BED interval and now says so in those words rather than claiming the picture is not at one
-  place. The scroll wheel on the map zooms the *picture* — the
-  same block, drawn larger or smaller — and past the edge of what was read it stops. This is the other
-  thing a genome browser means by zooming out: a wider **range**, re-read, with the region string
-  updated to say so. One press widens the window on screen three times about its own centre, so what
-  you were looking at becomes the middle third. Against an end of the sequence the window slides in
-  rather than asking for a negative coordinate; once a press would cover the whole sequence it *is*
-  the whole sequence, named as such; and on a declared circle it wraps past the origin rather than
-  clamping. It greys itself when there is nothing further out to go to, and it navigates through the
-  ordinary road, so three presses and three presses of the back button are the same journey in
-  reverse.
+- **Zoom, as four buttons beside the region box (§5.4).** The scroll wheel on the map zooms the
+  *picture* — the same block, drawn larger or smaller — and past the edge of what was read it stops.
+  This is the other thing a genome browser means by zooming: a different **range**, re-read, with
+  the region string updated to say so. The four are `10×` and `3×` out and `3×` and `10×` in,
+  widest first, so the row reads as one axis of scale with the window you are on in the middle of
+  it, and each is the exact undo of the one opposite. Two sizes rather than one because a single
+  step is always wrong twice — three presses to leave a gene, or one press past the locus. Every
+  press moves about the window's own centre. Against an end of the sequence the window slides in
+  rather than asking for a negative coordinate; once a press outward would cover the whole sequence
+  it *is* the whole sequence, named as such; inward it stops at the file's own bin size; and on a
+  declared circle it wraps past the origin rather than clamping. Each greys itself when there is
+  nothing in its direction to go to, and they navigate through the ordinary road, so three presses
+  and three presses of the back button are the same journey in reverse.
+
+  Zooming out is also what finally made a window across a circular origin *reachable*: the panel
+  refused to name one window where the axis showed a sequence's tail and then its head, so the
+  button greyed itself on exactly the view zooming out is most interesting from. Two runs of one
+  sequence is one window on a circle, and it is reported as the region a reader would type —
+  flagged as wrapped, because the Bookmarks card cannot write one as a BED interval and now says so
+  in those words rather than claiming the picture is not at one place.
+
+- **An APA's edge profiles are one aggregate over both anchors of every pair (§18.8).** Which anchor
+  of a loop is written first in a BEDPE is whichever sits further left on the sequence, and nothing
+  else: it is not upstream in any biological sense, not the cause of the contact, not the end with
+  the factor on it. Profiled apart — which is what the edges did — the top of the pileup was every
+  pair's second anchor and its right side every pair's first, so the two lines differed by whatever
+  that arbitrary ordering happened to sort, and a reader comparing them read a difference between
+  the two ends of a loop that the file never claimed. Each window now contributes **both** of its
+  anchors to **both** edges, which is one mean over twice as many anchors: better estimated as well
+  as honest. Pooled a window at a time rather than by averaging the two finished profiles, since the
+  accumulators count per cell and a cell one of them never saw would otherwise be weighted as though
+  it had. A tickbox turns it off for the file where the ordering *is* the figure — a BEDPE whose
+  left column is always the promoter, say — and it is offered only off the diagonal, where the two
+  axes cut the same window from the same feature and the two profiles are already the same numbers.
 
 - **A barChart lane takes a fixed value axis (§8.17).** Both readings the format had were *relative* —
   every chart against the file's tallest bar, or each against its own — so a GTEx lane and a
@@ -225,8 +243,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   for what it *is*: a declaration about the assembly — which of these sequences is a plasmid, which is
   the mitochondrion — asked one sequence at a time, of whichever one happened to be on screen.
   Declaring three of them meant opening three maps, and there was nowhere at all to *read* which had
-  been declared. The column sits directly after the name, beside the lengths; the filter row's own
-  tick narrows to the sequences that carry it, which is what makes the question answerable on a draft
+  been declared. The column sits **last**, after every column the file itself carries — it is the one
+  column that is not in the file, a declaration the reader makes rather than a number somebody
+  measured, so it goes where a reader's own additions go rather than interrupting the run of the
+  file's own fields. The filter row's own tick narrows to the sequences that carry it, which is what makes the question answerable on a draft
   assembly with three declared contigs in a hundred thousand; and the **Sequences card in the General
   panel wears a `↻` beside each declared name**, so a reader at work is told the answer rather than
   offered a second place to click. A map already on screen adopts the change without being rebuilt, so
@@ -353,6 +373,49 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   bin under that peak carries a balancing weight 1.45× its neighbours', so its self-contact is scaled
   2.09× and the peak is in the weights rather than in the counts, where neither statistic peaks at all.
   `ignoreDiags = 1` cuts that cell out of the score, and the hint on the control now says why one might.
+
+- **The region bar loses its back arrow and its map/tracks cycle button (§5.4).** Both were controls
+  with a shorter road already beside them. Going back is the browser's own back, which this bar's
+  navigation has fed since it existed. *Tracks only / map only / both* is the **eye beside the map**
+  in the column that lists what is drawn — where every other thing on screen is shown and hidden,
+  one row at a time, by the control that names it. A second way to do a thing is not a convenience
+  when the first way is a row the reader is already looking at; it is another control to learn, in
+  the bar that has to stay readable at a glance, and the bar has just gained four zoom buttons. The
+  `v` key still walks the three states, because a key costs the bar nothing.
+
+- **A barChart lane's ceiling is dragged like a track's (§8.17).** Giving the lane a fixed axis left
+  the reader one way to move it — typing two numbers into the card — while every lane above and
+  below it answered a drag across its body, and a ⌘-scroll over it, by moving its ceiling. A lane
+  that answers that gesture with a pan, in a stack where nothing else does, is a lane the reader has
+  to be told about. Both gestures now reach a chart, on the map's stacks and in the 1D browser, and
+  they start from the axis already on screen — zero to the file's own tallest bar, the same number
+  the typed field seeds from, so a notch and a drag on one lane cannot begin from two different
+  places. What this cost is an invariant that had held since the kind predicates were written: *has
+  a movable axis* and *is drawn as a profile* are two questions, and they were one function's worth
+  of answer only for as long as nothing but a profile had an axis. A chart still gets no **row** of
+  track controls — no autoscale group, no mode or flip switch — because it is not a measurement in
+  anybody else's units.
+
+- **An APA's half-width starts at 21 bins rather than 12, and *Anchor on* loses its paragraph
+  (§18.8).** Twelve was narrow enough that a loop filled the picture: the corners a P2LL divides by
+  were a couple of bins from the peak rather than background, and a reader had nowhere to watch the
+  pileup sit back down to it. The paragraph above *Centre / Start / End* explained which end of a
+  minus-strand gene is its 5′ end, over three options that carry a line each — three lines of the
+  card spent saying what the options say, and the 1D metaplot has asked the same question with no
+  such paragraph since it existed.
+
+- **The three *or open one by URL* boxes are gone, and the drop areas say less.** Each box was the
+  worse half of the pair it stood in. A reader holding a URL can drop the link on the window or
+  paste it into the landing page's own box, which is where this application says *open a file*; a
+  reader **without** one was being asked to produce something they have not got — and that is the
+  commonest state in all three places these stood: the bigWigs beside a map are keys in a prefix
+  whose names came off a run sheet, and a reader repairing a shared deck is looking at a `~`
+  precisely because the sender's file had no address a page could fetch by name (§11). What both of
+  those readers need is to be shown what is *there*, which is *from a connected place…* — which
+  stays, now as the only control on that row, so the disclosure triangle over it went too. The
+  hints inside the drop areas are cut to what a reader needs before dropping: which formats, and
+  that a click also works. The sentences they lost were about what happens *after* the drop, which
+  the picture then says for itself.
 
 ### Fixed
 

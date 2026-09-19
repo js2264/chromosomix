@@ -53,7 +53,7 @@ export function anchorAt(params: Params): 'start' | 'centre' | 'end' {
 
 /** Half-width of a fixed window, in bins. */
 export function windowBins(params: Params): number {
-  const value = typeof params.window === 'number' ? params.window : 12
+  const value = typeof params.window === 'number' ? params.window : 21
   return Math.max(1, Math.min(200, Math.round(value)))
 }
 
@@ -109,6 +109,37 @@ export function isDomainPileup(params: Params): boolean {
  */
 export function onDiagonal(params: Params): boolean {
   return params.anchors !== 'pairs' && params.anchors !== 'allpairs'
+}
+
+/**
+ * Whether one marginal profile is drawn along **both** edges of the pileup.
+ *
+ * Which anchor of a loop is written first in a BEDPE is whichever sits further
+ * left on the sequence, and nothing else — it is not upstream in any biological
+ * sense, not the cause of the contact, not the end with the factor on it.
+ * Profiled apart, the top edge of the pileup is every pair's second anchor and
+ * the right edge every pair's first, so the two lines differ by whatever that
+ * ordering happened to sort; a reader comparing them reads a difference between
+ * the two ends of a loop that the file never claimed. Pooled, both edges are one
+ * mean over twice as many anchors, which is the better-estimated profile as well
+ * as the honest one — so it is on.
+ *
+ * Off is for the file where the ordering *is* the figure: a BEDPE whose left
+ * column is always the promoter, say, where what the reader came for is exactly
+ * how the two ends differ.
+ *
+ * Never on the diagonal, where both axes cut the same window from the same
+ * feature and the two profiles are already the same numbers.
+ */
+export function poolsAnchors(params: Params): boolean {
+  return !onDiagonal(params) && params.symmetric !== false
+}
+
+/** Whether any track was picked to be profiled along the edges. */
+function hasTracks(params: Params): boolean {
+  const value = params.tracks
+  if (Array.isArray(value)) return value.length > 0
+  return typeof value === 'string' && value !== ''
 }
 
 /** Whether the input is a loaded pair set, rather than a feature set. */
@@ -196,9 +227,12 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'at',
     label: 'Anchor on',
     default: 'centre',
-    hint:
-      'Which point of each feature the window is cut about. Strand is respected, so the start of ' +
-      'a minus-strand gene is its 5′ end — the same rule the 1D aggregate follows.',
+    // **No hint beside the label.** *Centre*, *Start* and *End* of a feature are
+    // not terms a reader of this form needs explained, and the three options
+    // carry one line each already — a paragraph above them about which end of a
+    // minus-strand gene is its 5′ end was three lines of the card spent saying
+    // what the options say.
+    //
     // **The same control the 1D metaplot has, and it was missing here alone.** A
     // pileup at a set of genes centred on their midpoints is a pileup at
     // whatever is half way along a gene, which is a different question from the
@@ -235,7 +269,11 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'window',
     label: 'Half-width',
-    default: 12,
+    // Twenty-one bins a side, so the picture is 43 across. Twelve was narrow
+    // enough that a loop filled it: the corners a P2LL divides by were a couple
+    // of bins from the peak rather than background, and a reader had nowhere to
+    // see the pileup sit back down to it.
+    default: 21,
     min: 1,
     max: 200,
     integer: true,
@@ -488,6 +526,20 @@ const PARAMS: readonly ParamSpec[] = [
     // Off the chromosight path, which reads whole sequences and answers with its
     // own three outputs rather than with this runner's pileups.
     when: (params) => params.norm !== 'chromosight',
+    section: 'Tracks',
+  },
+  {
+    kind: 'toggle',
+    key: 'symmetric',
+    label: 'Same profile both sides',
+    hint:
+      'One aggregate over every anchor, drawn identically above and beside. Untick to keep each ' +
+      'pair’s two anchors apart — the second along the top, the first down the right.',
+    default: true,
+    // See {@link poolsAnchors}, which is where the argument for the default is.
+    // Offered only where it changes something: on the diagonal both axes cut
+    // the same window, and a tickbox that does nothing is worse than no tickbox.
+    when: (params) => params.norm !== 'chromosight' && !onDiagonal(params) && hasTracks(params),
     section: 'Tracks',
   },
   // **There is no Quality section, and its two settings are not defaults — they

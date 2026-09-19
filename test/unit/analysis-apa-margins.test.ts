@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest'
 import { runApa } from '@/analysis/run/apa'
 import type { JobContext } from '@/analysis/job'
 import type { AnalysisFraming, MatrixOutput, Params } from '@/analysis/types'
-import type { FeatureSet } from '@/annotations/types'
+import type { FeatureSet, PairSet } from '@/annotations/types'
 
 const BINSIZE = 1_000
 const NBINS = 20_000
@@ -80,9 +80,37 @@ function spikes(at: number[], value = 1): Float32Array {
   return out
 }
 
+/**
+ * A loop set whose two anchors are a hundred bins apart.
+ *
+ * Far enough that the two windows of one pair never overlap, and far enough
+ * apart from the next pair that no two are read in one block — so what a
+ * profile cell holds is one window's worth of one anchor and nothing else.
+ */
+function pairsOf(first: number[], second: number[]): PairSet {
+  const n = first.length
+  return {
+    contigs: ['I'],
+    length: n,
+    contig1: new Int32Array(n),
+    start1: Int32Array.from(first.map((bin) => bin * BINSIZE)),
+    end1: Int32Array.from(first.map((bin) => (bin + 1) * BINSIZE)),
+    contig2: new Int32Array(n),
+    start2: Int32Array.from(second.map((bin) => bin * BINSIZE)),
+    end2: Int32Array.from(second.map((bin) => (bin + 1) * BINSIZE)),
+    score: Float32Array.from(first.map((_, i) => n - i)),
+    name: first.map((_, i) => `l${i}`),
+    detail: first.map(() => ''),
+  }
+}
+
 function job(
   params: Params,
-  options: { vectors?: Record<string, Float32Array>; anchors?: number[] } = {},
+  options: {
+    vectors?: Record<string, Float32Array>
+    anchors?: number[]
+    pairs?: PairSet
+  } = {},
 ): JobContext {
   const anchors = options.anchors ?? ANCHORS
   const mc = {
@@ -106,6 +134,7 @@ function job(
     framing: FRAMING,
     inputs: {
       features: { features: features(anchors) },
+      ...(options.pairs === undefined ? {} : { pairs: { pairs: options.pairs } }),
       ...(options.vectors === undefined ? {} : { vectors: options.vectors }),
       labels: { t1: 'CTCF', t2: 'Rad21' },
     } as never,
@@ -239,5 +268,95 @@ describe('a window running off the end of the vector', () => {
     const values = [...(matrix.margins?.top?.[0].values ?? [])]
     expect(values[2]).toBeCloseTo(1, 10)
     for (const value of values) expect(Number.isFinite(value)).toBe(true)
+  })
+})
+
+/** Loop anchors: the first of each pair, and the second a hundred bins along. */
+const FIRST = [2_000, 6_000, 10_000]
+const SECOND = FIRST.map((bin) => bin + 100)
+
+/** The same fixed pileup, off the diagonal over a loop set. */
+function loopParams(over: Params = {}): Params {
+  return {
+    anchors: 'pairs',
+    pairs: 'loops',
+    mode: 'fixed',
+    window: 2,
+    norm: 'none',
+    balance: false,
+    tracks: ['t1'],
+    ...over,
+  }
+}
+
+/** A track that spikes on the first anchor of every pair and nowhere else. */
+function onFirstAnchors(): Record<string, Float32Array> {
+  return { 'tracks:t1': spikes(FIRST) }
+}
+
+describe('the two anchors of a loop, pooled (§18.7)', () => {
+  it('draws the same profile along both edges', async () => {
+    const matrix = await pileup(loopParams(), {
+      pairs: pairsOf(FIRST, SECOND),
+      vectors: onFirstAnchors(),
+    })
+    const top = [...(matrix.margins?.top?.[0].values ?? [])]
+    const right = [...(matrix.margins?.right?.[0].values ?? [])]
+    expect(top).toEqual(right)
+  })
+
+  it('is the mean over every anchor, not over the ones on one axis', async () => {
+    // The signal is on the first anchor of each pair and on neither second one,
+    // so over both anchors of all three pairs the middle cell is a half. That
+    // is the number the pooling is for: it says *half the anchors of this set
+    // carry the mark*, which is true, rather than the one-and-zero a reader
+    // would otherwise read as a difference between the two ends of a loop.
+    const matrix = await pileup(loopParams(), {
+      pairs: pairsOf(FIRST, SECOND),
+      vectors: onFirstAnchors(),
+    })
+    expect(matrix.margins?.top?.[0].values[2]).toBeCloseTo(0.5, 10)
+    expect(matrix.margins?.right?.[0].values[2]).toBeCloseTo(0.5, 10)
+  })
+
+  it('is what a run that says nothing about it gets, because it is on', async () => {
+    // `loopParams` carries no `symmetric` at all, which is the state a form
+    // built before this setting existed — and a saved workspace — comes back in.
+    expect(loopParams().symmetric).toBeUndefined()
+    const matrix = await pileup(loopParams(), {
+      pairs: pairsOf(FIRST, SECOND),
+      vectors: onFirstAnchors(),
+    })
+    expect(matrix.margins?.top?.[0].values[2]).toBeCloseTo(0.5, 10)
+  })
+})
+
+describe('the two anchors of a loop, kept apart', () => {
+  it('puts the second anchor along the top and the first down the right', async () => {
+    const matrix = await pileup(loopParams({ symmetric: false }), {
+      pairs: pairsOf(FIRST, SECOND),
+      vectors: onFirstAnchors(),
+    })
+    // `pairAnchors` sorts each pair, so the smaller bin is the row — which is
+    // the right-hand edge — and that is where the mark is.
+    expect([...(matrix.margins?.right?.[0].values ?? [])]).toEqual([0, 0, 1, 0, 0])
+    expect([...(matrix.margins?.top?.[0].values ?? [])]).toEqual([0, 0, 0, 0, 0])
+  })
+})
+
+describe('on the diagonal, where there is only one anchor', () => {
+  it('changes nothing either way, which is why the tickbox is not offered there', async () => {
+    const pooled = await pileup(params({ tracks: ['t1'], symmetric: true }), {
+      vectors: { 'tracks:t1': spikes([ANCHORS[0]], 3) },
+    })
+    const apart = await pileup(params({ tracks: ['t1'], symmetric: false }), {
+      vectors: { 'tracks:t1': spikes([ANCHORS[0]], 3) },
+    })
+    expect([...(pooled.margins?.top?.[0].values ?? [])]).toEqual([
+      ...(apart.margins?.top?.[0].values ?? []),
+    ])
+    expect([...(pooled.margins?.top?.[0].values ?? [])]).toEqual([
+      ...(pooled.margins?.right?.[0].values ?? []),
+    ])
   })
 })

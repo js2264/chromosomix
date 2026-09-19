@@ -66,8 +66,6 @@ export interface ContigsTableOptions {
   assembly?: Assembly
   /** The feature index the bar's box searches; see {@link SequenceBarProps.store}. */
   store?: AnnotationStore
-  /** The map/tracks switch, put in the bar beside **go**. */
-  extraControl?: HTMLElement
   /** Show every ticked sequence as one map — see the genomes table's twin. */
   onOpenSelection?(names: string[]): void
   /**
@@ -145,14 +143,15 @@ export class ContigsTable {
       }
     })
 
-    // Directly after the name, because it is a fact *about the name* — the same
-    // place the General panel's list wears the mark — and never at the far end
-    // of a row of assembly statistics, where a column of ticks reads as one more
-    // number nobody has got round to formatting.
+    // **Last, after every column the file brought.** It is the one column that is
+    // not in the file — a declaration the reader makes, not a number somebody
+    // measured — so it goes where a reader's own additions go rather than
+    // interrupting the run of the file's own fields. Between the name and the
+    // length it also pushed the length, which is the column most often read
+    // beside a name, a control's width to the right.
     const circular = options.circular
     if (circular !== undefined) {
-      const at = columns.findIndex((column) => column.key === 'name')
-      columns.splice(at < 0 ? 0 : at + 1, 0, {
+      columns.push({
         key: 'circular',
         label: 'circular',
         kind: 'string',
@@ -245,7 +244,6 @@ export class ContigsTable {
       this.bar = new SequenceBar({
         assembly,
         ...(options.store === undefined ? {} : { store: options.store }),
-        ...(options.extraControl === undefined ? {} : { extraControl: options.extraControl }),
         onOpenContig: (name) => options.onOpenContig(name),
         onOpenRegion: (region) => go(region),
         ...(whole === undefined ? {} : { onOpenWhole: whole }),

@@ -72,7 +72,7 @@ import {
   progressDetail,
 } from '../render/laneLabel'
 import type { LocusAxis } from '../render/locus'
-import { barChartCaption, barLimitsOf } from '../render/barchart'
+import { barChartCaption, barExtentOf, barLimitsOf } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type { OverlayAxes } from '../render/overlays'
@@ -1336,8 +1336,22 @@ export class AnnotationLanes {
         // map and another in the browser would be two pictures of one file.
         const features = featuresOf(entry.style, entry.kind)
         // A value axis the reader fixed by hand, which a barChart lane reads and
-        // every other feature kind ignores (§8.17).
-        const barLimits = barLimitsOf(entry.style.limits)
+        // every other feature kind ignores (§8.17) — moved by the factor of a
+        // ceiling drag in progress, exactly as the profile lanes above are.
+        // Mid-drag an autoscaled chart has to be given a pair to be scaled
+        // *from*, and it is the one it is already drawn against: zero to the
+        // file's tallest bar.
+        const scaling = geometry.scaling?.id === entry.id ? geometry.scaling.factor : null
+        const fixed = barLimitsOf(entry.style.limits)
+        const barAxis = fixed ?? barExtentOf(set.bars) ?? undefined
+        const barLimits =
+          scaling === null || barAxis === undefined ? fixed : scaledTo(barAxis, scaling)
+        // The pair the *next* gesture starts from, as the profile branch records
+        // its own: without this the drag resolves an extent of `null` and a
+        // ceiling nudge on a chart moves a stored `[0, 1]` nobody chose. The
+        // **committed** pair, never the one under a drag — a half-finished
+        // gesture is not a decision.
+        if (barAxis !== undefined) state.limits.set(entry.id, barAxis)
         const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
         const paint = {
           colour: entry.style.colour,

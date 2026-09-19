@@ -24,7 +24,6 @@ import { button, el, fmt } from './dom'
 import { cardTitle, iconButton } from './icons'
 import { folderPickButton } from './pickFromFolders'
 import type { OpenResult } from '../worker/protocol'
-import { canonicalUrl } from '../sources/rewrite'
 import { fileLabel } from './labels'
 
 /** What the card is showing right now. */
@@ -103,24 +102,15 @@ export class CompareCard {
       { class: 'card compare-card' },
       cardTitle('Contact maps', 'grid-2x2'),
       this.body,
-      el(
-        'details',
-        { class: 'ann-url' },
-        el('summary', { text: 'or open one by URL' }),
-        el(
-          'div',
-          { class: 'ann-url-row' },
-          this.urlInput,
-          button('add', () => this.openUrl(), { class: 'btn' }),
-          folderPickButton((picked) =>
-            this.props.onOpen(
-              picked.source.kind === 'local'
-                ? { kind: 'local', file: picked.source.file }
-                : { kind: 'remote', url: picked.uri },
-            ),
-          ),
-        ),
-      ),
+      // **No box to paste a URL into.** There were four of them, one per card
+      // that asks for a file, each folded away behind the same summary — and
+      // every one of them was the *worse* half of the pair it was in: a reader
+      // with a URL in the clipboard is a reader who can drop the link on the
+      // window, and a reader without one was being asked to produce something
+      // they do not have. What is left is the road that answers *where is the
+      // file* rather than assuming the answer: the places this window is
+      // connected to (§8.5).
+      el('div', { class: 'ann-url-row' }, this.folderButton()),
     )
     this.render()
   }
@@ -142,25 +132,29 @@ export class CompareCard {
     this.render()
   }
 
-  private readonly urlInput = el('input', {
-    class: 'input',
-    type: 'url',
-    placeholder: 'https://bucket.example.org/other.cool',
-  })
-
-  private openUrl(): void {
-    // The same rewrite the picker's box applies, for the same reason: what is
-    // typed here becomes a URI in the session and in every link written out of
-    // it, so it has to be the form that opens (SPECS §24.5).
-    const url = canonicalUrl(this.urlInput.value.trim())
-    if (url !== '') this.props.onOpen({ kind: 'remote', url })
+  /**
+   * *Choose from somewhere this window is connected to.*
+   *
+   * A local pick is handed over as the file it is; a remote one as its URI,
+   * which the picker has already canonicalised — what arrives here becomes a
+   * URI in the session and in every link written out of it, so it has to be the
+   * form that opens (SPECS §24.5).
+   */
+  private folderButton(): HTMLElement {
+    return folderPickButton((picked) =>
+      this.props.onOpen(
+        picked.source.kind === 'local'
+          ? { kind: 'local', file: picked.source.file }
+          : { kind: 'remote', url: picked.uri },
+      ),
+    )
   }
 
   /**
    * Two slots, each either a map or a rectangle to put one on.
    *
    * The Tracks card's shape, to the class: a list of `.ann-row`s over a
-   * `.ann-drop`, with the URL behind a fold underneath. The two cards ask the
+   * `.ann-drop`, with the connected-places button underneath. The two cards ask the
    * same thing of a reader — *put a file here*, then *here is what is in* — and
    * a card that answered it in its own vocabulary was a second application in
    * the same column. It is also what makes the controls on a row look like the
@@ -171,14 +165,10 @@ export class CompareCard {
     const paired = this.state.kind === 'open'
     const first = this.props.hasPrimary()
     this.slots[0].label.textContent = 'Load a contact map'
-    this.slots[0].hint.textContent =
-      'A .cool or .mcool on this genome. Click to choose, or drop one here — the tracks come ' +
-      'with it, drawn beside the map instead of along the axis.'
+    this.slots[0].hint.textContent = 'A .cool or .mcool. Drop one here, or click to choose.'
     this.slots[1].label.textContent = 'Load a second map'
     this.slots[1].hint.textContent =
-      'A cooler with the same chromosomes and the same bin size. Click to choose, or drop one ' +
-      'here — it fills the lower-left triangle, so the square stops being symmetric and the two ' +
-      'are read against each other in one picture.'
+      'A cooler on the same chromosomes and bin size. It fills the lower-left triangle.'
 
     const top = first
       ? this.mapRow(1, this.props.primaryLabel(), paired)
