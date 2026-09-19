@@ -30,6 +30,7 @@
 import { CIRCULAR_SCOPE } from './circular'
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
+import { FIGURES_SCOPE, type FigureMemory } from '../figures/style'
 import { formatUri, parseUri } from '../uri'
 import { parseMaps, readDeckLook, serialiseMaps, type DeckLocal, type DeckLook } from '../panels/deck'
 import type { PanelLayout } from '../ui/SidePanel'
@@ -244,6 +245,16 @@ export interface SessionConfig {
    */
   analysis: AnalysisMemory
   /**
+   * How each figure was last styled, by `task::output` (§18.13).
+   *
+   * Beside {@link analysis} and for the same argument one step further on: the
+   * recipe is worth keeping, and so is the picture the recipe was read from. A
+   * session that came back with the parameters but with every log axis, hidden
+   * series and colour thrown away would reproduce the numbers and not the
+   * figure, which is the half anybody was looking at.
+   */
+  figures?: FigureMemory
+  /**
    * The overlay preferences.
    *
    * A window-level setting rather than a session one — it lives in
@@ -390,6 +401,7 @@ const SCOPES = {
   genomes: 'table:genomes',
   contigs: 'table:contigs',
   analysis: ANALYSIS_SCOPE,
+  figures: FIGURES_SCOPE,
   starred: 'deck:starred',
   columns: 'deck:columns',
   locals: 'deck:locals',
@@ -456,6 +468,7 @@ export function buildConfig(options: {
       ...tableOf('contigs', recall<TableUiState>(key, SCOPES.contigs)),
     },
     analysis: recall<AnalysisMemory>(key, SCOPES.analysis) ?? {},
+    figures: recall<FigureMemory>(key, SCOPES.figures) ?? {},
     deck: deckOf(
       recall<string>(key, SCOPES.starred),
       recall<number>(key, SCOPES.columns),
@@ -518,6 +531,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   // an empty workspace rather than a broken one — the same tolerance every
   // field above is read with.
   if (config.analysis !== undefined) remember(key, SCOPES.analysis, config.analysis)
+  if (config.figures !== undefined) remember(key, SCOPES.figures, config.figures)
   // Each written only when the config carries it, so importing a session from
   // before these two existed leaves whatever this tab already had rather than
   // clearing the deck's arrangement to nothing.
@@ -697,6 +711,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     // an *added* field: an older file opens in a newer viewer with the parts it
     // did not know about left at their defaults.
     analysis: analysisRecord(row['analysis']),
+    figures: analysisRecord(row['figures']) as FigureMemory,
     compareNormalise: row['compareNormalise'] === true,
     tables: {
       ...tableOf('genomes', table(tables['genomes'])),
