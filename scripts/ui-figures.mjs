@@ -17,7 +17,7 @@
 
 import { createRequire } from 'node:module'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -44,9 +44,12 @@ const browser = await chromium.launch({
   ...(executablePath === undefined ? {} : { executablePath }),
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 })
-const page = await (
-  await browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: 1 })
-).newPage()
+const context = await browser.newContext({
+  viewport: { width: 1920, height: 1100 },
+  deviceScaleFactor: 1,
+  acceptDownloads: true,
+})
+const page = await context.newPage()
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => {
@@ -144,6 +147,35 @@ try {
   await page.keyboard.press('Escape')
   await sleep(1200)
   await shot('08-curve-back-in-drawer')
+
+  // The two marks that summarise a sample rather than plot it.
+  await page.locator('.figure-enlarge').first().click()
+  await page.waitForSelector('.modal-stage .figure-chart svg', { timeout: 20000 })
+  await sleep(1200)
+  await field('mark').locator('select').selectOption('box')
+  await sleep(2000)
+  await shot('08b-curve-box')
+  await field('mark').locator('select').selectOption('violin')
+  await sleep(2500)
+  await shot('08c-curve-violin')
+  await field('mark').locator('select').selectOption('line')
+  await sleep(1500)
+  await page.keyboard.press('Escape')
+  await sleep(1000)
+
+  // The export, end to end: the PDF a reader presses for has to be a drawing.
+  const pdf = page.waitForEvent('download', { timeout: 30000 })
+  await page.locator('.analysis-figure-head button', { hasText: 'PDF' }).first().click()
+  const file = await (await pdf).path()
+  const bytes = readFileSync(file)
+  const text = bytes.toString('latin1')
+  console.log(
+    'pdf:',
+    `${(bytes.length / 1024).toFixed(0)} kB`,
+    text.startsWith('%PDF') ? 'header ok' : 'NOT A PDF',
+    text.includes('/Subtype /Image') ? 'CARRIES A RASTER' : 'no raster',
+    text.includes('/Helvetica') ? 'has type' : 'NO FONT',
+  )
 
   // ---- a table and a matrix ---------------------------------------------
   await run('Cis and trans per sequence', () => document.querySelector('.analysis-figure-scroll table') !== null)

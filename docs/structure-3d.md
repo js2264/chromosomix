@@ -594,9 +594,11 @@ The spec section has to say each of these, because each is a departure from a ru
 argues for:
 
 - **The first main-thread runtime dependency.** `export.ts:11-16` writes the PDF in eighty lines
-  rather than take a library; `interactivePlot.ts:1-9` does the same for charts. The argument was
-  never "no dependencies", it was "not for this arithmetic". A lit, instanced, picked 3D scene is
-  not that arithmetic, and the line is drawn there: three.js draws the structure and nothing else.
+  rather than take a library, and the drawer's figures were hand-drawn for the same reason. The
+  argument was never "no dependencies", it was "not for this arithmetic". A lit, instanced, picked
+  3D scene is not that arithmetic, and the line is drawn there: three.js draws the structure and
+  nothing else. (The charts have since taken a library too — §18.13 — under the same test, and
+  under the condition that the PDF stay a drawing.)
 - **The tube's PDF is a raster; the beads' and sticks' is vector.** `VectorTarget`
   (`src/ui/vector.ts:132`) cannot carry a lit surface, so the tube and ribbon representations
   export as `PanelDeck.saveDeck` already exports a deck: a raster at the export dpi wrapped in a
@@ -645,8 +647,8 @@ argues for:
   with damping, wheel dolly about the pointer, shift-drag pan, double-click refit, arrow keys when
   focused, touch orbit and pinch. The camera state `{ target, azimuth, elevation, distance,
   projection }` is a plain object the panel owns and the adapter applies — the same "an interactive
-  figure is a plain figure of a derived object" rule `interactivePlot.ts` states, kept so the
-  export renders the object the controls built.
+  figure is a plain figure of a derived object" rule the drawer's figures state
+  (`figures/FigureBlock.ts`), kept so the export renders the object the controls built.
 - **Picking.** `Raycaster` against the instanced beads; on the tube, against the beads' positions
   with a radius, so a pick is always a bead index and never a point on a surface with no locus.
 - **Lit and ghosted.** *Others* at reduced opacity in a second material, sorted after the lit ones;

@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { chartFigure } from '@/figures/echartsFigure'
 import { specOf, type XyFigureSpec } from '@/figures/spec'
 import { defaultStyle } from '@/figures/style'
-import { VectorPage } from '@/ui/vector'
+import { VectorPage, pdfColour } from '@/ui/vector'
 import type { CurveOutput } from '@/analysis/types'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -67,6 +67,11 @@ function spec(): XyFigureSpec {
     ],
   }
   return specOf(output) as XyFigureSpec
+}
+
+/** A channel as the page writes it: three decimals, trailing zeros dropped. */
+function trim(value: number): string {
+  return value.toFixed(3).replace(/\.?0+$/, '')
 }
 
 /** The page's content stream, inflated, the way `vector.test.ts` reads one. */
@@ -146,6 +151,43 @@ describe('chartFigure', () => {
     expect(text).toContain('/MediaBox [0 0 900 450]')
 
     figure.destroy()
+  })
+
+  /**
+   * The one thing a pure test of the option cannot see.
+   *
+   * A violin is a `custom` series: the option can be perfectly well formed and
+   * the renderer can still draw nothing, because the datum it hangs on was
+   * filtered out by the axis before `renderItem` ran. That is exactly what
+   * happened — sixteen violins came out as an empty plot with its axes drawn
+   * neatly around them — so the check is on the *picture*.
+   */
+  it('draws a violin as a shape, on a log ordinate too', async () => {
+    for (const scale of ['linear', 'log'] as const) {
+      const built = spec()
+      const style = defaultStyle(built)
+      style.mark = 'violin'
+      style.y.scale = scale
+      const figure = chartFigure({ spec: built, style })
+      document.body.append(figure.el)
+      // The host has no width in jsdom, so the chart is measured by hand.
+      Object.defineProperty(figure.el, 'clientWidth', { value: 640, configurable: true })
+      Object.defineProperty(figure.el, 'clientHeight', { value: 400, configurable: true })
+      await figure.ready
+
+      const page = new VectorPage(640, 400)
+      figure.draw(page.ctx, { width: 640, height: 400 })
+      const content = await contentOf(await pdfOf(page, `violin-${scale}`))
+      // The series' own colours, as fills. Nothing else on this figure is
+      // painted in them — the legend is off, because the categories are named
+      // on the abscissa — so their absence means no shape was drawn.
+      for (const colour of ['#0072B2', '#D55E00']) {
+        const [r, g, b] = pdfColour(colour)
+        const fill = `${trim(r)} ${trim(g)} ${trim(b)} rg`
+        expect(content, `${scale} ordinate, ${colour}`).toContain(fill)
+      }
+      figure.destroy()
+    }
   })
 
   it('takes a style change and redraws from it', async () => {

@@ -156,6 +156,47 @@ describe('optionOf', () => {
     expect(seriesOf(option).map((entry) => entry['id'])).toEqual(['a', 'b'])
   })
 
+  /**
+   * The bug: a violin's `custom` series hung on one datum at y = 0, so the
+   * ordinate was sized to nothing and the shapes — computed from a Gaussian
+   * density three bandwidths below the smallest value, which on a log axis is
+   * a negative number — were drawn outside the grid and clipped. Sixteen
+   * violins came out as an empty plot with its axes drawn neatly around them.
+   *
+   * Both halves are here: the data is the density's whole support, so the axis
+   * fits it, and on a log ordinate the density is estimated on `log10` of the
+   * values, so every point of that support is a number the axis can hold.
+   */
+  it('gives a violin its whole support, in units the axis can hold', () => {
+    const { option } = build(curve(), (style) => {
+      style.mark = 'violin'
+      style.y.scale = 'log'
+    })
+    for (const entry of seriesOf(option)) {
+      const data = entry['data'] as Array<[number, number]>
+      expect(data.length).toBeGreaterThan(8)
+      expect(data.every(([, y]) => y > 0)).toBe(true)
+    }
+    // And on a linear axis it is the plain estimate, whose support runs past
+    // the sample in both directions — the series’ own values are 4, 5 and 6.
+    const linear = build(curve(), (style) => (style.mark = 'violin')).option
+    const first = seriesOf(linear)[0]['data'] as Array<[number, number]>
+    expect(Math.min(...first.map(([, y]) => y))).toBeLessThan(4)
+    expect(Math.max(...first.map(([, y]) => y))).toBeGreaterThan(6)
+  })
+
+  it('names the categories on the axis rather than in a legend', () => {
+    for (const mark of ['box', 'violin'] as const) {
+      const { option } = build(curve(), (style) => (style.mark = mark))
+      expect((option['legend'] as { show: boolean }).show).toBe(false)
+    }
+  })
+
+  it('gives a violin the series colour, so its swatch is not the library’s', () => {
+    const { option } = build(curve(), (style) => (style.mark = 'violin'))
+    expect(seriesOf(option).map((entry) => entry['color'])).toEqual(['#0072B2', '#D55E00'])
+  })
+
   it('makes the series the categories when the mark is a distribution', () => {
     const { option } = build(curve(), (style) => (style.mark = 'box'))
     const x = option['xAxis'] as Record<string, unknown>

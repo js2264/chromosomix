@@ -472,6 +472,10 @@ function distributionOption(
   }
 
   return {
+    // No legend: the categories are named on the abscissa, and a second list of
+    // the same names — whose swatches would have to agree with shapes the
+    // renderer colours itself — is a place for the two to disagree.
+    legend: { show: false },
     xAxis: {
       type: 'category',
       data: categories,
@@ -530,7 +534,8 @@ function boxSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme): Ch
  * equally concentrated, which is exactly the comparison they are there to make.
  */
 function violinSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme): ChartOption[] {
-  const shapes = visible.map((entry) => density(entry.series.y))
+  const log = style.y.scale === 'log'
+  const shapes = visible.map((entry) => violinShape(entry.series.y, log))
   const peak = Math.max(0, ...shapes.flatMap((shape) => shape.y))
   if (!(peak > 0)) return boxSeries(visible, style, theme)
 
@@ -538,16 +543,26 @@ function violinSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme):
     id: `violin-${entry.series.id}`,
     name: entry.series.name,
     type: 'custom',
-    data: [[at, 0]],
+    color: entry.colour,
+    itemStyle: { color: entry.colour },
+    // The density's own support, one datum per sample — which is what makes the
+    // *axis* fit the violins. One datum would have left the ordinate sized to
+    // sixteen medians with the shapes drawn far outside it, and a datum at zero
+    // would have been filtered out by a log axis before `renderItem` ever ran.
+    data: shapes[at].at.map((value) => [at, value]),
     renderItem: (
-      _params: unknown,
-      api: { coord: (point: [number, number]) => [number, number]; size?: unknown },
+      params: { dataIndex: number },
+      api: {
+        coord: (point: [number, number]) => [number, number]
+        size?: (point: [number, number]) => [number, number]
+      },
     ) => {
+      // One shape per series, drawn once; the rest of the data is there to be
+      // measured by the axis, not to be drawn.
+      if (params.dataIndex !== 0) return { type: 'group', children: [] }
       const shape = shapes[at]
       if (shape.at.length === 0) return { type: 'group', children: [] }
-      const size = (api.size as ((point: [number, number]) => [number, number]) | undefined)?.([
-        1, 0,
-      ]) ?? [24, 0]
+      const size = api.size?.([1, 0]) ?? [24, 0]
       const half = Math.min(48, size[0] * 0.42)
       const points: Array<[number, number]> = []
       for (let i = 0; i < shape.at.length; i++) {
@@ -571,4 +586,23 @@ function violinSeries(visible: Entry[], style: FigureStyle, theme: FigureTheme):
     },
     encode: { x: 0, y: 1 },
   }))
+}
+
+/**
+ * A violin's outline, in the units the axis is in.
+ *
+ * On a log ordinate the density is estimated on `log10` of the values and
+ * mapped back, which is both what R does under `scale_y_log10` and the only
+ * thing that works: a Gaussian kernel on the raw values puts its support three
+ * bandwidths below the smallest one, which on a log axis is a negative number
+ * the axis cannot hold — and a shape whose points are all rejected is an empty
+ * plot with its axes drawn neatly around it.
+ */
+function violinShape(values: readonly number[], log: boolean): { at: number[]; y: number[] } {
+  if (!log) return density(values)
+  const logs = sorted(values)
+    .filter((value) => value > 0)
+    .map((value) => Math.log10(value))
+  const shape = density(logs)
+  return { at: shape.at.map((value) => 10 ** value), y: shape.y }
 }

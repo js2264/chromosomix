@@ -25,7 +25,7 @@ code disagree, the code is right and this file is a bug.
 - [Maps on screen](#maps-on-screen) — lead, companion, deck, cell, star, the second file
 - [Annotations](#annotations) — track, lane, placement, group, mark, bookmark, structure
 - [The picture](#the-picture) — score, transform, clip, the turn, refine
-- [Analysis](#analysis) — task, availability, result, synthetic track
+- [Analysis](#analysis) — task, availability, result, synthetic track, figure spec and style
 - [Machinery](#machinery) — workers, sources, budgets, grants, buckets
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, CLI
 - [Overloaded words](#overloaded-words)
@@ -574,6 +574,23 @@ An analysis result that became an ordinary track — an entry in the store, a bi
 worker can sample, and a row with somewhere for its exports to go. Nothing downstream of it knows it
 was computed rather than loaded, which is the point: it gets renaming, limits, colour, edges,
 reordering, tooltips and the exported figure for free.
+
+### figure spec vs figure style
+
+The two halves every plot in the drawer is built from (§18.13). A **spec** is what the figure is
+*of* — numbers, names, axis titles, and the task's suggestions about scale and window — and it
+carries no colour, no line width and no hidden series. A **style** is everything the reader has
+decided: the mark, the axes, the colours, which series is switched off, how a table is sorted. The
+split is what lets a figure be restyled without rewriting what it is a figure of, and what lets the
+style be remembered per file, task and output while the spec is rebuilt on every run.
+
+### the stage dialog
+
+A picture with its settings beside it, a grip between them and a way to put the settings away
+(`ui/StageDialog.ts`). Invented for the enlarged 3D model (§25.3) and now also what a figure's
+*customise* button opens (§18.13) — one shell with two callers, not two implementations. What goes
+on the stage is *moved* in and moved back, never copied, so the camera or the zoom the reader left
+it at is what they come back to.
 
 ---
 
