@@ -28,6 +28,7 @@
  */
 
 import { CIRCULAR_SCOPE } from './circular'
+import { RESOLUTIONS_SCOPE } from './resolutions'
 import { recall, remember } from './UiMemory'
 import { ANALYSIS_SCOPE, type AnalysisMemory } from '../analysis/memory'
 import { FIGURES_SCOPE, type FigureMemory } from '../figures/style'
@@ -172,6 +173,19 @@ export interface SessionConfig {
    * nothing circular.
    */
   circular?: string[]
+  /**
+   * Resolutions the reader **added** to this file's ladder, in bp (§3.4).
+   *
+   * Beside `circular` and for its reason: the file's own rungs are in the file,
+   * and this is what somebody asked to be able to look at as well — *give me a
+   * 10 kb picture of a 4 kb file* — which travels with the tracks they loaded
+   * rather than in the view state. Which rung is *on screen* is a different
+   * question and rides in the hash (`ViewState.coarsen`).
+   *
+   * Optional, so a workspace written before this existed imports as what it was:
+   * the file's own ladder and nothing else. See `state/resolutions.ts`.
+   */
+  resolutions?: number[]
   /** Per-group stacking and scaling, by group name. */
   groups: GroupModes
   scaling: GroupModes
@@ -395,6 +409,7 @@ const SCOPES = {
   bookmarks: 'bookmarks',
   sequences: 'browser:sequences',
   circular: CIRCULAR_SCOPE,
+  resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
   normalise: 'compare:normalise',
@@ -460,6 +475,7 @@ export function buildConfig(options: {
     bookmarks: recall<Bookmark[]>(key, SCOPES.bookmarks) ?? [],
     sequences: recall<string[]>(key, SCOPES.sequences) ?? [],
     ...circularOf(recall<string[]>(key, SCOPES.circular)),
+    ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
     compareNormalise: recall<boolean>(key, SCOPES.normalise) ?? false,
@@ -494,6 +510,11 @@ function circularOf(names: string[] | null): { circular?: string[] } {
   return Array.isArray(names) && names.length > 0 ? { circular: names } : {}
 }
 
+/** `{ resolutions: … }` for a file the reader added one to, else nothing. */
+function resolutionsOf(sizes: number[] | null): { resolutions?: number[] } {
+  return Array.isArray(sizes) && sizes.length > 0 ? { resolutions: sizes } : {}
+}
+
 /** `{ name: … }` for a tab the reader has named, and nothing for one they have not. */
 function nameOf(name: string | null | undefined): { name?: string } {
   return typeof name === 'string' && name.trim() !== '' ? { name: name.trim() } : {}
@@ -522,6 +543,9 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   // a workspace written before circularity existed must leave whatever this tab
   // already declared alone rather than clearing it.
   if (config.circular !== undefined) remember(key, SCOPES.circular, config.circular)
+  if (config.resolutions !== undefined) {
+    remember(key, SCOPES.resolutions, config.resolutions)
+  }
   remember(key, SCOPES.groups, config.groups)
   remember(key, SCOPES.scaling, config.scaling)
   remember(key, SCOPES.normalise, config.compareNormalise)

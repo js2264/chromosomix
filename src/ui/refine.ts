@@ -24,9 +24,14 @@
  * the *sequence* rather than to the request. So a refine is the same `matrix`
  * request with narrower extents, and two blocks of the same region at the same
  * grid agree cell for cell wherever they overlap. Nothing is composited and
- * there is no seam. Which is also why this module must never send
- * `binsPerCell`: a request carrying an explicit plan bypasses `snapToGrid`, and
- * the cell values would then change as the reader panned.
+ * there is no seam.
+ *
+ * This module used to say it must **never** send `binsPerCell`, because a request
+ * carrying an explicit plan bypassed `snapToGrid` and the cell values would then
+ * change as the reader panned. The reader snaps an explicit plan too now, which
+ * is what lets {@link LadderOptions.floor} exist: a reader who has asked for a
+ * resolution the file does not store (§3.4) has committed to a grid, and the
+ * refine has to hold it rather than quietly reading past it on the next zoom.
  *
  * **It terminates.** There is no grid below the file's own bins, so the ladder
  * has a floor and reaches it: `⌈log₂(k₀)⌉` steps, where `k₀` is what the widest
@@ -154,6 +159,24 @@ export interface LadderOptions {
    * can see.
    */
   onBlock(result: MatrixResult): boolean
+  /**
+   * The coarsest grid this ladder may refine **to**, in bins of the open map.
+   *
+   * The reader's declared resolution (§3.4), as a number of the open map's bins
+   * per drawn cell: a 10 kb rung derived from a 2 kb one is `5`. Without it the
+   * ladder would do exactly what it is for and read finer on the next zoom —
+   * which is right when nobody has said otherwise and wrong the moment somebody
+   * has, because the axis has been *labelled* 10 kb and a 2 kb block under that
+   * label is a caption that lies.
+   *
+   * A function rather than a number because the declaration changes under a
+   * mounted ladder: a reader stepping from 10 kb to 3 kb does not rebuild the
+   * view, and a value captured at construction would hold the ladder at whatever
+   * was showing when the map opened.
+   *
+   * Absent, or 1, is every view of every file until somebody presses `+`.
+   */
+  floor?(): number
   /** Told when a read is outstanding, for whatever the view shows meanwhile. */
   onBusy?(busy: boolean): void
   /** Told when a read fails, so the view can say so once rather than per frame. */
@@ -373,7 +396,26 @@ export class BlockLadder {
     if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
     if (this.atEdge(view, block)) return false
     const wanted = this.plan(view)
-    return block.grid <= gridFor(wanted.rows, wanted.cols) * REFINE_FACTOR
+    return block.grid <= this.gridWanted(wanted) * REFINE_FACTOR
+  }
+
+  /**
+   * The grid a read for this window would come back on, the floor applied.
+   *
+   * One place, so *what is good enough* and *what to ask for* cannot disagree:
+   * without the floor here a declared 10 kb view would be permanently
+   * unsatisfied — the ladder would compare a 5-bin block against a 1-bin target,
+   * read, get 5 bins back because the floor bound the reader, and ask again on
+   * the next frame forever.
+   */
+  private gridWanted(wanted: { rows: Extent; cols: Extent }): number {
+    return Math.max(this.floor(), gridFor(wanted.rows, wanted.cols))
+  }
+
+  /** The declared grid, as a whole number of the open map's bins per cell. */
+  private floor(): number {
+    const asked = this.options.floor?.() ?? 1
+    return Number.isFinite(asked) && asked >= 1 ? Math.floor(asked) : 1
   }
 
   /**
@@ -809,6 +851,7 @@ export function attachRefine(options: {
     rows: Extent,
     cols: Extent,
     rung: string | undefined,
+    binsPerCell: number | undefined,
   ): Cancellable<{ result: MatrixResult; second?: MatrixResult }>
   ceiling: { rows: Extent; cols: Extent }
   /**
@@ -837,6 +880,18 @@ export function attachRefine(options: {
    * cheaper and its balanced values honest; it is never what makes it work.
    */
   rungs?: ReadonlyArray<{ name: string; binsize: number }>
+  /**
+   * The grid the reader has **declared**, in bins of the open map per cell.
+   *
+   * See {@link LadderOptions.floor}, which this is handed to. It also takes the
+   * rung choice out of the ladder's hands: a declared 3 kb grid over a 1 kb map
+   * is three of *these* bins, and a zoom that helpfully read the 2 kb rung
+   * instead would be asking for one and a half of those — which is not a bin
+   * anybody has. So while a floor is in force every read names no rung and
+   * carries the floor as its `binsPerCell`; the base rung was already chosen
+   * when the resolution was added, and it is the map that is open.
+   */
+  floor?: () => number
   /** `false` disables refinement without tearing the wiring down. */
   enabled?: () => boolean
   onBusy?: (busy: boolean) => void
@@ -854,13 +909,22 @@ export function attachRefine(options: {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
   const ladder = new BlockLadder({
     ceiling: options.ceiling,
+    ...(options.floor === undefined ? {} : { floor: options.floor }),
     read: (rows, cols) => {
-      const rung = chooseRung(
-        options.rungs ?? [],
-        Math.max(rows[1] - rows[0], cols[1] - cols[0]),
-        options.binsize,
-      )
-      const { promise, cancel } = options.read(rows, cols, rung)
+      const held = Math.max(1, Math.floor(options.floor?.() ?? 1))
+      // A declared grid takes the rung choice with it, for the reason
+      // {@link attachRefine}'s `floor` gives: the cell the reader was promised is
+      // a whole number of the *open* map's bins, and a coarser rung's bins do
+      // not divide it in general.
+      const rung =
+        held > 1
+          ? undefined
+          : chooseRung(
+              options.rungs ?? [],
+              Math.max(rows[1] - rows[0], cols[1] - cols[0]),
+              options.binsize,
+            )
+      const { promise, cancel } = options.read(rows, cols, rung, held > 1 ? held : undefined)
       return {
         cancel,
         promise: promise.then(({ result, second }) => {

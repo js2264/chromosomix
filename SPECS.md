@@ -188,6 +188,58 @@ This exists because *you* can run `zoomify` on files you publish yourself. It is
 a plain `.metacool` must behave identically, minus the extra zoom levels. The app never asks for an
 mmetacool and never degrades when given a plain file.
 
+**The reader may add rungs the file has not got.** The ladder in a file is whatever the person who
+ran `zoomify` chose to write — the default doubles, and a great many published `.mcool`s stop
+wherever that person stopped. So a reader who wants a 10 kb picture of a file whose coarsest rung is
+4 kb has had two options, and both are bad: look at 4 kb and squint, or leave the application, run
+`cooler coarsen`, and come back. There is a third, and it costs nothing: **a 10 kb bin is ten 1 kb
+bins added up**. This viewer has summed consecutive bins into one cell since its whole-genome view
+was written (§7.2); what was missing was a way to *ask* for a particular grid rather than have one
+fitted to the screen.
+
+A `+` past the coarse end of the resolution picker asks for one. What can be given is exactly what
+is **a whole number of some stored rung's bins**: on a `1 / 2 / 5 / 10 kb` ladder, 3 kb is three 1 kb
+bins — perfectly ordinary, and not a rung anybody would have written, which is why it is worth
+offering — while 2.5 kb is two and a half, and there is no such thing. A contact is recorded in a
+bin and not at a position inside one, so half a bin's contacts cannot be separated from the other
+half. The refusal is a fact about the format rather than a limitation here, and the dialog says so
+in those words as the number is typed, because *2.5 kb is not a whole number of bins of any
+resolution this file carries* tells a reader to type 2 or 3 and "invalid resolution" does not.
+Several rungs may divide a target — 20 kb is twenty 1 kb bins or two 10 kb ones — and the **coarsest**
+is taken: same picture, a twentieth of the stored pixels walked, and on a `--balance`d file the
+values summed are the ones balanced closest to the resolution asked for.
+
+Three properties make it a resolution rather than a rendering:
+
+- **The grid is the sequence's.** Cells fall at `contigStart + m·k` whatever window was asked for
+  (`snapToGrid`), so the same base pair lands in the same cell holding the same sum at every zoom
+  and every pan — which is what a cooler at that resolution would also give, and what a grid
+  anchored to the request would not.
+- **It holds.** The zoom-to-refine ladder takes it as a floor and never reads past it; the
+  whole-genome view takes it as a floor too, and its own plan still wins where the picture cannot
+  hold that many cells, with the summary saying which.
+- **It is in the link.** `coarsen=` beside `balance=` and `level=`, because a 10 kb map and a 1 kb
+  map of one window are different pictures. Which resolutions a reader has *added* is a different
+  question — a fact about the file, like which sequences they declared circular — and travels with
+  the tracks they loaded (§8.15's argument, restated).
+
+A derived rung wears a **`*`** in the picker, in the label rather than beside it, because the number
+is what somebody quotes in a methods section and `3 kb` would be a resolution this file does not
+contain. It sorts where its number says — 3 kb before 5 kb — since a ladder whose order is not its
+resolutions' order is a lie about which of two pictures is coarser, and it carries a `×`, which the
+file's own rungs do not: they are not the reader's to remove, and that asymmetry is the second thing
+the `*` is saying.
+
+**One caveat, always printed.** Counts coarsen *exactly*: a contact is in one fine bin and therefore
+in one coarse bin, so the sum is the count. Balanced values do not. `cooler zoomify --balance` sums
+the raw counts and then balances the coarse matrix at its own resolution, producing new weights;
+summing balanced values instead applies the fine weights and adds the results. That is what every
+aggregation in this field does and it is a good estimate — it is not the same number, and a reader
+comparing a derived 10 kb map with a colleague's `zoomify`d one is owed the distinction. Which is
+also why a stored rung always wins: a derived resolution that duplicates one is refused rather than
+quietly shadowing it, and `chooseRung` still prefers a real rung for every read that is not held to
+a declared grid (§9).
+
 ### 3.5 URI addressing
 
 `file::group`, exactly as `metacooler.uri.parse_uri`:
@@ -721,6 +773,10 @@ to stay readable at a glance.
 `genomes table → genome → contig → region`, with a breadcrumb whose segments are clickable to go back
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
+
+**And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
+whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
+bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
 
 **The resolution is not a segment of that trail.** A rung of a `zoomify` ladder (§3.4) is the same
 file drawn more or less finely: it does not contain the crumbs after it and clicking it does not go

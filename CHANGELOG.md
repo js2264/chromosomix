@@ -202,6 +202,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   flagged as wrapped, because the Bookmarks card cannot write one as a BED interval and now says so
   in those words rather than claiming the picture is not at one place.
 
+- **A resolution the file does not store, on the fly (§3.4).** A `+` past the coarse end of the
+  resolution picker asks for one, and what can be given is exactly what is a whole number of some
+  stored rung's bins added up. That covers both things a reader wants and neither of which a
+  published `.mcool` reliably has: a **coarser** picture than its coarsest rung — 10 kb from a file
+  that stops at 4 kb — and one **between** two rungs, like 3 kb on a `1 / 2 / 5 / 10 kb` ladder,
+  which is three 1 kb bins and not a number anybody would have run `zoomify` for. 2.5 kb on that
+  same ladder cannot be given, because a contact is recorded in a bin rather than at a position
+  inside one, and the dialog says so in those words as the number is typed rather than greying its
+  own button: *not a whole number of bins of any resolution this file carries* tells you to type 2
+  or 3. Where several rungs divide the target the **coarsest** is used — same picture, a twentieth of
+  the stored pixels walked.
+
+  It behaves as a resolution and not as a rendering. The grid is anchored to each **sequence's own
+  start**, so the same base pair holds the same sum at every pan and every zoom, which is the grid a
+  real coarse cooler has; the zoom-to-refine ladder takes it as a floor and never reads past it; the
+  whole-genome view takes it as a floor too and its own plan still wins where the picture cannot
+  hold that many cells; and it rides in the link beside `balance=`, because a 10 kb map and a 1 kb
+  map of one window are different pictures. Which resolutions you have added is a fact about the
+  file, kept per file and carried in an exported workspace beside the sequences you declared
+  circular. An added rung wears a `*` in the picker — in the label, because the number is what gets
+  quoted in a methods section and this one is not in the file — sorts where its number says, 3 kb
+  before 5 kb, and carries a `×` the file's own rungs do not.
+
+  One caveat, printed every time it is offered: **counts add up exactly and balanced values do
+  not.** `cooler zoomify --balance` sums raw counts and then balances the coarse matrix at its own
+  resolution; this applies the fine weights and adds the results, which is what every aggregation in
+  this field does and is a good estimate rather than the same number.
+
 - **An APA's edge profiles are one aggregate over both anchors of every pair (§18.8).** Which anchor
   of a loop is written first in a BEDPE is whichever sits further left on the sequence, and nothing
   else: it is not upstream in any biological sense, not the cause of the contact, not the end with
@@ -373,6 +401,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   bin under that peak carries a balancing weight 1.45× its neighbours', so its self-contact is scaled
   2.09× and the peak is in the weights rather than in the counts, where neither statistic peaks at all.
   `ignoreDiags = 1` cuts that cell out of the score, and the hint on the control now says why one might.
+
+- **An explicitly planned pooled read is snapped to the sequence's own grid.** The reader anchors
+  the cell grid to each sequence rather than to the window asked for, so two blocks of one region
+  agree cell for cell — but it did that only for the plans it chose *itself*, and a request carrying
+  its own `binsPerCell` skipped the step. That is why the zoom-to-refine module carried a standing
+  note saying it must never send one: the cell values would have moved as the reader panned. Both
+  paths snap now, which is what makes a declared resolution above a resolution rather than a
+  rendering. A no-op for the two callers that sent an explicit plan before this — a whole-genome read
+  and a selection both start at sequence boundaries.
 
 - **The region bar loses its back arrow and its map/tracks cycle button (§5.4).** Both were controls
   with a shorter road already beside them. Going back is the browser's own back, which this bar's

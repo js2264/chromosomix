@@ -37,6 +37,9 @@ import type {
 } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { ResolutionStore } from '../state/resolutions'
+import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
@@ -159,7 +162,7 @@ import { KEYS, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
-import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
+import { contigOf, fileBaseLabel, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
   MAP_NAMES_SCOPE,
@@ -2294,6 +2297,15 @@ export class Session {
             source,
             this.carryAcrossEntries(`${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`),
           ),
+        // The reader's own rungs, merged into the file's in bin-size order
+        // (§3.4). Given even where the file has none to merge with: a plain
+        // `.cool` has one resolution and the `+` beside it is the whole feature.
+        ladder: () => this.ladderRungs(),
+        coarsen: () => this.store.state?.coarsen,
+        onSelectRung: (entry) => this.openStoredRung(entry),
+        onSelectDerived: (binsize) => this.openDerived(binsize),
+        onAddResolution: () => this.askResolution(),
+        onDropResolution: (binsize) => this.dropResolution(binsize),
       })
       this.infoPanel = new InfoPanel({
         info,
@@ -4586,6 +4598,194 @@ export class Session {
   }
 
   /**
+   * Resolutions the reader has added to this file's ladder (§3.4).
+   *
+   * Held and keyed exactly as the circular declarations above are, and for the
+   * same reason: it is a fact about the *file* rather than about the rung that
+   * happens to be open, so a reader who adds 10 kb while looking at the 2 kb
+   * level still has it after stepping to 1 kb.
+   */
+  private resolutionsHeld: { key: string; store: ResolutionStore } | null = null
+
+  private resolutionStore(): ResolutionStore | null {
+    const key = this.sessionKey()
+    if (key === null) return null
+    if (this.resolutionsHeld?.key !== key) {
+      this.resolutionsHeld = { key, store: new ResolutionStore(key) }
+    }
+    return this.resolutionsHeld.store
+  }
+
+  /**
+   * The ladder as the picker draws it: the file's rungs and the reader's own.
+   *
+   * One list in bin-size order, each of the added ones carrying the arithmetic
+   * that reaches it. Empty for a file with no ladder at all, which is every
+   * plain `.cool` — and there the `+` is still offered, because a `.cool` has
+   * exactly one rung and a whole number of its bins is as reachable as ever.
+   */
+  private ladderRungs(): Array<Rung & { derived?: DerivedRung }> {
+    const rungs = rungsOf(this.file?.info.entries ?? [])
+    // A plain `.cool` has no entries and one resolution: its own. The `+` is
+    // offered there too — one rung is still a rung, and a whole number of its
+    // bins is as reachable as a whole number of any other's.
+    const binsize = this.file?.info.binsize ?? 0
+    const own =
+      rungs.length > 0 ? rungs : binsize > 0 ? [{ name: String(binsize), binsize }] : []
+    return ladderWith(own, this.resolutionStore()?.list() ?? [])
+  }
+
+  /**
+   * The resolution the reader is looking at, where it is one they added.
+   *
+   * `null` on every ordinary view — the open rung's own bins — and on a state
+   * whose `coarsen` this file cannot reach, which is what a link from somebody
+   * with a different `.mcool` produces. Falling back to the file's own grid
+   * rather than refusing is the rule every unreadable value in the hash follows.
+   */
+  private derivedRung(state: ViewState): DerivedRung | null {
+    const asked = state.coarsen
+    const binsize = this.file?.info.binsize ?? 0
+    if (asked === undefined || !(binsize > 0) || asked <= binsize) return null
+    if (asked % binsize !== 0) return null
+    return { binsize: asked, from: { name: String(binsize), binsize }, factor: asked / binsize }
+  }
+
+  /**
+   * `{ binsPerCell }` for a view of a declared resolution, else nothing.
+   *
+   * The factor rather than the bin size, because that is what a `matrix` request
+   * takes and what the views hand to their ladders. Spread into every map view's
+   * props so that one answer reaches the first read, the refine and the summary.
+   */
+  private pooledProps(state: ViewState): { binsPerCell?: number } {
+    const derived = this.derivedRung(state)
+    return derived === null ? {} : { binsPerCell: derived.factor }
+  }
+
+  /**
+   * Stand on a resolution the reader added (§3.4).
+   *
+   * Two halves, and which of them runs depends on where the base rung is. A
+   * derived rung is a whole number of some *stored* rung's bins, and the read
+   * that produces it is an ordinary read of that rung with a plan on it — so
+   * the file has to be open at it. Where it already is, this is a patch to the
+   * hash and nothing is re-read that was not going to be; where it is not, the
+   * file is re-opened at the base and the resolution rides along.
+   *
+   * A patch rather than a navigation, and not `replace`, for the reason the
+   * level toggle is the same: stepping through resolutions is looking at one
+   * thing several ways, and the back button should walk back through them.
+   */
+  private openDerived(binsize: number): void {
+    const state = this.store.state
+    if (state === null) return
+    const rung = this.ladderRungs().find((each) => each.binsize === binsize)
+    const derived = rung?.derived
+    if (derived === undefined) return
+    const open = this.file?.info.binsize ?? 0
+    if (open === derived.from.binsize) {
+      this.store.patch({ coarsen: binsize })
+      return
+    }
+    const uri = this.file?.uri
+    const source = this.file?.source
+    if (uri === undefined || source === undefined) return
+    const group = this.file?.info.entryGroup || 'entries'
+    const next = `${splitUri(uri).path}::${group}/${derived.from.name}`
+    const carried = this.carryAcrossEntries(next)
+    void this.open(
+      next,
+      source,
+      carried === undefined ? undefined : { ...carried, coarsen: binsize },
+    )
+  }
+
+  /**
+   * Stand on a rung the **file** carries.
+   *
+   * Two things have to happen and the second is the one that is easy to miss:
+   * open the entry, *and* stop coarsening. A reader stepping from a derived
+   * 3 kb to the file's own 2 kb has asked for 2 kb, and carrying the old
+   * `coarsen` across would give them 6 kb under a stop marked 2 kb.
+   *
+   * On a plain `.cool` there is no entry to open — one rung, no `/resolutions`
+   * group — so clearing it is the whole of the move, and trying to open
+   * `file.cool::entries/1000` would be a read of something that does not exist.
+   * The same shortcut serves the rung that is already open on a laddered file,
+   * where re-opening it would be a needless round trip through the worker.
+   */
+  private openStoredRung(entry: string): void {
+    const state = this.store.state
+    if (state === null) return
+    const uri = this.file?.uri
+    const source = this.file?.source
+    const entries = this.file?.info.entries ?? []
+    if (uri === undefined || source === undefined) return
+    // `/entries/rep1` in an mmetacool, `/resolutions/1000` in an mcool — the
+    // same read the bar's own `currentEntry` is made with.
+    const open = /^\/(?:entries|resolutions)\/(.+)$/.exec(splitUri(uri).group)?.[1]
+    if (!entries.includes(entry) || entry === open) {
+      if (state.coarsen !== undefined) this.store.patch({ coarsen: undefined })
+      return
+    }
+    const next = `${splitUri(uri).path}::${this.file?.info.entryGroup || 'entries'}/${entry}`
+    const carried = this.carryAcrossEntries(next)
+    void this.open(
+      next,
+      source,
+      carried === undefined ? undefined : { ...carried, coarsen: undefined },
+    )
+  }
+
+  /** The `+`: ask for a resolution, add it, and stand on it. */
+  private askResolution(): void {
+    const store = this.resolutionStore()
+    if (store === null) return
+    const rungs = this.ladderRungs()
+      .filter((rung) => rung.derived === undefined)
+      .map(({ name, binsize }) => ({ name, binsize }))
+    if (rungs.length === 0) return
+    openResolutionDialog({
+      rungs,
+      declared: store.list(),
+      // The file's own name, without the rung it happens to be open at: the
+      // ladder belongs to the file, and `Ecoli.mcool::500 carries 500 bp, 1 kb,
+      // …` reads as though the *entry* carried eight resolutions.
+      fileLabel: this.file === null ? 'This file' : fileBaseLabel(this.file.uri),
+      onConfirm: (derived) => {
+        if (!store.add(derived.binsize)) return
+        // Opened on it, because adding a resolution nobody is looking at is a
+        // gesture with no visible result — and *look at this map at 10 kb* is
+        // what the reader pressed `+` to do. The bar redraws as part of standing
+        // on it, so the new stop appears with the picture rather than before it.
+        this.openDerived(derived.binsize)
+      },
+    })
+  }
+
+  /**
+   * Take a resolution back off the ladder.
+   *
+   * Standing on the one being removed is the case worth handling: the picture
+   * has to come back to something, and the honest answer is the rung the file
+   * *does* store — which is the one that is open, so dropping `coarsen` is the
+   * whole of it.
+   */
+  private dropResolution(binsize: number): void {
+    const store = this.resolutionStore()
+    if (store === null) return
+    store.remove(binsize)
+    // Standing on the one being removed: the picture has to come back to
+    // something, and the honest answer is the rung the file *does* store —
+    // which is the one that is open, so dropping `coarsen` is the whole of it.
+    // Otherwise only the bar changes, and redrawing it is cheaper than a
+    // navigation that would re-read a block nobody asked to move.
+    if (this.store.state?.coarsen === binsize) this.store.patch({ coarsen: undefined })
+    else this.breadcrumb?.render(this.store.state)
+  }
+
+  /**
    * The declaration as the Chromosomes table takes it: read, write, watch.
    *
    * `null` before there is a file, which is the one state the table cannot be
@@ -6678,7 +6878,11 @@ export class Session {
     const picker = this.isMetacool
     this.mountWholeFile(
       state,
-      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
+      // The declared resolution is in the key for the reason `balance` is: the
+      // block a whole-file view holds *is* the picture, and a reader stepping
+      // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
+      // one under a bar that says 3 kb (§3.4).
+      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}|${state.coarsen ?? 0}`,
       () => {
         return new WholeView({
           client: this.clientOf(),
@@ -6701,6 +6905,7 @@ export class Session {
             : {}),
           binsize: file.info.binsize ?? 1,
           rungs: file.info.entries,
+          ...this.pooledProps(state),
           // The gate's other way out: the same picture from a coarser rung of
           // the same file, through the breadcrumb's own switch.
           onOpenRung: (entry: string) => {
@@ -6785,6 +6990,7 @@ export class Session {
       caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
+      ...this.pooledProps(state),
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
       displayExtent: file.info.displayExtent,
@@ -6898,6 +7104,7 @@ export class Session {
       caption: this.captionFor(state),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
+      ...this.pooledProps(state),
       genome: state.genome,
       balance: this.balanceOf(state),
       value: this.valueOf(state),
@@ -6936,6 +7143,7 @@ export class Session {
       caption: this.captionFor(state),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
+      ...this.pooledProps(state),
       genomeNames: file.displayNames,
       balance: this.balanceOf(state),
       value: this.valueOf(state),
@@ -6980,6 +7188,7 @@ export class Session {
       ...(keep === undefined ? {} : { boxControl: keep }),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
+      ...this.pooledProps(state),
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),

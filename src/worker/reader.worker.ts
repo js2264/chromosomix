@@ -645,7 +645,28 @@ async function handleMatrix(
     }
   }
   if (asked.binsPerCell > 1 || asked.contigsPerCell > 1) {
-    return atRung(mc, open, asked_, await pooledResult(mc, request, rows, cols, asked))
+    // **Snapped, exactly as a plan this worker chose for itself is.** The grid
+    // is a property of the sequence — cells fall at `contigStart + m·k` — and an
+    // extent that starts part way through one would otherwise anchor the grid to
+    // the *question*, so the same base pair would land in a different cell,
+    // holding a different sum, each time the reader panned. That is why
+    // `ui/refine.ts` used to say it must never send `binsPerCell`, and snapping
+    // here is what lets a reader ask for a resolution the file does not store
+    // (§3.4) and pan around in it. A no-op for the callers that had an explicit
+    // plan before this — a whole-genome read and a selection both start at
+    // sequence boundaries — so nothing that worked changes.
+    return atRung(
+      mc,
+      open,
+      asked_,
+      await pooledResult(
+        mc,
+        request,
+        snapToGrid(mc, rows, asked),
+        snapToGrid(mc, cols, asked),
+        asked,
+      ),
+    )
   }
   const planned = fitPlan(mc, rows, cols)
   if (planned !== null) {

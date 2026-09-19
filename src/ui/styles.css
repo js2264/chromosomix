@@ -2298,6 +2298,124 @@ p {
   border-radius: 3px;
 }
 
+/* A resolution the reader added (§3.4). Dashed, because that is what this
+   application already draws round a thing that is not in the file — a drop
+   zone, an empty deck cell — and because the `*` in the label is the claim and
+   this is only the echo of it. */
+.res-stop.res-added {
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.res-stop.res-added.current {
+  border-color: var(--border-strong);
+}
+
+/* The × on an added stop: room enough to hit, quiet enough that the number
+   beside it stays the thing being read. Shown on hover and on keyboard focus
+   only — four stops each wearing a permanent cross is a row of controls where
+   the reader is trying to read four numbers. */
+.res-drop {
+  margin-left: 0.2rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  opacity: 0;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.res-stop:hover .res-drop,
+.res-drop:focus-visible {
+  opacity: 1;
+}
+
+.res-drop:hover {
+  color: var(--danger);
+}
+
+/* The `+` past the coarse end of the ladder. Same size and weight as a stop, so
+   the row reads as one control rather than as a picker with a button after it. */
+.res-add {
+  padding: 0.1rem 0.25rem;
+  color: var(--text-faint);
+  border: 1px solid transparent;
+  line-height: 0;
+}
+
+.res-add:hover,
+.res-add:focus-visible {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+/* --- asking for one (`ui/ResolutionDialog.ts`) -------------------------- */
+
+.res-ask-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.res-ask {
+  width: 7rem;
+}
+
+.res-units {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.res-unit {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  cursor: pointer;
+}
+
+.res-unit:has(.res-unit-radio:checked) {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-raised);
+  font-weight: 600;
+}
+
+.res-unit-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.res-unit-radio:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The line that answers as the reader types. It is the dialog's whole job, so
+   it holds its height whichever way it answers — a verdict that moved the
+   button up and down under the hand would be read as the form flinching. */
+.res-verdict {
+  min-height: 2.4em;
+  margin: 0 0 0.6rem;
+}
+
+.res-verdict.is-bad {
+  color: var(--danger);
+}
+
 /* --- controls ---------------------------------------------------------- */
 
 .btn {
@@ -4231,7 +4349,7 @@ canvas.is-frozen {
 }
 
 .toast-failed {
-  border-color: var(--danger, var(--accent));
+  border-color: var(--danger);
 }
 
 .modal-head {

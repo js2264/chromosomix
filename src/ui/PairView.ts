@@ -34,6 +34,20 @@ export interface PairViewProps {
   binsize: number
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
+  /**
+   * Bins of this map summed into one drawn cell, because the reader asked for a
+   * resolution the file does not store (§3.4).
+   *
+   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
+   * and the effective resolution on screen is this map's bin size times it. The
+   * base rung is the map that is *open* — picking a derived resolution navigates
+   * to it — so every read here is an ordinary one carrying an explicit plan,
+   * and the worker snaps that plan to each sequence's own grid so the cells hold
+   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
+   *
+   * Absent, or 1, is every view of every file until somebody adds one.
+   */
+  binsPerCell?: number
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
   genomeNames: string[]
   rowGenome: string
@@ -263,10 +277,14 @@ export class PairView {
       ceiling: { rows: rowCeiling, cols: colCeiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      // The grid the reader declared (§3.4), so a zoom cannot quietly read past
+      // the resolution the axis is labelled with.
+      floor: () => this.props.binsPerCell ?? 1,
+      read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
           balance: this.props.balance,
@@ -292,9 +310,13 @@ export class PairView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
+      // The declared grid on the bin-level read alone: a contig-level roll-up's
+      // cells *are* sequences, and there is no bin size to hold it to.
+      const pooled =
+        (this.props.binsPerCell ?? 1) > 1 ? { binsPerCell: this.props.binsPerCell } : {}
       const result: MatrixResult =
         this.level === 'bin'
-          ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query })
+          ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query, ...pooled })
           : await this.props.client.request<'aggregate'>({ kind: 'aggregate', ...query, level: 'contig' })
       if (this.disposed) return
       // The reader may have planned a coarser grid than the file's bins — a

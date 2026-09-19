@@ -61,6 +61,20 @@ export interface WholeViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
+   * Bins of this map summed into one drawn cell, because the reader asked for a
+   * resolution the file does not store (§3.4).
+   *
+   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
+   * and the effective resolution on screen is this map's bin size times it. The
+   * base rung is the map that is *open* — picking a derived resolution navigates
+   * to it — so every read here is an ordinary one carrying an explicit plan,
+   * and the worker snaps that plan to each sequence's own grid so the cells hold
+   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
+   *
+   * Absent, or 1, is every view of every file until somebody adds one.
+   */
+  binsPerCell?: number
+  /**
    * Open the file at another rung, by entry name — the gate's second button.
    *
    * A whole-genome view pools the fine rung into cells hundreds of bins wide,
@@ -302,7 +316,7 @@ export class WholeView {
     // A selection is pooled against *its own* size: four MAGs are a small
     // picture however large the file they came out of is, and pooling them by
     // the file's stride would throw away the detail they were chosen for.
-    this.plan =
+    const fitted =
       props.level === 'bin'
         ? poolPlan(
             props.selection?.bins ?? props.displayExtent[1] - props.displayExtent[0],
@@ -310,6 +324,17 @@ export class WholeView {
             POOLED_CELL_CAP,
           )
         : IDENTITY_PLAN
+    // **The reader's declared resolution is a floor, never a ceiling** (§3.4).
+    // A whole genome at 10 kb is a picture; a whole genome at the 3 kb somebody
+    // added for a locus view is a hundred thousand cells a side, which is not a
+    // picture and which this view's own plan exists to refuse. So the coarser of
+    // the two wins, the summary says which, and a reader who came here from a
+    // 3 kb region view is told *cells of about 40 kb* rather than handed a
+    // number that was quietly ignored.
+    this.plan =
+      fitted.contigsPerCell > 1
+        ? fitted
+        : { ...fitted, binsPerCell: Math.max(fitted.binsPerCell, props.binsPerCell ?? 1) }
     this.summary = el('p', { class: 'summary' })
     this.problem = el('p', { class: 'inline-error hidden' })
     const store = props.annotations?.store
@@ -837,11 +862,13 @@ export class WholeView {
    * Three things this deliberately does *not* do. It is not armed at contig
    * level or over a selection: a cell there is a whole sequence and there is no
    * finer grid under it. It does not send `this.wire()` — the plan this view
-   * chose for the whole file is the answer to a different question, and a
-   * request carrying an explicit plan bypasses the reader's `snapToGrid`, which
-   * would anchor the cell grid to the pan position and make cell values move as
-   * the reader panned. And it does not run another full pass: every read it
-   * makes is a bounded window inside the extent the gate already allowed.
+   * chose for the *whole file* is the answer to a different question, and a
+   * window inside it deserves the finest grid its own cell count allows. (The
+   * reader's **declared** resolution is not that plan and does travel, as the
+   * `floor` below; it is a number somebody typed rather than one this view fitted,
+   * and the worker snaps it to each sequence's own grid so panning holds it
+   * still.) And it does not run another full pass: every read it makes is a
+   * bounded window inside the extent the gate already allowed.
    */
   private armRefine(
     ceiling: Extent,
@@ -859,10 +886,12 @@ export class WholeView {
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      floor: () => this.props.binsPerCell ?? 1,
+      read: (rows, cols, rung, binsPerCell) => {
         const own = client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
           balance,
@@ -876,6 +905,7 @@ export class WholeView {
               client2.request<'matrix'>({
                 kind: 'matrix',
                 ...(rung === undefined ? {} : { rung }),
+                ...(binsPerCell === undefined ? {} : { binsPerCell }),
                 rows,
                 cols,
                 balance,

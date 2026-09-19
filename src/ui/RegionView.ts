@@ -51,6 +51,20 @@ export interface RegionViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
+   * Bins of this map summed into one drawn cell, because the reader asked for a
+   * resolution the file does not store (§3.4).
+   *
+   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
+   * and the effective resolution on screen is this map's bin size times it. The
+   * base rung is the map that is *open* — picking a derived resolution navigates
+   * to it — so every read here is an ordinary one carrying an explicit plan,
+   * and the worker snaps that plan to each sequence's own grid so the cells hold
+   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
+   *
+   * Absent, or 1, is every view of every file until somebody adds one.
+   */
+  binsPerCell?: number
+  /**
    * A control the session puts on the title line, after the box.
    *
    * The 1D/2D switch, today. An element rather than a callback because what
@@ -653,12 +667,18 @@ export class RegionView {
     const wrap =
       cols === undefined && this.props.circular?.on === true ? ceiling.rows : undefined
     const lap = wrap === undefined ? undefined : wrap[1] - wrap[0]
-    const query = (rowExtent: [number, number], colExtent: [number, number], rung?: string) => ({
+    const query = (
+      rowExtent: [number, number],
+      colExtent: [number, number],
+      rung?: string,
+      binsPerCell?: number,
+    ) => ({
       kind: 'matrix' as const,
       ...(rung === undefined ? {} : { rung }),
       rows: rowExtent,
       ...(cols === undefined ? {} : { cols: colExtent }),
       ...(wrap === undefined ? {} : { wrap }),
+      ...(binsPerCell === undefined ? {} : { binsPerCell }),
       balance: this.props.balance,
       ...(this.props.value === undefined ? {} : { value: this.props.value }),
     })
@@ -683,13 +703,18 @@ export class RegionView {
       ...(lap === undefined ? {} : { enabled: () => true }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rowExtent, colExtent, rung) => {
-        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent, rung))
+      // The grid the reader declared (§3.4), so a zoom cannot quietly read past
+      // the resolution the axis is labelled with.
+      floor: () => this.props.binsPerCell ?? 1,
+      read: (rowExtent, colExtent, rung, binsPerCell) => {
+        const own = this.props.client.cancellable<'matrix'>(
+          query(rowExtent, colExtent, rung, binsPerCell),
+        )
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
             const second = await secondBlock(this.props.compare, (client) =>
-              client.request<'matrix'>(query(rowExtent, colExtent, rung)),
+              client.request<'matrix'>(query(rowExtent, colExtent, rung, binsPerCell)),
             )
             return second === undefined ? { result: block } : { result: block, second }
           }),
@@ -708,6 +733,20 @@ export class RegionView {
       },
     })
     this.ladder.adopt(result)
+  }
+
+  /**
+   * `{ binsPerCell }` where the reader declared a resolution, else nothing.
+   *
+   * Spread into every `matrix` request this view makes, so the first read and
+   * every refine after it are on one grid. Absent rather than `1` on the
+   * ordinary path, because `1` is a plan and absent is *choose one*: the reader
+   * fits the finest grid the window's cell count allows, which is what a view of
+   * a whole chromosome has always relied on.
+   */
+  private pooled(): { binsPerCell?: number } {
+    const k = this.props.binsPerCell ?? 1
+    return k > 1 ? { binsPerCell: k } : {}
   }
 
   /**
@@ -779,6 +818,7 @@ export class RegionView {
           kind: 'matrix' as const,
           rows: [lo, hi] as [number, number],
           ...(wrap === undefined ? {} : { wrap }),
+          ...this.pooled(),
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
@@ -810,21 +850,17 @@ export class RegionView {
         range: this.props.region2,
       })
       const [lo2, hi2] = other.extent
-      const result: MatrixResult = await this.props.client.request<'matrix'>({
-        kind: 'matrix',
-        rows: [lo, hi],
-        cols: [lo2, hi2],
+      const pair = {
+        kind: 'matrix' as const,
+        rows: [lo, hi] as [number, number],
+        cols: [lo2, hi2] as [number, number],
+        ...this.pooled(),
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
-      })
+      }
+      const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
       const second = await secondBlock(this.props.compare, (client) =>
-        client.request<'matrix'>({
-          kind: 'matrix',
-          rows: [lo, hi],
-          cols: [lo2, hi2],
-          balance: this.props.balance,
-          ...(this.props.value === undefined ? {} : { value: this.props.value }),
-        }),
+        client.request<'matrix'>(pair),
       )
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
