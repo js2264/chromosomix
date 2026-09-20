@@ -26,6 +26,7 @@ import type {
   CurveOutput,
   CurveSeries,
   MarginProfile,
+  MatrixMargins,
   MatrixOutput,
   ProfileOutput,
   TableColumn,
@@ -998,6 +999,9 @@ function cellSide(available: number, count: number): number {
  * axis is centred rather than pooled at one end (see {@link drawMatrix}). A
  * non-square matrix keeps its own aspect exactly, which is the same rule stated
  * once: the cells are square, so the picture is as tall as it is many.
+ *
+ * Not every matrix wants it: see {@link matrixCells}, which is where the choice
+ * is made, and `MatrixOutput.aspect`, which is where it is declared.
  */
 export function squareCell(
   availableWidth: number,
@@ -1006,6 +1010,34 @@ export function squareCell(
   nrows: number,
 ): number {
   return Math.min(cellSide(availableWidth, ncols), cellSide(availableHeight, nrows))
+}
+
+/**
+ * The cell's width and height — square, or one that fills the box.
+ *
+ * {@link squareCell} is the rule for a matrix with the *same quantity on both
+ * axes*, which is nearly all of them and every one with a diagonal. The
+ * exception is a picture whose rows are a **list**: the metaplot's per-feature
+ * heatmap is three thousand features down and a thousand bins across, and
+ * square cells there make it a ribbon a fifth of the card wide with white on
+ * either side. Nothing is compared across its diagonal because it has none —
+ * a row is a feature and a column is a distance — so the cell may be as wide as
+ * the box allows, which is the block every metaplot tool draws and the shape
+ * that lines the picture up with the profile above it.
+ */
+export function matrixCells(
+  availableWidth: number,
+  availableHeight: number,
+  output: Pick<MatrixOutput, 'ncols' | 'nrows' | 'aspect'>,
+): { width: number; height: number } {
+  if (output.aspect === 'fill') {
+    return {
+      width: cellSide(availableWidth, output.ncols),
+      height: cellSide(availableHeight, output.nrows),
+    }
+  }
+  const cell = squareCell(availableWidth, availableHeight, output.ncols, output.nrows)
+  return { width: cell, height: cell }
 }
 
 /**
@@ -1039,6 +1071,45 @@ function formatStat(value: number, digits?: number): string {
 }
 
 /**
+ * The extent a marginal profile is drawn against, per track name (§18.8).
+ *
+ * **Its own**, and not from zero. A band three lines tall is not an axis and
+ * cannot be read as one; what it promises is the *shape* of the aggregate along
+ * the window, which is the whole reason it is there. Drawn from zero, a ChIP
+ * track whose aggregate runs from 45 to 92 — a signal that doubles at the
+ * anchor — is a line across the top of the band with a bump in it, while the
+ * same numbers as a metaplot curve in the same drawer are a peak twice the
+ * height of the baseline. Two pictures of one quantity that disagree about
+ * whether anything happened is the complaint this is a fix for. The range is
+ * printed in the key, which is what keeps a self-scaled band honest about how
+ * much of an effect it is showing.
+ *
+ * **One ruler per quantity, across both edges.** The same track drawn above the
+ * picture and beside it is one measurement, and two bands normalised apart
+ * would invite a reader to compare a bump on one against a bump on the other
+ * when the two are drawn to different scales. Two *different* tracks keep their
+ * own rulers, because two units have no common axis.
+ */
+function marginScales(
+  margins: MatrixMargins | undefined,
+): Map<string, { lo: number; hi: number }> {
+  const out = new Map<string, { lo: number; hi: number }>()
+  for (const profile of [...(margins?.top ?? []), ...(margins?.right ?? [])]) {
+    const held = out.get(profile.name) ?? {
+      lo: Number.POSITIVE_INFINITY,
+      hi: Number.NEGATIVE_INFINITY,
+    }
+    for (const value of profile.values) {
+      if (!Number.isFinite(value)) continue
+      if (value < held.lo) held.lo = value
+      if (value > held.hi) held.hi = value
+    }
+    out.set(profile.name, held)
+  }
+  return out
+}
+
+/**
  * One marginal profile, filled under a line, against an edge of the picture.
  *
  * Its colour comes from {@link SERIES_COLOURS}, deliberately the same list a
@@ -1047,12 +1118,9 @@ function formatStat(value: number, digits?: number): string {
  * difference between a figure a reader can follow and a page of unrelated
  * pictures.
  *
- * **Normalised on its own**, from its own finite extent, and floored at zero
- * wherever it never goes negative. Two tracks in two units have no common axis,
- * so a shared one would be a claim the numbers do not support; what a marginal
- * promises is the *shape* along the window, which is what it is read for. A
- * profile with no variation in it draws flat on its own baseline rather than
- * filling the band, which is what "no variation" looks like.
+ * Normalised against {@link marginScales}'s answer for its track. A profile with
+ * no variation in it draws flat on its own baseline rather than filling the
+ * band, which is what "no variation" looks like.
  *
  * `along: 'x'` runs left to right above the picture; `along: 'y'` runs top to
  * bottom beside it, growing rightwards — the two edges the anchors of an
@@ -1066,20 +1134,26 @@ function drawMargin(
   profile: MarginProfile,
   fallback: string,
   theme: PlotTheme,
-  layout: { along: 'x' | 'y'; plot: Rect; band: number; gap: number },
+  layout: {
+    along: 'x' | 'y'
+    plot: Rect
+    band: number
+    gap: number
+    range?: { lo: number; hi: number }
+  },
 ): void {
   const { values } = profile
-  let lo = Number.POSITIVE_INFINITY
-  let hi = Number.NEGATIVE_INFINITY
-  for (const value of values) {
-    if (!Number.isFinite(value)) continue
-    if (value < lo) lo = value
-    if (value > hi) hi = value
+  let lo = layout.range?.lo ?? Number.POSITIVE_INFINITY
+  let hi = layout.range?.hi ?? Number.NEGATIVE_INFINITY
+  if (layout.range === undefined) {
+    for (const value of values) {
+      if (!Number.isFinite(value)) continue
+      if (value < lo) lo = value
+      if (value > hi) hi = value
+    }
   }
   if (!(lo <= hi)) return
-  // A track that never goes below zero is read against zero, which is what a
-  // coverage profile means; a signed one keeps its own floor.
-  const floor = lo >= 0 ? 0 : lo
+  const floor = lo
   const span = hi - floor
   const colour = profile.colour ?? fallback
   const { along, plot, band, gap: pad } = layout
@@ -1231,17 +1305,17 @@ export function drawMatrix(
     return
   }
 
-  const cell = squareCell(availableWidth, availableHeight, output.ncols, output.nrows)
+  const cell = matrixCells(availableWidth, availableHeight, output)
+  const cellW = cell.width
+  const cellH = cell.height
   const plot: Rect = {
     // Centred in what is left over after the cells were snapped to whole pixels,
     // so the slack is split rather than pooled against the colour bar.
-    x: left + Math.round((availableWidth - cell * output.ncols) / 2),
-    y: top + Math.round((availableHeight - cell * output.nrows) / 2),
-    width: cell * output.ncols,
-    height: cell * output.nrows,
+    x: left + Math.round((availableWidth - cellW * output.ncols) / 2),
+    y: top + Math.round((availableHeight - cellH * output.nrows) / 2),
+    width: cellW * output.ncols,
+    height: cellH * output.nrows,
   }
-  const cellW = cell
-  const cellH = cell
   if (!(plot.width > 0) || !(plot.height > 0)) {
     drawEmpty(ctx, box, theme, 'too small to draw')
     return
@@ -1282,11 +1356,24 @@ export function drawMatrix(
   const order = [...new Set(named.map((profile) => profile.name))]
   const colourOf = (profile: MarginProfile): string =>
     profile.colour ?? SERIES_COLOURS[Math.max(0, order.indexOf(profile.name)) % SERIES_COLOURS.length]
+  const scales = marginScales(output.margins)
   for (const profile of topMargins) {
-    drawMargin(ctx, profile, colourOf(profile), theme, { along: 'x', plot, band, gap })
+    drawMargin(ctx, profile, colourOf(profile), theme, {
+      along: 'x',
+      plot,
+      band,
+      gap,
+      range: scales.get(profile.name),
+    })
   }
   for (const profile of rightMargins) {
-    drawMargin(ctx, profile, colourOf(profile), theme, { along: 'y', plot, band, gap })
+    drawMargin(ctx, profile, colourOf(profile), theme, {
+      along: 'y',
+      plot,
+      band,
+      gap,
+      range: scales.get(profile.name),
+    })
   }
   if (keyLine > 0) {
     ctx.font = theme.font
@@ -1300,8 +1387,17 @@ export function drawMatrix(
       ctx.fillRect(keyAt, Math.round(size * 0.55), Math.round(size * 0.7), RULE_WIDTH * 2.5)
       keyAt += Math.round(size * 0.7) + gap * 0.6
       ctx.fillStyle = theme.muted
-      ctx.fillText(name, keyAt, 0)
-      keyAt += ctx.measureText(name).width + gap * 1.6
+      // The range the band is drawn against, beside the name. A self-scaled
+      // band says *what the shape is* and not how big it is, and these two
+      // numbers are what put the size back — without them a doubling and a
+      // rounding error are the same picture.
+      const scale = scales.get(name)
+      const text =
+        scale === undefined || !(scale.lo <= scale.hi)
+          ? name
+          : `${name}  ${trimNumber(scale.lo)}–${trimNumber(scale.hi)}`
+      ctx.fillText(text, keyAt, 0)
+      keyAt += ctx.measureText(text).width + gap * 1.6
     }
   }
 
@@ -1421,6 +1517,16 @@ export interface PlotFigure {
   el: HTMLElement
   draw(ctx: CanvasRenderingContext2D, box: { width: number; height: number }): void
   destroy(): void
+  /**
+   * Take the height of the box instead of choosing one from the width.
+   *
+   * What the dialog turns on. In the drawer a figure decides how tall it is,
+   * because the column it is in has no height of its own; in a dialog the
+   * window decides, and a figure that kept its own answer sits in the top half
+   * of it with the rest blank — which is what a five-thousand-row heatmap
+   * enlarged to see it better used to do.
+   */
+  setFill?(on: boolean): void
 }
 
 /** The width a figure is drawn at before anything has measured its column. */
@@ -1485,12 +1591,15 @@ function canvasFigure<T>(
   // arrived would be drawn at that size instead — a figure twice as wide as its
   // column on a retina screen. The class still carries the block display.
   const canvas = el('canvas', { class: 'analysis-figure-canvas', style: { width: '100%' } })
-  const host = el('div', {}, canvas)
+  const host = el('div', { class: 'analysis-figure-canvas-host' }, canvas)
   let width = 0
+  let fill = false
 
   const redraw = (): void => {
     const cssWidth = Math.max(MIN_FIGURE_WIDTH, Math.round(width))
-    const cssHeight = heightFor(cssWidth)
+    const cssHeight = fill
+      ? Math.max(MIN_FIGURE_WIDTH, Math.round(host.clientHeight))
+      : heightFor(cssWidth)
     const dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     canvas.style.height = `${cssHeight}px`
     const wantWidth = Math.max(1, Math.round(cssWidth * dpr))
@@ -1509,8 +1618,11 @@ function canvasFigure<T>(
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver((entries) => {
-          const next = entries[0]?.contentRect.width ?? 0
-          if (Math.abs(next - width) < 0.5) return
+          const box = entries[0]?.contentRect
+          const next = box?.width ?? 0
+          // The height matters only when the *box* decides it; otherwise the
+          // figure sets it and observing it would be the classic feedback loop.
+          if (Math.abs(next - width) < 0.5 && !fill) return
           width = next
           redraw()
         })
@@ -1530,6 +1642,12 @@ function canvasFigure<T>(
     el: host,
     draw(ctx: CanvasRenderingContext2D, box: { width: number; height: number }): void {
       paint(ctx, box, plotTheme(host))
+    },
+    setFill(on: boolean): void {
+      if (fill === on) return
+      fill = on
+      host.classList.toggle('analysis-figure-fill', on)
+      redraw()
     },
     destroy(): void {
       observer?.disconnect()
@@ -1587,6 +1705,14 @@ function matrixHeight(output: MatrixOutput, width: number): number {
     (tops > 0 ? band + gap : 0) +
     (tops + sides > 0 ? line : 0)
   const cells = Math.max(40, width - size * 4 - size * 6 - (sides > 0 ? band + gap : 0))
+  // A picture whose rows are a **list** has no aspect of its own to ask for —
+  // five thousand features against eighty bins would ask for sixty-four times
+  // its width — so it takes a generous share of the card instead, which is
+  // where a metaplot heatmap's few thousand rows want to be. See
+  // `MatrixOutput.aspect` and {@link matrixCells}.
+  if (output.aspect === 'fill') {
+    return Math.round(furniture + Math.max(260, Math.min(560, cells * 0.55)))
+  }
   const aspect = output.ncols > 0 ? output.nrows / output.ncols : 1
   return Math.round(furniture + Math.max(80, Math.min(420, cells * aspect)))
 }

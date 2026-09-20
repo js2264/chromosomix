@@ -15,13 +15,21 @@
  */
 
 import * as echarts from 'echarts/core'
-import { BarChart, BoxplotChart, CustomChart, LineChart, ScatterChart } from 'echarts/charts'
+import {
+  BarChart,
+  BoxplotChart,
+  CustomChart,
+  HeatmapChart,
+  LineChart,
+  ScatterChart,
+} from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
   TooltipComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 
@@ -31,10 +39,16 @@ echarts.use([
   BarChart,
   BoxplotChart,
   CustomChart,
+  // The result matrices — a saddle, a pileup, a cis/trans square (§18.13). Not
+  // the contact map, which is a raster of millions of cells behind a reader
+  // that pools on the way and has a renderer of its own.
+  HeatmapChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   DataZoomComponent,
+  // The colour bar a heatmap is read against, and the handles that clip it.
+  VisualMapComponent,
   TitleComponent,
   // SVG, not canvas: what comes back is a picture that can be replayed as
   // paths, which is the whole reason the PDF export survives a chart library

@@ -191,6 +191,76 @@ describe('the right band', () => {
   })
 })
 
+describe('the ruler a band is drawn against', () => {
+  /** The colour a profile with none of its own is drawn in. */
+  const INK = theme().series[0]
+
+  /** How tall the profile's own strokes run, as a share of the band. */
+  function reach(made: ReturnType<typeof recorder>): number {
+    // The profile is the only thing drawn in a *series* colour; the ticks, the
+    // frame and the band's baseline are the theme's grey.
+    const ink = made.strokes.filter((stroke) => stroke.style === INK)
+    const ys = ink.flatMap((stroke) => [stroke.from[1], stroke.to[1]])
+    return ys.length === 0 ? 0 : Math.max(...ys) - Math.min(...ys)
+  }
+
+  /**
+   * A ChIP aggregate: a baseline well above zero, doubling at the anchor. The
+   * shape is the thing the band exists to show, and drawn from zero it is a
+   * line across the top of the band with a nick in it.
+   */
+  function chip(): Float64Array {
+    return Float64Array.from({ length: SIDE }, (_, i) => (i === (SIDE - 1) / 2 ? 92 : 45))
+  }
+
+  it('is the profile’s own extent, so a doubling looks like a doubling', () => {
+    const high = draw(matrix({ margins: { top: [{ name: 'Scc1', values: chip() }] } }))
+    const zeroed = draw(matrix({ margins: { top: [{ name: 'Scc1', values: peak() }] } }))
+    // The same shape drawn from its own floor covers the same band, whether the
+    // numbers run 0–1 or 45–92.
+    expect(reach(high)).toBeCloseTo(reach(zeroed), 5)
+    expect(reach(high)).toBeGreaterThan(0)
+  })
+
+  it('is shared by the two edges, so a bump above means what a bump beside does', () => {
+    // The right-hand profile is half the height of the top one in its own
+    // units; on one ruler it must be drawn half as tall, not stretched to the
+    // same band.
+    const made = draw(
+      matrix({
+        margins: {
+          top: [{ name: 'Scc1', values: chip() }],
+          right: [
+            {
+              name: 'Scc1',
+              values: Float64Array.from({ length: SIDE }, (_, i) =>
+                i === (SIDE - 1) / 2 ? 68.5 : 45,
+              ),
+            },
+          ],
+        },
+      }),
+    )
+    const ink = made.strokes.filter((stroke) => stroke.style === INK)
+    // Which band a stroke belongs to is *where it is*: the top band is above
+    // the picture and the right band is beside it.
+    const picture = cells(made)
+    const above = Math.min(...picture.map((rect) => rect.y))
+    const beside = Math.max(...picture.map((rect) => rect.x + rect.w))
+    const spread = (list: Stroke[], axis: 0 | 1): number => {
+      const all = list.flatMap((stroke) => [stroke.from[axis], stroke.to[axis]])
+      return all.length === 0 ? 0 : Math.max(...all) - Math.min(...all)
+    }
+    const isTop = (stroke: Stroke): boolean => stroke.from[1] <= above && stroke.to[1] <= above
+    const top = ink.filter(isTop)
+    const right = ink.filter(
+      (stroke) => !isTop(stroke) && stroke.from[0] >= beside && stroke.to[0] >= beside,
+    )
+    expect(spread(top, 1)).toBeGreaterThan(0)
+    expect(spread(right, 0)).toBeCloseTo(spread(top, 1) / 2, 0)
+  })
+})
+
 describe('both bands at once', () => {
   it('draws a line for each profile on each side', () => {
     const made = draw(

@@ -15,12 +15,21 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
-node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 18-drawer.png
+node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
 (§18.13) — the slim strip, the settings dialog, every mark, a table filtered and sorted and
-drawn as a chart, a matrix recoloured. Run it after any change to `src/figures/`.
+drawn as a chart, a matrix recoloured, a ⌘-drag over a heatmap and the double click that undoes
+it, and the two figures that carry an aggregate: a pileup with a track profile along each edge
+and a metaplot's per-feature heatmap. Run it after any change to `src/figures/`.
+
+Those last two need a form filled in before the run, which is why they are driven by name rather
+than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
+the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
+of figure titles changes** — waiting for a chart to exist returns at once, since the drawer still
+holds the last task's, and waiting for the form to go away never returns at all, the form being a
+slot that is emptied and refilled rather than removed.
 
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
 Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL

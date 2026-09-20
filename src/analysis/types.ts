@@ -704,6 +704,24 @@ export interface MatrixOutput {
   /** Colormap name from `render/colormaps.ts`. */
   colormap: string
   /**
+   * Whether the cells must be square, or the picture should take the box.
+   *
+   * `'square'` — the default, and what everything with a diagonal needs. A
+   * saddle, a pileup, a cis/trans square and a correlation heatmap all have the
+   * *same quantity on both axes*, and they are read by comparing one corner
+   * against the other: a corner stretched 40% along one axis looks stronger
+   * than the one opposite it, so the aspect of such a picture must not be
+   * decided by how wide the reader dragged the drawer.
+   *
+   * `'fill'` — the rows are a **list**, not a coordinate: one per feature,
+   * strongest first, against distance along the abscissa. Nothing is compared
+   * across the diagonal because there is no diagonal, and the picture the
+   * literature draws is a tall block the width of the panel, under a profile it
+   * shares an abscissa with. Square cells there give three thousand rows a
+   * thousand columns' worth of width — a narrow ribbon in a wide card.
+   */
+  aspect?: 'square' | 'fill'
+  /**
    * The value a diverging colormap is centred on, if it is one.
    *
    * `1` for a ratio, `0` for a correlation, absent for a raw pileup. A diverging

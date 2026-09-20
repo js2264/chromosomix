@@ -309,6 +309,28 @@ function matrixToTsv(output: MatrixOutput): string[] {
       cells.push(tsvNumber(output.values[r * output.ncols + c]))
     lines.push(row(cells))
   }
+
+  // The profiles drawn along the two edges (§18.8), as a **second block** under
+  // the matrix rather than as a row and a column of it. A pileup with track
+  // aggregates is two measurements in different units — contacts and signal —
+  // and a spreadsheet that read them as one rectangle would average them
+  // together. Left out entirely, which is what shipped, the lines a reader is
+  // looking at are the one thing in the figure with no numbers behind it.
+  const profiles = [
+    ...(output.margins?.top ?? []).map((profile) => ['top', profile] as const),
+    ...(output.margins?.right ?? []).map((profile) => ['right', profile] as const),
+  ]
+  if (profiles.length > 0) {
+    const widest = Math.max(...profiles.map(([, profile]) => profile.values.length))
+    lines.push('')
+    lines.push('# aggregate profiles along the edges: top runs along x, right runs down y')
+    lines.push(row(['edge', 'track', ...Array.from({ length: widest }, (_, i) => String(i))]))
+    for (const [edge, profile] of profiles) {
+      const cells = [edge, cell(profile.name)]
+      for (const value of profile.values) cells.push(tsvNumber(value))
+      lines.push(row(cells))
+    }
+  }
   return lines
 }
 

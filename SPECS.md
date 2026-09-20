@@ -5156,10 +5156,18 @@ profile above it and beside it. That is the figure most papers using an APA actu
 aggregate contact map with the aggregate signal on its edges, which turns *these places touch* into
 *these places touch, and this is what is bound where they do*. Until this a reader had to run the 1D
 metaplot separately over anchors they re-derived by hand, and the two aggregates were over different
-windows unless every setting happened to agree. Each profile is normalised on its own — two tracks in
-two units have no common axis, and what a marginal promises is the *shape* along the window — and is
-resampled by the window's **own** grid edges, so a cell of the profile is the cell of the pileup above
-it by construction rather than by a second resampling that could land a domain boundary a column out.
+windows unless every setting happened to agree. Each profile is normalised **against its own extent, not from zero**, with the two
+edges of one track sharing a ruler and the range printed in the key: two tracks in two units have no
+common axis, a band three lines tall is not an axis either, and what a marginal promises is the
+*shape* along the window. Drawn from zero — which is what shipped — a ChIP aggregate running from 45
+to 92 is a line across the top of the band with a bump in it, while the same numbers as a metaplot
+curve two blocks down the drawer are a peak twice the height of its baseline: two pictures of one
+quantity disagreeing about whether anything happened. Each profile is resampled by the window's
+**own** grid edges, so a cell of the profile is the cell of the pileup above it by construction
+rather than by a second resampling that could land a domain boundary a column out, and it leaves as
+numbers with the matrix it belongs to — a second block under the pileup's own table, since contacts
+and signal are two units and a spreadsheet that read them as one rectangle would average them
+together.
 A track dropped between the form being filled in and Run being pressed is left out and said out loud,
 rather than drawn as a flat line.
 
@@ -5651,12 +5659,35 @@ figure is *of* is not what it *looks like*.
   became a scatter from carrying its own axis choice across.
 - A **renderer** turns the pair into a picture, and which renderer depends on the kind.
 
-**Contact maps are not drawn by a chart library, and never will be.** A `matrix` output stays with
-`ui/analysisPlots.ts` and the same rasteriser the contact maps use (§7): a matrix *is* a raster, the
-app already has the rasteriser, and a second answer to a question that has one is a way for two
-pictures of the same numbers to disagree. What a matrix gains here is the dialog, a colormap and the
-two ends of its scale — all of which produce a *derived* `MatrixOutput` for the existing painter,
-which is the same technique §18.5 uses everywhere else.
+**Contact maps are not drawn by a chart library, and never will be.** A contact map is a raster of
+up to sixteen million cells behind a reader that pools on the way (§7), with its own gestures, its
+own overlays and its own export path, and a heatmap series of one rectangle per cell is not a thing
+it could ever be.
+
+**A result matrix is, up to a size.** A saddle, a pileup, a cis/trans square and a
+track-correlation heatmap are *small grids of labelled cells*, and the thing a reader wants from one
+is the number under the pointer: which two sequences, how strong, is that cell the one the statistic
+under the picture is about. A painted picture has no answer, and the colour bar is a caption rather
+than a control. So a `matrix` whose cells number at most `MATRIX_CHART_CELLS` (20,000, about a
+hundred and forty a side) is built as a heatmap by `figures/matrixOption.ts` and drawn by the same
+chart every curve is; above that the painter draws it exactly as before — five hundred thousand
+rectangles in an SVG is not a picture anybody can point at, so the interaction it would buy does not
+exist at that size either. The colour scale is this application's own (`render/colormaps.ts`) and
+the painter's rule restated — a task's fixed range, else symmetric about a declared centre, else
+fitted, with what the reader typed above all three.
+
+**The cells are square unless the rows are a list.** `MatrixOutput.aspect` says which, and both
+renderers obey it. Square is the default and is what everything with a diagonal needs: a saddle is
+read by comparing its two corners, and a corner stretched 40% along one axis looks stronger than the
+one opposite it, so the aspect of such a picture must not be decided by how wide the drawer was
+dragged. The exception is a picture whose rows are a **list** — the metaplot's per-feature heatmap,
+three thousand features down against distance across — which has no diagonal, nothing to compare
+across one, and which square cells turn into a ribbon a fifth of the card wide. It takes the whole
+width, under the profile it shares an abscissa with, which is the figure every metaplot tool draws.
+A chart's grid is stated as four insets and stretches to whatever it is put in, so a square aspect
+means the builder is told the size of the box and answers with a grid in pixels — and the colour bar
+stands beside the picture at the picture's own height rather than against the far edge at a fixed
+one.
 
 **Everything else is ECharts, drawn as SVG, and the PDF is still a true vector page.** That last
 clause is the constraint the whole design was built to meet. Every figure meets the `PlotFigure`
@@ -5693,6 +5724,19 @@ reader zoomed to is the window the export draws.
 **The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
 the sidebar are the same change to the same place, and the export draws whichever happened last —
 which is what §18.7's *what you export is what you see* means once a figure can be panned.
+
+**A box drawn on a figure is how a reader arrives somewhere.** Hold ⌘ (or Ctrl, the same key on the
+other platforms) and drag a marquee over any chart, and the axes come back holding what was in it.
+**Which axes** is read off the shape of the drag, with no mode to be in: an axis is set when the
+drag covered at least a twelfth of *that axis's* length on screen, so a flick across the picture
+sets the abscissa alone, a flick down it sets the ordinate, and a box sets both. Proportional rather
+than a pixel count, so the rule reads the same in a folded drawer and in a full window; below it on
+both axes the gesture is a click and nothing moves. A **double click** puts both axes back to the
+windows a *control* last set — the numbers the reader typed, or the whole of the data where they
+typed none — which is a second bookmark and not a second window: the single source above still
+holds. The gesture is taken in the capture phase, because the chart pans on a drag and a picture
+sliding under the box being drawn on it is the one thing this must not do; ECharts' own brush is not
+used, since it arrives with a toolbox of buttons over the picture and zooms both axes always.
 
 **New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
 summaries of the ordinate. The last three are rules with parameters rather than plots of the data,

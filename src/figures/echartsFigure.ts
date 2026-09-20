@@ -32,8 +32,10 @@ import { el } from '../ui/dom'
 import { plotTheme, type PlotFigure } from '../ui/analysisPlots'
 import { subscribeTextScale } from '../ui/textScale'
 import { paintSvgString } from './svgPaint'
+import { attachMarquee, windowOf, type Marquee, type MarqueeAxes, type MarqueeBox } from './marquee'
 import { optionOf, type ChartOption, type FigureTheme } from './option'
-import type { XyFigureSpec } from './spec'
+import { matrixOptionOf } from './matrixOption'
+import type { MatrixFigureSpec, XyFigureSpec } from './spec'
 import type { FigureStyle } from './style'
 
 /** The library, once its chunk has arrived. `null` until then. */
@@ -89,7 +91,13 @@ export function chartHeight(width: number): number {
 }
 
 export interface ChartFigureOptions {
-  spec: XyFigureSpec
+  /**
+   * The figure. A matrix is drawn as a heatmap (`matrixOption.ts`) and
+   * everything else as an xy chart — one instance, one contract, one export
+   * path, and a reader who learnt the gestures on a curve has learnt them on a
+   * pileup.
+   */
+  spec: XyFigureSpec | MatrixFigureSpec
   style: FigureStyle
   /**
    * The reader changed the style *through the chart* — a legend click, a wheel
@@ -140,8 +148,41 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
   let dead = false
   /** Suppresses the write-back while the option we just built is being applied. */
   let settling = false
+  let marquee: Marquee | null = null
+  /**
+   * Where a double click goes back to: the windows a **control** last set.
+   *
+   * The single-source rule this module is built on says the window lives in the
+   * style and that a wheel gesture and a number typed into the sidebar are the
+   * same change to the same place. That is still true — this is not a second
+   * window, it is a second *bookmark*, and the only thing it decides is where
+   * *back* is. A reader who typed `4000` to `1e6`, scrolled about inside it and
+   * pressed home means those two numbers, not the whole of the data; a reader
+   * who typed nothing means the whole of the data, which is what `null` is.
+   *
+   * Written by {@link ChartFigure.update}, which is what a control reaches this
+   * through, and never by the chart's own gestures — exactly the distinction
+   * `FigureBlock` already draws between `apply` and `adopt`.
+   */
+  let home: { x: [number, number] | null; y: [number, number] | null } = {
+    x: options.style.x.domain,
+    y: options.style.y.domain,
+  }
 
-  const build = (): ChartOption => optionOf(options.spec, style, themeOf(host))
+  /**
+   * The option, for a box of a stated size.
+   *
+   * The size matters to a matrix and not to a curve: a heatmap's grid is given
+   * a width and a height in pixels so the cells can be square (see
+   * {@link matrixOptionOf}), where an xy chart's is four insets and stretches
+   * to whatever it is put in. It is a parameter rather than the figure's own
+   * `width`/`height` because an export is drawn at the page's size, not the
+   * screen's.
+   */
+  const build = (box: { width: number; height: number }): ChartOption =>
+    options.spec.kind === 'matrix'
+      ? matrixOptionOf(options.spec.output, style, themeOf(host), box)
+      : optionOf(options.spec, style, themeOf(host))
 
   /** How tall the picture is: the box's height, or one chosen from the width. */
   const tall = (): number => (fill ? host.clientHeight : chartHeight(width))
@@ -152,9 +193,11 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     if (height <= 0) return
     chart = core.init(host, null, { renderer: 'svg', width, height })
     chart.on('legendselectchanged', (event: unknown) => {
+      const spec = options.spec
+      if (spec.kind === 'matrix') return
       const selected = (event as { selected?: Record<string, boolean> }).selected
       if (selected === undefined) return
-      const hidden = options.spec.series
+      const hidden = spec.series
         .filter((series) => selected[series.name] === false)
         .map((series) => series.id)
       style = { ...style, hidden }
@@ -185,13 +228,47 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     apply()
   }
 
+  /**
+   * The axes a marquee covered, as data windows.
+   *
+   * Only the ones the drag was about: an axis it was not about keeps whatever
+   * it had, which is what makes a flick across the picture a zoom of the
+   * abscissa alone rather than a zoom of both with the ordinate guessed.
+   */
+  const zoomTo = (box: MarqueeBox, axes: MarqueeAxes): void => {
+    if (chart === null) return
+    const next = { ...style }
+    if (axes.x) {
+      const span = windowOf(chart, { xAxisIndex: 0 }, box.left, box.right, false)
+      if (span !== null) next.x = { ...next.x, domain: span }
+    }
+    if (axes.y) {
+      // Screen y runs down and the ordinate runs up, which `windowOf` sorts out
+      // by converting both ends and ordering the answer rather than the pixels.
+      const span = windowOf(chart, { yAxisIndex: 0 }, box.top, box.bottom, true)
+      if (span !== null) next.y = { ...next.y, domain: span }
+    }
+    if (next.x.domain === style.x.domain && next.y.domain === style.y.domain) return
+    style = next
+    apply()
+    options.onStyle?.(style)
+  }
+
+  /** Home: the windows a control last set, or the whole of the data. */
+  const goHome = (): void => {
+    if (style.x.domain === home.x && style.y.domain === home.y) return
+    style = { ...style, x: { ...style.x, domain: home.x }, y: { ...style.y, domain: home.y } }
+    apply()
+    options.onStyle?.(style)
+  }
+
   const apply = (): void => {
     if (chart === null) return
     settling = true
     // `notMerge`, because a rebuild may have *fewer* series than the last one —
     // a merge would leave the old ones on the picture, which is how a figure
     // ends up showing a band belonging to a series that is no longer drawn.
-    chart.setOption(build(), true)
+    chart.setOption(build({ width, height }), true)
     settling = false
   }
 
@@ -205,6 +282,10 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     if (next <= 0) return
     height = next
     chart.resize({ width, height })
+    // A matrix's grid is stated in pixels, so a new box is a new layout — the
+    // alternative is a square pileup that stops being square the moment the
+    // drawer is dragged. A curve's grid is insets and needs nothing.
+    if (options.spec.kind === 'matrix') apply()
   }
 
   const observer =
@@ -247,6 +328,16 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
     () => {
       if (dead || typeof document === 'undefined') return
       if (width > 0) mount()
+      // After the library, because the marquee asks the chart to convert its
+      // pixels and there is nothing to ask before then. Bound to the host and
+      // not to the chart's own element, so it survives the mount happening on a
+      // later resize — a figure in a folded drawer has no width yet.
+      marquee ??= attachMarquee({
+        host,
+        chart: () => chart,
+        onZoom: zoomTo,
+        onReset: goHome,
+      })
     },
     () => {
       // `dead` is not the only way this can arrive too late: a test tears the
@@ -288,7 +379,7 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
         height: box.height,
       })
       try {
-        off.setOption(build(), true)
+        off.setOption(build(box), true)
         paintSvgString(off.renderToSVGString(), ctx, box)
       } finally {
         off.dispose()
@@ -298,6 +389,8 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
 
     update(next: FigureStyle): void {
       style = next
+      // A control wrote this, so it is also where *back* is. See {@link home}.
+      home = { x: next.x.domain, y: next.y.domain }
       apply()
     },
 
@@ -314,6 +407,8 @@ export function chartFigure(options: ChartFigureOptions): ChartFigure {
 
     destroy(): void {
       dead = true
+      marquee?.destroy()
+      marquee = null
       observer?.disconnect()
       watcher?.disconnect()
       media?.removeEventListener?.('change', onTheme)

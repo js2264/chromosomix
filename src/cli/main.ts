@@ -79,6 +79,7 @@ import { pathToFileURL } from 'node:url'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { LocalFileSource } from '../sources/LocalFileSource'
 import { yieldToEventLoop } from '../async'
+import { chosenEntries } from '../analysis/runner'
 import { RUNNERS } from '../analysis/run/index'
 import { TRACK_RUNNERS } from '../analysis/run/tracks'
 import { TASKS, taskById } from '../analysis/registry'
@@ -722,6 +723,13 @@ function peersOf(paths: readonly string[]): PeerMap[] {
  * `compartments --phaseSequence` reporting that the sequence *could not be
  * read*, about a file the command had just parsed. So the same vector is
  * computed here, from the loaded track or from the reference as a GC track.
+ *
+ * **Under the runner's own keys**, which is what {@link chosenEntries} is
+ * exported for, and both halves of that matter: a parameter that takes several
+ * entries files each under `key:entryId`, and it is a *list* rather than a
+ * string. Read as a single string, `apa --tracks signal.bw` chose nothing at
+ * all, and the pileup came back with the note that one of one tracks could not
+ * be read — about a file the command had just opened.
  */
 async function vectorsFor(
   task: AnalysisTask,
@@ -733,23 +741,22 @@ async function vectorsFor(
   const vectors: Record<string, Float32Array> = {}
   for (const spec of task.params) {
     if (spec.kind !== 'track' && spec.kind !== 'sequence') continue
-    const chosen = params[spec.key]
-    const named = typeof chosen === 'string' && chosen !== '' ? chosen : null
-    if (named === null) continue
-    const track =
-      spec.kind === 'track'
-        ? trackFor(options.tracks, named)
-        : gcTrackFor(options.sequences, named)
-    if (track === undefined) continue
-    vectors[spec.key] = await vectorOver(track, {
-      contigs: grid.contigs.map((contig) => ({
-        name: contig.name,
-        startBin: contig.startBin,
-        length: contig.length,
-      })),
-      binsize: grid.binsize,
-      nBins: grid.nBins,
-    })
+    for (const [key, named] of chosenEntries(spec, params)) {
+      const track =
+        spec.kind === 'track'
+          ? trackFor(options.tracks, named)
+          : gcTrackFor(options.sequences, named)
+      if (track === undefined) continue
+      vectors[key] = await vectorOver(track, {
+        contigs: grid.contigs.map((contig) => ({
+          name: contig.name,
+          startBin: contig.startBin,
+          length: contig.length,
+        })),
+        binsize: grid.binsize,
+        nBins: grid.nBins,
+      })
+    }
   }
   return Object.keys(vectors).length === 0 ? {} : { vectors }
 }

@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { squareCell } from '@/ui/analysisPlots'
+import { matrixCells, squareCell } from '@/ui/analysisPlots'
 
 describe('the cell a matrix figure is drawn with', () => {
   /**
@@ -69,5 +69,32 @@ describe('the cell a matrix figure is drawn with', () => {
   it('keeps a fractional cell where a whole one would be nothing', () => {
     expect(squareCell(300, 300, 4000, 4000)).toBeGreaterThan(0)
     expect(squareCell(300, 300, 4000, 4000)).toBeLessThan(1)
+  })
+})
+
+/**
+ * …and the one picture that must *not* be square.
+ *
+ * The metaplot's per-feature heatmap is three thousand features down and a
+ * thousand bins across. Square cells make it a ribbon a fifth of the card wide,
+ * which is what a reader sees instead of the block every metaplot tool draws —
+ * and there is nothing to compare across its diagonal, because a row is a
+ * feature and a column is a distance.
+ */
+describe('a matrix whose rows are a list', () => {
+  const shape = { nrows: 3_000, ncols: 1_000 }
+
+  it('takes the whole box, where a square one would be a ribbon', () => {
+    const fill = matrixCells(900, 600, { ...shape, aspect: 'fill' })
+    expect(fill.width * shape.ncols).toBeCloseTo(900, 5)
+    expect(fill.height * shape.nrows).toBeCloseTo(600, 5)
+    const square = matrixCells(900, 600, { ...shape, aspect: 'square' })
+    expect(square.width * shape.ncols).toBeLessThan(900 / 4)
+  })
+
+  it('is the square rule where nothing says otherwise', () => {
+    const cell = matrixCells(900, 600, { nrows: 50, ncols: 50 })
+    expect(cell.width).toBe(cell.height)
+    expect(cell.width).toBe(squareCell(900, 600, 50, 50))
   })
 })

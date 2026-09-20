@@ -9992,6 +9992,12 @@ span.deck-name {
   width: 100%;
 }
 
+/* In the dialog a painted figure takes the room it is given, the same way a
+   chart does — the host has to be a box with a height for it to read. */
+.analysis-figure-fill {
+  height: 100%;
+}
+
 .analysis-figure-scroll {
   overflow: auto;
   max-height: 26rem;
@@ -10031,6 +10037,22 @@ span.deck-name {
   color-scheme: light;
   background: var(--bg);
   color: var(--text);
+  /* The marquee is placed against this box, so the box has to be one. */
+  position: relative;
+}
+
+/* The box a ⌘-drag draws over a chart (§18.13). Accent, thin, and filled at a
+   tenth — enough to read as a selection over a plot of any colour, faint enough
+   that the curve under it is still the thing being aimed at. `pointer-events`
+   off because the pointer is captured by the host: a rectangle under the cursor
+   that swallowed a move would freeze the drag the moment it grew past it. */
+.figure-marquee {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 2px;
 }
 
 /* In the dialog the chart takes the room it is given rather than choosing a

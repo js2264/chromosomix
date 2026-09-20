@@ -14,6 +14,41 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A box drawn over any chart is a zoom; a double click undoes it (§18.13).** Hold ⌘ — or Ctrl,
+  which is the same key on the other two platforms — and drag a marquee over a figure, and the axes
+  come back holding what was inside it. **Which axes it sets is read off the shape of the drag**,
+  with no mode to be in and nothing to choose first: a flick across the picture sets the abscissa
+  and leaves the ordinate alone, a flick down it sets the ordinate, and a box sets both. The rule is
+  a share of the axis rather than a count of pixels, so it reads the same in a folded drawer and in
+  a full window, and a press that went nowhere is a click. **A double click inside the plot puts
+  both axes back** to the windows a control last set — the numbers a reader typed, or the whole of
+  the data where they typed none. The wheel still zooms one axis at a time, which is the right
+  gesture for following a curve along; this is the one for *arriving* somewhere, which used to take
+  a scroll and a pan on each axis, overshooting at every notch.
+
+- **A result matrix is an interactive heatmap (§18.13).** A saddle, a pileup, a cis/trans square and
+  a track-correlation heatmap are now drawn by the same chart every curve is: the cells hover and
+  name themselves, the colour bar's handles clip the scale instead of captioning it, and the
+  marquee and the wheel work on them as they do everywhere else. The colours are still this
+  application's own tables and the scale is still the painter's rule, so a saddle in the drawer and
+  a saddle in a paper are the same picture. **Contact maps are untouched** — a raster of millions of
+  cells is not a thing a heatmap series could ever be — and so is any result matrix above twenty
+  thousand cells, where half a million rectangles in an SVG would be a picture nobody can point at.
+
+  **The cells stay square where both axes are the same quantity**, whatever the reader did to the
+  drawer, because a saddle is read by comparing its two corners and a corner stretched 40% along one
+  axis looks stronger than the one opposite it.
+
+- **The metaplot's per-feature heatmap takes the whole width of the card (§18.13).** Its rows are a
+  *list* — one feature per row, strongest first — and nothing is compared across a diagonal it does
+  not have, so square cells only made it a ribbon a fifth of the card wide with white on either
+  side. It now fills the card under the profile it shares an abscissa with, the way every metaplot
+  tool draws it, **with that abscissa numbered** so the two pictures can be lined up at all. Its
+  colours are **clipped at the 99th percentile** rather than fitted to the extremes: one feature
+  under an amplification, or a single bin of pile-up artefact, used to take the whole scale and draw
+  every other row at the bottom colour — a flat block with a colour bar running to thirteen hundred.
+  Cells above the clip keep the end colour, so an extreme row is still visibly extreme.
+
 - **Every figure a task produces is now restylable, and the PDF is still a drawing (§18.13).** A
   slim strip over each plot carries the controls reached for constantly — the mark, the two log
   axes, the legend, *Fit* — and one button beside it opens the figure **in the same dialog the 3D
@@ -25,9 +60,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   another as a scatter. All of it is **remembered per file, per task and per output**, beside the
   parameters the task was run with, and carried in an exported session.
 
-  **Contact maps and matrix outputs are drawn exactly as they were**, by the same rasteriser: a
-  matrix is a raster and the app already has the renderer for it. What a matrix gains is the dialog,
-  a colormap and the two ends of its scale.
+  **Contact maps are drawn exactly as they were**, by the same rasteriser: a contact map is a
+  raster of up to sixteen million cells with its own gestures and its own export path. A task's
+  *result* matrix is a chart now — see below.
 
   The **PDF export is still a true vector page** — paths and text, restylable and scalable, not a
   photograph. The chart library is asked for SVG rather than for a canvas, and the same picture is
@@ -478,6 +513,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   drag out of it still lands anywhere a drop lands.
 
 ### Fixed
+
+- **A pileup's edge profiles were drawn from zero, which flattened them (§18.8).** A ChIP aggregate
+  running from 45 at the baseline to 92 at the anchor — a doubling — came out as a line across the
+  top of a band three lines tall with a small bump in it, while the same numbers as a metaplot curve
+  two blocks down the drawer were a peak twice the height of its baseline. Two pictures of one
+  quantity disagreeing about whether anything happened, and the arithmetic was right in both. Each
+  profile is now drawn against **its own extent**, with the two edges of one track sharing a ruler —
+  they are one measurement — and the range printed beside the track's name in the key, which is what
+  keeps a self-scaled band honest about how much of an effect it is showing.
+
+- **A pileup's edge profiles now leave as numbers, with the matrix they belong to (§18.8).** The
+  TSV a reader exports carried the cells and not the lines drawn along them, which made the one
+  thing in the figure with no numbers behind it. They are written as a second block under the
+  matrix — contacts and signal are two units, and a spreadsheet reading them as one rectangle would
+  average them together.
+
+- **`metacooler-run apa --tracks` opened the file and then reported that it could not be read.** A
+  parameter that takes *several* entries files each one under `key:entryId`, which is how the app's
+  runner reads them back; the shell filed one vector under the bare key and read the parameter as a
+  single string, so a pileup asked for at a command line came back with a note saying one of one
+  tracks could not be read — about a file the command had just opened. The convention is now
+  written down once and imported, rather than stated in two places.
+
+- **A matrix figure's colormap control drew empty on exactly the figures that set one.** The slim
+  strip offers six colours inline with the full list in the dialog, and a `select` whose value is
+  not one of its options draws blank — so a saddle's `RdBu_r` or a pileup's `fall` made the control
+  look broken. Whatever is in force is now offered alongside the six.
 
 - **Fourteen rules in the stylesheet drew nothing, and looked like they meant to.** Six names —
   `--line`, `--muted`, `--fg`, `--fg-quiet`, `--bg-inset` and `--warn` — were read across the sheet

@@ -1396,8 +1396,14 @@ export class AnalysisRunner {
  * filed under `key:entryId`, which a runner rebuilds from `listParam(params,
  * key)` because that is the list the keys were built from. Keying multiples by
  * entry id alone would collide the moment one task took two multi-selects.
+ *
+ * Exported because the *shell* has to file its inputs under the same keys and
+ * has no runner to do it: `cli/main.ts` opens the files itself and hands the
+ * job a `TaskInputs` directly. Two statements of this convention is how the
+ * APA's track aggregates came out empty from a command line that named a track
+ * — the runner filed it under `tracks:<id>` and the shell under `tracks`.
  */
-function chosenEntries(spec: EntryParam, params: Params): Array<[string, string]> {
+export function chosenEntries(spec: EntryParam, params: Params): Array<[string, string]> {
   if (spec.multiple === true) {
     return listParam(params, spec.key).map((id): [string, string] => [`${spec.key}:${id}`, id])
   }

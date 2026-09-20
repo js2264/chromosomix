@@ -348,6 +348,81 @@ async function rowsFor(
  * sorted one is a shape: it is the picture that says whether the line above it
  * is a summary or an artefact of averaging two populations.
  */
+/**
+ * The colour range the per-feature heatmap is drawn between.
+ *
+ * **Clipped at the 99th percentile**, not fitted to the extremes. A coverage
+ * track's distribution over a few thousand features is the usual long tail: one
+ * feature under a copy-number amplification, or a single bin of pile-up
+ * artefact, is a hundred times the median, and a scale fitted to it draws every
+ * other row at the bottom colour. That is the picture this figure had — a flat
+ * purple block with a colour bar running to thirteen hundred — and it is not a
+ * statement about the data, it is the outlier deciding the scale. matplotlib's
+ * `set_over` is the convention for what is above it: the cells clamp to the end
+ * colour, so an extreme row is still visibly extreme.
+ *
+ * Read off a **subsample** where the matrix is large. A metaplot's heatmap is
+ * five thousand features by four hundred bins, and sorting two million numbers
+ * to find one percentile is a second of the reader's time for three significant
+ * figures nobody reads; every 20th value is the same percentile to well within
+ * the width of a colour step.
+ *
+ * The reader's own `scale`/`to` boxes still win over this, which is what
+ * `figures/matrixOption.matrixScale` puts above everything.
+ */
+export function clipOf(values: Float32Array): [number, number] | null {
+  const stride = Math.max(1, Math.floor(values.length / 100_000))
+  const sample: number[] = []
+  for (let i = 0; i < values.length; i += stride) {
+    const value = values[i]
+    if (Number.isFinite(value)) sample.push(value)
+  }
+  if (sample.length === 0) return null
+  sample.sort((a, b) => a - b)
+  const at = (p: number): number => sample[Math.min(sample.length - 1, Math.floor(p * (sample.length - 1)))]
+  // A track that never goes negative is read from zero — that is what a
+  // coverage heatmap means, and a floor at the 1st percentile of one would be
+  // a claim that its empty bins are its baseline. A signed one (a z-score, a
+  // log ratio) keeps a symmetric clip about its own centre instead.
+  const hi = at(0.99)
+  const lo = sample[0] >= 0 ? 0 : -Math.max(Math.abs(at(0.01)), Math.abs(hi))
+  const top = sample[0] >= 0 ? hi : Math.max(Math.abs(at(0.01)), Math.abs(hi))
+  return top > lo ? [lo, top] : null
+}
+
+/**
+ * Five labels along the abscissa, in the units the curve above it is drawn in.
+ *
+ * The heatmap and the profile are one figure read together — *is that line a
+ * summary or two populations averaged* — and a heatmap with no numbers under it
+ * cannot be lined up against the curve at all. The ends are the axis's own ends
+ * (`figures/matrixOption.spreadTicks`), so the two pictures agree column for
+ * column.
+ */
+function heatmapTicks(layout: Layout): string[] {
+  const { x } = axisFor(layout)
+  if (x.length === 0) return []
+  const scaled = layout.bodyTo > layout.bodyFrom
+  // In the scaled layout the abscissa is a slot number, which is not a unit
+  // anybody reads; the three parts are named in the axis label instead.
+  if (scaled) return ['', '', '', '', '']
+  // **The axis's own ends, not the bins' centres.** `axisFor` answers with the
+  // centre of each column, so the middle column of a 50 bp grid is at +25 and
+  // the first at −1,975: true to the half bin, and an axis nobody can read,
+  // when what a reader looks for first is the zero under the anchor. The
+  // labels are positions *along the axis*, which runs from the left edge of
+  // the first column to the right edge of the last — the same numbers the
+  // curve above it is drawn against.
+  const step = layout.flankStep > 0 ? layout.flankStep : 1
+  const lo = x[0] - step / 2
+  const hi = x[x.length - 1] + step / 2
+  return [0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+    const value = lo + fraction * (hi - lo)
+    const kb = Math.abs(value) >= 10_000
+    return kb ? `${Number((value / 1000).toFixed(1))} kb` : String(Math.round(value))
+  })
+}
+
 function heatmapOf(
   held: { rows: Float64Array; count: number; name: string },
   layout: Layout,
@@ -380,6 +455,7 @@ function heatmapOf(
       values[row * layout.slots + slot] = rows[order[row] * layout.slots + slot]
     }
   }
+  const clip = clipOf(values)
   return {
     kind: 'matrix',
     id: 'metaplot-heatmap',
@@ -392,8 +468,14 @@ function heatmapOf(
     values,
     xLabel,
     yLabel: `Features, strongest first (${count.toLocaleString()})`,
-    xTicks: [],
+    xTicks: heatmapTicks(layout),
     yTicks: [],
     colormap: 'viridis',
+    ...(clip === null ? {} : { range: clip }),
+    // Rows are a *list* — one per feature, strongest first — so there is no
+    // diagonal to keep square and nothing is compared across one. The picture
+    // takes the width of the card, under the profile it shares an abscissa
+    // with, which is the figure every metaplot tool draws.
+    aspect: 'fill',
   }
 }
