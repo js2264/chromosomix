@@ -391,6 +391,8 @@ The doctrinal cost was real and is paid in the open at §1: requiring a `.bai` c
 C1/C3 corollary, so that corollary is now *scoped* — it protects the contact map's opening path,
 which is what makes the no-preprocessing claim true — and the narrow rule that replaces it is stated
 positively at §8.13 rather than left as an exception.)*
-- **WebGL rendering** — the technique at §7.2 re-rasterises on three events and never on pan or zoom.
-  There is nothing here for a GPU to fix; G5 is where the real cost is.
+- **WebGL rendering of the map** — the technique at §7.2 re-rasterises on three events and never on
+  pan or zoom. There is nothing here for a GPU to fix; G5 is where the real cost is. (The one WebGL
+  surface is the structure cell of §25, which draws a model and not the map, and loads three.js only
+  for a session that opens one.)
 - **Accounts, sharing, collaboration** — C1.

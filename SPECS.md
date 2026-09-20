@@ -3864,6 +3864,20 @@ Three things about where the name lives:
   the record says nothing about — and a config that says nothing leaves the importing tab's names
   alone.
 
+### 16.11 Cells that are not maps
+
+A deck was *N maps*; it is now *N cells*, of which the maps are the kind the lock drives. Two
+kinds hold no file: a **structure** cell drawing the session's 3D model, and a **tracks** cell
+drawing the session's tracks alone (§25). Both answer the same short contract (`panels/cell.ts`):
+adopt the view, be told the lead's window as loci, remeasure, repaint, export a canvas, be
+destroyed. Everything the deck says to a *map* by name — a lock member, a lane floor, a bin size,
+a colour scale, the star — it goes on saying to the maps only. A cell holds no file, so it takes no
+share of the read budget (§16.7) and is not an empty card either; the bar counts it as neither.
+
+In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
+maps and the `~` of a vacancy are. A deck holds one structure cell — a second `3d` is dropped on
+the way in — and as many tracks cells as the reader opens, named apart in the location control.
+
 ## 17. The turn: 45°, distance up the side
 
 A contact map is symmetric about its diagonal, and the diagonal is where all the signal is. So a
@@ -5349,6 +5363,88 @@ by whichever bin reached furthest. A suggestion like the group and the style, wr
 style on the way in and the reader's from that moment, and a display scale and nothing else — the
 numbers behind the lane and every number that leaves it as a file stay as they were computed.
 
+### 18.13 A figure is a spec, a style and a renderer
+
+Every picture a task produces is now **restylable**, and the whole of how is one separation: what a
+figure is *of* is not what it *looks like*.
+
+- A **`FigureSpec`** (`src/figures/spec.ts`) is the output as the plainest thing that can be
+  plotted — numbers, names, axis titles, and the task's *suggestions* about scale and window. It
+  carries no colour, no line width, no legend and no hidden series. Three shapes, because there are
+  three genuinely different pictures: `xy` (one or more series over shared axes — a curve, a
+  profile, a scatter, a histogram and a box plot are all this), `matrix` (a small dense grid, which
+  keeps the `MatrixOutput` itself), and `table`.
+- A **`FigureStyle`** (`src/figures/style.ts`) is everything the reader has decided. One flat
+  record for every kind of figure, deliberately: a matrix has no line width and a curve has no
+  colormap, and a union would cost a migration on every new control and would stop a table that
+  became a scatter from carrying its own axis choice across.
+- A **renderer** turns the pair into a picture, and which renderer depends on the kind.
+
+**Contact maps are not drawn by a chart library, and never will be.** A `matrix` output stays with
+`ui/analysisPlots.ts` and the same rasteriser the contact maps use (§7): a matrix *is* a raster, the
+app already has the rasteriser, and a second answer to a question that has one is a way for two
+pictures of the same numbers to disagree. What a matrix gains here is the dialog, a colormap and the
+two ends of its scale — all of which produce a *derived* `MatrixOutput` for the existing painter,
+which is the same technique §18.5 uses everywhere else.
+
+**Everything else is ECharts, drawn as SVG, and the PDF is still a true vector page.** That last
+clause is the constraint the whole design was built to meet. Every figure meets the `PlotFigure`
+contract — an element, a `draw(ctx, box)` that paints into *any* canvas context, a `destroy` — and
+that contract is why the PNG is a redraw and the PDF is paths and text rather than a photograph
+(§18.7). A charting library paints into a canvas of its own and hands back an image, which would
+have cost exactly that. So the library is asked for **SVG**: on screen the SVG *is* the live chart,
+and for an export the same option is rendered once more, offscreen, at the size being exported to,
+and `figures/svgPaint.ts` replays it as canvas calls onto whatever context the caller passed —
+paths and text into a `VectorPage`, pixels onto a canvas. One implementation, two destinations,
+and no way for them to differ. `VectorPage` gained `bezierCurveTo` (a chart's curves are cubics),
+`transform` (a `<g transform>` composes with the caller's placement rather than replacing it) and
+`lineCap` for this.
+
+Three limits of the replay are stated rather than hidden: a gradient fill becomes its middle stop,
+because a page's `fillStyle` is a colour string and nothing here asks for a gradient; `<image>` is
+skipped, because nothing these charts draw is a raster; and `<style>` is ignored, because what the
+renderer puts there is `:hover` rules.
+
+**The library arrives in a chunk of its own**, fetched when the first figure is built, exactly as
+three.js is for the 3D cell (§25.1) — a reader who never runs an analysis never downloads a chart
+library. Only the charts these figures draw are registered, named statically in one module so the
+bundler can leave the rest out.
+
+**Controls are in two places, and the split is the point.** A **slim strip** sits over every figure
+with the two or three controls that are reached for constantly — the mark, the two log axes, the
+legend, *Fit*; a colormap for a matrix; a filter box for a table. Everything else is one button
+away, in the **same dialog the 3D model opens in**: the figure at the size of the window, every
+control in a resizable column beside it, the grip and the hide toggle behaving as they do there.
+That shell is `ui/StageDialog.ts` and the two are callers of it rather than two implementations of
+it. The figure's element is **moved** into the dialog and moved back, never copied, so the window a
+reader zoomed to is the window the export draws.
+
+**The window lives in the style, not in a zoom transform.** A wheel gesture and a number typed into
+the sidebar are the same change to the same place, and the export draws whichever happened last —
+which is what §18.7's *what you export is what you see* means once a figure can be panned.
+
+**New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
+summaries of the ordinate. The last three are rules with parameters rather than plots of the data,
+so the rules are in `figures/stats.ts` where they can be read: Freedman–Diaconis for a bin width
+unless one is typed, Tukey's whiskers stopping at the furthest *observed* value within 1.5 IQR, and
+a Gaussian kernel density at Silverman's bandwidth for the violin — every violin on a figure scaled
+by the same peak, because two violins each normalised to their own width say the two samples are
+equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
+one against another as a scatter.
+
+**A table is a view, not a printing.** Filter, sort and choose columns, which for four thousand MAGs
+is the difference between a record and a tool. The filter is a substring over each cell's *text*,
+because that is the search a reader means; a row missing a value sorts last whichever way the column
+runs, because a row with no value is not a row with the smallest one.
+
+**Every decision is remembered**, per file, per task and per output, in the `UiMemory` scope beside
+the task's parameters (§18.2) and carried in an exported session (§5.6). The argument is §18.2's one
+step further on: if the recipe is worth keeping then so is the picture the recipe was read from, and
+a session that came back with the parameters but with every log axis, hidden series and colour
+thrown away would reproduce the numbers and not the figure. What is stored is untrusted input like
+everything else that outlives the build that wrote it, and every field is validated against the spec
+it is about to be applied to.
+
 ---
 
 ## 19. Standalone target: one HTML file
@@ -6754,3 +6850,367 @@ The `.2bit` that script writes is checked with `py2bit`, a wrapper around the C 
 That is the only check worth having: a file this repository wrote and this repository read proves
 that two implementations share a reading of the format, which is exactly what they would do if the
 reading were wrong.
+
+## 25. A 3D structure beside the map
+
+A chromatin model — one chromosome or several, one haplotype or two — read from a file of beads
+with a place in space, drawn as a cell of the deck beside the maps and the tracks, linked to them
+in both directions, and coloured by whatever the session already knows about the sequence. The
+design it was built from, with the alternatives weighed and the sizes measured, is
+`docs/structure-3d.md`; this section is what stands.
+
+### 25.1 Words
+
+A **structure** is the file and the row it makes in the Structures card — a row of kind
+`structure` on the card `structure`, which is also a feature set: every bead is an interval. A **model** is one set of coordinates; a
+**chain** is the beads of one sequence and one haplotype in genomic order; a **bead** is one row
+of the file. A **cell** is any occupant of the deck (§16.11).
+
+### 25.2 The formats
+
+**g3d text**, WashU's own and what `g3dtools` takes: `chrom start x y z [haplotype]`, no header,
+no end column, rows in any order, the sixth column `m`, `p` or `s` (or `maternal`, `paternal`,
+`shared`), and the `chr7(mat)` fold of a `.3dg` read the same. The **width** of a bead is the
+commonest step between consecutive sorted starts, counted across every sequence — the spacing the
+file was modelled at, inferred rather than declared, and printed under the row so a reader whose
+file was meant to be at 10 kb and reads *1.04 Mb* has been told the one thing this reader could
+get wrong. It is independent of the map's bin size: the same file opens the same way beside a 1 kb
+map and a 50 kb one.
+
+**bed3d**: the same file with the end written down, `chrom start end x y z [haplotype]`, for a
+model whose beads are the bins of a map or of any width a BED can say. Each bead keeps its own
+end; the commonest length is the width under the row.
+
+**Binary g3d**, the container `g3dtools` writes: a 64 000-byte msgpack header and one zlib block
+per resolution, read by range like a BAM rather than whole like a text, through a reader written
+here (`annotations/g3dBinary.ts`, `annotations/msgpack.ts`) rather than a dependency. It opens at
+its finest resolution and names the others under the row. A version-1 container is refused by
+name, with the way out (`g3dtools` rewrites it).
+
+All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
+would be a lane of boxes whose *end* is a coordinate in space — and by name as a tiebreak only:
+`.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP. A file of whole-number coordinates
+has to be *named* to be read as a structure. The tests pin what a BED5, a BED6, a bedGraph and a
+narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
+location control, and skipped by every stack; its picture is the cell.
+
+**The Structures card.** Every model the session holds — dropped, named by URL, or computed
+(§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
+Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
+eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
+computed one, **show in the deck** — which puts the model in the structure cell, opening the cell
+where the deck has none, and reads *shown in the deck* on the row the cell is drawing — and
+**bed3d**, the model out (§25.7). The card's own load zone names the three formats. A computed
+row that came back from a reload is detached and offers **recompute**, which opens its recipe in
+the drawer, as the Synthetic card does (§18.5).
+
+### 25.3 The deck of cells
+
+**The structure cell** draws **one** structure row — the one the reader chose from the Structures
+card or from the cell's own **model** picker, remembered per file, or the first of the list where
+none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
+same row**, is the one it draws; and **the row the cell is drawing, removed from the card, empties
+the cell**, which says so, rather than quietly showing the next model along — however the cell came
+to be drawing it, whether the reader picked it, the session restored it, or it was simply the only
+one there was (a remembered choice whose row is already gone when a session opens falls back to the
+first, since no cell was drawing it) — with three.js, which is loaded when the first cell is built and never with the page: a chunk of its own
+on the web, folded into the one file of the standalone build. **Beads, sticks and a tube as three
+toggles that combine** (the tube alone by default); a **dashed run of ink across every gap** in a
+chain, always, so a chain with a missing bead reads as one chain with a hole and not as two; a halo
+on the hovered bead; a **dashed chord of ink** across a hovered contact and the loops as chords of
+ink, both drawn as cylinders rather than one-pixel lines so they are seen at the size of the tube
+they cross, at **half its radius**, since a line drawn *about* the model that is as thick as the
+model reads as a piece of it; **a fog tied to the slab**: it begins at the centre of rotation — the plane the slab is centred on,
+which ⌘-click moves — and reaches the page exactly where the slab cuts, so what the fog says is
+*how close this is to being cut away*, its slider weakening it by pushing that plane out (at 1 the
+far face of the slab is the page, at a half it is half way there). Measured from the camera alone,
+as it was, a thin slab left every one of the few beads it kept already half dissolved: the fog was
+describing the whole model while the slab was showing a slice of it. Lit, always; lit, always; **orthographic,
+always** — a model has no horizon, and perspective made the same distance read shorter at the back;
+the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
+the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
+everything else is drawn whole. *Outside the window* has three answers: *ghost* (the default),
+*hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
+how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
+says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
+
+**The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
+cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
+primitives, placed by the session whenever the deck has a structure cell and taken out when it has
+none, the column scrolling over all of them as one — and not a menu in the cell: a view's settings are in that column, and the model is a
+view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
+borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
+camera controls — and gives it back where it was. The card also carries **size by**
+(a track whose value at each bead sets its size, half to nearly twice the radius over the track's
+robust range — a second channel beside the colour), a **depth slab** (two clipping planes either side
+of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
+dense globule, and **the depth the fog is measured against** — see below; measured in the scene's
+own units, against the model's reach, rather than in the file's), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
+the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more than about forty
+ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
+at most eighty labels, and no zero tick: a chain's start is where its name is),
+**camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
+**frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` mark a bead,
+`o` mark a loop, `m` measure, `r` turntable — **bound only while the model is enlarged**, and listed
+in the palette either way. They are single letters and so are the app's own (`f` folds the Files
+panel, `a` the Annotations panel); a cell sits *beside* a map and its commands come first in the
+palette's list, so binding them there took those letters from the panels for as long as a model was
+on screen. In the dialog the model is the whole window and there is nothing else a letter could
+mean. A phased file draws both homologues,
+and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
+lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
+a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
+them** and remembered per file, as a panel column is; the cell's own canvas, key, labels and menu are
+moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
+what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
+back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
+*move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
+elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
+the fog forward or pushes it back, which the menu's *fog* slider also sets, 0 to 1, 0.6 the depth the
+cell always had), or *select* (§25.4). A **tap** of the centre key alone shows or hides the **centre
+of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
+which the menu's *centre and axes* toggle also does; the keys act only while the pointer is over the
+cell, its canvas is focused or its dialog is open. It opens when a structure is dropped or named by URL while a map or
+the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
+link's `3d`; a second structure replaces the picture rather than adding a cell.
+
+**The tracks cell** is the session's own browser over the lead file's sequences — the same store,
+client, groups and marks — drawing only the tracks **placed on it**: the location control lists
+it beside the maps, with its one edge live and the other three greyed and saying why. It follows
+the maps and the maps follow it without joining the lock, whose currency is cells of a block: the
+deck hands the cell the lead's window as loci, one way and never reported back, and a pan in the
+cell takes the lead's *column* axis there (`MatrixPanel.showLocusOnColumns`), which the lock
+spreads to every other map. The chain in its heading unhooks both roads.
+
+**The browser as lead.** A session showing its 1D browser can open a deck: the browser stays the
+session's view, re-parented into cell 0 as a map's is, and the cells beside it are tracks and the
+structure. The deck learns a lead that is not a map — the browser's windows as loci, and a way to
+be taken somewhere — and the browser reports every move of its window, a link's included. A map
+may not join such a deck: the bar refuses it in words, the add row puts its map roads away, and a
+map a link names is held as the cell it would have been, under its name.
+
+### 25.4 Hover, both ways
+
+A bead under the pointer is a place on every map and every lane: the maps draw it as a **dashed line
+down and across the heatmap** on each axis the place is on (one line on a turned map, whose rows are
+separation), and as the tick at the edge of the stacks the lanes already give a pointer on another
+panel's track; the status bar names the bead, **and so does the cell's own corner**, which is where
+a reader looking at the model is looking — one place for a bead, the pair and their distance for a
+contact named by a map. The corner is not gated with the *tooltip* switch: that switch is about the
+card that follows the pointer, not the line in the corner. The other way, a place pointed at on a map or a lane
+lights its beads and, for a contact, joins the two with a chord; the **ball** on a lit bead is
+translucent and depth-tested, so it sits in front of the bead or tube it marks and behind any part
+of the model nearer the eye, as a ball at that place would.
+
+**Three modes, a button each**, in the cell's corner and in the palette — and **no key**, because a
+bare letter that arms a mode is a letter pressed by accident while the pointer happens to be over
+the model. One is on at a time — arming the next disarms the
+one that was on, pressing the one that is on turns it off — and the badge in the top-left corner
+says which. They are three buttons and not one mode that counts clicks because marking a place and
+marking a loop are two things a reader means, and a mode whose first click might be either is a
+mode whose first click cannot be taken back by stopping.
+
+**Mark a bead** turns every click into one of the reader's own marks (§8.1's manual annotations):
+a **line** at the bead's locus on both axes, kept in the Manual annotations card and drawn by every
+map, lane and tracks cell. On the model it is the bead again, **twice the radius, in the mark's own
+colour** — a place is a thing on the model, so it is drawn as a bigger bead rather than as one more
+line over one. **Mark a loop** holds the first bead clicked, names it in the status bar and closes
+an **arrowhead** — the map's loop mark — on the second; Esc lets the held bead go. An arrowhead made
+here is a chord on the model, since *loops as chords* switches to *your marks* when nothing else is
+chosen. **Measure** is a **drag**: press on one bead, travel to another, let go, and the
+measurement is made — the line follows the pointer on the way, so what is about to be measured is
+what is drawn. The model does not turn under a measuring drag, because the hand is pointing rather
+than steering; a press that lands on nothing turns it as ever. A press and release on the same bead
+holds it instead, so the two-click gesture still closes a measurement for a reader who prefers it.
+The card lists each one — the two loci, the distance in the model's units and the genomic separation
+along the sequence, or *across sequences* — until its × removes it; each is drawn on the model as
+dashed ink with the distance written at the middle, and in the figure the same.
+
+**A card under the pointer** names the bead's sequence and where along it, in the same shape the
+map's card has and under the same switch (§7's *tooltip*): a reader who turned the card off beside
+the map meant it off. The line in the corner and the status bar are not gated, exactly as they are
+not beside the map.
+
+A store of one place (`ui/hoverLocus.ts`): one locus from a track, a bead or the browser's axis,
+two from a map's cell — **one** while a span modifier is held, because that is the gesture the hand
+is in the middle of: the crosshair has already stood up as a single line and the readout has already
+stopped naming a contact, so a model still joining two beads would be the one surface left answering
+a question the pointer stopped asking. The one place is the position along the diagonal, which is
+what the line is drawn at and what the readout names. Each saying which surface it came from, every
+subscriber ignoring its own.
+A pointer on a map lights the bead at each end and joins the two with a chord; a pointer on a
+bead is a mark on every map's column axis and a guide on every tracks cell; a pointer on a tracks
+cell is the same on the maps and the structure. The deck's own cell-to-cell echo between maps is
+untouched, and a map's hover is not relayed to the maps twice.
+
+What the maps are looking at reaches the cell as loci on every pan; beads outside the window are
+ghosted, hidden or shown, at the reader's choice, and the frame button puts the camera on what is
+lit. **The pointer aims for you.** A bead is a few pixels across and a fibre is thinner, so the ray is
+cast first — exact, and respecting what is in front of what — and where it hits nothing the nearest
+bead whose centre falls within fourteen pixels is taken instead, the nearest to the eye winning
+where several do, and never one the slab has cut away. **The cursor becomes a cross** whenever a
+bead is being aimed at, either way, so the slack is visible rather than a surprise when the click
+lands somewhere the hand did not press. A click pins a bead; Shift-click puts a mark at its locus
+that every map and track then draws; a double-click on a bead takes the maps there; on the air, it frames. A picking mode armed
+by the marks card or an analysis form takes a click on a bead as the place, on both axes at once,
+as a track's does.
+
+### 25.5 Colour, chords, names
+
+**The key is a control.** Under *colour by sequence*, each sequence's row carries its swatch as a
+colour picker — click it to choose the sequence's colour, kept with the row by name over the
+palette's — and its name as a button: a **click ghosts** that sequence (drawn as the beads outside
+the window are, and hidden with them under *outside the window: hide*), a **double-click shows it
+alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
+window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
+**arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
+sets, so a loop marked on the map or in loop mode is a chord on the model.
+
+**Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
+contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
+least the threshold slider's fraction of the way up the map's own colour scale — the transformed
+value between the scale's ends, half by default, because a Hi-C row read raw is its two neighbours
+and nothing else (the strongest four hundred where more pass) — each as thick as its place on that
+scale and coloured on it: the virtual 4C of the pin, read in space. A toggle beside the slider turns
+them off without losing the threshold.
+
+**Compare with.** Another structure row — the loaded model against the reconstruction, or two
+solvers' models of one map — is **superposed** on this one: the beads the two share are matched by
+locus (and haplotype where both are phased), the other is rotated, scaled and moved onto this by a
+similarity fit (Horn's closed form for the rotation, Umeyama's scale; `structure/align.ts`, held
+still by a model asked back from a turned, scaled and shifted copy of itself), drawn in grey as a thin
+tube in this model's frame, and the card says how many beads matched and the root-mean-square
+distance between them. *Colour by displacement* colours each bead of this model by its distance to
+its bead in the other, on a ramp, which is where the two disagree. Fewer than four shared beads is
+no fit, and the card says so.
+
+One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
+own **score** and any column it carries; and, from the session, **a track's values** at each
+bead, read through the same sample cache the lanes use at one bucket per bead and on the lane's
+own limits, so a bead coloured by a bigWig agrees with the lane at every value; **a feature
+set's** colour where a bead overlaps one; **the reader's marks**; **the distance to the pinned
+bead** in the model's units; and **contacts with the pinned bead** — the lead map's own row
+through it, read out of the block in hand on the map's own transform, range and colormap, the
+virtual 4C drawn in space. A colouring the list no longer has stays named in the picker rather
+than silently becoming the first option. Two rules carried from the modules reused: fit the
+colouring to the file, not to the window, so turning the model never changes what a colour means;
+and use the lane's scale.
+
+A **pairs row** — BEDPE, loops — can be drawn as chords between its anchors' beads, kept to the
+loops touching the window and capped at six hundred, past which a model is a cage. The reader's
+**bookmarks** are named on the model at their middle beads.
+
+### 25.6 Analysis
+
+Three tasks under *map*. The first two are listed greyed until a map is open and a structure
+loaded. **Model versus
+map** bins the beads to the map's bins per sequence and answers the validation picture: the
+model's distances as a matrix and as `1/d^α`, the mean distance at each separation beside the
+map's own P(s) over the same bins with the log-log slope, and a table of Spearman correlations
+between `1/d` and the observed contacts per sequence and haplotype — rank-based, so the exponent
+enters the picture and not the number. **Spatial tracks** turns the model into three profiles on
+the map's bins — radial position, distance to a chosen locus, local compaction — which "a
+synthetic track is a track" (§18.5) makes lanes, colourings of the model itself, and inputs of
+every track task. Both are `structure/versusMap.ts`, pure over arrays, held still by tests.
+
+**Model from the map** needs no structure: it makes one. It is the reversal of §25.8's refusal, and
+the §18.9 bar is met the way it was met for chromosight — by porting a published method rather
+than inventing one. The pipeline is **ShRec3D** (Lesne et al. 2014) with the refinement every MDS
+toolkit ends with: a contact count `c` is read as a distance `d = c^(−1/α)` — the law *Model versus
+map* assumes the other way round, `α` exposed and 3 by default; the pairs the map never counted
+(a zero, a `NaN`) are filled so the matrix is complete; classical MDS (Torgerson: double-centred
+squared distances, three leading eigenvectors by subspace iteration) gives a start; **SMACOF** (de
+Leeuw's majorisation, taken one bead at a time as Gansner, Koren and North's localised stress
+majorisation) moves the beads until the model's distances match the map's over the pairs the map
+counted, **each pair weighted by how often the map counted it** — a filled pair weighs nothing
+— stopping at the step count asked for or once a step improves the weighted stress by less than a
+millionth. The weighting is the point of refining at all: the count sets a pair's target, but with
+every pair weighing the same the stress is the far, weak, noisy pairs' and the near diagonal, where
+the map is most certain, is fitted worst. **Weight pairs by** offers the count (a pair seen a
+thousand times is a thousand times as sure as one seen once, which is what a Poisson count's
+precision says; the default), its square root (a weak pair is still heard on a deep map), or
+nothing (every counted pair one vote: the plain SMACOF of every toolkit, kept so a reader can see
+what the weighting changes). Three departures from ShRec3D are deliberate and named here: its
+shortest-path filling is cubic in the bead count and would not finish in a tab, so the filling is
+the mean observed distance at the same separation on the same sequence, walking outward to the
+nearest separation with an observation, and the mean observed trans distance across two; ShRec3D
+stops at the classical solution, which honours the filled pairs as much as the counted ones; and it
+has no refinement to weight. The bead-at-a-time form is what makes the weighting affordable: the
+full weighted Guttman transform is a linear solve in the weight Laplacian, and the localised one
+costs a pass over the pairs like the unweighted one does, and never raises the stress. The model
+is centred and scaled to a unit root-mean-square radius: a map carries no physical unit and
+`c^(−1/α)` is in none (§25.8).
+
+**What it is solved over** is what the **Sequences** box names, seeded from what the map shows
+(a locus, or every sequence on screen): where the view's block **as drawn** covers it — the loaded
+locus at its drawn resolution, pooled cells included, which is the one task that honours
+`binsPerCell > 1` rather than refusing it — the block is taken as it is, cis and trans together, one
+bead per cell, filed under the sequence holding its first bin and cut at that sequence's end. Where
+it does not — several sequences, a whole file, a block balanced the other way or not square — the
+file is **read span by span**, one rectangle per pair of named spans (two sequences far apart cost
+their two squares and the rectangle between them, never the sequences in between). **One bin of the
+resolution the reader has selected is one bead** — never the drawn cell, whose width comes from a
+raster cap and the size of the window rather than from anything anybody chose. The block on screen
+is borrowed only when it is drawn *one bin to the cell*, where borrowing changes nothing and costs
+no read; a pooled block is declined, which is `usableBlock`'s rule and every other task's (§18.4).
+A coarser model is a coarser **rung**, selected in the view, which also reads far less: a genome at
+5 kb from the 5 kb rung reads a twenty-fifth of what the 1 kb rung does for the same model. The box
+**empty is the whole file**. A cell whose row the map counted nothing on — a filtered bin, a gap —
+is left out of the model, and the run says how many were.
+
+**There is no ceiling on the beads.** Both the time and the memory are quadratic in the count, and
+what the estimate does about it is *say so* — the bead count and its bin width, the seconds per
+hundred refinement steps and the gigabytes of matrices — for the reader to confirm before pressing
+run. A number chosen in the source could only be a guess about somebody else's machine. What is
+still refused is the allocation that cannot succeed: the matrices are asked for inside a `try` and a
+browser that will not give them leaves a note naming the size, rather than a tab that dies. The run
+holds **two** dense `n × n` matrices of singles and no more — the pairs' weights, and the counts
+turned into the distances they imply over the buffer they already occupy, compacted onto the kept
+beads in place and then filled over themselves — so twelve thousand beads is about a gigabyte.
+**Every phase reports progress and breathes between units of work**: each rectangle read, each of
+the eighty sweeps of the classical start, each refinement step, so the bar moves and a cancel always
+has somewhere to land. The run's other output
+is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
+the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
+model and the contacts —
+the same number *Model versus map* would give the row, so a reader can see how well the model
+honours the map before believing it.
+
+**Its result is a row**, not a picture: a `structure` row on the Structures card, of kind
+`structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
+reconstructed-model` (per map on a deck, as every computed row is), labelled `3D model · chrIV`
+or `3D model · 16 sequences`, summarised as a loaded one is, carrying the task and the framing as
+provenance. It replaces the last run's row, is the model the cell draws the moment it lands, is
+what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
+`detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
+Synthetic-card export road. The golden is the one a reconstruction can honestly have
+(`structure-reconstruct.test.ts`): a helix whose contacts were made from it by the law comes back
+as itself up to a rigid motion, a chain with most far pairs uncounted comes back with ρ above 0.9,
+and a helix whose weak far pairs were corrupted keeps its near pairs when weighted by the count
+and loses them when every pair weighs the same.
+
+### 25.7 Export
+
+Beads and sticks export as **paths** through `structure/painter.ts`, projected through the same
+camera the screen was; a tube is a lit surface no `arc` can be and exports as the raster the GPU
+drew, at 300 dpi; the deck's figure takes the cell's canvas like any other. Both say which on
+the button.
+
+**A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
+`#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
+button of its row, from the drawer's result and from the export road a computed row shares with
+called intervals. It is the file §25.2 reads, so it reads straight back here and in `g3dtools`.
+
+### 25.8 Refused, and not yet built
+
+- ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), a
+  port of ShRec3D with SMACOF refinement. What stays refused is a **physical unit** for it: the
+  model is in its own units at unit radius, and a nanometre would be invented.
+- **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
+  one model. The scene's shape does not close the door.
+- **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one
+  yet.
+- **A resolution picker for a binary g3d**: the finest opens; the others are named under the row.
+- **Metadata columns as a colouring** and the Sequences card's ticks over the model: the key's
+  chips and the haplotype solo cover the case a reader meets.

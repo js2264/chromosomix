@@ -257,7 +257,7 @@ describe('VectorPage', () => {
     // `[] 0 d` is the dash pattern, part of the stroke state since the
     // alignment lane needed a dotted mate thread: empty is solid, which is what
     // an empty pattern means on a canvas too.
-    expect(content).toMatch(/1 1 1 RG\n3 w\n0 j\n\[\] 0 d\nBT\n1 Tr/)
+    expect(content).toMatch(/1 1 1 RG\n3 w\n0 j\n0 J\n\[\] 0 d\nBT\n1 Tr/)
     expect(content.indexOf('1 Tr')).toBeLessThan(content.indexOf('0 Tr'))
   })
 
@@ -295,5 +295,36 @@ describe('VectorPage', () => {
     const declared = /4 0 obj\n<< \/Length (\d+) \/Filter/.exec(text)
     const content = await contentOf(bytes)
     expect(Number(declared?.[1])).toBeLessThan(content.length / 4)
+  })
+})
+
+describe('the state a charted figure needs', () => {
+  it('writes the line cap, so a tick is the length the screen drew it', async () => {
+    const page = new VectorPage(100, 50)
+    const ctx = page.ctx
+    ctx.strokeStyle = '#000000'
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(10, 10)
+    ctx.lineTo(40, 10)
+    ctx.stroke()
+    const content = await contentOf(await bytesOf(await page.toBlob({ title: 'cap' })))
+    expect(content).toContain('1 J')
+  })
+
+  it('composes a transform rather than replacing the caller’s', async () => {
+    const page = new VectorPage(100, 100)
+    const ctx = page.ctx
+    ctx.translate(20, 30)
+    // A doubling about the new origin: the point (5, 5) must land at (30, 40),
+    // which on a page whose y runs up is (30, 60).
+    ctx.transform(2, 0, 0, 2, 0, 0)
+    ctx.fillStyle = '#000000'
+    ctx.beginPath()
+    ctx.moveTo(5, 5)
+    ctx.lineTo(6, 5)
+    ctx.fill()
+    const content = await contentOf(await bytesOf(await page.toBlob({ title: 'compose' })))
+    expect(content).toContain('30 60 m')
   })
 })

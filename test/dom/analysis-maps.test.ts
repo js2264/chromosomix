@@ -24,12 +24,12 @@
  * had been picked.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { AnalysisDrawer } from '@/ui/AnalysisDrawer'
 import { combineResults } from '@/analysis/combine'
 import { resolveSeriesColours } from '@/ui/analysisPlots'
-import { interactiveCurve } from '@/ui/interactivePlot'
+import { figureBlock } from '@/figures/FigureBlock'
 import type { AnalysisRunner, RunTarget } from '@/analysis/runner'
 import type {
   AnalysisContext,
@@ -313,167 +313,92 @@ describe('the combined figure', () => {
   })
 })
 
-describe('an interactive curve', () => {
-  it('offers the axis toggles, and a picker once there are two series', () => {
-    const single = interactiveCurve(curve('ps', 'P(s)', 'cis'))
-    document.body.appendChild(single.el)
-    const labels = [...single.el.querySelectorAll('.plot-controls button')].map(
-      (node) => node.textContent,
-    )
-    expect(labels).toEqual(['log x', 'log y'])
-
-    const many = interactiveCurve({
-      ...curve('ps', 'P(s)', 'cis'),
-      series: [
-        { name: 'cis', x: Float64Array.from([1, 2]), y: Float64Array.from([2, 1]) },
-        { name: 'trans', x: Float64Array.from([1, 2]), y: Float64Array.from([1, 1]) },
-      ],
-    })
-    document.body.appendChild(many.el)
-    const withPicker = [...many.el.querySelectorAll('.plot-controls button')].map(
-      (node) => node.textContent,
-    )
-    expect(withPicker).toEqual(['log x', 'log y', 'cis', 'trans'])
-  })
-
-  it('starts with the scales the task chose', () => {
-    const figure = interactiveCurve(curve('ps', 'P(s)', 'cis'))
-    document.body.appendChild(figure.el)
-    const on = [...figure.el.querySelectorAll('.plot-controls .btn.is-on')].map(
-      (node) => node.textContent,
-    )
-    expect(on).toEqual(['log x', 'log y'])
-  })
-
-  it('hides a series when its chip is clicked, and never hides them all', () => {
-    const figure = interactiveCurve({
-      ...curve('ps', 'P(s)', 'cis'),
-      series: [
-        { name: 'cis', x: Float64Array.from([1, 2]), y: Float64Array.from([2, 1]) },
-        { name: 'trans', x: Float64Array.from([1, 2]), y: Float64Array.from([1, 1]) },
-      ],
-    })
-    document.body.appendChild(figure.el)
-    const chip = (name: string): Element | undefined =>
-      [...figure.el.querySelectorAll('.plot-series')].find((node) => node.textContent === name)
-    click(chip('cis'))
-    expect(chip('cis')?.classList.contains('is-off')).toBe(true)
-    // Turning off the last one would leave an empty box; a reader who clicked it
-    // meant to isolate, which is what alt-click does.
-    click(chip('trans'))
-    expect(chip('cis')?.classList.contains('is-off')).toBe(false)
-    expect(chip('trans')?.classList.contains('is-off')).toBe(false)
-  })
-
-  /**
-   * The derived outputs a figure hands its renderer, in order.
-   *
-   * The same mock the export test below turns on, kept to itself: `curveFigure`
-   * is replaced so the `CurveOutput` each rebuild produces can be read back,
-   * which is the only way to see what colour a line was *given* rather than what
-   * colour it ended up on a canvas nobody can query. Callers unmock at the end.
-   */
-  async function capture(): Promise<{
-    interactive: typeof interactiveCurve
-    seen: CurveOutput[]
-  }> {
-    const seen: CurveOutput[] = []
-    vi.resetModules()
-    vi.doMock('@/ui/analysisPlots', async () => {
-      const actual = await vi.importActual<typeof import('@/ui/analysisPlots')>(
-        '@/ui/analysisPlots',
-      )
-      return {
-        ...actual,
-        curveFigure: (output: CurveOutput) => {
-          seen.push(output)
-          return {
-            el: document.createElement('div'),
-            draw: () => {},
-            destroy: () => {},
-          }
-        },
-      }
-    })
-    const { interactiveCurve: mocked } = await import('@/ui/interactivePlot')
-    return { interactive: mocked, seen }
-  }
+describe('a figure block', () => {
+  // A file of its own per test: the style is *remembered* per file and per
+  // task, so two tests sharing a URI would be two tests sharing a style.
+  const block = (uri = 'file://maps.mcool', task = 'ps'): { el: HTMLElement; destroy(): void } =>
+    figureBlock({ output: threeSeries(), task, uri })
 
   /** Three series with no colours of their own — the palette decides. */
-  const threeSeries = (): CurveOutput => ({
-    ...curve('ps', 'P(s)', 'a'),
-    series: ['a', 'b', 'c'].map((name) => ({
-      name,
-      x: Float64Array.from([1, 2]),
-      y: Float64Array.from([2, 1]),
-    })),
+  function threeSeries(): CurveOutput {
+    return {
+      ...curve('ps', 'P(s)', 'a'),
+      series: ['a', 'b', 'c'].map((name) => ({
+        name,
+        x: Float64Array.from([1, 2]),
+        y: Float64Array.from([2, 1]),
+      })),
+    }
+  }
+
+  /** The strip's *worded* controls; the legend is an icon toggle beside them. */
+  const strip = (figure: { el: HTMLElement }): string[] =>
+    [...figure.el.querySelectorAll('.figure-strip button')]
+      .map((node) => node.textContent ?? '')
+      .filter((text) => text !== '')
+
+  it('puts the controls a reader reaches for constantly inline', () => {
+    const figure = block()
+    document.body.appendChild(figure.el)
+    expect(strip(figure)).toEqual(['log x', 'log y', 'Fit'])
+    // …and the mark, which is the one that decides what the picture *is*.
+    const marks = figure.el.querySelector<HTMLSelectElement>('.figure-strip select')
+    expect(marks?.value).toBe('line')
+    figure.destroy()
   })
 
-  const chip = (figure: { el: HTMLElement }, name: string): Element | undefined =>
-    [...figure.el.querySelectorAll('.plot-series')].find((node) => node.textContent === name)
-
-  it('keeps a series in its own colour when another is hidden', async () => {
-    const { interactive, seen } = await capture()
-    const figure = interactive(threeSeries())
+  it('opens on the scales the task chose, and flips one on a press', () => {
+    const figure = block('file://flip.mcool')
     document.body.appendChild(figure.el)
-
-    const before = seen[0].series.map((series) => series.colour)
-    // Three lines, three colours: the palette is still assigned by position, it
-    // is just assigned once, before anything can be filtered out of the list.
-    expect(new Set(before).size).toBe(3)
-
-    click(chip(figure, 'a'))
-    const after = seen[seen.length - 1].series
-    expect(after.map((series) => series.name)).toEqual(['b', 'c'])
-    // The bug: `b` took `a`'s colour and `c` took `b`'s, silently, in the figure
-    // and in everything exported from it.
-    expect(after.map((series) => series.colour)).toEqual([before[1], before[2]])
-
-    vi.doUnmock('@/ui/analysisPlots')
-    vi.resetModules()
+    const pressed = (): string[] => pressedIn(figure)
+    expect(pressed()).toEqual(['log x', 'log y'])
+    click([...figure.el.querySelectorAll('.figure-strip button')].find((node) => node.textContent === 'log y'))
+    expect(pressed()).toEqual(['log x'])
+    figure.destroy()
   })
 
-  it('isolates a series in the colour it already had', async () => {
-    const { interactive, seen } = await capture()
-    const figure = interactive(threeSeries())
-    document.body.appendChild(figure.el)
-    const before = seen[0].series.map((series) => series.colour)
+  const pressedIn = (figure: { el: HTMLElement }): string[] =>
+    [...figure.el.querySelectorAll('.figure-strip button[aria-pressed="true"]')]
+      .map((node) => node.textContent ?? '')
+      .filter((text) => text !== '')
 
-    // Alt-click hides everything else. Drawn against the filtered list of one,
-    // the isolated series always came out in the first palette entry — so the
-    // reader picked out the third line and was shown the first line's colour.
-    chip(figure, 'c')?.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true }))
-    const shown = seen[seen.length - 1].series
-    expect(shown.map((series) => series.name)).toEqual(['c'])
-    expect(shown[0].colour).toBe(before[2])
-    expect(shown[0].colour).not.toBe(before[0])
+  it('remembers what was set, per file and per task', () => {
+    const first = block('file://memory.mcool')
+    document.body.appendChild(first.el)
+    click([...first.el.querySelectorAll('.figure-strip button')].find((node) => node.textContent === 'log x'))
+    first.destroy()
 
-    vi.doUnmock('@/ui/analysisPlots')
-    vi.resetModules()
+    // The same file and task comes back as it was left…
+    const again = block('file://memory.mcool')
+    document.body.appendChild(again.el)
+    expect(pressedIn(again)).toEqual(['log y'])
+    again.destroy()
+
+    // …and another task on the same file is untouched.
+    const other = block('file://memory.mcool', 'saddle')
+    document.body.appendChild(other.el)
+    expect(pressedIn(other)).toEqual(['log x', 'log y'])
+    other.destroy()
   })
 
-  it('does not recolour anything when the last series is switched off', async () => {
-    const { interactive, seen } = await capture()
-    const figure = interactive(threeSeries())
+  it('opens the whole settings column in a dialog, and puts the figure back', () => {
+    const figure = block('file://dialog.mcool')
     document.body.appendChild(figure.el)
-    const before = seen[0].series.map((series) => series.colour)
-    // Resolved, not left open: the fallback below hands the renderer this list,
-    // and a list of series with no colours on them is a list that gets coloured
-    // by position all over again.
-    expect(before.every((colour) => typeof colour === 'string')).toBe(true)
+    const chart = figure.el.querySelector('.figure-chart')
+    expect(chart).not.toBeNull()
 
-    click(chip(figure, 'a'))
-    click(chip(figure, 'b'))
-    expect(seen[seen.length - 1].series.map((series) => series.colour)).toEqual([before[2]])
-    // Hiding the last one shows them all again rather than an empty box — and
-    // the picture the reader comes back to has to be the one they left.
-    click(chip(figure, 'c'))
-    const back = seen[seen.length - 1].series
-    expect(back.map((series) => series.name)).toEqual(['a', 'b', 'c'])
-    expect(back.map((series) => series.colour)).toEqual(before)
+    click(figure.el.querySelector('.figure-enlarge'))
+    const dialog = document.querySelector('.modal-stage')
+    expect(dialog).not.toBeNull()
+    // The figure itself is moved in, not copied: there is one of it.
+    expect(dialog?.querySelector('.stage-body > .figure-chart')).toBe(chart)
+    expect(dialog?.querySelector('.stage-side .figure-settings')).not.toBeNull()
+    expect(document.querySelectorAll('.figure-chart')).toHaveLength(1)
 
-    vi.doUnmock('@/ui/analysisPlots')
-    vi.resetModules()
+    click(dialog?.querySelector('.btn-close'))
+    expect(document.querySelector('.modal-stage')).toBeNull()
+    expect(figure.el.querySelector('.figure-body > .figure-chart')).toBe(chart)
+    figure.destroy()
   })
 
   it('leaves a colour a series already carries, sentinel included', () => {
@@ -498,54 +423,5 @@ describe('an interactive curve', () => {
         { name: 'first', x: Float64Array.from([1]), y: Float64Array.from([1]) },
       ])[0].colour,
     ).not.toBe(resolved[1].colour)
-  })
-
-  it('exports what is on screen: draw follows the derived output', async () => {
-    // The property the whole approach rests on. `curveFigure` is mocked so the
-    // output it is handed can be inspected — toggling an axis must produce a
-    // *new figure of a new output*, and the wrapper's `draw` must delegate to
-    // that one rather than to the figure it was built with. Get the second half
-    // wrong and the screen updates while the PDF keeps exporting the original.
-    const seen: CurveOutput[] = []
-    const drawnBy: number[] = []
-    // The static import at the top of this file has already resolved the real
-    // module, so the mock only takes effect for a *fresh* module graph.
-    vi.resetModules()
-    vi.doMock('@/ui/analysisPlots', async () => {
-      const actual = await vi.importActual<typeof import('@/ui/analysisPlots')>(
-        '@/ui/analysisPlots',
-      )
-      return {
-        ...actual,
-        curveFigure: (output: CurveOutput) => {
-          const at = seen.length
-          seen.push(output)
-          return {
-            el: document.createElement('div'),
-            draw: () => drawnBy.push(at),
-            destroy: () => {},
-          }
-        },
-      }
-    })
-    const { interactiveCurve: mocked } = await import('@/ui/interactivePlot')
-    const figure = mocked(curve('ps', 'P(s)', 'cis'))
-    document.body.appendChild(figure.el)
-
-    expect(seen).toHaveLength(1)
-    expect(seen[0].yScale).toBe('log')
-    figure.draw({} as CanvasRenderingContext2D, { width: 10, height: 10 })
-    expect(drawnBy).toEqual([0])
-
-    const logY = [...figure.el.querySelectorAll('.plot-controls button')].find(
-      (node) => node.textContent === 'log y',
-    )
-    click(logY)
-    expect(seen).toHaveLength(2)
-    expect(seen[1].yScale).toBe('linear')
-    figure.draw({} as CanvasRenderingContext2D, { width: 10, height: 10 })
-    expect(drawnBy).toEqual([0, 1])
-    vi.doUnmock('@/ui/analysisPlots')
-    vi.resetModules()
   })
 })

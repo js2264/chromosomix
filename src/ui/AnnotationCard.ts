@@ -895,11 +895,14 @@ export class AnnotationCard {
     // computed — where the exports are — rather than among the files it was
     // computed from, which is also where a reader looks for it when they want
     // the numbers out.
+    // …and a structure is a row of the Structures card (§25), whatever road
+    // it came by: it is never a lane and has nothing this card's controls do.
     return this.props.store.entries.filter(
       (entry) =>
         entry.source.kind !== 'computed' &&
         entry.source.kind !== 'metadata' &&
-        entry.source.kind !== 'derived',
+        entry.source.kind !== 'derived' &&
+        entry.kind !== 'structure',
     )
   }
 
@@ -1035,7 +1038,14 @@ export class AnnotationCard {
     // either: reads are 1D-only (§8.13), so beside a map the row is there to be
     // closed and renamed and nothing else. A control that silently does nothing
     // is worse than an absent one.
-    if (entry.card === 'linear' && entry.kind !== 'reads' && this.props.context !== 'browser') {
+    // …nor for a structure, which is a row and not a lane (§25): its picture
+    // is the deck's structure cell, not an edge of the map.
+    if (
+      entry.card === 'linear' &&
+      entry.kind !== 'reads' &&
+      entry.kind !== 'structure' &&
+      this.props.context !== 'browser'
+    ) {
       out.push(placementField(this.props.store, entry, mapsOrLead(this.props.maps)))
     }
     if (hasTrackControls(entry.kind)) out.push(this.limits(entry), this.group(entry))

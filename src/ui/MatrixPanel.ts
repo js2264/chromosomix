@@ -210,6 +210,10 @@ import {
 import { openMenu, type MenuItem } from './Menu'
 import { VectorPage } from './vector'
 import { setReadout } from './readout'
+import { setHoverPlace, type HoverPlace } from './hoverLocus'
+
+/** What a contact map calls itself when it publishes the place under its pointer. */
+export const HOVER_SOURCE_MAP = 'map'
 import { revealTrack } from './revealTrack'
 import {
   MATRIX_OPTIONS,
@@ -6956,11 +6960,10 @@ export class MatrixPanel {
 
   /** Hand the current lane hover to whoever is listening, in matrix units. */
   private reportLaneHover(): void {
-    const listen = this.laneHoverListener
-    if (listen === null) return
     const guide = this.laneHover
     if (guide === null) {
-      listen(null)
+      this.laneHoverListener?.(null)
+      setHoverPlace(null)
       return
     }
     // The same conversion {@link paintLaneGuide} makes, and for the same reason
@@ -6971,7 +6974,55 @@ export class MatrixPanel {
     const unit = horizontal
       ? this.heatmap.scaleX.toUnit(guide.along - plot.x)
       : this.heatmap.scaleY.toUnit(guide.along - plot.y)
-    listen({ axis: horizontal ? 'cols' : 'rows', unit })
+    this.laneHoverListener?.({ axis: horizontal ? 'cols' : 'rows', unit })
+    // One place, for a structure cell (§25): a pointer on a track names a
+    // locus and not a contact, so one locus is what goes out.
+    const axis = horizontal ? this.locusAxes.cols : this.locusAxes.rows
+    const locus = axis?.unitToLocus(unit) ?? null
+    setHoverPlace(locus === null ? null : { loci: [locus], source: HOVER_SOURCE_MAP })
+  }
+
+  /**
+   * Show a place named by something that is not a map — a bead of a structure
+   * cell (§25) — or stop showing it.
+   *
+   * A bead is *one* genomic place, so it takes the lane-echo shape and not the
+   * cell-echo one: the small guide on the diagonal and a tick in the stacks on
+   * that axis, which is what a pointer on another panel's track already gets.
+   * Converted through the column axis, which is the one that means position in
+   * both presentations, and through `locusToUnits`' first answer — a circular
+   * sequence panned across its junction is on the axis twice, and one mark is
+   * what a place gets.
+   */
+  showLocusEcho(locus: { contig: string; bp: number } | null): void {
+    if (locus === null) {
+      this.showLaneEcho(null)
+      this.heatmap.setLocusEcho(null)
+      return
+    }
+    const units = this.locusAxes.cols?.locusToUnits(locus.contig, locus.bp) ?? []
+    this.showLaneEcho(units.length === 0 ? null : { axis: 'cols', unit: units[0] })
+    // …and across the heatmap itself, on both axes the place is on: a bead
+    // pointed at in the structure cell is a line down and a line across the
+    // map, where the tick at the edge alone left the reader to find it.
+    const rows = this.locusAxes.rows?.locusToUnits(locus.contig, locus.bp) ?? []
+    this.heatmap.setLocusEcho(
+      units.length === 0 && rows.length === 0 ? null : { rows: rows[0] ?? null, cols: units[0] ?? null },
+    )
+  }
+
+  /**
+   * The stretches of sequence on screen, per axis, for a cell that lights what
+   * the deck is looking at (§25).
+   *
+   * Empty above bin level, where a cell is a whole sequence and a window
+   * inside one would be an invention, and empty before a block has arrived.
+   */
+  framedRanges(): { rows: LocusWindow[]; cols: LocusWindow[] } {
+    return {
+      rows: this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY),
+      cols: this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX),
+    }
   }
 
   /**
@@ -7269,6 +7320,70 @@ export class MatrixPanel {
     const rows = spanOnAxis(this.locusAxes.rows, want, cells.rows)
     if (rows === null) return false
     this.heatmap.showCellWindow([rows[0], rows[1]], [cols[0], cols[1]])
+    return true
+  }
+
+  /**
+   * The map's own values between one place and many — the row through a
+   * pinned bead, for the structure cell to colour by (§25.5).
+   *
+   * Read out of the block the picture is drawn from, on the square axes, so
+   * a bead's colour is by construction the colour of the cell it names; a
+   * turned map reads the same square. `NaN` for a place off the block or in
+   * an empty cell, and `null` where there is no block, no square axis, or
+   * the first place is not on it. Zero I/O: the block is in hand.
+   */
+  contactsBetween(
+    from: { contig: string; bp: number },
+    to: ReadonlyArray<{ contig: string; bp: number }>,
+  ): Float32Array | null {
+    const data = this.data
+    const values = this.drawn
+    const rows = this.squareAxes.rows
+    const cols = this.squareAxes.cols
+    if (data === null || values === null || rows === null || cols === null) return null
+    const rowUnit = rows.locusToUnit(from.contig, from.bp)
+    if (rowUnit === null) return null
+    const row = Math.floor(rowUnit)
+    if (row < 0 || row >= data.nrows) return null
+    const out = new Float32Array(to.length).fill(Number.NaN)
+    for (let i = 0; i < to.length; i++) {
+      const at = to[i]
+      const colUnit = cols.locusToUnit(at.contig, at.bp)
+      if (colUnit === null) continue
+      const col = Math.floor(colUnit)
+      if (col < 0 || col >= data.ncols) continue
+      out[i] = values[row * data.ncols + col]
+    }
+    return out
+  }
+
+  /**
+   * Put a stretch on the **column** axis and leave the rows where they are —
+   * what a tracks cell of the deck asks for when the reader pans it (§25.3).
+   *
+   * {@link showLocus} is for a locus, which on a square map is the on-diagonal
+   * square; a stack of tracks names one axis, and moving both would take a
+   * reader looking off the diagonal back onto it for having scrolled a track.
+   * On a turned map the column axis is the only one there is, and the two
+   * calls are the same. `false` where nothing moved, on {@link showLocus}'s
+   * terms.
+   */
+  showLocusOnColumns(window: { contig: string; start: number; end: number }): boolean {
+    if (this.data === null) return false
+    const want = {
+      from: { contig: window.contig, bp: window.start },
+      to: { contig: window.contig, bp: window.end },
+    }
+    const cells = this.cellCount()
+    const cols = spanOnAxis(this.locusAxes.cols, want, cells.cols)
+    if (cols === null) return false
+    if (this.turned !== null) {
+      this.heatmap.showCellSpan([cols[0], cols[1]])
+      return true
+    }
+    const held = this.heatmap.cellWindow()
+    this.heatmap.showCellWindow(held.rows, [cols[0], cols[1]])
     return true
   }
 
@@ -7631,6 +7746,39 @@ export class MatrixPanel {
     return { label: group.label, range: [start, end] }
   }
 
+  /**
+   * The place under the pointer, for whatever is not a map (§25.4).
+   *
+   * Two loci ordinarily — a contact is a pair, and the structure cell lights
+   * both of its beads and draws the chord between them. **One** while the span
+   * modifier is held, because that is the gesture the reader is in the middle
+   * of: the crosshair has already stood up as a single line and the readout has
+   * already stopped naming a contact, so a model still joining two beads is the
+   * one surface left answering the question the pointer stopped asking. The one
+   * place is the position along the diagonal, which is what the line is drawn
+   * at and what the readout names.
+   */
+  private hoverPlaceFor(cell: Cell | null, span: boolean): HoverPlace | null {
+    if (cell === null || this.data === null) return null
+    if (span) {
+      const along = alongAxis(this.squareCell(cell))
+      const one = cellLoci(this.squareAxes, null, { row: along, col: along })
+      return one === null
+        ? null
+        : { loci: [{ contig: one.rows.contig, bp: Math.round(one.rows.bp) }], source: HOVER_SOURCE_MAP }
+    }
+    const at = this.locusOf(cell)
+    return at === null
+      ? null
+      : {
+          loci: [
+            { contig: at.rows.contig, bp: at.rows.bp },
+            { contig: at.cols.contig, bp: at.cols.bp },
+          ],
+          source: HOVER_SOURCE_MAP,
+        }
+  }
+
   private describe(cell: Cell | null, at?: { x: number; y: number; span?: boolean }): void {
     // Recorded whatever happens: the lanes continue the crosshair through the
     // hovered column, and they can only do that if they are told it has moved.
@@ -7643,6 +7791,12 @@ export class MatrixPanel {
     // has to be told on every move — including the move off the edge, which is
     // what takes the other panels' marks away with the pointer.
     if (moved) this.hoverListener?.(cell === null ? null : { row: cell.row, col: cell.col })
+    // …and the *place*, for whatever is not a map: a structure cell lights the
+    // beads at both ends of the contact under the pointer (§25). Published as
+    // loci rather than cells because a bead has no cell to be converted into,
+    // and through the square block so a turned map names the contact it is
+    // over rather than a band row and a half-bin.
+    if (moved) setHoverPlace(this.hoverPlaceFor(cell, at?.span === true))
 
     if (cell === null || this.data === null) {
       setReadout('')

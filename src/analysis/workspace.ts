@@ -74,6 +74,7 @@ import { profileToBedGraph, spansToBedGraph, type BedGraphContig } from './write
 import { writeBigWig } from './write/bigwig'
 import { outputToTsv, spansToTsv, tsvName } from './write/tsv'
 import { formatIntervals } from '../annotations/export'
+import { g3dSummary, writeBed3d } from '../annotations/g3d'
 import { VERSION } from '../version'
 import { TRACK_OP_LABELS, combineSamples, type TrackOp } from '../annotations/derived'
 
@@ -589,7 +590,12 @@ export class AnalysisWorkspace {
       },
       framing: result.provenance.framing.label,
     }
-    const kind = output.payload.kind === 'pairs' ? 'pairs' : 'segments'
+    // A reconstructed model (§25.6) is a `structure` row on the Structures
+    // card — the cell draws it, the tasks that read a model read it, a bed3d
+    // carries it away — and never an overlay: it is unplaced, as every
+    // structure row is, and `placeOnTarget` below has nothing to place.
+    const structure = output.entryKind === 'structure'
+    const kind = structure ? 'structure' : output.payload.kind === 'pairs' ? 'pairs' : 'segments'
     // Scoped to the map, exactly as a profile's id is and for the same reason:
     // a batch over five maps called five sets of boundaries, and one id meant
     // each `begin` replaced the row before it while `placeOnTarget` moved the
@@ -607,7 +613,7 @@ export class AnalysisWorkspace {
     // on the same row and a different task never does.
     if (store.byId(id) !== undefined) store.remove(id)
     store.begin({
-      card: 'overlay',
+      card: structure ? 'structure' : 'overlay',
       kind,
       id,
       label: map === LEAD_MAP ? output.label : `${output.label} · ${on.label}`,
@@ -615,8 +621,13 @@ export class AnalysisWorkspace {
       placement: emptyPlacement(),
       style: defaultStyle(kind, colour),
     })
-    this.placeOnTarget(store, id, emptyPlacement(), map)
-    store.update(id, { status: 'ready', payload: output.payload, summary: countedAs(output) })
+    if (!structure) this.placeOnTarget(store, id, emptyPlacement(), map)
+    store.update(id, {
+      status: 'ready',
+      payload: output.payload,
+      summary:
+        structure && output.payload.kind === 'features' ? g3dSummary(output.payload.data) : countedAs(output),
+    })
     this.intervals.set(id, { output, provenance: result.provenance, task: task.id })
   }
 
@@ -915,7 +926,7 @@ export class AnalysisWorkspace {
    * honest version of "recompute"; doing it behind their back would produce a
    * lane whose provenance line describes a picture they are not looking at.
    */
-  private recompute(entry: AnnotationEntry): void {
+  recompute(entry: AnnotationEntry): void {
     const source = entry.source
     if (source.kind !== 'computed') return
     const task = TASKS.find((candidate) => candidate.id === source.task)
@@ -939,20 +950,18 @@ export class AnalysisWorkspace {
       const payload = entry.payload
       if (payload === undefined) return
       const held = this.intervals.get(entry.id)
-      downloadBlob(
-        new Blob(
-          [
-            formatIntervals(payload, {
-              label: entry.label,
-              ...(held === undefined
-                ? {}
-                : { file: held.provenance.framing.label, created: held.provenance.createdAt }),
-            }),
-          ],
-          { type: 'text/plain' },
-        ),
-        `${base}-${stamp}.${payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
-      )
+      const context = {
+        label: entry.label,
+        ...(held === undefined
+          ? {}
+          : { file: held.provenance.framing.label, created: held.provenance.createdAt }),
+      }
+      // A structure row leaves as the bed3d it would have been loaded from
+      // (§25.7), through the same writer the Structures card's button uses.
+      const structure = entry.kind === 'structure' && payload.kind === 'features'
+      const text = structure ? writeBed3d(payload.data, context) : formatIntervals(payload, context)
+      const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
+      downloadBlob(new Blob([text], { type: 'text/plain' }), `${base}-${stamp}.${suffix}`)
       return
     }
 

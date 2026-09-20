@@ -84,6 +84,17 @@ export type AnnotationKind =
   // wanted the depth without the pile, or the pile without the depth, could ask
   // for neither.
   | 'reads'
+  // A 3D model of the chromatin fibre (§25): one bead per interval, at a fixed
+  // spacing, with a point in space on every row and — where the file is phased
+  // — two beads at every locus, one per homologue. A `FeatureSet` for the
+  // reason `barchart` is one, and the argument is the same one sharpened: a
+  // bead is an interval that *has a place*, and beside a map that interval is
+  // still a box on a lane, still searchable, still what a metaplot piles on.
+  // What it has besides is three coordinates, and three coordinates are one
+  // field ({@link FeatureSet.model}). Its own kind because the picture that
+  // reads them is not a lane at all but a cell of the deck (`panels/StructurePanel.ts`),
+  // and every control that picture needs is a question no other kind is asked.
+  | 'structure'
 
 /**
  * Which card an entry belongs to; see §8.1.
@@ -100,7 +111,7 @@ export type AnnotationKind =
  * remembered nowhere. The 4C *task* answers the same question from the file, so
  * the lane and its card are gone and the gesture is a 1D zoom (§18.9).
  */
-export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata'
+export type AnnotationCard = 'linear' | 'overlay' | 'synthetic' | 'metadata' | 'structure'
 
 /**
  * Where the bytes come from. The same two-case split as the reader's
@@ -268,6 +279,7 @@ export const ANNOTATION_KINDS = [
   'classes',
   'alignments',
   'reads',
+  'structure',
 ] as const satisfies readonly AnnotationKind[]
 
 /**
@@ -291,7 +303,28 @@ export const ANNOTATION_KINDS = [
  * to *load a BED or a GTF* while a variant set was on screen.
  */
 export function isIntervalSet(kind: AnnotationKind): boolean {
-  return kind === 'gtf' || kind === 'segments' || kind === 'variants' || kind === 'barchart'
+  // A structure's beads are intervals too (§25): what a bead carries besides its
+  // place on the genome does not stop a metaplot piling on the place.
+  return (
+    kind === 'gtf' ||
+    kind === 'segments' ||
+    kind === 'variants' ||
+    kind === 'barchart' ||
+    kind === 'structure'
+  )
+}
+
+/**
+ * Whether this kind is a 3D model of the fibre, and so carries a
+ * {@link StructureStyle} and a `model` on its set (§25).
+ *
+ * One member today, and a predicate rather than a literal for the reason every
+ * other one here is: the question is asked by the card, the store's clamp, the
+ * deck and the picker, and a fifth site spelling `kind === 'structure'` is the
+ * shape a second structure kind — an ensemble, say — would be missing from.
+ */
+export function isStructure(kind: AnnotationKind): boolean {
+  return kind === 'structure'
 }
 
 /**
@@ -448,6 +481,52 @@ export interface FeatureSet {
    * vector is one field.
    */
   bars?: BarChartBars
+  /**
+   * The point in space each bead sits at, or absent on every other format (§25).
+   *
+   * Optional on the set rather than a `FeatureSet` of its own, for exactly the
+   * reason {@link bars} is: a second feature shape breaks none of the dozen
+   * sites that test `payload.kind === 'features'` and makes every one of them
+   * skip the lane, silently. A bead is an interval with a name, a score and a
+   * strand like every other row here; what it has besides is a place, and a
+   * place is one field.
+   */
+  model?: StructureModel
+}
+
+/**
+ * Where every bead of a structure is, laid out against the set's own sort (§25).
+ *
+ * Three parallel typed arrays rather than one interleaved `xyz`, because the
+ * consumers read one axis at a time — a projection multiplies a column, a
+ * centroid sums one — and because a renderer's instance buffer wants exactly
+ * this shape. `hap` is an index into {@link haplotypes} so a phased file's two
+ * beads at one locus can be told apart without a string compare per bead.
+ *
+ * Coordinates are **the file's own**, in whatever units the solver wrote; the
+ * scene normalises for the camera and keeps the factor so a distance can be
+ * printed in the units the file had (`structure/scene.ts`). Nothing here
+ * claims a nanometre.
+ */
+export interface StructureModel {
+  x: Float32Array
+  y: Float32Array
+  z: Float32Array
+  /** Index into {@link haplotypes}, per bead. */
+  hap: Int8Array
+  /**
+   * The category names the file used — `shared` alone for an unphased one,
+   * `maternal` and `paternal` for a phased one, or whatever `g3dtools` was
+   * given (`cell-1`, `t0`). In first-seen order.
+   */
+  haplotypes: string[]
+  /**
+   * The spacing between consecutive beads, in base pairs: the file's
+   * resolution, inferred from its sorted starts and printed on the row. It is
+   * the width every bead's interval has, and it is independent of whatever bin
+   * size the map beside it happens to be at.
+   */
+  width: number
 }
 
 /**
@@ -820,6 +899,14 @@ export interface AnnotationStyle {
    * and that module reads this one. See {@link FeatureStyle}.
    */
   features?: FeatureStyle
+  /**
+   * The controls only a 3D model has (§25).
+   *
+   * Optional for the reason `reads` and `features` are: a representation and a
+   * bead radius mean nothing on a bedGraph, and being optional means no
+   * existing kind, no `defaultStyle` arm and no stored row changes shape.
+   */
+  structure?: StructureStyle
   colour: string
   /** Lane thickness in CSS pixels — the height of a bottom lane, width of a right one. */
   size: number
@@ -924,6 +1011,9 @@ function defaultSize(kind: AnnotationKind): number {
   // that a heterozygous site shows two alleles rather than a coin flip.
   if (kind === 'alignments') return 90
   if (kind === 'reads') return 180
+  // A structure's lane is its beads as boxes — the same picture a peak set is,
+  // and a phased file is two rows of them. The model itself is drawn in a cell
+  // of the deck, which has no height here to speak of (§25).
   return 16
 }
 
@@ -953,7 +1043,267 @@ export function defaultStyle(kind: AnnotationKind, colour: string): AnnotationSt
     // being optional — see {@link ReadStyle}. `readsOf` supplies the same
     // defaults for a lane whose stored style predates this field.
     ...(readsAlignments(kind) ? { reads: defaultReadStyle() } : {}),
+    // …and the same for a model, whose accessor is {@link structureOf}.
+    ...(isStructure(kind) ? { structure: defaultStructureStyle() } : {}),
   }
+}
+
+// ---------------------------------------------------------------------------
+// The structure's controls (§25)
+// ---------------------------------------------------------------------------
+
+/** How the beads of a model are drawn. */
+/**
+ * A representation a model was stored with before the three were toggles
+ * (§25.3): read back into them by {@link structureStyleOf}, written by nothing.
+ */
+export type StructureRepresentation = 'beads' | 'sticks' | 'beads+sticks' | 'tube'
+
+/**
+ * What the beads outside the deck's window are drawn as (§25).
+ *
+ * `ghost` is the default and the one that keeps the model readable as a whole
+ * while the map is zoomed into a domain: the domain is lit, the rest is there
+ * to be seen through. `hide` is for a figure of one region; `show` is the model
+ * with nothing about the window said on it.
+ */
+export type StructureOthers = 'ghost' | 'hide' | 'show'
+
+export const STRUCTURE_OTHERS: readonly StructureOthers[] = ['ghost', 'hide', 'show']
+
+/** Whether a missing bead breaks the tube, or is bridged by a dashed run. */
+export type StructureGaps = 'break' | 'dashed'
+
+/** The two projections a figure may be drawn in. */
+export type StructureProjection = 'perspective' | 'orthographic'
+
+/**
+ * The built-in colourings a model offers before it asks any other row (§25).
+ *
+ * `sequence` is one hue per contig, `haplotype` one lightness per homologue,
+ * `position` a ramp along each chain, `score` the file's fifth column. Every
+ * other value of {@link StructureStyle.colourBy} is a key of another row —
+ * `track:<id>`, `features:<id>` — or one of the two the pin makes
+ * (`distance`, `contacts`), resolved where the row is, in
+ * `structure/colour.ts`.
+ */
+export const STRUCTURE_COLOUR_SEQUENCE = 'sequence'
+export const STRUCTURE_COLOUR_HAPLOTYPE = 'haplotype'
+export const STRUCTURE_COLOUR_POSITION = 'position'
+export const STRUCTURE_COLOUR_SCORE = 'score'
+export const STRUCTURE_COLOUR_DISTANCE = 'distance'
+export const STRUCTURE_COLOUR_CONTACTS = 'contacts'
+/** The reader's own marks: a line colours its bead, a rectangle its run (§25.5). */
+export const STRUCTURE_COLOUR_MARKS = 'marks'
+/** `track:<row id>` — a loaded track's values at each bead, on the lane's limits. */
+export const STRUCTURE_COLOUR_TRACK = 'track:'
+/** `features:<row id>` — a feature set's colour where a bead overlaps one. */
+export const STRUCTURE_COLOUR_FEATURES = 'features:'
+
+/**
+ * Everything the structure cell's own menu controls.
+ *
+ * A nest on {@link AnnotationStyle} rather than fields of it, so that nothing
+ * about the other kinds changes shape, and so that the whole of it is stored
+ * and restored wholesale with the row — a saved workspace brings the model back
+ * as the reader left it, tube and colouring and all.
+ */
+export interface StructureStyle {
+  /** See the `STRUCTURE_COLOUR_*` constants and `structure/colour.ts`. */
+  /**
+   * What the model is drawn as — any of the three together (§25.3): beads
+   * at each place, sticks between neighbours, a tube through the run. A model
+   * with none of them is its gaps, chords and halos alone, which is a choice.
+   */
+  beads: boolean
+  sticks: boolean
+  tube: boolean
+  colourBy: string
+  /**
+   * Bead radius, as a fraction of the typical distance between neighbouring
+   * beads — so the same setting reads the same on a model in nanometres and
+   * one in solver units.
+   */
+  beadRadius: number
+  /** Tube and stick radius, on the same scale. */
+  tubeRadius: number
+  /** Opacity of the lit beads, `0..1`. */
+  /**
+   * How much of a **ghosted** bead is left (§25.5): 0 gone, 1 as drawn. The
+   * beads inside the window and the sequences not ghosted are always drawn
+   * whole; this is the one opacity there is.
+   */
+  opacity: number
+  others: StructureOthers
+  /** Chain names at each chain's midpoint. */
+  labels: boolean
+  /** The little axes gizmo in a corner. */
+  axes: boolean
+  /**
+   * The one haplotype shown, or `''` for every one.
+   *
+   * Both homologues of a phased file are drawn unless a reader solos one from
+   * the key; the solo is a decision about this model and is kept with it.
+   */
+  haplotype: string
+  /**
+   * A pairs row (BEDPE, loops) drawn as chords between its anchors' beads, by
+   * the row's id; `''` for none (§25.5). Kept in the style rather than the
+   * cell because it is a fact about how the model reads, like its colouring.
+   */
+  loops: string
+  /**
+   * Sequences drawn ghosted whatever the window says (§25.5): the key's
+   * click. By name, so the choice survives a re-read of the same file.
+   */
+  ghosted: string[]
+  /** A colour the reader chose for a sequence, by name, over the palette's. */
+  sequenceColours: Record<string, string>
+  /**
+   * How deep the fog sits, 0 (none) to 1 (the far side gone): space + scroll
+   * in the cell, or the slider. 0.6 is the depth cue the cell always had.
+   */
+  fog: number
+  /** Whether the fog is drawn at all; {@link fog} keeps its depth while it is off. */
+  fogOn: boolean
+  /** Whether the chords of {@link loops} are drawn; the choice of set is kept while they are off. */
+  chords: boolean
+  /**
+   * A track whose value at each bead sets the bead's size (§25.5), by the
+   * row's id; `''` for every bead the same. A second channel beside the
+   * colour, for a reader who wants to see two things at once.
+   */
+  sizeBy: string
+  /**
+   * The depth slab: 1 shows everything, smaller keeps only what lies within
+   * that fraction of the model's radius of the centre of rotation, front and
+   * back — a way into a dense globule.
+   */
+  slab: number
+  /** A genomic ruler along each chain: a tick every nice step, labelled. */
+  ruler: boolean
+  /**
+   * The map's contacts from the pinned bead as chords (§25.5): to every bead
+   * whose contact sits at least {@link contactThreshold} of the way up the
+   * map's colour scale, as thick as the contact and coloured on that scale.
+   */
+  contactChords: boolean
+  contactThreshold: number
+  /**
+   * Another structure row superposed on this one (§25.5), by id; `''` for
+   * none. Aligned by the beads the two share, drawn beside this model in its
+   * frame, and its distance from this model reported.
+   */
+  compare: string
+}
+
+export function defaultStructureStyle(): StructureStyle {
+  return {
+    beads: false,
+    sticks: false,
+    tube: true,
+    colourBy: STRUCTURE_COLOUR_SEQUENCE,
+    beadRadius: 0.35,
+    tubeRadius: 0.2,
+    opacity: 0.15,
+    others: 'ghost',
+    labels: true,
+    axes: false,
+    haplotype: '',
+    loops: '',
+    ghosted: [],
+    sequenceColours: {},
+    fog: 0.6,
+    fogOn: true,
+    chords: true,
+    sizeBy: '',
+    slab: 1,
+    ruler: false,
+    contactChords: false,
+    contactThreshold: 0.5,
+    compare: '',
+  }
+}
+
+/**
+ * One row's structure controls, whether or not its style carries any.
+ *
+ * The accessor every reader goes through, for {@link readsOf}'s reason: a
+ * session stored before this field existed opens with the defaults rather than
+ * with `undefined` reaching a renderer.
+ */
+export function structureOf(style: AnnotationStyle): StructureStyle {
+  return style.structure ?? defaultStructureStyle()
+}
+
+/** A finite number within `[lo, hi]`, or the fallback. */
+function bounded(value: unknown, lo: number, hi: number, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(lo, Math.min(hi, value))
+    : fallback
+}
+
+/**
+ * Read a stored structure style back, clamping every field.
+ *
+ * Untrusted input, like every stored shape (see {@link readStyleOf}): a
+ * representation this build has never heard of, a radius of a million, an
+ * opacity of `-1`, each of which a renderer would faithfully draw.
+ */
+export function structureStyleOf(value: unknown): StructureStyle {
+  const fallback = defaultStructureStyle()
+  if (typeof value !== 'object' || value === null) return fallback
+  const row = value as Record<string, unknown>
+  const stored = row['representation']
+  const representation: StructureRepresentation | undefined =
+    stored === 'beads' || stored === 'sticks' || stored === 'beads+sticks' || stored === 'tube' ? stored : undefined
+  const others = row['others']
+  const colourBy = row['colourBy']
+  const haplotype = row['haplotype']
+  // The three toggles, or a representation stored before there were three;
+  // a word this build has never heard of is the default drawing.
+  const flag = (key: 'beads' | 'sticks' | 'tube', legacy: boolean): boolean =>
+    typeof row[key] === 'boolean' ? (row[key] as boolean) : representation !== undefined ? legacy : fallback[key]
+  return {
+    beads: flag('beads', representation === 'beads' || representation === 'beads+sticks'),
+    sticks: flag('sticks', representation === 'sticks' || representation === 'beads+sticks'),
+    tube: flag('tube', representation === 'tube'),
+    colourBy:
+      typeof colourBy === 'string' && colourBy.length <= 200 ? colourBy : fallback.colourBy,
+    beadRadius: bounded(row['beadRadius'], 0.02, 3, fallback.beadRadius),
+    tubeRadius: bounded(row['tubeRadius'], 0.02, 3, fallback.tubeRadius),
+    opacity: bounded(row['opacity'], 0, 1, fallback.opacity),
+    others: STRUCTURE_OTHERS.includes(others as StructureOthers)
+      ? (others as StructureOthers)
+      : fallback.others,
+    labels: row['labels'] !== false,
+    axes: row['axes'] === true,
+    haplotype: typeof haplotype === 'string' && haplotype.length <= 64 ? haplotype : '',
+    loops: typeof row['loops'] === 'string' && (row['loops'] as string).length <= 200 ? (row['loops'] as string) : '',
+    ghosted: Array.isArray(row['ghosted'])
+      ? (row['ghosted'] as unknown[]).filter((v): v is string => typeof v === 'string' && v.length <= 200).slice(0, 10000)
+      : [],
+    sequenceColours: sequenceColoursOf(row['sequenceColours']),
+    fog: bounded(row['fog'], 0, 1, fallback.fog),
+    fogOn: row['fogOn'] !== false,
+    chords: row['chords'] !== false,
+    sizeBy: typeof row['sizeBy'] === 'string' && (row['sizeBy'] as string).length <= 200 ? (row['sizeBy'] as string) : '',
+    slab: bounded(row['slab'], 0.02, 1, fallback.slab),
+    ruler: row['ruler'] === true,
+    contactChords: row['contactChords'] === true,
+    contactThreshold: bounded(row['contactThreshold'], 0, 1, fallback.contactThreshold),
+    compare: typeof row['compare'] === 'string' && (row['compare'] as string).length <= 200 ? (row['compare'] as string) : '',
+  }
+}
+
+/** The reader's own sequence colours, kept only where both halves are strings. */
+function sequenceColoursOf(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null) return {}
+  const out: Record<string, string> = {}
+  for (const [name, colour] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(colour) && name.length <= 200) out[name] = colour
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

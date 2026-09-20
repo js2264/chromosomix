@@ -472,7 +472,7 @@ function binsFor(bp: number, binsize: number): number {
  * every box in this app and a span that stops partway through the next sequence
  * is a region nobody meant. `''` where there is no map to read a framing from.
  */
-function framingRegion(context: AnalysisContext): string {
+function framingRegion(context: AnalysisContext, many = false): string {
   const framing = context.framing
   if (framing === null) return ''
   // **Only where the axis is made of bins.** A genome × genome picture's
@@ -485,6 +485,23 @@ function framingRegion(context: AnalysisContext): string {
   // the task asks for a name, which is what the reader is there to give.
   if (framing.level === 'genome') return ''
   const [from, to] = framing.rows
+  const touching = (extent: readonly [number, number]) =>
+    context.contigs.filter((item) => item.startBin < extent[1] && item.startBin + item.bins > extent[0])
+  if (many) {
+    // **What the map shows**, for a box that takes several (§25.6): every
+    // sequence either axis touches — a map of chrI against chrIV shows
+    // those two and not the chrII between them — and nothing at all, which
+    // is every sequence, when that is all of them. One sequence reads as a
+    // box that takes one does, below.
+    const shown = [...new Set([...touching(framing.rows), ...touching(framing.cols)])]
+    if (shown.length === 0 || shown.length === context.contigs.length) return ''
+    if (shown.length > 1) {
+      return context.contigs
+        .filter((item) => shown.includes(item))
+        .map((item) => item.name)
+        .join(', ')
+    }
+  }
   const contig = context.contigs.find(
     (item) => from >= item.startBin && from < item.startBin + item.bins,
   )
@@ -819,7 +836,7 @@ export class ParamForm {
       // had. A spec that says empty is not an answer (`required`) still gets the
       // framing, because there the alternative is a form that starts refused.
       if (spec.sequences === true && spec.required !== true) continue
-      const region = spec.default ?? framingRegion(this.context)
+      const region = spec.default ?? framingRegion(this.context, spec.many === true)
       if (region !== '') this.params[spec.key] = region
     }
   }

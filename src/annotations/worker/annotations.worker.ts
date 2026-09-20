@@ -24,6 +24,8 @@ import {
 } from '../tabix'
 import { parseVcf, samplesIn, sniffVcf, vcfContigs } from '../vcf'
 import { barChartSummary, isBarChartSchema, parseBarChart, sniffBarChart } from '../barchart'
+import { g3dSummary, parseBed3d, parseG3d, sniffBed3d, sniffG3d } from '../g3d'
+import { g3dBinaryNote, isG3dBinary, readG3dHeader, readG3dModel, type G3dHeader } from '../g3dBinary'
 import { DEFAULT_EXCLUDE, FLAG, isBam, readHeader, type BamHeader } from '../bam/format'
 import { chunksFor, forecastBytes, parseBamIndex, type BamIndex, type ByteSpan as BamByteSpan } from '../bam/index'
 import { BamSearch, placeLabel, UnsortedError } from '../bam/search'
@@ -99,6 +101,7 @@ import type {
   TrackSamples,
   TrackSampleSet,
 } from '../types'
+import { DETAIL_SEP } from '../types'
 import {
   bbiMagic,
   isHdf5,
@@ -997,6 +1000,22 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'vcf', contigs: contigsOf(ends), origin: 'features', exact: false }
   }
 
+  // A structure dropped on an empty session declares a genome the way any
+  // feature file does — every sequence ends at its last bead — and opens a
+  // browser over it (§5.8, §25). Same place in the order as in `load`.
+  if (isG3dBinary(head)) {
+    const data = await readFinestG3d(handle)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+  if (sniffG3d(text, source.name) || sniffBed3d(text, source.name)) {
+    const data = sniffG3d(text, source.name) ? parseG3d(text, source.name) : parseBed3d(text, source.name)
+    const ends = new Map<string, number>()
+    for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
+    return { format: 'structure', contigs: contigsOf(ends), origin: 'features', exact: false }
+  }
+
   // Same place in the order as in `load`, and it has to be: this decides which
   // road a *drop* takes, and a barChart routed as a BED here would open as one
   // however well the loader knew better (§8.17). Its lengths are the ordinary
@@ -1510,6 +1529,10 @@ async function load(
   if (looksLikeTwoBit(head)) {
     return loadFasta(entry, await readTwoBit(source, handle, report), mapContigs)
   }
+  // WashU's container, by its magic (§25.2): a 64 000-byte msgpack header
+  // and one zlib block per resolution, read by range like a BAM rather than
+  // whole like a text — the header says where each block is.
+  if (isG3dBinary(head)) return loadG3dBinary(handle, mapContigs)
 
   // The parse this file already had, when the browser asked what genome it was
   // on a moment ago. Same bytes, same answer; the overlap report is recomputed
@@ -1555,6 +1578,14 @@ async function load(
   // neither: a VCF has at least eight columns and a bedGraph has exactly four,
   // so neither can capture the other whichever order they are asked in.
   if (sniffVcf(text)) return loadVcf(text, mapContigs)
+
+  // A 3D model (§25), asked here for the reason every sniffer in this block is:
+  // a five-column g3d read as a BED is a lane of boxes whose "end" is a
+  // coordinate in space. It cannot capture a VCF (eight columns, a non-integer
+  // in column 2) and nothing below it can capture a g3d (five or six columns,
+  // three coordinates where a BED has an integer end).
+  if (sniffG3d(text, source.name)) return loadG3d(text, source.name, mapContigs)
+  if (sniffBed3d(text, source.name)) return loadG3d(text, source.name, mapContigs, parseBed3d)
 
   // Third of the three, and stricter than the BED sniffer it precedes for the
   // same reason the two above are (§8.17): a barChart read as a BED is a lane
@@ -1743,6 +1774,70 @@ function loadBarChart(
     contigs: data.contigs,
     overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary: barChartSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * A g3d, read into beads with a place on each (§25).
+ *
+ * Its own arm for the summary's sake, which is the one place the inferred
+ * spacing is said: a reader whose file was meant to be at 10 kb reads `1.04 Mb`
+ * under the row and has been told the one thing this reader could have got
+ * wrong. The rename into the map's vocabulary is the generic one, so `chr7`
+ * meets `7` here exactly as a BED's does.
+ */
+function loadG3d(
+  text: string,
+  fileName: string,
+  mapContigs: NamedSequence[],
+  parse: (text: string, fileName: string) => FeatureSet = parseG3d,
+): LoadResult {
+  const data = parse(text, fileName)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  return {
+    format: 'structure',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary: g3dSummary(data),
+    payload: { kind: 'features', data },
+  }
+}
+
+/**
+ * The finest model of a binary g3d, with the header it came from.
+ *
+ * The finest rather than the map's rung, because a structure's spacing is a
+ * fact about how it was modelled and not about the map it is drawn beside
+ * (§25.2): the same file opens the same way next to a 1 kb map and a 50 kb
+ * one, and the coarser rungs are named under the row so a reader knows they
+ * exist. Two range reads: the header, then the one block.
+ */
+async function readFinestG3d(
+  handle: BlobFile | RemoteFile,
+): Promise<FeatureSet & { header: G3dHeader }> {
+  const read = (length: number, position: number): Promise<Uint8Array> => handle.read(length, position)
+  const size = await sizeOf(handle)
+  const header = await readG3dHeader(read, size ?? undefined)
+  const finest = Math.min(...header.resolutions)
+  const data = await readG3dModel(read, header, finest)
+  return Object.assign(data, { header })
+}
+
+async function loadG3dBinary(handle: BlobFile | RemoteFile, mapContigs: NamedSequence[]): Promise<LoadResult> {
+  const data = await readFinestG3d(handle)
+  const renaming = renameContigs(data.contigs, mapContigs)
+  const others = data.header.resolutions.filter((resolution) => resolution !== data.model?.width)
+  const summary = [
+    g3dSummary(data),
+    g3dBinaryNote(data.header),
+    ...(others.length === 0 ? [] : [`also at ${others.join(', ')} bp`]),
+  ].join(DETAIL_SEP)
+  return {
+    format: 'structure',
+    contigs: data.contigs,
+    overlap: overlapReport(data.contigs, mapContigs, renaming),
+    summary,
     payload: { kind: 'features', data },
   }
 }

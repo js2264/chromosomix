@@ -189,4 +189,11 @@ it is and `HANDOFF.md` §3.2 of what is left.
 
 ## FOR LATER
 
+- 3D structures (§25), left for later on purpose: ensembles and frames (FOF-CT, `.cndb`) with a
+  slider and a point-cloud representation; a resolution picker for a binary g3d (the finest opens
+  today); metadata columns as a colouring of the model; a map companion beside a browser lead;
+  the Sequences card's ticks hiding chains; a weighted (Sammon-style) or shortest-path-filled
+  variant of the reconstruction (§25.6), and a golden against ShRec3D's own output where a
+  reference implementation can be run over `demo/yeast/`.
+
 

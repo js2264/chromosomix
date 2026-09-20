@@ -46,3 +46,9 @@ data/*.tsv
 .claude/worktrees/
 dist-cli/
 dist-standalone/
+
+# Screenshots from the UI galleries (`scripts/ui-gallery.mjs`, `scripts/ui-figures.mjs`).
+# Written on demand, looked at, sent to the reader, and regenerated on the next
+# change — a picture of one build is not something to keep in the repository.
+gallery/
+gallery-figures/

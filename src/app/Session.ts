@@ -101,6 +101,7 @@ import { driveFileName } from '../browse/driveName'
 import type { AssemblyResult } from '../annotations/worker/protocol'
 import { isHicProMatrix, splitBinsFragment, splitIndexFragment } from '../annotations/sidecar'
 import { readFileDrag } from '../ui/fileDrag'
+import { isStructureName } from '../annotations/g3d'
 import {
   assemblyOf,
   browsingBinsize,
@@ -117,6 +118,7 @@ import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
 import { AnnotationCard } from '../ui/AnnotationCard'
+import { StructureCard } from '../ui/StructureCard'
 import { Breadcrumb } from '../ui/Breadcrumb'
 import { BrowserView } from '../ui/BrowserView'
 import { CompareCard, compareRefusal } from '../ui/CompareCard'
@@ -553,6 +555,8 @@ export class Session {
   readonly generalHost = el('div', { class: 'panel-host' })
   readonly annotationsHost = el('div', { class: 'panel-host' })
   readonly aestheticsHost = el('div', { class: 'panel-host' })
+  /** The structure cell's card as {@link refreshAesthetics} last placed it, so it can be taken out again. */
+  private placedStructureCard: HTMLElement | null = null
   /** The Analysis column's body: the list of tasks this file can be asked. */
   readonly analysisHost = el('div', { class: 'panel-host' })
   /**
@@ -649,6 +653,8 @@ export class Session {
   private current: {
     destroy?(): void
     applyScale?(scale: ScaleState): void
+    /** The view's own controls, for the Aesthetics column. */
+    sideEl?: HTMLElement
     /**
      * Move to a saved place without being rebuilt (§8.10).
      *
@@ -694,6 +700,8 @@ export class Session {
   /** The Metadata card (§8.12); rebuilt with the file, like every other card. */
   private metadataCard: MetadataCard | null = null
   private bookmarksCard: BookmarksCard | null = null
+  /** The bookmarks behind the card, for the structure cell to name on the model (§25.5). */
+  private bookmarkStore: BookmarkStore | null = null
   /**
    * The state the mounted view was built for.
    *
@@ -776,6 +784,15 @@ export class Session {
    * outright, and closing one still falls back to it.
    */
   private assembly: Assembly | null = null
+  /** Structure rows already seen, so a new one opens its cell (§25.3); `null` until the watch begins. */
+  /**
+   * The structure rows seen so far, by id, with the payload each held — so a
+   * row that is *replaced* under its id (a reconstruction run again lands on
+   * the same row, §25.6) reads as a fresh model too, and the cell draws it.
+   */
+  private knownStructures: Map<string, unknown> | null = null
+  /** The lead file's sequences as an assembly, for a tracks cell of the deck (§25.3). */
+  private tracksAssembly: { file: OpenFile; assembly: Assembly } | null = null
   /**
    * The file {@link assembly} was read from, in the shape a worker opens.
    *
@@ -809,6 +826,8 @@ export class Session {
   private mapOnly = false
   /** The map view's Tracks card, told when the lanes are put away (`V`). */
   private trackCard: AnnotationCard | null = null
+  /** The Structures card (§25), rebuilt with the Tracks card it sits under. */
+  private structureCard: StructureCard | null = null
   /**
    * The map/tracks button as it stands on screen, so it can be swapped in place.
    *
@@ -1198,6 +1217,7 @@ export class Session {
     this.wholeFile = null
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.compare?.client.terminate()
     this.compare = null
     this.correlator?.terminate()
@@ -1220,6 +1240,11 @@ export class Session {
    * the shell's own list is built the same way and for the same reason.
    */
   commands(): Command[] {
+    // The cells' own, after the session's: a structure cell's keys (§25.3).
+    return [...this.ownCommands(), ...(this.deck?.cellCommands() ?? [])]
+  }
+
+  private ownCommands(): Command[] {
     const state = this.store.state
     const file = this.file
     const isMetacool = this.isMetacool
@@ -2809,7 +2834,10 @@ export class Session {
     // arranging tracks and then closed the window would get none of it back.
     // The write itself is debounced, so a track landing costs no more than the
     // colour slider already does.
-    store.subscribe(() => this.host.sessionChanged(this))
+    store.subscribe(() => {
+      this.host.sessionChanged(this)
+      this.watchStructureRows(store)
+    })
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const lengths = new Map(assembly.contigs.map((contig) => [contig.name, contig.length]))
@@ -2892,6 +2920,7 @@ export class Session {
               },
             }),
       }).el,
+      this.structureCardFor(store, loader),
       this.manualCard.el,
     ])
     this.setGeneral([this.genomeCardFor(assembly)])
@@ -3090,6 +3119,10 @@ export class Session {
       ...(state.locus === undefined ? {} : { locus: state.locus }),
       ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
+      // The deck's cells follow this view when it is their lead (§25 stage D);
+      // by every road the window moves, a link included, which is why it is
+      // not the locus report above.
+      onWindowChange: () => this.deck?.leadMoved(),
       groups: held.groups,
       // The same store the card writes into and the map draws from. Handed over
       // rather than read back through the session, for the reason the tracks and
@@ -3347,6 +3380,7 @@ export class Session {
     const held = this.annotations
     const before = new Set(held.store.entries.map((entry) => entry.id))
     held.loader.addUrl(path, label, placement)
+    this.openStructureCell(path)
     if (map !== undefined && map !== LEAD_MAP) {
       for (const entry of held.store.entries) {
         if (before.has(entry.id)) continue
@@ -3421,6 +3455,7 @@ export class Session {
     // here without being asked *here* — see the hook's own comment for why it
     // is not a line at this call site.
     held.loader.addFiles(index === undefined ? [file] : [file, index], placement)
+    this.openStructureCell(file.name)
     // Everything `begin` just created belongs to the map it was dropped on. The
     // import itself is the session's, as it always was — only the placement
     // moves, so the track is in the one list with every other and simply drawn
@@ -3432,6 +3467,55 @@ export class Session {
         held.store.placeOn(entry.id, map, entry.placement)
       }
     }
+  }
+
+  /**
+   * A structure file arrived: put the cell that draws it beside the map (§25).
+   *
+   * By the file's *name*, because this runs the moment the file is handed to
+   * the loader and before anything has read it; a structure under another
+   * name lands in the Tracks card as a row and the reader opens its cell from
+   * the deck's own bar. One cell per deck, which `PanelDeck.add` keeps, so a
+   * second g3d replaces the picture rather than adding a cell. Nothing where
+   * there is no map to put it beside yet (§25 stage D).
+   */
+  private openStructureCell(name: string): void {
+    if (!isStructureName(name)) return
+    if (!this.deckIsPossible) return
+    this.ensureDeck().add({ kind: 'structure' })
+  }
+
+  /**
+   * The other road a structure arrives by: a row the Tracks card made itself,
+   * from its URL box or its file chooser, which never passes through
+   * {@link dropped} or {@link addRemote}. Watched on the store rather than
+   * hooked into the card, so every road agrees: a structure row that was not
+   * there a moment ago opens its cell. The rows already in the list when the
+   * watch begins — a restored session's — are noted and not opened, since
+   * their deck is the link's to rebuild.
+   */
+  private watchStructureRows(store: AnnotationStore): void {
+    const seen = this.knownStructures
+    const now = store.entries.filter((entry) => entry.kind === 'structure')
+    if (seen === null) {
+      this.knownStructures = new Map(now.map((entry) => [entry.id, entry.payload]))
+      return
+    }
+    let fresh: string | null = null
+    for (const entry of now) {
+      const known = seen.has(entry.id)
+      const held = seen.get(entry.id)
+      // New, or the same id with a payload it did not have before: a row
+      // that is still loading is noted and not shown until it can be.
+      const replaced = known && entry.payload !== undefined && held !== undefined && held !== entry.payload
+      seen.set(entry.id, entry.payload)
+      if (known && !replaced) continue
+      fresh = entry.id
+    }
+    // …and it is the one the cell draws: a model that has just arrived — a
+    // file dropped, a reconstruction landing — is the one the reader is
+    // waiting to see, whichever the cell was showing before (§25.6).
+    if (fresh !== null && this.deckIsPossible) this.ensureDeck().showStructure(fresh)
   }
 
   /**
@@ -3697,6 +3781,39 @@ export class Session {
     const card = new AnnotationCard(props)
     card.setMapOnly(this.mapOnly)
     this.trackCard = card
+    return card.el
+  }
+
+  /**
+   * The Structures card (§25): every model, loaded or computed, with the way
+   * into the deck's cell and the way out as a bed3d.
+   *
+   * Under the Tracks card at each of the three places one is mounted, so a
+   * model is found where a track is. *Show in the deck* opens the cell where
+   * there is none, which is the same road a dropped g3d takes.
+   */
+  private structureCardFor(store: AnnotationStore, loader: AnnotationLoader): HTMLElement {
+    this.structureCard?.destroy()
+    const card = new StructureCard({
+      store,
+      loader,
+      ...(this.deckIsPossible
+        ? {
+            onShow: (entry) => {
+              if (!this.deckIsPossible) return
+              this.ensureDeck().showStructure(entry.id)
+              this.structureCard?.refresh()
+            },
+            onHide: () => {
+              this.deck?.hideStructure()
+              this.structureCard?.refresh()
+            },
+            shown: () => this.deck?.shownStructure() ?? null,
+          }
+        : {}),
+      onRecompute: (entry) => this.analysis?.recompute(entry),
+    })
+    this.structureCard = card
     return card.el
   }
 
@@ -3998,6 +4115,7 @@ export class Session {
           context: 'browser',
           onPickDropped: (event) => this.pickDropped(event),
         }).el,
+        this.structureCardFor(held.store, held.loader),
       ])
       this.setGeneral([this.genomeCardFor(assembly)])
     }
@@ -4021,6 +4139,7 @@ export class Session {
     this.compareCarry = null
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.manualCard = null
     this.metadataCard = null
     this.bookmarksCard = null
@@ -4058,6 +4177,7 @@ export class Session {
   private async setUpAnnotations(uri: string, info: OpenResult): Promise<void> {
     this.annotations?.client.destroy()
     this.annotations = null
+    this.knownStructures = null
     this.manualCard = null
     this.metadataCard = null
     this.bookmarksCard = null
@@ -4112,7 +4232,10 @@ export class Session {
     // arranging tracks and then closed the window would get none of it back.
     // The write itself is debounced, so a track landing costs no more than the
     // colour slider already does.
-    store.subscribe(() => this.host.sessionChanged(this))
+    store.subscribe(() => {
+      this.host.sessionChanged(this)
+      this.watchStructureRows(store)
+    })
     const manual = new ManualStore(scope)
     const client = new AnnotationClient()
     const loader = new AnnotationLoader(
@@ -4167,8 +4290,9 @@ export class Session {
       picker: this.markPicker(),
       fileLabel: fileLabel(uri),
     })
+    this.bookmarkStore = new BookmarkStore(scope)
     this.bookmarksCard = new BookmarksCard({
-      store: new BookmarkStore(scope),
+      store: this.bookmarkStore,
       go: (mark) => this.goToBookmark(mark),
       available: () => this.current?.panel !== undefined,
       // Read off whatever panel is mounted *now*, not off one captured here: this
@@ -4263,6 +4387,7 @@ export class Session {
               },
             }),
       }),
+      this.structureCardFor(store, loader),
       this.metadataCard.el,
       this.manualCard.el,
       // Under the marks, because the two are the same kind of note made at
@@ -5114,9 +5239,24 @@ export class Session {
       // history entry rather than five that each undo a file — the same rule
       // the colour controls follow, and for the same reason: adding a map to
       // what is on screen is not a navigation away from it.
-      onMapsChange: (maps) => this.store.patch({ maps }, { replace: true }),
-      memoryKey: () => this.memoryKey(this.file?.uri ?? ''),
-      leadName: () => (this.file === null ? undefined : this.mapLabel(this.file.uri)),
+      onMapsChange: (maps) => {
+        this.store.patch({ maps }, { replace: true })
+        // A structure cell can arrive or go after the view was mounted — a g3d
+        // dropped, a reconstruction landing, the cell's heading closed — and
+        // its card in the Aesthetics column (§25.3) follows the cell, not the
+        // view.
+        this.refreshAesthetics()
+      },
+      memoryKey: () => this.memoryKey(this.file?.uri ?? this.assembly?.uri ?? ''),
+      // The browser as lead is named for its assembly (§25 stage D); a map for
+      // its file, under whatever the reader called it.
+      leadName: () =>
+        this.store.state?.view === 'browser'
+          ? this.assembly?.name
+          : this.file === null
+            ? undefined
+            : this.mapLabel(this.file.uri),
+      mapsAllowed: () => this.mapsAllowed,
       // Without the handler: §7.5's controls belong to the lead, and every
       // companion draws what they say without offering a second copy of them.
       derive: () => {
@@ -5144,7 +5284,10 @@ export class Session {
         const names = this.contigNames()
         return names === null ? undefined : NameIndex.for(names).context
       },
-      leadLabel: () => this.mapLabel(this.file?.uri ?? ''),
+      leadLabel: () =>
+        this.store.state?.view === 'browser' && this.assembly !== null
+          ? this.assembly.name
+          : this.mapLabel(this.file?.uri ?? ''),
       mapLabel: (uri) => this.mapLabel(uri),
       onRenameMap: (uri, name) => this.renameMap(uri, name),
       onRenameLead: (name) => {
@@ -5184,6 +5327,57 @@ export class Session {
       // both rebuilt from this session's memory on `sessionChanged`. The same
       // line the annotation store subscribes with, for the same reason.
       onLooksChange: () => this.host.sessionChanged(this),
+      // What a structure cell draws and where its gestures go (§25). The store
+      // is asked each time rather than captured: a browser session replaces
+      // its annotation machinery when its lengths are, and a cell holding the
+      // old store would draw a row nobody can see in the Tracks card.
+      structure: {
+        store: () => this.annotations?.store,
+        manual: () => this.annotations?.manual,
+        client: () => this.annotations?.client,
+        bookmarks: () => this.bookmarkStore ?? undefined,
+        // The lead map's own block, read in place: the row through the
+        // pinned bead, on the scale the map draws with (§25.5).
+        contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,
+        contactsScale: () => this.current?.panel?.shownScale() ?? null,
+        onGoTo: (range) => this.goToLocus(formatLocus(range)),
+        onDrop: (file) => this.dropped(file),
+        onDropUrl: (url) => {
+          void this.addRemote(url, { kind: 'remote', url })
+        },
+      },
+      // What a tracks cell draws from (§25.3): the lead file's own sequences
+      // as an assembly — the one `closeMap` would build — and the machinery
+      // the session's browser has. The assembly is kept per file, because the
+      // cell rebuilds its browser when the assembly object changes and a fresh
+      // one per call would rebuild it on every pan.
+      tracks: {
+        context: () => {
+          const held = this.annotations
+          const file = this.file
+          if (held === null) return undefined
+          // Beside a browser the axis is the browser's own assembly (§25
+          // stage D); beside a map, the map's sequences, kept per file.
+          let assembly: Assembly | null
+          if (this.store.state?.view === 'browser' || file === null) assembly = this.assembly
+          else {
+            if (this.tracksAssembly === null || this.tracksAssembly.file !== file) {
+              const made = this.assemblyOfFile(file)
+              if (made === null) return undefined
+              this.tracksAssembly = { file, assembly: made }
+            }
+            assembly = this.tracksAssembly.assembly
+          }
+          if (assembly === null) return undefined
+          return {
+            assembly,
+            store: held.store,
+            client: held.client,
+            groups: held.groups,
+            manual: held.manual,
+          }
+        },
+      },
     })
     this.deck = deck
     // `isConnected`, because the node this holds may be one a render in
@@ -5192,7 +5386,7 @@ export class Session {
     // one arrives through `showContent` and does it properly.
     if (this.contentNode !== null && this.contentNode.isConnected && this.deckIsPossible) {
       this.contentEl.replaceChildren(this.framed(this.contentNode))
-      deck.setLead(this.current?.panel ?? null)
+      this.syncDeckLead(deck)
     }
     return deck
   }
@@ -5217,7 +5411,7 @@ export class Session {
    * them, so the impatient gesture and the deliberate one reach the same deck.
    */
   private growDeck(direction: GrowDirection, picked?: PickedFile): void {
-    if (this.file === null || !this.deckIsPossible) return
+    if (!this.deckIsPossible) return
     this.ensureDeck().grow(direction, picked)
   }
 
@@ -5246,7 +5440,42 @@ export class Session {
   private get deckIsPossible(): boolean {
     if (this.file?.info.hasGenomes === true) return false
     const view = this.store.state?.view
+    // The browser names a place too (§25 stage D): a deck beside it holds
+    // tracks and a structure, drawn against the assembly its axis is. What may
+    // *not* join it is a map — {@link mapsAllowed} — since a map beside a
+    // browser has no lead to follow.
+    if (view === 'browser') return this.assembly !== null && this.annotations !== null
     return view === 'region' || view === 'genome' || view === 'pair' || view === 'whole' || view === 'selection'
+  }
+
+  /** Whether a map may join the deck: only beside a map (§25 stage D). */
+  private get mapsAllowed(): boolean {
+    return this.file !== null && this.store.state?.view !== 'browser'
+  }
+
+  /**
+   * Tell the deck which lead the session just mounted, in whichever shape.
+   *
+   * A map's panel drives the lock; the browser drives the cells by loci
+   * ({@link PanelDeck.setLeadAxis}). Exactly one of the two, and `null` for
+   * the other, so a deck that outlives a navigation from one to the other is
+   * not left following the view that went away.
+   */
+  private syncDeckLead(deck: PanelDeck): void {
+    const panel = this.current?.panel ?? null
+    deck.setLead(panel)
+    const browser = this.browser
+    deck.setLeadAxis(
+      panel === null && browser !== null && this.store.state?.view === 'browser'
+        ? {
+            windows: () => ({ rows: [], cols: browser.framedWindows() }),
+            show: (range) => {
+              browser.showLocus(formatLocus(range))
+              return true
+            },
+          }
+        : null,
+    )
   }
 
   /**
@@ -5779,6 +6008,7 @@ export class Session {
       // hold them until the tab closed.
       this.annotations?.client.destroy()
       this.annotations = null
+    this.knownStructures = null
       this.manualCard = null
       this.metadataCard = null
       this.bookmarksCard = null
@@ -7041,11 +7271,13 @@ export class Session {
     // files reopened — it simply stops being a frame while there is nothing for
     // it to be a frame around.
     this.contentEl.replaceChildren(this.framed(node))
-    this.deck?.setLead(view?.panel ?? null)
+    if (this.deck !== null) this.syncDeckLead(this.deck)
     // Emptied rather than hidden when a view has no controls: a table view
     // offers no aesthetics, so the column leaves the layout and its button goes
     // with it — the same rule the other two follow.
-    this.setAesthetics(view?.sideEl === undefined ? [] : [view.sideEl])
+    // The structure cell's card beside the map's (§25.3): its settings are a
+    // view's settings, and a view's settings are in this column.
+    this.refreshAesthetics()
     // After the view is mounted, because the framing and the block a task runs
     // on are read off whatever is on screen *now* (§18.4) — and because a table
     // view has neither, which is a state the panel has to be able to show.
@@ -7570,6 +7802,39 @@ export class Session {
     }
     this.annotationsHost.replaceChildren(...out)
     this.setAvailability('annotations', out.length > 0)
+  }
+
+  /**
+   * The Aesthetics column as it should be now: the view's own controls, then
+   * the structure cell's card where the deck has one (§25.3). Called when a
+   * view is mounted and whenever the deck's cells change, because either can
+   * happen after the other.
+   */
+  private refreshAesthetics(): void {
+    const side = this.current?.sideEl
+    const card = this.deck?.structureSettings() ?? null
+    // A card the enlarged dialog has borrowed stays where it is: the dialog
+    // gives it back when it closes.
+    const borrowed = card !== null && card.isConnected && !this.aestheticsHost.contains(card)
+    // The card placed last time, taken out where the deck no longer has it.
+    const placed = this.placedStructureCard
+    if (placed !== null && placed !== card && this.aestheticsHost.contains(placed)) placed.remove()
+    this.placedStructureCard = null
+    if (side === undefined) {
+      this.setAesthetics(card === null || borrowed ? [] : [card])
+      return
+    }
+    if (card !== null && !borrowed) {
+      // Inside the view's own aside, right after its *Map* card and before
+      // the tracks and the groups (§25.3): the model is a view of the same
+      // thing the map is, so its card stands with the map's. A view without
+      // a map card takes it last.
+      const map = this.current?.panel?.controlsEl
+      if (map !== undefined && map.parentElement === side) map.after(card)
+      else side.append(card)
+      this.placedStructureCard = card
+    }
+    this.setAesthetics([side])
   }
 
   private setAesthetics(nodes: readonly HTMLElement[]): void {

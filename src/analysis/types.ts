@@ -293,6 +293,15 @@ export interface RegionParam extends ParamBase {
    */
   sequences?: boolean
   /**
+   * The box takes **several sequences**, comma-separated, and is seeded from
+   * what the map shows (§25.6): every sequence on screen when the view spans
+   * more than one, the locus when it is inside one, and **empty for the whole
+   * file**, since empty means every sequence and a list of all of them is the
+   * same answer said the long way. The structure tasks take it; a task that
+   * reads one sequence leaves it off and gets the first on screen.
+   */
+  many?: boolean
+  /**
    * Empty is not an answer, so the list says *choose one* rather than *every*.
    *
    * Compartments is the case: a correlation matrix is a property of one
@@ -657,7 +666,7 @@ export interface CurveOutput {
    * not always its full extent: a P(s) runs from one base pair to a whole
    * chromosome and the decade at each end is a spike and a handful of noisy
    * points, so a curve drawn over all of it spends its height on the parts
-   * nobody reads. `ui/interactivePlot.ts` then treats them as the *initial*
+   * nobody reads. `figures/style.ts` then treats them as the *initial*
    * view — the marquee, the boxes and the reset all move them — so this is a
    * default rather than a limit, and it is on the output rather than in the
    * panel because which window is worth opening on is a fact about the
@@ -753,6 +762,16 @@ export interface IntervalsOutput {
   id: string
   label: string
   payload: AnnotationPayload
+  /**
+   * What the row *is*, where it is not a called interval set.
+   *
+   * A reconstructed model (§25.6) is a `FeatureSet` with a `model` on it —
+   * exactly what a bed3d parses to — and it lands through the same door as a
+   * called boundary set, but on the Structures card as a `structure` row that
+   * the deck's cell draws, never as an overlay on the map. Absent is the
+   * ordinary case: an overlay of segments or pairs.
+   */
+  entryKind?: 'structure'
   /**
    * What one of these *is*, so the row can say how many there are.
    *

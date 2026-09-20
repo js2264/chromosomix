@@ -52,18 +52,20 @@
  * the dark theme without a rule being written here (`ui/styles.css`).
  */
 
+import type { Command } from '../ui/commands'
 import type { NameContext } from '../genome/naming'
 import { deviceDenseBudgetBytes } from '../metacooler/matrix'
 import { recall, remember } from '../state/UiMemory'
 import type { ViewState } from '../types'
 import type { SourceSpec } from '../worker/protocol'
-import type {
-  AnnotationContext,
-  DeckExport,
-  DerivePresentation,
-  MatrixPanel,
-  PanelGeometry,
-  TurnPresentation,
+import {
+  HOVER_SOURCE_MAP,
+  type AnnotationContext,
+  type DeckExport,
+  type DerivePresentation,
+  type MatrixPanel,
+  type PanelGeometry,
+  type TurnPresentation,
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
@@ -82,6 +84,13 @@ import { iconButton } from '../ui/icons'
 import { folderPickButton } from '../ui/pickFromFolders'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
+import type { DeckCell } from './cell'
+import type { LocusWindow } from '../render/locus'
+import { StructurePanel, type StructureCellProps } from './StructurePanel'
+import { TracksPanel, type TracksCellProps } from './TracksPanel'
+import type { LaneEdge } from '../annotations/types'
+import { subscribeHoverPlace } from '../ui/hoverLocus'
+import { isStructureName } from '../annotations/g3d'
 import { MapPanel, VacantPanel, type VacancyOrigin } from './MapPanel'
 import {
   DECK_DRAG_TYPE,
@@ -95,6 +104,7 @@ import {
   sameRefs,
   serialiseMaps,
   swapItems,
+  isMapRef,
   localCompanions,
   withLocalCompanions,
   readDeckLook,
@@ -354,6 +364,38 @@ export interface PanelDeckProps {
    * nothing on the state road ever fired.
    */
   onLooksChange?(): void
+  /**
+   * What a **structure cell** needs from the session (§25): the store its row
+   * is in, the marks a shift-click adds to, and where a double-click takes
+   * the maps. Absent where the session has no annotation store — a metacool —
+   * in which case a structure cell draws its "no structure" line and nothing
+   * else.
+   */
+  structure?: StructureCellProps
+  /**
+   * What a **tracks cell** needs from the session (§25.3): the lead file's
+   * sequences and the annotation machinery its own browser would have. Absent
+   * where the session has none, in which case a tracks cell says so.
+   */
+  tracks?: TracksCellProps
+  /**
+   * Whether a **map** may join this deck (§25 stage D). Absent is yes. `false`
+   * for a deck whose lead is the 1D browser: its cells are tracks and a
+   * structure, and a map dropped on it is refused in the bar rather than
+   * opened beside a lead it cannot follow.
+   */
+  mapsAllowed?(): boolean
+}
+
+/**
+ * A lead that is not a map (§25 stage D): the session's browser, re-parented
+ * into cell 0 like a map's view, answering the two things the cells need of a
+ * lead — where it is looking, as loci, and to be taken somewhere.
+ */
+export interface LeadAxis {
+  windows(): { rows: LocusWindow[]; cols: LocusWindow[] }
+  /** Put a stretch on the axis; `false` where it could not. */
+  show(range: { contig: string; start: number; end: number }): boolean
 }
 
 /**
@@ -375,6 +417,13 @@ interface Slot {
   ref: PanelRef
   panel: MapPanel | null
   vacancy: VacantPanel | null
+  /**
+   * A cell that is not a map and not empty — a structure, a stack of tracks
+   * (§25). Exclusive with the two above: a slot holds one of the three, and a
+   * `DeckCell` answers only what every cell can, so the deck's map-only calls
+   * (a lock member, a lane floor, a bin size) never look at it.
+   */
+  cell: DeckCell | null
   /** What the reader asked for; whether it is *honoured* is {@link agrees}. */
   locked: boolean
 }
@@ -395,6 +444,11 @@ const DECK_EXPORT_GAP = 0.02
  * In the deck's own bar and on the `+` edges rather than on an error screen: a
  * refusal to open a *sixty-fifth* map is not a reason to take the others away.
  */
+/** A map offered to a deck whose lead is the browser (§25 stage D). */
+const NO_MAP_LEAD =
+  'This deck is of tracks and a structure beside the browser. A map opens as a session of its ' +
+  'own — drop it on the tab strip, or open it first and put the tracks beside it.'
+
 const NO_ROOM =
   `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
   'many are useful: every panel is a worker and, for a whole-file view, a block held in memory, ' +
@@ -432,6 +486,12 @@ export class PanelDeck {
   private readonly leadCell = el('div', { class: 'deck-panel is-lead' }, this.leadHead)
   private readonly addRow: HTMLElement
   private readonly urlInput: HTMLInputElement
+  /**
+   * The one cell that is not a file (§25). Greyed rather than hidden while
+   * the deck has one, since a deck holds one structure cell and a button that
+   * did nothing would read as a bug.
+   */
+  private readonly structureButton: HTMLButtonElement
   /** A refusal about the deck as a whole, rather than about one panel. */
   private readonly warning = el('p', { class: 'inline-error deck-warning hidden' })
 
@@ -441,6 +501,11 @@ export class PanelDeck {
   private slots: Slot[] = []
   private readonly lock = new ViewportLock()
   private lead: MatrixPanel | null = null
+  /** The lead when it is not a map — the browser (§25 stage D); else `null`. */
+  private leadAxis: LeadAxis | null = null
+  private readonly unsubscribeHover: () => void
+  /** Whether the echo on the maps is one a structure cell's pointer put there. */
+  private echoingPlace = false
   private leadLocked = true
   /**
    * The lead's last report, kept because the alignment is recomputed without it.
@@ -533,6 +598,28 @@ export class PanelDeck {
 
   constructor(private readonly props: PanelDeckProps) {
     this.columns = this.recallColumns()
+    // A pointer on a structure cell is a place on every map (§25.4): the cell
+    // publishes it and the deck, which is what knows the maps, draws the mark
+    // — the lane-echo shape, on the axis that means position in every
+    // presentation. Cleared only when this deck put one there, so a hand
+    // leaving a map does not wipe another deck's echo through this one.
+    this.unsubscribeHover = subscribeHoverPlace((place) => {
+      const locus = place === null ? null : place.loci[0]
+      // Onto the cells that draw an axis, whoever is pointing — bar the one
+      // pointing. The structure cell listens for itself and has no relay.
+      for (const slot of this.slots) {
+        if (slot.cell === null || place?.source === `${slot.cell.kind}:${slot.id}`) continue
+        slot.cell.showLocusEcho?.(locus)
+      }
+      // Onto the maps only from a cell: the maps already echo between
+      // themselves, through cells and converted, and a second mark for the
+      // same pointer would be two answers.
+      const fromCell = place !== null && place.source !== HOVER_SOURCE_MAP
+      if (!fromCell && !this.echoingPlace) return
+      this.echoingPlace = fromCell
+      this.lead?.showLocusEcho(fromCell ? locus : null)
+      for (const slot of this.slots) slot.panel?.map?.showLocusEcho(fromCell ? locus : null)
+    })
     // Restored, then reconciled: a session written when four maps were open can
     // name a slot this one has not built, and `keepStarPresent` puts it back on
     // the lead rather than leaving the Analysis column pointed at nothing.
@@ -540,6 +627,10 @@ export class PanelDeck {
     if (typeof star === 'string' && star !== '') this.starred = star
     this.looks = this.recallLooks()
 
+    this.structureButton = button('3D structure', () => this.add({ kind: 'structure' }), {
+      class: 'btn deck-add-structure',
+      title: 'Open a cell drawing the session’s 3D structure beside the maps',
+    })
     this.urlInput = el('input', {
       class: 'input input-tiny deck-url',
       type: 'url',
@@ -558,6 +649,15 @@ export class PanelDeck {
       this.urlInput,
       button('add', () => this.addUrl(), { class: 'btn' }),
       folderPickButton((picked) => this.addPicked(picked)),
+      // The one cell that is not a file: the session's 3D model, in a cell of
+      // its own (§25). Greyed rather than hidden where the deck has one, since
+      // a deck holds one structure cell and a button that did nothing would
+      // read as a bug.
+      this.structureButton,
+      button('tracks', () => this.add({ kind: 'tracks' }), {
+        class: 'btn deck-add-tracks',
+        title: 'Open a cell of tracks alone beside the maps — put tracks on it from the Tracks card',
+      }),
       fileInput,
     )
     this.urlInput.addEventListener('keydown', (event) => {
@@ -710,6 +810,11 @@ export class PanelDeck {
     })
     panel.setViewportListener((rows, cols) => {
       this.lock.report(LEAD, rows, cols)
+      // One way, to the cells that light what the maps are looking at (§25).
+      // Read back from the panel as loci rather than converted from the cell
+      // spans above: a structure has no cells, and base pairs are what it has.
+      const windows = panel.framedRanges()
+      for (const slot of this.slots) slot.cell?.applyWindow(windows)
       // Before the notes, because it is one of the things they are about: a
       // companion whose band reaches a different distance is refused by
       // `lockNote`, and this is what stops that being a thing two boxes can
@@ -802,7 +907,7 @@ export class PanelDeck {
       // make the next render see a difference and reconcile the deck away.
       this.published = { value: state.maps }
     }
-    for (const slot of this.slots) slot.panel?.apply(state)
+    for (const slot of this.slots) (slot.panel ?? slot.cell)?.apply(state)
     this.paintBar()
   }
 
@@ -942,8 +1047,10 @@ export class PanelDeck {
    * offered: a placement on a map that holds no file would be a lane waiting
    * for a picture, and the reader can place it the moment one arrives.
    */
-  get mapList(): Array<{ id: string; label: string }> {
-    const out = [{ id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' }]
+  get mapList(): Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> {
+    const out: Array<{ id: string; label: string; edges?: readonly LaneEdge[] }> = [
+      { id: LEAD_MAP, label: this.props.leadLabel?.() ?? 'this map' },
+    ]
     for (const slot of this.slots) {
       if (slot.panel === null) continue
       // The panel's **own** URI, which is neither the ref's nor the slot's id.
@@ -969,6 +1076,15 @@ export class PanelDeck {
         label: this.props.mapLabel?.(slot.panel.uri) ?? fileLabel(slot.panel.uri),
       })
     }
+    // A tracks cell is a place a track can be put, with one edge (§25.3).
+    // After the maps, and numbered, since two stacks of tracks would
+    // otherwise be two rows with one name.
+    let stacks = 0
+    for (const slot of this.slots) {
+      if (slot.cell?.kind !== 'tracks') continue
+      stacks++
+      out.push({ id: slot.id, label: stacks === 1 ? 'tracks' : `tracks ${stacks}`, edges: ['bottom'] })
+    }
     return out
   }
 
@@ -978,16 +1094,17 @@ export class PanelDeck {
   }
 
   relayout(): void {
-    for (const slot of this.slots) slot.panel?.remeasure()
+    for (const slot of this.slots) (slot.panel ?? slot.cell)?.remeasure()
   }
 
   /** Ask every companion for a frame; see `MatrixPanel.repaint` (§8.12). */
   repaint(): void {
-    for (const slot of this.slots) slot.panel?.repaint()
+    for (const slot of this.slots) (slot.panel ?? slot.cell)?.repaint()
   }
 
   destroy(): void {
     this.destroyed = true
+    this.unsubscribeHover()
     // Before anything else: the heading is the *view's*, it outlives this deck,
     // and a session that puts its last companion down must get it back rather
     // than lose its locus box with the grid.
@@ -995,6 +1112,7 @@ export class PanelDeck {
     for (const slot of this.slots) {
       slot.panel?.destroy()
       slot.vacancy?.destroy()
+      slot.cell?.destroy()
     }
     this.slots = []
     this.lock.leave(LEAD)
@@ -1010,6 +1128,7 @@ export class PanelDeck {
     this.lead?.setLaneFloor({ top: 0, right: 0, bottom: 0, left: 0 })
     this.lead?.setDeckExport(null)
     this.lead = null
+    this.leadAxis = null
   }
 
   /**
@@ -1169,7 +1288,7 @@ export class PanelDeck {
       // foot of a rectangle of air (`ui/styles.css`'s `.deck-vacant`).
       const plotHeight = Math.round(held.plotHeight)
       this.grid.style.setProperty('--deck-plot-h', plotHeight > 0 ? `${plotHeight}px` : '')
-      for (const slot of this.slots) slot.panel?.remeasure()
+      for (const slot of this.slots) (slot.panel ?? slot.cell)?.remeasure()
     } finally {
       this.aligning = false
     }
@@ -1197,7 +1316,7 @@ export class PanelDeck {
     // tab with its element already dropped from the grid.
     const spare = new Map<string, Slot[]>()
     for (const slot of this.slots) {
-      if (slot.ref.kind === 'vacant') continue
+      if (!isMapRef(slot.ref)) continue
       const queue = spare.get(slot.ref.uri)
       if (queue === undefined) spare.set(slot.ref.uri, [slot])
       else queue.push(slot)
@@ -1205,8 +1324,18 @@ export class PanelDeck {
     const reused = new Set<Slot>()
     const next: Slot[] = []
     for (const [index, ref] of wanted.slice(0, MAX_PANELS - 1).entries()) {
-      if (ref.kind !== 'vacant') {
+      if (isMapRef(ref)) {
         const existing = spare.get(ref.uri)?.shift()
+        if (existing !== undefined) {
+          reused.add(existing)
+          next.push(existing)
+          continue
+        }
+      } else if (ref.kind !== 'vacant') {
+        // A structure cell is keyed by its kind: the deck holds one (§25), and
+        // rebuilding it for a link that merely re-lists it would throw away a
+        // camera the reader had just set.
+        const existing = this.slots.find((slot) => !reused.has(slot) && slot.ref.kind === ref.kind)
         if (existing !== undefined) {
           reused.add(existing)
           next.push(existing)
@@ -1241,6 +1370,7 @@ export class PanelDeck {
       this.lock.leave(slot.id)
       slot.panel?.destroy()
       slot.vacancy?.destroy()
+      slot.cell?.destroy()
     }
     this.slots = next
     // A link, or a restored session, can name fewer maps than the star knew
@@ -1262,13 +1392,73 @@ export class PanelDeck {
     // window on the first pan, which is the one thing unhooking it said not to
     // do. `locked` where nothing was remembered, which is how a fresh panel
     // arrives (§16.2).
-    const held = ref.kind === 'vacant' ? undefined : this.lookFor(ref.uri)
+    const held = isMapRef(ref) ? this.lookFor(ref.uri) : undefined
     const slot: Slot = {
       id: `p${nextSlotId++}`,
       ref,
       panel: null,
       vacancy: null,
+      cell: null,
       locked: held?.locked !== false,
+    }
+    if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
+      // A map named beside a lead that is not one (§25 stage D): held as the
+      // cell it would have been, under its name, rather than opened beside a
+      // browser it could not follow — and rather than dropped from the link,
+      // which would lose the reader's arrangement for opening it in the
+      // wrong session.
+      slot.vacancy = new VacantPanel({
+        origin: 'remembered',
+        name: ref.uri,
+        onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
+        onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onClose: () => this.remove(slot),
+      })
+      return slot
+    }
+    if (ref.kind === 'structure') {
+      const shared = this.props.structure
+      const contacts = shared?.contacts
+      slot.cell = new StructurePanel({
+        id: slot.id,
+        store: () => shared?.store(),
+        manual: () => shared?.manual?.(),
+        client: () => shared?.client?.(),
+        bookmarks: () => shared?.bookmarks?.(),
+        // Passed only where the session offers it, since the cell offers
+        // *colour by contacts* on the strength of its presence.
+        ...(contacts === undefined
+          ? {}
+          : {
+              contacts: (from: { contig: string; bp: number }, to: ReadonlyArray<{ contig: string; bp: number }>) =>
+                contacts(from, to),
+              contactsScale: () => shared?.contactsScale?.() ?? null,
+            }),
+        memoryKey: () => this.props.memoryKey(),
+        onClose: () => this.remove(slot),
+        onGoTo: (range) => shared?.onGoTo(range),
+        onDrop: (file) => shared?.onDrop(file),
+        onDropUrl: (url) => shared?.onDropUrl(url),
+        onDragChange: (dragging) => this.setArranging(dragging),
+      })
+      // What the maps are looking at, from the moment the cell exists rather
+      // than from the lead's next pan: the lead's window is where it was.
+      const windows = this.leadWindows()
+      if (windows !== null) slot.cell.applyWindow(windows)
+      return slot
+    }
+    if (ref.kind === 'tracks') {
+      const shared = this.props.tracks
+      slot.cell = new TracksPanel({
+        id: slot.id,
+        context: () => shared?.context(),
+        onClose: () => this.remove(slot),
+        onFollow: (range) => this.followColumns(range),
+        onDragChange: (dragging) => this.setArranging(dragging),
+      })
+      const windows = this.leadWindows()
+      if (windows !== null) slot.cell.applyWindow(windows)
+      return slot
     }
     if (ref.kind === 'vacant') {
       slot.vacancy = new VacantPanel({
@@ -1325,9 +1515,9 @@ export class PanelDeck {
       // above, because a companion handed a collection resolves itself to one of
       // its entries and rewrites the slot ({@link resolveRef}) — and it is the
       // resolved URI the look was written under.
-      remembered: () => (slot.ref.kind === 'vacant' ? undefined : this.lookFor(slot.ref.uri)),
+      remembered: () => (isMapRef(slot.ref) ? this.lookFor(slot.ref.uri) : undefined),
       onLook: (look) => {
-        if (slot.ref.kind !== 'vacant') this.noteLook(slot.ref.uri, { ...look, locked: slot.locked })
+        if (isMapRef(slot.ref)) this.noteLook(slot.ref.uri, { ...look, locked: slot.locked })
       },
       preferBinsize: () => this.props.binsize?.(),
       onResolved: (uri) => this.resolveRef(slot, uri),
@@ -1335,9 +1525,9 @@ export class PanelDeck {
       // Against the *slot's* ref rather than the one captured above, for
       // {@link remembered}'s reason: a companion handed a collection rewrites
       // itself into one of its entries, and a name is filed under the file.
-      label: () => (slot.ref.kind === 'vacant' ? undefined : this.props.mapLabel?.(slot.ref.uri)),
+      label: () => (isMapRef(slot.ref) ? this.props.mapLabel?.(slot.ref.uri) : undefined),
       onRename: (name) => {
-        if (slot.ref.kind !== 'vacant') this.props.onRenameMap?.(slot.ref.uri, name)
+        if (isMapRef(slot.ref)) this.props.onRenameMap?.(slot.ref.uri, name)
       },
     })
     slot.panel.syncLock()
@@ -1353,7 +1543,7 @@ export class PanelDeck {
    * the ladder to the two people looking at it (§3.4, §16.6).
    */
   private resolveRef(slot: Slot, uri: string): void {
-    if (slot.ref.kind === 'vacant' || slot.ref.uri === uri) return
+    if (!isMapRef(slot.ref) || slot.ref.uri === uri) return
     slot.ref = { kind: slot.ref.kind, uri }
     this.publish()
     // A **starred** panel that moved rung is a different file to an analysis:
@@ -1576,7 +1766,7 @@ export class PanelDeck {
     // Recorded beside the scale, because to a reader it is the same kind of
     // decision about the same map: *this one is not like the others*. Only a
     // slot with a file behind it — a vacancy has no key to be remembered under.
-    if (slot.ref.kind !== 'vacant') {
+    if (isMapRef(slot.ref)) {
       const held = this.lookFor(slot.ref.uri) ?? { uri: slot.ref.uri }
       this.noteLook(slot.ref.uri, { ...held, locked: slot.locked })
     }
@@ -1620,7 +1810,9 @@ export class PanelDeck {
       this.setArranging(false)
       if (cell === null) return
       event.preventDefault()
-      const from = this.slots.findIndex((slot) => slot.panel?.el.classList.contains('is-dragging') === true)
+      const from = this.slots.findIndex(
+        (slot) => (slot.panel ?? slot.cell)?.el.classList.contains('is-dragging') === true,
+      )
       if (from >= 0) this.swap(from, indexOf(cell))
     })
     this.grid.addEventListener('dragleave', (event) => {
@@ -1676,7 +1868,7 @@ export class PanelDeck {
    */
   armPicking(handlers: PickHandlers, onEnd: () => void = () => {}): () => void {
     const cancels = this.slots
-      .map((slot) => slot.panel?.armPicking(handlers, onEnd))
+      .map((slot) => slot.panel?.armPicking(handlers, onEnd) ?? slot.cell?.armPicking?.(handlers, onEnd))
       .filter((cancel): cancel is () => void => cancel !== undefined)
     return () => {
       for (const cancel of cancels) cancel()
@@ -1782,7 +1974,7 @@ export class PanelDeck {
    */
   renamed(): void {
     this.paintLeadHead()
-    for (const slot of this.slots) slot.panel?.syncName()
+    for (const slot of this.slots) (slot.panel ?? slot.cell)?.syncName()
   }
 
   /** Repaint every star, so exactly one of them is filled. */
@@ -1800,6 +1992,7 @@ export class PanelDeck {
     this.lock.leave(slot.id)
     slot.panel?.destroy()
     slot.vacancy?.destroy()
+    slot.cell?.destroy()
     this.slots.splice(index, 1)
     this.paintGrid()
     this.publish()
@@ -1807,6 +2000,15 @@ export class PanelDeck {
 
   /** Turn a vacancy into a map, in the position it was standing in. */
   private fill(slot: Slot, picked: PickedFile): void {
+    // The same routing {@link addPicked} does, into *this* cell: a g3d dropped
+    // on an empty card is the reader saying where the structure goes.
+    if (isStructureName(picked.uri)) {
+      if (picked.source.kind === 'local') this.props.structure?.onDrop(picked.source.file)
+      else this.props.structure?.onDropUrl(picked.uri)
+      if (this.hasStructure()) this.remove(slot)
+      else this.occupy(slot, { kind: 'structure' })
+      return
+    }
     this.occupy(
       slot,
       { kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri },
@@ -1823,7 +2025,7 @@ export class PanelDeck {
     this.slots[index] = built
     this.paintGrid()
     this.publish()
-    if (this.state !== null) built.panel?.apply(this.state)
+    if (this.state !== null) (built.panel ?? built.cell)?.apply(this.state)
   }
 
   private addUrl(): void {
@@ -1849,6 +2051,15 @@ export class PanelDeck {
    * is a rename rather than a second road in.
    */
   private addPicked(picked: PickedFile): void {
+    // A structure is a *track* to the session and a *cell* to the deck: the
+    // file goes to the store by the session's road, and the cell that draws
+    // the store's structure row opens here (§25.3).
+    if (isStructureName(picked.uri)) {
+      if (picked.source.kind === 'local') this.props.structure?.onDrop(picked.source.file)
+      else this.props.structure?.onDropUrl(picked.uri)
+      this.add({ kind: 'structure' })
+      return
+    }
     this.add(
       { kind: picked.source.kind === 'local' ? 'local' : 'remote', uri: picked.uri },
       picked.source,
@@ -1866,6 +2077,16 @@ export class PanelDeck {
    * adding a map disagree about what the deck is.
    */
   add(ref: PanelRef, source?: SourceSpec): void {
+    // One structure cell per deck (§25): a second press, or a second g3d
+    // dropped, keeps the one there is.
+    if (ref.kind === 'structure' && this.hasStructure()) {
+      this.hideAdd()
+      return
+    }
+    if (isMapRef(ref) && this.props.mapsAllowed?.() === false) {
+      this.warn(NO_MAP_LEAD)
+      return
+    }
     const empty = this.slots.find((slot) => slot.ref.kind === 'vacant')
     if (empty !== undefined) {
       this.warn('')
@@ -1887,7 +2108,7 @@ export class PanelDeck {
     this.hideAdd()
     this.paintGrid()
     this.publish()
-    if (this.state !== null) slot.panel?.apply(this.state)
+    if (this.state !== null) (slot.panel ?? slot.cell)?.apply(this.state)
   }
 
   /**
@@ -1992,7 +2213,7 @@ export class PanelDeck {
   private paintGrid(): void {
     this.grid.replaceChildren(
       this.leadCell,
-      ...this.slots.map((slot) => slot.panel?.el ?? slot.vacancy?.el ?? el('div')),
+      ...this.slots.map((slot) => slot.panel?.el ?? slot.cell?.el ?? slot.vacancy?.el ?? el('div')),
     )
     // Every panel that has just been built needs to be told whether its star is
     // filled: which one it is belongs to the deck, and a panel has no way to
@@ -2056,7 +2277,7 @@ export class PanelDeck {
       },
       NO_ROOM,
     )
-    for (const slot of this.slots) slot.panel?.remeasure()
+    for (const slot of this.slots) (slot.panel ?? slot.cell)?.remeasure()
   }
 
   /**
@@ -2078,7 +2299,7 @@ export class PanelDeck {
 
   /** Cells with a file in them, lead included — the budget's divisor. */
   private get filled(): number {
-    return 1 + this.slots.filter((slot) => slot.ref.kind !== 'vacant').length
+    return 1 + this.slots.filter((slot) => isMapRef(slot.ref)).length
   }
 
   /**
@@ -2091,7 +2312,10 @@ export class PanelDeck {
   private paintBar(): void {
     const cells = this.slots.length + 1
     const filled = this.filled
-    const empty = cells - filled
+    // The cards with nothing in them — not `cells - filled`, which would count
+    // a structure cell as a gap (§25): it holds no *file*, and a file is what
+    // the budget divides by, but it is not empty.
+    const empty = this.slots.filter((slot) => slot.ref.kind === 'vacant').length
 
     // The one control that puts a map *into* the deck, and the reason it is
     // here: the row of boxes below the bar takes a file or a URL, and until now
@@ -2101,6 +2325,8 @@ export class PanelDeck {
     // one, which is the road §11 exists for. A `+` on an edge draws a *cell*
     // (§16.9); this opens a map.
     const adding = !this.addRow.classList.contains('hidden')
+    this.structureButton.disabled = this.hasStructure()
+    this.addRow.classList.toggle('is-cells-only', this.props.mapsAllowed?.() === false)
     const addMap = button(
       adding ? 'cancel' : 'add a map…',
       () => (adding ? this.hideAdd() : this.promptAdd()),
@@ -2287,6 +2513,7 @@ export class PanelDeck {
       this.lock.leave(slot.id)
       slot.panel?.destroy()
       slot.vacancy?.destroy()
+      slot.cell?.destroy()
     }
     this.slots = []
     // The star comes back to the lead and the lanes go with the maps, the
@@ -2343,7 +2570,7 @@ export class PanelDeck {
     // entry of a collection is keyed by the map it is actually drawing.
     const files = new Map<MapId, string>()
     for (const slot of this.slots) {
-      const uri = slot.panel?.uri ?? (slot.ref.kind === 'vacant' ? undefined : slot.ref.uri)
+      const uri = slot.panel?.uri ?? (isMapRef(slot.ref) ? slot.ref.uri : undefined)
       if (uri !== undefined) files.set(slot.id, uri)
     }
     store.noteMapFiles(files)
@@ -2406,6 +2633,95 @@ export class PanelDeck {
     },
   }
 
+  /**
+   * A tracks cell was panned: the lead goes there on its column axis, and
+   * reports through the lock to every other map (§25.3). One road in, so a
+   * cell never drives a companion the lead is not driving. A browser lead is
+   * taken there the same way, and tells the cells itself.
+   */
+  private followColumns(range: { contig: string; start: number; end: number }): void {
+    if (this.lead !== null) this.lead.showLocusOnColumns(range)
+    else this.leadAxis?.show(range)
+  }
+
+  /**
+   * The lead the session mounted when it is **not a map** — its browser
+   * (§25 stage D). `null` when the lead is a map, or nothing.
+   *
+   * The map road is {@link setLead}; the two are exclusive, and the session
+   * calls the one for the view it mounted. The cells are told where the new
+   * lead is looking at once, since a browser reports nothing until it moves.
+   */
+  setLeadAxis(axis: LeadAxis | null): void {
+    this.leadAxis = axis
+    if (axis !== null) this.leadMoved()
+  }
+
+  /** The browser lead moved: the cells follow, as they do a map's pan. */
+  leadMoved(): void {
+    const windows = this.leadWindows()
+    if (windows === null) return
+    for (const slot of this.slots) slot.cell?.applyWindow(windows)
+  }
+
+  /** Where the lead is looking, whichever shape it has, or `null` for none. */
+  private leadWindows(): { rows: LocusWindow[]; cols: LocusWindow[] } | null {
+    if (this.lead !== null) return this.lead.framedRanges()
+    return this.leadAxis?.windows() ?? null
+  }
+
+  /** Whether the deck already holds its one structure cell (§25). */
+  hasStructure(): boolean {
+    return this.slots.some((slot) => slot.ref.kind === 'structure')
+  }
+
+  /**
+   * Draw this structure row in the structure cell, opening the cell if the
+   * deck has none. The Structures card's *show in the deck* lands here.
+   */
+  showStructure(id: string): void {
+    if (!this.hasStructure()) this.add({ kind: 'structure' })
+    for (const slot of this.slots) slot.cell?.showModel?.(id)
+  }
+
+  /**
+   * Take the structure cell out of the deck, where there is one.
+   *
+   * The counterpart of {@link showStructure}, for the eye on a Structures row:
+   * showing a model opens the cell, hiding it closes the cell again. The deck
+   * publishes as ever, so a deck left with nothing in it goes with it.
+   */
+  hideStructure(): void {
+    for (const slot of [...this.slots]) {
+      if (slot.ref.kind === 'structure') this.remove(slot)
+    }
+  }
+
+  /** The structure cell's settings card, for the Aesthetics panel, or `null` where there is no cell. */
+  structureSettings(): HTMLElement | null {
+    for (const slot of this.slots) {
+      const settings = slot.cell?.settings?.()
+      if (settings !== undefined) return settings
+    }
+    return null
+  }
+
+  /** The cells' commands, for the palette and its keys. */
+  cellCommands(): Command[] {
+    const out: Command[] = []
+    for (const slot of this.slots) out.push(...(slot.cell?.commands?.() ?? []))
+    return out
+  }
+
+  /** The structure row the structure cell is drawing, or `null` where there is no cell. */
+  shownStructure(): string | null {
+    for (const slot of this.slots) {
+      const shown = slot.cell?.shownModel?.()
+      if (shown !== undefined) return shown
+    }
+    return null
+  }
+
   /** Whether any cell beside the lead holds a map. */
   private hasCompanions(): boolean {
     return this.slots.some((slot) => slot.panel?.map !== undefined && slot.panel?.map !== null)
@@ -2454,10 +2770,13 @@ export class PanelDeck {
    * that cannot export at all rather than a deck that cannot.
    */
   private composeDeck(now: Date, dpi = DECK_EXPORT_DPI): HTMLCanvasElement | null {
-    const maps = [this.lead, ...this.slots.map((slot) => slot.panel?.map ?? null)]
-    const drawn = maps.map((panel) => {
+    const cells: Array<MatrixPanel | DeckCell | null> = [
+      this.lead,
+      ...this.slots.map((slot) => slot.panel?.map ?? slot.cell ?? null),
+    ]
+    const drawn = cells.map((cell) => {
       try {
-        return panel === null ? null : panel.exportCanvas(dpi, now)
+        return cell === null ? null : cell.exportCanvas(dpi, now)
       } catch {
         // One panel past what a browser will rasterise must not take the other
         // five with it; the gap says which one, and every other cell is right.

@@ -9,6 +9,7 @@
  */
 
 import type { NamedSequence } from '../genome/naming'
+import { isStructureName } from './g3d'
 
 import type { AnnotationStore } from './store'
 import { defaultStyle } from './types'
@@ -76,6 +77,9 @@ function guessOf(name: string): { card: AnnotationCard; kind: AnnotationKind } {
   if (/\.vcf(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'variants' }
   if (/\.(bigbarchart|barchart)(\.gz)?$/i.test(name)) return { card: 'linear', kind: 'barchart' }
   if (/\.bam$/i.test(name)) return { card: 'linear', kind: 'alignments' }
+  // WashU's g3d, text or container, and Dip-C's `.3dg` which is the same text
+  // with the haplotype folded into the chromosome's name (§25).
+  if (isStructureName(name)) return { card: 'structure', kind: 'structure' }
   return { card: 'linear', kind: 'segments' }
 }
 
@@ -749,6 +753,12 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
     case 'bedmethyl':
     case 'twobit':
       return 'linear'
+    // A model's beads are intervals along one axis and its picture is a cell of
+    // the deck, which is neither of the two above: the row lives on the
+    // Structures card, which lists models and nothing else, and the cell reads
+    // the row (§25).
+    case 'structure':
+      return 'structure'
     default:
       return null
   }
@@ -762,6 +772,7 @@ export function cardFor(format: DetectedFormat): AnnotationCard | null {
  * lanes is not, because there is no lane a pair belongs in.
  */
 export function kindFor(card: AnnotationCard, format: DetectedFormat): AnnotationKind | null {
+  if (card === 'structure') return format === 'structure' ? 'structure' : null
   if (card === 'linear') {
     // A bedGraph and a wig are a bigWig written out, and become the same kind
     // of thing: values sampled per view, with a range, a ceiling, an autoscale

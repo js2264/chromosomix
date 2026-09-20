@@ -129,8 +129,12 @@ export class SyntheticCard {
     // made, and what a reader wants from it — the provenance, and a way to get
     // the numbers out — is exactly what this card carries and the Tracks card
     // does not.
+    // A computed *structure* is the one computed row not here: it is a model,
+    // and the Structures card lists models with the controls a model has —
+    // show in the deck, the bed3d — which this card's have no use for (§25.6).
     const rows = this.options.store.entries.filter(
-      (entry) => entry.source.kind === 'computed' || entry.source.kind === 'derived',
+      (entry) =>
+        (entry.source.kind === 'computed' || entry.source.kind === 'derived') && entry.kind !== 'structure',
     )
     this.el.classList.toggle('hidden', rows.length === 0)
     this.list.replaceChildren(...rows.map((entry) => this.row(entry)))

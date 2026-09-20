@@ -37,7 +37,8 @@
 :root,
 :root[data-theme='light'],
 .content,
-.analysis-figure {
+.analysis-figure,
+.figure-chart {
   --bg: #ffffff;
   --bg-sunken: #f5f6f8;
   --bg-raised: #ffffff;
@@ -1736,6 +1737,14 @@ p {
 .panel-column-body > .panel-host > .qc,
 .panel-column-body > .panel-host > .meta,
 .panel-column-body > .panel-host > .meta-empty {
+  flex: 0 0 auto;
+}
+
+/* The structure cell's card stands inside the view's own aside, after its
+   Map card (§25.3), so it is one of the aside's cards and the column scrolls
+   over all of them as one; on a view with no aside it is the column's only
+   card. */
+.panel-column-body > .panel-host > .structure-settings {
   flex: 0 0 auto;
 }
 
@@ -8818,6 +8827,438 @@ span.deck-name {
 }
 
 /* ---------------------------------------------------------------------------
+   The structure cell (§25): the session's 3D model, in a cell of the deck.
+
+   The plot is the size of the maps beside it, by the same two numbers that
+   size a companion and an empty card — `--deck-plot` for the width and
+   `--deck-plot-h` for the height — so a row of cells lines up whatever is in
+   them. Everything drawn over the canvas (the key, the readout, the labels, the
+   menu) is absolutely placed inside `.structure-wrap` and lets the pointer
+   through to the canvas, because a drag anywhere on the picture is an orbit.
+   --------------------------------------------------------------------------- */
+.structure-wrap {
+  position: relative;
+  /* The whole cell, not a square of the lead's plot: a map's cell is its plot
+     and its lanes together, and a model has neither a plot to match nor an
+     axis to line up, so the picture takes all the room the cell has and is
+     as tall as the row. Beside a turned map that is still a real picture,
+     where a band's height was not. */
+  /* A basis of zero, so the row's height is the maps' and not this cell's
+     content: the picture fills what the row gives it and asks for nothing. */
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 16rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  /* The canvas below sizes itself from this box (`StructurePanel.remeasure`),
+     so the box must not size itself from the canvas. */
+  contain: size layout;
+  touch-action: none;
+  user-select: none;
+}
+
+.structure-wrap.is-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.structure-wrap > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.structure-wrap > canvas:active {
+  cursor: grabbing;
+}
+
+/* Labels at the beads they name, each anchored at the bead's projected point. */
+.structure-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.2;
+}
+
+.structure-label {
+  position: absolute;
+  transform: translate(6px, -50%);
+  padding: 0 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* The corner key, as the map's own is (`.map-key`): what the colours mean. */
+.structure-key {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.2;
+  max-width: 60%;
+  /* Sixteen chromosomes is sixteen rows; the key scrolls inside the plot
+     rather than standing taller than it. */
+  max-height: 55%;
+  overflow-y: auto;
+  z-index: 2;
+}
+
+.structure-key-title {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.structure-key-ramp {
+  height: 6px;
+  border-radius: 3px;
+}
+
+.structure-key-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.structure-key-level {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+/* A row per level — a sequence, a haplotype — with its swatch; a press on a
+   haplotype's row solos that homologue (`StructurePanel.paintKey`). A button,
+   so the rows are the one thing in the key that takes the pointer. */
+.structure-key-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px 1px 3px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.structure-key-level:hover {
+  border-color: var(--border);
+}
+
+.structure-key-level.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.structure-key-chip {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* Where the pointer is, in words: the locus, the chain, the bead. */
+.structure-readout {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  white-space: pre;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Pointing at a bead — exactly, or within the aim radius — is a cross, so the
+   slack the aim is given is something the reader can see rather than a
+   surprise when the click lands somewhere they did not press. */
+.structure-wrap canvas.is-aimed {
+  cursor: crosshair;
+}
+
+/* The card under the pointer on a model: the same card the map puts up, in the
+   cell's own box. Placed by a transform from the pointer, like the map's. */
+.structure-tip {
+  z-index: 4;
+}
+
+.structure-tip > .cell-tip-pair {
+  font-weight: 600;
+}
+
+/* The two buttons in the top-right corner: the menu, and "frame the window". */
+.structure-corner {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: flex;
+  gap: 2px;
+  z-index: 3;
+}
+
+/* The menu of how the model is drawn, folded out of the corner. Scrolls
+   inside the plot rather than growing it, so opening it moves nothing beside. */
+.structure-menu {
+  position: absolute;
+  right: 4px;
+  top: 30px;
+  bottom: 4px;
+  width: min(15rem, calc(100% - 8px));
+  overflow-y: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  z-index: 3;
+}
+
+.structure-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--text-dim);
+}
+
+.structure-field > .select,
+.structure-field > .structure-range {
+  flex: 0 1 8rem;
+  min-width: 0;
+}
+
+.structure-toggle {
+  justify-content: flex-start;
+}
+
+.structure-export {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* The Structures card (§25): a model's row says whether the cell is drawing it. */
+.structure-card .structure-actions {
+  gap: 6px;
+}
+.structure-card .ann-row.is-shown {
+  box-shadow: inset 3px 0 0 var(--accent, #1f5fa9);
+}
+.structure-card .structure-show.is-on {
+  color: var(--accent, #1f5fa9);
+  font-weight: 600;
+}
+
+.structure-note:empty {
+  display: none;
+}
+
+/* A picking mode (`ui/mapPick.ts`): the pointer says a click names a place. */
+.structure-wrap.is-picking > canvas {
+  cursor: crosshair;
+}
+
+/* A bookmark's name on the model, set apart from a sequence's. */
+.structure-label.is-bookmark {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+.structure-label.is-ghost {
+  opacity: 0.45;
+}
+
+/* ---------------------------------------------------------------------------
+   The tracks cell (§25.3): the session's tracks alone, in a cell of the deck.
+
+   A browser view inside a box the size of the maps beside it, by the same two
+   numbers. The stack scrolls inside the box rather than growing it, so a cell
+   of twelve tracks is as tall as the map next to it and a grid row stays a row.
+   --------------------------------------------------------------------------- */
+.tracks-wrap {
+  /* The whole cell, as `.structure-wrap` takes it: the stack scrolls inside
+     the room the row gives it. */
+  /* The same basis of zero: a stack of tracks would otherwise ask the row
+     for its whole height, and the maps beside it would be pushed off screen. */
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 16rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.deck-structure > .structure-body,
+.deck-tracks > .tracks-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* A picture with its settings beside it (`ui/StageDialog.ts`): the model
+   enlarged (§25.3), an analysis figure opened up (§18.13). The elements inside
+   are the caller's own, moved in and moved back. */
+.modal-stage {
+  width: min(96vw, 110rem);
+  height: 90vh;
+  max-height: 90vh;
+}
+
+.modal-backdrop:has(> .modal-stage) {
+  padding: 4vh 1rem 1rem;
+}
+
+.stage-modal {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.stage-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.5rem;
+}
+
+/* Whatever is on the stage takes the stage. Without this a picture that sizes
+   itself from its box — a canvas at `width: 100%`, a table — is laid out as a
+   shrink-to-fit flex item and collapses to its own intrinsic width, which is
+   how a matrix rebuilt inside the dialog came back two hundred pixels wide. */
+.stage-body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A table in the dialog scrolls to the window's height, not to the drawer's. */
+.stage-body > .analysis-figure-scroll {
+  max-height: none;
+  height: 100%;
+}
+
+.structure-stage > .structure-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.stage-side {
+  /* Wider than a panel column, because it is every setting the picture has and
+     the dialog has the room a cell did not; and a starting width only — the
+     grip beside it is what decides. */
+  flex: 0 0 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+
+/* The grip between the picture and the settings, six pixels of it, with a
+   wider invisible target either side: the same gesture and the same size as
+   the panel columns' own. */
+.stage-side-grip {
+  flex: 0 0 6px;
+  align-self: stretch;
+  cursor: col-resize;
+  background: var(--border);
+  border: 0;
+  padding: 0;
+  touch-action: none;
+}
+
+.stage-side-grip:hover,
+.stage-side-grip:focus-visible,
+.stage-side-grip.is-dragging {
+  background: var(--accent, var(--border-strong));
+  outline: none;
+}
+
+/* In the sidebar the menu is a form, not a fold-out over the picture. */
+.structure-side > .structure-menu {
+  position: static;
+  width: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  overflow: visible;
+}
+
+.structure-side .structure-field > .select,
+.structure-side .structure-field > .structure-range {
+  flex-basis: 11rem;
+}
+
+/* The two corner buttons that open what the dialog already shows. */
+.structure-stage .structure-menu-toggle,
+.structure-stage .structure-expand {
+  display: none;
+}
+
+.deck-tracks .view-browser {
+  min-height: 0;
+  padding: 0.25rem 0.35rem;
+}
+
+.deck-tracks .view-head {
+  margin-bottom: 0.25rem;
+}
+
+/* The bar's hint is written for a page; in a cell it is a paragraph over a
+   picture, and the locus box says what the cell is. */
+.deck-tracks .view-head .hint {
+  display: none;
+}
+
+.deck-tracks .browser-bar .browser-search {
+  flex-basis: 8rem;
+  min-width: 6rem;
+}
+
+.deck-tracks.is-unlocked .deck-lock {
+  color: var(--text-faint);
+}
+
+/* The add row beside a browser lead (§25 stage D): the roads that open a
+   *map* are put away, since a map cannot follow a browser; the two cells that
+   can stay. */
+.deck-add.is-cells-only > :not(.deck-add-structure):not(.deck-add-tracks) {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
    The `+` edges, which draw a deck before there is one (§16.9).
 
    Round the session's own view while there is no deck and round the grid once
@@ -9275,6 +9716,11 @@ span.deck-name {
  * a vector PDF, its colormaps are built for ink on white, and what leaves the
  * app must be what was on screen. The drawer around it — the header, the form,
  * the buttons — follows the theme like the rest of the furniture.
+ *
+ * `.figure-chart` is on the light list at the top of this sheet for the same
+ * reason and one more: the dialog moves a chart *out* of `.analysis-figure`,
+ * and a figure that changed colour on being enlarged would be a different
+ * figure from the one the export draws.
  */
 .analysis-figure {
   border: 1px solid var(--border);
@@ -9316,6 +9762,172 @@ span.deck-name {
 .analysis-figure-scroll {
   overflow: auto;
   max-height: 26rem;
+}
+
+/* -------------------------------------------------------------------------
+   A figure that restyles (§18.13): the slim strip of controls over it, the
+   chart itself, and the settings column the dialog puts beside it.
+   ------------------------------------------------------------------------- */
+
+.figure-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step--2);
+}
+
+/* Tighter than a panel's controls, because this row sits *over the picture*
+   and every pixel it takes is a pixel the figure does not have. */
+.select-tight,
+.input-tight {
+  height: 1.55rem;
+  padding: 0 0.35rem;
+  font-size: var(--step--2);
+}
+
+.input-tight {
+  width: 9rem;
+}
+
+.figure-chart {
+  display: block;
+  width: 100%;
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* In the dialog the chart takes the room it is given rather than choosing a
+   height from its width. */
+.figure-chart-fill {
+  height: 100%;
+}
+
+.stage-body > .figure-chart {
+  height: 100%;
+}
+
+.figure-settings {
+  /* The card fills the sidebar it was put in; the sidebar scrolls. */
+  border: 0;
+  background: none;
+}
+
+.figure-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.figure-group:first-of-type {
+  border-top: 0;
+}
+
+.figure-group-head {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+/* A checkbox and its name read as one thing, left-aligned — not a checkbox in
+   the label column with its word a field's width away in the other. Two
+   classes, because `.field` is a grid and one class would lose to it. */
+.field.figure-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* A range is two boxes and the word between them, on one row. */
+.figure-range {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.figure-range .input-num {
+  flex: 1 1 4rem;
+  min-width: 0;
+}
+
+.figure-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+
+.figure-series {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.figure-series-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.figure-series-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figure-series-n {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A colour is a thing you point at, so the control is a swatch. */
+.figure-swatch {
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.figure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.2rem;
+}
+
+/* A column head that sorts looks like one: a pointer and an accent on hover,
+   which is the promise every other sortable table in this app makes. */
+.figure-th {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.figure-th:hover,
+.figure-th:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.figure-th.is-sorted {
+  color: var(--accent);
 }
 
 /* The line under the locus box, while the pick is armed. Tighter than a hint
@@ -10059,4 +10671,140 @@ span.deck-name {
   .console-title {
     display: none;
   }
+}
+
+/* The structure cell's mode badge (§25.3): what a drag or a click does now,
+   in the top-left corner; the readout sits under it. */
+.structure-mode {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  pointer-events: none;
+  z-index: 2;
+}
+.structure-mode[data-mode='centre'],
+.structure-mode[data-mode='select'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.structure-wrap > .structure-readout {
+  top: 30px;
+}
+.structure-select.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+/* A sequence's row on the key: a picker for its colour, a button for its name. */
+.structure-key-seq {
+  padding: 1px 6px 1px 3px;
+  cursor: default;
+}
+.structure-key-seq.is-off {
+  opacity: 0.45;
+}
+.structure-key-swatch {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.structure-key-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.structure-key-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.structure-key-name {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.structure-key-name:hover {
+  text-decoration: underline;
+}
+/* The dialog's sidebar toggle, in the stage's bottom corner. */
+.stage-modal {
+  position: relative;
+}
+.stage-side-toggle {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+}
+.stage-side.hidden {
+  display: none;
+}
+
+/* The cell's on/off settings as icon toggles, in rows; a field with a toggle
+   beside its control (the chords' set, the fog's depth). */
+.structure-toggle-row {
+  display: inline-flex;
+  gap: 2px;
+}
+.structure-toggle.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.structure-field-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.structure-field-with-toggle > .select,
+.structure-field-with-toggle > .structure-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The structure cell's settings card (§25.3) and its measurements. */
+.structure-measures {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.structure-measure-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.structure-measure-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.structure-note-line {
+  margin: 0;
+}
+.structure-label.is-tick {
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  opacity: 0.8;
+}
+.structure-label.is-measure {
+  font-weight: 600;
+}
+.structure-settings .structure-range {
+  width: 100%;
 }

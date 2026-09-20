@@ -4,9 +4,9 @@
  * A P(s) runs from one base pair to a whole chromosome, and both ends of that
  * are unreadable: the first break holds the diagonal and is orders of magnitude
  * above everything else, and the last few are a handful of cells each. So a
- * runner says which decades its figure is worth opening on and
- * `ui/interactivePlot.ts` lets the reader move it — a marquee, four boxes, a
- * double-click — by rewriting the same two fields.
+ * runner says which decades its figure is worth opening on and the figure's own
+ * controls let the reader move it (`figures/FigureBlock.ts`) — a wheel, a drag,
+ * two number boxes — by rewriting the same two fields.
  *
  * Two properties carry the whole feature and neither is visible from the
  * pictures a person looks at:

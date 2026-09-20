@@ -32,6 +32,7 @@ import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
 import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
 import { defaultParams, type AnalysisContext, type AnalysisTask } from '@/analysis/types'
+import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { ParamForm } from '@/ui/ParamForm'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -553,6 +554,43 @@ describe('4C on a metagenome', () => {
     expect(asks(view, 'Cis only')).toBe(false)
     view.setContext(context())
     expect(asks(view, 'Cis only')).toBe(true)
+    view.destroy()
+  })
+})
+
+describe('a box that takes several sequences (§25.6)', () => {
+  function framed(rows: [number, number], cols: [number, number] = rows): AnalysisContext {
+    const base = context()
+    return { ...base, framing: { ...(base.framing as NonNullable<AnalysisContext['framing']>), rows, cols } }
+  }
+
+  it('is seeded with the locus when the map is inside one sequence', () => {
+    const view = form(RECONSTRUCT_TASK, framed([240, 300]))
+    expect(view.value.region).toBe('II:10001-70000')
+    view.destroy()
+  })
+
+  it('is seeded with every sequence on screen when the map spans several', () => {
+    const view = form(RECONSTRUCT_TASK, framed([0, 1043]))
+    expect(view.value.region).toBe('I, II')
+    view.destroy()
+    const versus = form(STRUCTURE_MAP_TASK, framed([230, 1200]))
+    expect(versus.value.region).toBe('II, IV')
+    versus.destroy()
+  })
+
+  it('is left empty — every sequence — for the whole file, or a view touching every sequence', () => {
+    const view = form(RECONSTRUCT_TASK, framed([0, 2574]))
+    expect(view.value.region).toBe('')
+    view.destroy()
+    const touching = form(RECONSTRUCT_TASK, framed([100, 1200]))
+    expect(touching.value.region).toBe('')
+    touching.destroy()
+  })
+
+  it('takes the union of the two axes', () => {
+    const view = form(RECONSTRUCT_TASK, framed([0, 230], [1043, 2574]))
+    expect(view.value.region).toBe('I, IV')
     view.destroy()
   })
 })

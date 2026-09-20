@@ -49,6 +49,7 @@ import {
   normalisePlacement,
   placementOn,
   readStyleOf,
+  structureStyleOf,
 } from './types'
 import { featureStyleOf } from './fields'
 
@@ -641,8 +642,12 @@ export class AnnotationStore {
     // who gave it edges or a range there of its own; both are decisions already
     // made, and re-placing over them is what made the deck's arrangement the one
     // part of a workspace that did not come back.
+    // A structure is a row and never a lane (§25): its picture is the deck's
+    // structure cell, and a chain of beads drawn as boxes along an edge is a
+    // solid bar saying nothing. Unplaced from the start, so the stacks never
+    // see it and the location control has nothing to offer it.
     this.lanes =
-      options.lead === null
+      options.lead === null || options.kind === 'structure'
         ? unplace(this.lanes, entry.id, LEAD_MAP)
         : place(this.lanes, entry.id, LEAD_MAP, options.lead?.placement ?? entry.placement)
     if (options.lead != null && options.lead.style !== undefined) {
@@ -1033,7 +1038,9 @@ export class AnnotationStore {
       // object, which is enough to hand a renderer a negative MAPQ floor or a
       // colouring it has never heard of — see {@link readStyleOf}.
       rows.push(
-        row.style.reads === undefined && row.style.features === undefined
+        row.style.reads === undefined &&
+          row.style.features === undefined &&
+          row.style.structure === undefined
           ? row
           : {
               ...row,
@@ -1048,6 +1055,12 @@ export class AnnotationStore {
                 ...(row.style.features === undefined
                   ? {}
                   : { features: featureStyleOf(row.style.features, row.kind) }),
+                // …and a third time for a model's controls (§25), where the
+                // unclamped values are a radius of a million and an opacity a
+                // renderer would draw as more than opaque.
+                ...(row.style.structure === undefined
+                  ? {}
+                  : { structure: structureStyleOf(row.style.structure) }),
               },
             },
       )
@@ -1162,7 +1175,7 @@ function samePlacement(a: Placement, b: Placement): boolean {
 
 /** Every kind, from the one place that lists them (`annotations/types.ts`). */
 const KINDS: readonly AnnotationKind[] = ANNOTATION_KINDS
-const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata']
+const CARDS: AnnotationCard[] = ['linear', 'overlay', 'synthetic', 'metadata', 'structure']
 
 function isStoredEntry(value: unknown): value is StoredEntry {
   if (typeof value !== 'object' || value === null) return false
@@ -1244,7 +1257,7 @@ function sideOf(placement: Placement): LaneEdge | 'neither' {
 export function cleanLabel(name: string): string {
   const base = name.split('/').pop() ?? name
   return base.replace(
-    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas)(\.gz)?$/i,
+    /\.(bw|bigwig|bigWig|bb|bigbed|gtf|gff3?|bed|bedpe|vcf|bam|narrowPeak|broadPeak|gappedPeak|peaks|bdg|bedgraph|wig|tsv|txt|fa|fasta|fna|fas|g3d|3dg|bed3d)(\.gz)?$/i,
     '',
   )
 }

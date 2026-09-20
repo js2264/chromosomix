@@ -24,6 +24,25 @@ interface Raw {
   cds: [number, number] | null
   /** A barChart's per-category values, or `null` on every other format (§8.17). */
   bars: readonly number[] | null
+  /** A structure's bead position, or `null` on every other format (§25). */
+  xyz: readonly [number, number, number] | null
+  /** Which haplotype the bead belongs to, as an index; `0` everywhere else. */
+  hap: number
+}
+
+/**
+ * What a structure knows about itself before any bead is placed (§25).
+ *
+ * The counterpart of {@link BarChartSchema}: the spacing and the category names
+ * come from a pass over the whole file and the coordinates come from every row,
+ * and they meet once, after the sort, where the arrays can be laid out in the
+ * order the beads will be drawn and searched in.
+ */
+export interface StructureSchema {
+  /** The spacing between consecutive beads, in base pairs; see `StructureModel.width`. */
+  width: number
+  /** The category names, in the order the `hap` indices count them. */
+  haplotypes: string[]
 }
 
 /**
@@ -88,6 +107,15 @@ export class FeatureBuilder {
        * chart drawn on the wrong gene — which looks like data.
        */
       bars?: readonly number[]
+      /**
+       * Where this bead is, for a structure (§25). Carried through the builder
+       * for the reason `bars` is: {@link finish} sorts, and a coordinate kept
+       * in file order beside a set in genomic order is a bead drawn at the
+       * wrong locus — which looks exactly like a model.
+       */
+      xyz?: readonly [number, number, number]
+      /** The bead's haplotype, as an index into the schema's list. */
+      hap?: number
     } = {},
   ): void {
     // A zero-length feature is legal in BED and unpaintable: give it one base so
@@ -106,6 +134,8 @@ export class FeatureBuilder {
       exons: extra.exons ?? null,
       cds: extra.cds ?? null,
       bars: extra.bars ?? null,
+      xyz: extra.xyz ?? null,
+      hap: extra.hap ?? 0,
     })
   }
 
@@ -127,9 +157,15 @@ export class FeatureBuilder {
    * the sort this method performs, and a caller that attached them later would
    * have to reproduce that sort to do it.
    */
-  finish(bars: BarChartSchema | null = null): FeatureSet {
+  finish(bars: BarChartSchema | null = null, model: StructureSchema | null = null): FeatureSet {
     const rows = this.rows
-    rows.sort((a, b) => (a.contig - b.contig) || (a.start - b.start) || (a.end - b.end))
+    // The haplotype last, as a tiebreak and nothing more: a phased structure
+    // has two rows at every `(contig, start, end)`, and without it their order
+    // would be whatever the sort happened to leave, which is a model whose
+    // homologues swap places between two loads of the same file.
+    rows.sort(
+      (a, b) => (a.contig - b.contig) || (a.start - b.start) || (a.end - b.end) || (a.hap - b.hap),
+    )
     const n = rows.length
     const set: FeatureSet = {
       contigs: this.contigs,
@@ -164,6 +200,18 @@ export class FeatureBuilder {
     const values = new Float32Array(stride * n).fill(Number.NaN)
     let widest = 0
 
+    // Three columns for a structure, filled in the sorted order below — the
+    // whole reason the coordinates ride through the builder (§25).
+    const placed =
+      model === null
+        ? null
+        : {
+            x: new Float32Array(n),
+            y: new Float32Array(n),
+            z: new Float32Array(n),
+            hap: new Int8Array(n),
+          }
+
     let exonCursor = 0
     for (let i = 0; i < n; i++) {
       const row = rows[i]
@@ -195,6 +243,15 @@ export class FeatureBuilder {
           if (value > widest) widest = value
         }
       }
+      if (placed !== null) {
+        // A row with no coordinate in a structure is `NaN`, which every reader of
+        // the model treats as *not placed* — the same answer a bar chart gives a
+        // row whose vector was missing, for the same reason.
+        placed.x[i] = row.xyz === null ? Number.NaN : row.xyz[0]
+        placed.y[i] = row.xyz === null ? Number.NaN : row.xyz[1]
+        placed.z[i] = row.xyz === null ? Number.NaN : row.xyz[2]
+        placed.hap[i] = row.hap
+      }
       const span = row.end - row.start
       if (span > set.maxSpan[row.contig]) set.maxSpan[row.contig] = span
     }
@@ -217,6 +274,13 @@ export class FeatureBuilder {
         // the file where it does not. Zero for a file of zeroes and empties,
         // which would otherwise divide every bar by nothing.
         max: Number.isFinite(limit) && limit > 0 ? limit : widest,
+      }
+    }
+    if (placed !== null && model !== null) {
+      set.model = {
+        ...placed,
+        haplotypes: [...model.haplotypes],
+        width: model.width,
       }
     }
     return set

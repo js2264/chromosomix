@@ -63,6 +63,23 @@ const LUCIDE = [
   'type',
   'chart-area',
   'chart-spline',
+  // The Structures card (§25): a model is a thing with a volume.
+  'box',
+  // The structure cell's mode badge and its corner (§25.3): orbit, pan, the
+  // centre of rotation, select-to-mark, and the dialog's sidebar.
+  'rotate-3d',
+  'move',
+  'locate-fixed',
+  'mouse-pointer-click',
+  'map-pin',
+  // The cell's menu as toggles: beads, sticks, a tube; the chords; the fog;
+  // the names.
+  'circle-dot',
+  'minus',
+  'spline',
+  'link-2',
+  'cloud-fog',
+  'waypoints',
   'list',
   'align-end-horizontal',
   'chevrons-up-down',

@@ -2099,16 +2099,28 @@ function valueAtPixel(
   if (samples === null) return null
   const locus = axis.unitToLocus(frame.toUnit(along))
   if (locus === null) return null
+  return sampleValueAt(samples, locus.contig, locus.bp)
+}
+
+/**
+ * A track's value at one base pair, out of samples already in hand.
+ *
+ * What the tooltip reads under the pointer, lifted out so a structure cell
+ * can read the same number at each bead (§25.5): one implementation, so a
+ * bead coloured by a bigWig agrees with the lane at every value. `null`
+ * where no sample covers the place.
+ */
+export function sampleValueAt(samples: TrackSampleSet, contig: string, bp: number): number | null {
   for (const region of samples.regions) {
-    if (region.contig !== locus.contig) continue
+    if (region.contig !== contig) continue
     // Ascending and non-overlapping, so this is a binary search rather than the
     // linear scan a pointer move cannot afford at base resolution.
     let low = 0
     let high = region.starts.length - 1
     while (low <= high) {
       const mid = (low + high) >> 1
-      if (locus.bp < region.starts[mid]) high = mid - 1
-      else if (locus.bp >= region.ends[mid]) low = mid + 1
+      if (bp < region.starts[mid]) high = mid - 1
+      else if (bp >= region.ends[mid]) low = mid + 1
       else return region.values[mid]
     }
   }

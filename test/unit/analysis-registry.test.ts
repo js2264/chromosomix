@@ -290,6 +290,11 @@ describe('the map card', () => {
       'compartments',
       'chromosight',
       'hicrep',
+      // The model against the map (§25.6) reads last: it is about a file the
+      // map is compared with rather than about the map alone.
+      'structuremap',
+      'spatialtracks',
+      'reconstruct3d',
     ])
   })
 })

@@ -22,10 +22,10 @@ code disagree, the code is right and this file is a bug.
 - [What is being looked at](#what-is-being-looked-at) — view state, views, levels
 - [Files and addressing](#files-and-addressing) — cool, metacool, entries, URIs, stores
 - [Genomes and sequences](#genomes-and-sequences) — genome, contig, assembly, naming
-- [Maps on screen](#maps-on-screen) — lead, companion, deck, star, the second file
-- [Annotations](#annotations) — track, lane, placement, group, mark, bookmark
+- [Maps on screen](#maps-on-screen) — lead, companion, deck, cell, star, the second file
+- [Annotations](#annotations) — track, lane, placement, group, mark, bookmark, structure
 - [The picture](#the-picture) — score, transform, clip, the turn, refine
-- [Analysis](#analysis) — task, availability, result, synthetic track
+- [Analysis](#analysis) — task, availability, result, synthetic track, figure spec and style
 - [Machinery](#machinery) — workers, sources, budgets, grants, buckets
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, CLI
 - [Overloaded words](#overloaded-words)
@@ -390,6 +390,13 @@ An empty cell: a link's memory of a *local* companion, with no bytes behind it a
 where its map would be. Written as `~` in a link, so a shared deck keeps the count and the order of
 what was sent even where it cannot keep the bytes (§11).
 
+### cell
+
+Any occupant of the deck (§16.11, §25): a map (the lead or a companion), a **vacancy**, a
+**structure** cell drawing the session's 3D model, or a **tracks** cell drawing the session's tracks
+alone. Only the maps are members of the lock; the other two are told the lead's window as loci and
+never report one back. In a link: a URI, `~`, `3d`, `tracks`.
+
 ### star
 
 Which panel the Analysis column reads (§18.2). It starts on the lead and says only which picture the
@@ -430,12 +437,21 @@ may not** — a deck reserves the same lane room on every panel so the maps line
 ### placement and edge
 
 Which of the map's four edges a lane sits on: `top`, `right`, `bottom`, `left`. A track may be on
-several at once.
+several at once. A tracks cell has one edge, the bottom; the other three are greyed for it.
+
+### structure, model, chain, bead
+
+A **structure** is a file of beads with a place in space (g3d, bed3d, §25) and the row it makes in
+the Structures card — a row that is also a feature set, since every bead is an interval, and that is
+never a lane. A model can also be *made* from the map (§25.6). A **model** is one set of coordinates; a **chain** is the beads of one sequence and one
+haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
+file was modelled at, inferred from its starts and independent of the map's bin size.
 
 ### card
 
 Which list a track is listed in (`AnnotationCard`): `linear` (drawn beside the map), `overlay`
-(drawn on it), `metadata` (columns the file already carries), `synthetic` (computed). Each is absent —
+(drawn on it), `metadata` (columns the file already carries), `synthetic` (computed), `structure`
+(3D models, loaded or computed, drawn by the deck's cell). Each is absent —
 not disabled, not empty — on a file that cannot carry it (§8.1, §8.5).
 
 ### kind
@@ -558,6 +574,23 @@ An analysis result that became an ordinary track — an entry in the store, a bi
 worker can sample, and a row with somewhere for its exports to go. Nothing downstream of it knows it
 was computed rather than loaded, which is the point: it gets renaming, limits, colour, edges,
 reordering, tooltips and the exported figure for free.
+
+### figure spec vs figure style
+
+The two halves every plot in the drawer is built from (§18.13). A **spec** is what the figure is
+*of* — numbers, names, axis titles, and the task's suggestions about scale and window — and it
+carries no colour, no line width and no hidden series. A **style** is everything the reader has
+decided: the mark, the axes, the colours, which series is switched off, how a table is sorted. The
+split is what lets a figure be restyled without rewriting what it is a figure of, and what lets the
+style be remembered per file, task and output while the spec is rebuilt on every run.
+
+### the stage dialog
+
+A picture with its settings beside it, a grip between them and a way to put the settings away
+(`ui/StageDialog.ts`). Invented for the enlarged 3D model (§25.3) and now also what a figure's
+*customise* button opens (§18.13) — one shell with two callers, not two implementations. What goes
+on the stage is *moved* in and moved back, never copied, so the camera or the zoom the reader left
+it at is what they come back to.
 
 ---
 

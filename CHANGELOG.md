@@ -12,6 +12,127 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **Every figure a task produces is now restylable, and the PDF is still a drawing (§18.13).** A
+  slim strip over each plot carries the controls reached for constantly — the mark, the two log
+  axes, the legend, *Fit* — and one button beside it opens the figure **in the same dialog the 3D
+  model opens in**: the picture at the size of the window, every control in a resizable column
+  beside it. There are new marks to choose from (line, area, step, points, bars; histogram, box and
+  violin as summaries of the ordinate), per-series colours and visibility, typed axis windows, and
+  a title and type size that go into the export. A **table** is now a view rather than a printing —
+  filter it, sort it, choose its columns, or draw one numeric column as a distribution or against
+  another as a scatter. All of it is **remembered per file, per task and per output**, beside the
+  parameters the task was run with, and carried in an exported session.
+
+  **Contact maps and matrix outputs are drawn exactly as they were**, by the same rasteriser: a
+  matrix is a raster and the app already has the renderer for it. What a matrix gains is the dialog,
+  a colormap and the two ends of its scale.
+
+  The **PDF export is still a true vector page** — paths and text, restylable and scalable, not a
+  photograph. The chart library is asked for SVG rather than for a canvas, and the same picture is
+  replayed onto whatever context the export hands over, so the screen, the PNG and the PDF are one
+  drawing rather than three. The library itself arrives in a chunk of its own when the first figure
+  is built, so a reader who never runs an analysis never downloads it.
+
+- **The Structures card takes a drop, its eye is the deck's cell (§25.3).** A `.g3d` can be dropped
+  anywhere on the *Structures* card, where before it had to be aimed at the *Tracks* card — the one
+  whose list it does not join, since the loader files it as a structure either way. The eye on a
+  row now shows the model in the deck and takes it out again, opening the cell where there is none
+  and closing it on the way out; it used to toggle a `visible` flag that nothing drawing a model
+  ever read. And the **place under the pointer is always named in the cell's corner**, including
+  when the pointer is on the model itself — one locus there, where a contact from a map is a pair
+  — independent of the tooltip switch, which is about the card that follows the pointer.
+- **The pointer aims, the fog follows the slab, the letters stay in the dialog (§25.4–25.5).** The
+  pointer now **snaps to the nearest bead within fourteen pixels** where an exact ray misses, and
+  the **cursor becomes a cross** whenever a bead is being aimed at, so landing on a bead is no
+  longer a test of aim. The **fog is tied to the depth slab**: it starts at the centre of rotation
+  and reaches the page exactly where the slab cuts, rather than being measured from the camera —
+  which on a thin slab left every one of the few beads it kept already half dissolved. And the
+  **depth slab now clips at all** — it was measured with the factor back to the file's own units
+  against coordinates already normalised, so on a model whose radius of gyration was a thousand
+  nanometres the planes stood a thousand times too far apart and no setting of the slider did
+  anything. And the cell's **single-letter keys are bound only while the model is enlarged**, where the model is the
+  whole window; beside a map they took `f` from the Files panel and `a` from the Annotations panel
+  for as long as a model was on screen. The palette lists them either way, and `e`, `o` and `m`
+  for the three modes are back among them.
+- **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
+  with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
+  where one mode used to count clicks and guess which was meant; the three are in the palette with
+  no key of their own, a bare letter that arms a mode being one pressed by accident. A marked place is drawn on the
+  model as **the bead again at twice the radius in the mark's own colour**; a measurement is a
+  **drag** from one bead to another, the line following the pointer, the model holding still while
+  it does. A **card under the pointer** names the bead's sequence and coordinate, under the map's
+  own *tooltip* switch. A pointer on a map with the span modifier held now lights **one bead**
+  rather than joining two, which is what the crosshair and the readout had already switched to.
+  The black lines over the model — a gap's dashes, a loop's chord — are **half the tube's radius**,
+  so a line about the model no longer reads as part of it. The enlarge dialog's settings are wider
+  and **dragged to any width** by the grip beside them, remembered per file.
+- **One bin, one bead, and no ceiling (§25.6).** *Model from the map* now builds a bead per bin of
+  the resolution the reader has selected, and nothing else: the *bins per bead* control is gone, and
+  a block drawn pooled — four bins to the cell, because that is what fits the window — is declined
+  rather than borrowed, which is `usableBlock`'s rule and every other task's. This was the one task
+  in the app whose answer came at the resolution of the *window* rather than the one the reader
+  chose, and it silently capped a model at the raster cap of 4,096 cells. A coarser model is a
+  coarser rung, which also reads far less. The bead ceiling is gone with it: both the time and the
+  memory are quadratic, so the estimate *says so* — the beads and their width, the seconds per
+  hundred steps, the gigabytes of matrices — and the reader decides. What is refused is only the
+  allocation a browser will not give, as a note naming the size rather than as a dead tab. The run
+  holds two dense matrices where it held six: each made once at its final size, the counts turned
+  into the distances they imply over the buffer they already occupy, and classical scaling
+  multiplying through the centred matrix without writing it down. **Every phase reports progress
+  and breathes** — each rectangle read, each of the eighty sweeps of the classical start, each
+  refinement step — so the bar moves and a cancel always lands. A typed locus is priced as the bins
+  of *that stretch*, where the estimate used to count the whole sequence it named.
+- **The 3D viewer, as a view of the app (§25.3–25.5).** Its settings are now a *3D structure* card
+  of the Aesthetics panel right after the *Map* card, built from the same fields, borrowed by the enlarge
+  dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
+  **depth slab** into a dense model, a **genomic ruler** along each chain, camera presets, a
+  turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
+  threshold on the map's colour scale, as thick as the contact and in the map's colours. **Compare with** superposes another
+  structure row by a similarity fit over the beads the two share, reports the RMSD, and *colour by
+  displacement* shows where they differ. **Measure mode** turns two clicks into a distance kept on
+  the card and written on the model.
+- **The structure cell's settings, settled (§25.3).** Drawn as is three icon toggles that combine
+  (beads, sticks, tube); every gap in a chain is a dashed run of ink, always, and the *gaps* option
+  is gone; chords and the hovered contact's chord are thick ink cylinders rather than one-pixel
+  lines; the cell is always orthographic and always lit, so those two options are gone; the fog,
+  the chords, the names and the centre are icon toggles; the *ghost opacity* slider (0.15 by
+  default) is the one opacity, applied to what is outside the window or ghosted from the key, and
+  *outside the window: show* draws a whole genome in colour while the maps look at one window of it;
+  the map's *legend* switch hides the key of the structure cell too. A stored style still reads back:
+  the old representation becomes the three toggles.
+- **The structure cell, in the hand (§25.3–25.5).** The sequence box of the three structure tasks
+  is seeded from what the map shows: the locus inside one sequence, every sequence on screen when
+  the view spans several (`IV, V`), and empty — every sequence — for the whole genome. A model
+  computed again onto the same row replaces the one the cell draws, and removing the model the
+  cell shows empties the cell — whichever way the cell came to be drawing it, where it used to empty
+  only for a row the reader had picked by hand. Under *colour by sequence* the key is a control: a click ghosts a
+  sequence, a double-click shows it alone, and the swatch is a colour picker. A badge in the
+  cell's top-left corner says what a drag or a click does — turn, move (Shift), centre (⌘ on a
+  Mac, Ctrl elsewhere: click a bead to turn about it; a tap alone shows or hides the centre ball
+  and axes), fog (Space + scroll moves the fog, which the menu's slider also sets), select. The
+  dialog's sidebar hides and shows from a button in the stage's corner. The halo on a lit bead is a
+  translucent ball in front of the bead it marks and behind what is nearer the eye. A bead under
+  the pointer is drawn as a dashed line down and across every map. **Select mode** turns clicks
+  into manual marks: a bead clicked twice is a line at its locus on both axes, two beads an
+  arrowhead between them; the reader's arrowheads are offered as chords under *your marks*.
+- **A 3D model from the map, and a Structures card.** A third map task, **Model from the map**,
+  makes a structure from the contacts the view is holding — the whole loaded block at the
+  resolution it is drawn at, cis and trans together — by ShRec3D's pipeline (contacts read as
+  distances `c^(−1/α)`, the uncounted pairs filled, classical MDS) with SMACOF refinement over the
+  pairs the map counted, **each pair weighted by how often the map counted it** (the count, its
+  square root, or every pair alike — a choice on the form, the count by default), so the near
+  diagonal the map is surest of is what the model honours first; `α` and the step count are
+  exposed, a sequence or a typed range restricts it, more than 10,000 beads is refused with the way
+  out, and a table reports the fit (weighted stress and Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
+  holds — dropped, named by URL or computed — is now listed on a **Structures** card of its own
+  under the Tracks card, with *show in the deck* (which opens the structure cell where there is
+  none and says which row it is drawing), a **bed3d** download, the provenance of a computed row
+  and *recompute* after a reload; the structure cell gains a **model** picker, remembered per
+  file, and draws a model the moment it arrives. The same bed3d leaves from the drawer's result.
+  SPECS §25.1–25.3, §25.6–25.8.
+
 ### Changed
 
 - **The landing page is one screen, the three ways in are marked, and the stores colour up as you
@@ -223,6 +344,26 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   columns are not a thing to find out about from the shelf.
 
 ### Added
+
+- **A 3D structure beside the map (§25).** A chromatin model read from WashU's g3d — the text
+  `g3dtools` takes, gzipped or not, local or over HTTP; the binary container it writes, through a
+  reader written here; a `.3dg`; and `bed3d`, the same file with the end column — becomes a row of
+  the Tracks card and a **cell of the deck**, drawn with three.js loaded on the first cell only:
+  beads, sticks or a tube, both homologues of a phased file, a camera remembered per file, vector PDF
+  of beads and sticks, and a button that enlarges the model into a dialog with every setting in a
+  sidebar, the cell taking back the camera and colouring the reader left it with. Hover links every surface: a pointer on a map lights the beads at both ends
+  and joins them, a pointer on a bead marks every map and tracks cell, the lead's window ghosts what
+  the maps are not looking at. A click pins, Shift-click marks, a double-click goes. Colour by
+  sequence, haplotype, position, the file's columns, **a loaded track on the lane's own limits, a
+  feature set, the reader's marks, the distance to the pinned bead, or the map's own row through
+  it**; a loops file as chords; bookmarks named on the model. Two analysis tasks: **model versus
+  map** — distance matrices, distance by separation beside the map's P(s), Spearman agreement per
+  sequence — and **spatial tracks**: radial position, distance to a locus, local compaction, as
+  synthetic tracks. The deck gains **cells that are not maps** (§16.11): a **tracks cell** drawing
+  the session's tracks alone, placed on it from the location control and following the maps both
+  ways, and **the browser as lead**, so a deck of tracks and a structure opens with no map at all.
+  Demo models for the E. coli and yeast maps under `demo/`. Measured: three.js is a 552 kB chunk
+  (140 kB gzipped) fetched only by a session that opens a structure cell.
 
 - **The store grid: Roadmap shipped as a hub, a link to whoever made each shelf, and two doors named
   for what they do (§24.2, §24.10).**

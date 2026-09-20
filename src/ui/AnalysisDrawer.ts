@@ -84,8 +84,7 @@ import { outputToTsv, provenanceLines, tsvName } from '../analysis/write/tsv'
 import { cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
 import { combineResults } from '../analysis/combine'
-import { profileCurve } from './analysisPlots'
-import { interactiveCurve, interactiveMatrix } from './interactivePlot'
+import { figureBlock } from '../figures/FigureBlock'
 import type { MapId } from '../annotations/placement'
 import type { RunTarget } from '../analysis/runner'
 import type { CurveOutput } from '../analysis/types'
@@ -98,14 +97,10 @@ import type { CurveOutput } from '../analysis/types'
  */
 const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
+import { writeBed3d } from '../annotations/g3d'
 import { recallParams, rememberParams } from '../analysis/memory'
 import { durationText } from './AnalysisPanelCard'
-import {
-  profileFigure,
-  tableFigure,
-  type PlotFigure,
-  type TableFigure,
-} from './analysisPlots'
+import { profileCurve, profileFigure, type PlotFigure } from './analysisPlots'
 import { button, el, fmt } from './dom'
 import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
 import { icon, iconButton } from './icons'
@@ -300,10 +295,6 @@ function takesEscape(node: HTMLElement): boolean {
   if (node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) return true
   if (!(node instanceof HTMLInputElement)) return node.isContentEditable
   return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset'].includes(node.type)
-}
-
-function isDrawable(figure: PlotFigure | TableFigure): figure is PlotFigure {
-  return 'draw' in figure
 }
 
 /**
@@ -1018,28 +1009,24 @@ export class AnalysisDrawer {
     this.paintWidth()
   }
 
-  /** One overlaid curve, with the two exports that mean anything for it. */
+  /**
+   * One overlaid curve, with the two exports that mean anything for it.
+   *
+   * The same shell every other figure gets, keyed under the task's id with a
+   * suffix: a curve drawn *across* the maps is a different picture from the
+   * per-map one of the same name, and a reader who logs one has not said
+   * anything about the other.
+   */
   private combinedBlock(curve: CurveOutput): HTMLElement {
-    const figure = interactiveCurve(curve)
-    this.figures.push(figure)
-    return el(
-      'div',
-      { class: 'analysis-figure' },
-      el(
-        'div',
-        { class: 'analysis-figure-head' },
-        el('span', { class: 'analysis-figure-title', text: curve.label }),
-        button('PNG', () => void this.savePngPlain(figure, curve.label), {
-          class: 'btn btn-quiet',
-          title: `The figure as a raster, redrawn at ${FIGURE_EXPORT_DPI} dpi`,
-        }),
-        button('PDF', () => void this.savePdfPlain(figure, curve.label), {
-          class: 'btn btn-quiet',
-          title: 'The figure as a true vector page',
-        }),
-      ),
-      figure.el,
-    )
+    const block = figureBlock({
+      output: curve,
+      task: `${this.current?.id ?? 'task'}:combined`,
+      uri: this.options.context()?.uri ?? '',
+      onPng: (figure) => void this.savePngPlain(figure, curve.label),
+      onPdf: (figure) => void this.savePdfPlain(figure, curve.label),
+    })
+    this.figures.push(block)
+    return block.el
   }
 
   // -------------------------------------------------------------------------
@@ -1145,50 +1132,26 @@ export class AnalysisDrawer {
     if (output.kind === 'profile' && this.options.hasLanes()) {
       return this.elsewhere(output, provenance)
     }
-    // The interactive wrappers rather than the bare figures, for `curve` and
-    // `matrix`. Both are `PlotFigure`s of a *derived* output, so the PNG and the
-    // PDF below draw whatever the reader has set rather than what the task
-    // returned — which is the point (`ui/interactivePlot.ts`). A profile drawn
-    // here is a curve too, and gets the same controls by the same route.
-    const figure: PlotFigure | TableFigure =
-      output.kind === 'curve'
-        ? interactiveCurve(output)
-        : output.kind === 'matrix'
-          ? interactiveMatrix(output)
-          : output.kind === 'profile'
-            ? interactiveCurve(profileCurve(output))
-            : tableFigure(output)
-    this.figures.push(figure)
-    const drawable = isDrawable(figure) ? figure : null
-
-    return el(
-      'div',
-      { class: 'analysis-figure' },
-      el(
-        'div',
-        { class: 'analysis-figure-head' },
-        el('span', { class: 'analysis-figure-title', text: output.label }),
+    // Everything else is a `FigureBlock`: the figure, the slim strip of controls
+    // over it, and the button that opens the whole settings column beside it at
+    // the size of the window (§18.13). What the reader sets there is what the
+    // PNG and the PDF below draw, because both are handed the figure as it
+    // stands rather than the output the task returned.
+    const block = figureBlock({
+      output,
+      task: this.current?.id ?? 'task',
+      uri: this.options.context()?.uri ?? '',
+      extras: [
         // The two formats a genome browser opens, on the one file where this
-        // drawer is the only place they are offered from. §18.7's headline —
-        // bigWig for a signal, bedGraph, BED, TSV, PNG and vector PDF — was
-        // false on a metacool until they were here.
+        // drawer is the only place they are offered from (§18.7).
         ...(output.kind === 'profile' ? this.profileButtons(output, provenance) : []),
         this.tsvButton(output, provenance),
-        ...(drawable === null
-          ? []
-          : [
-              button('PNG', () => void this.savePng(drawable, output, provenance), {
-                class: 'btn btn-quiet',
-                title: `The figure as a raster, redrawn at ${FIGURE_EXPORT_DPI} dpi`,
-              }),
-              button('PDF', () => void this.savePdf(drawable, output, provenance), {
-                class: 'btn btn-quiet',
-                title: 'The figure as a true vector page — restylable, recolourable, scalable',
-              }),
-            ]),
-      ),
-      figure.el,
-    )
+      ],
+      onPng: (figure) => void this.savePng(figure, output, provenance),
+      onPdf: (figure) => void this.savePdf(figure, output, provenance),
+    })
+    this.figures.push(block)
+    return block.el
   }
 
   /** bigWig and bedGraph, written by the workspace because they need the assembly. */
@@ -1238,7 +1201,11 @@ export class AnalysisDrawer {
         ? 'one value per bin, so it is a lane rather than a picture: it is on the Synthetic ' +
           'tracks card in the Annotations panel, with the colour, limits, edges and figure ' +
           'every other track has.'
-        : lanes
+        : output.kind === 'intervals' && output.entryKind === 'structure'
+          ? 'a 3D model: it is on the Structures card in the Annotations panel, and the deck’s ' +
+            'structure cell shows it — open one from the deck’s bar if none is on screen. ' +
+            'Take it as a bed3d, which this app and g3dtools read back.'
+          : lanes
           ? 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
             'the map it was called from.'
           : 'a set of intervals. This file carries no annotation layer, so there is no overlay ' +
@@ -1272,21 +1239,30 @@ export class AnalysisDrawer {
    * for a tool.
    */
   private bedButton(output: IntervalsOutput, provenance: Provenance): HTMLButtonElement {
-    const format = output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
+    const structure = output.entryKind === 'structure'
+    const format = structure ? 'bed3d' : output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
     return button(format, () => this.saveIntervals(output, provenance), {
       class: 'btn btn-quiet',
-      title: `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
+      title: structure
+        ? 'The model as a bed3d — chrom, start, end, x, y, z — which this app and g3dtools read back'
+        : `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
     })
   }
 
   private saveIntervals(output: IntervalsOutput, provenance: Provenance): void {
     const stamp = fileStamp(new Date())
-    const text = formatIntervals(output.payload, {
+    const context = {
       label: output.label,
       file: provenance.framing.label,
       created: provenance.createdAt,
-    })
-    const suffix = output.payload.kind === 'pairs' ? 'bedpe' : 'bed'
+    }
+    const payload = output.payload
+    const structure = output.entryKind === 'structure' && payload.kind === 'features'
+    const text =
+      structure && payload.kind === 'features'
+        ? writeBed3d(payload.data, context)
+        : formatIntervals(payload, context)
+    const suffix = structure ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'
     downloadBlob(
       new Blob([text], { type: 'text/plain' }),
       exportName(output, provenance, stamp, suffix),

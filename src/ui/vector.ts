@@ -69,6 +69,7 @@ interface State {
   textAlign: CanvasTextAlign
   textBaseline: CanvasTextBaseline
   lineJoin: CanvasLineJoin
+  lineCap: CanvasLineCap
   /** The dash pattern, in CSS pixels; empty is a solid line. */
   lineDash: number[]
 }
@@ -140,6 +141,7 @@ export type VectorTarget = Pick<
   | 'rect'
   | 'arc'
   | 'quadraticCurveTo'
+  | 'bezierCurveTo'
   | 'fill'
   | 'stroke'
   | 'clip'
@@ -149,6 +151,7 @@ export type VectorTarget = Pick<
   | 'measureText'
   | 'translate'
   | 'rotate'
+  | 'transform'
   | 'setTransform'
   | 'clearRect'
   | 'strokeRect'
@@ -162,6 +165,7 @@ export type VectorTarget = Pick<
   | 'textAlign'
   | 'textBaseline'
   | 'lineJoin'
+  | 'lineCap'
   | 'setLineDash'
   | 'getLineDash'
 >
@@ -211,6 +215,7 @@ export class VectorPage {
       textAlign: 'start',
       textBaseline: 'alphabetic',
       lineJoin: 'miter',
+      lineCap: 'butt',
       lineDash: [],
     }
     // Measured against a real canvas, because the *layout* above this — which
@@ -287,6 +292,11 @@ export class VectorPage {
     this.emit(`${round(r)} ${round(g)} ${round(b)} RG`)
     this.emit(`${round(Math.max(0.05, this.state.lineWidth * scaleOf(this.state.matrix)))} w`)
     this.emit(`${this.state.lineJoin === 'round' ? 1 : this.state.lineJoin === 'bevel' ? 2 : 0} j`)
+    // Caps matter once a chart library is drawing the lines: `zrender` ends a
+    // tick with a round cap and a dashed grid line with a butt one, and a page
+    // that ignored the attribute would print every short segment a half-width
+    // longer or shorter than the screen drew it.
+    this.emit(`${this.state.lineCap === 'round' ? 1 : this.state.lineCap === 'square' ? 2 : 0} J`)
     // PDF's dash operator takes the same array the canvas does, scaled by the
     // same matrix the width is: `[] 0 d` is solid, which is what an empty
     // pattern means on a canvas too. Without this an exported figure drew the
@@ -361,6 +371,12 @@ export class VectorPage {
       set lineJoin(value: CanvasLineJoin) {
         self.state.lineJoin = value
       },
+      get lineCap(): CanvasLineCap {
+        return self.state.lineCap
+      },
+      set lineCap(value: CanvasLineCap) {
+        self.state.lineCap = value
+      },
 
       save: () => {
         self.stack.push({ ...self.state, matrix: { ...self.state.matrix } })
@@ -403,6 +419,30 @@ export class VectorPage {
         self.path.push(`${round(points[0][0])} ${round(points[0][1])} m`)
         for (const [px, py] of points.slice(1)) self.path.push(`${round(px)} ${round(py)} l`)
         self.path.push('h')
+        self.current = { x, y }
+      },
+      /**
+       * A cubic, which PDF has natively — one operator, no conversion.
+       *
+       * Wanted because a chart library's SVG is cubics: every smoothed line,
+       * every rounded corner and every arc `zrender` emits arrives as `C`, and
+       * a page that could only take quadratics would have to approximate them
+       * (`figures/svgPaint.ts`).
+       */
+      bezierCurveTo: (
+        c1x: number,
+        c1y: number,
+        c2x: number,
+        c2y: number,
+        x: number,
+        y: number,
+      ) => {
+        const [ax, ay] = self.point(c1x, c1y)
+        const [bx, by] = self.point(c2x, c2y)
+        const [ex, ey] = self.point(x, y)
+        self.path.push(
+          `${round(ax)} ${round(ay)} ${round(bx)} ${round(by)} ${round(ex)} ${round(ey)} c`,
+        )
         self.current = { x, y }
       },
       quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => {
@@ -494,6 +534,18 @@ export class VectorPage {
           f: 0,
         })
       },
+      /**
+       * Multiply, rather than replace.
+       *
+       * The one canvas transform the painters above never needed, and the only
+       * one an SVG replay can use: a `<g transform>` composes with whatever the
+       * caller already put on the context, and `setTransform` — which throws
+       * the caller's own placement away — would strand the whole figure at the
+       * page origin (`figures/svgPaint.ts`).
+       */
+      transform: ((a: number, b: number, c: number, d: number, e: number, f: number) => {
+        self.state.matrix = multiply(self.state.matrix, { a, b, c, d, e, f })
+      }) as CanvasRenderingContext2D['transform'],
       setTransform: ((a: number, b: number, c: number, d: number, e: number, f: number) => {
         self.state.matrix = { a, b, c, d, e, f }
       }) as CanvasRenderingContext2D['setTransform'],

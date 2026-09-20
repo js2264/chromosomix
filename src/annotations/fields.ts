@@ -463,7 +463,10 @@ export type BarScale = 'file' | 'feature'
  */
 export function defaultFeatureStyle(kind: AnnotationKind): FeatureStyle {
   return {
-    colourBy: kind === 'variants' ? FIELD_BASE : FIELD_STRAND,
+    // A structure's beads carry no strand, and a lane of them coloured by one
+    // would be a lane in the "not set" colour throughout; the lane's own colour
+    // is what a row of beads means (§25).
+    colourBy: kind === 'variants' ? FIELD_BASE : kind === 'structure' ? FIELD_LANE : FIELD_STRAND,
     arrows: true,
     // Comparable before legible: a lane whose glyphs cannot be compared is a
     // row of shapes, and a reader who wants the shapes can ask for them.

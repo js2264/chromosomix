@@ -26,6 +26,7 @@ import { runCoverage } from './coverage'
 import { runExpected } from './expected'
 import { runFourC } from './fourc'
 import { runInsulation } from './insulation'
+import { runReconstruct, runSpatialTracks, runStructureMap } from './structure'
 import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from './mags'
 
 /**
@@ -51,6 +52,9 @@ export const RUNNERS: Record<string, TaskRunner> = {
   chromosight: runChromosight,
   compartments: runCompartments,
   hicrep: runHicrep,
+  structuremap: runStructureMap,
+  spatialtracks: runSpatialTracks,
+  reconstruct3d: runReconstruct,
   magqc: runMagQc,
   magnetwork: runMagNetwork,
   magpurity: runMagPurity,
