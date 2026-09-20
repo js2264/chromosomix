@@ -70,103 +70,79 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   drawing rather than three. The library itself arrives in a chunk of its own when the first figure
   is built, so a reader who never runs an analysis never downloads it.
 
-- **The Structures card takes a drop, its eye is the deck's cell (§25.3).** A `.g3d` can be dropped
-  anywhere on the *Structures* card, where before it had to be aimed at the *Tracks* card — the one
-  whose list it does not join, since the loader files it as a structure either way. The eye on a
-  row now shows the model in the deck and takes it out again, opening the cell where there is none
-  and closing it on the way out; it used to toggle a `visible` flag that nothing drawing a model
-  ever read. And the **place under the pointer is always named in the cell's corner**, including
-  when the pointer is on the model itself — one locus there, where a contact from a map is a pair
-  — independent of the tooltip switch, which is about the card that follows the pointer.
-- **The pointer aims, the fog follows the slab, the letters stay in the dialog (§25.4–25.5).** The
-  pointer now **snaps to the nearest bead within fourteen pixels** where an exact ray misses, and
-  the **cursor becomes a cross** whenever a bead is being aimed at, so landing on a bead is no
-  longer a test of aim. The **fog is tied to the depth slab**: it starts at the centre of rotation
-  and reaches the page exactly where the slab cuts, rather than being measured from the camera —
-  which on a thin slab left every one of the few beads it kept already half dissolved. And the
-  **depth slab now clips at all** — it was measured with the factor back to the file's own units
-  against coordinates already normalised, so on a model whose radius of gyration was a thousand
-  nanometres the planes stood a thousand times too far apart and no setting of the slider did
-  anything. And the cell's **single-letter keys are bound only while the model is enlarged**, where the model is the
-  whole window; beside a map they took `f` from the Files panel and `a` from the Annotations panel
-  for as long as a model was on screen. The palette lists them either way, and `e`, `o` and `m`
-  for the three modes are back among them.
-- **The 3D viewer, in the hand (§25.4).** The marks a reader makes on a model are now three modes
-  with a button each and a key each — *mark a bead* (`e`), *mark a loop* (`o`), *measure* (`m`) —
-  where one mode used to count clicks and guess which was meant; the three are in the palette with
-  no key of their own, a bare letter that arms a mode being one pressed by accident. A marked place is drawn on the
-  model as **the bead again at twice the radius in the mark's own colour**; a measurement is a
-  **drag** from one bead to another, the line following the pointer, the model holding still while
-  it does. A **card under the pointer** names the bead's sequence and coordinate, under the map's
-  own *tooltip* switch. A pointer on a map with the span modifier held now lights **one bead**
-  rather than joining two, which is what the crosshair and the readout had already switched to.
-  The black lines over the model — a gap's dashes, a loop's chord — are **half the tube's radius**,
-  so a line about the model no longer reads as part of it. The enlarge dialog's settings are wider
-  and **dragged to any width** by the grip beside them, remembered per file.
-- **One bin, one bead, and no ceiling (§25.6).** *Model from the map* now builds a bead per bin of
-  the resolution the reader has selected, and nothing else: the *bins per bead* control is gone, and
-  a block drawn pooled — four bins to the cell, because that is what fits the window — is declined
-  rather than borrowed, which is `usableBlock`'s rule and every other task's. This was the one task
-  in the app whose answer came at the resolution of the *window* rather than the one the reader
-  chose, and it silently capped a model at the raster cap of 4,096 cells. A coarser model is a
-  coarser rung, which also reads far less. The bead ceiling is gone with it: both the time and the
-  memory are quadratic, so the estimate *says so* — the beads and their width, the seconds per
-  hundred steps, the gigabytes of matrices — and the reader decides. What is refused is only the
-  allocation a browser will not give, as a note naming the size rather than as a dead tab. The run
-  holds two dense matrices where it held six: each made once at its final size, the counts turned
-  into the distances they imply over the buffer they already occupy, and classical scaling
-  multiplying through the centred matrix without writing it down. **Every phase reports progress
-  and breathes** — each rectangle read, each of the eighty sweeps of the classical start, each
-  refinement step — so the bar moves and a cancel always lands. A typed locus is priced as the bins
-  of *that stretch*, where the estimate used to count the whole sequence it named.
-- **The 3D viewer, as a view of the app (§25.3–25.5).** Its settings are now a *3D structure* card
-  of the Aesthetics panel right after the *Map* card, built from the same fields, borrowed by the enlarge
-  dialog's sidebar; the cell keeps four corner buttons. New on the card: **size by** a track, a
-  **depth slab** into a dense model, a **genomic ruler** along each chain, camera presets, a
-  turntable, and the cell's actions as palette commands with keys (`f`, `a`, `1`–`3`, `l`, `r`). **Contacts from the pin** draws the map's row through the pinned bead as chords above a
-  threshold on the map's colour scale, as thick as the contact and in the map's colours. **Compare with** superposes another
-  structure row by a similarity fit over the beads the two share, reports the RMSD, and *colour by
-  displacement* shows where they differ. **Measure mode** turns two clicks into a distance kept on
-  the card and written on the model.
-- **The structure cell's settings, settled (§25.3).** Drawn as is three icon toggles that combine
-  (beads, sticks, tube); every gap in a chain is a dashed run of ink, always, and the *gaps* option
-  is gone; chords and the hovered contact's chord are thick ink cylinders rather than one-pixel
-  lines; the cell is always orthographic and always lit, so those two options are gone; the fog,
-  the chords, the names and the centre are icon toggles; the *ghost opacity* slider (0.15 by
-  default) is the one opacity, applied to what is outside the window or ghosted from the key, and
-  *outside the window: show* draws a whole genome in colour while the maps look at one window of it;
-  the map's *legend* switch hides the key of the structure cell too. A stored style still reads back:
-  the old representation becomes the three toggles.
-- **The structure cell, in the hand (§25.3–25.5).** The sequence box of the three structure tasks
-  is seeded from what the map shows: the locus inside one sequence, every sequence on screen when
-  the view spans several (`IV, V`), and empty — every sequence — for the whole genome. A model
-  computed again onto the same row replaces the one the cell draws, and removing the model the
-  cell shows empties the cell — whichever way the cell came to be drawing it, where it used to empty
-  only for a row the reader had picked by hand. Under *colour by sequence* the key is a control: a click ghosts a
-  sequence, a double-click shows it alone, and the swatch is a colour picker. A badge in the
-  cell's top-left corner says what a drag or a click does — turn, move (Shift), centre (⌘ on a
-  Mac, Ctrl elsewhere: click a bead to turn about it; a tap alone shows or hides the centre ball
-  and axes), fog (Space + scroll moves the fog, which the menu's slider also sets), select. The
-  dialog's sidebar hides and shows from a button in the stage's corner. The halo on a lit bead is a
-  translucent ball in front of the bead it marks and behind what is nearer the eye. A bead under
-  the pointer is drawn as a dashed line down and across every map. **Select mode** turns clicks
-  into manual marks: a bead clicked twice is a line at its locus on both axes, two beads an
-  arrowhead between them; the reader's arrowheads are offered as chords under *your marks*.
-- **A 3D model from the map, and a Structures card.** A third map task, **Model from the map**,
-  makes a structure from the contacts the view is holding — the whole loaded block at the
-  resolution it is drawn at, cis and trans together — by ShRec3D's pipeline (contacts read as
-  distances `c^(−1/α)`, the uncounted pairs filled, classical MDS) with SMACOF refinement over the
-  pairs the map counted, **each pair weighted by how often the map counted it** (the count, its
-  square root, or every pair alike — a choice on the form, the count by default), so the near
-  diagonal the map is surest of is what the model honours first; `α` and the step count are
-  exposed, a sequence or a typed range restricts it, more than 10,000 beads is refused with the way
-  out, and a table reports the fit (weighted stress and Spearman's ρ against the map). The result is a **row**, not a picture: every model the session
-  holds — dropped, named by URL or computed — is now listed on a **Structures** card of its own
-  under the Tracks card, with *show in the deck* (which opens the structure cell where there is
-  none and says which row it is drawing), a **bed3d** download, the provenance of a computed row
-  and *recompute* after a reload; the structure cell gains a **model** picker, remembered per
-  file, and draws a model the moment it arrives. The same bed3d leaves from the drawer's result.
-  SPECS §25.1–25.3, §25.6–25.8.
+- **A 3D structure viewer, as a full view of the app (§25.3–25.5).** A chromatin model — WashU's g3d
+  (the text `g3dtools` takes, or the binary container written here), a `.3dg`, or `bed3d` (the same
+  file with an end column) — becomes a row of the **Structures** card (under Tracks) and a cell of
+  the deck; a `.g3d` can be dropped on either card, since the loader files it as a structure either
+  way. three.js loads only when a structure cell first opens (a 552 kB chunk, 140 kB gzipped). Its
+  settings sit on a **3D structure** card of the Aesthetics panel, right after the Map card, shared
+  with the enlarge dialog's sidebar: **size by** a track, a **depth slab** into a dense model (the
+  fog is tied to it — measured from the centre of rotation, so it actually clips, rather than from
+  the camera), a **genomic ruler** along each chain, camera presets, a turntable, and the cell's
+  actions as palette commands (`f`, `a`, `1`–`3`, `l`, `r`). Drawn-as is three combining icon toggles
+  (beads, sticks, tube); every chain gap is always a dashed run of ink and the *gaps* option is gone; the cell is
+  always orthographic and lit, so those two options are gone too; fog, chords, names and centre are
+  icon toggles; one **ghost opacity** slider (0.15 default) covers what is outside the window or
+  ghosted from the key, and *outside the window: show* draws a whole genome in colour while the maps
+  look at one window of it. A stored style still reads back, the old representation becoming the
+  three toggles.
+
+  **Colour by** sequence — the key is a control: click ghosts a sequence, double-click shows it
+  alone, the swatch is a colour picker — haplotype, position, the file's own columns, a loaded
+  track, a feature set, the reader's marks, distance to the pinned bead, or **contacts from the
+  pin**, the map's own row through it drawn as chords above a threshold on the map's colour scale.
+  **Compare with** superposes another structure by a similarity fit over the beads the two share,
+  reports the RMSD, and *colour by displacement* shows where they differ. Hover links every surface:
+  a pointer on a map lights the beads at both ends and joins them (or, with the span modifier held,
+  lights one bead); a pointer on a bead marks every map and tracks cell; a card under the pointer
+  names the bead's sequence and coordinate; the pointer **snaps to the nearest bead within 14 px**
+  with a cross cursor while it is aiming; the eye on a Structures row opens and closes the model's
+  cell in the deck. **Marks** are three modes, a button and a key each — *mark a bead* (`e`), *mark a
+  loop* (`o`), *measure* (`m`) — replacing a click-counter that had to guess which was meant: a mark
+  is the bead again at twice the radius in the mark's colour, a measurement a drag between two beads
+  with the model holding still, and **select mode** turns clicks into manual marks the same way on a
+  map (two beads an arrowhead, offered as chords under *your marks*). The black lines over the model
+  — a gap's dashes, a loop's chord — are half the tube's radius. A badge in the cell's corner says
+  what a drag or click does; single-letter keys are bound only while the model is enlarged, so they
+  no longer steal `f`/`a` from the Files/Annotations panels when a model sits beside a map. The
+  enlarge dialog's sidebar is dragged to any width, remembered per file — the cell takes back the
+  camera and colouring the reader left it with. A click pins, Shift-click marks, a double-click
+  goes; bookmarks are named on the model; the export includes a vector PDF of beads and sticks.
+
+  The place under the pointer is always named in the cell's corner, including on the model itself —
+  one locus there, where a contact from a map is a pair. The sequence box of every structure task is
+  seeded from what the map already shows (the locus inside one sequence, every sequence on screen
+  when it spans several, empty for the whole genome); a model computed again onto the same row
+  replaces the one the cell draws, and removing it empties the cell however it arrived there. Two
+  analysis tasks: **model versus map** (distance matrices, distance by separation beside the map's
+  P(s), Spearman agreement per sequence) and **spatial tracks** (radial position, distance to a
+  locus, local compaction, as synthetic tracks). The deck gains cells that are not maps (§16.11): a
+  **tracks cell** drawing the session's tracks alone, and **the browser as lead**, so a deck of
+  tracks and a structure needs no map at all — the lead's window ghosts what the maps are not
+  looking at. Demo models ship for the E. coli and yeast maps under `demo/`.
+
+- **Model from the map builds one bead per bin, with no ceiling (§25.6).** The map task that makes a
+  structure from the contacts the view is holding — the whole loaded block, cis and trans, by
+  ShRec3D (contacts as distances `c^(−1/α)`, uncounted pairs filled, classical MDS) with SMACOF
+  refinement, each pair weighted by how often the map counted it (count, its square root, or uniform
+  — count by default; `α` and the step count exposed, a sequence or typed range restricts it, a
+  table reports the fit) — now builds a bead per bin at the resolution selected. The *bins per bead*
+  control, and the silent pooling that used to cap a model at the raster's 4,096-cell ceiling, are
+  both gone: a coarser model is a coarser rung, which reads far less, rather than the one task in the
+  app whose answer came at the window's resolution instead of the reader's own choice.
+
+  The bead ceiling is gone with it. Both time and memory are quadratic, so the cost estimate says so
+  — beads and their width, seconds per hundred steps, gigabytes of matrices — and the reader
+  decides; only an allocation the browser will not give is refused, as a named error rather than a
+  dead tab. The run holds two dense matrices where it held six, each built once at its final size;
+  every phase — each rectangle read, each of the eighty sweeps of the classical start, each
+  refinement step — reports progress, so the bar moves and a cancel always lands. A typed locus is
+  priced as the bins of that stretch; over 10,000 beads is refused with the way out.
+
+  The result is a **row**, not a picture: every model the session holds — dropped, named by URL, or
+  computed — is listed on the Structures card with *show in the deck*, a **bed3d** download, the
+  provenance of a computed row, and *recompute* after a reload; the structure cell gains a **model**
+  picker, remembered per file, and draws a model the moment it arrives.
 
 - **Track aggregates along a pileup's two edges (§18.8).** The APA takes any number of bigWig or
   synthetic tracks and averages each over the **same windows** the pileup is taken from — the real
@@ -299,380 +275,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   intact region box rather than reaching the full-screen error page, which was a long way back from a
   missing comma.
 
-### Changed
-
-- **A pileup's axes are numbered in base pairs, not in bins (§18.8).** The APA, chromosight's
-  pileup and the chromosight APA all drew a picture whose axes said *Bins from the centre* and
-  carried no numbers at all. They now read *Distance from the centre* — or from the feature's start
-  or end, whichever the window was cut about — with five labels along each axis: `-21 kb`,
-  `-10.5 kb`, `0`, `+10.5 kb`, `+21 kb`. A count of bins is a number only a reader holding the
-  resolution in their head can use, and a different number for the same window at every resolution.
-  A scaled window keeps its own `0 → 1` labels, its axis being the feature rather than a distance.
-
-- **The Structures card has no box to paste a URL into either (§5.11).** It arrived with the 3D
-  card after the Tracks, Contact maps and deck rows were cleared of theirs, so it kept the one
-  pattern every other card had lost: a drop zone with *or open one by URL* folded under it. The
-  rule is the card's shape rather than a list of cards — what a card that asks for a file needs is
-  the drop zone and nothing under it. A structure held at an address still opens by every road it
-  did: the landing page's own box, a saved session, a `#uri` link, or the Files column.
-
-- **A sequence is declared circular in the Chromosomes table, in a column of its own (§8.15).** It was
-  a tickbox in the Map card, which was the right card for what the flag *changes* and the wrong place
-  for what it *is*: a declaration about the assembly — which of these sequences is a plasmid, which is
-  the mitochondrion — asked one sequence at a time, of whichever one happened to be on screen.
-  Declaring three of them meant opening three maps, and there was nowhere at all to *read* which had
-  been declared. The column sits **last**, after every column the file itself carries — it is the one
-  column that is not in the file, a declaration the reader makes rather than a number somebody
-  measured, so it goes where a reader's own additions go rather than interrupting the run of the
-  file's own fields. The filter row's own tick narrows to the sequences that carry it, which is what makes the question answerable on a draft
-  assembly with three declared contigs in a hundred thousand; and the **Sequences card in the General
-  panel wears a `↻` beside each declared name**, so a reader at work is told the answer rather than
-  offered a second place to click. A map already on screen adopts the change without being rebuilt, so
-  the reader keeps the zoom they needed in order to be somewhere the question was worth asking from.
-
-- **The resolution picker is a slider over labelled stops, at the far end of the top bar (§5.5).** It
-  was a dropdown of raw bin counts — `1000`, `5000`, `50000` — sitting second in the trail, between
-  the file name and the table. Three things were wrong with that. It read as a step of the trail,
-  which a rung of a `zoomify` ladder is not: it is the same file drawn more or less finely, and the
-  crumbs after it stay where they were. It was in bins, and `50000` is a number a reader has to divide
-  before it means anything. And a dropdown hides the ladder, where a slider over stops shows how many
-  rungs there are, which one you are on and which way is finer. The stops now say `1 kb`, `50 kb`,
-  `1 Mb`; they are real radio inputs, so the arrow keys and a screen reader get the list; and the
-  slider commits on release rather than per rung, since dragging across five rungs must not re-open
-  the file five times. An mmetacool's entry picker is untouched and stays before the root, because
-  switching to a different nested metacool genuinely does invalidate every crumb after it.
-
-- **The landing page is one screen, the three ways in are marked, and the stores colour up as you
-  is marked and spaced.** The masthead's tagline, the paragraph inside the drop area and the glyph over it are
-  gone — between them a fifth of a laptop screen, and what was below the fold was the third of the
-  three things the page offers. The target now says *Drop genomic files here* and *or click to
-  choose*, and nothing else. Each of the three headings leads with the mark that thing already wears
-  elsewhere — a file, `folder-tree` from the Files column, `library` from the store drawer — because
-  three bold lines down one column read as one section with emphasis in it rather than as three
-  doors. Each store tile's line is **written for the two lines it is drawn on** — about fifty
-  characters — rather than clipped to them: the first fifty characters of a sentence are a
-  truncation and not a shorter sentence, so the eight are written out beside the blurbs they
-  shorten, a remembered store shows the host of its URL, and `builtin-stores.test.ts` holds the
-  budget. **4em between the three**, on the bottom of every section but the last: they are three
-  offers rather than three paragraphs of one, and packed at a rem and a bit they read as a single
-  column to be worked down. The page is a **dotted ground** — a sub-pixel dot every 10 px at half the
-  border grey — which is the only patterned surface in the application: arriving at the landing page
-  and leaving it are both legible now, and at that pitch and weight it is grain rather than pattern.
-
-- **One button, everywhere.** Every `.btn` takes the same gesture on approach — the border and the
-  word to the accent, a one-pixel lift, a shadow — which was the store tiles' hover and is now the
-  rule rather than the one place in the app that had one. The quiet ones (a close cross, a link, a
-  chip, a tab's ×) opt out of the lift, having no surface to raise. The landing page's row of places
-  and the two sign-ins stop being `.btn-primary`: they stood directly above a row of store tiles
-  offering the same gesture, and four blue blocks over eight grey squares read as a toolbar over a
-  gallery — as well as claiming, against the doctrine, that one of the four was the answer. None of
-  them is. They are tiles now, and `.btn-primary` is back to meaning the invited answer in a dialog.
-
-- **The mark has a track down its left side and another under it**, which is where this application
-  puts a track: the lanes grow towards the matrix from the bottom and the left edges. Both rise at
-  the first bin of each of the three blocks and disagree in between, which is what having two of
-  them is for.
-
-  They are **slivers in the margin the plate already had** — a third of a pitch across, a fifth of a
-  pitch clear of the map — and **one hue at two saturations**, not two hues. The first attempt gave
-  each lane a whole row of an 8 × 8 grid and a colour of its own, and it cost more than it bought:
-  three hues on one plate is a generic analytics icon and breaks the rule this application is built
-  on, a solid run of seven cells outlasts a sparse diagonal at every downsample so at 24 px the
-  decoration became the identity, and the extra row took an eighth off the map, which is the
-  subject. Drawn this way the field keeps the size, the spacing and the palette it has always had;
-  the one thing the lanes ask of it is half a lane's footprint of optical centring, so the mark
-  rather than the map sits in the middle of the plate. Redrawn from `scripts/make-app-icons.py`, so
-  the favicon, the install icon, the iOS icon, the dock icon and the custom-store tile are all the
-  one drawing.
-
-- **The greys are neutral, and the borders carry the contrast.** The whole ramp had a blue cast —
-  `#c8cdd4`, `#98a1ac`, `#4a5058` are all blue-greys — and a blue-grey chrome around a blue accent
-  leaves the accent nothing to be. They are neutral now, in both themes, and lighter in the light
-  one: `--bg-sunken` is `#f5f6f8`, and what got darker instead is `--border` and `--border-strong`,
-  which were pale enough that a card read as floating on nothing and a table's rules disappeared on
-  a projector. A hairline that cannot be seen is a missing hairline; a fill that cannot be seen is
-  just the page. Two elevation tokens with it, `--shadow-1` for *resting on the page* and
-  `--shadow-2` for *lifted off it*.
-
-- **The two store doors are named for the errand.** *Add a UCSC hub* is **Connect to a UCSC hub** —
-  a hub is somebody else's shelf, read where it stands, which is what *connect* means everywhere
-  else on the page — and *Add a custom store config* is **Add a custom store**, a file this viewer
-  takes a copy of. Naming both *add* made the first promise the second's gesture.
-
-- **The HiC score is the mean of the bin's own line across the near-diagonal, which is what the R the
-  score comes from computes.** It was the *sum of every cell in a square window*, and neither the shape
-  nor the missing division was right.
-
-  **The shape.** The score is now `a[k, k + d]` for `|d| ≤ D − 1` — the bin's column, reaching `D − 1`
-  bins each way — where it was every cell of a square centred on the bin. Drawn on a map that is a
-  straight line through the diagonal: **half a crosshair**, one arm-pair, because the matrix is
-  symmetric and taking both arms would count every off-diagonal contact twice against a main diagonal
-  counted once. Every cell in it touches bin `k`. A square window does not have that property: it also
-  counts the self-contact of `k − 1` and the corner joining `k − 1` to `k + 1`, cells that involve `k`
-  in no way — and on a bacterial map at three diagonals those borrowed cells are most of the score, so
-  consecutive bins shared half their cells and a single bright bin came out as a three-bin plateau. On
-  `Bignaud2025_T7.mcool` a bin whose neighbours sit at 55% of it under the line reads 87% and 89% under
-  the square.
-
-  **The division.** It is a mean now: `N = 2D − 1`, the cells in the line. A sum grew with the number of
-  diagonals and could only be compared against another run of the same size on the same map; a mean is
-  contacts per cell and a lane labelled in contacts is readable as contacts. Multiplying by `N` returns
-  the R script's own number exactly — which is how this is checked: against
-  `Bignaud2025_T7.mcool::2000` at `NC_000913.3:3,442,000` the kernel returns **3.7433** × 1/N where that
-  script returns 3.7433, and the same at every neighbouring bin.
-
-  **The parameter is a count of diagonals**, counting the main one, replacing a window in base pairs.
-  It defaults to **3** — the main diagonal and the one either side, five cells, two bins each way —
-  which is the bacterial reading at the 2 kb resolution the score is computed on there, and is the R
-  script's `num_diagonals = 2` under the other way of counting. P(s)'s minimum separation and the
-  diamond's window went the same way and for the same reason: the near-diagonal is a fact about the grid
-  rather than about the genome, and the same typed distance meant three diagonals at one resolution and
-  one at the next. The runner says what the reach came to in base pairs on the file open and how many
-  cells are behind each point of the track.
-
-  The read is **shallower**: the band is `D − 1` deep where the square needed twice its own reach for
-  its corners — two bins at the default, one strip on most files, no tiling.
-
-  **A bin without a whole line through it now scores nothing.** Dividing a short sum by a full `N` fades
-  both ends of every linear sequence towards zero, which reads as *this end of the chromosome is
-  unstructured* — the artefact the diamond has always refused partial windows for, and one that arrives
-  the moment the reading becomes a mean. A circular sequence has no end to run off and every bin on one
-  is still scored. A cell the balancer dropped *inside* a whole line is a different thing and is
-  unchanged: counted rather than guessed at, never scaled up, and `NaN` below `minValid`.
-
-  The task's version is **3**, so a result carried in from a shared session is not silently compared
-  against one computed here. `--window` is gone; the parameter is `--diagonals`, and an old command line
-  naming the old one is refused rather than quietly reinterpreted.
-
-  One thing worth knowing and not fixed here, because it is a property of the data rather than of this
-  task: at three diagonals the **main diagonal is the bulk of the line**, it is where self-ligation
-  lands, and on a balanced map it is the one place the weights were never fitted — cooler excludes
-  `ignore_diags` diagonals from its own solve and then scales them anyway. On the E. coli map above, the
-  bin under that peak carries a balancing weight 1.45× its neighbours', so its self-contact is scaled
-  2.09× and the peak is in the weights rather than in the counts, where neither statistic peaks at all.
-  `ignoreDiags = 1` cuts that cell out of the score, and the hint on the control now says why one might.
-
-- **An explicitly planned pooled read is snapped to the sequence's own grid.** The reader anchors
-  the cell grid to each sequence rather than to the window asked for, so two blocks of one region
-  agree cell for cell — but it did that only for the plans it chose *itself*, and a request carrying
-  its own `binsPerCell` skipped the step. That is why the zoom-to-refine module carried a standing
-  note saying it must never send one: the cell values would have moved as the reader panned. Both
-  paths snap now, which is what makes a declared resolution above a resolution rather than a
-  rendering. A no-op for the two callers that sent an explicit plan before this — a whole-genome read
-  and a selection both start at sequence boundaries.
-
-- **Nine resolution rungs are chipped rather than six (§5.5).** A `zoomify` ladder that doubles from
-  1 kb reaches a megabase in ten rungs and one on the 1–2–5 series reaches it in nine, so the old cap
-  collapsed most real `.mcool`s to a bare slider — and collapsed an eight-rung one the moment
-  somebody added a ninth, which is exactly the reader the `+` above is for. Nine stops is about
-  three hundred pixels of short numbers, right-aligned into whatever the trail leaves.
-
-- **Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
-  its own body class and each used to set its own padding — a rule spelled a dozen times, and the way
-  that shape fails is not subtle: a dialog written without the declaration comes out with its text
-  against the panel's border, looking broken, and nothing says what was forgotten. (The resolution
-  dialog shipped exactly that.) The padding is stated once now, against the panel's own children, at
-  a specificity that beats a body class. Three are flush on purpose and opt out by name, in one place
-  where the exception list can be read whole: the command palette's search box and the feature
-  card's footer each carry a border across the panel's whole width, and the stage (§18.13, §25) is a
-  picture at the size of the window beside a column the reader drags the width of — where an inset
-  would be measured into the drag, since the grip sizes the column from the modal's own right edge.
-
-- **The region bar loses its back arrow and its map/tracks cycle button (§5.4).** Both were controls
-  with a shorter road already beside them. Going back is the browser's own back, which this bar's
-  navigation has fed since it existed. *Tracks only / map only / both* is the **eye beside the map**
-  in the column that lists what is drawn — where every other thing on screen is shown and hidden,
-  one row at a time, by the control that names it. A second way to do a thing is not a convenience
-  when the first way is a row the reader is already looking at; it is another control to learn, in
-  the bar that has to stay readable at a glance, and the bar has just gained four zoom buttons. The
-  `v` key still walks the three states, because a key costs the bar nothing.
-
-- **A barChart lane's ceiling is dragged like a track's (§8.17).** Giving the lane a fixed axis left
-  the reader one way to move it — typing two numbers into the card — while every lane above and
-  below it answered a drag across its body, and a ⌘-scroll over it, by moving its ceiling. A lane
-  that answers that gesture with a pan, in a stack where nothing else does, is a lane the reader has
-  to be told about. Both gestures now reach a chart, on the map's stacks and in the 1D browser, and
-  they start from the axis already on screen — zero to the file's own tallest bar, the same number
-  the typed field seeds from, so a notch and a drag on one lane cannot begin from two different
-  places. What this cost is an invariant that had held since the kind predicates were written: *has
-  a movable axis* and *is drawn as a profile* are two questions, and they were one function's worth
-  of answer only for as long as nothing but a profile had an axis. A chart still gets no **row** of
-  track controls — no autoscale group, no mode or flip switch — because it is not a measurement in
-  anybody else's units.
-
-- **An APA's half-width starts at 21 bins rather than 12, and *Anchor on* loses its paragraph
-  (§18.8).** Twelve was narrow enough that a loop filled the picture: the corners a P2LL divides by
-  were a couple of bins from the peak rather than background, and a reader had nowhere to watch the
-  pileup sit back down to it. The paragraph above *Centre / Start / End* explained which end of a
-  minus-strand gene is its 5′ end, over three options that carry a line each — three lines of the
-  card spent saying what the options say, and the 1D metaplot has asked the same question with no
-  such paragraph since it existed.
-
-- **The three *or open one by URL* boxes are gone, and the drop areas say less.** Each box was the
-  worse half of the pair it stood in. A reader holding a URL can drop the link on the window or
-  paste it into the landing page's own box, which is where this application says *open a file*; a
-  reader **without** one was being asked to produce something they have not got — and that is the
-  commonest state in all three places these stood: the bigWigs beside a map are keys in a prefix
-  whose names came off a run sheet, and a reader repairing a shared deck is looking at a `~`
-  precisely because the sender's file had no address a page could fetch by name (§11). What both of
-  those readers need is to be shown what is *there*, which is *from a connected place…* — which
-  stays, now as the only control on that row, so the disclosure triangle over it went too. The
-  hints inside the drop areas are cut to the formats the zone takes and nothing else.
-
-- **And the *from a connected place…* button is gone with them.** It opened the Files column's own
-  folder view in a dialog, from under every card that asks for a file and from the deck's add row —
-  four doors to one room, each closing on the first pick. §20 opens by saying that every door this
-  application had asked *which file* once and then closed, and that the way people work with a
-  directory of data is to open one, look, open the next, and keep going; a one-shot copy of the
-  column is the shape the connected folder exists to replace. The column itself is untouched, and a
-  drag out of it still lands anywhere a drop lands.
-
-### Fixed
-
-- **A pileup's edge profiles were drawn from zero, which flattened them (§18.8).** A ChIP aggregate
-  running from 45 at the baseline to 92 at the anchor — a doubling — came out as a line across the
-  top of a band three lines tall with a small bump in it, while the same numbers as a metaplot curve
-  two blocks down the drawer were a peak twice the height of its baseline. Two pictures of one
-  quantity disagreeing about whether anything happened, and the arithmetic was right in both. Each
-  profile is now drawn against **its own extent**, with the two edges of one track sharing a ruler —
-  they are one measurement — and the range printed beside the track's name in the key, which is what
-  keeps a self-scaled band honest about how much of an effect it is showing.
-
-- **A pileup's edge profiles now leave as numbers, with the matrix they belong to (§18.8).** The
-  TSV a reader exports carried the cells and not the lines drawn along them, which made the one
-  thing in the figure with no numbers behind it. They are written as a second block under the
-  matrix — contacts and signal are two units, and a spreadsheet reading them as one rectangle would
-  average them together.
-
-- **`metacooler-run apa --tracks` opened the file and then reported that it could not be read.** A
-  parameter that takes *several* entries files each one under `key:entryId`, which is how the app's
-  runner reads them back; the shell filed one vector under the bare key and read the parameter as a
-  single string, so a pileup asked for at a command line came back with a note saying one of one
-  tracks could not be read — about a file the command had just opened. The convention is now
-  written down once and imported, rather than stated in two places.
-
-- **A matrix figure's colormap control drew empty on exactly the figures that set one.** The slim
-  strip offers six colours inline with the full list in the dialog, and a `select` whose value is
-  not one of its options draws blank — so a saddle's `RdBu_r` or a pileup's `fall` made the control
-  look broken. Whatever is in force is now offered alongside the six.
-
-- **Fourteen rules in the stylesheet drew nothing, and looked like they meant to.** Six names —
-  `--line`, `--muted`, `--fg`, `--fg-quiet`, `--bg-inset` and `--warn` — were read across the sheet
-  and defined nowhere, neither in CSS nor from the code. An unresolvable `var()` is *invalid at
-  computed-value time*, which does not skip the declaration: the property takes its inherited value
-  if it inherits and its initial value if it does not. So `border: 1px solid var(--line)` came out
-  `border-style: none` and drew **no border** — on the colour ramp beside an annotation, on the
-  share dialog's link box, under the analysis drawer's map tabs and round a plot control's number
-  box. `background: var(--line)` came out transparent, so the well behind a feature-count bar and
-  the one-pixel divider in the plot controls were **invisible**. And `color: var(--muted)` inherited,
-  so two labels meant to sit quietly under something else were drawn at **full strength**. Each of
-  those looks, in a screenshot, exactly like a deliberate choice, which is why none was found.
-
-  `--warn` is now a real token in both themes, and the three rules that wanted a warning colour stop
-  inventing one each: `.pairs-warning` was written `var(--warn, var(--accent))` and therefore drew a
-  warning in **link blue**, and the other two hard-coded ambers that never changed in the dark theme.
-  `.input.is-bad` takes `--danger` like the `.input-region.is-bad` three thousand lines above it,
-  instead of a red of its own that stayed dark on the dark theme's dark surface.
-
-  **`test/unit/css-tokens.test.ts` is why there is not a fourth time.** It reads every `var()` in the
-  sheet and fails, with the line number, on any name nothing defines — allowing only the sixteen
-  properties the code writes with `setProperty`, and checking that allowance against the source so it
-  cannot rot. It also holds the two halves of the dark palette to each other and the light palette to
-  the dark one's set of names, which is how `--tab-rest` came to exist in four of the six blocks that
-  carried a palette and in neither of the other two.
-
-- **The palette is written once.** The light values were spelled out in full in four places —
-  `:root`, `[data-theme='light']`, `.content` and `.analysis-figure` — and are now one selector list
-  that names all four. Eighty-four declarations become sixteen, and the two boxes that stay light
-  while the furniture goes dark can no longer drift from the theme they are a copy of. The dead
-  `var()` fallbacks went with it: `var(--accent, …)` appeared with **three different** fallbacks for
-  a token that is always defined, and fifteen font sizes bypassed the type scale for values that
-  were a step under another name.
-
-- **A bacterial GFF arrived as 87 features out of 5,870.** A 6.4 Mb *Pseudomonas aeruginosa* PAK
-  annotation — 5,783 CDS, 74 tRNA, 12 rRNA, one tmRNA — opened as 87 anonymous boxes: every RNA in
-  the file and not one of its proteins, each drawn with no name and no accession. The count is the
-  diagnosis. 74 + 12 + 1 = 87, so what came through was exactly the rows whose feature type ends in
-  the letters `rna`.
-
-  The parser only knew the hierarchy GTF and an Ensembl GFF3 are built from — gene, transcript, and
-  the exons and CDS underneath — and it keyed every row that was not a gene or a transcript by its
-  `Parent`, because in that world such a row is a *fragment* and the parent is the thing being drawn.
-  A row naming no parent could not be placed, and was skipped. **A bacterial annotation has no
-  hierarchy in it at all**: Prokka, Bakta and DFAST write one row per feature, each with its own `ID`
-  and `locus_tag` and not one `Parent` anywhere in the file, because a bacterial gene is a single
-  uninterrupted CDS and the gene and mRNA rows Ensembl writes would each be a second copy of the same
-  span. So all 5,783 CDS rows went looking for a transcript they had never named and were dropped,
-  while the tRNAs and rRNAs matched the "is this a transcript" test on their type and came through on
-  their own `ID`s. That the survivors were a plausible-looking 87 features rather than an error is why
-  this read as a file that had loaded.
-
-  A row that names no parent is now read as the whole feature it is. It is keyed on its own `ID` — so
-  two rows sharing one, which is GFF3's way of writing a feature with a gap in it, are one glyph — and
-  a row carrying no `ID` at all is drawn keyless rather than collected with every other such row into
-  one feature stretching across the file. Where a file *does* say what a row belongs to, that still
-  decides and nothing changes: a CDS with a `Parent` still folds into its transcript and is not drawn
-  beside it.
-
-  Three things that were being thrown away come with it, because 5,870 nameless boxes is not much
-  better than 87. `locus_tag` now counts as an accession — it is assigned per gene by definition, and
-  it is the only one a Prokka file writes — so the 2,643 `hypothetical protein` rows that carry no
-  symbol are labelled `IMMMIJEE_00005` instead of nothing, and the search box can find them. A bare
-  `gene` attribute now counts as a symbol, which is how NCBI and Prokka both spell one, so `dnaA`,
-  `gyrB` and 3,139 others are drawn under their own names. And `product` joins `biotype` and `source`
-  in the detail string: it is the whole of what a bacterial annotation has to say, the feature card
-  had been showing `source Prodigal:002006` and stopping, and the colour picker (§8.16) can only
-  offer a column that is written there.
-
-  One row type had to be turned away deliberately as a result. NCBI opens every contig with a
-  `region` spanning it end to end, and a GFF converted from GenBank writes `source` for the same
-  thing; both name no parent, so both used to fall off the same end the CDS rows did. Drawn, each
-  would be a box the width of the chromosome sitting on top of the genes.
-
-- **A species with no `README.json` no longer fails the whole Stores run.** `--readme optional` is
-  the default precisely because those files are hand-maintained across hundreds of species, and it
-  promises that a species without one keeps every file it has and loses two columns. Against
-  recorded fixtures it did exactly that; against the bucket it could not, and the first weekly run
-  of the DNA Zoo store died on `Preliminary/` — a top-level directory that is not a species and
-  never had a README. Nothing was published that week, so the shelves readers saw stayed as they
-  were.
-
-  The cause is one fetcher doing two jobs. A portal search is read by a function that treats `404`
-  as *zero results* only when the body is JSON — 4DN's way of saying a facet matched nothing — and
-  turns every other status into the end of the run. A bucket refuses a key that is not there with a
-  `404` and an **XML** body, which landed in that function's "the endpoint has moved" case. Reading
-  a document that may simply be absent is now its own function, and it answers *no document* to any
-  status and to a body that is not a JSON object. Absence and outage are still told apart: a host
-  that cannot be reached, or that stops talking part-way through three times over, still ends the
-  run, because a store is only ever replaced by a run that succeeded. `--readme require` still fails
-  on the first missing one, which is what it is for.
-
-  A run where *no* directory yielded a README now says so in a line of its own. Every row is still
-  published and the run still succeeds — but a bucket that answered for its objects and for none of
-  its READMEs has more likely been rearranged than lost every one at once, and two silently empty
-  columns are not a thing to find out about from the shelf.
-
-### Added
-
-- **A 3D structure beside the map (§25).** A chromatin model read from WashU's g3d — the text
-  `g3dtools` takes, gzipped or not, local or over HTTP; the binary container it writes, through a
-  reader written here; a `.3dg`; and `bed3d`, the same file with the end column — becomes a row of
-  the Tracks card and a **cell of the deck**, drawn with three.js loaded on the first cell only:
-  beads, sticks or a tube, both homologues of a phased file, a camera remembered per file, vector PDF
-  of beads and sticks, and a button that enlarges the model into a dialog with every setting in a
-  sidebar, the cell taking back the camera and colouring the reader left it with. Hover links every surface: a pointer on a map lights the beads at both ends
-  and joins them, a pointer on a bead marks every map and tracks cell, the lead's window ghosts what
-  the maps are not looking at. A click pins, Shift-click marks, a double-click goes. Colour by
-  sequence, haplotype, position, the file's columns, **a loaded track on the lane's own limits, a
-  feature set, the reader's marks, the distance to the pinned bead, or the map's own row through
-  it**; a loops file as chords; bookmarks named on the model. Two analysis tasks: **model versus
-  map** — distance matrices, distance by separation beside the map's P(s), Spearman agreement per
-  sequence — and **spatial tracks**: radial position, distance to a locus, local compaction, as
-  synthetic tracks. The deck gains **cells that are not maps** (§16.11): a **tracks cell** drawing
-  the session's tracks alone, placed on it from the location control and following the maps both
-  ways, and **the browser as lead**, so a deck of tracks and a structure opens with no map at all.
-  Demo models for the E. coli and yeast maps under `demo/`. Measured: three.js is a 552 kB chunk
-  (140 kB gzipped) fetched only by a session that opens a structure cell.
 
 - **The store grid: Roadmap shipped as a hub, a link to whoever made each shelf, and two doors named
   for what they do (§24.2, §24.10).**
@@ -691,11 +293,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   as a store is opened, read or not — the reader whose catalogue just failed to load is exactly the
   one who wants the site behind it.
 
-  **The two doors are named for the errand**: *A track hub* is now *Add a UCSC hub* and *Your own
-  store* is *Add a custom store config*. The first wears UCSC's logo, and so does every hub a
-  reader remembers; Roadmap wears its own emblem over UCSC's colour. The second wears this viewer's
-  own icon, the file behind it being the one format in the grid written *for* this viewer rather
-  than translated into it.
+  **The two doors are named for the errand**: *A track hub* is now **Connect to a UCSC hub** — a
+  hub is somebody else's shelf, read where it stands, which is what *connect* means everywhere else
+  on the page — and *Your own store* is **Add a custom store**, a file this viewer takes a copy of.
+  The first wears UCSC's logo, and so does every hub a reader remembers; Roadmap wears its own
+  emblem over UCSC's colour. The second wears this viewer's own icon, the file behind it being the
+  one format in the grid written *for* this viewer rather than translated into it.
 
   **The grid wraps.** It was one row that could not, which was right while there were five tiles;
   there are eight now and a reader can connect more, so it is equal columns that fill the width and
@@ -833,15 +436,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   absent one. The demo folder gains `Yeast_expression.barChart` — real gene coordinates, synthetic
   numbers, and the file says so on its first line.
 
-- **DNA Zoo is a shipped store, with a front end of its own.** Its open bucket is one directory a
-  species, flat inside, and most of what is in a directory is not a file this viewer opens — so the
-  generic bucket walk would have published a long list of `.assembly` files, scaffold tracks and
-  `.maf.gz` with the maps somewhere in it. `make_store.py dnazoo` keeps what has a door and then
-  applies two rules. A `.hic` carries its own index, so a corner of a 3.6 GB map is the bytes it
-  needs and size is no reason to leave one out; nothing else on that bucket has one — the FASTAs
-  are plain gzip with no `.fai`, the GFFs have no `.tbi` — so opening one is a download of the whole
-  file, and past `--max-unindexed` it is a trap rather than an offer. Protein and transcript FASTA
-  go too: they route as `genome` on their suffix alone and are not one.
+- **DNA Zoo is a shipped store.** Its open bucket is walked the way any lab's bucket is — the
+  `bucket` front end, every object this viewer has a route for, read straight from the listing with
+  no portal in between — and published beside the other four by the weekly Stores workflow. Most of
+  what is in a directory is not a file this viewer opens, so `make_store.py dnazoo` applies two
+  rules on top of the generic walk. A `.hic` carries its own index, so a corner of a 3.6 GB map is
+  the bytes it needs and size is no reason to leave one out; nothing else on that bucket has one —
+  the FASTAs are plain gzip with no `.fai`, the GFFs have no `.tbi` — so opening one is a download of
+  the whole file, and past `--max-unindexed` it is a trap rather than an offer. Protein and
+  transcript FASTA route as `genome` on their suffix alone and are not one.
 
   Each species' `README.json` supplies the rest, and it is worth the request. *Asian small-clawed
   otter* is how anybody but its authors looks for `Aonyx_cinereus`, so the shelf folds under the
@@ -851,11 +454,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and a rule built on `_HiC` is wrong about both ends of that. A species whose README cannot be read
   keeps every file it has and loses those two columns.
 
-- **DNA Zoo is a shipped store.** Its open bucket is walked the way any lab's bucket is — the
-  `bucket` front end, every object this viewer has a route for, read straight from the listing with
-  no portal in between — and published beside the other four by the weekly Stores workflow. The
-  tile is a lettermark for now: DNA Zoo's logo is published under terms nobody here has checked and
-  the file has not been supplied, so it falls back to the coloured square the mark was always
+  The tile is a lettermark for now: DNA Zoo's logo is published under terms nobody here has checked
+  and the file has not been supplied, so it falls back to the coloured square the mark was always
   designed to fall back to.
 
 - **`make_store.py bucket --folders` names a bucket's directory levels.** A bucket knows a file's
@@ -868,8 +468,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   shallower than the names it was given leaves the deeper ones empty rather than guessing. Omitted,
   nothing changes.
 
-### Added
-
 - **A store's catalogue can be taken away with you.** There was no way to read the JSON behind a
   shipped store: a built-in's URL is never shown on the page, RSG has none at all because it ships
   inside the bundle, and *copy link* copies a `?store=` link carrying an id rather than the file. A
@@ -880,292 +478,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read or could not be: a disabled button there would say the file exists and this build will not
   hand it over.
 
-### Fixed
-
-- **A shared link opened the picker on the first visit in a fresh browser profile.** Not on the
-  second, and not in a second tab, which is what made it read as a broken link rather than as what
-  it was. The first load of the site registers the service worker; the worker calls
-  `clients.claim()` as it activates, so it takes over the page that is still running; and the page
-  reloaded, because a worker that has *replaced* another is serving a page built from the one it
-  replaced. A worker installing for the first time has replaced nothing — the page came off the
-  network a moment earlier and is already the newest build — but it fired the same
-  `controllerchange` and got the same reload. `openSharedHash` decodes a session and then takes
-  `#session=…` out of the address bar before the tab it describes has finished opening, so the
-  reload landed on a bare URL and the session was gone. The first claim no longer reloads; an
-  update still does, which is the case the reload was written for.
-
-- **A store that did not answer with a store said it was not a saved workspace.** The store reader
-  borrowed the *workspace* reader's wording for the one refusal both formats share, so a host
-  answering with a page instead of the file — which is what a dev server does for a store the
-  Stores workflow has not generated — produced `… is not a JSON file, so it is not a saved
-  workspace`, naming a kind of file nobody in the drawer was trying to open. It now says it is not
-  a store, and names the case that causes it.
-
-### Changed
-
-- **The landing page names three things instead of two, and one of them is new.** *Load files* and
-  *Connect to a data store* have been joined by **Mount a local or remote folder**: four buttons,
-  side by side — *choose a folder…*, *connect a bucket…*, *sign in to Google…*, *sign in to
-  Dropbox…*. The places were reachable only from the plug in the Files column, which is to say from
-  a page a reader arriving with a directory of coolers had not looked at yet; a reader with a folder
-  rather than a file now has a door on the first screen. *Choose a folder…* **is** the directory
-  picker — one gesture, drawn by the browser, with no dialog in front of it asking the reader to
-  press the same words twice — and it says *choose a folder (this visit)…* in a browser that can
-  only hand over a snapshot of the file list, which is the wording the dialog's own pane already
-  used and now shares with it. The other three open the Connect dialog on the pane they name,
-  rather than on its first tile, because a reader who pressed *sign in to Dropbox* has already
-  chosen. The desktop build shows three of the four: a Google sign-in cannot be registered against
-  `app://viewer`, so the button that could not keep its promise is absent there rather than
-  disabled, and the dialog's own tile still carries the sentence saying why.
-
-- **The Files column is no longer on the first screen, and is no longer permanent.** It is there
-  exactly while this window has a place connected — mount a folder and it appears, open, on that
-  folder; disconnect the last one and it goes — which is the rule the four columns beside it have
-  always followed and is what the row of buttons above buys. It was unconditional because its own
-  *Open a local/remote folder* was the only door to a folder, and a column nobody can see is not a
-  door; with the landing page offering the four places itself, what that bought on arrival was an
-  empty column beside a row of buttons saying the same thing. The doors that remain are the landing
-  page, which is what a new tab is, and *Open a local/remote folder* in the command palette.
-
-- **The drop area is shallower, and the *choose files* button beside it is gone.** That button
-  opened the same file dialog a click on the target opens, so the two were one action drawn twice,
-  and a reader deciding between them was being given a choice that does not exist. What is left is
-  one target that says both things it does — drop, or click — with the sentence about what opens as
-  what inside it, and the URL box under it behind a rule reading *or a URL*, which is the way in
-  that is genuinely different. It used to be deep enough to be the whole screen, which said the
-  reader's next move was to drag something: wrong for the reader who has a URL, wrong for the one
-  on a laptop with no second window to drag out of, and wrong now that there are two more sections
-  under it to be seen. The landing page's other buttons are the marked, filled ones the Connect
-  dialog's panes are pressed by, so one gesture looks the same wherever it is met.
-
-- **The RSG tile carries a mark rather than its initials.** The picker drew all four shipped stores
-  the same way, as a coloured square with the name set in it, and for three of them that is the only
-  honest thing to draw: IGV's logo, 4DN's and ENCODE's are not published under terms a viewer may
-  redistribute, and a redrawn brand mark is wrong in a way that brand's own users can see. The
-  fourth was only sharing their fate. RSG's tile is now a contact map — 100 bins square, in the
-  viewer's own `default` ramp, with domains along the diagonal, A/B compartments, loop peaks and the
-  decay to paper that every Hi-C map has — and where the main diagonal would run, *RSG* is written
-  instead, the letters rasterised onto the matrix so that they are bins like everything else in the
-  picture. `npm run icons:rsg` draws it and commits it as an indexed PNG data URI whose palette *is*
-  that ramp: it costs no request, it needs no `public/` — the standalone build emits none — and a
-  test holds its 256 entries against `applyColormap('default')`, so the logo cannot quietly end up
-  in last year's colours beside maps drawn in this year's. The letters stay behind the image, so a
-  mark that fails to load is a lettermark and not a hole.
-
-- **The other three tiles carry their projects' own logos.** IGV's mark, 4DN's and ENCODE's were set
-  as letters in a coloured square because the logos were not ours to ship. They have since been given
-  to this viewer to carry, so the tiles draw them. Not one is redrawn — the icon pipeline's rule that
-  a brand mark is the published one or nothing holds over these exactly as it does over the icon set.
-  What they needed was fitting. A tile is a square drawn with `object-fit: cover`, and ENCODE's badge
-  is half again as wide as it is tall, so used as it arrived it would have been cropped to the middle
-  of the helix with the word *ENCODE* thrown away. `npm run icons:stores` fits each to a 160-pixel
-  square first — ENCODE letterboxed, 4DN composited on the white its disc is drawn for instead of
-  left transparent over a green square, IGV full bleed — and commits the three as data URIs beside
-  RSG's, for the same reason: `public/` is not emitted by the standalone build. The coloured grounds
-  stay underneath as what shows while an image loads and what is left if one fails, which is why they
-  are still deliberately nobody's brand.
-
-- **The store row is one row, and the marks have no band round them.** The five tiles wrapped onto a
-  second line at most widths, which made the last of them read as an afterthought rather than as one
-  of five; they share the width instead. The sentence over them is gone — the tiles say what they
-  are. Each mark carried a thin arc of the store's colour at all four corners: the square and the
-  image over it are rounded by the same radius and both corners are antialiased, so along each arc
-  the image covers its pixel only partly and the colour underneath fills the rest. On the three
-  marks with pale corners that read as a border the tile does not have. The colour is the fallback,
-  so it is dropped the moment an image is in front of it. The drawer's head now leads with the row
-  of stores and puts the one it is *on* underneath — a head that opened with the name of the store
-  the reader is already inside told them the one thing they knew — and its pills are rounded near
-  the marks' own 22% instead of to a capsule, which had put a semicircle around a square logo.
-
-- **The Connect dialog stops explaining itself on the pane.** *This machine* is now the shape the
-  two sign-in panes have had since §24.7 — a title, a `?` and one large button — with what *read in
-  place* means, and how long the browser keeps the permission, behind the `?`. The bucket pane keeps
-  a name, a URL and *Additional settings*, and nothing else: the switch that read *public* against
-  *needs a key* asked the reader to classify a prefix before describing it, which is answerable only
-  in terms of the five fields the answer then reveals, so whether a scope is signed now *follows*
-  from whether a key was typed into it — all three of region, key id and secret, or none. Its `?`
-  carries what a bucket needs before any of this reaches it: the CORS policy without which no read
-  starts at all, `Range` and `Content-Range` being the pair a `.mcool` cannot be read without, and
-  the two separate grants that make a prefix readable and listable — as blocks to paste rather than
-  prose to translate back into one.
-
-### Added
-
-- **Every task in the catalogue runs from the shell, so every run the console records is a real
-  command.** `metacooler-run` refused four of them by name — the 1D metaplot, track correlation and
-  FRiP, whose bigWig reader lived in the annotations worker alone, and reproducibility (HiCRep),
-  whose second map the deck supplies — and any run made in a 1D browser session, which has no
-  contact map to open as the first argument. The console (§23) recorded each of those as a sentence
-  with the refusal under it, and the drawer's *copy CLI command* was greyed. Now `--tracks` opens a
-  bigWig, a bedGraph, a wig or a FASTA read as GC content where it lies, and the runners are handed
-  the same `sample` the worker answers; `--against` names the maps HiCRep compares with, mounted as
-  the analysis worker mounts them; a track task with no file positional runs over the assembly the
-  tracks declare, framed as the session frames it; `--track` names the file behind an id a replayed
-  workspace recorded, and the tab's own track list says which is which. Two silent gaps went with
-  them: `compartments --phaseSequence` had parsed the reference and then reported that it *could not
-  be read*, because the per-bin GC vector the session ships was never computed in a shell; and
-  `expected --stranded` could not read a named `.pairs` from disk, nor the orientation curves a
-  `.pairs` given as the map had just counted. A composite (`magnetwork`) runs what it requires
-  first, at its defaults, as the app does. And three facts of a *framing* the session sets from
-  the picture, each an input to the arithmetic and none a parameter of any task, are now flags the
-  console writes whenever they differ from the shell's defaults: `--value` for the score column a
-  `.metacool` is drawn from, `--circular` for the sequences declared circular (§8.15), and `--cell`
-  for the cells of an `.scool` that were ticked (§3.8). An imported `.pairs` writes its
-  `--bin-size` too, since a contact list declares no resolution and the line died at the open
-  without it (README, SPECS §23).
-- **A `legend` overlay.** The key in the corner of the map — the score, the bin size and the two
-  ends of the colour scale — has a toggle of its own in the Map card, on by default, beside the
-  dividers and ticks it stands with. Off is for the figure whose caption already says it, and the
-  caption now does: every export ends its detail line with *colour −3.13 to 0.385*, so a map
-  without its key, or two maps side by side, are still read against their ranges.
-
-- **The whole-genome gate names the cheaper rung.** Pressing *W* on a fine resolution used to read
-  every stored pixel and say so afterwards; the ask-first screen now says in a line what it costs
-  and, on a laddered file, offers *open at 250 kb instead* — the coarsest rung whose bins still fit
-  in one drawn cell, which draws the same picture from a fraction of the pixels. A `.hic` declares
-  no pixel count and was never gated at all; a file that states no count is now gated on its bin
-  count instead (`WHOLE_VIEW_GATE_BINS`), so a chicken genome at 1 kb asks before it walks every
-  block.
-
-- **Compartments say when the resolution is wrong for them.** 4,642 bins on one sequence at 1 kb
-  is under the correlation gate and six minutes of eigenvectors with the CPU meter reading idle.
-  The line beside Run now says so in red, gives the rule of thumb — 250 kb on a mammalian genome,
-  and past about 2,000 bins the correlation takes minutes — and names the rung of this file at
-  which the widest sequence would fit (*open it at 5 kb (929 bins) or coarser*). The analysis
-  context carries the file's resolution ladder for it.
-
-### Changed
-
-- **Annotations and Analysis start folded.** Five open columns beside a square plot left the plot a
-  thirty-pixel sliver on a laptop, with the *whole genome* button clipped off the chromosome table.
-  A window that has never chosen now opens with the two columns a reader reaches for least on
-  arrival folded to their tabs; a stored choice still wins, and the open state is written as one,
-  so a reader who opens a column keeps it open (`ui/SidePanel.ts`, `defaultFolded`). The Files
-  column folds itself, for this window only, once a file chosen or dropped on the landing page has
-  opened — it is the one column that page shows, and it has done its job.
-
-- **Restore adds to what is open.** The banner outlives the picker, so a reader who opened a file
-  while it stood and then pressed *Restore* had the file they just opened replaced by the ones they
-  had, with no message and no undo. A window holding anything now takes the remembered tabs *beside*
-  it, the way a dropped workspace file always did; only an empty window is replaced.
-
-- **The Export card exports the deck.** Its download button and the `S` key called the lead
-  panel's own figure, so a reader with four maps side by side got the first cell of the
-  arrangement — the mismatch ⌘C had already been cured of. Both now go through the deck when there
-  is one: every panel at the card's dpi, laid out as on screen, as a PNG or as a one-page PDF; a deck
-  of one map exports as that map, vector PDF and all.
-
-- **The Tracks card says when the lanes are put away.** `V` cycles the map with its tracks, the
-  tracks alone, and the map alone, and the third stop left the card listing eight files drawn
-  nowhere — which read as the tracks having been lost, and was reported as the square map losing
-  them. One line above the list now says where they are and that `V` brings them back.
-
-- **The readout under the pointer says what and where.** `count 0.003` under a key reading
-  *Balanced* was two names for one number, and `1.22 Mb × 1.23 Mb` named a ten-kilobase
-  neighbourhood of a cell one kilobase wide, so two cells three bins apart printed the same string.
-  The tooltip and the status line now use the score picker's own word and write the coordinate out
-  in full — `NC_000913.3:1,215,000`. The analysis drawers' selects no longer shrink to their first
-  four letters (*Chro*, *ever*, *Prob*).
-
-### Fixed
-
-- **A 4DN `.hic` drew a blank map as *balanced* at 1 kb and 2 kb.** Juicer writes a `KR` entry for
-  every chromosome whether or not the balancer converged, and where it did not the vector behind
-  the entry is all `NaN` — the chicken maps carry one at 1 kb and 2 kb for every chromosome, beside
-  a `VC_SQRT` and a `VC` that are whole. The reader chose its normalisation by name alone, per file,
-  and never looked behind it, so every cell multiplied by `NaN` and the legend read 0 to 1. A
-  chromosome whose preferred vector has no finite value in it now takes the next normalisation down
-  the preference list (`hic/HicFile.ts`, `normVector`), and `normTypeFor` says which one it got.
-
-- **Reading a single-cell container in small pieces looked hung.** The listing is a thousand
-  synchronous range requests inside one h5wasm call, so the bar said *listing cells…* and nothing
-  else for as long as it took — minutes on a slow link — and the open then went on to probe one
-  dataset header per cell for a pixel count nobody was waiting for, another four thousand round
-  trips. The requests now count themselves out loud (*listing cells · 512 reads — 8.0 MB*), and the
-  per-cell count is skipped on that source: unknown is what it is, and the File card says so.
-
-- **A file that is not HDF5 failed as `error - name not defined!`.** An HTML page saved under a
-  `.mcool` name, a download that stopped short, a text matrix: h5wasm found no superblock and said
-  so in its own words, which reached the screen as *something went wrong*. The container is now
-  refused by its first bytes, in a sentence that names the file, and a failure h5wasm raises on a
-  file that *is* HDF5 is said about that file and group rather than about nothing.
-
-- **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts
-  gzip, and Drive takes it up on an unranged `HEAD`: `Content-Encoding: gzip`, chunked, no length.
-  The map door read that as a host that re-encodes what it serves — GitHub Pages does, and ranges
-  through a gzip stream are garbage — and took the fallback for such a host, one `GET` of the whole
-  file into memory, silently and whatever the size: 81 MB for the `.mcool` this was found on, and
-  the same road for a 2 GB one. Drive answers every *ranged* request raw, so a `HEAD` that comes
-  back re-encoded is now followed by one more, for `Range: bytes=0-`, and a 206 that is not
-  re-encoded and states its length is read by range from there — the file's length, since the
-  range is all of it. Pages re-encodes that too and is refused exactly as before, one request later
-  (docs/hosting.md, docs/remote-sources.md).
-
-- **A file picked from Google Drive took a long time to open, under a name that was its id.** A
-  Drive file is addressed by an id, so nothing in its address says what it is, and the session took
-  the contact-map door first: a `HEAD`, then HDF5 hunting for a superblock at doubling offsets — a
-  megabyte chunk at each — through the whole of a bigWig, before the track door read the file's
-  header three times over, four small requests each. Over the Drive API, where a request is the
-  better part of a second, a 56 MB bigWig sat at *Opening 1pq7NDWo…?alt=media…* for most of a
-  minute. The name a folder gives a file now decides the door where its address cannot, a bare
-  address is asked what it is before the map door is tried, and the annotations worker reads a
-  remote file in 256 KiB chunks it keeps, one handle per address — so the same open is three
-  requests and 0.6 MB, and the loading screen and the tab say *ATAC_rep2_WBcel235.bw* (SPECS
-  §24.9). A presigned URL's tab loses its signature the same way: a query string is the request,
-  not the name.
-
-- **Opening a 4DN BAM as a genome fetched the whole file.** 4DN's open-data bucket exposes `ETag`
-  and nothing else to a page, so the browser could not see the `Content-Range` the file handle
-  reads a size off, and the handle reported nought bytes. The bounded header read was then a read
-  of nought bytes, "not a BAM", and the alignment file was fetched whole — gigabytes, behind
-  *Reading 4DNFIV9TCZVO.bam* — to find out what its first block said. A size the handle cannot
-  give is now asked for with a `HEAD`, whose `Content-Length` every page may read; a size nothing
-  states is unknown rather than empty and the header is still read within its bound; and the
-  browser opens from the header in three small requests, with the index's download drawn as a
-  bar on the row while it is already on screen (SPECS §8.8).
-
-- **A merged pull request's preview stayed in the About dialog's version picker.** Merging fires
-  `pull_request: closed` — the run that deletes the preview — and `push` to `main` in the same
-  instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
-  run in a group, so whenever something was already deploying, the removal was cancelled about a
-  second after it queued and the review copy outlived its review. #49 and #50 were both lost that
-  way, behind a deploy the Stores workflow had dispatched a minute earlier.
-
-  The deploy now reconciles rather than trusting the event: before publishing, it asks GitHub about
-  every preview in the manifest and drops the ones whose pull request is no longer open. That also
-  covers a removal that failed outright, and one whose pull request closed while the workflow was
-  broken. A pull request the API will not answer for is left alone — *I could not ask* must not read
-  as *it closed*.
-
-- **The 4DN shelf could not be generated at all.** Its first live run died on
-  `IncompleteRead(43378383 bytes read, 39983032 more expected)`: the widened query asks the portal
-  for every experiment set with all four of its file arrays embedded, which is an 83 MB response,
-  and the socket closed half way through it — as a Python traceback, where every other failure in
-  `make_store.py` is a sentence saying what to do. IGV and ENCODE published fine; nothing was
-  published, because a run that loses one front end publishes none of them (the branch is replaced
-  wholesale, so a missing store would delete last week's good copy of that shelf).
-
-  4DN's search is now paged — 50 records a request, each retried on its own — and **ENCODE's is
-  deliberately not**, which the next run proved the hard way: paged uniformly, ENCODE answered
-  `&limit=500&from=0` with `403 Forbidden`, having answered the same query with `limit=all`
-  perfectly the week before. The two portals want opposite things of one search, both answers are
-  measured, and `--page-size` is there for the run that disagrees. A 403 on a page now names
-  `--page-size 0` in its own message, since that is the fix and no status page will suggest it.
-
-  Around that: every whole read is retried three times when a host agrees to answer and then stops
-  talking. An HTTP *status* is still never retried, since 4DN answers a search matching nothing
-  with a JSON-bodied 404 and retrying that would turn zero results into a failure. The paged walk
-  stops on the portal's `total`, on a short page, or on a page that repeats what it has already
-  sent — and that last one fails the run when it happens early, because a portal ignoring `from`
-  would otherwise publish a catalogue that draws with empty cells in nine rows out of ten.
-
-  The suite drove the generator only through recorded responses, which is how this shipped: the
-  recorded path reads a file and the live path walks a portal. `--portal-base` now points a front
-  end at a portal served by the test itself — out of process, since `spawnSync` blocks the one
-  running the assertions — and the five ways a walk ends are each made to happen, including the cut
-  off response that started this.
-
-### Added
 
 - **A pasted Drive link opens under the file's own name.** A share link becomes the Drive API's
   media address, which ends in an id and says nothing else, so the loading screen, the tab and the
@@ -1671,71 +983,672 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   mean. A value at or below zero has no logarithm and is drawn as a gap, so log₂
   suits a ratio and not a difference.
 
-### Removed
+### Changed
 
-- **The header's plug and `+`.** *Connect a place* and *Add a file to this tab* stood in the header
-  beside the store drawer's toggle and were the Files column's own *Open a local/remote folder* and the file
-  crumb's *Open a file* said a second time, one row up; a header with three doors to a file read as
-  three different things. Both verbs stay in the command palette, and dropping a file still adds
-  it. The hints that pointed at "the plug in the header" now point at the Files column.
+- **A pileup's axes are numbered in base pairs, not in bins (§18.8).** The APA, chromosight's
+  pileup and the chromosight APA all drew a picture whose axes said *Bins from the centre* and
+  carried no numbers at all. They now read *Distance from the centre* — or from the feature's start
+  or end, whichever the window was cut about — with five labels along each axis: `-21 kb`,
+  `-10.5 kb`, `0`, `+10.5 kb`, `+21 kb`. A count of bins is a number only a reader holding the
+  resolution in their head can use, and a different number for the same window at every resolution.
+  A scaled window keeps its own `0 → 1` labels, its axis being the feature rather than a distance.
 
-- **The Buckets card, the bucket browser and the shelves dropdown.** The plug's *Buckets* card
-  listed what the Files panel already lists and edited keys the provider pane now edits; the
-  *browse bucket…* dialog behind four URL boxes browsed buckets and nothing else, where the window
-  can be connected to a folder, a Drive or a Dropbox too; and the eighteen-entry dropdown of
-  shelves, the landing page's URL box and its *private buckets…* button were the store tiles, the
-  Load box and the plug under other names. The two 4DN maps that sat in the Demos store are on
-  4DN's own page, where every 4DN map is. Earlier unreleased builds called a store a *hub*
-  (`metacooler.hub`, `?hub=`, `make_hub.py`, the `hubs` branch); none of those names is read any
-  more.
+- **The Structures card has no box to paste a URL into either (§5.11).** It arrived with the 3D
+  card after the Tracks, Contact maps and deck rows were cleared of theirs, so it kept the one
+  pattern every other card had lost: a drop zone with *or open one by URL* folded under it. The
+  rule is the card's shape rather than a list of cards — what a card that asks for a file needs is
+  the drop zone and nothing under it. A structure held at an address still opens by every road it
+  did: the landing page's own box, a saved session, a `#uri` link, or the Files column.
 
-- **The `log₂ ratio` combine operation.** It was a scale wearing an operation's
-  clothes: it put the same finding in two rows and left only one of them
-  exportable as the quantity it measured — a bigWig of log₂ ratios is a file of
-  a *picture*, and anything downstream that wanted the ratio had to undo it. The
-  reason it existed is real and is answered above, on the lane's own axis. Two
-  operations remain, a ratio and a difference, and either can be *drawn* as a
-  logarithm.
+- **A sequence is declared circular in the Chromosomes table, in a column of its own (§8.15).** It was
+  a tickbox in the Map card, which was the right card for what the flag *changes* and the wrong place
+  for what it *is*: a declaration about the assembly — which of these sequences is a plasmid, which is
+  the mitochondrion — asked one sequence at a time, of whichever one happened to be on screen.
+  Declaring three of them meant opening three maps, and there was nowhere at all to *read* which had
+  been declared. The column sits **last**, after every column the file itself carries — it is the one
+  column that is not in the file, a declaration the reader makes rather than a number somebody
+  measured, so it goes where a reader's own additions go rather than interrupting the run of the
+  file's own fields. The filter row's own tick narrows to the sequences that carry it, which is what makes the question answerable on a draft
+  assembly with three declared contigs in a hundred thousand; and the **Sequences card in the General
+  panel wears a `↻` beside each declared name**, so a reader at work is told the answer rather than
+  offered a second place to click. A map already on screen adopts the change without being rebuilt, so
+  the reader keeps the zoom they needed in order to be somewhere the question was worth asking from.
 
-- **The `Domains (CIDs)` task**, which was withheld from the panel on every file
-  and is now redundant. Everything it did is reachable and in one place:
-  insulation calls the boundaries, calls the domains between them, and an APA
-  over those domains is the pileup. What it added over that was a composite
-  whose three settings never reached the step they named — `AnalysisRunner.plan`
-  walks a required task at *that task's* defaults — so its window, its region
-  and its prominence changed nothing, and its estimate read a window labelled
-  base pairs as a count of bins. A task nobody could run, whose settings did not
-  work, duplicating two that do.
+- **The resolution picker is a slider over labelled stops, at the far end of the top bar (§5.5).** It
+  was a dropdown of raw bin counts — `1000`, `5000`, `50000` — sitting second in the trail, between
+  the file name and the table. Three things were wrong with that. It read as a step of the trail,
+  which a rung of a `zoomify` ladder is not: it is the same file drawn more or less finely, and the
+  crumbs after it stay where they were. It was in bins, and `50000` is a number a reader has to divide
+  before it means anything. And a dropdown hides the ladder, where a slider over stops shows how many
+  rungs there are, which one you are on and which way is finer. The stops now say `1 kb`, `50 kb`,
+  `1 Mb`; they are real radio inputs, so the arrow keys and a screen reader get the list; and the
+  slider commits on release rather than per rung, since dragging across five rungs must not re-open
+  the file five times. An mmetacool's entry picker is untouched and stays before the root, because
+  switching to a different nested metacool genuinely does invalidate every crumb after it.
 
-- **Diamond insulation calls the domains between its boundaries, and does it by
-  default.** A second overlay beside the calls: the span from each boundary to
-  the next, drawn as a segmentation the way the A/B compartment track is, and
-  exportable as BED like any other called interval set. A boundary set is half
-  an answer — everything downstream of insulation takes an *interval* rather
-  than a point, and the scaled pileup over these is the domain APA — so what
-  every reader was doing by hand (sort per sequence, pair the neighbours) is now
-  a tickbox, and it is ticked.
+- **The landing page is one screen with three doors, not one long scroll with two.** **Load files**
+  is a shallow drop target — *Drop genomic files here* / *or click to choose*, with an *or a URL* box
+  under it — and the redundant *choose files* button beside it is gone, since it opened the same
+  dialog a click on the target already does. **Mount a local or remote folder** is new: four buttons
+  side by side, *choose a folder…* (the directory picker itself, one gesture, no dialog in front of
+  it), *connect a bucket…*, *sign in to Google…*, *sign in to Dropbox…* — the last three opening the
+  Connect dialog straight on the pane they name. These places used to be reachable only from the
+  Files column's own plug, a page a reader arriving with a folder had not looked at yet; the **Files
+  column now appears only while a place is connected** and disappears when the last one is, since a
+  row of buttons on the landing page made an always-open, always-empty column redundant — the doors
+  that remain to it are the landing page itself and *Open a local/remote folder* in the command
+  palette. The desktop build shows three of the four buttons, a Google sign-in having no origin to
+  register against `app://viewer`. **Connect to a store** is the third door, unchanged in kind.
 
-  Three decisions in it. Consecutive domains **tile**: one ends where the next
-  begins, so the lane reads as a segmentation rather than as boxes with gaps,
-  and a domain's two corners sit on the bins the calls were actually made at,
-  which is what a scaled pileup lines up on. Each carries the **weaker** of its
-  two edges as its score, because a domain is only as well defined as its
-  worse-supported side and reporting the stronger would let one good boundary
-  vouch for a run of bad ones. And **two boundaries make a domain, one makes
-  nothing**: the two ends of every sequence are left out rather than run to the
-  telomere, which would assert an edge the data never placed.
+  The masthead's tagline and the drop area's own paragraph are gone — between them a fifth of a
+  laptop screen — and each of the three headings now leads with the icon that thing already wears
+  elsewhere (a file, `folder-tree`, `library`), with 4em between the three sections so they read as
+  three offers rather than one column of paragraphs. The page sits on a dotted ground — a sub-pixel
+  dot every 10 px at half the border grey — the only patterned surface in the app, so arriving at and
+  leaving the landing page are both legible. Each store tile's blurb is written for the roughly fifty
+  characters its two lines actually hold, rather than truncated to them, and a remembered store shows
+  the host of its URL (`builtin-stores.test.ts` holds the budget).
 
-  On the yeast demo: 710 boundaries across 16 sequences, and 694 domains — one
-  fewer per sequence, which is what the arithmetic says it should be.
+- **One button, everywhere.** Every `.btn` takes the same gesture on approach — the border and the
+  word to the accent, a one-pixel lift, a shadow — which was the store tiles' hover and is now the
+  rule rather than the one place in the app that had one. The quiet ones (a close cross, a link, a
+  chip, a tab's ×) opt out of the lift, having no surface to raise. The landing page's row of places
+  and the two sign-ins stop being `.btn-primary`: they stood directly above a row of store tiles
+  offering the same gesture, and four blue blocks over eight grey squares read as a toolbar over a
+  gallery — as well as claiming, against the doctrine, that one of the four was the answer. None of
+  them is. They are tiles now, and `.btn-primary` is back to meaning the invited answer in a dialog.
 
-- `metacooler-run` writes a called interval set as **BED** beside its TSV, the
-  way it already wrote bedGraph and bigWig beside a profile's. The drawer has
-  carried a BED button since there were called intervals at all; a batch run got
-  a TSV with a provenance header, which is readable and is not what bedtools
+- **The mark has a track down its left side and another under it**, which is where this application
+  puts a track: the lanes grow towards the matrix from the bottom and the left edges. Both rise at
+  the first bin of each of the three blocks and disagree in between, which is what having two of
+  them is for.
+
+  They are **slivers in the margin the plate already had** — a third of a pitch across, a fifth of a
+  pitch clear of the map — and **one hue at two saturations**, not two hues. The first attempt gave
+  each lane a whole row of an 8 × 8 grid and a colour of its own, and it cost more than it bought:
+  three hues on one plate is a generic analytics icon and breaks the rule this application is built
+  on, a solid run of seven cells outlasts a sparse diagonal at every downsample so at 24 px the
+  decoration became the identity, and the extra row took an eighth off the map, which is the
+  subject. Drawn this way the field keeps the size, the spacing and the palette it has always had;
+  the one thing the lanes ask of it is half a lane's footprint of optical centring, so the mark
+  rather than the map sits in the middle of the plate. Redrawn from `scripts/make-app-icons.py`, so
+  the favicon, the install icon, the iOS icon, the dock icon and the custom-store tile are all the
+  one drawing.
+
+- **The greys are neutral, and the borders carry the contrast.** The whole ramp had a blue cast —
+  `#c8cdd4`, `#98a1ac`, `#4a5058` are all blue-greys — and a blue-grey chrome around a blue accent
+  leaves the accent nothing to be. They are neutral now, in both themes, and lighter in the light
+  one: `--bg-sunken` is `#f5f6f8`, and what got darker instead is `--border` and `--border-strong`,
+  which were pale enough that a card read as floating on nothing and a table's rules disappeared on
+  a projector. A hairline that cannot be seen is a missing hairline; a fill that cannot be seen is
+  just the page. Two elevation tokens with it, `--shadow-1` for *resting on the page* and
+  `--shadow-2` for *lifted off it*.
+
+- **The HiC score is the mean of the bin's own line across the near-diagonal, which is what the R the
+  score comes from computes.** It was the *sum of every cell in a square window*, and neither the shape
+  nor the missing division was right.
+
+  **The shape.** The score is now `a[k, k + d]` for `|d| ≤ D − 1` — the bin's column, reaching `D − 1`
+  bins each way — where it was every cell of a square centred on the bin. Drawn on a map that is a
+  straight line through the diagonal: **half a crosshair**, one arm-pair, because the matrix is
+  symmetric and taking both arms would count every off-diagonal contact twice against a main diagonal
+  counted once. Every cell in it touches bin `k`. A square window does not have that property: it also
+  counts the self-contact of `k − 1` and the corner joining `k − 1` to `k + 1`, cells that involve `k`
+  in no way — and on a bacterial map at three diagonals those borrowed cells are most of the score, so
+  consecutive bins shared half their cells and a single bright bin came out as a three-bin plateau. On
+  `Bignaud2025_T7.mcool` a bin whose neighbours sit at 55% of it under the line reads 87% and 89% under
+  the square.
+
+  **The division.** It is a mean now: `N = 2D − 1`, the cells in the line. A sum grew with the number of
+  diagonals and could only be compared against another run of the same size on the same map; a mean is
+  contacts per cell and a lane labelled in contacts is readable as contacts. Multiplying by `N` returns
+  the R script's own number exactly — which is how this is checked: against
+  `Bignaud2025_T7.mcool::2000` at `NC_000913.3:3,442,000` the kernel returns **3.7433** × 1/N where that
+  script returns 3.7433, and the same at every neighbouring bin.
+
+  **The parameter is a count of diagonals**, counting the main one, replacing a window in base pairs.
+  It defaults to **3** — the main diagonal and the one either side, five cells, two bins each way —
+  which is the bacterial reading at the 2 kb resolution the score is computed on there, and is the R
+  script's `num_diagonals = 2` under the other way of counting. P(s)'s minimum separation and the
+  diamond's window went the same way and for the same reason: the near-diagonal is a fact about the grid
+  rather than about the genome, and the same typed distance meant three diagonals at one resolution and
+  one at the next. The runner says what the reach came to in base pairs on the file open and how many
+  cells are behind each point of the track.
+
+  The read is **shallower**: the band is `D − 1` deep where the square needed twice its own reach for
+  its corners — two bins at the default, one strip on most files, no tiling.
+
+  **A bin without a whole line through it now scores nothing.** Dividing a short sum by a full `N` fades
+  both ends of every linear sequence towards zero, which reads as *this end of the chromosome is
+  unstructured* — the artefact the diamond has always refused partial windows for, and one that arrives
+  the moment the reading becomes a mean. A circular sequence has no end to run off and every bin on one
+  is still scored. A cell the balancer dropped *inside* a whole line is a different thing and is
+  unchanged: counted rather than guessed at, never scaled up, and `NaN` below `minValid`.
+
+  The task's version is **3**, so a result carried in from a shared session is not silently compared
+  against one computed here. `--window` is gone; the parameter is `--diagonals`, and an old command line
+  naming the old one is refused rather than quietly reinterpreted.
+
+  One thing worth knowing and not fixed here, because it is a property of the data rather than of this
+  task: at three diagonals the **main diagonal is the bulk of the line**, it is where self-ligation
+  lands, and on a balanced map it is the one place the weights were never fitted — cooler excludes
+  `ignore_diags` diagonals from its own solve and then scales them anyway. On the E. coli map above, the
+  bin under that peak carries a balancing weight 1.45× its neighbours', so its self-contact is scaled
+  2.09× and the peak is in the weights rather than in the counts, where neither statistic peaks at all.
+  `ignoreDiags = 1` cuts that cell out of the score, and the hint on the control now says why one might.
+
+- **An explicitly planned pooled read is snapped to the sequence's own grid.** The reader anchors
+  the cell grid to each sequence rather than to the window asked for, so two blocks of one region
+  agree cell for cell — but it did that only for the plans it chose *itself*, and a request carrying
+  its own `binsPerCell` skipped the step. That is why the zoom-to-refine module carried a standing
+  note saying it must never send one: the cell values would have moved as the reader panned. Both
+  paths snap now, which is what makes a declared resolution above a resolution rather than a
+  rendering. A no-op for the two callers that sent an explicit plan before this — a whole-genome read
+  and a selection both start at sequence boundaries.
+
+- **Nine resolution rungs are chipped rather than six (§5.5).** A `zoomify` ladder that doubles from
+  1 kb reaches a megabase in ten rungs and one on the 1–2–5 series reaches it in nine, so the old cap
+  collapsed most real `.mcool`s to a bare slider — and collapsed an eight-rung one the moment
+  somebody added a ninth, which is exactly the reader the `+` above is for. Nine stops is about
+  three hundred pixels of short numbers, right-aligned into whatever the trail leaves.
+
+- **Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
+  its own body class and each used to set its own padding — a rule spelled a dozen times, and the way
+  that shape fails is not subtle: a dialog written without the declaration comes out with its text
+  against the panel's border, looking broken, and nothing says what was forgotten. (The resolution
+  dialog shipped exactly that.) The padding is stated once now, against the panel's own children, at
+  a specificity that beats a body class. Three are flush on purpose and opt out by name, in one place
+  where the exception list can be read whole: the command palette's search box and the feature
+  card's footer each carry a border across the panel's whole width, and the stage (§18.13, §25) is a
+  picture at the size of the window beside a column the reader drags the width of — where an inset
+  would be measured into the drag, since the grip sizes the column from the modal's own right edge.
+
+- **The region bar loses its back arrow and its map/tracks cycle button (§5.4).** Both were controls
+  with a shorter road already beside them. Going back is the browser's own back, which this bar's
+  navigation has fed since it existed. *Tracks only / map only / both* is the **eye beside the map**
+  in the column that lists what is drawn — where every other thing on screen is shown and hidden,
+  one row at a time, by the control that names it. A second way to do a thing is not a convenience
+  when the first way is a row the reader is already looking at; it is another control to learn, in
+  the bar that has to stay readable at a glance, and the bar has just gained four zoom buttons. The
+  `v` key still walks the three states, because a key costs the bar nothing.
+
+- **A barChart lane's ceiling is dragged like a track's (§8.17).** Giving the lane a fixed axis left
+  the reader one way to move it — typing two numbers into the card — while every lane above and
+  below it answered a drag across its body, and a ⌘-scroll over it, by moving its ceiling. A lane
+  that answers that gesture with a pan, in a stack where nothing else does, is a lane the reader has
+  to be told about. Both gestures now reach a chart, on the map's stacks and in the 1D browser, and
+  they start from the axis already on screen — zero to the file's own tallest bar, the same number
+  the typed field seeds from, so a notch and a drag on one lane cannot begin from two different
+  places. What this cost is an invariant that had held since the kind predicates were written: *has
+  a movable axis* and *is drawn as a profile* are two questions, and they were one function's worth
+  of answer only for as long as nothing but a profile had an axis. A chart still gets no **row** of
+  track controls — no autoscale group, no mode or flip switch — because it is not a measurement in
+  anybody else's units.
+
+- **An APA's half-width starts at 21 bins rather than 12, and *Anchor on* loses its paragraph
+  (§18.8).** Twelve was narrow enough that a loop filled the picture: the corners a P2LL divides by
+  were a couple of bins from the peak rather than background, and a reader had nowhere to watch the
+  pileup sit back down to it. The paragraph above *Centre / Start / End* explained which end of a
+  minus-strand gene is its 5′ end, over three options that carry a line each — three lines of the
+  card spent saying what the options say, and the 1D metaplot has asked the same question with no
+  such paragraph since it existed.
+
+- **The three *or open one by URL* boxes, and the *from a connected place…* button that briefly
+  replaced them, are both gone.** Each URL box was the worse half of the pair it stood in: a reader
+  holding a URL can drop the link on the window or paste it into the landing page's own box, and a
+  reader **without** one — the commonest state in all three places these stood, since the bigWigs
+  beside a map are keys in a prefix and a repaired shared deck's `~` has no address a page could
+  fetch by name (§11) — was being asked to produce something they have not got. What that reader
+  needs is to be shown what is *there*: the Files column, open for exactly as long as a place is
+  connected (§20), rather than a *from a connected place…* button that opened the same folder view
+  in a dialog from under every such card — four doors to one room, each closing on the first pick,
+  where the way people actually work through a directory is to open one, look, open the next, and
+  keep going. The column itself is untouched, a drag out of it still lands anywhere a drop lands,
+  and the drop areas' hints are cut to the formats each zone takes and nothing else.
+
+- **The store tiles carry real marks, in one row.** RSG's tile is a contact map of its own — 100
+  bins square in the viewer's own `default` ramp, with domains, compartments, loop peaks and the
+  decay to paper every Hi-C map has, *RSG* rasterised onto the diagonal as bins like the rest of the
+  picture (`npm run icons:rsg`, committed as an indexed PNG whose palette *is* the `default` ramp,
+  held against `applyColormap('default')` by a test so it cannot drift out of step with the colours
+  maps are drawn in; the letters sit behind the image, so a mark that fails to load is a lettermark
+  rather than a hole) — where all four tiles once shared a coloured square with initials in it. The
+  other three now carry their own logos too, IGV's, 4DN's and ENCODE's having since been given to
+  this viewer to redistribute: each is fitted to a 160-pixel square (`npm run icons:stores`; ENCODE
+  letterboxed, since its badge is half again as wide as tall and would otherwise crop the word
+  *ENCODE* away; 4DN composited on white; IGV full bleed) and committed as a data URI, the standalone
+  build emitting no `public/` for either set. The coloured grounds stay underneath every tile as what
+  shows while an image loads or if one fails, deliberately nobody's brand.
+
+  The row itself no longer wraps at most widths — the tiles share the width instead of spilling a
+  lone extra tile onto its own line — and the thin coloured arc that showed through each mark's
+  antialiased corners, reading as a border the tile does not have, is gone now that the fallback
+  colour is dropped the moment an image sits in front of it.
+
+- **The 4DN and ENCODE stores list a BAM only where its reads can be drawn.** A third of the 4DN
+  store's rows were BAMs, and most of those were clicks that could only be refused: 2,271 were the
+  alignment files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C,
+  PLAC-seq, DNase Hi-C, ChIA-PET, MARGI, TCC, HiChIP), every one `bwa mem -SP5M` output in read-pair
+  order with no `@HD` line, which the viewer refuses for want of a sort, and 6,309 were BAMs the
+  portal describes nowhere — no assay, no biosource, no dataset, nothing to filter on. The generator
+  now leaves both out, so *bam* in the Files facet is the 1,397 alignments of RNA-seq, ChIP-seq,
+  CUT&RUN, Repli-seq, DamID and TSA-seq, which are sorted and draw; the `.pairs` and the contact
+  map of every Hi-C set are the rows that were wanted from it, and they stay. ENCODE's alignment
+  shards lose their Hi-C pipeline's files the same way — 471 rows of in situ, dilution and intact
+  Hi-C, `@HD SO:unknown` — and nothing else: ENCODE's ChIA-PET alignments are ChIA-PIPE's and
+  coordinate-sorted, and a BAM the portal did not describe keeps the cells its manifest row has.
+  The rule is about what a BAM is — its reads — and not a list of assays: a new member of the
+  family whose name says Hi-C arrives filtered, and a new linear assay arrives listed (SPECS
+  §24.3, docs/stores.md).
+
+- **The Connect dialog is four panes, each a title, a `?` and one button.** Every pane used to carry
+  two or three paragraphs of explanation between its heading and its control — the Drive pane had a
+  second heading of its own, a bucket pane a *public* / *needs a key* switch that asked the reader to
+  classify a prefix before describing it — and the three provider panes (this machine, Google Drive,
+  Dropbox) also carried boxes for the site's own client id, API key and app key. Those boxes and the
+  storage behind them are gone: the three are the site's own registrations, built from
+  `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY` and `DROPBOX_APP_KEY` at deploy (docs/deploy.md), so a reader
+  is offered a sign-in and nothing to configure, a site built without a registration says so where
+  the sign-in would be, and the About screen and stored settings carry nothing for them. What is left
+  on each provider pane is one line — *Connect to your Google Drive*, *Connect to your Dropbox* — a
+  `?` at the far right holding what the grant is, where the token lives and how long the browser
+  keeps it (reachable by keyboard, read by a screen reader as the button's description), and one
+  large sign-in button with the provider's mark on it; the Drive pane's folder box appears under the
+  button once signed in and goes away on sign-out, and the Files panel names the tile **Google
+  Drive** rather than a section that no longer exists. The bucket pane keeps a name, a URL and
+  *Additional settings*: whether a scope is signed now follows from whether a key was typed into all
+  three of region, key id and secret, rather than the reader declaring *public* or *needs a key*
+  first, and its `?` carries the CORS policy and the `Range`/`Content-Range` pair a `.mcool` cannot
+  be read without, as blocks to paste rather than prose to translate back into one. The Files
+  column's own button and the dialog it opens are both named **Open a local/remote folder**, in
+  place of *connect a place…* (SPECS §20, §24.7, §24.9).
+
+- **IGV's genome cards are four across, tighter, and named without the bracket.** *Human
+  (GRCh38/hg38)* is *Human* with `hg38` as its chip — the assembly was on the card twice — the
+  whole name staying in the tooltip and in what the filter box searches; the grid is four
+  columns at the drawer's default width, two when it is narrowed.
+
+- **A store row is called what the drawer called it.** A 4DN map opened from the shelf was named by
+  its accession — `4DNFI24F7GRY.mcool` — where the reader had picked *Hi-C on HFF cells, protocol
+  variations*. The row's line now goes with the file: onto the map, onto the track, and onto the
+  tab a row opens in a session of its own, through the same road a file named by a Drive folder
   takes.
 
+- **The lab's figures and IGV's genomes are one shape of card.** The name and the card's one verb on
+  the first line — the new-session mark, icon only — the chips under them, the one-line description
+  where there is one, and *8 files* behind a fold listing every file the session is made of, each a
+  store row with the two verbs. The *Figures* heading and the separate *Files* section are gone:
+  every file is under the figure it belongs to, and the few no figure names sit under the cards in
+  a fold of their own. IGV's cards lose the host line under the name.
+
+- **Every file row carries the same two marks: add it here, or open it in a new session.** A store
+  row had *add* as a word and *open* as a grey arrow, a folder row in the Files column had the
+  arrow alone and *add* only in the tooltip, and which of the two a row offered depended on whether
+  the tab was empty. Now every row — a store's, a folder's — has a `+` that joins the file to the
+  session in front and a window with a `+` where its corner was that opens it as a session of its
+  own, both icons, both always there, the words in the tooltips (SPECS §20.5, `ui/rowVerbs.ts`).
+  The same mark stands beside *open* on a gallery card and *open with its tracks* on a group, and
+  the tray under a portal gained *add to this session* beside *open together*. A workspace row has
+  the second alone, being tabs and not a file.
+
+- **Two verbs to open anything: load files, or connect to a store.** The landing page had grown a
+  URL box, a *browse…*, a *private buckets…*, a dropdown of eighteen shelves and a list of
+  examples, and the header a plug, a `+` and a *Buckets* card that overlapped all of them. Every
+  one was one of two things under another name. The page now says the two (SPECS §24.2):
+  **Load files** is the drop area and the URL box, and **Connect to a store** is a row of tiles —
+  the lab's own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a `+`
+  for one by URL.
+
+  A tile opens the **store drawer**, a panel down the left in the family of the Analysis drawer
+  and the console: resizable, put down by Escape or its header button, and back where it was left
+  when it is reopened. Each store gets the page its data wants. The lab's store and IGV's are
+  **galleries** — one card per figure or per genome, a line of context, one button that opens the
+  whole pre-configured session, the files under a fold. 4DN and ENCODE are **portals**: a rail of
+  facets (assay, biosource, lab, format…) whose counts follow every tick — OR within a facet, AND
+  across them — a search box, a **matrix** that crosses any two facets and opens a cell, and a
+  **tray** that collects rows to open together. What is open is in the address —
+  `?store=4dn&assay=Hi-C&biosource=HFFc6&view=matrix` — so a narrowed store is a link, and
+  `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
+
+  Around it, the doors are fewer and each says what it is. **Connect** (the Files column's
+  *Open a local/remote folder*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
+  each provider's credentials on its own pane rather than a bucket card here and a Drive key there.
+  The file crumb's *Open a file* opens one **Load** dialog with the store tiles behind it. Every URL box that
+  once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every
+  place the window is connected to and not only buckets. The **Files** panel is the one listing of
+  connected places. And `scripts/make_store.py` writes a *Group*, *Experiment set* or *Dataset*
+  column into what it generates, which is what the galleries and the sessions are grouped by.
+
+- **A map of several ticked genomes is divided and labelled by genome.** Ticking
+  four MAGs in the genomes table asks for four blocks — their own maps on the
+  diagonal and everything between them off it — and the picture came back ruled
+  and named by *contig*, so the thing four ticks were spent on had two thousand
+  hairlines across it and no line anywhere saying where one MAG ended and the
+  next began. The whole-metagenome view has always refused exactly that wash; a
+  selection of genomes is the same picture of a chosen few and now reads the
+  same way.
+
+  The rule it follows is the one the whole-file levels already state, one level
+  down: **what was ticked is what the axis is divided and labelled by.** So
+  ticking *contigs* is unchanged — there the names picked are the contigs, and
+  coarsening to the genomes behind them would throw away the answer to "what did
+  I pick" — and so is a single genome, whose own contigs are the only structure
+  inside it. The genome of a contig is still on the tooltip in every one of
+  those cases, as it was; what changed is only which of two run lists gets the
+  ink.
+
+  Where the axis is pooled — enough small contigs and a cell holds several — a
+  cell is now kept **inside one genome**, the same guarantee the whole-metagenome
+  scan already makes for its slots. Without it a boundary can land a cell late and the
+  block it closes carries a sliver of the next MAG, which is precisely the kind
+  of invented adjacency the pooling rules exist to prevent.
+
+  **And clicking one of those labels opens that genome.** It used to open a
+  *region* view of it — a legal destination, since a bare genome name is a range
+  the parser takes (§5.4), and one screen short of where the gesture meant to go.
+  The whole-file picker has always gone straight to the genome; both now
+  dispatch on what the axis actually is rather than on which view is asking, so
+  the two pictures that are divided by genome behave alike. A label on an axis of
+  contigs opens a region, as it always has.
+
+  A companion panel in a deck follows the lead here, because the decision is made
+  on the read rather than in the view: `#genomes=` shows the same blocks in every
+  map it is applied to.
+
+- **A GTF's biotype is written into the feature's attributes with its key in front of it**
+  (`biotype protein_coding`, where it was a bare `protein_coding`). An attribute with no key is a
+  fact nothing can ask for — invisible to the new column picker — and the feature card behind a
+  click gains a label it was missing anyway.
+
+- **The number under a domain pileup is no longer P2LL.** Peak-to-lower-left
+  measures a dot against the corner furthest from it, and the lower-left corner
+  of a *domain* window is the upstream neighbour against the downstream one —
+  two regions further apart than anything inside the domain — so the ratio is
+  mostly the distance decay and reads well above 1 on a set with no boundaries
+  in it at all. What is reported instead is **in / out**: the domain's own
+  corner against the same block just across its boundary, which sits at very
+  nearly the same separation, so what is left when you divide is whether contact
+  stops at the edge. Above 1 is a domain. The per-feature table carries the same
+  number per domain, and the loop pileups are unchanged — they still report
+  P2LL, which is the right statistic for a dot.
+
+- **Observed / expected is refused in the scaled mode, in the form rather than
+  at Run.** One cell of a scaled pileup is fed by windows at a dozen different
+  separations — that is what scaling *is* — so it has no one diagonal offset for
+  a P(s) to be looked up at, and dividing by one anyway produced a plausible
+  picture of nothing. The refusal names the alternative: the distance-matched
+  control, which is drawn at the same separations by construction and is what
+  the task defaults to.
+
+- The scaled pileup's axes are labelled in units of the feature — `0` at its
+  start and `1` at its end — with the flank the run used named beside them,
+  instead of an unlabelled *Scaled position*.
+
+- **A store or a hub can be pasted instead of fetched.** Both doors now carry a folded *or paste
+  the hub* / *or paste the store* box, with an optional base URL for relative names. Two reasons,
+  and the first is not convenience: a store is fetched by the **page**, so the host has to allow a
+  cross-origin `GET`, and plenty never will — `genome.ucsc.edu` among them, which puts UCSC's own
+  example hubs out of reach of every browser-only viewer. The file is public, the reader can see it
+  in another tab, and the only thing in the way is a response header on somebody else's server.
+  Pasting gets past that without routing anybody's traffic through a proxy this project would then
+  be asking them to trust (C1). The second is writing one: a lab assembling its own shelf edits,
+  pastes, sees what broke and edits again, and publishing a file to a bucket between each of those
+  is a loop nobody runs twice.
+
+  **One box and not three**, even for a hub, which is three files. `useOneFile on` is a hub in a
+  single file — and a `hub.txt`, `genomes.txt` and `trackDb.txt` **concatenated** are the same
+  thing, because the only keys the concatenation loses are the two saying where the next file is
+  and the next file is already in the box. A text that is *only* a `hub.txt` is refused by name and
+  told what to paste after it, rather than coming back as an empty shelf. Relative names are
+  refused with the first of them quoted, so the base box is an obvious fix rather than a shelf
+  whose rows fail one at a time when they are pressed. A pasted shelf has no address, so it is not
+  put in the address bar and not offered for remembering: a store worth keeping is one with a URL.
+
+  Each box carries a **fill in an example** button beside *open what is pasted*, and what it puts
+  there is a hub and a store that actually **read** — over the published demo files, so the first
+  press draws a shelf and the reader's first edit is to a thing that already worked rather than to a
+  template whose state they cannot tell. The hub example is an **assembly hub**, naming the demo's
+  own `.2bit` through `twoBitPath`: the rung of §24.10's ladder worth demonstrating, and the only
+  way a hub carries a sequence of its own. It is a hub somebody wrote and checked against the bucket
+  rather than one composed here, which is why `Yeast_reference.2bit` is published beside the FASTA
+  and carries that name. It asks before replacing a box that is not empty, because
+  that box is where somebody's half-written hub lives. A test pins every file the two examples name
+  against the published set, since an example that 404s on its first press is worse than none.
+
+  The CORS failure now names the box, because a reader staring at *Failed to fetch* has no reason
+  to guess there is one — and where the host is a **UCSC** one it says what was measured on
+  2026-09-16: neither `genome.ucsc.edu` nor `hgdownload.soe.ucsc.edu` sends the header, so UCSC's
+  own example hubs and the whole of GenArk are out of reach of *any* browser-only viewer, this one,
+  igv.js or otherwise. That is a UCSC hosting decision rather than a fault in the reader's URL, and
+  saying so beats sending them to check a link that is perfectly correct. It also says that pasting
+  such a hub's text gets past it for the hub and not for its `bigDataUrl`s, which are on the same
+  hosts — the part that would otherwise be discovered one row at a time.
+
+- **A store's own name replaces the door's on the drawer heading once it lands.** A door is named
+  for the errand — *A track hub*, *Your own store* — which is right until one has been read, at
+  which point the page is about a particular shelf and the heading says which, with the store's own
+  description under it. Both doors, not only the new one.
+
+- **Every task in the catalogue runs from the shell, so every run the console records is a real
+  command.** `metacooler-run` refused four of them by name — the 1D metaplot, track correlation and
+  FRiP, whose bigWig reader lived in the annotations worker alone, and reproducibility (HiCRep),
+  whose second map the deck supplies — and any run made in a 1D browser session, which has no
+  contact map to open as the first argument. The console (§23) recorded each of those as a sentence
+  with the refusal under it, and the drawer's *copy CLI command* was greyed. Now `--tracks` opens a
+  bigWig, a bedGraph, a wig or a FASTA read as GC content where it lies, and the runners are handed
+  the same `sample` the worker answers; `--against` names the maps HiCRep compares with, mounted as
+  the analysis worker mounts them; a track task with no file positional runs over the assembly the
+  tracks declare, framed as the session frames it; `--track` names the file behind an id a replayed
+  workspace recorded, and the tab's own track list says which is which. Two silent gaps went with
+  them: `compartments --phaseSequence` had parsed the reference and then reported that it *could not
+  be read*, because the per-bin GC vector the session ships was never computed in a shell; and
+  `expected --stranded` could not read a named `.pairs` from disk, nor the orientation curves a
+  `.pairs` given as the map had just counted. A composite (`magnetwork`) runs what it requires
+  first, at its defaults, as the app does. And three facts of a *framing* the session sets from
+  the picture, each an input to the arithmetic and none a parameter of any task, are now flags the
+  console writes whenever they differ from the shell's defaults: `--value` for the score column a
+  `.metacool` is drawn from, `--circular` for the sequences declared circular (§8.15), and `--cell`
+  for the cells of an `.scool` that were ticked (§3.8). An imported `.pairs` writes its
+  `--bin-size` too, since a contact list declares no resolution and the line died at the open
+  without it (README, SPECS §23).
+- **A `legend` overlay.** The key in the corner of the map — the score, the bin size and the two
+  ends of the colour scale — has a toggle of its own in the Map card, on by default, beside the
+  dividers and ticks it stands with. Off is for the figure whose caption already says it, and the
+  caption now does: every export ends its detail line with *colour −3.13 to 0.385*, so a map
+  without its key, or two maps side by side, are still read against their ranges.
+
+- **The whole-genome gate names the cheaper rung.** Pressing *W* on a fine resolution used to read
+  every stored pixel and say so afterwards; the ask-first screen now says in a line what it costs
+  and, on a laddered file, offers *open at 250 kb instead* — the coarsest rung whose bins still fit
+  in one drawn cell, which draws the same picture from a fraction of the pixels. A `.hic` declares
+  no pixel count and was never gated at all; a file that states no count is now gated on its bin
+  count instead (`WHOLE_VIEW_GATE_BINS`), so a chicken genome at 1 kb asks before it walks every
+  block.
+
+- **Compartments say when the resolution is wrong for them.** 4,642 bins on one sequence at 1 kb
+  is under the correlation gate and six minutes of eigenvectors with the CPU meter reading idle.
+  The line beside Run now says so in red, gives the rule of thumb — 250 kb on a mammalian genome,
+  and past about 2,000 bins the correlation takes minutes — and names the rung of this file at
+  which the widest sequence would fit (*open it at 5 kb (929 bins) or coarser*). The analysis
+  context carries the file's resolution ladder for it.
+
+- **Annotations and Analysis start folded.** Five open columns beside a square plot left the plot a
+  thirty-pixel sliver on a laptop, with the *whole genome* button clipped off the chromosome table.
+  A window that has never chosen now opens with the two columns a reader reaches for least on
+  arrival folded to their tabs; a stored choice still wins, and the open state is written as one,
+  so a reader who opens a column keeps it open (`ui/SidePanel.ts`, `defaultFolded`). The Files
+  column folds itself, for this window only, once a file chosen or dropped on the landing page has
+  opened — it is the one column that page shows, and it has done its job.
+
+- **Restore adds to what is open.** The banner outlives the picker, so a reader who opened a file
+  while it stood and then pressed *Restore* had the file they just opened replaced by the ones they
+  had, with no message and no undo. A window holding anything now takes the remembered tabs *beside*
+  it, the way a dropped workspace file always did; only an empty window is replaced.
+
+- **The Export card exports the deck.** Its download button and the `S` key called the lead
+  panel's own figure, so a reader with four maps side by side got the first cell of the
+  arrangement — the mismatch ⌘C had already been cured of. Both now go through the deck when there
+  is one: every panel at the card's dpi, laid out as on screen, as a PNG or as a one-page PDF; a deck
+  of one map exports as that map, vector PDF and all.
+
+- **The Tracks card says when the lanes are put away.** `V` cycles the map with its tracks, the
+  tracks alone, and the map alone, and the third stop left the card listing eight files drawn
+  nowhere — which read as the tracks having been lost, and was reported as the square map losing
+  them. One line above the list now says where they are and that `V` brings them back.
+
+- **The readout under the pointer says what and where.** `count 0.003` under a key reading
+  *Balanced* was two names for one number, and `1.22 Mb × 1.23 Mb` named a ten-kilobase
+  neighbourhood of a cell one kilobase wide, so two cells three bins apart printed the same string.
+  The tooltip and the status line now use the score picker's own word and write the coordinate out
+  in full — `NC_000913.3:1,215,000`. The analysis drawers' selects no longer shrink to their first
+  four letters (*Chro*, *ever*, *Prob*).
+
+
 ### Fixed
+
+- **A pileup's edge profiles were drawn from zero, which flattened them (§18.8).** A ChIP aggregate
+  running from 45 at the baseline to 92 at the anchor — a doubling — came out as a line across the
+  top of a band three lines tall with a small bump in it, while the same numbers as a metaplot curve
+  two blocks down the drawer were a peak twice the height of its baseline. Two pictures of one
+  quantity disagreeing about whether anything happened, and the arithmetic was right in both. Each
+  profile is now drawn against **its own extent**, with the two edges of one track sharing a ruler —
+  they are one measurement — and the range printed beside the track's name in the key, which is what
+  keeps a self-scaled band honest about how much of an effect it is showing.
+
+- **A pileup's edge profiles now leave as numbers, with the matrix they belong to (§18.8).** The
+  TSV a reader exports carried the cells and not the lines drawn along them, which made the one
+  thing in the figure with no numbers behind it. They are written as a second block under the
+  matrix — contacts and signal are two units, and a spreadsheet reading them as one rectangle would
+  average them together.
+
+- **`metacooler-run apa --tracks` opened the file and then reported that it could not be read.** A
+  parameter that takes *several* entries files each one under `key:entryId`, which is how the app's
+  runner reads them back; the shell filed one vector under the bare key and read the parameter as a
+  single string, so a pileup asked for at a command line came back with a note saying one of one
+  tracks could not be read — about a file the command had just opened. The convention is now
+  written down once and imported, rather than stated in two places.
+
+- **A matrix figure's colormap control drew empty on exactly the figures that set one.** The slim
+  strip offers six colours inline with the full list in the dialog, and a `select` whose value is
+  not one of its options draws blank — so a saddle's `RdBu_r` or a pileup's `fall` made the control
+  look broken. Whatever is in force is now offered alongside the six.
+
+- **Fourteen rules in the stylesheet drew nothing, and looked like they meant to.** Six names —
+  `--line`, `--muted`, `--fg`, `--fg-quiet`, `--bg-inset` and `--warn` — were read across the sheet
+  and defined nowhere, neither in CSS nor from the code. An unresolvable `var()` is *invalid at
+  computed-value time*, which does not skip the declaration: the property takes its inherited value
+  if it inherits and its initial value if it does not. So `border: 1px solid var(--line)` came out
+  `border-style: none` and drew **no border** — on the colour ramp beside an annotation, on the
+  share dialog's link box, under the analysis drawer's map tabs and round a plot control's number
+  box. `background: var(--line)` came out transparent, so the well behind a feature-count bar and
+  the one-pixel divider in the plot controls were **invisible**. And `color: var(--muted)` inherited,
+  so two labels meant to sit quietly under something else were drawn at **full strength**. Each of
+  those looks, in a screenshot, exactly like a deliberate choice, which is why none was found.
+
+  `--warn` is now a real token in both themes, and the three rules that wanted a warning colour stop
+  inventing one each: `.pairs-warning` was written `var(--warn, var(--accent))` and therefore drew a
+  warning in **link blue**, and the other two hard-coded ambers that never changed in the dark theme.
+  `.input.is-bad` takes `--danger` like the `.input-region.is-bad` three thousand lines above it,
+  instead of a red of its own that stayed dark on the dark theme's dark surface.
+
+  **`test/unit/css-tokens.test.ts` is why there is not a fourth time.** It reads every `var()` in the
+  sheet and fails, with the line number, on any name nothing defines — allowing only the sixteen
+  properties the code writes with `setProperty`, and checking that allowance against the source so it
+  cannot rot. It also holds the two halves of the dark palette to each other and the light palette to
+  the dark one's set of names, which is how `--tab-rest` came to exist in four of the six blocks that
+  carried a palette and in neither of the other two.
+
+- **The palette is written once.** The light values were spelled out in full in four places —
+  `:root`, `[data-theme='light']`, `.content` and `.analysis-figure` — and are now one selector list
+  that names all four. Eighty-four declarations become sixteen, and the two boxes that stay light
+  while the furniture goes dark can no longer drift from the theme they are a copy of. The dead
+  `var()` fallbacks went with it: `var(--accent, …)` appeared with **three different** fallbacks for
+  a token that is always defined, and fifteen font sizes bypassed the type scale for values that
+  were a step under another name.
+
+- **A bacterial GFF arrived as 87 features out of 5,870.** A 6.4 Mb *Pseudomonas aeruginosa* PAK
+  annotation — 5,783 CDS, 74 tRNA, 12 rRNA, one tmRNA — opened as 87 anonymous boxes: every RNA in
+  the file and not one of its proteins, each drawn with no name and no accession. The count is the
+  diagnosis. 74 + 12 + 1 = 87, so what came through was exactly the rows whose feature type ends in
+  the letters `rna`.
+
+  The parser only knew the hierarchy GTF and an Ensembl GFF3 are built from — gene, transcript, and
+  the exons and CDS underneath — and it keyed every row that was not a gene or a transcript by its
+  `Parent`, because in that world such a row is a *fragment* and the parent is the thing being drawn.
+  A row naming no parent could not be placed, and was skipped. **A bacterial annotation has no
+  hierarchy in it at all**: Prokka, Bakta and DFAST write one row per feature, each with its own `ID`
+  and `locus_tag` and not one `Parent` anywhere in the file, because a bacterial gene is a single
+  uninterrupted CDS and the gene and mRNA rows Ensembl writes would each be a second copy of the same
+  span. So all 5,783 CDS rows went looking for a transcript they had never named and were dropped,
+  while the tRNAs and rRNAs matched the "is this a transcript" test on their type and came through on
+  their own `ID`s. That the survivors were a plausible-looking 87 features rather than an error is why
+  this read as a file that had loaded.
+
+  A row that names no parent is now read as the whole feature it is. It is keyed on its own `ID` — so
+  two rows sharing one, which is GFF3's way of writing a feature with a gap in it, are one glyph — and
+  a row carrying no `ID` at all is drawn keyless rather than collected with every other such row into
+  one feature stretching across the file. Where a file *does* say what a row belongs to, that still
+  decides and nothing changes: a CDS with a `Parent` still folds into its transcript and is not drawn
+  beside it.
+
+  Three things that were being thrown away come with it, because 5,870 nameless boxes is not much
+  better than 87. `locus_tag` now counts as an accession — it is assigned per gene by definition, and
+  it is the only one a Prokka file writes — so the 2,643 `hypothetical protein` rows that carry no
+  symbol are labelled `IMMMIJEE_00005` instead of nothing, and the search box can find them. A bare
+  `gene` attribute now counts as a symbol, which is how NCBI and Prokka both spell one, so `dnaA`,
+  `gyrB` and 3,139 others are drawn under their own names. And `product` joins `biotype` and `source`
+  in the detail string: it is the whole of what a bacterial annotation has to say, the feature card
+  had been showing `source Prodigal:002006` and stopping, and the colour picker (§8.16) can only
+  offer a column that is written there.
+
+  One row type had to be turned away deliberately as a result. NCBI opens every contig with a
+  `region` spanning it end to end, and a GFF converted from GenBank writes `source` for the same
+  thing; both name no parent, so both used to fall off the same end the CDS rows did. Drawn, each
+  would be a box the width of the chromosome sitting on top of the genes.
+
+- **A species with no `README.json` no longer fails the whole Stores run.** `--readme optional` is
+  the default precisely because those files are hand-maintained across hundreds of species, and it
+  promises that a species without one keeps every file it has and loses two columns. Against
+  recorded fixtures it did exactly that; against the bucket it could not, and the first weekly run
+  of the DNA Zoo store died on `Preliminary/` — a top-level directory that is not a species and
+  never had a README. Nothing was published that week, so the shelves readers saw stayed as they
+  were.
+
+  The cause is one fetcher doing two jobs. A portal search is read by a function that treats `404`
+  as *zero results* only when the body is JSON — 4DN's way of saying a facet matched nothing — and
+  turns every other status into the end of the run. A bucket refuses a key that is not there with a
+  `404` and an **XML** body, which landed in that function's "the endpoint has moved" case. Reading
+  a document that may simply be absent is now its own function, and it answers *no document* to any
+  status and to a body that is not a JSON object. Absence and outage are still told apart: a host
+  that cannot be reached, or that stops talking part-way through three times over, still ends the
+  run, because a store is only ever replaced by a run that succeeded. `--readme require` still fails
+  on the first missing one, which is what it is for.
+
+  A run where *no* directory yielded a README now says so in a line of its own. Every row is still
+  published and the run still succeeds — but a bucket that answered for its objects and for none of
+  its READMEs has more likely been rearranged than lost every one at once, and two silently empty
+  columns are not a thing to find out about from the shelf.
+
+
+- **A shared link opened the picker on the first visit in a fresh browser profile.** Not on the
+  second, and not in a second tab, which is what made it read as a broken link rather than as what
+  it was. The first load of the site registers the service worker; the worker calls
+  `clients.claim()` as it activates, so it takes over the page that is still running; and the page
+  reloaded, because a worker that has *replaced* another is serving a page built from the one it
+  replaced. A worker installing for the first time has replaced nothing — the page came off the
+  network a moment earlier and is already the newest build — but it fired the same
+  `controllerchange` and got the same reload. `openSharedHash` decodes a session and then takes
+  `#session=…` out of the address bar before the tab it describes has finished opening, so the
+  reload landed on a bare URL and the session was gone. The first claim no longer reloads; an
+  update still does, which is the case the reload was written for.
+
+- **A store that did not answer with a store said it was not a saved workspace.** The store reader
+  borrowed the *workspace* reader's wording for the one refusal both formats share, so a host
+  answering with a page instead of the file — which is what a dev server does for a store the
+  Stores workflow has not generated — produced `… is not a JSON file, so it is not a saved
+  workspace`, naming a kind of file nobody in the drawer was trying to open. It now says it is not
+  a store, and names the case that causes it.
+
 
 - **Analysis tasks on a map imported from a `.pairs` failed at the mount.** §3.7
   says every §18 task reads an imported map through `PixelStore` exactly as it
@@ -1873,223 +1786,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the exported TSV. They go in a `#` line saying what they are, and the columns
   keep their indices.
 
-### Changed
-
-- **The 4DN and ENCODE stores list a BAM only where its reads can be drawn.** A third of the 4DN
-  store's rows were BAMs, and most of those were clicks that could only be refused: 2,271 were the
-  alignment files of Hi-C-family assays (in situ Hi-C, Dilution Hi-C, Micro-C, Capture Hi-C,
-  PLAC-seq, DNase Hi-C, ChIA-PET, MARGI, TCC, HiChIP), every one `bwa mem -SP5M` output in read-pair
-  order with no `@HD` line, which the viewer refuses for want of a sort, and 6,309 were BAMs the
-  portal describes nowhere — no assay, no biosource, no dataset, nothing to filter on. The generator
-  now leaves both out, so *bam* in the Files facet is the 1,397 alignments of RNA-seq, ChIP-seq,
-  CUT&RUN, Repli-seq, DamID and TSA-seq, which are sorted and draw; the `.pairs` and the contact
-  map of every Hi-C set are the rows that were wanted from it, and they stay. ENCODE's alignment
-  shards lose their Hi-C pipeline's files the same way — 471 rows of in situ, dilution and intact
-  Hi-C, `@HD SO:unknown` — and nothing else: ENCODE's ChIA-PET alignments are ChIA-PIPE's and
-  coordinate-sorted, and a BAM the portal did not describe keeps the cells its manifest row has.
-  The rule is about what a BAM is — its reads — and not a list of assays: a new member of the
-  family whose name says Hi-C arrives filtered, and a new linear assay arrives listed (SPECS
-  §24.3, docs/stores.md).
-
-- **The Google Drive and Dropbox panes are a title, a `?` and a button.** Each was still two or
-  three paragraphs about the grant and the token between its heading and its button, and the Drive
-  pane had a second heading, *A Google Drive folder*, over a box that said *sign in above* until
-  the reader had. Each is now one line — *Connect to your Google Drive* or *Connect to your
-  Dropbox* on the left, a `?` at the far right — and one large sign-in button under it, with the
-  provider's mark on it. What the grant is, where the token lives and what is kept are behind the
-  `?`: hover it, or press it on a screen with no hover, and the sentences appear; a keyboard
-  reaches them too, and a screen reader reads them as the button's description. Only what a reader
-  acts on is on the pane: the button, the reason it is disabled on a site built without the
-  registration, the code box a Dropbox sign-in opens, an error. On the Drive pane the folder box
-  appears under the button the moment the sign-in has happened, on the same pane, and goes away
-  with a sign-out. The Files panel's *sign in under* line and the listing errors name the tile,
-  **Google Drive**, rather than a section that no longer exists (SPECS §20, §24.7).
-
-- **The Google Drive and Dropbox sections are a sign-in and nothing else.** The boxes for a
-  Google API key, a Google client id and a Dropbox app key are gone, and so is the storage behind
-  them: the three are the site's registrations, built in from `GOOGLE_CLIENT_ID`, `GOOGLE_API_KEY`
-  and `DROPBOX_APP_KEY` (docs/deploy.md), and a reader is offered the sign-in they make possible
-  and nothing to wonder about. A site built without one says so where the sign-in would be and
-  names the variable its maintainer sets. The About screen lists nothing for them, because a
-  browser keeps nothing of them; a Dropbox is in the Files panel while a sign-in is live (SPECS
-  §24.7, §24.9).
-
-- **The Files column's button says what it does: *Open a local/remote folder*.** It was *connect a
-  place…*, and the dialog behind it — now titled the same — has lost its opening paragraph and
-  most of every pane's: each keeps one line and the two sentences about a grant that §24.7
-  requires. The bucket pane's placeholder is generic, and a prefix may be typed as
-  `s3://bucket/prefix/`, which becomes the bucket's https address on the region given. The header
-  reads stores, Files column, then the four panels.
-
-- **IGV's genome cards are four across, tighter, and named without the bracket.** *Human
-  (GRCh38/hg38)* is *Human* with `hg38` as its chip — the assembly was on the card twice — the
-  whole name staying in the tooltip and in what the filter box searches; the grid is four
-  columns at the drawer's default width, two when it is narrowed.
-
-- **A store row is called what the drawer called it.** A 4DN map opened from the shelf was named by
-  its accession — `4DNFI24F7GRY.mcool` — where the reader had picked *Hi-C on HFF cells, protocol
-  variations*. The row's line now goes with the file: onto the map, onto the track, and onto the
-  tab a row opens in a session of its own, through the same road a file named by a Drive folder
-  takes.
-
-- **The lab's figures and IGV's genomes are one shape of card.** The name and the card's one verb on
-  the first line — the new-session mark, icon only — the chips under them, the one-line description
-  where there is one, and *8 files* behind a fold listing every file the session is made of, each a
-  store row with the two verbs. The *Figures* heading and the separate *Files* section are gone:
-  every file is under the figure it belongs to, and the few no figure names sit under the cards in
-  a fold of their own. IGV's cards lose the host line under the name.
-
-- **Every file row carries the same two marks: add it here, or open it in a new session.** A store
-  row had *add* as a word and *open* as a grey arrow, a folder row in the Files column had the
-  arrow alone and *add* only in the tooltip, and which of the two a row offered depended on whether
-  the tab was empty. Now every row — a store's, a folder's — has a `+` that joins the file to the
-  session in front and a window with a `+` where its corner was that opens it as a session of its
-  own, both icons, both always there, the words in the tooltips (SPECS §20.5, `ui/rowVerbs.ts`).
-  The same mark stands beside *open* on a gallery card and *open with its tracks* on a group, and
-  the tray under a portal gained *add to this session* beside *open together*. A workspace row has
-  the second alone, being tabs and not a file.
-
-- **Two verbs to open anything: load files, or connect to a store.** The landing page had grown a
-  URL box, a *browse…*, a *private buckets…*, a dropdown of eighteen shelves and a list of
-  examples, and the header a plug, a `+` and a *Buckets* card that overlapped all of them. Every
-  one was one of two things under another name. The page now says the two (SPECS §24.2):
-  **Load files** is the drop area and the URL box, and **Connect to a store** is a row of tiles —
-  the lab's own figures, IGV's genomes, 4DN, ENCODE, every store the reader connected, and a `+`
-  for one by URL.
-
-  A tile opens the **store drawer**, a panel down the left in the family of the Analysis drawer
-  and the console: resizable, put down by Escape or its header button, and back where it was left
-  when it is reopened. Each store gets the page its data wants. The lab's store and IGV's are
-  **galleries** — one card per figure or per genome, a line of context, one button that opens the
-  whole pre-configured session, the files under a fold. 4DN and ENCODE are **portals**: a rail of
-  facets (assay, biosource, lab, format…) whose counts follow every tick — OR within a facet, AND
-  across them — a search box, a **matrix** that crosses any two facets and opens a cell, and a
-  **tray** that collects rows to open together. What is open is in the address —
-  `?store=4dn&assay=Hi-C&biosource=HFFc6&view=matrix` — so a narrowed store is a link, and
-  `?store=<url>` opens a lab's own. Nothing is fetched until a tile is pressed.
-
-  Around it, the doors are fewer and each says what it is. **Connect** (the Files column's
-  *Open a local/remote folder*) is a row of providers — this machine, a bucket, Google Drive, Dropbox — with
-  each provider's credentials on its own pane rather than a bucket card here and a Drive key there.
-  The file crumb's *Open a file* opens one **Load** dialog with the store tiles behind it. Every URL box that
-  once had a *browse bucket…* beside it has *from a connected place…* instead, which lists every
-  place the window is connected to and not only buckets. The **Files** panel is the one listing of
-  connected places. And `scripts/make_store.py` writes a *Group*, *Experiment set* or *Dataset*
-  column into what it generates, which is what the galleries and the sessions are grouped by.
-
-- **A map of several ticked genomes is divided and labelled by genome.** Ticking
-  four MAGs in the genomes table asks for four blocks — their own maps on the
-  diagonal and everything between them off it — and the picture came back ruled
-  and named by *contig*, so the thing four ticks were spent on had two thousand
-  hairlines across it and no line anywhere saying where one MAG ended and the
-  next began. The whole-metagenome view has always refused exactly that wash; a
-  selection of genomes is the same picture of a chosen few and now reads the
-  same way.
-
-  The rule it follows is the one the whole-file levels already state, one level
-  down: **what was ticked is what the axis is divided and labelled by.** So
-  ticking *contigs* is unchanged — there the names picked are the contigs, and
-  coarsening to the genomes behind them would throw away the answer to "what did
-  I pick" — and so is a single genome, whose own contigs are the only structure
-  inside it. The genome of a contig is still on the tooltip in every one of
-  those cases, as it was; what changed is only which of two run lists gets the
-  ink.
-
-  Where the axis is pooled — enough small contigs and a cell holds several — a
-  cell is now kept **inside one genome**, the same guarantee the whole-metagenome
-  scan already makes for its slots. Without it a boundary can land a cell late and the
-  block it closes carries a sliver of the next MAG, which is precisely the kind
-  of invented adjacency the pooling rules exist to prevent.
-
-  **And clicking one of those labels opens that genome.** It used to open a
-  *region* view of it — a legal destination, since a bare genome name is a range
-  the parser takes (§5.4), and one screen short of where the gesture meant to go.
-  The whole-file picker has always gone straight to the genome; both now
-  dispatch on what the axis actually is rather than on which view is asking, so
-  the two pictures that are divided by genome behave alike. A label on an axis of
-  contigs opens a region, as it always has.
-
-  A companion panel in a deck follows the lead here, because the decision is made
-  on the read rather than in the view: `#genomes=` shows the same blocks in every
-  map it is applied to.
-
-- **A GTF's biotype is written into the feature's attributes with its key in front of it**
-  (`biotype protein_coding`, where it was a bare `protein_coding`). An attribute with no key is a
-  fact nothing can ask for — invisible to the new column picker — and the feature card behind a
-  click gains a label it was missing anyway.
-
-- **The number under a domain pileup is no longer P2LL.** Peak-to-lower-left
-  measures a dot against the corner furthest from it, and the lower-left corner
-  of a *domain* window is the upstream neighbour against the downstream one —
-  two regions further apart than anything inside the domain — so the ratio is
-  mostly the distance decay and reads well above 1 on a set with no boundaries
-  in it at all. What is reported instead is **in / out**: the domain's own
-  corner against the same block just across its boundary, which sits at very
-  nearly the same separation, so what is left when you divide is whether contact
-  stops at the edge. Above 1 is a domain. The per-feature table carries the same
-  number per domain, and the loop pileups are unchanged — they still report
-  P2LL, which is the right statistic for a dot.
-
-- **Observed / expected is refused in the scaled mode, in the form rather than
-  at Run.** One cell of a scaled pileup is fed by windows at a dozen different
-  separations — that is what scaling *is* — so it has no one diagonal offset for
-  a P(s) to be looked up at, and dividing by one anyway produced a plausible
-  picture of nothing. The refusal names the alternative: the distance-matched
-  control, which is drawn at the same separations by construction and is what
-  the task defaults to.
-
-- The scaled pileup's axes are labelled in units of the feature — `0` at its
-  start and `1` at its end — with the flank the run used named beside them,
-  instead of an unlabelled *Scaled position*.
-
-### Changed
-
-- **A store or a hub can be pasted instead of fetched.** Both doors now carry a folded *or paste
-  the hub* / *or paste the store* box, with an optional base URL for relative names. Two reasons,
-  and the first is not convenience: a store is fetched by the **page**, so the host has to allow a
-  cross-origin `GET`, and plenty never will — `genome.ucsc.edu` among them, which puts UCSC's own
-  example hubs out of reach of every browser-only viewer. The file is public, the reader can see it
-  in another tab, and the only thing in the way is a response header on somebody else's server.
-  Pasting gets past that without routing anybody's traffic through a proxy this project would then
-  be asking them to trust (C1). The second is writing one: a lab assembling its own shelf edits,
-  pastes, sees what broke and edits again, and publishing a file to a bucket between each of those
-  is a loop nobody runs twice.
-
-  **One box and not three**, even for a hub, which is three files. `useOneFile on` is a hub in a
-  single file — and a `hub.txt`, `genomes.txt` and `trackDb.txt` **concatenated** are the same
-  thing, because the only keys the concatenation loses are the two saying where the next file is
-  and the next file is already in the box. A text that is *only* a `hub.txt` is refused by name and
-  told what to paste after it, rather than coming back as an empty shelf. Relative names are
-  refused with the first of them quoted, so the base box is an obvious fix rather than a shelf
-  whose rows fail one at a time when they are pressed. A pasted shelf has no address, so it is not
-  put in the address bar and not offered for remembering: a store worth keeping is one with a URL.
-
-  Each box carries a **fill in an example** button beside *open what is pasted*, and what it puts
-  there is a hub and a store that actually **read** — over the published demo files, so the first
-  press draws a shelf and the reader's first edit is to a thing that already worked rather than to a
-  template whose state they cannot tell. The hub example is an **assembly hub**, naming the demo's
-  own `.2bit` through `twoBitPath`: the rung of §24.10's ladder worth demonstrating, and the only
-  way a hub carries a sequence of its own. It is a hub somebody wrote and checked against the bucket
-  rather than one composed here, which is why `Yeast_reference.2bit` is published beside the FASTA
-  and carries that name. It asks before replacing a box that is not empty, because
-  that box is where somebody's half-written hub lives. A test pins every file the two examples name
-  against the published set, since an example that 404s on its first press is worse than none.
-
-  The CORS failure now names the box, because a reader staring at *Failed to fetch* has no reason
-  to guess there is one — and where the host is a **UCSC** one it says what was measured on
-  2026-09-16: neither `genome.ucsc.edu` nor `hgdownload.soe.ucsc.edu` sends the header, so UCSC's
-  own example hubs and the whole of GenArk are out of reach of *any* browser-only viewer, this one,
-  igv.js or otherwise. That is a UCSC hosting decision rather than a fault in the reader's URL, and
-  saying so beats sending them to check a link that is perfectly correct. It also says that pasting
-  such a hub's text gets past it for the hub and not for its `bigDataUrl`s, which are on the same
-  hosts — the part that would otherwise be discovered one row at a time.
-
-- **A store's own name replaces the door's on the drawer heading once it lands.** A door is named
-  for the errand — *A track hub*, *Your own store* — which is right until one has been read, at
-  which point the page is about a particular shelf and the heading says which, with the store's own
-  description under it. Both doors, not only the new one.
-
-### Fixed
 
 - **A contact map is never put on a track shelf.** A hub's `type hic` track has a row of its own
   that opens through the map door, and it was *also* going onto the genome row's shelf — so *open
@@ -2117,6 +1813,166 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the same shelf and was losing it the same way. The Tracks card now offers them in a browser
   session exactly as it does beside a map, through the same one question and the same gate — so a
   restored session, which is bringing its own tracks back, is still not offered them on top.
+
+- **A 4DN `.hic` drew a blank map as *balanced* at 1 kb and 2 kb.** Juicer writes a `KR` entry for
+  every chromosome whether or not the balancer converged, and where it did not the vector behind
+  the entry is all `NaN` — the chicken maps carry one at 1 kb and 2 kb for every chromosome, beside
+  a `VC_SQRT` and a `VC` that are whole. The reader chose its normalisation by name alone, per file,
+  and never looked behind it, so every cell multiplied by `NaN` and the legend read 0 to 1. A
+  chromosome whose preferred vector has no finite value in it now takes the next normalisation down
+  the preference list (`hic/HicFile.ts`, `normVector`), and `normTypeFor` says which one it got.
+
+- **Reading a single-cell container in small pieces looked hung.** The listing is a thousand
+  synchronous range requests inside one h5wasm call, so the bar said *listing cells…* and nothing
+  else for as long as it took — minutes on a slow link — and the open then went on to probe one
+  dataset header per cell for a pixel count nobody was waiting for, another four thousand round
+  trips. The requests now count themselves out loud (*listing cells · 512 reads — 8.0 MB*), and the
+  per-cell count is skipped on that source: unknown is what it is, and the File card says so.
+
+- **A file that is not HDF5 failed as `error - name not defined!`.** An HTML page saved under a
+  `.mcool` name, a download that stopped short, a text matrix: h5wasm found no superblock and said
+  so in its own words, which reached the screen as *something went wrong*. The container is now
+  refused by its first bytes, in a sentence that names the file, and a failure h5wasm raises on a
+  file that *is* HDF5 is said about that file and group rather than about nothing.
+
+- **A contact map on Google Drive was downloaded whole.** A browser tells every host it accepts
+  gzip, and Drive takes it up on an unranged `HEAD`: `Content-Encoding: gzip`, chunked, no length.
+  The map door read that as a host that re-encodes what it serves — GitHub Pages does, and ranges
+  through a gzip stream are garbage — and took the fallback for such a host, one `GET` of the whole
+  file into memory, silently and whatever the size: 81 MB for the `.mcool` this was found on, and
+  the same road for a 2 GB one. Drive answers every *ranged* request raw, so a `HEAD` that comes
+  back re-encoded is now followed by one more, for `Range: bytes=0-`, and a 206 that is not
+  re-encoded and states its length is read by range from there — the file's length, since the
+  range is all of it. Pages re-encodes that too and is refused exactly as before, one request later
+  (docs/hosting.md, docs/remote-sources.md).
+
+- **A file picked from Google Drive took a long time to open, under a name that was its id.** A
+  Drive file is addressed by an id, so nothing in its address says what it is, and the session took
+  the contact-map door first: a `HEAD`, then HDF5 hunting for a superblock at doubling offsets — a
+  megabyte chunk at each — through the whole of a bigWig, before the track door read the file's
+  header three times over, four small requests each. Over the Drive API, where a request is the
+  better part of a second, a 56 MB bigWig sat at *Opening 1pq7NDWo…?alt=media…* for most of a
+  minute. The name a folder gives a file now decides the door where its address cannot, a bare
+  address is asked what it is before the map door is tried, and the annotations worker reads a
+  remote file in 256 KiB chunks it keeps, one handle per address — so the same open is three
+  requests and 0.6 MB, and the loading screen and the tab say *ATAC_rep2_WBcel235.bw* (SPECS
+  §24.9). A presigned URL's tab loses its signature the same way: a query string is the request,
+  not the name.
+
+- **Opening a 4DN BAM as a genome fetched the whole file.** 4DN's open-data bucket exposes `ETag`
+  and nothing else to a page, so the browser could not see the `Content-Range` the file handle
+  reads a size off, and the handle reported nought bytes. The bounded header read was then a read
+  of nought bytes, "not a BAM", and the alignment file was fetched whole — gigabytes, behind
+  *Reading 4DNFIV9TCZVO.bam* — to find out what its first block said. A size the handle cannot
+  give is now asked for with a `HEAD`, whose `Content-Length` every page may read; a size nothing
+  states is unknown rather than empty and the header is still read within its bound; and the
+  browser opens from the header in three small requests, with the index's download drawn as a
+  bar on the row while it is already on screen (SPECS §8.8).
+
+- **A merged pull request's preview stayed in the About dialog's version picker.** Merging fires
+  `pull_request: closed` — the run that deletes the preview — and `push` to `main` in the same
+  instant, and both land in the `pages` concurrency group; GitHub keeps only the newest *pending*
+  run in a group, so whenever something was already deploying, the removal was cancelled about a
+  second after it queued and the review copy outlived its review. #49 and #50 were both lost that
+  way, behind a deploy the Stores workflow had dispatched a minute earlier.
+
+  The deploy now reconciles rather than trusting the event: before publishing, it asks GitHub about
+  every preview in the manifest and drops the ones whose pull request is no longer open. That also
+  covers a removal that failed outright, and one whose pull request closed while the workflow was
+  broken. A pull request the API will not answer for is left alone — *I could not ask* must not read
+  as *it closed*.
+
+- **The 4DN shelf could not be generated at all.** Its first live run died on
+  `IncompleteRead(43378383 bytes read, 39983032 more expected)`: the widened query asks the portal
+  for every experiment set with all four of its file arrays embedded, which is an 83 MB response,
+  and the socket closed half way through it — as a Python traceback, where every other failure in
+  `make_store.py` is a sentence saying what to do. IGV and ENCODE published fine; nothing was
+  published, because a run that loses one front end publishes none of them (the branch is replaced
+  wholesale, so a missing store would delete last week's good copy of that shelf).
+
+  4DN's search is now paged — 50 records a request, each retried on its own — and **ENCODE's is
+  deliberately not**, which the next run proved the hard way: paged uniformly, ENCODE answered
+  `&limit=500&from=0` with `403 Forbidden`, having answered the same query with `limit=all`
+  perfectly the week before. The two portals want opposite things of one search, both answers are
+  measured, and `--page-size` is there for the run that disagrees. A 403 on a page now names
+  `--page-size 0` in its own message, since that is the fix and no status page will suggest it.
+
+  Around that: every whole read is retried three times when a host agrees to answer and then stops
+  talking. An HTTP *status* is still never retried, since 4DN answers a search matching nothing
+  with a JSON-bodied 404 and retrying that would turn zero results into a failure. The paged walk
+  stops on the portal's `total`, on a short page, or on a page that repeats what it has already
+  sent — and that last one fails the run when it happens early, because a portal ignoring `from`
+  would otherwise publish a catalogue that draws with empty cells in nine rows out of ten.
+
+  The suite drove the generator only through recorded responses, which is how this shipped: the
+  recorded path reads a file and the live path walks a portal. `--portal-base` now points a front
+  end at a portal served by the test itself — out of process, since `spawnSync` blocks the one
+  running the assertions — and the five ways a walk ends are each made to happen, including the cut
+  off response that started this.
+
+### Removed
+
+- **The header's plug and `+`.** *Connect a place* and *Add a file to this tab* stood in the header
+  beside the store drawer's toggle and were the Files column's own *Open a local/remote folder* and the file
+  crumb's *Open a file* said a second time, one row up; a header with three doors to a file read as
+  three different things. Both verbs stay in the command palette, and dropping a file still adds
+  it. The hints that pointed at "the plug in the header" now point at the Files column.
+
+- **The Buckets card, the bucket browser and the shelves dropdown.** The plug's *Buckets* card
+  listed what the Files panel already lists and edited keys the provider pane now edits; the
+  *browse bucket…* dialog behind four URL boxes browsed buckets and nothing else, where the window
+  can be connected to a folder, a Drive or a Dropbox too; and the eighteen-entry dropdown of
+  shelves, the landing page's URL box and its *private buckets…* button were the store tiles, the
+  Load box and the plug under other names. The two 4DN maps that sat in the Demos store are on
+  4DN's own page, where every 4DN map is. Earlier unreleased builds called a store a *hub*
+  (`metacooler.hub`, `?hub=`, `make_hub.py`, the `hubs` branch); none of those names is read any
+  more.
+
+- **The `log₂ ratio` combine operation.** It was a scale wearing an operation's
+  clothes: it put the same finding in two rows and left only one of them
+  exportable as the quantity it measured — a bigWig of log₂ ratios is a file of
+  a *picture*, and anything downstream that wanted the ratio had to undo it. The
+  reason it existed is real and is answered above, on the lane's own axis. Two
+  operations remain, a ratio and a difference, and either can be *drawn* as a
+  logarithm.
+
+- **The `Domains (CIDs)` task**, which was withheld from the panel on every file
+  and is now redundant. Everything it did is reachable and in one place:
+  insulation calls the boundaries, calls the domains between them, and an APA
+  over those domains is the pileup. What it added over that was a composite
+  whose three settings never reached the step they named — `AnalysisRunner.plan`
+  walks a required task at *that task's* defaults — so its window, its region
+  and its prominence changed nothing, and its estimate read a window labelled
+  base pairs as a count of bins. A task nobody could run, whose settings did not
+  work, duplicating two that do.
+
+- **Diamond insulation calls the domains between its boundaries, and does it by
+  default.** A second overlay beside the calls: the span from each boundary to
+  the next, drawn as a segmentation the way the A/B compartment track is, and
+  exportable as BED like any other called interval set. A boundary set is half
+  an answer — everything downstream of insulation takes an *interval* rather
+  than a point, and the scaled pileup over these is the domain APA — so what
+  every reader was doing by hand (sort per sequence, pair the neighbours) is now
+  a tickbox, and it is ticked.
+
+  Three decisions in it. Consecutive domains **tile**: one ends where the next
+  begins, so the lane reads as a segmentation rather than as boxes with gaps,
+  and a domain's two corners sit on the bins the calls were actually made at,
+  which is what a scaled pileup lines up on. Each carries the **weaker** of its
+  two edges as its score, because a domain is only as well defined as its
+  worse-supported side and reporting the stronger would let one good boundary
+  vouch for a run of bad ones. And **two boundaries make a domain, one makes
+  nothing**: the two ends of every sequence are left out rather than run to the
+  telomere, which would assert an edge the data never placed.
+
+  On the yeast demo: 710 boundaries across 16 sequences, and 694 domains — one
+  fewer per sequence, which is what the arithmetic says it should be.
+
+- `metacooler-run` writes a called interval set as **BED** beside its TSV, the
+  way it already wrote bedGraph and bigWig beside a profile's. The drawer has
+  carried a BED button since there were called intervals at all; a batch run got
+  a TSV with a provenance header, which is readable and is not what bedtools
+  takes.
 
 ## [0.12.0] - 2026-09-10
 
