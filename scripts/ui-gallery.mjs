@@ -66,11 +66,21 @@ try {
   await fold('Fold the General panel')
   await fold('Fold the Aesthetics panel')
 
-  // The structure, by URL through the Tracks card's box.
-  const card = page.locator('.card.annotation-card')
-  await card.locator('details.ann-url summary').first().click()
-  await card.locator('details.ann-url input').first().fill(`${BASE}/demo/yeast/Yeast_structure.g3d.gz`)
-  await card.locator('details.ann-url button', { hasText: 'add' }).first().click()
+  // The structure, **dropped on the Structures card**, which is the route the
+  // card's own sentence names and — since there is no box to paste a URL into
+  // on any card (§5.11) — the only one a script can drive: the click road opens
+  // the browser's file picker, which is not the page's to answer.
+  await page.evaluate(async (url) => {
+    const card = document.querySelector('.structure-card')
+    if (card === null) throw new Error('no Structures card')
+    const bytes = await (await fetch(url)).arrayBuffer()
+    const file = new File([bytes], 'Yeast_structure.g3d.gz', { type: 'application/gzip' })
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    for (const kind of ['dragenter', 'dragover', 'drop']) {
+      card.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    }
+  }, `${BASE}/demo/yeast/Yeast_structure.g3d.gz`)
   await page.waitForSelector('.deck-structure', { timeout: 60000 })
   await page.waitForFunction(() => { const n = document.querySelector('.structure-note'); return n === null || n.classList.contains('hidden') }, null, { timeout: 90000 }).catch(() => {})
   await sleep(5000)

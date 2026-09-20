@@ -308,13 +308,21 @@ function noteOf(entry: AnnotationEntry): string | null {
 }
 
 /**
- * The zone a structure is loaded through: the three formats, and a URL.
+ * The zone a structure is loaded through.
  *
  * Its own zone rather than the Tracks card's, because the sentence on it is
  * the point: a reader with a `.3dg` from Dip-C does not know it is a g3d, and
  * the Tracks card's list of eight formats does not say so. A file of any
  * other kind dropped here still goes where its bytes say (§8.3) — the loader
  * decides by content — so the zone accepts and the row lands where it should.
+ *
+ * **The card is the target and nothing under it.** There is no box to paste a
+ * URL into, here or on any other card: the same rule the Tracks and Contact
+ * maps cards were brought to (§5.11), and for the same reasons — a remote file
+ * arrives by the address bar, by a session, or by the Files column (§20), and
+ * a text box under every drop zone was three ways of saying *open something*
+ * on one card. A structure held by URL still opens exactly as it did; only the
+ * box is gone.
  */
 function loadZone(loader: AnnotationLoader): HTMLElement[] {
   const choose = async (): Promise<void> => {
@@ -339,27 +347,5 @@ function loadZone(loader: AnnotationLoader): HTMLElement[] {
       void choose()
     }
   })
-  const url = el('input', {
-    class: 'input',
-    type: 'url',
-    placeholder: 'https://bucket.example.org/model.g3d',
-  })
-  const submit = (): void => {
-    const value = url.value.trim()
-    if (value === '') return
-    loader.addUrl(value)
-    url.value = ''
-  }
-  url.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submit()
-  })
-  return [
-    zone,
-    el(
-      'details',
-      { class: 'ann-url' },
-      el('summary', { text: 'or open one by URL' }),
-      el('div', { class: 'ann-url-row' }, url, button('add', submit, { class: 'btn' })),
-    ),
-  ]
+  return [zone]
 }

@@ -5985,10 +5985,14 @@ the credential the listing used; `ui/pickFromFolders.ts` is the same view in a d
 column's own places open and which a drag out of it resolves through. With nothing connected it says
 so and names the column's *Open a local/remote folder* rather than offering an empty listing.
 
-**The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps, an empty
-cell of a deck — used to carry a box to paste a URL into, folded away behind *or open one by URL*,
-and beside it a *from a connected place…* button onto that dialog. Both are gone from all of them,
-and the deck's add row has lost the button too.
+**The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps,
+Structures, an empty cell of a deck — used to carry a box to paste a URL into, folded away behind
+*or open one by URL*, and beside it a *from a connected place…* button onto that dialog. Both are
+gone from all of them, and the deck's add row has lost the button too. **Structures** went last and
+separately, having arrived with §25's card after the others were cleared: the rule is the card's
+shape and not a list of cards, so a new one that asks for a file is a drop zone and nothing under
+it. A structure held at an address still opens by every road it did — the landing page's box, a
+session, a `#uri`, the Files column — and what is gone is the third of them on the card itself.
 
 The box went first and for the obvious reason: it was the worse half of the pair it was in. A reader
 holding a URL can drop the link on the window or paste it into the landing page's own box, which is

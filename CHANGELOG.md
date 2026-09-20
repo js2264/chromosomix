@@ -301,6 +301,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The Structures card has no box to paste a URL into either (§5.11).** It arrived with the 3D
+  card after the Tracks, Contact maps and deck rows were cleared of theirs, so it kept the one
+  pattern every other card had lost: a drop zone with *or open one by URL* folded under it. The
+  rule is the card's shape rather than a list of cards — what a card that asks for a file needs is
+  the drop zone and nothing under it. A structure held at an address still opens by every road it
+  did: the landing page's own box, a saved session, a `#uri` link, or the Files column.
+
 - **A sequence is declared circular in the Chromosomes table, in a column of its own (§8.15).** It was
   a tickbox in the Map card, which was the right card for what the flag *changes* and the wrong place
   for what it *is*: a declaration about the assembly — which of these sequences is a plasmid, which is

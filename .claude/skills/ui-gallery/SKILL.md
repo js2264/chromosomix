@@ -38,7 +38,7 @@ Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software 
 ## What it drives
 
 The yeast demo (`?config=…/demo/yeast/Yeast_microC.metacooler.json`), the square map, the
-side panels folded for room, then: the demo structure added by URL through the Tracks card,
+side panels folded for room, then: the demo structure dropped on the Structures card,
 the cell framed on the maps' window, a hover on a bead (the status bar names it) and on the map
 (the chord), colour by the first track, a tracks cell with two tracks placed on it, the Analysis
 panel, the spatial-tracks task run, the reconstruction (*Model from the map*) run and landing
@@ -48,6 +48,8 @@ note or a squashed plot is a bug the tests did not see, and this is where it sho
 ## Gotchas met
 
 - The Annotations panel is folded by default; its buttons are `button[title^="Show the … panel"]`.
-- The Tracks card's URL box adds through the loader, not the session's drop road.
+- No card has a box to paste a URL into any more, so a file gets in by being **dropped**: fetch it
+  in the page, build a `File`, and dispatch `dragenter`/`dragover`/`drop` with a `DataTransfer`.
+  The click road opens the browser's own file picker, which the page cannot answer.
 - The cell's own hover speaks in the status bar and on the maps, not in its corner readout.
 - Vite serves `.gz` with `Content-Encoding: gzip` unless `vite.config.ts`'s dev plugin strips it.
