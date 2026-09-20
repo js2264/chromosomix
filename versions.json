@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 67,
+      "commit": "eb7216f",
+      "title": "Resolutions the file does not store, zoom both ways from the bar, and an APA that pools its anchors",
+      "branch": "claude/map-visualization-improvements-oi2o8p",
+      "date": "2026-09-20T10:35:23Z"
+    }
+  ]
 }
