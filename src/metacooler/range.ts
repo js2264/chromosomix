@@ -103,9 +103,19 @@ function tokenize(text: string): Token[] {
  * unaddressable — a cooler limitation this viewer inherits deliberately rather
  * than diverging from.
  *
+ * `reversed` lifts the one refusal this port makes that a **circle** does not
+ * deserve: on a sequence that joins its own ends, `chr:2,900,000-100,000` is not
+ * a typo, it is the 200 kb window across the origin — the most local contacts
+ * there are, and the only window a reader cannot otherwise ask for. It is opt-in
+ * and reached from one place ({@link parseMetacoolerRange}, for a sequence the
+ * reader has declared), so every linear range keeps cooler's own error.
+ *
  * @returns `[chrom, start, end]` with `null` for coordinates the string omits.
  */
-export function parseRegionString(text: string): [string, number | null, number | null] {
+export function parseRegionString(
+  text: string,
+  options: { reversed?: boolean } = {},
+): [string, number | null, number | null] {
   const parts = text.split(':')
   const chrom = parts[0].trim()
   if (chrom.length === 0) badRange('Chromosome name cannot be empty', { region: text })
@@ -128,7 +138,17 @@ export function parseRegionString(text: string): [string, number | null, number 
   const tail = next()
   if (tail === undefined) return [chrom, start, null]
   const end = parseHumanized(expect(tail, ['COORD']).text)
-  if (end < start) badRange('End coordinate less than start', { region: text, start, end })
+  if (end < start && options.reversed !== true) {
+    // cooler's own wording, with the one thing cooler has no way to say after
+    // it: on a sequence the reader has declared circular this is a legal window
+    // (§8.15), and the reader who typed it is usually a base pair away from
+    // meaning it.
+    badRange(
+      'End coordinate less than start — unless the sequence joins its own ends, ' +
+        'which is a tick in the circular column of the Chromosomes table',
+      { region: text, start, end },
+    )
+  }
   return [chrom, start, end]
 }
 
@@ -194,6 +214,7 @@ export function parseMetacoolerRange(
   mc: RangeTarget,
   rangeStr: string,
   context?: NameContext,
+  circular?: readonly string[],
 ): ParsedRange {
   // No trim: Python splits the raw string, so `' MAG_1'` is genuinely unknown.
   const label = rangeStr.split(':')[0]
@@ -225,7 +246,7 @@ export function parseMetacoolerRange(
   }
 
   if (contigNames.includes(label)) {
-    return { kind: 'contig', label, extent: mc.extent(rangeStr) }
+    return { kind: 'contig', label, extent: extentOf(mc, label, rangeStr, circular) }
   }
 
   // Nothing under that spelling. **This, and only this, is where the naming
@@ -257,7 +278,11 @@ export function parseMetacoolerRange(
     return {
       kind: 'contig',
       label: matched.name,
-      extent: mc.extent(`${matched.name}${suffix}`),
+      // Under **this file's** spelling, which is what the wrap is looked up by:
+      // the declaration is a set of this file's own names (§8.15), and a reader
+      // who typed `chr1:2.9M-100k` against a file that writes `1` is asking
+      // about the same molecule.
+      extent: extentOf(mc, matched.name, `${matched.name}${suffix}`, circular),
       matched,
     }
   }
@@ -272,6 +297,47 @@ export function parseMetacoolerRange(
       `  Contigs: ${truncateNames(contigNames)}`,
     { label, region: rangeStr },
   )
+}
+
+/**
+ * A contig range's bin extent — **unwrapped** where the sequence is a circle and
+ * the coordinates run backwards over its origin (§8.15).
+ *
+ * `chr:2,900,000-100,000` on a 3 Mb circle is two stored runs, the last 100 kb
+ * and the first 100 kb, and it is the window a reader most wants on a bacterial
+ * chromosome: the junction is where the origin is, and on a line it is the one
+ * place that cannot be looked at. What comes back is written in the same
+ * **unwrapped** bin space `worker/wrap.ts` consumes — the first bin is where the
+ * window opens and the last runs off the end of the sequence by however far the
+ * window carries on past it — because that is the space the view pans in and the
+ * only one in which panning across the junction is monotonic.
+ *
+ * Built out of two ordinary extents rather than fresh arithmetic, so the bin
+ * edges are cooler's own on both sides of the junction: `chr:start-` for the
+ * head and `chr:0-end` for the tail, with the sequence's own bin count between
+ * them. A `.mcool` rung whose last bin absorbs a remainder (see
+ * {@link regionToExtent}) is therefore handled here by being handled there.
+ *
+ * Every other range — a linear sequence, a window that reads forwards, a bare
+ * contig name — goes straight to {@link RangeTarget.extent} and keeps cooler's
+ * refusal.
+ */
+function extentOf(
+  mc: RangeTarget,
+  name: string,
+  region: string,
+  circular: readonly string[] | undefined,
+): Extent {
+  if (circular === undefined || !circular.includes(name)) return mc.extent(region)
+  const [, start, end] = parseRegionString(region, { reversed: true })
+  if (start === null || end === null || end >= start) return mc.extent(region)
+  // Bounds-checked by the two reads below, which are ordinary ranges: a start
+  // past the end of the sequence, or an end below zero, refuses there in
+  // cooler's own words rather than being wrapped into something plausible.
+  const whole = mc.extent(name)
+  const head = mc.extent(`${name}:${start}-`)
+  const tail = mc.extent(`${name}:0-${end}`)
+  return [head[0], whole[1] + (tail[1] - whole[0])]
 }
 
 /** A name index over a target that did not bring one. */

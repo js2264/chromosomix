@@ -537,28 +537,73 @@ export interface MatrixPanelOptions {
    */
   turn?: TurnPresentation
   /**
-   * *This sequence is circular* — the declaration, and the control for it
-   * (SPECS §8.15).
+   * The window on screen changed — a pan, a zoom, a new block.
    *
-   * Offered only on a view that is a window on **one** sequence, because that is
-   * the only view the answer changes anything about: a two-contig block has no
-   * diagonal to slide along, and a whole-genome picture is a list of sequences of
-   * which some might be circular and some not — a single tickbox over it would be
-   * asking one question about several things.
+   * Fired from the draw loop but **only when the window it names has actually
+   * moved**, which is what makes it affordable: a drag is sixty frames a second
+   * and the phrase under the map changes a handful of times across one. The
+   * argument is deliberately nothing; a listener that wants the window asks
+   * {@link MatrixPanel.framedRegion} for it, so there is one answer rather than
+   * two that can drift.
    *
-   * A presentation rather than a boolean, on {@link derive}'s rule: the state
-   * lives in the session (`state/circular.ts`), the panel draws it and reports
-   * back, and nothing here remembers an answer.
+   * One caller: the zoom-out button beside the region box, which has to grey
+   * itself the moment there is nothing further out to go to.
    */
-  circular?: CircularPresentation
+  onViewMoved?(): void
 }
 
-/** The *this sequence is circular* control, as the session hands it over. */
+/**
+ * *This sequence is circular* — the declaration, as the session passes it round
+ * (SPECS §8.15).
+ *
+ * **Not a control on this panel.** It was one, in the card about the map, and
+ * the tickbox is gone: a declaration about the assembly asked one sequence at a
+ * time, of whichever one was on screen, is a question in the wrong place, and it
+ * left no way to read which sequences had been declared. The ticking is a column
+ * of the Chromosomes table now (`ui/ContigsTable.ts`) and the mark is in the
+ * General panel's list.
+ *
+ * What survives is the *reading*: `RegionView` needs to know whether this window
+ * may run off the end of its sequence, and it is handed this. Still a
+ * presentation rather than a boolean, on `derive`'s rule — the state lives in
+ * the session (`state/circular.ts`) and nothing in a view remembers an answer —
+ * and `on` is written through when the declaration changes under an open map,
+ * which is what lets the ladder be re-armed without the reader losing their
+ * zoom.
+ */
 export interface CircularPresentation {
   /** The sequence it is about, spelled as this map spells it. */
   label: string
   on: boolean
   onChange(on: boolean): void
+}
+
+/**
+ * The stretch of one sequence a panel is showing, with the sequence's length.
+ *
+ * Two callers and they do different things with it: the Bookmarks card writes it
+ * down, and the zoom-out button widens it. The length is here for the second —
+ * widening has to stop at the end of the sequence, and neither caller carries an
+ * assembly to look it up in.
+ */
+export interface FramedRegion {
+  contig: string
+  start: number
+  end: number
+  /** The whole sequence's length in base pairs, which is where coordinates stop. */
+  length: number
+  /**
+   * The window runs across the sequence's own origin (§8.15), so `end` is
+   * **below** `start` and the window is what lies outside the two.
+   *
+   * A circular axis panned across its junction shows the same sequence twice —
+   * its tail, then its head — and that is one window written backwards rather
+   * than two places. Which is a legal region on a declared sequence and an error
+   * on every other, so it is flagged rather than left for a caller to notice
+   * from the arithmetic: the zoom-out widens it, and the Bookmarks card refuses
+   * it, because a BED interval cannot be written backwards.
+   */
+  wrapped?: boolean
 }
 
 /**
@@ -878,6 +923,8 @@ export class MatrixPanel {
    * thing whichever picture a reader is looking at.
    */
   readonly viewNote: HTMLElement = el('span', { class: 'view-span' })
+  /** The window {@link MatrixPanelOptions.onViewMoved} was last fired for. */
+  private framedAt = ''
   /**
    * The cards this panel contributes to whichever view's Aesthetics column.
    *
@@ -2024,26 +2071,15 @@ export class MatrixPanel {
       controls.unshift(field('level', levelSelect, 'Summed from the loaded matrix — no further reads.'))
     }
 
-    // *This sequence is circular*, in the card about the map, because that is
-    // what it changes: with it the picture slides past the end of the sequence
-    // and comes back on at its beginning, in the square view and under the turn
-    // alike (§8.15). A tickbox rather than a mark in the overlay row below —
-    // those five are things drawn *over* the data, and this is a statement about
-    // what the data is.
-    const circular = this.options.circular
-    if (circular !== undefined) {
-      const box = el('input', { class: 'checkbox', type: 'checkbox' }) as HTMLInputElement
-      box.checked = circular.on
-      box.addEventListener('change', () => circular.onChange(box.checked))
-      controls.push(
-        field(
-          'circular',
-          box,
-          `Read ${circular.label} as a circle: the map slides past its end and back on at its ` +
-            'beginning, and every cis analysis measures separation the short way round.',
-        ),
-      )
-    }
+    // **There is no circular tickbox here any more** (§8.15). It sat in the card
+    // about the map, which was the right card for what it *changes* and the
+    // wrong place for what it *is*: a declaration about the assembly — which of
+    // these sequences is a plasmid, which is the mitochondrion — asked one
+    // sequence at a time, of whichever one happened to be on screen, and
+    // readable nowhere. It is a column of tick boxes in the Chromosomes table
+    // now, beside the lengths, where every sequence is a row; the General
+    // panel's list wears the mark; and this panel still *reads* the answer
+    // through `RegionViewProps.circular`, which is what arms the wrapped read.
 
     // The four marks that draw on the matrix, in the card about the matrix.
     // They spent a release at the bottom of the Tracks card under a label reading
@@ -6714,6 +6750,13 @@ export class MatrixPanel {
       const caveat = this.derived?.scope ?? null
       const phrase = this.viewPhrase()
       this.viewNote.textContent = caveat === null ? phrase : `${phrase} · ${caveat}`
+      // The same string decides both, because it *is* the window: a frame whose
+      // phrase is what the last one said is a frame in which nothing anybody
+      // outside this panel cares about has moved.
+      if (phrase !== this.framedAt) {
+        this.framedAt = phrase
+        this.options.onViewMoved?.()
+      }
       this.syncLaneControls()
       // After the draw, because this reads a number the rasteriser resolved.
       // `effectiveScale` is the scale the raster actually used, so this is where
@@ -7403,13 +7446,37 @@ export class MatrixPanel {
    * map framed across four chromosomes is not at a location, and saving its first
    * chromosome would be saving somewhere the reader is not looking.
    */
-  framedRegion(): { contig: string; start: number; end: number } | null {
+  framedRegion(): FramedRegion | null {
     if (this.data === null) return null
     const windows = this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX)
+    // **Two runs of one sequence is one window on a circle**, not two places: a
+    // wrapped axis carries the sequence's tail and then its head, with the
+    // second run a lap along (§8.15). Reported as the window a reader would
+    // type — `chr:4,500,000-150,000` — and flagged, because that is a region
+    // only a declared sequence accepts.
+    if (windows.length === 2) {
+      const [tail, head] = windows
+      if (tail.contig !== head.contig || tail.segment === head.segment) return null
+      return {
+        contig: tail.contig,
+        start: tail.start,
+        end: head.end,
+        length: tail.segment.contigLength,
+        wrapped: true,
+      }
+    }
     if (windows.length !== 1) return null
     const only = windows[0]
     return only.end > only.start
-      ? { contig: only.contig, start: only.start, end: only.end }
+      ? {
+          contig: only.contig,
+          start: only.start,
+          end: only.end,
+          // The sequence's own length travels with the window, because the two
+          // callers that widen one have nowhere else to learn where it stops: a
+          // region view is a window on one contig and carries no assembly.
+          length: only.segment.contigLength,
+        }
       : null
   }
 
@@ -7600,6 +7667,7 @@ export class MatrixPanel {
     const only = windows.length === 1 ? windows[0] : undefined
     return only === undefined ? undefined : formatLocus(only)
   }
+
 
   /** The stretches of sequence one axis currently shows. */
   private framedWindows(axis: LocusAxis | null, scale: Scale): LocusWindow[] {

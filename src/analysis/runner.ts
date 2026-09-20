@@ -266,6 +266,18 @@ export function resultKey(map: MapId, taskId: string): string {
 }
 
 /**
+ * How many runs of one task on one map are kept, the current one included.
+ *
+ * Eight, which is a parameter sweep and not an archive. Each held result is its
+ * own typed arrays — a pileup, a saddle, a per-bin profile — so this is a memory
+ * budget as much as a convenience, and the failure it guards against is a tab
+ * that grows all afternoon and is blamed on the file. Eight is enough for the
+ * thing people actually do, which is to change one number two or three times and
+ * then want the one before last.
+ */
+export const RUN_HISTORY = 8
+
+/**
  * What the analysis worker's mount is identified by.
  *
  * The file, and — for a single-cell container — the cells it is summing. Two
@@ -387,6 +399,30 @@ export class AnalysisRunner {
    * and only for the composites.
    */
   private readonly results = new Map<string, TaskResult>()
+  /**
+   * The runs **before** the current one, newest first, keyed like the results.
+   *
+   * A task run twice used to leave one figure: the second result replaced the
+   * first in place and the first was gone, along with the parameters that
+   * produced it. That is the wrong shape for what people actually do with this
+   * catalogue, which is to run a thing, change one number, run it again, and
+   * then want the two side by side — or, more often, to discover that the
+   * previous answer was the one worth keeping. Nothing about a finished result
+   * makes it cheap to recompute: a pileup over forty thousand anchors is a
+   * minute of range requests, and a reader who lost it by pressing Run has lost
+   * the minute.
+   *
+   * So the old result is kept rather than dropped. Bounded by
+   * {@link RUN_HISTORY}, because these hold typed arrays and an afternoon of
+   * parameter sweeps would otherwise be an afternoon of pileups in memory; the
+   * oldest falls off the end, which is the one a reader is least likely to want
+   * and the one they can most easily produce again.
+   *
+   * Not persisted, for the reason §18.4 gives about the framing: a result is a
+   * record *of a view*, and a history restored against a file that has since
+   * been re-binned would be a list of figures that no longer describe anything.
+   */
+  private readonly history = new Map<string, TaskResult[]>()
   /** The target each stored result was measured on, for labelling the tabs. */
   private readonly resultTargets = new Map<string, RunTarget>()
   private readonly queue: Job[] = []
@@ -421,6 +457,24 @@ export class AnalysisRunner {
   resultOf(taskId: string, map?: MapId): TaskResult | null {
     const where = map ?? this.host.targetMap?.() ?? LEAD_MAP
     return this.results.get(resultKey(where, taskId)) ?? null
+  }
+
+  /**
+   * Every run of this task on one map, newest first — the current one included.
+   *
+   * What the drawer's *previous run* stepper walks. The current result leads,
+   * because that is what is on screen when the drawer opens and a list that made
+   * the reader step *forwards* to reach it would be reading itself backwards.
+   *
+   * An empty list where there is no result at all, so a caller need not tell
+   * "never run" from "run once" before it can count.
+   */
+  runsOf(taskId: string, map?: MapId): TaskResult[] {
+    const where = map ?? this.host.targetMap?.() ?? LEAD_MAP
+    const key = resultKey(where, taskId)
+    const current = this.results.get(key)
+    const older = this.history.get(key) ?? []
+    return current === undefined ? [...older] : [current, ...older]
   }
 
   /**
@@ -806,6 +860,16 @@ export class AnalysisRunner {
         // was meant to pre-empt.
         if (job.cancelled) throw abortError()
         const key = resultKey(job.target.map, step.task.id)
+        // The result this one replaces goes to the front of the history, so
+        // *previous* means the run before this one on this map — and a
+        // composite's reused upstream step is filed the same way, since it is
+        // as much a result as the leaf.
+        const previous = this.results.get(key)
+        if (previous !== undefined && previous !== result) {
+          const kept = this.history.get(key) ?? []
+          kept.unshift(previous)
+          this.history.set(key, kept.slice(0, RUN_HISTORY))
+        }
         this.results.set(key, result)
         this.resultTargets.set(key, job.target)
         if (leaf) {
@@ -1332,8 +1396,14 @@ export class AnalysisRunner {
  * filed under `key:entryId`, which a runner rebuilds from `listParam(params,
  * key)` because that is the list the keys were built from. Keying multiples by
  * entry id alone would collide the moment one task took two multi-selects.
+ *
+ * Exported because the *shell* has to file its inputs under the same keys and
+ * has no runner to do it: `cli/main.ts` opens the files itself and hands the
+ * job a `TaskInputs` directly. Two statements of this convention is how the
+ * APA's track aggregates came out empty from a command line that named a track
+ * — the runner filed it under `tracks:<id>` and the shell under `tracks`.
  */
-function chosenEntries(spec: EntryParam, params: Params): Array<[string, string]> {
+export function chosenEntries(spec: EntryParam, params: Params): Array<[string, string]> {
   if (spec.multiple === true) {
     return listParam(params, spec.key).map((id): [string, string] => [`${spec.key}:${id}`, id])
   }

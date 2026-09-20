@@ -32,7 +32,7 @@
  */
 
 import type { BarScale } from '../annotations/fields'
-import type { BarChartBars } from '../annotations/types'
+import type { AnnotationEntry, BarChartBars } from '../annotations/types'
 import { DEFAULT_HEATMAP_LANE_COLORMAP } from '../annotations/types'
 import { colormapCss } from './colormaps'
 import { CATEGORY_PALETTE } from './meta'
@@ -97,6 +97,73 @@ export function barColours(bars: BarChartBars): string[] {
 }
 
 /**
+ * The value axis a reader has fixed by hand, or `undefined` for the file's own.
+ *
+ * §8.17 gives a barChart lane two readings and both are relative — every chart
+ * against the file's tallest bar, or each chart against its own. Neither can
+ * answer the question a reader comparing two *files* asks: a GTEx lane and a
+ * knockdown's lane, drawn side by side, are each scaled to their own maximum, so
+ * the one with the quieter tail draws taller bars and looks like more
+ * expression. A fixed axis is the third reading and the only one under which two
+ * lanes of two files mean the same thing — the same answer, and for the same
+ * reason, that `AnnotationStyle.limits` already gives a bigWig.
+ *
+ * It is that same `limits` rather than a field of its own: a reader who types a
+ * ceiling has said what the top of the lane means, and one control saying it for
+ * a signal track and another saying it for a chart would be two names for one
+ * idea. `auto` is what the lane always did, which is why absent is the answer
+ * there.
+ *
+ * Refused where it would divide by nothing — an inverted or degenerate pair is
+ * not an axis — so a half-typed number draws the picture it had rather than a
+ * lane of nothing.
+ */
+export function barLimitsOf(limits: {
+  auto: boolean
+  min: number
+  max: number
+}): { min: number; max: number } | undefined {
+  if (limits.auto) return undefined
+  const { min, max } = limits
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !(max > min)) return undefined
+  return { min, max }
+}
+
+/**
+ * Where a barChart lane's axis **starts from**, before the reader has moved it.
+ *
+ * Zero to the tallest bar anywhere in the file, which is precisely what the lane
+ * was drawing against under the `file` reading — so a ceiling drag that begins
+ * on an autoscaled chart begins on the picture that is on screen, rather than on
+ * a stored `[0, 1]` nobody chose. The typed field seeds from the same number for
+ * the same reason, and this is the one place it is written down.
+ *
+ * `null` where the set carries no bars, or none above zero: an axis from zero to
+ * zero is not an axis, and a factor applied to it stays zero however far the
+ * hand travels.
+ */
+export function barExtentOf(
+  bars: { max: number } | undefined,
+): { min: number; max: number } | null {
+  return bars !== undefined && bars.max > 0 ? { min: 0, max: bars.max } : null
+}
+
+/**
+ * The bar heights a lane draws, or `undefined` where it draws something else.
+ *
+ * Asked by everything that has an *entry* and wants the chart's own axis — both
+ * views' ceiling gestures and the typed field — and it is a function because the
+ * two conditions have to be asked together: a set of features is not necessarily
+ * a chart, and a chart whose payload has not arrived yet has no bars to scale
+ * to. Spelled at three call sites it was the same pair of tests written three
+ * ways, and the way that shape fails is a drag that silently does nothing.
+ */
+export function barsOf(entry: AnnotationEntry): BarChartBars | undefined {
+  if (entry.kind !== 'barchart' || entry.payload?.kind !== 'features') return undefined
+  return entry.payload.data.bars
+}
+
+/**
  * The line under a barChart lane's label: what the top of a bar means.
  *
  * The one thing a reader cannot get from the picture. Every chart on the lane
@@ -111,7 +178,16 @@ export function barChartCaption(
   bars: BarChartBars,
   num: (value: number) => string,
   scale: BarScale = 'file',
+  limits?: { min: number; max: number },
 ): string {
+  // A fixed axis wins over both readings, and says both of its ends: it is the
+  // one the reader typed, and the one under which this lane and the lane of
+  // another file are comparable — so the caption has to carry enough to compare
+  // them by.
+  if (limits !== undefined) {
+    const unit = bars.unit === '' ? '' : ` ${bars.unit}`
+    return `bars from ${num(limits.min)} to ${num(limits.max)}${unit}`
+  }
   // Per feature there is no one number to print, and printing the file's would
   // be a caption for a picture that is not on screen.
   if (scale === 'feature') return 'bars to each feature’s own top'

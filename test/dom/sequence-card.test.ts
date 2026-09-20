@@ -175,3 +175,82 @@ describe('a click on the name', () => {
     })
   })
 })
+
+describe('the circular mark (§8.15)', () => {
+  /** A declaration of the shape the session hands over, with its listeners. */
+  function declared(...names: string[]): {
+    has(name: string): boolean
+    subscribe(listener: () => void): () => void
+    set(name: string, on: boolean): void
+  } {
+    const held = new Set(names)
+    const listeners = new Set<() => void>()
+    return {
+      has: (name) => held.has(name),
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      set: (name, on) => {
+        if (on) held.add(name)
+        else held.delete(name)
+        for (const listener of listeners) listener()
+      },
+    }
+  }
+
+  function withCircular(
+    circular: ReturnType<typeof declared>,
+  ): { el: HTMLElement; circular: ReturnType<typeof declared> } {
+    const el = sequenceCard({
+      contigs: YEAST,
+      selection: new SequenceSelection(),
+      circular,
+      onGoTo: () => {},
+      ...MAP_TICKS,
+    })
+    return { el, circular }
+  }
+
+  it('rides inside the name of a declared sequence, and nowhere else', () => {
+    const { el } = withCircular(declared('II'))
+    mounted(el, () => {
+      const marked = all(el, '.seq-row').map(
+        (row) => row.querySelector('.seq-circular') !== null,
+      )
+      expect(marked).toEqual([false, true, false, false])
+    })
+  })
+
+  it('is absent altogether where nothing was declared', () => {
+    const { el } = withCircular(declared())
+    mounted(el, () => {
+      expect(all(el, '.seq-circular')).toHaveLength(0)
+    })
+  })
+
+  it('says so in the row’s own tooltip', () => {
+    const { el } = withCircular(declared('IV'))
+    mounted(el, () => {
+      expect(all<HTMLButtonElement>(el, '.seq-go')[3].title).toContain('read as a circle')
+      expect(all<HTMLButtonElement>(el, '.seq-go')[0].title).not.toContain('circle')
+    })
+  })
+
+  it('appears when the Chromosomes table declares one', () => {
+    const { el, circular } = withCircular(declared())
+    mounted(el, () => {
+      circular.set('III', true)
+      const marked = all(el, '.seq-row').map((row) => row.querySelector('.seq-circular') !== null)
+      expect(marked).toEqual([false, false, true, false])
+    })
+  })
+
+  it('leaves the card alone once it is off the page', () => {
+    const { el, circular } = withCircular(declared())
+    // Never mounted, so the listener unsubscribes itself the first time it is
+    // spoken to — the same teardown the selection's listener has.
+    expect(() => circular.set('I', true)).not.toThrow()
+    expect(el.querySelector('.seq-circular')).toBeNull()
+  })
+})

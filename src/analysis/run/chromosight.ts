@@ -43,6 +43,7 @@ import {
   type Square,
 } from '../chromosight'
 import { boolParam, numParam, type JobContext, type TaskRunner } from '../job'
+import { loopSpectrum } from '../loopSpectrum'
 import { MAX_SCAN_CELLS, presetFor, scanCellsFor, threshold } from '../tasks/chromosight'
 import type { ChromosightPreset } from '../chromosightPresets'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
@@ -55,6 +56,7 @@ import {
   validBins,
   type Span,
 } from './blocks'
+import { offsetTicks } from './labels'
 
 /** How many rows of a correlation are computed between two chances to cancel. */
 const ROWS_PER_BREATH = 64
@@ -407,10 +409,13 @@ function outputsFor(
     // A diagonal pattern's window is half gaps, so the picture is a triangle
     // until its own transpose is added back — `cmd_detect`'s last step.
     values: Float32Array.from(shape.onDiagonal ? symmetrise(pileup, shape.size) : pileup),
-    xLabel: 'Bins from the centre',
-    yLabel: 'Bins from the centre',
-    xTicks: [],
-    yTicks: [],
+    // Base pairs, not bins: what a reader asks of a pileup is how far from the
+    // anchor a thing lies, and a count of bins answers that only for somebody
+    // holding the resolution in their head (`run/labels.offsetTicks`).
+    xLabel: 'Distance from the centre',
+    yLabel: 'Distance from the centre',
+    xTicks: offsetTicks(shape.size, binsize),
+    yTicks: offsetTicks(shape.size, binsize),
     ...CHROMOSIGHT_SPECTRUM,
     stats: [
       { label: 'patterns', value: calls.length, digits: 0, hint: 'Calls that entered the pileup.' },
@@ -424,6 +429,25 @@ function outputsFor(
   } satisfies MatrixOutput)
 
   outputs.push(spectrumOf(calls, preset))
+  // The same scores against the one axis a loop set has and a histogram throws
+  // away (`analysis/loopSpectrum.ts`). Only off the diagonal, where there is a
+  // separation to plot against: a border's two anchors are one bin apart by
+  // construction, and a scatter over a single x is not a plot.
+  if (!shape.onDiagonal) {
+    const spectrum = loopSpectrum(
+      calls.map((call) => ({
+        separation: Math.abs(call.bin2 - call.bin1) * binsize,
+        score: call.score,
+      })),
+      {
+        id: 'chromosight-loop-spectrum',
+        label: `Loop spectrum · ${label}`,
+        noun: 'calls',
+        yLabel: 'Pearson correlation with the template',
+      },
+    )
+    if (spectrum !== null) outputs.push(spectrum)
+  }
   outputs.push(tableOf(calls, binsize))
   job.note(
     `${calls.length.toLocaleString()} ${label} across ${shape.sequences.toLocaleString()} ` +

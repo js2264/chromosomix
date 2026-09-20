@@ -15,7 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { Breadcrumb, type BreadcrumbProps } from '@/ui/Breadcrumb'
+import { Breadcrumb, resolutionLabel, type BreadcrumbProps } from '@/ui/Breadcrumb'
 import type { ViewState } from '@/types'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -265,17 +265,162 @@ describe('the entry picker', () => {
     expect(built.entries).toEqual(['rep1'])
   })
 
-  it('calls an mcool’s entries resolutions', () => {
-    const { crumb } = build({ entries: ['1000', '5000'], currentEntry: '1000', entryNoun: 'resolution' })
+  it('leaves an mcool’s rungs to the resolution picker', () => {
+    const { crumb } = build({
+      entries: ['1000', '5000'],
+      currentEntry: '1000',
+      entryNoun: 'resolution',
+    })
     crumb.render({ uri: 'f::resolutions/1000', view: 'contigs' })
-    expect((crumb.el.querySelector('select.crumb-select') as HTMLSelectElement).title).toBe(
-      'Resolution to view',
-    )
+    // A rung is the same file drawn more or less finely, so it is not a step of
+    // the trail and does not take a crumb.
+    expect(crumb.el.querySelector('select.crumb-select')).toBeNull()
+    expect(crumb.el.querySelector('.crumb-res')).not.toBeNull()
   })
 
   it('is absent on a plain metacool', () => {
     const { crumb } = build()
     crumb.render({ uri: 'f', view: 'genomes' })
     expect(crumb.el.querySelector('select.crumb-select')).toBeNull()
+  })
+})
+
+describe('the resolution picker', () => {
+  function ladder(over: Partial<BreadcrumbProps> = {}): Built {
+    return build({
+      entries: ['1000', '10000', '50000', '1000000'],
+      currentEntry: '10000',
+      entryNoun: 'resolution',
+      ...over,
+    })
+  }
+
+  const REGION: ViewState = { uri: 'f::resolutions/10000', view: 'region', region: 'I:1000-5000' }
+
+  it('comes after the place, not before it', () => {
+    const { crumb } = ladder()
+    crumb.render(REGION)
+    const res = crumb.el.querySelector('.crumb-res') as HTMLElement
+    expect(res).not.toBeNull()
+    // Every crumb of the trail is before it in document order.
+    for (const node of all(crumb.el, '.crumb')) {
+      expect(res.compareDocumentPosition(node)).toBe(Node.DOCUMENT_POSITION_PRECEDING)
+    }
+  })
+
+  it('writes the rungs in bp, kb and Mb rather than in bins', () => {
+    const { crumb } = ladder()
+    crumb.render(REGION)
+    expect(textsOf(crumb.el, '.res-stop span')).toEqual(['1 kb', '10 kb', '50 kb', '1 Mb'])
+  })
+
+  it('marks the rung that is open, and only it', () => {
+    const { crumb } = ladder()
+    crumb.render(REGION)
+    expect(textsOf(crumb.el, '.res-stop.current span')).toEqual(['10 kb'])
+    const checked = all<HTMLInputElement>(crumb.el, '.res-radio').map((box) => box.checked)
+    expect(checked).toEqual([false, true, false, false])
+  })
+
+  it('opens the rung a stop is clicked on', () => {
+    const built = ladder()
+    built.crumb.render(REGION)
+    const stop = all<HTMLInputElement>(built.crumb.el, '.res-radio')[2]
+    stop.checked = true
+    stop.dispatchEvent(new Event('change'))
+    expect(built.entries).toEqual(['50000'])
+  })
+
+  it('walks the same ladder with the slider, on release rather than per rung', () => {
+    const built = ladder()
+    built.crumb.render(REGION)
+    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
+    expect(slider.min).toBe('0')
+    expect(slider.max).toBe('3')
+    expect(slider.value).toBe('1')
+    slider.value = '3'
+    // Dragging across the ladder must not re-open the file at every rung.
+    slider.dispatchEvent(new Event('input'))
+    expect(built.entries).toEqual([])
+    slider.dispatchEvent(new Event('change'))
+    expect(built.entries).toEqual(['1000000'])
+  })
+
+  it('says nothing about a rung the reader is already on', () => {
+    const built = ladder()
+    built.crumb.render(REGION)
+    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
+    slider.dispatchEvent(new Event('change'))
+    expect(built.entries).toEqual([])
+  })
+
+  it('is absent where there is nothing to pick between', () => {
+    const { crumb } = build({ entries: ['1000'], currentEntry: '1000', entryNoun: 'resolution' })
+    crumb.render(REGION)
+    expect(crumb.el.querySelector('.crumb-res')).toBeNull()
+  })
+
+  it('is absent on a collection of replicates, which is not a ladder', () => {
+    const { crumb } = build({ entries: ['rep1', 'rep2'], currentEntry: 'rep1' })
+    crumb.render({ uri: 'f::entries/rep1', view: 'genomes' })
+    expect(crumb.el.querySelector('.crumb-res')).toBeNull()
+    expect(crumb.el.querySelector('select.crumb-select')).not.toBeNull()
+  })
+
+  it('does not lose itself on a selection or a pair, which return early', () => {
+    const { crumb } = ladder()
+    crumb.render({ uri: 'f::resolutions/10000', view: 'selection', regions: 'I,II' })
+    expect(crumb.el.querySelector('.crumb-res')).not.toBeNull()
+    crumb.render({ uri: 'f::resolutions/10000', view: 'pair', genome: 'a', genome2: 'b' })
+    expect(crumb.el.querySelector('.crumb-res')).not.toBeNull()
+  })
+})
+
+describe('how a rung is written', () => {
+  it('trims the places a round number does not need', () => {
+    expect(resolutionLabel(1)).toBe('1 bp')
+    expect(resolutionLabel(500)).toBe('500 bp')
+    expect(resolutionLabel(1_000)).toBe('1 kb')
+    expect(resolutionLabel(12_500)).toBe('12.5 kb')
+    expect(resolutionLabel(1_000_000)).toBe('1 Mb')
+    expect(resolutionLabel(2_500_000)).toBe('2.5 Mb')
+  })
+
+  it('answers a dash rather than a number for what is not one', () => {
+    expect(resolutionLabel(0)).toBe('—')
+    expect(resolutionLabel(Number.NaN)).toBe('—')
+  })
+})
+
+describe('a ladder with more rungs than fit', () => {
+  /** A 4DN-shaped `.mcool`: eleven rungs, which is six hundred pixels of chips. */
+  const MANY = [
+    '1000', '2000', '5000', '10000', '25000', '50000',
+    '100000', '250000', '500000', '1000000', '2500000',
+  ]
+
+  it('shows the slider and the rung it is on, not eleven chips', () => {
+    const { crumb } = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
+    crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
+    expect(crumb.el.querySelector('.res-slider')).not.toBeNull()
+    expect(textsOf(crumb.el, '.res-stop span')).toEqual(['25 kb'])
+  })
+
+  it('still walks the whole ladder with the slider', () => {
+    const built = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
+    built.crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
+    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
+    expect(slider.max).toBe(String(MANY.length - 1))
+    slider.value = '0'
+    slider.dispatchEvent(new Event('change'))
+    expect(built.entries).toEqual(['1000'])
+  })
+
+  it('names every rung in the slider’s own tooltip, since the chips are gone', () => {
+    const { crumb } = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
+    crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
+    const title = crumb.el.querySelector('.res-slider')?.getAttribute('title') ?? ''
+    expect(title).toContain('1 kb')
+    expect(title).toContain('2.5 Mb')
   })
 })

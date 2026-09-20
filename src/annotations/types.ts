@@ -222,13 +222,23 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
 /**
  * Whether the reader may move this kind's value axis.
  *
- * Everything {@link drawsAProfile} covers except a sequence: GC content is a
+ * Everything {@link drawsAProfile} covers except a sequence — GC content is a
  * fraction pinned to the whole of `[0, 1]` on purpose, so that the same genome
- * looks the same in two views (see {@link defaultStyle}). A ceiling drag, a
- * ⌘-scroll and the autoscale button all ask this.
+ * looks the same in two views (see {@link defaultStyle}) — **and a barChart**,
+ * which draws no profile at all and has an axis anyway.
+ *
+ * The barChart is the one worth saying out loud. §8.17 gave it a fixed pair of
+ * limits for a reason that has nothing to do with how it is drawn: both readings
+ * it had were relative, so two files' lanes side by side were each scaled to
+ * their own tallest bar and the quieter file drew the taller bars. Having given
+ * it an axis, every way of moving an axis has to reach it — a ceiling drag, a
+ * ⌘-scroll, the autoscale button — or the reader is left with a number they can
+ * only type, over a lane that answers a drag with a pan.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
-  return kind === 'track' || kind === 'metadata' || kind === 'alignments'
+  return (
+    kind === 'track' || kind === 'metadata' || kind === 'alignments' || kind === 'barchart'
+  )
 }
 
 /**
@@ -357,6 +367,12 @@ export function readsAlignments(kind: AnnotationKind): boolean {
  * rescaled and may not join a group: it is a column of the open file rather
  * than a measurement, and putting one on a shared axis with a bigWig would be
  * asserting they are in the same units.
+ *
+ * **The ceiling drag is no longer one of these**, and the warning above is why:
+ * the two sets coincided only for as long as nothing else had an axis. A
+ * barChart has one now, so every gesture that *moves* an axis asks
+ * {@link hasAMovableAxis} on both surfaces, and what is left here is the set of
+ * controls a lane gets a **row** for in its settings card.
  */
 export function hasTrackControls(kind: AnnotationKind): boolean {
   return kind === 'track' || kind === 'alignments'

@@ -22,6 +22,7 @@ import {
   fieldFor,
   type FeatureStyle,
 } from '../annotations/fields'
+import { barExtentOf } from '../render/barchart'
 import { featureColouring, rampStops } from '../render/featureInk'
 import {
   COLOUR_BY,
@@ -307,7 +308,13 @@ export function opacityField(store: AnnotationStore, entry: AnnotationEntry): HT
  */
 export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTMLElement {
   const { limits } = entry.style
-  const seed = entry.fileExtent ?? { min: 0, max: 1 }
+  // A barChart has no `fileExtent` — that is filled by the signal readers, and a
+  // chart is a feature set — but it does carry the one number that is the same
+  // fact: the tallest bar anywhere in the file, which is precisely the ceiling
+  // the lane was drawing against before the reader touched this. Seeding from it
+  // means leaving auto starts on the picture that was already on screen, rather
+  // than on `0 to 1` and a lane of full-height bars (§8.17).
+  const seed = entry.fileExtent ?? barExtentOf(setOf(entry)?.bars) ?? { min: 0, max: 1 }
   const min = el('input', {
     class: 'input input-num',
     type: 'number',

@@ -2,11 +2,13 @@
 /**
  * Picking a file out of a connected place, from a box that takes a URL.
  *
- * The dialog behind the four `from a connected place…` buttons. Three things
- * are worth pinning: it lists every place the window is connected to and not
- * only buckets, a pick hands back the `PickedFile` the Files column would and
- * closes the dialog, and with nothing connected it says so and names the Files
- * column's button rather than offering an empty listing.
+ * The dialog the Files column's own places open onto. It used to stand behind
+ * four `from a connected place…` buttons as well; those are gone (see the last
+ * block). Three things are worth pinning: it lists every place the window is
+ * connected to and not only buckets, a pick hands back the `PickedFile` the
+ * Files column would and closes the dialog, and with nothing connected it says
+ * so and names the Files column's button rather than offering an empty
+ * listing.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,8 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectSnapshot, disconnectFolder } from '@/browse/connected'
 import type { PickedFile } from '@/browse/folder'
 import { writeScopes, type BucketScope } from '@/s3/credentials'
-import { folderPickButton, pickFromFolders } from '@/ui/pickFromFolders'
-import { all, buttonNamed, setUpDom, type DomTeardown } from '../support/dom'
+import { pickFromFolders } from '@/ui/pickFromFolders'
+import { all, setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
 const snapshotIds: string[] = []
@@ -119,13 +121,16 @@ describe('with places connected', () => {
   })
 })
 
-describe('the button beside a URL box', () => {
-  it('opens the dialog, whatever is connected', () => {
-    const node = folderPickButton(() => undefined)
-    document.body.appendChild(node)
-    expect(node.textContent).toBe('from a connected place…')
-    node.click()
-    expect(document.querySelector('.pick-body')).not.toBeNull()
-    expect(buttonNamed(document.body, 'from a connected place…')).toBe(node)
+describe('the button that used to sit beside a URL box', () => {
+  it('is gone, and this module exports no way to build one', async () => {
+    // *From a connected place…* stood under every card that asks for a file and
+    // beside the deck's add row — four doors to one room, when browsing a
+    // connected place is the Files column's whole job (§20) and a column is a
+    // better shape for it than a dialog that closes on the first pick. What is
+    // pinned here is the export, because the way this comes back is somebody
+    // reaching for a helper that is still there.
+    const module: Record<string, unknown> = await import('@/ui/pickFromFolders')
+    expect(Object.keys(module)).not.toContain('folderPickButton')
+    expect(module['pickFromFolders']).toBeTypeOf('function')
   })
 })

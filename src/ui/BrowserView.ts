@@ -37,7 +37,7 @@ import {
   nestsAsRibbons,
   stacksAsHeatmaps,
   drawnFromSamples,
-  hasTrackControls,
+  hasAMovableAxis,
   readsOf,
   scaleOf,
 } from '../annotations/types'
@@ -57,7 +57,7 @@ import {
   rowsFor,
   type ReadRung,
 } from '../render/alignments'
-import { barChartCaption } from '../render/barchart'
+import { barChartCaption, barExtentOf, barLimitsOf, barsOf } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
 import { featuresOf } from '../annotations/fields'
 import type {
@@ -286,14 +286,6 @@ export interface BrowserViewProps {
    * *visible*, and a copy on either side is a copy that can disagree.
    */
   selection: SequenceSelection
-  /**
-   * A control the session puts in the bar, after the box.
-   *
-   * The switch back to the contact map this browser is standing in front of.
-   * An element rather than a callback because whether there *is* one is the
-   * session's question — see `Session.mapToggleButton`.
-   */
-  extraControl?: HTMLElement
   /** The window to open at, from the view state. Absent means the whole genome. */
   locus?: string
   /** The view moved; the hash follows. `undefined` is the whole genome. */
@@ -689,11 +681,9 @@ export class BrowserView {
           // once, and after that it is furniture over the placeholder.
           el('div', { class: 'browser-search search-box' }, this.locusInput, searchKey(), this.searchList),
           button('go', () => this.submit()),
-          // The way back to the map, where the map's own way here is: beside the
-          // box, in the bar. Absent when there is no map behind this browser,
-          // which is most of the time — a genome browser opened on a bigWig has
-          // nothing to go back to.
-          ...(props.extraControl === undefined ? [] : [props.extraControl]),
+          // No switch back to the map here: the eye in the Contact maps card is
+          // where a reader says which pictures are drawn, and a second control
+          // for it cost a slot in six title bars.
           iconButton('zoom-out', 'Zoom out (−)', () => this.zoomBy(1 / 1.8)),
           iconButton('zoom-in', 'Zoom in (+)', () => this.zoomBy(1.8)),
           // The same three marks the Tracks card uses, because they are the same
@@ -1297,7 +1287,7 @@ export class BrowserView {
    */
   autoscaleAll(): void {
     for (const entry of this.props.store.entries) {
-      if (!hasTrackControls(entry.kind) || entry.style.limits.auto) continue
+      if (!hasAMovableAxis(entry.kind) || entry.style.limits.auto) continue
       this.props.store.restyle(entry.id, { limits: { ...entry.style.limits, auto: true } })
     }
   }
@@ -2149,7 +2139,7 @@ export class BrowserView {
           // nesting order, and the first member has only the floor under it.
           ...(nested && at > 0 ? { floor: lane.profiles[at - 1].profile } : {}),
         }
-        if (dragged === null || !hasTrackControls(member.kind)) {
+        if (dragged === null || !hasAMovableAxis(member.kind)) {
           drawTrack(ctx, laneFrame, profile, paint)
         }
         else drawTrackScaling(ctx, laneFrame, profile, paint, scaledTo(limits, dragged))
@@ -2232,6 +2222,15 @@ export class BrowserView {
       // settings card's key, so the picture, the legend and the lane's own name
       // cannot disagree about what a colour means.
       const features = featuresOf(entry.style, entry.kind)
+      // A value axis the reader fixed by hand, which a barChart lane reads and
+      // every other feature kind ignores (§8.17) — moved by the factor of a
+      // ceiling drag in progress, exactly as a signal lane's is. Mid-drag an
+      // autoscaled chart has to be given a pair to be scaled *from*, and it is
+      // the one it is already drawn against: zero to the file's tallest bar.
+      const dragged = this.scaling?.id === lane.entry.id ? this.scaling.factor : null
+      const fixed = barLimitsOf(entry.style.limits)
+      const axis = fixed ?? barExtentOf(barsOf(entry)) ?? undefined
+      const barLimits = dragged === null || axis === undefined ? fixed : scaledTo(axis, dragged)
       const ink = featureColouring(set, entry.kind, features.colourBy, entry.style.colour)
       const paint = {
         colour: entry.style.colour,
@@ -2244,6 +2243,7 @@ export class BrowserView {
         labelBand: scaleLength(LABEL_BAND),
         arrows: features.arrows,
         barScale: features.bars,
+        ...(barLimits === undefined ? {} : { barLimits }),
         colourOf: ink.colourOf,
       }
       drawFeatures(ctx, frame, set, layout, paint, entry.kind)
@@ -2268,7 +2268,10 @@ export class BrowserView {
               // without an axis cannot say for itself (§8.17).
               set.bars === undefined
               ? null
-              : { kind: 'text', text: barChartCaption(set.bars, fmt.num, features.bars) },
+              : {
+                  kind: 'text',
+                  text: barChartCaption(set.bars, fmt.num, features.bars, barLimits),
+                },
           at: 'near',
         }
       }
@@ -2371,7 +2374,7 @@ export class BrowserView {
       const owner = entries.find((entry) => entry.id === swatch.id)
       if (owner !== undefined) this.marks.push({ kind: 'swatch', entries: [owner], box: swatch.box })
     }
-    if (boxes.auto !== null && entries.some((entry) => hasTrackControls(entry.kind))) {
+    if (boxes.auto !== null && entries.some((entry) => hasAMovableAxis(entry.kind))) {
       this.marks.push({ kind: 'auto', entries, at: boxes.auto })
     }
   }
@@ -3432,7 +3435,7 @@ export class BrowserView {
     this.schedule()
     if (held === null || held.factor === 1) return
     for (const member of members) {
-      if (!hasTrackControls(member.kind)) continue
+      if (!hasAMovableAxis(member.kind)) continue
       const next = nudgedLimits(member.style.limits, this.extentOf(member.id), held.factor)
       if (next !== null) this.props.store.restyle(member.id, { limits: next })
     }
@@ -3445,19 +3448,29 @@ export class BrowserView {
       const row = lane.profiles.find((profile) => profile.entry.id === id)
       if (row !== undefined) return extentFor(row.entry, row.profile.extent, groups)
     }
-    return null
+    // A barChart has no profile row to take an extent from and is not in any
+    // group — its axis starts at the file's own tallest bar, which is what the
+    // lane was drawn against before anybody touched it (§8.17).
+    const entry = this.props.store.entries.find((each) => each.id === id)
+    return entry === undefined ? null : barExtentOf(barsOf(entry))
   }
 
   private nudgeCeiling(lane: Lane, factor: number): void {
     const groups = this.groupRanges()
     const row = lane.profiles.find((entry) => entry.entry.id === lane.entry.id) ?? lane.profiles[0]
     const target = row?.entry ?? lane.entry
-    if (!hasTrackControls(target.kind)) return
+    if (!hasAMovableAxis(target.kind)) return
     // Through the group, as the drag does. Nudging from the lane's *own* peak
     // while its axis is showing the group's is one notch moving the ceiling by
     // a factor of the wrong number — a lane peaking at 5 in a group drawn to
     // 100 jumps to 6.25 instead of 125.
-    const extent = extentFor(target, row?.profile.extent ?? null, groups)
+    // A barChart has no profile row, so its own axis stands in for one — the
+    // same pair the drag resolves, so a notch and a drag on one lane cannot
+    // start from two different numbers.
+    const extent =
+      row === undefined
+        ? barExtentOf(barsOf(target))
+        : extentFor(target, row.profile.extent, groups)
     const next = nudgedLimits(target.style.limits, extent, factor)
     if (next !== null) this.props.store.restyle(target.id, { limits: next })
   }
@@ -3987,12 +4000,17 @@ const NO_OFFSET = { left: 0, top: 0 }
  */
 function scalableLane(lane: Lane | null): AnnotationEntry[] | null {
   if (lane === null) return null
-  // `profiles` alone, which is now the whole of it: a pile lane has no value
-  // axis at all, and the depth a reader drags the ceiling of is the row beside
-  // it (§8.13).
-  const tracks = lane.profiles
-    .map((row) => row.entry)
-    .filter((entry) => hasTrackControls(entry.kind))
+  // `profiles` **where the lane has them**, and the lane's own entries where it
+  // has none. That second half is the barChart, and it is not a special case so
+  // much as the consequence of §8.17: a chart is a feature set, so it draws no
+  // profile row at all, and it has had a value axis since the day it was given
+  // limits to be drawn against. A pile lane still answers `null` — it has no
+  // value axis of any kind, and the depth a reader drags the ceiling of is the
+  // row beside it (§8.13).
+  const rows = lane.profiles.map((row) => row.entry)
+  const tracks = (rows.length > 0 ? rows : [lane.entry, ...lane.overlaid]).filter((entry) =>
+    hasAMovableAxis(entry.kind),
+  )
   return tracks.length === 0 ? null : tracks
 }
 

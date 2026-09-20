@@ -128,30 +128,11 @@ class PickBody {
   }
 }
 
-/**
- * The button that opens the dialog, next to a box that takes a URL.
- *
- * Always offered, on §8.5's reading that its promise — *find me a file
- * somewhere this window is connected to* — is kept even with nothing
- * connected, by the dialog saying so and naming the button that fixes it. A
- * button that appeared and disappeared as places were connected in another
- * dialog would be a control that moves, which is worse than one that explains
- * itself.
- */
-export function folderPickButton(
-  onPick: (picked: PickedFile) => void,
-  options: { label?: string; class?: string; title?: string } = {},
-): HTMLButtonElement {
-  return button(
-    options.label ?? 'from a connected place…',
-    () => {
-      pickFromFolders({ onPick })
-    },
-    {
-      class: options.class ?? 'btn',
-      title:
-        options.title ??
-        'Pick a file from a folder, bucket, Drive folder or Dropbox this window is connected to, instead of pasting its URL',
-    },
-  )
-}
+// **There is no `folderPickButton` any more.** A button that opened this dialog
+// used to sit under every card that asks for a file and beside the deck's add
+// row — four doors to one room. Browsing a place this window is connected to is
+// the Files column's whole job (§20), and a column you open one file from, look,
+// and open the next from is a better shape for it than a dialog that closes on
+// the first pick. `pickFromFolders` itself stays: it is what a *drag* out of the
+// Files column resolves through, and what the landing page's own places row
+// opens.

@@ -4,7 +4,9 @@
  * Four questions are asked about an `AnnotationKind` across this application —
  * does it draw a profile, may its axis be moved, does it get a track's full
  * controls, and is it filled from the worker's `sample` — and each is asked in
- * a dozen places. Getting one of them wrong is not a visible failure: the lane
+ * a dozen places. They are four questions and not one: a barChart draws no
+ * profile, gets no row of track controls and has a value axis the reader may
+ * drag all the same (§8.17). Getting one of them wrong is not a visible failure: the lane
  * is simply empty, or a control silently does nothing, with no error anywhere.
  *
  * That is exactly how `alignments` shipped broken once. It answered
@@ -81,10 +83,19 @@ describe('what a lane can be controlled with', () => {
     }
   })
 
-  it('moves an axis only on a lane that has one', () => {
+  it('moves an axis only on a lane that has one — a profile, or a chart', () => {
+    // The invariant used to be *a movable axis implies a profile*, and the
+    // barChart is what broke it rather than what slipped through it: §8.17 gave
+    // a lane of glyphs a pair of limits, because both readings it had were
+    // relative and two files' lanes could not be compared by eye. An axis is a
+    // pair of numbers a picture is drawn against; a profile is one way of
+    // drawing against one.
     for (const kind of KINDS) {
       if (!hasAMovableAxis(kind)) continue
-      expect(drawsAProfile(kind), `${kind} has a movable axis and no profile`).toBe(true)
+      expect(
+        drawsAProfile(kind) || kind === 'barchart',
+        `${kind} has a movable axis and nothing drawn against it`,
+      ).toBe(true)
     }
   })
 
@@ -268,18 +279,23 @@ describe('a variant lane', () => {
  * drag around by numbers that are not in the group's units.
  */
 describe('a barChart lane', () => {
-  it('is a feature kind and not a value one', () => {
+  it('is a feature kind that nonetheless has an axis', () => {
     expect(drawsAProfile('barchart')).toBe(false)
-    expect(hasAMovableAxis('barchart')).toBe(false)
-    expect(hasTrackControls('barchart')).toBe(false)
     expect(drawnFromSamples('barchart')).toBe(false)
     expect(isMetadata('barchart')).toBe(false)
+    // §8.17's fixed limits, and every way of moving them: the ceiling drag, the
+    // ⌘-scroll, the autoscale spot. It still gets no *row* of track controls —
+    // no autoscale group, no mode or flip switch — because a chart is not a
+    // measurement in anybody else's units.
+    expect(hasAMovableAxis('barchart')).toBe(true)
+    expect(hasTrackControls('barchart')).toBe(false)
   })
 
-  it('answers every predicate the way a peak set does', () => {
-    for (const ask of [drawsAProfile, hasAMovableAxis, hasTrackControls, drawnFromSamples, isMetadata]) {
+  it('answers every predicate the way a peak set does, its axis apart', () => {
+    for (const ask of [drawsAProfile, hasTrackControls, drawnFromSamples, isMetadata]) {
       expect(ask('barchart'), ask.name).toBe(ask('segments'))
     }
+    expect(hasAMovableAxis('barchart')).not.toBe(hasAMovableAxis('segments'))
   })
 
   it('is a set of intervals, whatever is drawn inside them', () => {
@@ -340,9 +356,11 @@ describe('the kinds that draw no profile at all', () => {
       'classes',
     ] as AnnotationKind[]) {
       expect(drawsAProfile(kind), kind).toBe(false)
-      expect(hasAMovableAxis(kind), kind).toBe(false)
       expect(hasTrackControls(kind), kind).toBe(false)
       expect(drawnFromSamples(kind), kind).toBe(false)
+      // The barChart is the one exception and only to this one question; see
+      // the lane's own block above for what §8.17 gave it and why.
+      if (kind !== 'barchart') expect(hasAMovableAxis(kind), kind).toBe(false)
     }
   })
 })

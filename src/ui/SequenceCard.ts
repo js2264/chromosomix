@@ -48,6 +48,18 @@ export interface SequenceCardProps {
   contigs: readonly SequenceRow[]
   /** The ticks, shared with whoever else reads them (§8.4). */
   selection: SequenceSelection
+  /**
+   * Which of them the reader has declared circular (§8.15), for the mark.
+   *
+   * **Read here and written in the Chromosomes table.** Two surfaces for one
+   * fact, and deliberately not two controls: the table is where the assembly is
+   * laid out row by row and is where the declaring is done, and this list is
+   * where a reader ends up while working — so what it owes them is the answer,
+   * not another box to click. A sequence that joins its own ends is read
+   * differently by the map and by every cis analysis, and until the mark was
+   * here nothing on screen said which ones were.
+   */
+  circular?: { has(name: string): boolean; subscribe(listener: () => void): () => void }
   /** A click on the name — go there, in whatever sense the surface means. */
   onGoTo(name: string): void
   /**
@@ -89,14 +101,36 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
         })
         tick.checked = selection.has(contig.name)
         tick.addEventListener('change', () => selection.toggle(contig.name, tick.checked))
+        // The mark rides **inside the name**, not in a column of its own: a
+        // fourth column on a row this narrow is a column of mostly nothing, and
+        // what a reader is doing here is reading names. `↻` and a title beside
+        // it, because a glyph alone is a puzzle and a word would be as long as
+        // the names it follows.
+        const round = props.circular?.has(contig.name) === true
         const go = el(
           'button',
           {
             class: 'seq-go',
             type: 'button',
-            title: `${contig.name} — ${fmt.int(contig.length)} bp. Click to show the whole sequence.`,
+            title:
+              `${contig.name} — ${fmt.int(contig.length)} bp` +
+              (round ? ', read as a circle (declared in the Chromosomes table)' : '') +
+              '. Click to show the whole sequence.',
           },
-          el('span', { class: 'seq-name', text: contig.name }),
+          el(
+            'span',
+            { class: 'seq-name' },
+            el('span', { text: contig.name }),
+            ...(round
+              ? [
+                  el('span', {
+                    class: 'seq-circular',
+                    text: '↻',
+                    attrs: { 'aria-label': 'circular' },
+                  }),
+                ]
+              : []),
+          ),
           el('span', { class: 'seq-len', text: fmt.bp(contig.length) }),
         )
         go.addEventListener('click', () => props.onGoTo(contig.name))
@@ -164,6 +198,17 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
       off()
       return
     }
+    sync()
+  })
+  // A declaration made in the Chromosomes table has to reach the mark here, and
+  // it is a **repaint** rather than a sync: the ring is drawn into the row's
+  // name and `sync` only moves ticks. Same self-teardown as above.
+  const offRound = props.circular?.subscribe(() => {
+    if (!list.isConnected) {
+      offRound?.()
+      return
+    }
+    paint(filter.value)
     sync()
   })
   sync()

@@ -26,6 +26,7 @@ import { icon, iconButton } from '../ui/icons'
 import { stageDialog } from '../ui/StageDialog'
 import type { Modal } from '../ui/Modal'
 import { matrixFigure, type PlotFigure } from '../ui/analysisPlots'
+import { drawnAsChart } from './matrixOption'
 import { chartFigure, themeOf, type ChartFigure } from './echartsFigure'
 import { figureSettings, type FigureSettings } from './settings'
 import { tableView } from './tableFigure'
@@ -101,7 +102,27 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     // A figure built while the dialog is up takes the dialog's height, not the
     // drawer column's — the reset that rebuilds it must not shrink it.
     const fill = dialog !== null
-    if (built.kind === 'matrix') return matrixFigure(styledMatrix(built, current))
+    if (built.kind === 'matrix') {
+      // The painter takes the *styled* output, because it reads the colours and
+      // the scale off the output it is given; the chart takes the raw one and
+      // reads them off the style, which is what lets a recolour be an update in
+      // place rather than a rebuild (`matrixOption.matrixOptionOf`).
+      const output = drawnAsChart(built.output) ? built.output : styledMatrix(built, current)
+      // A matrix small enough to be one rect per cell is a chart: hoverable, with
+      // a colour bar the reader can clip by, zoomed by the same wheel and the
+      // same marquee as every other figure. Above that the painter draws
+      // (`matrixOption.MATRIX_CHART_CELLS`) — the metaplot's per-feature heatmap
+      // is thousands of rows, and half a million rects is not a picture anybody
+      // can point at.
+      if (!drawnAsChart(output)) return matrixFigure(output)
+      return chartFigure({
+        spec: { ...built, output },
+        // No legend: a heatmap has one series and its key is the colour bar.
+        style: { ...current, legend: 'none' },
+        onStyle: (next) => adopt(next),
+        fill,
+      })
+    }
     if (built.kind === 'table') {
       if (current.plot === null) {
         return tableView(built, current, (key, down) => apply({ sortKey: key, sortDown: down }))
@@ -200,7 +221,15 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
     } else if (spec.kind === 'matrix') {
       const maps = el('select', { class: 'select select-tight' })
       maps.appendChild(el('option', { value: '', text: 'auto' }))
-      for (const name of MATRIX_MAPS) maps.appendChild(el('option', { value: name, text: name }))
+      // The short list, **plus whatever is in force**. A `select` whose value
+      // is not one of its options draws empty, and a task that names its own
+      // colours — a saddle's `RdBu_r`, a pileup's `fall` — put exactly that on
+      // screen: a control that looked broken for the figures most likely to
+      // have been recoloured on purpose.
+      const offered = MATRIX_MAPS.includes(style.colormap ?? '')
+        ? MATRIX_MAPS
+        : [...(style.colormap === null ? [] : [style.colormap]), ...MATRIX_MAPS]
+      for (const name of offered) maps.appendChild(el('option', { value: name, text: name }))
       maps.value = style.colormap ?? ''
       maps.title = 'The colours the values are drawn in'
       maps.addEventListener('change', () => apply({ colormap: maps.value === '' ? null : maps.value }))
@@ -264,16 +293,30 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
       side: column.el,
       memoryKey: () => props.uri,
       scope: SIDE_SCOPE,
-      onResize: () => chart()?.setFill(true),
+      onResize: () => filling(true),
       onClose: () => {
         dialog = null
-        chart()?.setFill(false)
+        filling(false)
         body.replaceChildren(figure.el)
         paintHead()
       },
     })
     // The window decides the height from here until the dialog closes.
-    chart()?.setFill(true)
+    filling(true)
+  }
+
+  /**
+   * The figure takes the dialog's height, or goes back to choosing its own.
+   *
+   * Both renderers answer to this: a chart and a *painted* matrix alike sit in
+   * the top half of the window otherwise, which on the one figure large enough
+   * to still be painted — a heatmap of five thousand features — is the half a
+   * reader opened the dialog to see more of.
+   */
+  function filling(on: boolean): void {
+    chart()?.setFill(on)
+    const held = figure as Partial<PlotFigure>
+    held.setFill?.(on)
   }
 
   function settingsColumn(): FigureSettings {
@@ -321,7 +364,10 @@ function asDrawable(figure: { el: HTMLElement; destroy(): void }): PlotFigure | 
  * instance — and the element the dialog is holding — where it is.
  */
 function sameFigure(spec: FigureSpec, before: FigureStyle, after: FigureStyle): boolean {
-  if (spec.kind === 'matrix') return false
+  // A matrix drawn as a chart takes a recolour and a new scale in place, like
+  // every other chart; one drawn by the painter is rebuilt, which is what the
+  // caller falls back to anyway when `chart()` answers `null`.
+  if (spec.kind === 'matrix') return true
   if (spec.kind === 'table') {
     if (before.plot === null || after.plot === null) return before.plot === after.plot
     return before.plot.x === after.plot.x && before.plot.y === after.plot.y

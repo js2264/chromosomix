@@ -36,6 +36,20 @@ export interface GenomeViewProps {
   binsize: number
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
+  /**
+   * Bins of this map summed into one drawn cell, because the reader asked for a
+   * resolution the file does not store (§3.4).
+   *
+   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
+   * and the effective resolution on screen is this map's bin size times it. The
+   * base rung is the map that is *open* — picking a derived resolution navigates
+   * to it — so every read here is an ordinary one carrying an explicit plan,
+   * and the worker snaps that plan to each sequence's own grid so the cells hold
+   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
+   *
+   * Absent, or 1, is every view of every file until somebody adds one.
+   */
+  binsPerCell?: number
   genome: string
   level: 'bin' | 'contig'
   scale: ScaleState
@@ -260,7 +274,11 @@ export class GenomeView {
       const [lo, hi] = this.extent
       const result: MatrixResult =
         this.level === 'bin'
-          ? await this.props.client.request<'matrix'>({ kind: 'matrix', rows: [lo, hi] })
+          ? await this.props.client.request<'matrix'>({
+              kind: 'matrix',
+              rows: [lo, hi],
+              ...this.pooled(),
+            })
           : await this.props.client.request<'aggregate'>({
               kind: 'aggregate',
               rows: [lo, hi],
@@ -305,10 +323,14 @@ export class GenomeView {
       ceiling: { rows: ceiling, cols: ceiling },
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rows, cols, rung) => {
+      // The grid the reader declared (§3.4), so a zoom cannot quietly read past
+      // the resolution the axis is labelled with.
+      floor: () => this.props.binsPerCell ?? 1,
+      read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
         })
@@ -320,6 +342,18 @@ export class GenomeView {
       },
     })
     this.ladder.adopt(result)
+  }
+
+  /**
+   * `{ binsPerCell }` where the reader declared a resolution, else nothing.
+   *
+   * Absent rather than `1` on the ordinary path: `1` is a plan, and absent is
+   * *choose one* — which is what a genome-wide read has always relied on, since
+   * the side that knows how many contigs are in a genome is the reader.
+   */
+  private pooled(): { binsPerCell?: number } {
+    const k = this.props.binsPerCell ?? 1
+    return k > 1 ? { binsPerCell: k } : {}
   }
 
   private renderSummary(result: MatrixResult): void {

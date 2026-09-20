@@ -15,12 +15,21 @@ per step; send those to the reader (as files, in the chat) and say what each sho
 npm run dev -- --host 127.0.0.1 --port 5173 &
 timeout 60 bash -c 'until curl -sf http://127.0.0.1:5173/ >/dev/null; do sleep 1; done'
 node scripts/ui-gallery.mjs gallery      # writes gallery/01-map.png … 19-compare-models.png
-node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 18-drawer.png
+node scripts/ui-figures.mjs gallery-figures   # the analysis figures: 01-curve.png … 25-metaplot-heatmap-dialog.png
 ```
 
 The second script drives the part the first only passes through: the figures a task returns
 (§18.13) — the slim strip, the settings dialog, every mark, a table filtered and sorted and
-drawn as a chart, a matrix recoloured. Run it after any change to `src/figures/`.
+drawn as a chart, a matrix recoloured, a ⌘-drag over a heatmap and the double click that undoes
+it, and the two figures that carry an aggregate: a pileup with a track profile along each edge
+and a metaplot's per-feature heatmap. Run it after any change to `src/figures/`.
+
+Those last two need a form filled in before the run, which is why they are driven by name rather
+than by position: an APA returns a pileup, a loop spectrum *and* a table, so "the last chart on
+the page" is the scatter and not the picture. And the wait after pressing Run is that **the list
+of figure titles changes** — waiting for a chart to exist returns at once, since the drawer still
+holds the last task's, and waiting for the form to go away never returns at all, the form being a
+slot that is emptied and refilled rather than removed.
 
 Playwright comes from the global install when it is not a dev dependency (`npm root -g`), and
 Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software WebGL
@@ -29,7 +38,7 @@ Chromium from `PLAYWRIGHT_BROWSERS_PATH`; the browser is launched with software 
 ## What it drives
 
 The yeast demo (`?config=…/demo/yeast/Yeast_microC.metacooler.json`), the square map, the
-side panels folded for room, then: the demo structure added by URL through the Tracks card,
+side panels folded for room, then: the demo structure dropped on the Structures card,
 the cell framed on the maps' window, a hover on a bead (the status bar names it) and on the map
 (the chord), colour by the first track, a tracks cell with two tracks placed on it, the Analysis
 panel, the spatial-tracks task run, the reconstruction (*Model from the map*) run and landing
@@ -39,6 +48,8 @@ note or a squashed plot is a bug the tests did not see, and this is where it sho
 ## Gotchas met
 
 - The Annotations panel is folded by default; its buttons are `button[title^="Show the … panel"]`.
-- The Tracks card's URL box adds through the loader, not the session's drop road.
+- No card has a box to paste a URL into any more, so a file gets in by being **dropped**: fetch it
+  in the page, build a `File`, and dispatch `dragenter`/`dragover`/`drop` with a `DataTransfer`.
+  The click road opens the browser's own file picker, which the page cannot answer.
 - The cell's own hover speaks in the status bar and on the maps, not in its corner readout.
 - Vite serves `.gz` with `Content-Encoding: gzip` unless `vite.config.ts`'s dev plugin strips it.

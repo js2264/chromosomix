@@ -235,8 +235,10 @@ try {
   await page.keyboard.press('Escape')
   await sleep(1000)
 
-  // The matrix the same run produced: the old rasteriser, the new dialog.
-  const matrix = page.locator('.figure-block').filter({ has: page.locator('canvas') }).first()
+  // The matrix the same run produced. A heatmap now, not a raster: the cells
+  // are hoverable, the colour bar clips, and the box below drags a window —
+  // which is why it is found by its chart and no longer by a canvas.
+  const matrix = page.locator('.figure-block').filter({ has: page.locator('.figure-chart') }).last()
   if (await matrix.count()) {
     await matrix.scrollIntoViewIfNeeded()
     await sleep(600)
@@ -254,10 +256,158 @@ try {
       await sleep(1500)
       await shot('17-matrix-colormap')
     }
+    // ⌘-drag a box over the picture, which sets both axis windows; then a
+    // double click, which puts them back where the controls last had them.
+    const stage = page.locator('.modal-stage .figure-chart').first()
+    const box = await stage.boundingBox()
+    if (box) {
+      await page.keyboard.down('Meta')
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.62, { steps: 12 })
+      await page.mouse.up()
+      await page.keyboard.up('Meta')
+      await sleep(1800)
+      await shot('17b-matrix-marquee')
+      await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2)
+      await sleep(1800)
+      await shot('17c-matrix-home')
+    }
     await page.keyboard.press('Escape')
     await sleep(1000)
   }
   await shot('18-drawer')
+
+  // ---- the two figures that carry an aggregate --------------------------
+  //
+  // A pileup with a track aggregate along each edge (§18.8), and a metaplot's
+  // per-feature heatmap. Neither is reachable without filling a form in, and
+  // both are where a band drawn to the wrong ruler or a picture squeezed into
+  // a ribbon shows up — which no assertion about the numbers can see.
+  const pick = async (label, wanted) => {
+    const control = page
+      .locator('.analysis-form .field')
+      .filter({ has: page.locator('.field-label', { hasText: new RegExp(`^${label}$`) }) })
+      .first()
+    if ((await control.count()) === 0) return false
+    const select = control.locator('select').first()
+    if (await select.count()) {
+      const options = await select.locator('option').evaluateAll((all) =>
+        all.map((one) => ({ value: one.value, text: one.textContent ?? '' })),
+      )
+      const match = options.find((one) => one.text.includes(wanted) || one.value.includes(wanted))
+      if (match === undefined) return false
+      await select.selectOption(match.value)
+      await sleep(500)
+      return true
+    }
+    // A `multiple` entry parameter is a list of checkboxes, not a select.
+    const row = control.locator('label', { hasText: wanted }).first()
+    if ((await row.count()) === 0) return false
+    await row.locator('input[type="checkbox"]').check()
+    await sleep(500)
+    return true
+  }
+
+  /**
+   * What the drawer is showing, as the list of figure titles.
+   *
+   * The wait after a Run is that this **changes**. Waiting for a chart to exist
+   * returns immediately — the drawer still holds the last task's — and waiting
+   * for the form to go away never returns at all, since the form is a slot that
+   * is emptied and refilled rather than removed.
+   */
+  const shown = () =>
+    page.$$eval('.analysis-figure-head', (all) => all.map((one) => one.textContent).join('|'))
+  const ran = async (label, before) => {
+    await page
+      .waitForFunction(
+        (was) =>
+          [...document.querySelectorAll('.analysis-figure-head')]
+            .map((one) => one.textContent)
+            .join('|') !== was,
+        before,
+        { timeout: 300000 },
+      )
+      .catch(() => console.log('no output for', label))
+    await sleep(4000)
+  }
+
+  await page.keyboard.press('Escape')
+  await sleep(600)
+  await page.locator('text=Aggregate peak analysis').first().click()
+  await sleep(1200)
+  await pick('Anchors', 'loop')
+  await pick('Pairs', 'loops')
+  await pick('Track aggregates', 'ATAC')
+  // The raw pileup, with no shifted controls: the picture is the same figure and
+  // the run is a sixth of the windows, which is the difference between a gallery
+  // that finishes and one that times out.
+  await pick('Normalisation', 'none')
+  const controls = page
+    .locator('.analysis-form .field')
+    .filter({ has: page.locator('.field-label', { hasText: /^Controls per pair$/ }) })
+    .first()
+  if (await controls.count()) {
+    await controls.locator('input[type="number"], input').first().fill('0')
+    await controls.locator('input[type="number"], input').first().press('Enter')
+    await sleep(500)
+  }
+  await shot('19-apa-form')
+  const beforeApa = await shown()
+  await page.locator('button', { hasText: /^run$/i }).first().click()
+  await ran('APA', beforeApa)
+  // **The pileup**, by name: the same run also returns a loop spectrum and a
+  // table of anchors, so the last chart on the page is a scatter of scores.
+  const pileup = page
+    .locator('.figure-block')
+    .filter({ has: page.locator('.analysis-figure-head', { hasText: /APA/ }) })
+    .first()
+  if (await pileup.count()) {
+    await pileup.scrollIntoViewIfNeeded()
+    await sleep(800)
+  }
+  await shot('20-apa-margins')
+  if (await pileup.count()) {
+    await pileup.locator('.figure-enlarge').first().click()
+    await page.waitForSelector('.modal-stage .figure-chart svg', { timeout: 20000 })
+    await sleep(2000)
+    await shot('21-apa-dialog')
+    await page.keyboard.press('Escape')
+    await sleep(1000)
+  }
+
+  await page.keyboard.press('Escape')
+  await sleep(600)
+  await page.locator('text=Metaplot over a feature set').first().click()
+  await sleep(1200)
+  await pick('Features', 'ATAC peaks')
+  await pick('Tracks', 'ATAC')
+  const heatmap = page.locator('.analysis-form .figure-check, .analysis-form label', {
+    hasText: /heatmap/i,
+  }).first()
+  if (await heatmap.count()) await heatmap.locator('input[type="checkbox"]').check()
+  await sleep(500)
+  await shot('22-metaplot-form')
+  const beforeMeta = await shown()
+  await page.locator('button', { hasText: /^run$/i }).first().click()
+  await ran('metaplot', beforeMeta)
+  await shot('23-metaplot')
+  const heat = page
+    .locator('.figure-block')
+    .filter({ has: page.locator('.analysis-figure-head', { hasText: /per feature/ }) })
+    .first()
+  if (await heat.count()) {
+    await heat.scrollIntoViewIfNeeded()
+    await sleep(800)
+    await shot('24-metaplot-heatmap')
+    await heat.locator('.figure-enlarge').first().click()
+    await page.waitForSelector('.modal-stage', { timeout: 20000 })
+    await sleep(2000)
+    await shot('25-metaplot-heatmap-dialog')
+    await page.keyboard.press('Escape')
+    await sleep(800)
+  }
 } catch (e) {
   console.log('FAILED', String(e).slice(0, 800))
   await shot('99-failure')

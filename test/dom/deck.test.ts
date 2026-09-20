@@ -528,30 +528,18 @@ describe('adding a map by URL', () => {
     expect(addRow(deck).classList.contains('hidden')).toBe(true)
   })
 
-  it('is offered on an empty cell too, and fills that cell rather than the first', () => {
-    const { deck, published } = make()
-    // Two empty cells; the URL is typed into the second.
+  it('is the deck’s own row, and nothing is tucked inside a vacancy', () => {
+    const { deck } = make()
     deck.grow('beside')
     deck.grow('beside')
     expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'empty'])
-    const boxes = all<HTMLInputElement>(deck.el, '.deck-vacant-url input[type="url"]')
-    expect(boxes).toHaveLength(2)
-    boxes[1].value = 'https://x.example.org/b.cool'
-    boxes[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'b.cool'])
-    // The vacancy is still published as `~`, in its own place, so the link says
-    // what is on screen.
-    expect(published[published.length - 1]).toBe('~|https://x.example.org/b.cool')
-  })
-
-  it('ignores an empty box rather than opening a panel with no file', () => {
-    const { deck } = make()
-    deck.grow('beside')
-    const box = deck.el.querySelector<HTMLInputElement>('.deck-vacant-url input[type="url"]')
-    if (box === null) throw new Error('the empty cell has no URL box')
-    box.value = '   '
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(cellNames(deck)).toEqual(['lead.cool', 'empty'])
+    // An empty cell used to carry a box of its own, folded away behind *or open
+    // one by URL*, and then a button onto the connected places. Both are gone:
+    // the rectangle's whole message is *drop a file here*, dropping is the
+    // gesture, and clicking it opens the chooser.
+    expect(all(deck.el, '.deck-vacant-url')).toHaveLength(0)
+    expect(all(deck.el, 'details.ann-url')).toHaveLength(0)
+    expect(all(deck.el, '.deck-vacant .btn')).toHaveLength(0)
   })
 })
 

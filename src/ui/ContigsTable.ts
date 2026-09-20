@@ -66,10 +66,25 @@ export interface ContigsTableOptions {
   assembly?: Assembly
   /** The feature index the bar's box searches; see {@link SequenceBarProps.store}. */
   store?: AnnotationStore
-  /** The map/tracks switch, put in the bar beside **go**. */
-  extraControl?: HTMLElement
   /** Show every ticked sequence as one map — see the genomes table's twin. */
   onOpenSelection?(names: string[]): void
+  /**
+   * *This sequence joins its own ends* — a column of tick boxes (§8.15).
+   *
+   * Here rather than on the map's own card, and the move is the point. The
+   * declaration is a fact about **the assembly**: which of these sequences are
+   * plasmids, which is the mitochondrion, which is a bacterial chromosome. A
+   * tickbox beside one open map could only ever say it about the sequence
+   * already on screen, so declaring three of them meant opening three maps — and
+   * there was nowhere at all to *read* which had been declared. The table that
+   * lists every sequence with its length is the one place where the question is
+   * asked about all of them at once.
+   *
+   * Absent where there is no store to write to, which is a metacool: §8.15's
+   * declaration is per file and per sequence name, and a hundred thousand
+   * contigs off four thousand assemblies is not a list anybody declares against.
+   */
+  circular?: CircularColumn
   /**
    * Open the whole file at once — see {@link GenomesTableOptions.onOpenWhole}.
    *
@@ -80,11 +95,21 @@ export interface ContigsTableOptions {
   onOpenWhole?(): void
 }
 
+/** The circular declaration, as the session hands it to a table. */
+export interface CircularColumn {
+  has(name: string): boolean
+  set(name: string, on: boolean): void
+  /** Tell the table when something else changed the set; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void
+}
+
 export class ContigsTable {
   readonly el: HTMLElement
   private readonly table: VirtualTable
   private readonly locus: SearchBox | null
   private readonly bar: SequenceBar | null
+  /** The circular store's listener, dropped with the table. */
+  private readonly unwatch: (() => void) | null
 
   constructor(options: ContigsTableOptions) {
     const payload = options.data.table
@@ -117,6 +142,39 @@ export class ContigsTable {
           typeof value !== 'number' ? '' : name === 'length' ? fmt.int(value) : fmt.num(value),
       }
     })
+
+    // **Last, after every column the file brought.** It is the one column that is
+    // not in the file — a declaration the reader makes, not a number somebody
+    // measured — so it goes where a reader's own additions go rather than
+    // interrupting the run of the file's own fields. Between the name and the
+    // length it also pushed the length, which is the column most often read
+    // beside a name, a control's width to the right.
+    const circular = options.circular
+    if (circular !== undefined) {
+      columns.push({
+        key: 'circular',
+        label: 'circular',
+        kind: 'string',
+        width: '5.5rem',
+        title:
+          'Tick a sequence that joins its own ends — a plasmid, a mitochondrion, a bacterial ' +
+          'chromosome. The map then slides past its end and back on at its beginning, a window ' +
+          'may be typed across the junction, and every cis analysis measures separation the short ' +
+          'way round. Nothing in a .cool can say this, so it is the reader who does.',
+        // A value as well as a box, so the column sorts and the search box
+        // reaches it: on a draft assembly the three declared sequences are three
+        // rows in a hundred thousand.
+        value: (row) => (circular.has(names[row]) ? 'circular' : undefined),
+        toggle: {
+          checked: (row) => circular.has(names[row]),
+          onToggle: (row, on) => circular.set(names[row], on),
+          title: (row) =>
+            circular.has(names[row])
+              ? `${names[row]} is read as a circle. Untick to read it as a line.`
+              : `Read ${names[row]} as a circle: its last bin joins its first.`,
+        },
+      })
+    }
 
     const chooser = options.onOpenSelection
     const show = button('show selected →', () => {
@@ -156,6 +214,10 @@ export class ContigsTable {
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenContig(names[row]),
     })
+    // The same set is drawn in three places — this column, the General panel's
+    // list and the map — so the boxes follow the store rather than their own
+    // clicks: a declaration made on one surface has to show on the other two.
+    this.unwatch = circular === undefined ? null : circular.subscribe(() => this.table.repaint())
     if (chooser !== undefined) {
       this.table.addToolbarItem(none)
       this.table.addToolbarItem(show)
@@ -182,7 +244,6 @@ export class ContigsTable {
       this.bar = new SequenceBar({
         assembly,
         ...(options.store === undefined ? {} : { store: options.store }),
-        ...(options.extraControl === undefined ? {} : { extraControl: options.extraControl }),
         onOpenContig: (name) => options.onOpenContig(name),
         onOpenRegion: (region) => go(region),
         ...(whole === undefined ? {} : { onOpenWhole: whole }),
@@ -272,6 +333,7 @@ export class ContigsTable {
 
   /** Release the table's listeners and flush its pending filter state. */
   destroy(): void {
+    this.unwatch?.()
     this.table.destroy()
     this.bar?.destroy()
   }

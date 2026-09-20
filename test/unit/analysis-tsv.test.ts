@@ -170,6 +170,35 @@ describe('outputToTsv, matrix', () => {
     expect(body(outputToTsv(bare, PROVENANCE))[0]).toEqual(['offset', '0', '1', '2'])
   })
 
+  it('writes the edge profiles as a block of their own under the matrix', () => {
+    // The lines drawn along a pileup's edges were the one thing in the figure
+    // with no numbers behind it. They go *under* the rectangle rather than into
+    // it: contacts and signal are two units, and a spreadsheet reading them as
+    // one block would average them together.
+    const withEdges: MatrixOutput = {
+      ...matrix,
+      margins: {
+        top: [{ name: 'ATAC', values: Float64Array.from([1, 2, 3]) }],
+        right: [{ name: 'ATAC', values: Float64Array.from([4, Number.NaN]) }],
+      },
+    }
+    const text = outputToTsv(withEdges, PROVENANCE)
+    expect(text).toContain('# aggregate profiles along the edges')
+    // Split without trimming: the last row ends in the tab of a gap, and a
+    // trim would take it off and make the assertion below a lie about the file.
+    const lines = text.split('\n')
+    expect(lines).toContain('edge\ttrack\t0\t1\t2')
+    expect(lines).toContain('top\tATAC\t1\t2\t3')
+    // A gap stays a gap, which is what every other number in this writer does.
+    expect(lines).toContain('right\tATAC\t4\t')
+    // …and the matrix above it is untouched.
+    expect(body(text)[0]).toEqual(['offset', '-10 kb', '0', '+10 kb'])
+  })
+
+  it('writes no such block where the pileup has no profiles', () => {
+    expect(outputToTsv(matrix, PROVENANCE)).not.toContain('aggregate profiles')
+  })
+
   it('does not put a positional tick list over the first few columns', () => {
     // A scaled pileup's ticks are *positions* on a continuous axis, drawn evenly
     // spaced across the picture — five of them describing forty-one columns.

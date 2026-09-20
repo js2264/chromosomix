@@ -35,8 +35,10 @@ import {
   type AnnotationContext,
   type CircularPresentation,
   type DerivePresentation,
+  type FramedRegion,
   type TurnPresentation,
 } from './MatrixPanel'
+import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -48,6 +50,20 @@ export interface RegionViewProps {
   binsize: number
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
+  /**
+   * Bins of this map summed into one drawn cell, because the reader asked for a
+   * resolution the file does not store (§3.4).
+   *
+   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
+   * and the effective resolution on screen is this map's bin size times it. The
+   * base rung is the map that is *open* — picking a derived resolution navigates
+   * to it — so every read here is an ordinary one carrying an explicit plan,
+   * and the worker snaps that plan to each sequence's own grid so the cells hold
+   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
+   *
+   * Absent, or 1, is every view of every file until somebody adds one.
+   */
+  binsPerCell?: number
   /**
    * A control the session puts on the title line, after the box.
    *
@@ -141,16 +157,144 @@ export interface RegionViewProps {
   neighbours?: { prev: string | null; next: string | null }
   onStep?(delta: number): void
   /**
-   * *This sequence is circular* (SPECS §8.15) — the reader's declaration, and
-   * the control for it.
+   * *This sequence is circular* (SPECS §8.15) — the reader's declaration.
    *
-   * Absent on a two-contig block, which has no diagonal to slide along, and on a
-   * file the session has no circular store for. When it is present and `on`, the
-   * block is read **wrapped**: the window may run off either end of the sequence
-   * and comes back on at the other, and the ladder's ceiling becomes a cap on the
-   * window's *width* rather than on where it may sit.
+   * The declaration is made in the Chromosomes table, a column of ticks beside
+   * the lengths; this view *reads* it. Absent on a two-contig block, which has
+   * no diagonal to slide along, and on a file the session has no circular store
+   * for. When it is present and `on`, the block is read **wrapped**: the window
+   * may run off either end of the sequence and comes back on at the other, and
+   * the ladder's ceiling becomes a cap on the window's *width* rather than on
+   * where it may sit.
    */
   circular?: CircularPresentation
+}
+
+/**
+ * The four steps the zoom buttons take, in the order they sit on the bar.
+ *
+ * **Widest first, narrowest last**, so the row reads as one ruler rather than as
+ * two pairs of controls: every press moves the window along it in the direction
+ * the button is on, and a reader who wants *a bit* wider reaches for the one
+ * beside the box rather than aiming.
+ *
+ * Three and ten rather than one factor twice. Three is what a genome browser's
+ * zoom button has done since there were genome browsers — a third of the new
+ * window is what you were looking at and a third each side is what it sits in —
+ * and it is the wrong step when the answer is four chromosomes away. Ten gets
+ * there in one press and loses where you were, which is exactly the trade a
+ * reader should be able to make per press rather than per application.
+ */
+export const ZOOM_STEPS: ReadonlyArray<{ factor: number; label: string; out: boolean }> = [
+  { factor: 10, label: '10×', out: true },
+  { factor: 3, label: '3×', out: true },
+  { factor: 1 / 3, label: '3×', out: false },
+  { factor: 1 / 10, label: '10×', out: false },
+]
+
+/**
+ * The window on screen, scaled about its own centre — as a region string.
+ *
+ * `factor` is **how many times wider the window becomes**: above one widens,
+ * below one narrows, and one press of each button is one of {@link ZOOM_STEPS}.
+ * One function for both directions because it is one piece of arithmetic, and
+ * every interesting case is an edge it shares: a window against the end of a
+ * chromosome cannot be centred, a window one press from the whole sequence has
+ * to *become* the whole sequence rather than `chrI:0-230218`, and on a circle
+ * there are no ends to be stopped by at all.
+ *
+ * `null` when the press would change nothing, which is what greys the button: a
+ * window that already covers the sequence has nowhere wider to go, and one
+ * already down to a bin has nowhere finer. `floor` is the bin size where the
+ * caller knows it, because a window narrower than one bin is a window of one bin
+ * drawn with a coordinate nobody can act on.
+ *
+ * **On a circle the window wraps rather than clamping** (§8.15). Zooming out
+ * from a window near the origin of a bacterial chromosome is how a reader gets
+ * to look *across* it, and a clamp would shove the window sideways to fit inside
+ * a boundary the molecule has not got — which is the whole of what the
+ * declaration is for. Past one lap it is the whole sequence, because a window
+ * wider than the circle would draw the same bins twice.
+ */
+export function zoomedRegion(
+  window: FramedRegion,
+  factor: number,
+  options: { circular?: boolean; floor?: number } = {},
+): string | null {
+  const { contig, length } = window
+  // **A window across the origin is measured the long way round the outside.**
+  // It is the one window whose end is below its start, and subtracting them
+  // gives a negative span — which would refuse to widen exactly the view a
+  // reader most wants to widen, since a junction is a place you arrive at by
+  // zooming out (§8.15).
+  const round = options.circular === true
+  const span =
+    window.end > window.start
+      ? window.end - window.start
+      : round
+        ? length - window.start + window.end
+        : Number.NaN
+  if (!(span > 0) || !(length > 0) || !(factor > 0)) return null
+  // Already the whole of it. Only in the widening direction: a whole chromosome
+  // is a perfectly ordinary thing to zoom *into*.
+  if (factor > 1 && span >= length) return null
+  const floor = Math.max(1, Math.round(options.floor ?? 1))
+  const wanted = Math.round(span * factor)
+  if (wanted < floor || wanted === span) return null
+  // A press that would reach past the sequence lands *on* it, and the bare name
+  // is how this application spells the whole of something everywhere else.
+  if (factor > 1 && wanted >= length) return contig
+  // From the window's own start, so a wrapped one is centred on the middle of
+  // what is drawn rather than on the midpoint of two coordinates that run
+  // backwards past each other.
+  const centre = window.start + span / 2
+  let start = Math.round(centre - wanted / 2)
+  let end = start + wanted
+
+  if (round) {
+    const wrap = (at: number): number => ((at % length) + length) % length
+    const from = wrap(start)
+    const to = wrap(end)
+    // The two ends landing on the same base is a lap exactly, which is the whole
+    // sequence and is named as one.
+    return from === to ? contig : `${contig}:${from}-${to}`
+  }
+
+  if (start < 0) {
+    start = 0
+    end = wanted
+  } else if (end > length) {
+    end = length
+    start = length - wanted
+  }
+  return `${contig}:${start}-${end}`
+}
+
+/**
+ * One zoom step, as a button: the mark for the direction and the factor beside it.
+ *
+ * `btn-keyed`'s shape without its key badge — a mark, a word, one baseline —
+ * because four bare magnifiers in a row cannot be told apart and four words
+ * without marks cannot be told from the controls either side of them. Bordered
+ * like `go` next to it: these move the view.
+ */
+function zoomButton(
+  step: { factor: number; label: string; out: boolean },
+  onClick: () => void,
+): HTMLButtonElement {
+  const node = el('button', { class: 'btn btn-keyed btn-zoom', type: 'button' })
+  node.append(
+    icon(step.out ? 'zoom-out' : 'zoom-in', { size: 14 }),
+    el('span', { text: step.label }),
+  )
+  node.addEventListener('click', onClick)
+  return node
+}
+
+/** The whole sequence each axis is a window on, in bins. */
+interface Ceiling {
+  rows: [number, number]
+  cols: [number, number]
 }
 
 export class RegionView {
@@ -169,6 +313,15 @@ export class RegionView {
    */
   readonly panel: MatrixPanel
   private readonly search: SearchBox
+  /**
+   * The four zoom steps, in {@link ZOOM_STEPS} order.
+   *
+   * Built in the constructor rather than in the header, because their state is
+   * written from the draw loop: {@link MatrixPanelOptions.onViewMoved} fires
+   * whenever the window changes and {@link syncZoom} greys whichever of the four
+   * has nowhere to go.
+   */
+  private readonly zooms: HTMLButtonElement[]
   private readonly matched: HTMLElement
   private readonly title: HTMLElement
   private readonly problem: HTMLElement
@@ -215,6 +368,10 @@ export class RegionView {
         ? {}
         : { suggest: (text: string) => featureSuggestions(store, text) }),
     })
+    // Ordinary bordered buttons, like `go` beside them: these move the view, and
+    // a control that moves the view reading as quietly as a label is a control
+    // nobody finds. The mark says which way and the number says how far.
+    this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.stepZoom(step.factor)))
     this.matched = el('span', { class: 'match-kind' })
     this.problem = el('p', { class: 'inline-error hidden' })
 
@@ -234,13 +391,13 @@ export class RegionView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
-      ...(props.circular === undefined ? {} : { circular: props.circular }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,
         onChange: (choice) => props.onScoreChange(choice),
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
+      onViewMoved: () => this.syncZoom(),
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
@@ -289,22 +446,32 @@ export class RegionView {
           // same thing, and a hit list the button could not see would make them
           // disagree about what "go" is.
           button('go', () => this.search.submit()),
+          // **The zoom steps, beside the box, because they write into the box.**
+          // The scroll wheel on the map is a zoom of the *picture* — the same
+          // block, drawn larger or smaller — and past the edge of what was read
+          // it stops. These are the other thing "zoom" means on a genome
+          // browser: a different *range*, re-read, with the region string
+          // updated to say so. They sit here rather than on the map because this
+          // is where the coordinate they change is written.
+          //
+          // **No back button.** It was `window.history.back()` under an arrow,
+          // which is the browser's own back with a second face — the key, the
+          // trackpad gesture and the chrome all already reach it, and a fourth
+          // way to press it cost a slot on the one line every other control here
+          // is about *this* view.
+          //
+          // **One group, so the four wrap together or not at all.** They are a
+          // scale — widest out to widest in, with the window you are on in the
+          // middle — and a bar narrow enough to break the row was breaking it
+          // *between* them, leaving `10×` alone at the end of one line and the
+          // other three on the next. That reads as two controls rather than one
+          // axis, and which three happened to fit said nothing about anything.
+          el('div', { class: 'zoom-steps' }, ...this.zooms),
           // Beside `go`, because it is about the same thing `go` is: the box says
           // where to be and this says *remember this*. A bookmark button in the
           // sidebar would have been a card control, and the hand that has just
           // arrived somewhere worth keeping is up here.
           ...(props.boxControl === undefined ? [] : [props.boxControl]),
-          ...(props.extraControl === undefined ? [] : [props.extraControl]),
-          // Back, beside the box that got you here. Every navigation is a
-          // history entry (§5.5 puts the whole view state in the hash), so this
-          // is the browser's own back — the same button the keyboard and the
-          // trackpad already reach, put where a selection lands you. Selecting
-          // a box now *opens* something, and undoing that should not require
-          // knowing where you were.
-          button('← back', () => window.history.back(), {
-            class: 'btn btn-quiet',
-            title: 'Back to the previous view',
-          }),
         ),
         this.matched,
         this.problem,
@@ -314,6 +481,10 @@ export class RegionView {
 
     this.sideEl = el('aside', { class: 'side' }, ...this.panel.cards)
 
+    // Greyed until there is a picture to scale. The draw loop takes them from
+    // here — {@link MatrixPanelOptions.onViewMoved} fires on the first frame of
+    // the first block, and on every pan and zoom after it.
+    this.syncZoom()
     void this.load()
   }
 
@@ -332,6 +503,54 @@ export class RegionView {
   /** The `/` key: this view's box is the region box, which is also its title. */
   focusSearch(): void {
     this.search.focus()
+  }
+
+  /**
+   * One press of a zoom step: a different range, through the ordinary navigation.
+   *
+   * `onChangeRegion` rather than a read of its own, so the new window is a
+   * history entry and a shareable link like every other place this view goes
+   * (§5.5) — pressing it three times and going back three times is the same
+   * journey in reverse.
+   */
+  private stepZoom(factor: number): void {
+    const target = this.zoomTarget(factor)
+    if (target !== null) this.props.onChangeRegion(target)
+  }
+
+  /**
+   * Where a press would take the view, or `null` when it would take it nowhere.
+   *
+   * Refused off the diagonal for the reason the panel refuses to name one window
+   * there: a `contig × contig` block is a picture of two places, and scaling
+   * "the" range would have to pick one of them.
+   */
+  private zoomTarget(factor: number): string | null {
+    if (this.props.region2 !== undefined) return null
+    const framed = this.panel.framedRegion()
+    if (framed === null) return null
+    return zoomedRegion(framed, factor, {
+      circular: this.props.circular?.on === true,
+      // A window narrower than a bin is a window of one bin under a coordinate
+      // nobody can act on, so the file's own grain is where zooming in stops.
+      floor: this.props.binsize,
+    })
+  }
+
+  /** Grey whichever steps have nowhere to go, and say where the others lead. */
+  private syncZoom(): void {
+    ZOOM_STEPS.forEach((step, at) => {
+      const node = this.zooms[at]
+      if (node === undefined) return
+      const target = this.zoomTarget(step.factor)
+      node.disabled = target === null
+      node.title =
+        target === null
+          ? step.out
+            ? 'The whole sequence is on screen — there is nothing further out to go to'
+            : 'This window is already at the file’s own bin size'
+          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ${target}`
+    })
   }
 
   destroy(): void {
@@ -426,11 +645,16 @@ export class RegionView {
     rows: ParsedRange,
     result: MatrixResult,
     cols: ParsedRange | undefined,
+    known?: Ceiling | null,
   ): Promise<void> {
     this.ladder?.destroy()
     this.ladder = null
     this.armed = { rows, result, ...(cols === undefined ? {} : { cols }) }
-    const ceiling = await this.wholeOf(rows, cols)
+    // `known` is the ceiling the load has already paid for, which it needs
+    // *before* the first read on a circular sequence — a window across the
+    // origin cannot be read without knowing what a lap is. Asking again here
+    // would be a second `range` request for an answer already in hand.
+    const ceiling = known ?? (await this.wholeOf(rows, cols))
     if (this.disposed || ceiling === null) return
     // **The sequence, when the reader has said it joins its own ends** (§8.15).
     // A window on one is read wrapped, and the ceiling that ordinarily stops a
@@ -443,12 +667,18 @@ export class RegionView {
     const wrap =
       cols === undefined && this.props.circular?.on === true ? ceiling.rows : undefined
     const lap = wrap === undefined ? undefined : wrap[1] - wrap[0]
-    const query = (rowExtent: [number, number], colExtent: [number, number], rung?: string) => ({
+    const query = (
+      rowExtent: [number, number],
+      colExtent: [number, number],
+      rung?: string,
+      binsPerCell?: number,
+    ) => ({
       kind: 'matrix' as const,
       ...(rung === undefined ? {} : { rung }),
       rows: rowExtent,
       ...(cols === undefined ? {} : { cols: colExtent }),
       ...(wrap === undefined ? {} : { wrap }),
+      ...(binsPerCell === undefined ? {} : { binsPerCell }),
       balance: this.props.balance,
       ...(this.props.value === undefined ? {} : { value: this.props.value }),
     })
@@ -473,13 +703,18 @@ export class RegionView {
       ...(lap === undefined ? {} : { enabled: () => true }),
       binsize: this.props.binsize,
       rungs: rungsOf(this.props.rungs ?? []),
-      read: (rowExtent, colExtent, rung) => {
-        const own = this.props.client.cancellable<'matrix'>(query(rowExtent, colExtent, rung))
+      // The grid the reader declared (§3.4), so a zoom cannot quietly read past
+      // the resolution the axis is labelled with.
+      floor: () => this.props.binsPerCell ?? 1,
+      read: (rowExtent, colExtent, rung, binsPerCell) => {
+        const own = this.props.client.cancellable<'matrix'>(
+          query(rowExtent, colExtent, rung, binsPerCell),
+        )
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
             const second = await secondBlock(this.props.compare, (client) =>
-              client.request<'matrix'>(query(rowExtent, colExtent, rung)),
+              client.request<'matrix'>(query(rowExtent, colExtent, rung, binsPerCell)),
             )
             return second === undefined ? { result: block } : { result: block, second }
           }),
@@ -501,6 +736,20 @@ export class RegionView {
   }
 
   /**
+   * `{ binsPerCell }` where the reader declared a resolution, else nothing.
+   *
+   * Spread into every `matrix` request this view makes, so the first read and
+   * every refine after it are on one grid. Absent rather than `1` on the
+   * ordinary path, because `1` is a plan and absent is *choose one*: the reader
+   * fits the finest grid the window's cell count allows, which is what a view of
+   * a whole chromosome has always relied on.
+   */
+  private pooled(): { binsPerCell?: number } {
+    const k = this.props.binsPerCell ?? 1
+    return k > 1 ? { binsPerCell: k } : {}
+  }
+
+  /**
    * The bin extent of the whole sequence each axis is a window on.
    *
    * `null` where an axis is not a window on a single sequence — a range that
@@ -508,10 +757,7 @@ export class RegionView {
    * zoom then simply does not read, which is today's behaviour and is never
    * wrong, only less.
    */
-  private async wholeOf(
-    rows: ParsedRange,
-    cols: ParsedRange | undefined,
-  ): Promise<{ rows: [number, number]; cols: [number, number] } | null> {
+  private async wholeOf(rows: ParsedRange, cols: ParsedRange | undefined): Promise<Ceiling | null> {
     const whole = async (range: ParsedRange): Promise<[number, number] | null> => {
       // A genome range is already whole — `metacooler` refuses coordinates on
       // one (§10) — so its own extent is the ceiling and there is nothing to ask.
@@ -533,31 +779,52 @@ export class RegionView {
     return colCeiling === null ? null : { rows: rowCeiling, cols: colCeiling }
   }
 
+  /**
+   * The sequences this view may read as circles, for a `range` request.
+   *
+   * One name and only where it has been declared, because that is all a region
+   * view is about. It is what lets `chr:2,900,000-100,000` mean the window
+   * across the origin rather than a typing mistake — the worker cannot know it
+   * (§8.15), so it is asked with the question.
+   */
+  private circularNames(): readonly string[] | undefined {
+    const declared = this.props.circular
+    return declared?.on === true ? [declared.label] : undefined
+  }
+
   private async load(): Promise<void> {
     if (this.props.region === '') return
     this.panel.setBusy(true)
     this.problem.classList.add('hidden')
     try {
+      const declared = this.circularNames()
       const parsed: ParsedRange = await this.props.client.request<'range'>({
         kind: 'range',
         range: this.props.region,
+        ...(declared === undefined ? {} : { circular: declared }),
       })
       const [lo, hi] = parsed.extent
 
       if (this.props.region2 === undefined) {
-        const result: MatrixResult = await this.props.client.request<'matrix'>({
-          kind: 'matrix',
-          rows: [lo, hi],
+        // **The ceiling before the first read, on a circle.** A window typed
+        // across the origin comes back as an extent that runs off the end of the
+        // sequence, and a read of one is only a read at all if it is told what a
+        // lap is. On a linear sequence nothing is asked here and the ladder pays
+        // for its own ceiling afterwards, as it always did.
+        const ceiling = declared === undefined ? null : await this.wholeOf(parsed, undefined)
+        if (this.disposed) return
+        const wrap = ceiling === null ? undefined : ceiling.rows
+        const ask = {
+          kind: 'matrix' as const,
+          rows: [lo, hi] as [number, number],
+          ...(wrap === undefined ? {} : { wrap }),
+          ...this.pooled(),
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
-        })
+        }
+        const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
         const second = await secondBlock(this.props.compare, (client) =>
-          client.request<'matrix'>({
-            kind: 'matrix',
-            rows: [lo, hi],
-            balance: this.props.balance,
-            ...(this.props.value === undefined ? {} : { value: this.props.value }),
-          }),
+          client.request<'matrix'>(ask),
         )
         if (this.disposed) return
         this.title.textContent = this.props.region
@@ -574,7 +841,7 @@ export class RegionView {
         // block that arrives is a finer block of the bookmark rather than of the
         // fitted chromosome nobody is looking at any more.
         this.applyFocus()
-        await this.armRefine(parsed, result, undefined)
+        await this.armRefine(parsed, result, undefined, ceiling)
         return
       }
 
@@ -583,21 +850,17 @@ export class RegionView {
         range: this.props.region2,
       })
       const [lo2, hi2] = other.extent
-      const result: MatrixResult = await this.props.client.request<'matrix'>({
-        kind: 'matrix',
-        rows: [lo, hi],
-        cols: [lo2, hi2],
+      const pair = {
+        kind: 'matrix' as const,
+        rows: [lo, hi] as [number, number],
+        cols: [lo2, hi2] as [number, number],
+        ...this.pooled(),
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
-      })
+      }
+      const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
       const second = await secondBlock(this.props.compare, (client) =>
-        client.request<'matrix'>({
-          kind: 'matrix',
-          rows: [lo, hi],
-          cols: [lo2, hi2],
-          balance: this.props.balance,
-          ...(this.props.value === undefined ? {} : { value: this.props.value }),
-        }),
+        client.request<'matrix'>(pair),
       )
       if (this.disposed) return
       this.title.textContent = `${this.props.region} × ${this.props.region2}`
@@ -628,6 +891,13 @@ export class RegionView {
         (err.code === 'unknown-label' ||
           err.code === 'genome-coordinate-suffix' ||
           err.code === 'unbinned-not-displayable' ||
+          // A range that will not parse is the same kind of thing as a name
+          // this file has not got: a typing mistake, over an intact box, with
+          // the picture the reader was looking at still on screen. It reached
+          // the full-screen error page instead — which is a long way back from
+          // a missing comma, and further still from `chr:2.9M-100k` on a
+          // sequence nobody has declared circular yet (§8.15).
+          err.code === 'bad-range' ||
           err.code === 'dense-too-large')
       ) {
         this.panel.setBusy(false)

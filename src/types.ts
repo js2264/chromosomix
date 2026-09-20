@@ -429,6 +429,29 @@ export interface ViewState {
    */
   level?: 'bin' | 'contig' | 'genome'
   /**
+   * The effective bin size, in bp, where the reader asked for one the file does
+   * not store (§3.4).
+   *
+   * A `.mcool` carries the rungs whoever ran `cooler zoomify` chose to write,
+   * and a reader who wants a 10 kb picture of a file that stops at 4 kb can have
+   * one for free: a 10 kb bin is a whole number of stored bins added up. This
+   * says which resolution they asked for; `metacooler/coarsen.ts` says which rung
+   * it is summed from and by how much, and the {@link uri} names that rung.
+   *
+   * **Part of the shared view**, for the reason {@link balance} is: a 10 kb map
+   * and a 1 kb map of the same window are different pictures, and a link that
+   * dropped which one you were looking at would send its recipient a blockier or
+   * a finer map with nothing on screen saying so. Which resolutions a reader has
+   * *added to the ladder* is a different question and travels with the tracks
+   * they loaded (`state/resolutions.ts`).
+   *
+   * Absent is the open rung's own bins, which is every view of every file until
+   * somebody presses `+`. A value this file cannot be read at is ignored rather
+   * than refused — a link is a string a stranger can edit, and the answer closest
+   * to what was asked for is the file's own grid.
+   */
+  coarsen?: number
+  /**
    * Multiply counts by their bin weights — cooler's balanced matrix (§6.4).
    *
    * Part of the shared view, not a preference: a balanced map and a raw one are

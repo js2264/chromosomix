@@ -60,7 +60,7 @@ export interface BookmarksCardProps {
    * under it: it is built once per file and the picture changes beneath it on
    * every navigation.
    */
-  framed(): { contig: string; start: number; end: number } | null
+  framed(): { contig: string; start: number; end: number; wrapped?: boolean } | null
   /** The bin size the map is open at, in bp, to save alongside a place. */
   binsize(): number | null
 }
@@ -163,7 +163,20 @@ export class BookmarksCard {
       )
       return
     }
-    this.keep({ ...region, label: '' })
+    // A window across a circular sequence's origin (§8.15) is one place and
+    // cannot be written down as one: a bookmark leaves here as a BED interval,
+    // and a BED interval whose end is below its start is not a BED interval. Said
+    // in those words rather than through the sentence above, which would tell a
+    // reader looking at a single sequence that they are not.
+    if (region.wrapped === true) {
+      this.say(
+        'This window runs across the sequence’s own origin, which a bookmark cannot be written ' +
+          'as — move off the junction, or bookmark the two halves.',
+      )
+      return
+    }
+    const { contig, start, end } = region
+    this.keep({ contig, start, end, label: '' })
   }
 
   /**

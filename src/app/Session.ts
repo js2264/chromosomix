@@ -37,6 +37,9 @@ import type {
 } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { ResolutionStore } from '../state/resolutions'
+import { ladderWith, type DerivedRung, type Rung } from '../metacooler/coarsen'
+import { openResolutionDialog } from '../ui/ResolutionDialog'
 import { ViewerError } from '../errors'
 import {
   COMPANION_KEYS,
@@ -136,7 +139,7 @@ import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
 import type { AnnotationContext, MatrixPanel } from '../ui/MatrixPanel'
-import { ContigsTable } from '../ui/ContigsTable'
+import { ContigsTable, type CircularColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
 import type { ProviderId } from '../ui/connectFronts'
@@ -155,11 +158,11 @@ import { RegionView } from '../ui/RegionView'
 import { BROWSER_TICKS, MAP_TICKS, sequenceCard } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
 import type { TableUiState } from '../ui/VirtualTable'
-import { KEYS, keyedIconButton, withKey, type Command } from '../ui/commands'
+import { KEYS, type Command } from '../ui/commands'
 import { button, el, fmt } from '../ui/dom'
 import { cardTitle, iconButton } from '../ui/icons'
 import { demoAnnotationsToOffer, shelfWasAsked } from '../ui/examples'
-import { contigOf, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
+import { contigOf, fileBaseLabel, fileLabel, neighbour, sourceNote, splitUri } from '../ui/labels'
 import { logAction } from '../state/actions'
 import {
   MAP_NAMES_SCOPE,
@@ -828,13 +831,6 @@ export class Session {
   private trackCard: AnnotationCard | null = null
   /** The Structures card (§25), rebuilt with the Tracks card it sits under. */
   private structureCard: StructureCard | null = null
-  /**
-   * The map/tracks button as it stands on screen, so it can be swapped in place.
-   *
-   * Held because one of the cycle's three steps rebuilds no view, and a control
-   * that is not rebuilt keeps the face it was given.
-   */
-  private mapSwitch: HTMLElement | null = null
   private browser: BrowserView | null = null
   /** Which sequences are on the browser's axis; see {@link selectionFor}. */
   private sequences: SequenceSelection | null = null
@@ -2301,6 +2297,15 @@ export class Session {
             source,
             this.carryAcrossEntries(`${splitUri(uri).path}::${info.entryGroup || 'entries'}/${entry}`),
           ),
+        // The reader's own rungs, merged into the file's in bin-size order
+        // (§3.4). Given even where the file has none to merge with: a plain
+        // `.cool` has one resolution and the `+` beside it is the whole feature.
+        ladder: () => this.ladderRungs(),
+        coarsen: () => this.store.state?.coarsen,
+        onSelectRung: (entry) => this.openStoredRung(entry),
+        onSelectDerived: (binsize) => this.openDerived(binsize),
+        onAddResolution: () => this.askResolution(),
+        onDropResolution: (binsize) => this.dropResolution(binsize),
       })
       this.infoPanel = new InfoPanel({
         info,
@@ -3024,10 +3029,15 @@ export class Session {
     // left behind would navigate a session that has since opened something else.
     this.sequenceListener?.()
     this.sequenceListener = selection.subscribe(() => this.sequencesChosen())
+    const circular = this.circularColumn()
     panel.setSequences(
       sequenceCard({
         contigs: assembly.contigs,
         selection,
+        // Read-only here: the declaring is done in the Chromosomes table, and
+        // what this list owes a reader at work is the answer rather than a
+        // second place to click (§8.15).
+        ...(circular === null ? {} : { circular }),
         // The same destination a click on a row of the Chromosomes table
         // reaches, because it is the same act: show me that chromosome.
         onGoTo: (name) => this.navigate({ uri: file.uri, view: 'region', region: name }),
@@ -3110,14 +3120,12 @@ export class Session {
     const assembly = this.assembly
     const held = this.annotations
     if (assembly === null || held === null) return
-    const toggle = this.mapToggleButton()
     const view = new BrowserView({
       assembly,
       store: held.store,
       client: held.client,
       selection: this.selectionFor(assembly),
       ...(state.locus === undefined ? {} : { locus: state.locus }),
-      ...(toggle === undefined ? {} : { extraControl: toggle }),
       onLocusChange: (locus) => this.store.patch({ locus }, { replace: true }),
       // The deck's cells follow this view when it is their lead (§25 stage D);
       // by every road the window moves, a link included, which is why it is
@@ -3769,7 +3777,6 @@ export class Session {
       this.mapOnly = false
       this.current?.panel?.showLanes(true)
       this.trackCard?.setMapOnly(false)
-      this.refreshMapToggle()
       this.host.sessionChanged(this)
       return
     }
@@ -3843,69 +3850,17 @@ export class Session {
   }
 
   /**
-   * The control that swaps the map for the tracks, and back.
+   * **There is no map/tracks switch on the bars any more.**
    *
-   * Built here rather than in the six views that show it, because what it says
-   * depends on which of the two is on screen and only the session knows that.
-   * `undefined` where the swap is impossible — a browser with no map behind it,
-   * a metacool, a file whose contigs have not been read — so a view that gets
-   * nothing draws nothing rather than a button that does nothing.
+   * It was a button in six title bars whose face changed with the cycle's three
+   * stops, and the eye in the Contact maps card already says the same thing in
+   * the place a reader decides what is drawn: tick it and the map goes, untick
+   * it and it comes back. Two controls for one act cost a slot on every bar in
+   * the application and a second vocabulary for the state they shared.
    *
-   * The same act as the eye in the Contact maps card, and deliberately two
-   * controls: the card is where a reader decides *what is drawn*, and this is
-   * where their hand already is when they decide they would rather be reading
-   * the other picture.
+   * {@link cycleView} stays — the key still walks all three stops, and the
+   * command list still lists it — because a key costs no room.
    */
-  private mapToggleButton(): HTMLElement | undefined {
-    const node = this.buildMapToggle()
-    this.mapSwitch = node ?? null
-    return node
-  }
-
-  /**
-   * Put the button's *current* face on screen, without rebuilding the view.
-   *
-   * Two of the cycle's three steps mount another view and get a fresh button
-   * with it; the third — putting the tracks back beside the map — changes
-   * nothing but this panel's furniture, so nothing would have rebuilt the
-   * control that had just been pressed. It read `map + tracks` while showing
-   * exactly that, which is a button describing the state it is in rather than
-   * the one it offers, and only on one of the three steps.
-   */
-  private refreshMapToggle(): void {
-    const held = this.mapSwitch
-    if (held === null || !held.isConnected) return
-    const next = this.buildMapToggle()
-    if (next === undefined) return
-    held.replaceWith(next)
-    this.mapSwitch = next
-  }
-
-  private buildMapToggle(): HTMLElement | undefined {
-    // What the button offers is the **next** stop of the cycle, not the one on
-    // screen: it is a control rather than a status light, and a reader reads it
-    // to find out what pressing it will do. Three stops, three faces.
-    if (this.canShowMap) {
-      return keyedIconButton('grid-2x2', 'map only', KEYS.mapToggle, () => this.cycleView(), {
-        title: withKey(
-          'Back to the contact map on its own — it was never unloaded, and neither were the tracks',
-          KEYS.mapToggle,
-        ),
-      })
-    }
-    if (!this.canHideMap) return undefined
-    if (this.mapOnly) {
-      return keyedIconButton('layers', 'map + tracks', KEYS.mapToggle, () => this.cycleView(), {
-        title: withKey('Put the tracks back beside the map', KEYS.mapToggle),
-      })
-    }
-    return keyedIconButton('chart-line', 'tracks', KEYS.mapToggle, () => this.cycleView(), {
-      title: withKey(
-        'Read this genome as tracks. The map stays open — the same key comes back to it',
-        KEYS.mapToggle,
-      ),
-    })
-  }
 
   /**
    * The Contact maps card, for either shape of session.
@@ -4643,13 +4598,246 @@ export class Session {
   }
 
   /**
-   * The *this sequence is circular* control, for a view that is a window on one.
+   * Resolutions the reader has added to this file's ladder (§3.4).
+   *
+   * Held and keyed exactly as the circular declarations above are, and for the
+   * same reason: it is a fact about the *file* rather than about the rung that
+   * happens to be open, so a reader who adds 10 kb while looking at the 2 kb
+   * level still has it after stepping to 1 kb.
+   */
+  private resolutionsHeld: { key: string; store: ResolutionStore } | null = null
+
+  private resolutionStore(): ResolutionStore | null {
+    const key = this.sessionKey()
+    if (key === null) return null
+    if (this.resolutionsHeld?.key !== key) {
+      this.resolutionsHeld = { key, store: new ResolutionStore(key) }
+    }
+    return this.resolutionsHeld.store
+  }
+
+  /**
+   * The ladder as the picker draws it: the file's rungs and the reader's own.
+   *
+   * One list in bin-size order, each of the added ones carrying the arithmetic
+   * that reaches it. Empty for a file with no ladder at all, which is every
+   * plain `.cool` — and there the `+` is still offered, because a `.cool` has
+   * exactly one rung and a whole number of its bins is as reachable as ever.
+   */
+  private ladderRungs(): Array<Rung & { derived?: DerivedRung }> {
+    const rungs = rungsOf(this.file?.info.entries ?? [])
+    // A plain `.cool` has no entries and one resolution: its own. The `+` is
+    // offered there too — one rung is still a rung, and a whole number of its
+    // bins is as reachable as a whole number of any other's.
+    const binsize = this.file?.info.binsize ?? 0
+    const own =
+      rungs.length > 0 ? rungs : binsize > 0 ? [{ name: String(binsize), binsize }] : []
+    return ladderWith(own, this.resolutionStore()?.list() ?? [])
+  }
+
+  /**
+   * The resolution the reader is looking at, where it is one they added.
+   *
+   * `null` on every ordinary view — the open rung's own bins — and on a state
+   * whose `coarsen` this file cannot reach, which is what a link from somebody
+   * with a different `.mcool` produces. Falling back to the file's own grid
+   * rather than refusing is the rule every unreadable value in the hash follows.
+   */
+  private derivedRung(state: ViewState): DerivedRung | null {
+    const asked = state.coarsen
+    const binsize = this.file?.info.binsize ?? 0
+    if (asked === undefined || !(binsize > 0) || asked <= binsize) return null
+    if (asked % binsize !== 0) return null
+    return { binsize: asked, from: { name: String(binsize), binsize }, factor: asked / binsize }
+  }
+
+  /**
+   * `{ binsPerCell }` for a view of a declared resolution, else nothing.
+   *
+   * The factor rather than the bin size, because that is what a `matrix` request
+   * takes and what the views hand to their ladders. Spread into every map view's
+   * props so that one answer reaches the first read, the refine and the summary.
+   */
+  private pooledProps(state: ViewState): { binsPerCell?: number } {
+    const derived = this.derivedRung(state)
+    return derived === null ? {} : { binsPerCell: derived.factor }
+  }
+
+  /**
+   * Stand on a resolution the reader added (§3.4).
+   *
+   * Two halves, and which of them runs depends on where the base rung is. A
+   * derived rung is a whole number of some *stored* rung's bins, and the read
+   * that produces it is an ordinary read of that rung with a plan on it — so
+   * the file has to be open at it. Where it already is, this is a patch to the
+   * hash and nothing is re-read that was not going to be; where it is not, the
+   * file is re-opened at the base and the resolution rides along.
+   *
+   * A patch rather than a navigation, and not `replace`, for the reason the
+   * level toggle is the same: stepping through resolutions is looking at one
+   * thing several ways, and the back button should walk back through them.
+   */
+  private openDerived(binsize: number): void {
+    const state = this.store.state
+    if (state === null) return
+    const rung = this.ladderRungs().find((each) => each.binsize === binsize)
+    const derived = rung?.derived
+    if (derived === undefined) return
+    const open = this.file?.info.binsize ?? 0
+    if (open === derived.from.binsize) {
+      this.store.patch({ coarsen: binsize })
+      return
+    }
+    const uri = this.file?.uri
+    const source = this.file?.source
+    if (uri === undefined || source === undefined) return
+    const group = this.file?.info.entryGroup || 'entries'
+    const next = `${splitUri(uri).path}::${group}/${derived.from.name}`
+    const carried = this.carryAcrossEntries(next)
+    void this.open(
+      next,
+      source,
+      carried === undefined ? undefined : { ...carried, coarsen: binsize },
+    )
+  }
+
+  /**
+   * Stand on a rung the **file** carries.
+   *
+   * Two things have to happen and the second is the one that is easy to miss:
+   * open the entry, *and* stop coarsening. A reader stepping from a derived
+   * 3 kb to the file's own 2 kb has asked for 2 kb, and carrying the old
+   * `coarsen` across would give them 6 kb under a stop marked 2 kb.
+   *
+   * On a plain `.cool` there is no entry to open — one rung, no `/resolutions`
+   * group — so clearing it is the whole of the move, and trying to open
+   * `file.cool::entries/1000` would be a read of something that does not exist.
+   * The same shortcut serves the rung that is already open on a laddered file,
+   * where re-opening it would be a needless round trip through the worker.
+   */
+  private openStoredRung(entry: string): void {
+    const state = this.store.state
+    if (state === null) return
+    const uri = this.file?.uri
+    const source = this.file?.source
+    const entries = this.file?.info.entries ?? []
+    if (uri === undefined || source === undefined) return
+    // `/entries/rep1` in an mmetacool, `/resolutions/1000` in an mcool — the
+    // same read the bar's own `currentEntry` is made with.
+    const open = /^\/(?:entries|resolutions)\/(.+)$/.exec(splitUri(uri).group)?.[1]
+    if (!entries.includes(entry) || entry === open) {
+      if (state.coarsen !== undefined) this.store.patch({ coarsen: undefined })
+      return
+    }
+    const next = `${splitUri(uri).path}::${this.file?.info.entryGroup || 'entries'}/${entry}`
+    const carried = this.carryAcrossEntries(next)
+    void this.open(
+      next,
+      source,
+      carried === undefined ? undefined : { ...carried, coarsen: undefined },
+    )
+  }
+
+  /** The `+`: ask for a resolution, add it, and stand on it. */
+  private askResolution(): void {
+    const store = this.resolutionStore()
+    if (store === null) return
+    const rungs = this.ladderRungs()
+      .filter((rung) => rung.derived === undefined)
+      .map(({ name, binsize }) => ({ name, binsize }))
+    if (rungs.length === 0) return
+    openResolutionDialog({
+      rungs,
+      declared: store.list(),
+      // The file's own name, without the rung it happens to be open at: the
+      // ladder belongs to the file, and `Ecoli.mcool::500 carries 500 bp, 1 kb,
+      // …` reads as though the *entry* carried eight resolutions.
+      fileLabel: this.file === null ? 'This file' : fileBaseLabel(this.file.uri),
+      onConfirm: (derived) => {
+        if (!store.add(derived.binsize)) return
+        // Opened on it, because adding a resolution nobody is looking at is a
+        // gesture with no visible result — and *look at this map at 10 kb* is
+        // what the reader pressed `+` to do. The bar redraws as part of standing
+        // on it, so the new stop appears with the picture rather than before it.
+        this.openDerived(derived.binsize)
+      },
+    })
+  }
+
+  /**
+   * Take a resolution back off the ladder.
+   *
+   * Standing on the one being removed is the case worth handling: the picture
+   * has to come back to something, and the honest answer is the rung the file
+   * *does* store — which is the one that is open, so dropping `coarsen` is the
+   * whole of it.
+   */
+  private dropResolution(binsize: number): void {
+    const store = this.resolutionStore()
+    if (store === null) return
+    store.remove(binsize)
+    // Standing on the one being removed: the picture has to come back to
+    // something, and the honest answer is the rung the file *does* store —
+    // which is the one that is open, so dropping `coarsen` is the whole of it.
+    // Otherwise only the bar changes, and redrawing it is cheaper than a
+    // navigation that would re-read a block nobody asked to move.
+    if (this.store.state?.coarsen === binsize) this.store.patch({ coarsen: undefined })
+    else this.breadcrumb?.render(this.store.state)
+  }
+
+  /**
+   * The declaration as the Chromosomes table takes it: read, write, watch.
+   *
+   * `null` before there is a file, which is the one state the table cannot be
+   * mounted in anyway. The write goes through the session rather than straight
+   * to the store so that a map already on screen adopts it — see
+   * {@link adoptCircular} — and the watch is the store's own, because the same
+   * fact is drawn in three places and none of them is the authority.
+   */
+  private circularColumn(): CircularColumn | null {
+    const store = this.circularStore()
+    if (store === null) return null
+    return {
+      has: (name) => store.has(name),
+      set: (name, on) => {
+        store.set(name, on)
+        this.adoptCircular(name, on)
+      },
+      subscribe: (listener) => store.subscribe(listener),
+    }
+  }
+
+  /**
+   * Let a map already on screen adopt a declaration made somewhere else.
+   *
+   * **Not a remount.** The declaration changes how the block is *read* — wrapped
+   * or not, with a ceiling or a lap — so the ladder has to be built again; but a
+   * remount would rebuild the view from its named region and throw away the
+   * reader's zoom. The view re-arms its ladder against the block already on
+   * screen instead.
+   *
+   * Guarded on the mounted view being a window on **this** sequence, because the
+   * declaration is now made from a table that lists every one of them: telling a
+   * region view of chrIV that chrI is circular would re-arm it with a wrap it
+   * has no business having.
+   */
+  private adoptCircular(name: string, on: boolean): void {
+    const state = this.store.state
+    if (state === null || state.view !== 'region' || state.region === undefined) return
+    if (state.region2 !== undefined) return
+    const names = this.contigNames()
+    if (names === null || contigOf(state.region, names) !== name) return
+    this.current?.setCircular?.(on)
+  }
+
+  /**
+   * The circular declaration for a view that is a window on one sequence.
    *
    * `undefined` on every other view, and each exclusion is a question the
-   * tickbox could not answer honestly: a two-contig block has no diagonal to
-   * slide along, a whole-genome picture is a list of sequences of which some may
-   * be circular and some not, and a name that is not a sequence of this file is
-   * a genome or a typo (SPECS §8.15).
+   * declaration could not answer honestly here: a two-contig block has no
+   * diagonal to slide along, a whole-genome picture is a list of sequences of
+   * which some may be circular and some not, and a name that is not a sequence
+   * of this file is a genome or a typo (SPECS §8.15).
    */
   private circularPresentation(state: ViewState): CircularPresentation | undefined {
     if (state.view !== 'region' || state.region === undefined || state.region2 !== undefined) {
@@ -4670,13 +4858,7 @@ export class Session {
       on: store.has(name),
       onChange: (on) => {
         store.set(name, on)
-        // **Not a remount.** The declaration changes how the block is *read* —
-        // wrapped or not, with a ceiling or a lap — so the ladder has to be
-        // built again; but a remount would rebuild the view from its named
-        // region and throw away the reader's zoom, which is the one thing they
-        // had to do to get somewhere worth asking the question from. The view
-        // re-arms its ladder against the block already on screen instead.
-        this.current?.setCircular?.(on)
+        this.adoptCircular(name, on)
       },
     }
   }
@@ -5619,7 +5801,7 @@ export class Session {
   /**
    * *Bookmark this view*, on the title line beside `go`.
    *
-   * Built here rather than in the view for the reason {@link mapToggleButton} is:
+   * Built here rather than in the view for the reason the Sequences card is:
    * what it saves is the window the panel is showing and where it saves it is a
    * store the session owns, and neither is something a view mounted for one region
    * knows about.
@@ -6644,7 +6826,6 @@ export class Session {
     // metacool, where the same strip is a hundred thousand sub-pixel bands with
     // no name in any of them — see `ContigsTableOptions.assembly`.
     const assembly = cooler ? this.assemblyOfFile(file) : null
-    const toggle = assembly === null ? undefined : this.mapToggleButton()
     const view = new ContigsTable({
       data,
       hideColumns: cooler ? ['genome_id'] : [],
@@ -6654,7 +6835,14 @@ export class Session {
         : undefined,
       ...(assembly === null ? {} : { assembly }),
       ...(this.annotations === null ? {} : { store: this.annotations.store }),
-      ...(toggle === undefined ? {} : { extraControl: toggle }),
+      // *This sequence is circular* (§8.15), as a column of ticks beside the
+      // lengths. On a cooler alone, which is what {@link circularColumn} says
+      // and why: a metacool's contig list is a hundred thousand pieces of four
+      // thousand assemblies, and a declaration is made about a molecule somebody
+      // knows the shape of.
+      ...(cooler && this.circularColumn() !== null
+        ? { circular: this.circularColumn() as CircularColumn }
+        : {}),
       persistence: this.tableMemory(state.uri, 'contigs'),
       onOpenContig: (contig) =>
         this.navigate({ uri: state.uri, view: 'region', region: contig, genome: state.genome }),
@@ -6690,13 +6878,15 @@ export class Session {
     const picker = this.isMetacool
     this.mountWholeFile(
       state,
-      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}`,
+      // The declared resolution is in the key for the reason `balance` is: the
+      // block a whole-file view holds *is* the picture, and a reader stepping
+      // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
+      // one under a bar that says 3 kb (§3.4).
+      `whole|${state.uri}|${this.compareKey()}|${level}|${String(balance)}|${state.coarsen ?? 0}`,
       () => {
-        const mapSwitch = this.mapToggleButton()
         return new WholeView({
           client: this.clientOf(),
           caption: this.captionFor(state),
-          ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
           ...(picker
             ? {
                 wholeFileLevel: {
@@ -6715,6 +6905,7 @@ export class Session {
             : {}),
           binsize: file.info.binsize ?? 1,
           rungs: file.info.entries,
+          ...this.pooledProps(state),
           // The gate's other way out: the same picture from a coarser rung of
           // the same file, through the breadcrumb's own switch.
           onOpenRung: (entry: string) => {
@@ -6794,13 +6985,12 @@ export class Session {
     }
     const bins = this.binsOfSelection(selection)
     const contigs = this.contigsOfSelection(selection)
-    const mapSwitch = this.mapToggleButton()
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
+      ...this.pooledProps(state),
       nBins: file.info.nBins,
       nContigs: file.info.nContigs,
       displayExtent: file.info.displayExtent,
@@ -6914,6 +7104,7 @@ export class Session {
       caption: this.captionFor(state),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
+      ...this.pooledProps(state),
       genome: state.genome,
       balance: this.balanceOf(state),
       value: this.valueOf(state),
@@ -6946,14 +7137,13 @@ export class Session {
       this.navigate({ uri: state.uri, view: 'genomes' }, { replace: true })
       return
     }
-    const mapSwitch = this.mapToggleButton()
     const view = new PairView({
       client: this.clientOf(),
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
+      ...this.pooledProps(state),
       genomeNames: file.displayNames,
       balance: this.balanceOf(state),
       value: this.valueOf(state),
@@ -6991,15 +7181,14 @@ export class Session {
     // nothing afterwards.
     if (this.file?.contigs == null) await this.contigs().catch(() => null)
     if (this.destroyed || this.store.state !== state) return
-    const mapSwitch = this.mapToggleButton()
     const keep = this.bookmarkButton()
     const view = new RegionView({
       client: this.clientOf(),
       caption: this.captionFor(state),
-      ...(mapSwitch === undefined ? {} : { extraControl: mapSwitch }),
       ...(keep === undefined ? {} : { boxControl: keep }),
       binsize: this.file?.info.binsize ?? 1,
       rungs: this.file?.info.entries,
+      ...this.pooledProps(state),
       region: state.region,
       noun: this.file?.info.hasGenomes === false ? 'chromosome' : 'contig',
       ...(this.annotationContext() === undefined ? {} : { annotations: this.annotationContext() }),

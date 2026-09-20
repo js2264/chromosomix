@@ -54,6 +54,7 @@ const KEY_ORDER = [
   'cells',
   'locus',
   'level',
+  'coarsen',
   'transform',
   'colormap',
   'vmin',
@@ -80,6 +81,7 @@ const OPTIONAL_KEYS = [
   'cells',
   'locus',
   'level',
+  'coarsen',
   'transform',
   'colormap',
   'vmin',
@@ -203,6 +205,19 @@ export function parseViewState(hash: string): ViewState | null {
   const level = raw.get('level')
   if (level !== undefined && (LEVELS as readonly string[]).includes(level)) {
     state.level = level as 'bin' | 'contig'
+  }
+
+  // The resolution the reader **added**, in base pairs (§3.4). Believed only as
+  // a positive whole number, and never re-derived here: whether this file can
+  // actually be read at it is a question about the ladder that is open, which
+  // this parser has not got and which `metacooler/coarsen.ts` answers where it
+  // does. A link naming one the recipient's file cannot reach falls back to that
+  // file's own grid, which is the behaviour every unreachable value in this hash
+  // already has.
+  const coarsen = raw.get('coarsen')
+  if (coarsen !== undefined && coarsen !== '') {
+    const parsed = Number(coarsen)
+    if (Number.isInteger(parsed) && parsed > 0) state.coarsen = parsed
   }
 
   const transform = raw.get('transform')

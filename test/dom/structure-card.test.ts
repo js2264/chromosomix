@@ -168,13 +168,14 @@ describe('the Structures card', () => {
     expect(added).toEqual(['model.g3d'])
   })
 
-  it('loads by URL through the loader', () => {
-    const { card, added } = make()
-    const url = card.el.querySelector<HTMLInputElement>('details.ann-url input')
-    if (url === null) throw new Error('no url box')
-    url.value = 'https://x.org/model.3dg'
-    url.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(added).toEqual(['https://x.org/model.3dg'])
-    expect(url.value).toBe('')
+  it('offers no box to paste a URL into, here or on any other card', () => {
+    // The card is the target and nothing under it (§5.11): a remote structure
+    // arrives by the address bar, by a session or by the Files column, and a
+    // text box under the drop zone was a third way of saying *open something*
+    // on a card that already says it twice.
+    const { card } = make()
+    expect(card.el.querySelector('details.ann-url')).toBeNull()
+    expect(card.el.querySelector('input[type="url"]')).toBeNull()
+    expect(card.el.textContent).not.toContain('by URL')
   })
 })

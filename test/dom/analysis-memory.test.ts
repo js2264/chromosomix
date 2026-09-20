@@ -112,6 +112,8 @@ const RUNNER = {
   subscribe: () => () => {},
   resultOf: () => null,
   resultsFor: () => [],
+  /** Nothing has run, so there is no history to step through. */
+  runsOf: () => [],
   stateOf: () => ({ status: 'idle' }),
   run: () => {},
   runAll: () => {},

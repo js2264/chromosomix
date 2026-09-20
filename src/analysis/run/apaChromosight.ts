@@ -47,9 +47,11 @@ import {
 import { CHROMOSIGHT_PRESETS, type ChromosightPreset } from '../chromosightPresets'
 import { CHROMOSIGHT_SPECTRUM } from '../chromosightSpectrum'
 import { boolParam, strParam, type JobContext } from '../job'
+import { loopSpectrum } from '../loopSpectrum'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
 import { bandFor, cisMarginal, usableBlock, validBins, type Span } from './blocks'
+import { offsetTicks } from './labels'
 
 /** What the APA runner hands over: an anchor pair in whole-file bins. */
 export interface ChromosightAnchor {
@@ -188,17 +190,37 @@ export async function chromosightPileup(
   const size = kernel.size
   const raw = pileupOf(windows, size)
   const values = preset.onDiagonal ? symmetrise(raw, size) : raw
-  return [
-    pileupOutput(values, size, { preset, n: scored }),
+  const outputs: TaskOutput[] = [
+    pileupOutput(values, size, { preset, n: scored, binsize }),
     spectrumOf(rows, preset),
-    tableOf(rows, binsize),
   ]
+  // …and the same scores against separation, where the anchors have one. A
+  // pileup and a histogram both average the distance away, and a set whose near
+  // anchors score and whose far ones do not is the same picture as one where
+  // they all score — see `analysis/loopSpectrum.ts`.
+  if (!preset.onDiagonal) {
+    const spectrum = loopSpectrum(
+      rows.map((row) => ({
+        separation: (row.anchor.col - row.anchor.row) * binsize,
+        score: row.score,
+      })),
+      {
+        id: 'apa-chromosight-loop-spectrum',
+        label: `Loop spectrum · ${preset.name.replace(/_/g, ' ')}`,
+        noun: 'anchors',
+        yLabel: 'Pearson correlation with the template',
+      },
+    )
+    if (spectrum !== null) outputs.push(spectrum)
+  }
+  outputs.push(tableOf(rows, binsize))
+  return outputs
 }
 
 function pileupOutput(
   values: Float64Array,
   size: number,
-  about: { preset: ChromosightPreset; n: number },
+  about: { preset: ChromosightPreset; n: number; binsize: number },
 ): MatrixOutput {
   return {
     kind: 'matrix',
@@ -207,10 +229,12 @@ function pileupOutput(
     nrows: size,
     ncols: size,
     values: Float32Array.from(values),
-    xLabel: 'Bins from the centre',
-    yLabel: 'Bins from the centre',
-    xTicks: [],
-    yTicks: [],
+    // Base pairs, not bins: the question a reader has of a pileup is how far
+    // from the anchor a thing lies (`run/labels.offsetTicks`).
+    xLabel: 'Distance from the centre',
+    yLabel: 'Distance from the centre',
+    xTicks: offsetTicks(size, about.binsize),
+    yTicks: offsetTicks(size, about.binsize),
     // Drawn as `pileup_plot` draws it — the fixed 0–2 seismic scale — so this
     // picture and the one in a chromosight PDF are the same picture.
     ...CHROMOSIGHT_SPECTRUM,

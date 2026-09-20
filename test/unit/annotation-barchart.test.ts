@@ -36,7 +36,15 @@ import { sniffFormat } from '@/annotations/parse'
 import { sniffVcf } from '@/annotations/vcf'
 import { sniffSignal } from '@/annotations/signal'
 import type { FeatureSet } from '@/annotations/types'
-import { barChartCaption, barColours, dominantOf, peakOf } from '@/render/barchart'
+import {
+  barChartCaption,
+  barColours,
+  barExtentOf,
+  barLimitsOf,
+  barsOf,
+  dominantOf,
+  peakOf,
+} from '@/render/barchart'
 import { drawBarCharts, featureLayoutFor, layoutFeatures } from '@/render/features'
 import { featureColouring } from '@/render/featureInk'
 import type { LaneFrame } from '@/render/lane'
@@ -378,6 +386,11 @@ describe('the ink', () => {
     const bars = parseBarChart(TOY, 'toy.barChart').bars!
     expect(barChartCaption(bars, (v) => String(v))).toBe('bars to 10.5 TPM')
     expect(barChartCaption(bars, (v) => String(v), 'feature')).toContain('own top')
+    // A fixed axis says both its ends, and overrides the per-chart reading: the
+    // caption is what lets two lanes of two files be compared.
+    expect(barChartCaption(bars, (v) => String(v), 'feature', { min: 0, max: 50 })).toBe(
+      'bars from 0 to 50 TPM',
+    )
   })
 })
 
@@ -452,6 +465,7 @@ function drawn(
   set: FeatureSet,
   frame: LaneFrame,
   barScale: 'file' | 'feature' = 'file',
+  barLimits?: { min: number; max: number },
 ): Rect[] {
   const rules = featureLayoutFor('barchart', frame.thickness, (n) => n)
   const layout = layoutFeatures(frame, axisOf(), set, rules.rows, rules.least, rules.banded)
@@ -464,6 +478,7 @@ function drawn(
     opacity: 1,
     labels: false,
     barScale,
+    ...(barLimits === undefined ? {} : { barLimits }),
   })
   return filled
 }
@@ -535,6 +550,54 @@ describe('a barChart lane, drawn', () => {
     expect(byFile[1].h / byFile[0].h).toBeCloseTo(2 / 100, 2)
     expect(byFeature).toHaveLength(2)
     expect(byFeature[1].h).toBeCloseTo(byFeature[0].h, 5)
+  })
+
+  it('draws against a value axis the reader fixed, whichever switch is on', () => {
+    // The tall feature's first bar is 100 against a file ceiling of 100, so it
+    // fills the chart; on a ceiling of 200 it fills half of it, and it does so
+    // under both readings — a fixed axis is what the reader typed, and "each
+    // chart against its own top" is the other answer to the same question.
+    const two = [
+      TRACK,
+      rows([
+        'chrI 1000 2000 big 500 + BIG 3 100,50,0',
+        'chrI 3000 4000 small 10 + SMALL 3 2,1,0',
+      ]),
+    ].join('\n')
+    const set = parseBarChart(two, 'toy.barChart')
+    const free = drawn(set, frameOf(0, 6000)).filter((r) => r.fill === '#f00')
+    const fixed = drawn(set, frameOf(0, 6000), 'file', { min: 0, max: 200 }).filter(
+      (r) => r.fill === '#f00',
+    )
+    expect(fixed[0].h / free[0].h).toBeCloseTo(0.5, 2)
+    const overridden = drawn(set, frameOf(0, 6000), 'feature', { min: 0, max: 200 }).filter(
+      (r) => r.fill === '#f00',
+    )
+    expect(overridden.map((r) => r.h)).toEqual(fixed.map((r) => r.h))
+  })
+
+  it('clamps a value above the ceiling rather than drawing out of the lane', () => {
+    const tall = drawn(parseBarChart(ONE, 'toy.barChart'), frameOf(0, 4000), 'file', {
+      min: 0,
+      max: 1,
+    }).filter((r) => r.fill !== '#333333')
+    const full = drawn(parseBarChart(ONE, 'toy.barChart'), frameOf(0, 4000)).filter(
+      (r) => r.fill !== '#333333',
+    )
+    // Both categories are past the ceiling, so both draw the full chart — the
+    // same height the tallest bar had when the file's own ceiling was in force.
+    expect(tall).toHaveLength(2)
+    expect(tall[0].h).toBeCloseTo(full[0].h, 5)
+    expect(tall[1].h).toBeCloseTo(full[0].h, 5)
+  })
+
+  it('draws nothing below the floor rather than downwards through the baseline', () => {
+    const under = drawn(parseBarChart(ONE, 'toy.barChart'), frameOf(0, 4000), 'file', {
+      min: 20,
+      max: 40,
+    })
+    // The guide and nothing else: 10.5 and 3.2 are both under the floor.
+    expect(under.map((rect) => rect.fill)).toEqual(['#333333'])
   })
 
   it('never bands a chart lane by strand, because the rows are its axis', () => {
@@ -628,3 +691,45 @@ function manyCategories(width: number): string {
   const values = Array.from({ length: width }, (_, at) => at + 1).join(',')
   return rows([`chrI 1000 2000 g 500 + G ${width} ${values}`])
 }
+
+describe('the value axis a reader fixes', () => {
+  it('is the lane’s own limits, and absent while they are on auto', () => {
+    expect(barLimitsOf({ auto: true, min: 0, max: 50 })).toBeUndefined()
+    expect(barLimitsOf({ auto: false, min: 0, max: 50 })).toEqual({ min: 0, max: 50 })
+  })
+
+  it('refuses a pair that is not an axis, so a half-typed number draws nothing new', () => {
+    expect(barLimitsOf({ auto: false, min: 50, max: 50 })).toBeUndefined()
+    expect(barLimitsOf({ auto: false, min: 80, max: 20 })).toBeUndefined()
+    expect(barLimitsOf({ auto: false, min: Number.NaN, max: 20 })).toBeUndefined()
+  })
+})
+
+describe('where a ceiling drag on a chart starts from', () => {
+  it('is zero to the tallest bar in the file — the axis already on screen', () => {
+    // 10.5, from YAL001C's liver column, which is what the `file` reading draws
+    // every chart on the lane against.
+    const axis = barExtentOf(parseBarChart(TOY).bars)
+    expect(axis?.min).toBe(0)
+    expect(axis?.max).toBeCloseTo(10.5, 5)
+  })
+
+  it('refuses a file with no bars above zero, which is not an axis to scale', () => {
+    expect(barExtentOf(undefined)).toBeNull()
+    expect(barExtentOf({ max: 0 })).toBeNull()
+  })
+
+  it('finds the bars through the entry, and only on a chart', () => {
+    const set = parseBarChart(TOY)
+    const entry = {
+      id: 'a',
+      kind: 'barchart',
+      payload: { kind: 'features', data: set },
+    } as never
+    expect(barsOf(entry)?.max).toBeCloseTo(10.5, 5)
+    // The same payload under any other kind is a feature set, not a chart, and
+    // a drag across it has no ceiling to move.
+    expect(barsOf({ ...(entry as object), kind: 'segments' } as never)).toBeUndefined()
+    expect(barsOf({ id: 'a', kind: 'barchart' } as never)).toBeUndefined()
+  })
+})

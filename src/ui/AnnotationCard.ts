@@ -37,7 +37,6 @@ import { dragHasFileRow } from './fileDrag'
 import { chooseFiles, filesFrom } from './chooseFiles'
 import { pairIndexes } from '../annotations/loader'
 import { cardTitle, icon, iconButton } from './icons'
-import { folderPickButton } from './pickFromFolders'
 import { mapsOrLead, placementField } from './lanePlacement'
 import { subscribeReveal } from './revealTrack'
 import { stepperField } from './trackControls'
@@ -1103,7 +1102,14 @@ export class AnnotationCard {
       // where the bars get their names.
       const key = featureLegend(entry)
       if (entry.kind === 'barchart') {
-        out.push(barScaleToggle(this.props.store, entry), key)
+        // …and the value axis, which is the one control §8.17 left it without.
+        // Both readings a barChart had were *relative* — every chart against the
+        // file's tallest bar, or each against its own — so two lanes of two
+        // files could not be compared by eye however carefully they were laid
+        // out: the quieter file drew the taller bars. The limits row is the same
+        // control a bigWig has and means the same thing, and it is above the
+        // per-chart switch because it overrides it.
+        out.push(this.limits(entry), barScaleToggle(this.props.store, entry), key)
       } else {
         // The key is built first and handed to the picker, for the reason the
         // pile's is: this card defers its own rebuild while a control holds
@@ -1442,9 +1448,7 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', { class: 'ann-drop-label', text: 'Load a track' }),
     el('span', {
       class: 'ann-drop-hint',
-      text:
-        'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM. Click to choose, or drop one anywhere on ' +
-        'this card — what it is and where it is drawn come from the file itself.',
+      text: 'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM.',
     }),
   )
   zone.addEventListener('click', () => void choose())
@@ -1459,51 +1463,13 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
   // element while it happens — so the target the reader is looking at is the
   // one that reacts, and one gesture still has one handler.
 
-  const url = el('input', {
-    class: 'input',
-    type: 'url',
-    placeholder: 'https://bucket.example.org/ATAC.bw',
-  })
-  const submit = (): void => {
-    const value = url.value.trim()
-    if (value === '') return
-    loader.addUrl(value)
-    url.value = ''
-  }
-  url.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submit()
-  })
-
-  return {
-    zone,
-    nodes: [
-      zone,
-      el(
-        'details',
-        { class: 'ann-url' },
-        el('summary', { text: 'or open one by URL' }),
-        el(
-          'div',
-          { class: 'ann-url-row' },
-          url,
-          button('add', submit, { class: 'btn' }),
-          // A track's URL is the one nobody has in their hand: a map is opened
-          // from a link or a store, and the bigWigs beside it are keys in a
-          // prefix whose names came off a run sheet. A picked local file goes
-          // the way a dropped one does, with the index found beside it.
-          folderPickButton((picked) => {
-            if (picked.source.kind === 'local') {
-              loader.addFiles(
-                picked.index === undefined ? [picked.source.file] : [picked.source.file, picked.index],
-              )
-              return
-            }
-            loader.addUrl(picked.uri)
-          }),
-        ),
-      ),
-    ],
-  }
+  // **The zone and nothing under it.** This card used to carry a box to paste a
+  // URL into and, beside it, a button onto the places this window is connected
+  // to. Both are gone: what a card that asks for a file needs is the target
+  // above, and browsing a connected folder is what the Files column is
+  // (§20) — a second door to it, folded into the bottom of every card that takes
+  // a file, was three ways to do one thing in a column that lists what is drawn.
+  return { zone, nodes: [zone] }
 }
 
 /**

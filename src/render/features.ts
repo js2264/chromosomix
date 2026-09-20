@@ -376,6 +376,15 @@ export interface FeaturePaint {
    * `annotations/fields.ts` says why the other reading exists.
    */
   barScale?: BarScale
+  /**
+   * A value axis the reader has fixed, which overrides {@link barScale}.
+   *
+   * Absent is the file's own ceiling — the two readings §8.17 describes, both
+   * relative. Present, a bar's height is where its value falls between these two
+   * numbers, which is the only reading under which the same chart in two files
+   * draws the same way. See `render/barchart.ts`'s `barLimitsOf`.
+   */
+  barLimits?: { min: number; max: number }
 }
 
 /** Height a below-the-feature name needs, in canvas pixels. */
@@ -568,7 +577,13 @@ export function drawBarCharts(
   const chartHeight = Math.max(3, rowHeight - band - 2)
   const width = bars.labels.length
   const colours = barColours(bars)
-  const perFeature = paint.barScale === 'feature'
+  const fixed = paint.barLimits
+  // A fixed axis is not a *ceiling*, it is two ends, so it cannot be folded into
+  // the division below — and it overrides the per-feature reading rather than
+  // composing with it: "each chart against its own top" and "every chart against
+  // these two numbers" are contradictory answers to one question, and the one
+  // the reader typed wins.
+  const perFeature = fixed === undefined && paint.barScale === 'feature'
   // A file of zeroes would divide every bar by nothing. One is the ceiling that
   // draws all of them flat on the baseline, which is what that file says.
   const fileCeiling = bars.max > 0 ? bars.max : 1
@@ -578,6 +593,18 @@ export function drawBarCharts(
     if (!perFeature) return fileCeiling
     const peak = peakOf(bars, index)
     return Number.isFinite(peak) && peak > 0 ? peak : fileCeiling
+  }
+  /**
+   * How tall a bar stands, as a fraction of the chart.
+   *
+   * Clamped at both ends under a fixed axis, which is what a fixed axis means: a
+   * value above the ceiling draws full height rather than out of the lane and
+   * into the one above it, and one below the floor draws nothing rather than
+   * downwards through the baseline.
+   */
+  const heightOf = (value: number, index: number): number => {
+    if (fixed === undefined) return value / ceilingOf(index)
+    return Math.max(0, Math.min(1, (value - fixed.min) / (fixed.max - fixed.min)))
   }
 
   const charted: FeaturePlacement[] = []
@@ -609,7 +636,14 @@ export function drawBarCharts(
     let drawn = false
     for (const placement of charted) {
       const value = bars.values[placement.index * width + category]
-      if (!Number.isFinite(value) || value <= 0) continue
+      if (!Number.isFinite(value)) continue
+      // Nothing to draw is nothing drawn, and the test is the **height** rather
+      // than the value: under the file's own ceiling those are the same question
+      // (a positive value is a positive bar), and under a fixed axis they are
+      // not — a value below the floor is a real number with no ink, and a
+      // zero-height rectangle in the path is a bar the lane claims to have drawn.
+      const height = heightOf(value, placement.index)
+      if (!(height > 0)) continue
       const span = placement.along1 - placement.along0
       const slot = span / width
       // The gap is dropped rather than shrinking the bars below the floor: two
@@ -623,7 +657,7 @@ export function drawBarCharts(
         band,
         chartHeight,
         inward,
-        value / ceilingOf(placement.index),
+        height,
       )
       const [x, y, w, h] = laneRect(frame, along0, along0 + thickness, across0, across1)
       ctx.rect(x, y, w, h)
@@ -652,8 +686,15 @@ export function drawBarCharts(
       // is still a mark rather than a gap in the lane. Against the *file's*
       // ceiling whatever the switch says, because per feature this is the
       // feature's own peak divided by itself — every collapsed glyph full
-      // height, which is a lane saying nothing.
-      const height = Number.isFinite(value) ? Math.max(value / fileCeiling, 1 / 12) : 1
+      // height, which is a lane saying nothing. A fixed axis is honoured here
+      // too: it is the one reading that is about the numbers rather than about
+      // the picture, so a collapsed row has to obey it or a lane zoomed out
+      // would quietly change what its heights meant.
+      const against =
+        fixed === undefined
+          ? value / fileCeiling
+          : Math.max(0, Math.min(1, (value - fixed.min) / (fixed.max - fixed.min)))
+      const height = Number.isFinite(value) ? Math.max(against, 1 / 12) : 1
       const [across0, across1] = barAcross(
         placement.row,
         rowHeight,

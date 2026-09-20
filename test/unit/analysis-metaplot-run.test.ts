@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { runMetaplot } from '@/analysis/run/metaplot'
+import { clipOf, runMetaplot } from '@/analysis/run/metaplot'
 import type { TrackJobContext } from '@/analysis/job'
 import type { AnalysisFraming, CurveOutput, MatrixOutput, Params } from '@/analysis/types'
 import type { FeatureSet, TrackSampleSet } from '@/annotations/types'
@@ -194,6 +194,50 @@ describe('the metaplot runner, standardising', () => {
     expect(Math.max(...zscored.values)).toBeCloseTo((12 - 6) / sd, 6)
     expect(Math.min(...zscored.values)).toBeCloseTo((10 - 6) / sd, 6)
     expect(zscored.label).toContain('z-scored')
+  })
+
+  it('gives the heatmap a colour range of its own, read from zero', async () => {
+    // What the range *is* is `clipOf`'s business and is checked there; what
+    // matters here is that the picture carries one at all, and that a coverage
+    // track is read from zero, which is what its empty bins mean.
+    const matrix = matrixOf(await runMetaplot(job(PARAMS(false))))
+    expect(matrix.range).not.toBeUndefined()
+    expect((matrix.range ?? [1, 0])[0]).toBe(0)
+    expect((matrix.range ?? [0, 0])[1]).toBeGreaterThan(0)
+  })
+
+  it('clips the colours at the 99th percentile, not at the outlier', async () => {
+    // One row a hundred times the rest is the usual shape of a coverage track
+    // over a few thousand features — a copy-number amplification, a bin of
+    // pile-up artefact — and a scale fitted to it draws every other row at the
+    // bottom colour: a flat block with a colour bar nobody can read the
+    // picture against.
+    const values = Float32Array.from({ length: 1000 }, (_, i) => (i === 0 ? 1000 : (i % 10) + 1))
+    expect(clipOf(values)).toEqual([0, 10])
+    // A signed track — a z-score, a log ratio — is clipped symmetrically about
+    // its own centre instead, so the midpoint stays where it means something.
+    const signed = Float32Array.from({ length: 1000 }, (_, i) => (i % 10) - 5)
+    const clip = clipOf(signed) ?? [0, 0]
+    expect(clip[0]).toBeCloseTo(-clip[1], 12)
+    // Nothing finite is nothing to draw.
+    expect(clipOf(Float32Array.from([Number.NaN, Number.NaN]))).toBeNull()
+    // …and a flat matrix has no range at all, which the scale rule handles.
+    expect(clipOf(Float32Array.from([2, 2, 2]))).toEqual([0, 2])
+  })
+
+  it('numbers the heatmap’s abscissa in the units the curve uses', async () => {
+    // The two pictures are read together — *is that line a summary, or two
+    // populations averaged* — and a heatmap with no numbers under it cannot be
+    // lined up against the curve at all.
+    const matrix = matrixOf(await runMetaplot(job(PARAMS(false))))
+    // Five labels, spread across the columns they name by `spreadTicks`.
+    expect(matrix.xTicks).toHaveLength(5)
+    // Positions **along the axis**, not the columns' centres: this window is
+    // four columns of 50 bp running from −100 to +100, and an axis labelled
+    // with the centres would read −75 at one end and +75 at the other — half a
+    // bin in from the window the picture is of, with no zero under the anchor.
+    expect(matrix.xTicks).toEqual(['-100', '-50', '0', '50', '100'])
+    expect(matrix.xLabel).toBe('Distance from the anchor (bp)')
   })
 
   it('reads a session stored before the option existed as one with it off', async () => {

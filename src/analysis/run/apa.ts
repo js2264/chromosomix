@@ -57,28 +57,33 @@ import {
   chosenInput,
   contigIdFor,
   idParam,
+  listParam,
   missingInput,
   numParam,
   strParam,
   type JobContext,
   type TaskRunner,
 } from '../job'
+import { loopSpectrum } from '../loopSpectrum'
 import { makeRandom } from '../random'
 import {
+  anchorAt,
   flankFractionOf,
   isChromosight,
   isDomainPileup,
   isScaled,
   onDiagonal,
+  poolsAnchors,
   usesPairSet,
   allPairs,
   distanceBins,
   MAX_GENERATED_PAIRS,
   windowBins,
 } from '../tasks/apa'
-import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
+import type { MarginProfile, MatrixOutput, TableOutput, TaskOutput } from '../types'
 import { chromosightPileup } from './apaChromosight'
 import { usableBlock, type Span } from './blocks'
+import { offsetTicks } from './labels'
 
 /** A rectangle of the matrix, in absolute bins. */
 interface Rect {
@@ -285,6 +290,13 @@ export const runApa: TaskRunner = async (job) => {
 
   const real = kept.map(() => new PileupAccumulator(side, side))
   const controls = kept.map(() => new PileupAccumulator(side, side))
+  // The tracks whose aggregate is drawn along the pileup's two edges, and one
+  // running mean per group, per track, per axis. Empty where none was chosen,
+  // which is every run this task has ever done until now.
+  const tracks = marginTracks(job)
+  const alongRows = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
+  const alongCols = kept.map(() => tracks.map(() => new PileupAccumulator(1, side)))
+  const pooled = poolsAnchors(job.params)
   const expected = new ExpectedAccumulator(job.mc.nBins)
   const perAnchor: Array<{ label: string; separation: number; score: number }> = []
 
@@ -319,6 +331,31 @@ export const runApa: TaskRunner = async (job) => {
         continue
       }
       real[plan.group].add(window)
+      // **Only the real windows**, and the same ones: a marginal averaged over
+      // the controls as well would be a profile of the shifted anchors, which
+      // is the denominator of the picture rather than the picture. Cut from the
+      // plan's own rectangle and resampled by the plan's own edges, so a cell of
+      // the profile is the cell of the pileup above it by construction.
+      if (tracks.length > 0) {
+        const edges = edgesFor(plan, layout)
+        for (let t = 0; t < tracks.length; t++) {
+          const down = marginOf(tracks[t].values, plan.rect.rowFrom, plan.rect.rowTo, side, edges)
+          const across = marginOf(tracks[t].values, plan.rect.colFrom, plan.rect.colTo, side, edges)
+          alongRows[plan.group][t].add(down)
+          alongCols[plan.group][t].add(across)
+          // Pooled, every window contributes **both** of its anchors to **both**
+          // edges, so the two profiles come out one mean over twice as many
+          // anchors rather than two means over half as many each. Done here, a
+          // window at a time, rather than by averaging the two finished profiles
+          // at the end: the two accumulators count per cell, and a cell one of
+          // them never saw would be weighted as though it had. See
+          // {@link poolsAnchors}.
+          if (pooled) {
+            alongRows[plan.group][t].add(across)
+            alongCols[plan.group][t].add(down)
+          }
+        }
+      }
       if (plan.label !== undefined) {
         perAnchor.push({
           label: plan.label,
@@ -362,12 +399,33 @@ export const runApa: TaskRunner = async (job) => {
       label = `${name} · observed / expected`
     }
 
+    // **What the middle of the picture is**, which stopped being "the centre" the
+    // moment a window could be cut about a feature's start. An axis labelled
+    // *bins from the centre* over a pileup at four thousand transcription start
+    // sites is a caption for a figure nobody drew.
+    const from = onDiagonal(job.params)
+      ? anchorAt(job.params) === 'start'
+        ? 'the feature’s start'
+        : anchorAt(job.params) === 'end'
+          ? 'the feature’s end'
+          : 'the feature’s centre'
+      : 'the centre'
     const axis = isScaled(job.params)
       ? scaledDomains
         ? `Position along the feature (0 → 1), flanked by ${flankFractionOf(job.params)}×`
         : 'Scaled position'
-      : 'Bins from the centre'
-    const ticks = scaledDomains ? scaledTickLabels(layout, flankFractionOf(job.params)) : []
+      : `Distance from ${from}`
+    // **In base pairs, not in bins.** A fixed window is a window of the genome,
+    // and what a reader asks of a pileup is how far from the anchor the thing
+    // they are looking at lies; a count of bins answers that only for somebody
+    // holding the resolution in their head, and differently at every
+    // resolution. A *scaled* window has no such distance — its axis is the
+    // feature, 0 to 1 — and keeps its own labels ({@link scaledTickLabels}).
+    const ticks = isScaled(job.params)
+      ? scaledDomains
+        ? scaledTickLabels(layout, flankFractionOf(job.params))
+        : []
+      : offsetTicks(side, job.mc.binsize)
 
     outputs.push({
       kind: 'matrix',
@@ -382,6 +440,13 @@ export const runApa: TaskRunner = async (job) => {
       yTicks: ticks,
       colormap: centre === undefined ? 'default' : DEFAULT_DIVERGING_COLORMAP,
       ...(centre === undefined ? {} : { centre }),
+      // The aggregate signal above and beside the aggregate map, over the same
+      // windows: the figure this task could not draw, and the one most papers
+      // that use an APA actually print.
+      ...(() => {
+        const margins = marginsOf(tracks, alongRows[g], alongCols[g])
+        return margins === undefined ? {} : { margins }
+      })(),
       stats: [
         { label: 'windows', value: observed.n, digits: 0, hint: 'Anchors that contributed.' },
         scaledDomains
@@ -404,6 +469,22 @@ export const runApa: TaskRunner = async (job) => {
   }
 
   if (perAnchor.length > 0) {
+    // **The loop spectrum**, before the table and only off the diagonal, where a
+    // separation exists to plot against. Every anchor already carries its own
+    // P2LL and its own separation — the table below prints both — and the one
+    // thing the pileup above cannot show is how the first varies with the
+    // second. A loop set whose 30 kb pairs are loops and whose 2 Mb pairs are
+    // noise averages into a single plausible dot, and the two numbers that say
+    // so are already in hand (`analysis/loopSpectrum.ts`).
+    if (!onDiagonal(job.params)) {
+      const spectrum = loopSpectrum(perAnchor, {
+        id: 'apa-loop-spectrum',
+        label: 'Loop spectrum',
+        noun: allPairs(job.params) ? 'pairs' : 'loops',
+        yLabel: 'P2LL — centre against the lower-left corner',
+      })
+      if (spectrum !== null) outputs.push(spectrum)
+    }
     perAnchor.sort((a, b) => (Number.isNaN(b.score) ? -1 : b.score) - (Number.isNaN(a.score) ? -1 : a.score))
     outputs.push({
       kind: 'table',
@@ -422,6 +503,131 @@ export const runApa: TaskRunner = async (job) => {
     } satisfies TableOutput)
   }
   return outputs
+}
+
+// ---------------------------------------------------------------------------
+// Track aggregates along the edges
+// ---------------------------------------------------------------------------
+
+/** One chosen track: what it is called, and one value per bin of this map. */
+interface MarginTrack {
+  name: string
+  values: Float32Array
+}
+
+/**
+ * The tracks whose aggregate is drawn along the pileup's edges.
+ *
+ * **By the parameter key plus the entry id**, which is how a `multiple` entry
+ * parameter's inputs are filed (`AnalysisRunner`'s `chosenEntries`) — and a
+ * track arrives as a *vector over the map's bins* rather than as a file handle,
+ * which is what lets a task in this venue read one at all (§18.6): the bigWig
+ * lives in the annotations worker and is megabytes, and what a marginal profile
+ * needs is one number per bin, which the lane renderer already computes.
+ *
+ * A row dropped between the form being filled in and Run being pressed is simply
+ * absent, and is left out rather than drawn as a flat line.
+ */
+function marginTracks(job: JobContext): MarginTrack[] {
+  const chosen = listParam(job.params, 'tracks')
+  const out: MarginTrack[] = []
+  for (const id of chosen) {
+    const values = job.inputs.vectors?.[`tracks:${id}`]
+    if (values === undefined) continue
+    out.push({ name: job.inputs.labels?.[id] ?? id, values })
+  }
+  if (out.length < chosen.length) {
+    // Said out loud, because the pileup comes back looking perfectly finished
+    // with one fewer line above it than the form promised — and a reader who
+    // dropped a track between filling the form in and pressing Run has no other
+    // way to find out which of the two things happened.
+    job.note(
+      `${(chosen.length - out.length).toLocaleString()} of ${chosen.length.toLocaleString()} ` +
+        'tracks could not be read and are not drawn beside the pileup. Re-open the file, or ' +
+        'pick another under Track aggregates.',
+    )
+  }
+  return out
+}
+
+/**
+ * The grid edges one window's profile is resampled onto, or `undefined`.
+ *
+ * The plan's own, so a marginal cell is the cell of the pileup above it: a
+ * domain window is flank, body, flank with the body pinned to its own two grid
+ * lines ({@link cut}), and a profile stretched evenly over the same window would
+ * put the boundary a column away from where the picture draws it.
+ */
+function edgesFor(plan: Plan, layout: ScaledLayout): Float64Array | undefined {
+  if (plan.body === undefined) return undefined
+  return scaledEdges(
+    layout,
+    plan.body.from - plan.rect.rowFrom,
+    plan.body.to - plan.rect.rowFrom,
+    plan.body.pad,
+  )
+}
+
+/**
+ * One window's stretch of a track, resampled onto the pileup's grid.
+ *
+ * Bins outside the vector read as `NaN` rather than as zero — a window running
+ * off the end of the last sequence has no coverage there, and zero is a
+ * measurement. `PileupAccumulator` skips them per cell, so a window that is half
+ * off the end contributes the half it has.
+ *
+ * The resampling is `analysis/apa.ts`'s, over a source one row tall: area
+ * weighted and gap preserving, which is the same arithmetic the matrix window
+ * goes through and therefore the same answer about where a feature's edge lands.
+ */
+function marginOf(
+  values: Float32Array,
+  from: number,
+  to: number,
+  side: number,
+  edges: Float64Array | undefined,
+): Float64Array {
+  const span = to - from
+  if (span <= 0) return new Float64Array(side).fill(Number.NaN)
+  const source = new Float64Array(span)
+  for (let i = 0; i < span; i++) {
+    const at = from + i
+    source[i] = at >= 0 && at < values.length ? values[at] : Number.NaN
+  }
+  if (edges === undefined) return resampleWindow(source, 1, span, 1, side)
+  return resampleWindowTo(source, 1, span, Float64Array.from([0, 1]), edges)
+}
+
+/**
+ * The finished profiles for one group, or `undefined` where there are none.
+ *
+ * A profile with no window behind it is left out rather than drawn empty: a flat
+ * line along the top of a pileup is a claim about the signal, and *no anchor of
+ * this group could be profiled* is not that claim.
+ */
+function marginsOf(
+  tracks: readonly MarginTrack[],
+  rows: readonly PileupAccumulator[],
+  cols: readonly PileupAccumulator[],
+): { top?: MarginProfile[]; right?: MarginProfile[] } | undefined {
+  if (tracks.length === 0) return undefined
+  const top: MarginProfile[] = []
+  const right: MarginProfile[] = []
+  for (let t = 0; t < tracks.length; t++) {
+    // The **columns** run along the top and the **rows** down the right side,
+    // which is what puts each profile beside the axis it is a profile of.
+    const alongTop = cols[t].finish()
+    const alongSide = rows[t].finish()
+    if (alongTop.n > 0) top.push({ name: tracks[t].name, values: Float64Array.from(alongTop.values) })
+    if (alongSide.n > 0) {
+      right.push({ name: tracks[t].name, values: Float64Array.from(alongSide.values) })
+    }
+  }
+  if (top.length === 0 && right.length === 0) return undefined
+  return {
+    ...(top.length === 0 ? {} : { top }),
+    ...(right.length === 0 ? {} : { right }),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -475,11 +681,36 @@ function pairAnchors(job: JobContext, set: PairSet): Anchor[] {
   return out
 }
 
+/**
+ * The base a window is cut about: the feature's start, its centre or its end.
+ *
+ * **Strand decides which end is which**, exactly as `analysis/metaplot.ts`'s
+ * reference point does, because *start* means the 5′ end and a minus-strand gene
+ * runs the other way. A set with no strand column reads as plus throughout,
+ * which is what an unstranded peak set means by its own coordinates.
+ *
+ * The end takes the feature's **last base** rather than its exclusive end, which
+ * is a bin off on any feature whose end lands on a bin boundary — and on a gene
+ * set that is most of them, since annotation ends are round numbers.
+ */
+function anchorBase(set: FeatureSet, i: number, at: 'start' | 'centre' | 'end'): number {
+  const start = set.start[i]
+  const end = set.end[i]
+  if (at === 'centre') return Math.round((start + end) / 2)
+  const last = Math.max(start, end - 1)
+  const reversed = set.strand[i] < 0
+  if (at === 'start') return reversed ? last : start
+  return reversed ? start : last
+}
+
 function featureAnchors(job: JobContext, set: FeatureSet): Anchor[] {
   const out: Anchor[] = []
   const from = contextOf(set.contigs)
+  const reference = anchorAt(job.params)
   for (let i = 0; i < set.length; i++) {
-    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from)
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, {
+      point: anchorBase(set, i, reference),
+    })
     if (at === null) continue
     out.push({
       pair: { row: at.bin, col: at.bin, separation: 0 },
@@ -515,11 +746,17 @@ function binOf(
   start: number,
   end: number,
   named?: NameContext,
+  options: { point?: number } = {},
 ): { bin: number; body: Span; bounds: Span; contig: string } | null {
   const cid = contigIdFor(job.mc, contig, named)
   if (cid < 0) return null
   const [from, to] = job.mc.contigExtent(cid)
-  const bin = job.mc.coords.binIndex(cid, Math.round((start + end) / 2))
+  // The reader's own reference point where there is one, and the midpoint
+  // otherwise — which is what a loop set's anchor has and what this task did
+  // before the choice existed. The *body* below is the feature either way: the
+  // scaled mode resamples the whole interval, and where it is cut about is a
+  // question only the fixed mode asks.
+  const bin = job.mc.coords.binIndex(cid, options.point ?? Math.round((start + end) / 2))
   if (bin < from || bin >= to) return null
   // The bins the interval itself covers, clamped to the sequence and never
   // empty: a feature narrower than one bin is one bin, since that is the finest
@@ -891,12 +1128,18 @@ function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
     label: string
   }
   const placed: Placed[] = []
+  const reference = anchorAt(job.params)
   for (let i = 0; i < set.length; i++) {
-    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from)
+    // The **same point** the window is cut about is the point the separation is
+    // measured between, and it has to be: a range of 20 kb to 2 Mb between gene
+    // centres and a pileup at gene starts would be two different sets of pairs
+    // wearing one caption.
+    const point = anchorBase(set, i, reference)
+    const at = binOf(job, set.contigs[set.contig[i]], set.start[i], set.end[i], from, { point })
     if (at === null) continue
     placed.push({
       contig: at.contig,
-      centre: Math.round((set.start[i] + set.end[i]) / 2),
+      centre: point,
       bin: at.bin,
       bounds: at.bounds,
       body: at.body,
