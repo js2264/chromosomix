@@ -220,11 +220,20 @@ let groups = 0
 /**
  * How many rungs are drawn as a row of clickable stops.
  *
- * Six fits across the right-hand end of a crumb row without pushing the place
- * the reader is looking at off the left of a laptop screen. Past it the slider
- * carries the walk on its own — see {@link Breadcrumb.pushResolution}.
+ * Nine, which is most of the `.mcool`s in the wild: a `zoomify` ladder that
+ * doubles from 1 kb reaches a megabase in ten rungs, and one that walks the
+ * 1–2–5 series reaches it in nine. Past that the slider carries the walk on its
+ * own — see {@link Breadcrumb.pushResolution}.
+ *
+ * It was six, on the grounds that more would push the place the reader is
+ * looking at off the left of a laptop screen. It does not: a stop is a short
+ * number in a condensed face, nine of them is about three hundred pixels, and
+ * the trail they sit beside is right-aligned into whatever is left. What six
+ * actually cost was the aim-and-click on exactly the files that have the most
+ * rungs to aim at — and now, on the files somebody is most likely to *add* a
+ * rung to, since adding one to an eight-rung ladder used to collapse the row.
  */
-const MAX_STOPS = 6
+const MAX_STOPS = 9
 
 export class Breadcrumb {
   readonly el: HTMLElement

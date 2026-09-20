@@ -198,11 +198,33 @@ describe('taking one back off', () => {
 })
 
 describe('a ladder too long to chip', () => {
-  /** Nine rungs, which is past `MAX_STOPS` — the shape a real `.mcool` has. */
-  const MANY = [500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000].map((binsize) => ({
-    name: String(binsize),
-    binsize,
-  }))
+  /** Twelve rungs, which is past `MAX_STOPS` — a 4DN-shaped `.mcool`. */
+  const MANY = [
+    500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
+  ].map((binsize) => ({ name: String(binsize), binsize }))
+
+  it('chips a nine-rung ladder in full, which is most of them', () => {
+    // The cap was six, and an eight-rung file — the commonest shape there is —
+    // collapsed to a bare slider the moment somebody added a ninth rung to it,
+    // which is exactly the reader this feature is for.
+    const nine = MANY.slice(0, 8)
+    const built = build({
+      ladder: () => ladderWith(nine, [3_000]),
+      entries: nine.map((rung) => rung.name),
+    })
+    built.crumb.render(REGION)
+    expect(textsOf(built.crumb.el, '.res-stop span')).toEqual([
+      '500 bp',
+      '1 kb',
+      '2 kb',
+      '3 kb*',
+      '5 kb',
+      '10 kb',
+      '25 kb',
+      '50 kb',
+      '100 kb',
+    ])
+  })
 
   it('still lets the reader take their own resolution back off', () => {
     // Above the cap the picker draws one chip and leaves the walking to the

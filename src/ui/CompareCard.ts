@@ -22,7 +22,6 @@ import { alignNames, type Alignment, type NamedSequence } from '../genome/naming
 
 import { button, el, fmt } from './dom'
 import { cardTitle, iconButton } from './icons'
-import { folderPickButton } from './pickFromFolders'
 import type { OpenResult } from '../worker/protocol'
 import { fileLabel } from './labels'
 
@@ -102,15 +101,12 @@ export class CompareCard {
       { class: 'card compare-card' },
       cardTitle('Contact maps', 'grid-2x2'),
       this.body,
-      // **No box to paste a URL into.** There were four of them, one per card
-      // that asks for a file, each folded away behind the same summary — and
-      // every one of them was the *worse* half of the pair it was in: a reader
-      // with a URL in the clipboard is a reader who can drop the link on the
-      // window, and a reader without one was being asked to produce something
-      // they do not have. What is left is the road that answers *where is the
-      // file* rather than assuming the answer: the places this window is
-      // connected to (§8.5).
-      el('div', { class: 'ann-url-row' }, this.folderButton()),
+      // **No second door on this card.** It held a box to paste a URL into and,
+      // beside it, a button onto the places this window is connected to. Both
+      // have gone: what a card that asks for a file needs is the drop zone above
+      // and nothing else, and every road *into* a connected folder still runs
+      // through the Files column (§20), which is where a reader goes to browse
+      // one and where the same pick lands.
     )
     this.render()
   }
@@ -130,24 +126,6 @@ export class CompareCard {
    */
   sync(): void {
     this.render()
-  }
-
-  /**
-   * *Choose from somewhere this window is connected to.*
-   *
-   * A local pick is handed over as the file it is; a remote one as its URI,
-   * which the picker has already canonicalised — what arrives here becomes a
-   * URI in the session and in every link written out of it, so it has to be the
-   * form that opens (SPECS §24.5).
-   */
-  private folderButton(): HTMLElement {
-    return folderPickButton((picked) =>
-      this.props.onOpen(
-        picked.source.kind === 'local'
-          ? { kind: 'local', file: picked.source.file }
-          : { kind: 'remote', url: picked.uri },
-      ),
-    )
   }
 
   /**

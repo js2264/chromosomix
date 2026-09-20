@@ -81,7 +81,6 @@ import {
 import { VectorPage } from '../ui/vector'
 import { KEYS, withKey } from '../ui/commands'
 import { iconButton } from '../ui/icons'
-import { folderPickButton } from '../ui/pickFromFolders'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
@@ -648,7 +647,11 @@ export class PanelDeck {
       button('choose a file…', () => fileInput.click(), { class: 'btn' }),
       this.urlInput,
       button('add', () => this.addUrl(), { class: 'btn' }),
-      folderPickButton((picked) => this.addPicked(picked)),
+      // No *from a connected place…* beside it any more. Browsing a folder this
+      // window is connected to is the Files column (§20), which is a column and
+      // not a dialog — open one, look, open the next — and a button that opened a
+      // one-shot copy of it from four different rows was four doors to one room.
+      //
       // The one cell that is not a file: the session's 3D model, in a cell of
       // its own (§25). Greyed rather than hidden where the deck has one, since
       // a deck holds one structure cell and a button that did nothing would

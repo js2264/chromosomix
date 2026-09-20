@@ -817,8 +817,8 @@ p {
 }
 
 /* No `.dropzone-small` and no `.compare-url` any more. A card that asks for a
-   file now wears the Tracks card's load zone — `.ann-drop` and `.ann-url-row`,
-   below — whichever card it is: the second map, the map under a browser's
+   file now wears the Tracks card's load zone — `.ann-drop`, below — whichever
+   card it is: the second map, the map under a browser's
    tracks, and the tracks themselves are one gesture asked three times, and
    three shaded variations of it in one column read as three applications. */
 
@@ -4147,6 +4147,35 @@ canvas.is-frozen {
 
 .modal-wide {
   width: min(46rem, 100%);
+}
+
+/* **Every dialog's body is inset, and no dialog has to remember it.**
+
+   Each one used to name its own body class and set its own padding, which is a
+   rule spelled a dozen times — and the way that shape fails is not subtle: a
+   dialog written without the declaration comes out with its text against the
+   panel's border, looking broken, and nothing anywhere says what was forgotten.
+   So the padding is stated once, against the panel's own children, at a
+   specificity that beats a body class: whatever a dialog calls its body, it is
+   inset. The two flush ones below opt out by name, in one place a reader can
+   see the whole exception list. */
+.modal-panel > :not(.modal-head) {
+  padding: 0.85rem 0.9rem 0.95rem;
+}
+
+/* The three that are flush on purpose. Two have a child carrying a border across
+   the panel's whole width — the palette's search box, the feature card's footer
+   rule — which an inset body would cut short of both edges; they pad their own
+   rows instead (`.palette-body > .input`, `.feature-rows`, `.feature-foot`). The
+   third is the stage (§18.13, §25): a picture at the size of the window beside a
+   column the reader drags the width of, where the divider has to reach both
+   edges — and where an inset would be measured into the drag, since the grip
+   sizes the column from the modal's own right edge. `.stage-body` carries its
+   own inset round the picture. */
+.modal-panel > .palette-body,
+.modal-panel > .feature-body,
+.modal-panel > .stage-modal {
+  padding: 0;
 }
 
 /* --- the pairs binning dialog ------------------------------------------
@@ -7479,16 +7508,11 @@ canvas.is-frozen {
   line-height: 1.3;
 }
 
-/* The row under a load zone. It held a box to paste a URL into, folded away
-   behind a summary, and now holds only the button that opens a connected place
-   — so the fold went with the box: one button is not worth hiding, and a
-   disclosure triangle over a single control is furniture. */
-.ann-url-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.3rem;
-}
+/* No `.ann-url-row` any more. The row under a load zone held a box to paste a
+   URL into, folded away behind a summary, and then — once the box went — only a
+   button onto the connected places. Both are gone: a card that asks for a file
+   is the target and nothing under it, and browsing a connected place is the
+   Files column (§20). */
 
 .ann-list {
   display: flex;
@@ -9031,18 +9055,9 @@ span.deck-name {
   max-height: 60vh;
 }
 
-/* …and the way onto §11's road, inside it. Inside rather than under, so the cell
-   stays exactly the size of the map it stands in for: a strip added below would
-   make this cell taller than the pictures beside it, and a grid row is as tall
-   as its tallest cell. */
-.deck-vacant-url {
-  margin-top: auto;
-  align-self: stretch;
-  justify-content: center;
-  /* The zone is a button; this is a control inside it, and it takes its own
-     presses (`panels/MapPanel.ts`). */
-  cursor: auto;
-}
+/* No `.deck-vacant-url` either. An empty cell of a deck carried the same two
+   controls in the middle of a rectangle whose whole message is *drop a file
+   here*; dropping is the gesture and clicking opens the chooser. */
 
 /* ---------------------------------------------------------------------------
    The structure cell (§25): the session's 3D model, in a cell of the deck.

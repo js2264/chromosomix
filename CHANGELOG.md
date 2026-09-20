@@ -411,6 +411,23 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rendering. A no-op for the two callers that sent an explicit plan before this — a whole-genome read
   and a selection both start at sequence boundaries.
 
+- **Nine resolution rungs are chipped rather than six (§5.5).** A `zoomify` ladder that doubles from
+  1 kb reaches a megabase in ten rungs and one on the 1–2–5 series reaches it in nine, so the old cap
+  collapsed most real `.mcool`s to a bare slider — and collapsed an eight-rung one the moment
+  somebody added a ninth, which is exactly the reader the `+` above is for. Nine stops is about
+  three hundred pixels of short numbers, right-aligned into whatever the trail leaves.
+
+- **Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
+  its own body class and each used to set its own padding — a rule spelled a dozen times, and the way
+  that shape fails is not subtle: a dialog written without the declaration comes out with its text
+  against the panel's border, looking broken, and nothing says what was forgotten. (The resolution
+  dialog shipped exactly that.) The padding is stated once now, against the panel's own children, at
+  a specificity that beats a body class. Three are flush on purpose and opt out by name, in one place
+  where the exception list can be read whole: the command palette's search box and the feature
+  card's footer each carry a border across the panel's whole width, and the stage (§18.13, §25) is a
+  picture at the size of the window beside a column the reader drags the width of — where an inset
+  would be measured into the drag, since the grip sizes the column from the modal's own right edge.
+
 - **The region bar loses its back arrow and its map/tracks cycle button (§5.4).** Both were controls
   with a shorter road already beside them. Going back is the browser's own back, which this bar's
   navigation has fed since it existed. *Tracks only / map only / both* is the **eye beside the map**
@@ -450,9 +467,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   precisely because the sender's file had no address a page could fetch by name (§11). What both of
   those readers need is to be shown what is *there*, which is *from a connected place…* — which
   stays, now as the only control on that row, so the disclosure triangle over it went too. The
-  hints inside the drop areas are cut to what a reader needs before dropping: which formats, and
-  that a click also works. The sentences they lost were about what happens *after* the drop, which
-  the picture then says for itself.
+  hints inside the drop areas are cut to the formats the zone takes and nothing else.
+
+- **And the *from a connected place…* button is gone with them.** It opened the Files column's own
+  folder view in a dialog, from under every card that asks for a file and from the deck's add row —
+  four doors to one room, each closing on the first pick. §20 opens by saying that every door this
+  application had asked *which file* once and then closed, and that the way people work with a
+  directory of data is to open one, look, open the next, and keep going; a one-shot copy of the
+  column is the shape the connected folder exists to replace. The column itself is untouched, and a
+  drag out of it still lands anywhere a drop lands.
 
 ### Fixed
 

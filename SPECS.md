@@ -768,6 +768,18 @@ a time, by the control that names it. A second way to do a thing is not a conven
 first way is a row the reader is already looking at; it is a control to learn, in the bar that has
 to stay readable at a glance.
 
+**Every dialog's body is inset from its panel, and no dialog has to remember it.** Each one names
+its own body class, and each used to set its own padding — a rule spelled a dozen times, and the way
+that shape fails is not subtle: a dialog written without the declaration comes out with its text
+against the panel's border, looking broken, with nothing anywhere saying what was forgotten. So the
+padding is stated once, against the panel's own children, at a specificity that beats a body class.
+Three dialogs are flush on purpose, and they opt out by name in one place where the exception list
+can be read whole: the command palette's search box and the feature card's footer each carry a
+border across the panel's whole width, which an inset body would cut short of both edges, and the
+stage (§18.13, §25) is a picture at the size of the window beside a column the reader drags the
+width of — where an inset would also be measured *into* the drag, since the grip sizes the column
+from the modal's own right edge.
+
 ### 5.5 Navigation
 
 `genomes table → genome → contig → region`, with a breadcrumb whose segments are clickable to go back
@@ -777,6 +789,14 @@ state serialises to the URL hash.
 **And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
 whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
 bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
+
+**Nine rungs are chipped; past that the slider carries the walk alone.** A `zoomify` ladder that
+doubles from 1 kb reaches a megabase in ten rungs and one that walks the 1–2–5 series reaches it in
+nine, so nine covers most of the files in the wild — about three hundred pixels of short numbers,
+right-aligned into whatever the trail leaves. The cap was six, on the grounds that more would push
+the place the reader is looking at off the left of a laptop screen; what it actually cost was the
+aim-and-click on the files with the most rungs to aim at, and on the files somebody is most likely
+to *add* a rung to, since a ninth stop used to collapse an eight-rung row to a bare slider.
 
 **The resolution is not a segment of that trail.** A rung of a `zoomify` ladder (§3.4) is the same
 file drawn more or less finely: it does not contain the crumbs after it and clicking it does not go
@@ -5915,24 +5935,32 @@ stack (§8.9), onto a companion for a track on that map (§16), onto the Tracks 
 area, onto the landing page's drop zone — which replaces, because that is what the landing page has
 always meant.
 
-**The door the cards keep is this one.** *From a connected place…* (`ui/pickFromFolders.ts`) stands
-under the Tracks card's load zone, under the Contact maps card's, inside an empty cell of a deck,
-and beside the deck's add row: the Files column's own folder view in a dialog, over every place the
-window is connected to — a directory on this machine included — and a row that hands back the file,
-with the credential the listing used. It replaces a browser that could look at buckets and nothing
-else; with nothing connected it says so and names the Files column's *Open a local/remote folder*,
-rather than offering an empty listing.
+**The Files column is the only door onto a connected place.** Its folder view lists every place the
+window is connected to — a directory on this machine included — and a row hands back the file with
+the credential the listing used; `ui/pickFromFolders.ts` is the same view in a dialog, which the
+column's own places open and which a drag out of it resolves through. With nothing connected it says
+so and names the column's *Open a local/remote folder* rather than offering an empty listing.
 
-The three cards used to keep a **box to paste a URL into** as well, folded away behind *or open one
-by URL*, and all three have gone. Each was the worse half of the pair it was in. A reader holding a
-URL can drop the link on the window or paste it into the landing page's own box, which is where
-this application says *open a file*; a reader **without** one was being asked to produce something
-they have not got — and that is not an edge case but the commonest state of the three places the
-boxes stood in. The bigWigs beside a map are keys in a prefix whose names came off a run sheet; a
-reader repairing a shared deck is looking at a `~` precisely because the sender's file had no
-address a page could fetch by name (§11). Both of those readers need to be shown what is there,
-which is the door above and not a text field. A disclosure triangle over a single button is
-furniture too, so the fold went with the box.
+**The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps, an empty
+cell of a deck — used to carry a box to paste a URL into, folded away behind *or open one by URL*,
+and beside it a *from a connected place…* button onto that dialog. Both are gone from all of them,
+and the deck's add row has lost the button too.
+
+The box went first and for the obvious reason: it was the worse half of the pair it was in. A reader
+holding a URL can drop the link on the window or paste it into the landing page's own box, which is
+where this application says *open a file*; a reader **without** one was being asked to produce
+something they have not got — and that is the commonest state in all three places the boxes stood
+in. The bigWigs beside a map are keys in a prefix whose names came off a run sheet; a reader
+repairing a shared deck is looking at a `~` precisely because the sender's file had no address a
+page could fetch by name (§11).
+
+The button went for a different reason, and it is the one worth stating: **browsing a connected place
+is a column, not a dialog.** §20 opens by saying that every door to a file this application had asked
+*which file* once and then closed, and that the way people work with a directory of data is to open
+one, look, open the next, and keep going. A button that opened a one-shot copy of the column from
+four different rows was four doors to one room, each of which closed on the first pick — the shape
+the connected folder exists to replace. What a card that asks for a file needs is the drop zone and
+nothing under it.
 
 A dragged row carries a **folder id and a path**, never bytes: the file behind it is fetched at the
 drop, once, by the target that accepted it. The path alone would be ambiguous the moment two folders

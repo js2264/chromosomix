@@ -528,26 +528,18 @@ describe('adding a map by URL', () => {
     expect(addRow(deck).classList.contains('hidden')).toBe(true)
   })
 
-  it('is the deck’s own row, and no longer a second box inside every vacancy', () => {
+  it('is the deck’s own row, and nothing is tucked inside a vacancy', () => {
     const { deck } = make()
     deck.grow('beside')
     deck.grow('beside')
     expect(cellNames(deck)).toEqual(['lead.cool', 'empty', 'empty'])
-    // An empty cell had a box of its own, folded away behind *or open one by
-    // URL*. It has gone, with the three others like it: a reader repairing a
-    // shared deck is precisely the one who does not have the URL in their hand,
-    // since what the link left here is a `~` where somebody else's file was.
-    expect(all(deck.el, '.deck-vacant-url input[type="url"]')).toHaveLength(0)
+    // An empty cell used to carry a box of its own, folded away behind *or open
+    // one by URL*, and then a button onto the connected places. Both are gone:
+    // the rectangle's whole message is *drop a file here*, dropping is the
+    // gesture, and clicking it opens the chooser.
+    expect(all(deck.el, '.deck-vacant-url')).toHaveLength(0)
     expect(all(deck.el, 'details.ann-url')).toHaveLength(0)
-  })
-
-  it('leaves each vacancy the road that answers where the file is', () => {
-    const { deck } = make()
-    deck.grow('beside')
-    // One button per empty cell: the connected places this window can reach.
-    const buttons = all<HTMLButtonElement>(deck.el, '.deck-vacant-url .btn')
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0].textContent).toContain('connected place')
+    expect(all(deck.el, '.deck-vacant .btn')).toHaveLength(0)
   })
 })
 
