@@ -1,6 +1,13 @@
 {
-  "latest": "d61edbc",
+  "latest": "2b4f0af",
   "versions": [
+    {
+      "commit": "2b4f0af",
+      "version": "0.12.0",
+      "date": "2026-09-20T21:48:11+02:00",
+      "subject": "Resolutions the file does not store, zoom both ways from the bar, and an APA that pools its anchors (#67)",
+      "tag": ""
+    },
     {
       "commit": "d61edbc",
       "version": "0.12.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "a560ca8",
-      "version": "0.12.0",
-      "date": "2026-09-12T09:11:35+02:00",
-      "subject": "Public stores: IGV's genomes, all of 4DN, all of ENCODE, and sessions with the tracks on (#50)",
-      "tag": ""
-    },
-    {
       "commit": "fe7debc",
       "version": "0.12.0",
       "date": "2026-09-10T10:40:39+02:00",
@@ -205,13 +205,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 67,
-      "commit": "1ca61e3",
-      "title": "Resolutions the file does not store, zoom both ways from the bar, and an APA that pools its anchors",
-      "branch": "claude/map-visualization-improvements-oi2o8p",
-      "date": "2026-09-20T18:37:19Z"
-    }
-  ]
+  "pulls": []
 }
