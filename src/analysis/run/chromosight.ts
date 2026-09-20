@@ -56,6 +56,7 @@ import {
   validBins,
   type Span,
 } from './blocks'
+import { offsetTicks } from './labels'
 
 /** How many rows of a correlation are computed between two chances to cancel. */
 const ROWS_PER_BREATH = 64
@@ -408,10 +409,13 @@ function outputsFor(
     // A diagonal pattern's window is half gaps, so the picture is a triangle
     // until its own transpose is added back — `cmd_detect`'s last step.
     values: Float32Array.from(shape.onDiagonal ? symmetrise(pileup, shape.size) : pileup),
-    xLabel: 'Bins from the centre',
-    yLabel: 'Bins from the centre',
-    xTicks: [],
-    yTicks: [],
+    // Base pairs, not bins: what a reader asks of a pileup is how far from the
+    // anchor a thing lies, and a count of bins answers that only for somebody
+    // holding the resolution in their head (`run/labels.offsetTicks`).
+    xLabel: 'Distance from the centre',
+    yLabel: 'Distance from the centre',
+    xTicks: offsetTicks(shape.size, binsize),
+    yTicks: offsetTicks(shape.size, binsize),
     ...CHROMOSIGHT_SPECTRUM,
     stats: [
       { label: 'patterns', value: calls.length, digits: 0, hint: 'Calls that entered the pileup.' },

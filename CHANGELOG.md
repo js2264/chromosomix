@@ -301,6 +301,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A pileup's axes are numbered in base pairs, not in bins (§18.8).** The APA, chromosight's
+  pileup and the chromosight APA all drew a picture whose axes said *Bins from the centre* and
+  carried no numbers at all. They now read *Distance from the centre* — or from the feature's start
+  or end, whichever the window was cut about — with five labels along each axis: `-21 kb`,
+  `-10.5 kb`, `0`, `+10.5 kb`, `+21 kb`. A count of bins is a number only a reader holding the
+  resolution in their head can use, and a different number for the same window at every resolution.
+  A scaled window keeps its own `0 → 1` labels, its axis being the feature rather than a distance.
+
 - **The Structures card has no box to paste a URL into either (§5.11).** It arrived with the 3D
   card after the Tracks, Contact maps and deck rows were cleared of theirs, so it kept the one
   pattern every other card had lost: a drop zone with *or open one by URL* folded under it. The

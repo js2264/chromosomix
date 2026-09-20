@@ -83,6 +83,7 @@ import {
 import type { MarginProfile, MatrixOutput, TableOutput, TaskOutput } from '../types'
 import { chromosightPileup } from './apaChromosight'
 import { usableBlock, type Span } from './blocks'
+import { offsetTicks } from './labels'
 
 /** A rectangle of the matrix, in absolute bins. */
 interface Rect {
@@ -413,8 +414,18 @@ export const runApa: TaskRunner = async (job) => {
       ? scaledDomains
         ? `Position along the feature (0 → 1), flanked by ${flankFractionOf(job.params)}×`
         : 'Scaled position'
-      : `Bins from ${from}`
-    const ticks = scaledDomains ? scaledTickLabels(layout, flankFractionOf(job.params)) : []
+      : `Distance from ${from}`
+    // **In base pairs, not in bins.** A fixed window is a window of the genome,
+    // and what a reader asks of a pileup is how far from the anchor the thing
+    // they are looking at lies; a count of bins answers that only for somebody
+    // holding the resolution in their head, and differently at every
+    // resolution. A *scaled* window has no such distance — its axis is the
+    // feature, 0 to 1 — and keeps its own labels ({@link scaledTickLabels}).
+    const ticks = isScaled(job.params)
+      ? scaledDomains
+        ? scaledTickLabels(layout, flankFractionOf(job.params))
+        : []
+      : offsetTicks(side, job.mc.binsize)
 
     outputs.push({
       kind: 'matrix',

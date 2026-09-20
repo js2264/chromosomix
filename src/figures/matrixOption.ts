@@ -376,14 +376,30 @@ export function matrixOptionOf(
   const yAxes: ChartOption[] = []
   const series: ChartOption[] = []
 
-  const axisInk = {
+  /**
+   * The ink an axis is drawn in, and **which of its labels are drawn**.
+   *
+   * A tick list shorter than the axis is a *scale laid across it* — a pileup's
+   * five distances over forty-three columns — spread onto the cells it names
+   * with blanks in between ({@link spreadTicks}). The library thins labels by
+   * counting **categories**, blanks included, so left to itself it draws every
+   * k-th column and hides four of the five things there were to read. With one
+   * label per cell the thinning is right and is what keeps a fifty-quantile
+   * saddle from writing a wall of numbers along its foot.
+   */
+  const axisInk = (labels: readonly string[], cells: number): ChartOption => ({
     axisLine: { lineStyle: { color: theme.grid } },
     axisTick: { lineStyle: { color: theme.grid } },
-    axisLabel: { color: theme.muted, fontSize: size, fontFamily: theme.fontFamily },
+    axisLabel: {
+      color: theme.muted,
+      fontSize: size,
+      fontFamily: theme.fontFamily,
+      ...(labels.length > 0 && labels.length !== cells ? { interval: 0 } : {}),
+    },
     nameTextStyle: { color: theme.ink, fontSize: size, fontFamily: theme.fontFamily },
     splitLine: { show: false },
     splitArea: { show: false },
-  }
+  })
 
   xAxes.push({
     type: 'category',
@@ -392,7 +408,7 @@ export function matrixOptionOf(
     name: output.xLabel,
     nameLocation: 'middle',
     nameGap: size * 2.2,
-    ...axisInk,
+    ...axisInk(output.xTicks, output.ncols),
   })
   yAxes.push({
     type: 'category',
@@ -403,7 +419,7 @@ export function matrixOptionOf(
     name: output.yLabel,
     nameLocation: 'middle',
     nameGap: size * 3.4,
-    ...axisInk,
+    ...axisInk(output.yTicks, output.nrows),
   })
 
   series.push({

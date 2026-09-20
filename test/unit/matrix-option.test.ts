@@ -335,6 +335,45 @@ describe('the marginal profiles', () => {
   })
 })
 
+describe('which tick labels the axis draws', () => {
+  /** The abscissa of a built option. */
+  function abscissa(option: Record<string, unknown>): Record<string, Record<string, unknown>> {
+    return (option['xAxis'] as Array<Record<string, Record<string, unknown>>>)[0]
+  }
+
+  it('draws every one of a scale laid across the axis, blanks and all', () => {
+    // Five distances over forty-three columns, spread onto the cells they
+    // name. The library thins by counting *categories* — the blanks included —
+    // so left to itself a pileup shows two of the five numbers there were to
+    // read, and which two depends on how wide the card happens to be.
+    const pileup = matrix({
+      nrows: 43,
+      ncols: 43,
+      values: new Float32Array(43 * 43),
+      xTicks: ['-21 kb', '-10.5 kb', '0', '+10.5 kb', '+21 kb'],
+      yTicks: ['-21 kb', '-10.5 kb', '0', '+10.5 kb', '+21 kb'],
+    })
+    const option = matrixOptionOf(pileup, STYLE, THEME, BOX)
+    expect(abscissa(option)['axisLabel']['interval']).toBe(0)
+    const ordinate = (option['yAxis'] as Array<Record<string, Record<string, unknown>>>)[0]
+    expect(ordinate['axisLabel']['interval']).toBe(0)
+  })
+
+  it('leaves one label per cell to the library, which thins a wall of them', () => {
+    // A saddle's fifty quantile groups or a cis/trans square's sequences: each
+    // label names its own cell, and drawing all fifty is a row of numbers on
+    // top of each other rather than an axis.
+    const saddle = matrix({ xTicks: ['a', 'b', 'c'], yTicks: ['a', 'b', 'c'] })
+    const option = matrixOptionOf(saddle, STYLE, THEME, BOX)
+    expect(abscissa(option)['axisLabel']['interval']).toBeUndefined()
+  })
+
+  it('says nothing about an axis with no labels at all', () => {
+    const option = matrixOptionOf(matrix(), STYLE, THEME, BOX)
+    expect(abscissa(option)['axisLabel']['interval']).toBeUndefined()
+  })
+})
+
 describe('the shape of the picture', () => {
   /** The main grid, which is the picture itself. */
   function picture(option: Record<string, unknown>): Record<string, number> {

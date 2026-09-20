@@ -5138,6 +5138,18 @@ normalised by **distance-matched controls by default**, by observed/expected, by
 not at all; with the P2LL enrichment reported under it and a per-feature score table that can leave
 the app.
 
+**A pileup's axes are distances, in base pairs.** `-21 kb`, `0`, `+21 kb` — five labels along each
+axis, the ends at the ends, the sign written out on both sides because what a label says is *which
+side of the anchor*. They were counts of **bins**, which is a number only a reader holding the
+resolution in their head can use and a different number for the same window at every resolution: a
+±21 kb pileup reads `±21` at 1 kb and `±21` at 5 kb, two pictures five times apart labelled
+identically. The labels are positions along the axis rather than the offsets of the cells they land
+on, which is what keeps a symmetric window symmetric — rounding each quarter point to a whole bin
+puts `-10 kb` opposite `+11 kb`. A *scaled* window has no such distance, its axis being the feature
+from 0 to 1, and keeps its own labels. The rule is one function in `analysis/run/labels.ts` and the
+three tasks that draw a pileup — APA, chromosight's own, and the chromosight pileup — all read it,
+since two of them rounding differently is how one figure comes to look computed by another tool.
+
 **A pileup is cut about a point of the feature, and which point is the reader's** — *start*, *centre*
 or *end*, strand-aware, the same three the metaplot has offered since it existed and spelled the same
 way. It took the midpoint and never said so, which on a gene set is a pileup at whatever is half way

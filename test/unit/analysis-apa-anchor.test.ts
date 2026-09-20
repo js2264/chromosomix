@@ -178,17 +178,28 @@ describe('the anchor point', () => {
 })
 
 describe('what the axis says', () => {
-  async function label(params: Params): Promise<string> {
+  async function matrixOf(params: Params): Promise<MatrixOutput> {
     const outputs = await runApa(job(params))
     const matrix = outputs.find((out): out is MatrixOutput => out.kind === 'matrix')
     if (matrix === undefined) throw new Error('no matrix output')
-    return matrix.xLabel
+    return matrix
   }
+  const label = async (params: Params): Promise<string> => (await matrixOf(params)).xLabel
 
   it('names the point the picture is about', async () => {
-    expect(await label(fixed('start'))).toBe('Bins from the feature’s start')
-    expect(await label(fixed('end'))).toBe('Bins from the feature’s end')
-    expect(await label(fixed())).toBe('Bins from the feature’s centre')
+    expect(await label(fixed('start'))).toBe('Distance from the feature’s start')
+    expect(await label(fixed('end'))).toBe('Distance from the feature’s end')
+    expect(await label(fixed())).toBe('Distance from the feature’s centre')
+  })
+
+  it('numbers both axes in base pairs, not in bins', async () => {
+    // A half-width of 2 bins at 1 kb: five cells spanning ±2 kb. Read as a
+    // count of bins the same picture says `±2` at every resolution, which is a
+    // number only somebody holding the bin size in their head can use.
+    const matrix = await matrixOf(fixed())
+    expect(matrix.ncols).toBe(5)
+    expect(matrix.xTicks).toEqual(['-2 kb', '-1 kb', '0', '+1 kb', '+2 kb'])
+    expect(matrix.yTicks).toEqual(matrix.xTicks)
   })
 })
 
