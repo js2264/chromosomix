@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 67,
-      "commit": "9792814",
+      "commit": "1ca61e3",
       "title": "Resolutions the file does not store, zoom both ways from the bar, and an APA that pools its anchors",
       "branch": "claude/map-visualization-improvements-oi2o8p",
-      "date": "2026-09-20T17:40:05Z"
+      "date": "2026-09-20T18:37:19Z"
     }
   ]
 }
