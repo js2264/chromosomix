@@ -1,6 +1,13 @@
 {
-  "latest": "2b4f0af",
+  "latest": "18db091",
   "versions": [
+    {
+      "commit": "18db091",
+      "version": "0.12.0",
+      "date": "2026-09-20T22:15:12+02:00",
+      "subject": "Update README",
+      "tag": ""
+    },
     {
       "commit": "2b4f0af",
       "version": "0.12.0",
@@ -132,13 +139,6 @@
       "version": "0.12.0",
       "date": "2026-09-12T10:49:50Z",
       "subject": "Reconcile pull-request previews in the deploy, because the removal gets cancelled",
-      "tag": ""
-    },
-    {
-      "commit": "918d7f6",
-      "version": "0.12.0",
-      "date": "2026-09-12T09:13:42Z",
-      "subject": "Page 4DN and do not page ENCODE, because each refuses what the other needs",
       "tag": ""
     },
     {
