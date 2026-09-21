@@ -4162,11 +4162,38 @@ canvas.is-frozen {
   gap: 0.3rem;
 }
 
-/* Bounded below by something a resolution fits into, and free to grow: the
-   `1fr` tracks of the old grid, said in the units a wrap needs. */
+/* The resolution takes what it needs and the format takes the rest.
+
+   Equal `1fr` tracks split a 200-pixel column in two, and `300 dpi` does not
+   need half of it while `PDF (image)` needs more — so the format select read
+   `PDF (imag`, in the one card where the choice of file is the whole question
+   and where §7.2 argues at length that the word *image* has to be legible: a
+   reader who opens a map's PDF in Illustrator expecting paths is being told
+   here that they will not get them.
+
+   The trade is a line. Nothing fits `300 dpi` and `PDF (image)` side by side in
+   200 pixels, so the row is three lines in this column — the two selects each on
+   their own, the two buttons together underneath — and it reads as a stack
+   rather than as a row that broke. A legible format on three lines beats a
+   truncated one on two. The wrap does the arranging, so a wider column (the
+   panel in the map's own header, where the same card is inlined) still draws it
+   as the one line §26.6 describes. */
 .export-row > .select {
-  flex: 1 1 5rem;
   min-width: 0;
+}
+
+/* `width: auto` on both, because `.controls-card .select` further up sets
+   `width: 100%` and a `flex-basis: auto` resolves to it — so the resolution took
+   the whole of the first line, the format the whole of the second and the two
+   buttons a third, which is the same trap `.export-row-flex` below documents. */
+.export-row > .select-dpi {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+.export-row > .select-format {
+  flex: 1 1 8rem;
+  width: auto;
 }
 
 /* In the panel header there is no column to divide, so the row is just a row. */

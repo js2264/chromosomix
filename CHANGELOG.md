@@ -535,6 +535,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   through `formatLocus` now, which is the one writer §26.1 names, and the hand-rolled `+1` beside each
   of them is gone with them.
 
+- **The map's Export card no longer says `PDF (imag`.** Its two selects shared the column in equal
+  halves, and `300 dpi` does not need half of a 200-pixel column while `PDF (image)` needs more —
+  in the one card where §7.2 argues at length that the word *image* has to be legible, because a
+  reader who opens a map's PDF in Illustrator expecting paths is being told here that they will not
+  get them. It costs the row a line in that column and reads as a stack rather than as a row that
+  broke.
+
+- **`text size` and `opacity` wear their per-cent sign the same way.** They are deliberately one
+  question asked twice, and one printed `135%` between its chevrons while the other printed a bare
+  `100` with a `%` after them — two shapes for one pair.
+
 - **The one tab you start with is called a tab.** Its label read *New session* under a `+` titled
   *New tab*, in a strip whose every other control — close, rename, share, next, previous — had already
   been brought to that word.
