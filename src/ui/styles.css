@@ -10394,14 +10394,6 @@ span.deck-name {
   gap: 0.5rem;
 }
 
-.param-section {
-  margin: 0.35rem 0 0;
-  font-size: var(--step--1);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-}
-
 .param-row {
   display: grid;
   /* The control column grows to what its control needs, within reason: an
@@ -10446,40 +10438,6 @@ span.deck-name {
 .param-row > .param-field > .select {
   width: auto;
   min-width: 9rem;
-}
-
-.param-label {
-  font-size: var(--step--1);
-  color: var(--text-dim);
-}
-
-.param-control {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.param-hint,
-.param-resolved {
-  grid-column: 2;
-  font-size: var(--step--2);
-  color: var(--text-faint);
-  line-height: 1.35;
-}
-
-.param-number {
-  width: 6rem;
-}
-
-.param-checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  max-height: 9rem;
-  overflow: auto;
-  width: 100%;
 }
 
 /* --- the synthetic tracks card ------------------------------------------- */
