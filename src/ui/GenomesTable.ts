@@ -18,14 +18,53 @@
  *   bins, and the one number retained about it lives in the info panel.
  */
 
+import { typedLocusToRegion } from '../genome/assembly'
 import { payloadColumnIsText, type GenomesResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
-import { SearchBox } from './SearchBox'
+import { SearchBox, locusPlaceholder } from './SearchBox'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
 /** Columns the format guarantees, in the order they are shown. */
 const CORE_ORDER = ['name', 'length', 'n_contigs', 'n_bins']
+
+/**
+ * The reader's word for each of the four columns the format guarantees, and
+ * what each of them is.
+ *
+ * Only those four, and that is the line §5.1 draws: no *discovered* column's
+ * name is hard-coded, because whatever the creator joined in is theirs to name
+ * and a viewer that renamed one would be hiding what the file says. These four
+ * are not discovered — {@link CORE_ORDER} already names them — and they were
+ * printed as the identifiers they are stored under, so the header row read
+ * `name length n_contigs n_bins` two inches from a File card calling the same
+ * things `contigs` and `bins`.
+ *
+ * The raw key stays the column's `key`, so sorts, filters and anything
+ * persisted are untouched. The tooltip is the other half of the fix and it is
+ * about the *neighbours*: a CheckM table joined into this file brings a
+ * `Length` of its own, so the reader gets two columns of identical numbers
+ * under two capitalisations and no way to tell which they are sorting by.
+ * Dropping the discovered one would be a viewer deciding a column the creator
+ * joined in is redundant, which §5.1 forbids and which would be wrong the first
+ * time the two disagreed; saying what this one is costs nothing and answers the
+ * question.
+ */
+const CORE_LABELS: Record<string, { label: string; title: string }> = {
+  name: { label: 'name', title: 'name — this genome, as the file’s genomes table names it' },
+  length: {
+    label: 'length',
+    title: 'length — the bases of this genome, from the file’s own genomes table',
+  },
+  n_contigs: {
+    label: 'contigs',
+    title: 'contigs — how many sequences the file assigns to this genome (n_contigs)',
+  },
+  n_bins: {
+    label: 'bins',
+    title: 'bins — how many rows of the matrix this genome covers (n_bins)',
+  },
+}
 
 export interface GenomesTableOptions {
   data: GenomesResult
@@ -92,7 +131,9 @@ export class GenomesTable {
       rows: Array.from(data.display),
       selectable: true,
       searchKeys: ['name'],
-      searchPlaceholder: 'search genome names…',
+      // `filter`, not `search`: this box narrows the list under it, and `search`
+      // is what the command palette and a store's full-text box do (§26.4).
+      searchPlaceholder: 'filter genome names…',
       emptyMessage: 'No genomes match these filters.',
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenGenome(this.names[row]),
@@ -102,12 +143,18 @@ export class GenomesTable {
         // Two are named, because two is the comparison this table was built for
         // and reading "MAG_7 × MAG_12 →" is worth more than a count. Past that
         // the names would be longer than the button.
+        // One is named, because a name says what is about to open and a count
+        // does not: the Cells table beside this one has always said
+        // `show <name> →` for a single tick, and `show 1 selected →` was this
+        // table answering the same gesture with arithmetic.
         show.textContent =
-          rows.length === 2
-            ? `show ${this.names[rows[0]]} × ${this.names[rows[1]]} →`
-            : rows.length > 0
-              ? `show ${fmt.int(rows.length)} selected →`
-              : 'show selected →'
+          rows.length === 1
+            ? `show ${this.names[rows[0]]} →`
+            : rows.length === 2
+              ? `show ${this.names[rows[0]]} × ${this.names[rows[1]]} →`
+              : rows.length > 0
+                ? `show ${fmt.int(rows.length)} selected →`
+                : 'show selected →'
       },
     })
     this.table.addToolbarItem(none)
@@ -119,13 +166,25 @@ export class GenomesTable {
     )
 
     this.locus = new SearchBox({
-      placeholder: 'genome, contig, or contig:start-end',
+      // One builder for every locus box in the application (§26.6), and the
+      // example is this file's own first sequence rather than a grammar spelled
+      // out in nouns: four boxes asked for the same thing in four phrasings.
+      placeholder: locusPlaceholder({
+        first: this.names[0],
+        accepts: { sequence: true, genome: true },
+      }),
       title:
         'Open a window without opening the genome around it first — MAG_012, a contig of ' +
-        'one, or contig:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
-        'cooler. The same box the / key opens.',
+        'one, or contig:1,200,001-1,210,000. Coordinates are 1-based and inclusive, as IGV ' +
+        'and samtools write them. The same box the / key opens.',
+      go: true,
+      // 1-based inclusive in, the machine form out (§26.1). This box used to
+      // hand the digits to `parseMetacoolerRange` untouched, which reads them
+      // 0-based and half-open — so the same coordinates named one window here
+      // and a different one in the browser, and the hint had to tell a reader
+      // which of the two bases they were in.
       onSubmit: (text) => {
-        if (text !== '') options.onOpenRegion(text)
+        if (text !== '') options.onOpenRegion(typedLocusToRegion(text))
       },
     })
 
@@ -136,13 +195,13 @@ export class GenomesTable {
         'header',
         { class: 'view-head' },
         el('h2', { text: 'Genomes' }),
+        // One sentence (§26.4). It was four lines of prose over a control two
+        // lines tall, and the two clauses it lost are said by the screen: the
+        // box says what it takes in its own placeholder, and what a selection of
+        // genomes draws is the picture the button opens.
         el('p', {
           class: 'hint',
-          text:
-            'Click a genome to open its matrix. Tick any number and show them as one map — ' +
-            'each genome on the diagonal and every block between them off it, which is the ' +
-            'phage–host, plasmid–host and HGT view. Or name a window in the box and go ' +
-            'straight there.',
+          text: 'Click a genome to open its matrix; tick several to show them as one map.',
         }),
         this.locus.el,
       ),
@@ -191,10 +250,14 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
 
   const columns: ColumnDef[] = ordered.map((name) => {
     const column = payload.data[name]
+    const core = CORE_LABELS[name]
+    const label = core?.label ?? name
+    const title = core === undefined ? {} : { title: core.title }
     if (payloadColumnIsText(column)) {
       return {
         key: name,
-        label: name,
+        label,
+        ...title,
         kind: 'string',
         width: name === 'name' ? 'minmax(10rem, 1.4fr)' : 'minmax(7rem, 1fr)',
         // An empty fixed-length string is padding, not a value: treating it as
@@ -204,7 +267,8 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
     }
     return {
       key: name,
-      label: name,
+      label,
+      ...title,
       kind: 'number',
       align: 'right',
       width: 'minmax(5.5rem, 0.7fr)',
@@ -215,7 +279,10 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
 
   columns.push({
     key: '__density__',
-    label: 'nnz rows (proxy)',
+    // The words §5.1 uses for it, and the words the File card beside this table
+    // uses for the same quantity: `nnz rows` is the worker's own name for a
+    // slice of `bin1_offset` and names nothing a biologist has heard of.
+    label: 'non-zero pixels (proxy)',
     kind: 'number',
     align: 'right',
     width: 'minmax(7rem, 0.8fr)',

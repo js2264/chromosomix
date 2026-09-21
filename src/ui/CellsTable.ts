@@ -99,7 +99,7 @@ export class CellsTable {
       rows: Array.from({ length: total }, (_, row) => row),
       selectable: true,
       searchKeys: ['name'],
-      searchPlaceholder: 'search cell names…',
+      searchPlaceholder: 'filter cell names…',
       emptyMessage: 'No cells match these filters.',
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       // A click opens that cell on its own, which is the per-cell view and the
@@ -136,7 +136,12 @@ export class CellsTable {
     )
 
     this.search = new SearchBox({
-      placeholder: 'cell name',
+      // What it *takes*, which is what tells it from the box directly under it.
+      // `cell name` over `filter cell names…` was two boxes for one thing, and
+      // a reader typing half a barcode into the wrong one got a filtered list
+      // where they expected a map.
+      placeholder: 'cell name, or a prefix to sum',
+      go: true,
       title:
         'Jump to a cell by name. The box above the rows filters the list; this one goes ' +
         'straight to a cell and opens it.',
@@ -162,7 +167,12 @@ export class CellsTable {
       el(
         'header',
         { class: 'view-head' },
-        el('h2', { text: `Cells (${fmt.int(total)})` }),
+        // No count in the heading. `Cells (3,882)` put the number a few lines
+        // above the row count the toolbar already prints, and neither of the two
+        // tables beside this one carries one — the three landing views are near
+        // twins and should look like it. What the header was said to be for, the
+        // *sticky* selection, it never said: the number in it was the total.
+        el('h2', { text: 'Cells' }),
         el('p', {
           class: 'hint',
           text:

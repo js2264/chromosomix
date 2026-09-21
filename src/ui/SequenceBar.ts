@@ -25,16 +25,25 @@
  *
  * ## The base
  *
- * Every region this emits is **0-based and half-open**, which is what
- * `metacooler/range.ts` reads and what the table's own hint promises. The 1D
- * browser writes 1-based inclusive loci for the same drag, because that is what
- * its own box takes (`genome/assembly.ts`) — the two surfaces genuinely differ
- * and the difference is one line in each, kept where it can be seen rather than
- * shared and got wrong once.
+ * **What a reader sees and types is 1-based and inclusive; what this bar emits
+ * is 0-based and half-open** (§26.1). The two used to be the same number: this
+ * box handed what was typed straight to `parseMetacoolerRange` and its marquee
+ * drew the raw positions, so the identical digits meant one base here and
+ * another in the browser's own box above the same genome — an off-by-one nobody
+ * would notice and everybody would be wrong about. The conversion is now
+ * `genome/assembly.ts`'s and happens at the two edges of this file:
+ * `typedLocusToRegion` on the way in, `formatPosition` on the chips. The
+ * *region* keeps cooler's grammar because that is what a link has to keep
+ * meaning and what `metacooler show --range` takes.
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import { assemblyAxis, type Assembly } from '../genome/assembly'
+import {
+  assemblyAxis,
+  formatPosition,
+  typedLocusToRegion,
+  type Assembly,
+} from '../genome/assembly'
 import {
   RULER_FONT,
   TICK_FONT,
@@ -53,7 +62,7 @@ import type { LocusAxis, LocusSegment } from '../render/locus'
 import { Scale } from '../render/scale'
 import { button, el, fmt } from './dom'
 import { readCanvasPalette } from './MatrixPanel'
-import { SearchBox, featureSuggestions } from './SearchBox'
+import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { getTextScale, scaleFont, scaleLength, subscribeTextScale } from './textScale'
 
 /** Movement below this many pixels is a click rather than a drag. */
@@ -84,7 +93,13 @@ export interface SequenceBarProps {
   store?: AnnotationStore
   /** A whole sequence: a click on a band, or a bare name typed. */
   onOpenContig(name: string): void
-  /** A window inside one, 0-based half-open: a drag, or coordinates typed. */
+  /**
+   * A window inside one, as a region string: a drag, or coordinates typed.
+   *
+   * 0-based half-open, which is the machine form every region in this
+   * application is stated in (§26.1) — what the reader typed has already been
+   * converted.
+   */
   onOpenRegion(region: string): void
   /** `*`, which is what the browser's box takes for the whole genome. */
   onOpenWhole?(): void
@@ -137,14 +152,26 @@ export class SequenceBar {
 
     const store = props.store
     this.box = new SearchBox({
-      placeholder: 'chrI:1,000-20,000, a sequence, a gene, or * for the whole genome',
+      // The example is the open assembly's own first sequence (§26.6). It was a
+      // hard-coded `chrI` printed over a strip of bands named `I…XVI`, and
+      // `a gene` was promised whether or not there was an annotation to look one
+      // up in.
+      placeholder: locusPlaceholder({
+        first: props.assembly.contigs[0]?.name,
+        accepts: { sequence: true, gene: store !== undefined, whole: true },
+      }),
       title:
         'Where do you want to be. A sequence name opens the whole of it; coordinates open a ' +
-        'window inside it, 0-based and half-open as in cooler; a gene name is looked up in the ' +
-        'annotation the star picks. Or drag across the bar below.',
+        'window inside it, 1-based and inclusive as IGV and samtools write it; a gene name is ' +
+        'looked up in the annotation the star picks. Or drag across the bar below.',
       inputClass: 'input-region',
       onSubmit: (text) => this.submit(text),
-      ...(store === undefined ? {} : { suggest: (text: string) => featureSuggestions(store, text) }),
+      // `display`, because this box's value is what a reader reads and Enter
+      // reads back through `typedLocusToRegion`: a machine-form hit would be
+      // converted a second time and land a base to the left of the gene.
+      ...(store === undefined
+        ? {}
+        : { suggest: (text: string) => featureSuggestions(store, text, 'display') }),
     })
 
     this.el = el(
@@ -214,7 +241,8 @@ export class SequenceBar {
    *
    * Read rather than drawn by a test, for the reason {@link hairlineAt} gives:
    * jsdom refuses a 2D context, and the drawing is `drawSelection`, which the 1D
-   * browser has used for as long as it has had a marquee.
+   * browser has used for as long as it has had a marquee. These are the machine
+   * form; {@link chipAt} is what a reader sees.
    */
   get selection(): { contig: string; start: number; end: number } | null {
     const drag = this.drag
@@ -266,7 +294,15 @@ export class SequenceBar {
       this.props.onOpenContig(asked)
       return
     }
-    this.props.onOpenRegion(asked)
+    // **Read as the display form, handed on as the machine one** (§26.1). This
+    // box used to pass what was typed straight through to
+    // `parseMetacoolerRange`, so the same digits meant one thing here and one
+    // base earlier in the browser's own box — and the chips this bar draws
+    // during a drag, being 1-based now, would have been a base off the window
+    // that typing them back would open. `typedLocusToRegion` takes every
+    // spelling the tokenizer takes and hands anything it refuses straight on, so
+    // a refusal is still about what the reader wrote.
+    this.props.onOpenRegion(typedLocusToRegion(asked))
   }
 
   // -------------------------------------------------------------------------
@@ -281,11 +317,19 @@ export class SequenceBar {
     })
   }
 
+  /**
+   * The line over the strip: how much genome, and what the strip answers to.
+   *
+   * Both gestures, in the Genome minimap card's own words. The two widgets are
+   * the same strip drawn in two places and they taught two different things —
+   * this one said only `drag a band to open a window in it`, which leaves out
+   * the click that opens a whole sequence and that this bar has always answered.
+   */
   private paintNote(): void {
     const count = this.props.assembly.contigs.length
     this.note.textContent =
       `${fmt.int(count)} ${count === 1 ? 'sequence' : 'sequences'} · ` +
-      `${fmt.bp(this.props.assembly.total)} · drag a band to open a window in it`
+      `${fmt.bp(this.props.assembly.total)} · click a band for a sequence, drag for a window`
   }
 
   /**
@@ -337,6 +381,12 @@ export class SequenceBar {
       },
       dpr: this.dpr,
       fonts: { ruler: scaleFont(RULER_FONT), tick: scaleFont(TICK_FONT) },
+      // No caption under the bands. The line above the strip already says
+      // `16 sequences · 12.11 Mb`, and the ruler's own `0 bp – 12.11 Mb across
+      // 16 sequences` repeated both forty pixels below it — two captions for one
+      // strip, which makes a reader look for the difference between them. The
+      // boundary marks are still drawn; they are the picture.
+      caption: false,
     })
 
     this.paintMarquee(ctx, palette.labelHaloColor)
@@ -382,8 +432,15 @@ export class SequenceBar {
     drawSelection(ctx, {
       anchor: drag.from,
       moving: drag.to,
-      start: `${marks.contig}:${fmt.int(marks.start)}`,
-      end: `${marks.contig}:${fmt.int(marks.end)}`,
+      // The display form, through the one helper that writes it: a chip is
+      // something a reader reads and, having read, types back (§26.1). They
+      // were the raw 0-based positions, so the marquee named a window one base
+      // to the left of the one the release would open — and the *far* chip
+      // names the last base **inside** the window rather than the first one
+      // past it, which is what makes the pair read as the window the crumb is
+      // about to show.
+      start: this.chipAt(marks, 'anchor'),
+      end: this.chipAt(marks, 'moving'),
       span: fmt.bp(Math.abs(marks.end - marks.start)),
       top: 0,
       bottom: this.height + this.marksRoom(),
@@ -396,6 +453,27 @@ export class SequenceBar {
       colour: CROSSHAIR_COLOR,
       halo,
     })
+  }
+
+  /**
+   * One end of the marquee, as a reader reads a coordinate.
+   *
+   * The two chips are the two ends of the **window**, not two independent
+   * positions, so the near one is its first base and the far one its last: a
+   * 0-based half-open `[lo, hi)` is displayed `lo + 1` to `hi`, which is
+   * `formatPosition` of `lo` and of `hi - 1`. A drag made right to left reports
+   * its anchor first, which is what the chips show and why the two are sorted
+   * here rather than by the caller.
+   */
+  private chipAt(
+    marks: { contig: string; start: number; end: number },
+    which: 'anchor' | 'moving',
+  ): string {
+    const lo = Math.min(marks.start, marks.end)
+    const hi = Math.max(lo, Math.max(marks.start, marks.end) - 1)
+    const forward = marks.start <= marks.end
+    const wanted = which === 'anchor' ? (forward ? lo : hi) : forward ? hi : lo
+    return formatPosition(marks.contig, wanted)
   }
 
   /** Where a pixel falls in one sequence, in that sequence's own base pairs. */

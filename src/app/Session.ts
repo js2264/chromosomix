@@ -1496,7 +1496,10 @@ export class Session {
       {
         id: 'go-contigs',
         group: 'Go',
-        title: 'Contigs table',
+        // The file's own word for its sequences, as the crumb and the table's
+        // own heading use it: the palette offered `Contigs table` for a screen
+        // headed **Chromosomes** (§26.4).
+        title: isMetacool ? 'Contigs table' : 'Chromosomes table',
         keys: KEYS.contigs,
         enabled: file !== null,
         run: () => {
@@ -6830,6 +6833,10 @@ export class Session {
       data,
       hideColumns: cooler ? ['genome_id'] : [],
       title: cooler ? 'Chromosomes' : 'Contigs',
+      // The same word the crumb and the title use, inside the table too: its
+      // filter box and its empty state said `contig` under a heading reading
+      // **Chromosomes** (§26.4).
+      noun: cooler ? 'chromosome' : 'contig',
       hint: cooler
         ? 'One genome, its chromosomes. Pick one to see its map, or select a subset to compare them.'
         : undefined,
@@ -6876,6 +6883,8 @@ export class Session {
     // offering a *second* `contig`, meaning the roll-up of this read rather
     // than the scan the other level draws.
     const picker = this.isMetacool
+    // The locus box's example, from the file in front of the reader (§26.6).
+    const first = this.assemblyOfFile(file)?.contigs[0]?.name ?? null
     this.mountWholeFile(
       state,
       // The declared resolution is in the key for the reason `balance` is: the
@@ -6931,6 +6940,12 @@ export class Session {
           // metagenome, where the card above already offers all three.
           offerLevel: !picker && file.info.nContigs > 1,
           noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+          // The example in the locus box, and what the read costs in bytes: the
+          // gate priced itself in stored pixels alone, which is the wrong currency
+          // for a reader on a network (§7.3, §18.6).
+          ...(first === null ? {} : { first }),
+          sourceKind: file.info.sourceKind,
+          sourceBytes: file.info.sourceBytes,
           ...(this.annotationContext() === undefined
             ? {}
             : { annotations: this.annotationContext() }),
@@ -6985,6 +7000,7 @@ export class Session {
     }
     const bins = this.binsOfSelection(selection)
     const contigs = this.contigsOfSelection(selection)
+    const first = this.assemblyOfFile(file)?.contigs[0]?.name ?? null
     const view = new WholeView({
       client: this.clientOf(),
       caption: this.captionFor(state),
@@ -7004,6 +7020,9 @@ export class Session {
       // one. The sequences are already the axis at bin level here.
       offerLevel: false,
       noun: file.info.hasGenomes ? 'contig' : 'chromosome',
+      ...(first === null ? {} : { first }),
+      sourceKind: file.info.sourceKind,
+      sourceBytes: file.info.sourceBytes,
       ...(this.annotationContext() === undefined
         ? {}
         : { annotations: this.annotationContext() }),
@@ -7250,6 +7269,9 @@ export class Session {
     // *that* is the cheapest thing to land on and the default gives way to it.
     // Only the default: a link that names a level has already chosen.
     const edgeListUrl = this.edgeListUrl()
+    // The same count the whole-genome gate prices itself in, from the same
+    // place as the File card's row.
+    const nnz = file.info.cellNnz ?? numberOr(file.info.info['nnz'])
     const level =
       state.level === undefined && edgeListUrl !== undefined ? 'genome' : overviewLevel(state)
     // Three levels, two classes. `bin × bin` is not an accumulation over pairs
@@ -7272,6 +7294,11 @@ export class Session {
           binsize: file.info.binsize ?? 1,
           sourceKind: file.info.sourceKind,
           sourceBytes: file.info.sourceBytes,
+          // Both figures on both gates: the pixels are what a local read costs
+          // and the bytes are what a remote one costs, and one gate used to
+          // quote each (§7.3).
+          ...(nnz === null ? {} : { nnz }),
+          noun: file.info.hasGenomes ? 'contig' : 'chromosome',
           ...(edgeListUrl === undefined ? {} : { edgeListUrl }),
           level,
           scale: this.scaleOf(state),

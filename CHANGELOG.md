@@ -59,6 +59,87 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **The 1D browser's bar zooms in the map's own four steps.** It had two unlabelled magnifiers at
+  1.8×, beside a region bar carrying `⊖10× ⊖3× ⊕3× ⊕10×` on the same screen: a reader who had learnt
+  that one press is 3× on the map got something unpredictable on the tracks, and the zoom-out stayed
+  live with the whole genome already on screen. The four buttons are `RegionView`'s own, each greys
+  itself when there is nowhere in its direction to go, and the `−` / `+` keys drive the 3× pair. The
+  three lane-height marks have left the bar — they are the same three the Tracks card draws a few
+  inches away, and the map's bar never carried them — and in a deck's tracks cell the bar is the box
+  and the steps alone, so it stays whole and the cell's ruler stays in line with the maps beside it.
+
+- **Every locus box in the browser and the tables reads what a reader types as 1-based inclusive.**
+  Four boxes told you in so many words that coordinates were *0-based and half-open, as in cooler*
+  while the browser's box beside them read the same digits one base to the right, and the map's own
+  summary printed a locus its own box would have understood differently. What a box shows and what it
+  accepts are now both the display form and the conversion happens at the box (§26.1); the region in
+  a link is unchanged, which is what keeps a shared view meaning what it meant.
+
+- **A locus box's example comes from the file you have open.** It said `chrI:1,000-20,000` over a
+  yeast genome whose sequences are called `I…XVI`, and promised *a gene* whether or not an annotation
+  was loaded to look one up in. The Genomes, Chromosomes, whole-genome and pair boxes have gained the
+  `go` the other four always had, and the whole-genome view's placeholder no longer ends mid-word at
+  the clause that says a gene name works.
+
+- **Picking a gene out of the browser's hit list lands on the gene.** The list printed one coordinate
+  and the box then filled with another, a base apart.
+
+- **The readout under the pointer names the base.** At 47 bases per pixel the browser's status line
+  read `IV:1.27 Mb` — two decimals of a megabase, so the number did not change across a fifth of the
+  window — and a lane's tooltip beside the map said `IV:1.18 Mb` over 1 kb bins while the matrix
+  tooltip a pixel above said the base. One rule now, on all three.
+
+- **A track's value axis no longer depends on how wide its lane is.** The same ATAC track over the
+  same 400 kb read `0 – 111` on a wide lane and `0 – 36.9` in a deck cell, so two cells of one deck —
+  and the two stacks of one map — disagreed about the same file. Autoscale resolves over the values
+  the file states in the window, and a lane narrower than a thousand pixels is sampled as though it
+  were that wide, so the numbers behind two pictures of one window are the same numbers.
+
+- **A lane's label no longer sits on the lane's own data.** Beside a map the block is drawn over the
+  track, and a halo around each glyph was the whole of the protection: on a 16-pixel peak lane
+  `ATAC peaks` came out with orange bars through every letter, `230 features in view` lay across the
+  density block it was describing, and the GC lane's `0 – 1` ran along the trace it measures. The
+  block now sits on a plate, a name too long for its lane is cut in the middle rather than clipped by
+  it — a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000` — a lane name is
+  set in the weight the browser sets it in, and a fixed `0 – 1` axis keeps its range beside the name.
+
+- **A gene name that is not in the file is never drawn.** `MSW1` came out as `SW1`, `HEH2` as `HE`
+  and `MUS81` as `US81`, cut by the lane's edge and every one of them a plausible yeast symbol. Names
+  are kept inside the lane, and a name may overhang its own feature four times over rather than
+  without limit: a 46-character peak name written under a 3-pixel peak spanned a dozen unlabelled
+  neighbours and read as the label for all of them.
+
+- **A gene track stops vanishing into a grey bar when you open a side panel.** The collapse to a
+  density profile was measured against one row of the lane, so a stranded gene set that packs into a
+  band per strand was declared undrawable at half the genes it can draw: 230 yeast genes drew as named
+  boxes at one width and as a solid block at another.
+
+- **Both whole-genome gates ask the same question with the same words and the same button.** One said
+  `compute overview` — a word that appeared nowhere else — under a toolbar button reading *whole
+  genome*, and priced the read in bytes while its sibling priced it in stored pixels. Both now state
+  both figures, and a remote file past the scan limit is *warned about* on both, in the warning colour
+  rather than the colour of a refusal, with the download offered under it.
+
+- **The tracks cell's locus box can hold a locus.** In a deck three across it read
+  `IV:1,000,001-1,400,0` — the end of the window clipped, which is the number you are reading it for
+  — and the icon buttons after it wrapped one at a time, leaving a single glyph on a line of its own.
+
+- **The landing tables read as one family.** The four columns a `.metacool` guarantees are labelled in
+  the app's own words rather than as `n_contigs` and `n_bins`, with the file's identifier in the
+  header's tooltip; the density column is `non-zero pixels (proxy)`, which is what the File card
+  beside it calls the same number; one ticked row is named on the button rather than counted;
+  `clear filters` greys itself when there is nothing to clear, as `clear selection` beside it always
+  did; a filter box says `filter` and a toggle column's filter is a named control rather than a
+  second bare checkbox meaning something else; and the Cells heading no longer repeats the row count
+  two lines above it.
+
+- **The Chromosomes table says *chromosome* throughout.** Its filter box asked for contig names and
+  its empty state named contigs, under a heading — and a breadcrumb, and a File card — reading
+  *Chromosomes*.
+
+- **The pair view opens either genome by name.** There was one door, labelled `open rows genome →`,
+  which is not a phrase and did not say which of the two it opened.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

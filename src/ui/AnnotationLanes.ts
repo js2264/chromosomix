@@ -65,12 +65,14 @@ import {
 import {
   drawLaneLabel,
   labelEndFor,
+  positionLabel,
   type LaneLabelSpec,
   type LaneLabelStyle,
   type LimitBox,
   type NameBox,
   progressDetail,
 } from '../render/laneLabel'
+import { formatLocus } from '../genome/assembly'
 import type { LocusAxis } from '../render/locus'
 import { barChartCaption, barExtentOf, barLimitsOf } from '../render/barchart'
 import { featureColouring } from '../render/featureInk'
@@ -100,6 +102,7 @@ import {
   drawsAProfile,
   hasAMovableAxis,
   isMetadata,
+  laneLabelOf,
   readsOf,
   type AnnotationEntry,
   type FeatureSet,
@@ -1167,6 +1170,8 @@ export class AnnotationLanes {
         entries: AnnotationEntry[]
         detail: LaneLabelSpec['detail']
         at: 'near' | 'far'
+        /** Keep the range on the name's line — see {@link LaneLabelSpec.detailBeside}. */
+        beside?: boolean
       } | null = null
       // The bands a stack of heatmaps was divided into, kept for the label: a
       // name per row rather than four names in a line across the third of them.
@@ -1245,11 +1250,13 @@ export class AnnotationLanes {
           // number a reader is watching is the one they are setting.
           const shown = dragged === null ? limits : scaledTo(limits, dragged)
           label = {
-            entries: profiles.map(({ entry: member }) =>
-              member.kind === 'sequence'
-                ? { ...member, label: `${member.label} · GC` }
-                : member,
-            ),
+            // Through `laneLabelOf`, which is the one place the ` · GC` a
+            // sequence lane wears is spelled: the readout beside this lane used
+            // to write `sequence GC` and the browser's the bare `sequence`.
+            entries: profiles.map(({ entry: member }) => ({
+              ...member,
+              label: laneLabelOf(member),
+            })),
             // A note wins the detail line, for the reason `BrowserView` gives
             // at its own copy of this: it is only ever set where the lane drew
             // nothing, and limits under an empty lane read as "there is nothing
@@ -1259,6 +1266,12 @@ export class AnnotationLanes {
                 ? progressDetail(lane.pending)
                 : (laneNote(profiles) ?? { kind: 'limits', ...shown }),
             at: labelEndFor(frame, shown, first.entry.style.flip),
+            // A GC trace lives in the middle of its lane — yeast sits at 0.4 of
+            // a 0–1 axis, which on the 46-pixel default is within a pixel of
+            // where a stacked range line lands — so `0 – 1` was written along
+            // the line it measures at every zoom. Beside the name instead: one
+            // band of the lane rather than two.
+            beside: first.entry.kind === 'sequence',
           }
         }
       } else if (lane.categories !== null) {
@@ -1577,7 +1590,12 @@ export class AnnotationLanes {
     ctx: CanvasRenderingContext2D,
     lane: Lane,
     geometry: LaneGeometry,
-    label: { entries: AnnotationEntry[]; detail: LaneLabelSpec['detail']; at: 'near' | 'far' },
+    label: {
+      entries: AnnotationEntry[]
+      detail: LaneLabelSpec['detail']
+      at: 'near' | 'far'
+      beside?: boolean
+    },
     state: EdgeState,
     /**
      * The bands a stacked lane was divided into (§18.11), one per name.
@@ -1605,6 +1623,7 @@ export class AnnotationLanes {
       detail: label.detail,
       labelAt: label.at,
       column: null,
+      ...(label.beside === true ? { detailBeside: true } : {}),
       style: laneLabelStyle(),
       palette: { text: geometry.palette.guide, halo: geometry.palette.halo },
     })
@@ -1815,12 +1834,17 @@ export class AnnotationLanes {
     const rows: LaneReadout['rows'] = []
     let detail: string[] = []
     let onALane = false
+    /** The lane the pointer is inside, for the facts that are about that lane. */
+    let hovered: (typeof slots)[number] | null = null
 
     for (const slot of slots) {
       const frame = this.frameOf(edge, slot, geometry)
       const offset = across - slot.acrossFrom
       const here = offset >= 0 && offset <= slot.thickness
-      if (here) onALane = true
+      if (here) {
+        onALane = true
+        hovered = slot
+      }
 
       // Every track in the lane, not only the one that hosts it: an overlay
       // group draws several into one strip, and a readout that named the host
@@ -1845,7 +1869,7 @@ export class AnnotationLanes {
                     along,
                   )
           rows.push({
-            label: member.kind === 'sequence' ? `${member.label} GC` : member.label,
+            label: laneLabelOf(member),
             colour: member.style.colour,
             value: value === null ? '—' : fmt.num(value),
             here,
@@ -1895,12 +1919,28 @@ export class AnnotationLanes {
       // both, since that is what tells one `VAR` from the next.
       const label = featureLabel(set, at)
       detail = label === '' ? [] : [label]
+      // Through `formatLocus`, so the span a reader is shown here is the span
+      // the feature's own card shows and the span a locus box would accept: the
+      // row used to print the FeatureSet's raw 0-based start, so a gene whose
+      // first base was under the pointer read as starting one base earlier
+      // (§26.1).
       detail.push(
-        `${set.contigs[set.contig[at]]}:${fmt.int(set.start[at])}–${fmt.int(set.end[at])}${strand}`,
+        `${formatLocus({ contig: set.contigs[set.contig[at]], start: set.start[at], end: set.end[at] })}${strand}`,
       )
       if (Number.isFinite(set.score[at])) detail.push(`score ${fmt.num(set.score[at])}`)
       if (set.detail[at] !== '') detail.push(set.detail[at])
     }
+
+    // **Which group the lane is in**, where it is in one. Beside the map a
+    // group is drawn as a bare coloured rule across the run of lanes it holds
+    // together and nothing says what it is — the browser writes `chromatin`
+    // beside its own bar, and here the margin is the plot's six pixels, which
+    // cannot hold nine-pixel type. So the name is said where there is room for
+    // it: the reader points at a lane and is told what it shares an axis with,
+    // rather than having to open the Groups card to find out why three lanes
+    // are joined by a red line (§8.8).
+    const group = hovered?.entry.style.group ?? ''
+    if (group !== '') detail.push(`group ${group}`)
 
     if (rows.length === 0 && detail.length === 0 && !onALane) return null
     const first = this.frameOf(edge, slots[0], geometry)
@@ -2021,6 +2061,18 @@ function laneTick(
 
 /** 9 px is what fits in a 16-pixel lane and still reads at a normal distance. */
 const LANE_FONT = '9px system-ui, sans-serif'
+/**
+ * The same size, heavier: a lane's **name**.
+ *
+ * The browser writes its lane names at 12 px semibold and its feature names at
+ * 10 px regular, because the name is what identifies the row and the contents
+ * are the contents. Beside the map both were `LANE_FONT`, so on a gene lane the
+ * word `genes` sat in the same line as `SWI1 ZIP1 BFR2` at the same size and
+ * weight and there was nothing to say which of them was the track. The size
+ * cannot grow — a 16-pixel lane has nine pixels of room — so the weight carries
+ * it, which is the browser's own argument at the map's constants (§8.8).
+ */
+const LANE_NAME_FONT = '600 9px system-ui, sans-serif'
 /** The bar under a lane's name while its read is on its way, and its thickness. */
 const PROGRESS_WIDTH = 40
 const PROGRESS_THICKNESS = 2
@@ -2056,7 +2108,7 @@ const GROUP_GAP = 2
  */
 function laneLabelStyle(): LaneLabelStyle {
   return {
-    nameFont: scaleFont(LANE_FONT),
+    nameFont: scaleFont(LANE_NAME_FONT),
     rangeFont: scaleFont(LANE_FONT),
     progressWidth: scaleLength(PROGRESS_WIDTH),
     progressThickness: scaleLength(PROGRESS_THICKNESS),
@@ -2074,10 +2126,38 @@ function laneLabelStyle(): LaneLabelStyle {
   }
 }
 
-/** `I:412,000` — the same phrasing the matrix readout uses. */
+/**
+ * `I:412,001` — the same phrasing the matrix readout uses, which it now is.
+ *
+ * It claimed as much and called `fmt.bp`, which above a megabase is two
+ * decimals of one: over 1 kb bins the tooltip read `IV:1.18 Mb` while the
+ * matrix tooltip a pixel above said `IV:1,162,001` about the same place, ten
+ * bins coarser and in a different grammar. `positionLabel` is the one rule both
+ * lane surfaces and the browser's status line read a position by (§8.8).
+ */
 function describeAt(axis: LocusAxis, frame: LaneFrame, along: number): string {
   const locus = axis.unitToLocus(frame.toUnit(along))
-  return locus === null ? '—' : `${locus.contig}:${fmt.bp(locus.bp)}`
+  if (locus === null) return '—'
+  return positionLabel(locus.contig, locus.bp, bpPerPixel(axis, frame, along))
+}
+
+/**
+ * How many bases one pixel of this lane covers, at this point on the axis.
+ *
+ * Asked of the axis rather than computed from the domain, because a lane's axis
+ * is the whole genome laid end to end and a pixel's worth of bases is a fact
+ * about the sequence the pointer is in — the segments have their own scales, and
+ * on a whole-genome view two neighbouring pixels can be in two of them.
+ * `Infinity` where the neighbouring pixel is not in the same sequence, which is
+ * the coarsest thing a picture can be and is read as such.
+ */
+function bpPerPixel(axis: LocusAxis, frame: LaneFrame, along: number): number {
+  const here = axis.unitToLocus(frame.toUnit(along))
+  const next = axis.unitToLocus(frame.toUnit(along + 1))
+  if (here === null || next === null || next.contig !== here.contig) {
+    return Number.POSITIVE_INFINITY
+  }
+  return Math.abs(next.bp - here.bp)
 }
 
 /**

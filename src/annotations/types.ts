@@ -222,10 +222,8 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
 /**
  * Whether the reader may move this kind's value axis.
  *
- * Everything {@link drawsAProfile} covers except a sequence — GC content is a
- * fraction pinned to the whole of `[0, 1]` on purpose, so that the same genome
- * looks the same in two views (see {@link defaultStyle}) — **and a barChart**,
- * which draws no profile at all and has an axis anyway.
+ * Everything {@link drawsAProfile} covers, **and a barChart**, which draws no
+ * profile at all and has an axis anyway.
  *
  * The barChart is the one worth saying out loud. §8.17 gave it a fixed pair of
  * limits for a reason that has nothing to do with how it is drawn: both readings
@@ -234,11 +232,46 @@ export function drawsAProfile(kind: AnnotationKind): boolean {
  * it an axis, every way of moving an axis has to reach it — a ceiling drag, a
  * ⌘-scroll, the autoscale button — or the reader is left with a number they can
  * only type, over a lane that answers a drag with a pan.
+ *
+ * A **sequence** is in the list now, and it used to be the exception: GC
+ * content is a fraction, `[0, 1]` is the whole of it, and pinning the axis kept
+ * the same genome looking the same in two views. The pin was only ever half
+ * kept, which is why it goes. The lane records its limit boxes as click targets
+ * like every other lane's, the editor stores whatever is typed in them, and the
+ * settings card offers the row `limits [0] [1] auto` — so a reader who narrowed
+ * a yeast GC lane to the 0.3–0.5 its values actually live in had no way back
+ * from the lane, while the lane alone withheld the autoscale mark that is the
+ * way back. Two surfaces disagreeing about one axis (§8.8). `[0, 1]` survives
+ * where it belongs, as {@link defaultStyle}'s default, which is what makes two
+ * views of one genome match until somebody deliberately changes one.
  */
 export function hasAMovableAxis(kind: AnnotationKind): boolean {
   return (
-    kind === 'track' || kind === 'metadata' || kind === 'alignments' || kind === 'barchart'
+    kind === 'track' ||
+    kind === 'sequence' ||
+    kind === 'metadata' ||
+    kind === 'alignments' ||
+    kind === 'barchart'
   )
+}
+
+/**
+ * What a lane of this entry is *called on screen* — `sequence · GC`.
+ *
+ * A FASTA drawn as a value track is drawn as its GC content, and an unlabelled
+ * line between 0 and 1 under a genome's name is a line nobody can name. That
+ * argument was made in three places and answered in three spellings: the lane
+ * labels wrote `sequence · GC`, the map's readout `sequence GC`, and the
+ * browser's tooltip and status line the bare `sequence` — three names for one
+ * lane in one glance (§8.8). One helper, so the picture, the card's key and both
+ * readouts say the same words.
+ *
+ * The **Tracks card's** row keeps the bare label, and that is not an oversight:
+ * the card lists the *files* that are loaded, and the file is a sequence. The
+ * `· GC` belongs to the picture drawn from it.
+ */
+export function laneLabelOf(entry: { kind: AnnotationKind; label: string }): string {
+  return entry.kind === 'sequence' ? `${entry.label} · GC` : entry.label
 }
 
 /**

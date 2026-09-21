@@ -27,7 +27,8 @@ import { MatrixPanel, axisRegion, blockSummary,
 } from './MatrixPanel'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
-import { SearchBox } from './SearchBox'
+import { typedLocusToRegion } from '../genome/assembly'
+import { SearchBox, locusPlaceholder } from './SearchBox'
 
 export interface PairViewProps {
   client: ReaderClient
@@ -134,10 +135,16 @@ export class PairView {
     this.level = props.level
     this.summary = el('p', { class: 'summary' })
     this.search = new SearchBox({
-      placeholder: 'contig, or contig:start-end',
-      title: 'Open one contig of either genome, or a range within it.',
+      // The shared builder and the shared `go` (§26.6): this box asked for the
+      // same thing as the five others in its own phrasing, and had no button.
+      placeholder: locusPlaceholder({ accepts: { sequence: true } }),
+      go: true,
+      title:
+        'Open one contig of either genome, or a range within it. Coordinates are 1-based and ' +
+        'inclusive, as IGV and samtools write them.',
+      // 1-based inclusive in, the machine form out (§26.1).
       onSubmit: (text) => {
-        if (text !== '') props.onOpenContig(text)
+        if (text !== '') props.onOpenContig(typedLocusToRegion(text))
       },
     })
 
@@ -219,9 +226,14 @@ export class PairView {
           field('rows', rowSelect),
           field('columns', colSelect),
           swap,
-          button('open rows genome →', () => props.onOpenGenome(props.rowGenome), {
-            class: 'btn btn-quiet',
-          }),
+          // **Both genomes, each named.** There was one door and it was labelled
+          // `open rows genome →`, which is not a phrase and does not say which
+          // genome it opens — and a phage–host reader wants the host's own map as
+          // often as the phage's, which meant swapping the axes to get at it
+          // (§5.3). Bordered, like every other action (§26.4): a door to another
+          // view is not a quieter thing than the picker above it.
+          button(`open ${props.rowGenome} →`, () => props.onOpenGenome(props.rowGenome)),
+          button(`open ${props.colGenome} →`, () => props.onOpenGenome(props.colGenome)),
         ),
       ),
     )

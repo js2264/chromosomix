@@ -16,7 +16,7 @@
  * both at once.
  */
 
-import { chooseBpStep, formatBpTick } from './heatmap'
+import { TICK_MIN_GAP_PX, chooseBpStep, formatBpTick } from './heatmap'
 import type { LocusAxis } from './locus'
 import type { Scale } from './scale'
 
@@ -90,6 +90,17 @@ export interface RulerFrame {
    * business reading that preference, but it must be able to be told.
    */
   fonts?: { ruler: string; tick: string }
+  /**
+   * Write the span under a multi-sequence strip. Absent means yes.
+   *
+   * `false` for a strip that is already captioned by the surface around it: the
+   * Chromosomes table's bar says `16 sequences · 12.11 Mb · click a band…` in
+   * its own summary line, and the ruler then wrote `0 bp – 12.11 Mb across 16
+   * sequences` forty pixels under it. Two captions for one strip say the strip
+   * is two things, and the reader goes looking for the difference. The boundary
+   * marks are drawn either way — they are the picture, not the caption.
+   */
+  caption?: boolean
 }
 
 /** One sequence's stretch of the ruler, for hit-testing a click on its name. */
@@ -216,8 +227,12 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
       ctx.lineTo(at, top + 4)
     }
     ctx.stroke()
+    if (frame.caption === false) return
     const span = frame.domain[1] - frame.domain[0]
-    ctx.fillText(`${formatBpTick(0)} — ${formatBpTick(span)} across ${countOf(frame)}`, x + 3, top + 5)
+    // An en dash, which is how this application typesets a range everywhere
+    // else (§26.1): the em dash read as a sentence break in the one line on
+    // screen that is not a sentence.
+    ctx.fillText(`${formatBpTick(0)} – ${formatBpTick(span)} across ${countOf(frame)}`, x + 3, top + 5)
     return
   }
 
@@ -227,7 +242,17 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
   if (segment === undefined) return
   const from = Math.max(frame.domain[0], segment.unitStart) - segment.unitStart
   const to = Math.min(frame.domain[1], segment.unitEnd) - segment.unitStart
-  const step = chooseBpStep(to - from, MAX_RULER_TICKS)
+  // **How many ticks fit, not how many a page-wide window fits.** The budget
+  // was a constant tuned for the browser at full width, and the same ruler is
+  // drawn in a deck cell a third as wide, where ten labels ran into each other
+  // — `1250 kb1255 kb1260 kb` under a picture whose whole job is to say where.
+  // Measured across the stretch actually being ruled rather than the frame, so
+  // a window that ends inside a sequence budgets for the part it labels, and
+  // spaced by the heatmap's own {@link TICK_MIN_GAP_PX} so the two rulers of
+  // one genome thin out by one rule.
+  const ruled = Math.abs(frame.toPixel(segment.unitStart + to) - frame.toPixel(segment.unitStart + from))
+  const room = Math.max(2, Math.floor(ruled / TICK_MIN_GAP_PX))
+  const step = chooseBpStep(to - from, Math.min(MAX_RULER_TICKS, room))
   if (!(step > 0)) return
 
   ctx.textAlign = 'center'
@@ -247,7 +272,14 @@ function drawScale(ctx: CanvasRenderingContext2D, frame: RulerFrame, single: boo
   }
 }
 
-/** As many ticks as 11 px labels fit without touching at a usual window width. */
+/**
+ * The most ticks this ruler will draw, however wide it is.
+ *
+ * A ceiling rather than the count: the count comes from the pixel width through
+ * {@link TICK_MIN_GAP_PX}, and this is what stops a very wide window filling
+ * its axis with numbers nobody asked for — past ten positions a ruler is a
+ * table of them.
+ */
 const MAX_RULER_TICKS = 10
 
 function countOf(frame: RulerFrame): string {

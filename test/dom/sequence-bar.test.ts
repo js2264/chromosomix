@@ -289,10 +289,15 @@ describe('the box', () => {
     view.bar.destroy()
   })
 
-  it('opens a window for coordinates', () => {
+  // What is typed is the display form — 1-based and inclusive, as IGV and
+  // samtools write it (§26.1) — and what comes out is the machine form the
+  // region reader takes. The box used to hand the digits through untouched, so
+  // the same `II:100-200` meant one window here and a different one in the
+  // browser's own box over the same genome.
+  it('reads a typed window as 1-based inclusive and emits the machine form', () => {
     const view = open()
     submit(view.bar, 'II:100-200')
-    expect(view.regions).toEqual(['II:100-200'])
+    expect(view.regions).toEqual(['II:99-200'])
     view.bar.destroy()
   })
 

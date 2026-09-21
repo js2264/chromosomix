@@ -38,6 +38,7 @@ import {
   stacksAsHeatmaps,
   drawnFromSamples,
   hasAMovableAxis,
+  laneLabelOf,
   readsOf,
   scaleOf,
 } from '../annotations/types'
@@ -71,6 +72,7 @@ import {
   assemblyAxis,
   findContig,
   formatLocus,
+  formatPosition,
   lengthsAreExact,
   parseLocus,
   rangeToUnits,
@@ -129,6 +131,7 @@ import {
 import {
   drawLaneLabel,
   labelEndFor,
+  positionLabel,
   type LaneLabelBoxes,
   type LaneLabelSpec,
   type LaneLabelStyle,
@@ -196,7 +199,10 @@ import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { exportRow } from './exportRow'
-import { searchKey } from './SearchBox'
+import { locusPlaceholder, searchKey } from './SearchBox'
+// The map's own zoom steps and the button that draws one. §26.6: one bar shape
+// for every locus bar, so the browser's four buttons *are* the region bar's.
+import { ZOOM_STEPS, zoomButton } from './RegionView'
 import { revealTrack } from './revealTrack'
 import { cardTitle, iconButton } from './icons'
 import {
@@ -315,6 +321,23 @@ export interface BrowserViewProps {
    * lane, since one axis is the only place there is to draw it.
    */
   map?: MapId
+  /**
+   * The pixel width to choose this view's sample resolution at, where another
+   * surface's picture of the same window owns that decision.
+   *
+   * For a tracks cell of a deck (§25.3). The resolution a lane is fetched at
+   * decides which of a file's summary levels its numbers come from, and
+   * therefore what its value axis autoscales to — so a cell 265 pixels wide and
+   * the lead's lanes at 900 were drawn from two different sets of means and
+   * ceilinged differently over the same window, which is a difference in the
+   * layout wearing the clothes of a difference in the data. `SampleCache` floors
+   * every lane at `SAMPLE_PIXELS_FLOOR`, which covers the widths this
+   * application lays out; this is how a cell can be exact about it instead.
+   *
+   * Absent — the session's own browser — the view's own width decides, which is
+   * what it has always done.
+   */
+  sampleWidth?(): number
   /**
    * The window moved, by any road — a pan, the box, a link, the deck. What the
    * deck listens to when this view is its lead (§25 stage D), because a link
@@ -447,6 +470,17 @@ export class BrowserView {
   private readonly locusInput: HTMLInputElement
   private readonly searchList = el('div', { class: 'browser-hits hidden' })
   private readonly zoomNote = el('span', { class: 'browser-zoom' })
+  /**
+   * The four zoom steps, in {@link ZOOM_STEPS} order, held so they can be greyed.
+   *
+   * The map's buttons, built by the map's own factory: §26.6 makes one bar shape
+   * for every locus bar in the application, and a reader who has learnt that one
+   * press is 3× on the map must get 3× here. Each greys itself the moment there
+   * is nothing in its direction to go to, which the pair of bare magnifiers this
+   * replaced never did — the zoom-out stayed live with the whole genome already
+   * on screen.
+   */
+  private readonly zooms: HTMLButtonElement[]
   private readonly groupsCard: GroupsCard
   private readonly exportStatus = el('span', { class: 'clip-note export-note' })
   private readonly cache: SampleCache
@@ -632,8 +666,9 @@ export class BrowserView {
     this.locusInput = el('input', {
       class: 'input input-region',
       type: 'text',
-      placeholder: 'chrI:1,000-20,000, a sequence, a gene, or * for the whole genome',
+      placeholder: '',
     })
+    this.syncPlaceholder()
     // A click selects what is in the box, because what is in the box is where
     // you already are. Merging the two boxes made this necessary rather than
     // merely convenient: the search box was always empty, and this one is
@@ -662,6 +697,12 @@ export class BrowserView {
       window.setTimeout(() => this.closeSearch(), 150)
     })
 
+    // Built before the bar that holds them, greyed after the first frame by
+    // {@link syncZoom}. The step's factor is *how many times wider the window
+    // becomes*, which is the region bar's grammar; `zoomBy` takes a
+    // magnification, which is this view's — hence the reciprocal.
+    this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.zoomBy(1 / step.factor)))
+
     this.el = el(
       'section',
       { class: 'view view-browser' },
@@ -677,34 +718,46 @@ export class BrowserView {
           //
           // The box and its hit list are one element, because the list is
           // positioned against the box it belongs to.
+          //
           // The badge rides in the box rather than beside it, and steps out of
           // the way as soon as the caret arrives: `/` is worth knowing exactly
-          // once, and after that it is furniture over the placeholder.
-          el('div', { class: 'browser-search search-box' }, this.locusInput, searchKey(), this.searchList),
-          button('go', () => this.submit()),
+          // once, and after that it is furniture over the placeholder. **Only on
+          // the session's own browser**, though: in a deck's tracks cell the
+          // lead map's box is the one `/` reaches, and a second badge was a
+          // promise printed in a box the key does not land in (§25.3).
+          el(
+            'div',
+            { class: 'browser-search search-box' },
+            this.locusInput,
+            ...(props.map === undefined ? [searchKey()] : []),
+            this.searchList,
+          ),
+          // …and no `go` in a cell either. Enter submits, the lead's bar above
+          // the grid carries the button, and the cell's bar has to stay on one
+          // line at three cells across with a side column open — every control
+          // past that puts an orphaned button on a line of its own under the
+          // box and pushes the cell's ruler out of line with the maps beside it.
+          ...(props.map === undefined ? [button('go', () => this.submit())] : []),
           // No switch back to the map here: the eye in the Contact maps card is
           // where a reader says which pictures are drawn, and a second control
           // for it cost a slot in six title bars.
-          iconButton('zoom-out', 'Zoom out (−)', () => this.zoomBy(1 / 1.8)),
-          iconButton('zoom-in', 'Zoom in (+)', () => this.zoomBy(1.8)),
-          // The same three marks the Tracks card uses, because they are the same
-          // three actions and a reader should not have to learn them twice.
-          iconButton('unfold-horizontal', 'The whole genome (0, or a double click)', () => this.fit()),
-          iconButton(
-            'unfold-vertical',
-            withKey('Stretch every track to fill the height, all to one height', KEYS.stretch),
-            () => this.fitTracks(),
-          ),
-          iconButton(
-            'fold-vertical',
-            'Shrink every track to the height of the shortest of them',
-            () => this.shrinkTracks(),
-          ),
-          // Autoscale is not here. It is in the Tracks card, beside the height
-          // box, with `Y` on it — and a sixth control in this row is what tips
-          // the bar into wrapping, which puts one orphaned button on a line of
-          // its own under the locus box. The two that stay are the two that are
-          // about *this window*: fit across, and fill down.
+          //
+          // **The map's own four steps, from the map's own pair.** It was two
+          // bare magnifiers at 1.8×, which is a factor nobody can predict or
+          // undo, beside a region bar carrying `⊖10× ⊖3× ⊕3× ⊕10×` on the same
+          // screen — two zoom vocabularies for one gesture over two pictures of
+          // one genome (§26.6). `ZOOM_STEPS` and `zoomButton` come from
+          // `RegionView` so there is one row of buttons and not a second copy of
+          // it, and the group does not break between them.
+          el('div', { class: 'zoom-steps' }, ...this.zooms),
+          // The three lane-height marks are **not** here. They were, and they
+          // were the same three the Tracks card draws a few inches to the right
+          // — six identical glyphs on one screen, which makes a reader check
+          // whether the pair do different things — while the map's own bar
+          // carries none of them. A second way to do a thing is not a
+          // convenience when the first way is a row already in front of the
+          // reader (§5.4), and dropping them is what makes room for the four
+          // steps above.
         ),
         el(
           'p',
@@ -719,10 +772,15 @@ export class BrowserView {
             // past it as real sequence with nothing in it — and would take the
             // right-hand edge for a coordinate this file supports, which is the
             // one thing an inferred length cannot be.
+            // A **label**, which is what §5.8 asks for, and not the paragraph
+            // this used to be: the Genome card beside it already carries the
+            // whole explanation and says what to do about it, so a
+            // 120-character clause in the line that otherwise states the scale
+            // was the same fact twice on one screen, the second time in the
+            // wrong place for it.
             text: lengthsAreExact(props.assembly)
               ? ''
-              : ' · lengths inferred from the features in this file, so each sequence ends at ' +
-                'its last feature rounded up rather than at its true end',
+              : ' · lengths inferred, rounded up past the last feature',
           }),
         ),
       ),
@@ -762,7 +820,14 @@ export class BrowserView {
     this.cache = new SampleCache(props.client, () => this.schedule())
     this.bases = new BaseCache(props.client, () => this.schedule())
     this.piles = new ReadCache(props.client, () => this.schedule())
-    this.unsubscribes.push(props.store.subscribe(() => this.schedule()))
+    this.unsubscribes.push(
+      props.store.subscribe(() => {
+        // The placeholder as well as the picture: whether the box can answer a
+        // gene name is a fact about what is loaded, and it changes here.
+        this.syncPlaceholder()
+        this.schedule()
+      }),
+    )
     this.unsubscribes.push(props.groups.subscribe(() => this.schedule()))
     // The cards write to the store and this view reads from it, exactly as the
     // matrix panel does: neither holds a reference to the other, which is what
@@ -1202,6 +1267,27 @@ export class BrowserView {
   // Navigation
   // -------------------------------------------------------------------------
 
+  /**
+   * What the box says it takes, from the file in front of the reader.
+   *
+   * Built by `locusPlaceholder` (§26.6) rather than written here, and rebuilt
+   * whenever the store changes, because two of the four things it lists are
+   * facts about what is loaded: the *example* is the assembly's own first
+   * sequence — it used to be a hard-coded `chrI` over a genome whose sequences
+   * are called `I…XVI` — and `a gene` is a promise only a loaded feature set can
+   * keep (§8.5).
+   */
+  private syncPlaceholder(): void {
+    this.locusInput.placeholder = locusPlaceholder({
+      first: this.props.assembly.contigs[0]?.name,
+      accepts: {
+        sequence: true,
+        gene: this.props.store.entries.some((entry) => entry.payload?.kind === 'features'),
+        whole: true,
+      },
+    })
+  }
+
   private goTo(text: string): void {
     const parsed = parseLocus(text, this.props.assembly)
     if (parsed === null) {
@@ -1315,6 +1401,51 @@ export class BrowserView {
     this.afterMove(true)
   }
 
+  /**
+   * Grey whichever steps have nowhere to go, and say where the others lead.
+   *
+   * The map's bar has done this since it had four buttons; the browser's pair of
+   * magnifiers never did, so the zoom-out stayed live with the whole genome
+   * already on screen and a press did nothing (§26.6). {@link zoomChanges} asks
+   * the clamp the same question a press would.
+   */
+  private syncZoom(): void {
+    ZOOM_STEPS.forEach((step, at) => {
+      const node = this.zooms[at]
+      if (node === undefined) return
+      node.disabled = !this.zoomChanges(1 / step.factor)
+      const inner = step.factor === 3 || step.factor === 1 / 3
+      node.title = node.disabled
+        ? step.out
+          ? 'The whole genome is on screen — there is nothing further out to go to'
+          : 'This window is as narrow as the browser draws one'
+        : `${step.out ? 'Widen' : 'Narrow'} the window ${step.label} about its own centre` +
+          // Where the key works, not merely that there is one: `+` and `−` are
+          // handlers on the canvas, so they answer once the tracks have been
+          // clicked and not before, and a bare `(+)` promised otherwise (§26.4).
+          (inner ? ` — or ${step.out ? '−' : '+'} with the tracks focused` : '')
+    })
+  }
+
+  /**
+   * Whether a press of this magnification would move anything.
+   *
+   * Asked of the window and the clamp rather than of the picture, because the
+   * clamp is what decides: {@link clamp} holds the span between a readable floor
+   * and the whole axis, so a press that lands outside that is a press that lands
+   * where the view already is.
+   */
+  private zoomChanges(factor: number): boolean {
+    const [d0, d1] = this.scale.domain
+    const [f0, f1] = this.scale.full
+    const span = d1 - d0
+    const total = f1 - f0
+    if (!(span > 0) || !(total > 0) || !(factor > 0)) return false
+    const floor = Math.min(MIN_SPAN, total)
+    const wanted = Math.min(Math.max(span / factor, floor), total)
+    return Math.abs(wanted - span) > 1e-6
+  }
+
   /** A step of a continuous gesture: repaint now, report once it settles. */
   private nudged(): void {
     this.afterMove(false)
@@ -1386,6 +1517,7 @@ export class BrowserView {
     // `X:1-745,751` there would name whichever sequence the midpoint fell in
     // and read as though the view were on it.
     this.locusInput.value = locus ?? '*'
+    this.syncZoom()
     if (report) {
       if (this.reportTimer !== null) clearTimeout(this.reportTimer)
       this.reportTimer = null
@@ -2159,12 +2291,10 @@ export class BrowserView {
           // A sequence drawn as a value track is drawn as its GC content, and
           // an unlabelled line between 0 and 1 under a genome's name is a line
           // nobody can name. The entry is copied rather than renamed, because
-          // the label belongs to this frame's picture and not to the file.
-          entries: lane.profiles.map((row) =>
-            row.entry.kind === 'sequence'
-              ? { ...row.entry, label: `${row.entry.label} · GC` }
-              : row.entry,
-          ),
+          // the label belongs to this frame's picture and not to the file — and
+          // the spelling is `laneLabelOf`'s, so the lane, the hover card and the
+          // status line say one thing (§8.8). They said three.
+          entries: lane.profiles.map((row) => ({ ...row.entry, label: laneLabelOf(row.entry) })),
           // A note wins the detail line. It is only ever set where the lane
           // drew *nothing* (§8.13) — a window of alignments too deep to read at
           // this width — and a pair of limits under an empty lane would be
@@ -2200,7 +2330,11 @@ export class BrowserView {
       if (this.text) {
         label = {
           entries: [entry],
-          detail: { kind: 'text', text: `${fmt.int(drawn)} in view` },
+          // With its noun. `9 in view` on a loops lane said nine of what —
+          // loops, anchors, arcs — beside a features lane saying `230 features
+          // in view`; `pairs` rather than `loops` because that is what the card
+          // calls the file and because a BEDPE is not always a loop call set.
+          detail: { kind: 'text', text: `${fmt.int(drawn)} pairs in view` },
           at: 'near',
         }
       }
@@ -2565,7 +2699,9 @@ export class BrowserView {
         scope: 'browser',
         axis: this.axis,
         domain: lane.frame.domain,
-        pixels: this.scale.pixels,
+        // The lead's width where a cell was given one — see
+        // {@link BrowserViewProps.sampleWidth}.
+        pixels: this.props.sampleWidth?.() ?? this.scale.pixels,
         ...(member.derivedFrom === undefined ? {} : { derived: member.derivedFrom }),
         ...(member.kind === 'alignments'
           ? { reads: readsOf(member.style), reference: this.referenceKey() }
@@ -2674,6 +2810,7 @@ export class BrowserView {
         value: this.exportDpi,
         onChange: (dpi) => {
           this.exportDpi = dpi
+          syncDpi()
         },
       },
       formats: BROWSER_EXPORT_FORMATS,
@@ -2692,8 +2829,21 @@ export class BrowserView {
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.
+    //
+    // **And then the copy button says which resolution it will use**, because it
+    // takes a PNG whatever the format beside it says: with PDF chosen, the
+    // reader was pasting a raster rasterised at a number they could no longer
+    // see or change (§7.2).
     const syncDpi = (): void => {
       if (row.parts.dpi !== null) row.parts.dpi.hidden = this.exportFormat === 'pdf'
+      if (row.parts.copy !== null) {
+        row.parts.copy.title = withKey(
+          this.exportFormat === 'pdf'
+            ? `Copy the figure as a PNG at ${this.exportDpi} dpi, ready to paste`
+            : 'Copy the figure as a PNG, ready to paste',
+          KEYS.copyPlot,
+        )
+      }
     }
     syncDpi()
 
@@ -2721,36 +2871,64 @@ export class BrowserView {
         // axes back to the data, take the words off — and a column of full-width
         // buttons spelling them out is seven lines of prose in place of two rows
         // of controls. The words survive in every tooltip.
+        // **In the map's own order**, which is autoscale, stretch, shrink — and
+        // then the one mark the browser has and the map has not. The three
+        // shared glyphs were in the opposite order here, so the autoscale mark
+        // was the first control beside a map and the fourth beside the tracks,
+        // and muscle memory pressed the wrong one (§8.8). Labelled `all tracks`,
+        // as the map's card labels the same row: every one of these acts on the
+        // whole stack, and a row of marks with no label beside a column of
+        // labelled fields reads as controls whose subject has to be worked out.
         el(
           'div',
-          { class: 'plot-icon-row' },
-          iconButton('unfold-horizontal', 'Fit the whole genome across (0, or a double click on the tracks)', () => this.fit(), {
-            class: 'btn btn-icon',
-            size: 15,
-          }),
-          iconButton(
-            'unfold-vertical',
-            withKey(
-              'Stretch every track to fill the height there is, all of them to one height',
-              KEYS.stretch,
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'all tracks' }),
+          el(
+            'div',
+            { class: 'plot-icon-row' },
+            iconButton(
+              'chevrons-up-down',
+              withKey(
+                'Autoscale every track to what is in view — a group resolves as a group',
+                KEYS.autoscale,
+              ),
+              () => this.autoscaleAll(),
+              { class: 'btn btn-icon', size: 15 },
             ),
-            () => this.fitTracks(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-          iconButton(
-            'fold-vertical',
-            'Shrink every track to the height of the shortest of them',
-            () => this.shrinkTracks(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-          iconButton(
-            'chevrons-up-down',
-            withKey(
-              'Autoscale every track to what is in view — a group resolves as a group',
-              KEYS.autoscale,
+            iconButton(
+              'unfold-vertical',
+              withKey(
+                'Stretch every track to fill the height there is, all of them to one height',
+                KEYS.stretch,
+              ),
+              () => this.fitTracks(),
+              { class: 'btn btn-icon', size: 15 },
             ),
-            () => this.autoscaleAll(),
-            { class: 'btn btn-icon', size: 15 },
+            iconButton(
+              'fold-vertical',
+              'Shrink every track to the height of the shortest of them',
+              () => this.shrinkTracks(),
+              { class: 'btn btn-icon', size: 15 },
+            ),
+            // The key printed here is `w`, which is the browser session's own
+            // command and works wherever the caret is; `0` is a canvas handler
+            // and fires only once the tracks have been clicked, so naming it and
+            // not `w` told the reader about the narrower of the two (§26.4). The
+            // gestures are in the shortcuts dialog's browser table.
+            iconButton(
+              'unfold-horizontal',
+              withKey('Fit the whole genome across', KEYS.whole),
+              () => this.fit(),
+              { class: 'btn btn-icon', size: 15 },
+            ),
+            // The name column's switch, here rather than at the end of the
+            // overlays row below. It is about this picture's own gutter — a
+            // heatmap's tracks are named in the map's margins and have no column
+            // to switch on — so it never belonged in a list the two cards share,
+            // and appended to that list it was the seventh toggle in a row that
+            // fits six: it wrapped to a line of its own at the default column
+            // width, where one glyph alone reads as a different kind of control.
+            this.optionToggle('gutter'),
           ),
         ),
         trackHeightField((px) => this.setTrackHeight(px)),
@@ -2759,8 +2937,8 @@ export class BrowserView {
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'overlays' }),
           // The shared list, in the shared order, exactly as the map's own
-          // Tracks card offers it — and then the one preference that is this
-          // view's alone. Spelled out by hand, this row was one toggle short of
+          // Tracks card offers it — and nothing else, so the two cards' rows are
+          // the same row. Spelled out by hand, this row was one toggle short of
           // that list: `tooltip` was missing, so the card that follows the
           // pointer could be turned off beside a map and only with the `p` key
           // here, which is a control that exists in one of the two places the
@@ -2770,10 +2948,6 @@ export class BrowserView {
             'div',
             { class: 'plot-icon-row' },
             ...TRACK_OPTIONS.map((key) => this.optionToggle(key)),
-            // Last, and not in that list, because it is about this picture and
-            // no other: a heatmap's tracks have the map's own gutters to be
-            // named in, and there is no name column beside one to switch on.
-            this.optionToggle('gutter'),
           ),
         ),
         // The two legibility numbers on one line, under the overlays rather than
@@ -3587,13 +3761,17 @@ export class BrowserView {
         case 'ArrowRight':
           this.scale.panByUnits(step)
           break
+        // Three, which is the factor the `3×` buttons on the bar take: the keys
+        // and the buttons are one control asked for two ways, and they used to
+        // differ (1.8 against 3) so a reader could not undo a press with a key
+        // or a key with a press (§26.6).
         case '+':
         case '=':
-          this.scale.zoomAt(this.scale.pixels / 2, 1.8)
+          this.scale.zoomAt(this.scale.pixels / 2, 3)
           break
         case '-':
         case '_':
-          this.scale.zoomAt(this.scale.pixels / 2, 1 / 1.8)
+          this.scale.zoomAt(this.scale.pixels / 2, 1 / 3)
           break
         case '0':
           this.scale.reset()
@@ -3624,18 +3802,32 @@ export class BrowserView {
   /**
    * Where the pointer is, at the precision the view can actually resolve.
    *
-   * `fmt.bp` rounds to a readable unit — `477.6 kb` — which is the right answer
-   * across a whole genome, where one pixel is thirteen thousand bases and a
-   * figure to the base would be six digits of noise. Zoomed in it is the wrong
-   * answer twice over: the number stops changing as the pointer moves, and the
-   * position it names is not the one under the arrowhead. So once a pixel is
-   * worth a few bases, the readout says the base.
+   * `positionLabel`'s rule, which is also the lane stacks' beside the map (§8.8)
+   * — and the threshold it holds is a kilobase per pixel, where this view used
+   * ten. Ten bases to the pixel is a seven-kilobase window on a wide screen, so
+   * in practice the readout was never exact anywhere a reader works: at 47 bases
+   * per pixel the status line said `IV:1.27 Mb`, which is `fmt.bp`'s two
+   * decimals of a megabase and therefore a ten-kilobase neighbourhood, and the
+   * string did not change across a fifth of the screen. The map answers the same
+   * hover with the base. One rule, one answer.
    */
   private describePosition(locus: { contig: string; bp: number }): string {
     const perPixel = (this.scale.domain[1] - this.scale.domain[0]) / Math.max(1, this.scale.pixels)
-    return perPixel <= EXACT_BP_PER_PIXEL
-      ? `${locus.contig}:${fmt.int(Math.round(locus.bp) + 1)}`
-      : `${locus.contig}:${fmt.bp(locus.bp)}`
+    return positionLabel(locus.contig, locus.bp, perPixel * this.axisBpPerUnit(locus.contig))
+  }
+
+  /**
+   * How many bases one axis unit is, in the sequence the pointer is in.
+   *
+   * The browser's axis is the whole genome laid end to end and its units are
+   * that axis's, so a `Scale` domain is in units rather than in base pairs;
+   * every sequence carries its own conversion. `1` where the name is not on the
+   * axis, which is the identity and is what the segments carry for a browser
+   * built from an assembly.
+   */
+  private axisBpPerUnit(contig: string): number {
+    const segment = this.axis.segmentOf(contig)
+    return segment === null || !(segment.bpPerUnit > 0) ? 1 : segment.bpPerUnit
   }
 
   private describe(x: number, y: number, clientX: number, clientY: number): void {
@@ -3675,13 +3867,17 @@ export class BrowserView {
             // picture already uses: the line is that colour and so is this.
             el('span', {
               class: 'cell-tip-key',
-              text: `${entry.label}:`,
+              // The lane's own name, ` · GC` and all: the card used to write the
+              // bare `sequence: 0.412`, which is a value between nought and one
+              // under a word that does not say what was measured — the exact
+              // argument the lane label's suffix was added for (§8.8).
+              text: `${laneLabelOf(entry)}:`,
               style: { color: entry.style.colour },
             }),
             el('span', { class: 'cell-tip-val', text }),
           ),
         )
-        parts.push(`${entry.label} ${text}`)
+        parts.push(`${laneLabelOf(entry)} ${text}`)
       }
       // …and the base under the pointer, where a lane is showing them. The one
       // readout in this view that is a letter rather than a number, and the
@@ -3735,7 +3931,17 @@ export class BrowserView {
       rows.push(
         el('div', { class: 'cell-tip-row' }, el('span', {
           class: 'cell-tip-key',
-          text: `${name}${set.contigs[set.contig[index]]}:${fmt.int(set.start[index])}–${fmt.int(set.end[index])}${strand}`,
+          // Through `formatLocus`, which is where every coordinate a reader
+          // reads is written (§26.1). This row printed the FeatureSet's own
+          // 0-based half-open start, so the hover card, the header line above it
+          // and the feature card a click opens disagreed by one base about a
+          // gene's first base — which is the one number a biologist checks
+          // against their annotation.
+          text: `${name}${formatLocus({
+            contig: set.contigs[set.contig[index]],
+            start: set.start[index],
+            end: set.end[index],
+          })}${strand}`,
         })),
       )
       if (set.detail[index] !== '') {
@@ -3878,14 +4084,16 @@ export class BrowserView {
     if (contig !== null) hits.push({ label: `${contig.name} · whole sequence`, locus: contig.name })
 
     // The scan is `annotations/search.ts`'s, and shared with the box beside a
-    // map. What stays here is the *base*: a locus in this view is 1-based
-    // inclusive (`genome/assembly.ts`) and a region on a map is 0-based
-    // half-open (`metacooler/range.ts`), so the one place the two surfaces must
-    // not share a line is the one that writes the string.
+    // map. What stays here is the *base*: a `FeatureHit` carries the 0-based
+    // half-open coordinates the file was parsed into, and both the row a reader
+    // reads and the locus this box goes to are the 1-based inclusive display
+    // form (§26.1). They used to differ — the row printed `IV:449,655` and the
+    // box then filled with `IV:449,656`, so a reader who noted the number off
+    // the list could not find it again in the box they had just used.
     for (const hit of findFeatures(this.props.store, raw)) {
       hits.push({
-        label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
-        locus: `${hit.contig}:${Math.max(1, hit.start + 1)}-${hit.end}`,
+        label: `${hitLabel(hit)} · ${formatPosition(hit.contig, hit.start)} · ${hit.source}`,
+        locus: formatLocus({ contig: hit.contig, start: hit.start, end: hit.end }),
       })
     }
 
@@ -4036,18 +4244,6 @@ const GRIP_IDLE = 0.45
 
 /** Clear space between the end of a name and the start of the data. */
 const GUTTER_PAD = 8
-
-/**
- * Below this many bases per pixel, the readout names the base rather than
- * rounding to a unit.
- *
- * Ten is where the two answers part company: at ten bases per pixel `fmt.bp`
- * still writes kilobases, so moving the pointer a hundred pixels changes the
- * number by one digit — while the base under the arrowhead has moved a thousand
- * times. Above it the exact figure would be six digits of false precision about
- * a pixel covering thirteen thousand bases.
- */
-const EXACT_BP_PER_PIXEL = 10
 
 /**
  * One end of a lane's value axis, the box it was drawn in, and whose it is.

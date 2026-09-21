@@ -16,6 +16,7 @@
  */
 
 import { button, el } from './dom'
+import { formatLocus, formatPosition } from '../genome/assembly'
 import { KEYS, keyLabel } from './commands'
 import { findFeatures, hitLabel } from '../annotations/search'
 import type { AnnotationStore } from '../annotations/store'
@@ -185,18 +186,37 @@ export class SearchBox {
 }
 
 /**
- * Feature hits as this box's suggestions, in a **contact map's** coordinates.
+ * Feature hits as a box's suggestions, in whichever grammar that box speaks.
  *
- * The base is the whole reason this is written here rather than shared with the
- * browser's list: `metacooler/range.ts` reads a region as 0-based half-open,
- * exactly as `FeatureHit` carries it, while `genome/assembly.ts` reads the
- * browser's loci as 1-based inclusive. One string for both would be off by a
- * base on one of the two, silently and for ever.
+ * `FeatureHit` carries the window 0-based and half-open, which is the machine
+ * form (§26.1) and is what `metacooler/range.ts` takes; a box that **shows** a
+ * locus and reads back what it shows speaks the display form, 1-based and
+ * inclusive. This used to answer in the machine form only, and the hint under
+ * the browser's box said so — which was true until the browser's box began
+ * reading what was typed as the display form, at which point picking a gene off
+ * the list landed a base to the left of the gene.
+ *
+ * So the base is a parameter, named at the call site, and the label always
+ * matches the value: a row that prints one coordinate over a box that fills with
+ * another is the defect either way round.
+ *
+ * @param form `'machine'` for a box whose value is a region string handed
+ * straight to the region reader — the map's — and `'display'` for one a reader
+ * reads and Enter re-reads through `typedLocusToRegion`.
  */
-export function featureSuggestions(store: AnnotationStore, text: string): Suggestion[] {
+export function featureSuggestions(
+  store: AnnotationStore,
+  text: string,
+  form: 'machine' | 'display' = 'machine',
+): Suggestion[] {
   return findFeatures(store, text).map((hit) => ({
-    label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
-    value: `${hit.contig}:${hit.start}-${hit.end}`,
+    label: `${hitLabel(hit)} · ${
+      form === 'display' ? formatPosition(hit.contig, hit.start) : `${hit.contig}:${fmt.int(hit.start)}`
+    } · ${hit.source}`,
+    value:
+      form === 'display'
+        ? formatLocus({ contig: hit.contig, start: hit.start, end: hit.end })
+        : `${hit.contig}:${hit.start}-${hit.end}`,
   }))
 }
 
@@ -235,8 +255,14 @@ export function locusPlaceholder(options: { first?: string; accepts?: LocusAccep
   if (accepts.sequence === true) parts.push('a sequence')
   if (accepts.genome === true) parts.push('a genome')
   if (accepts.gene === true) parts.push('a gene')
-  const listed = parts.join(', ')
-  return accepts.whole === true ? `${listed}, or * for the whole genome` : listed
+  if (accepts.whole === true) parts.push('* for the whole genome')
+  // `or` before the last one, whatever the last one is. It was put in with the
+  // `*` and nowhere else, so a box that does not take `*` read
+  // `contig:1,000-20,000, a sequence, a genome, a gene` — a list with no
+  // conjunction, which reads as an unfinished sentence rather than as a set of
+  // alternatives.
+  if (parts.length < 2) return parts[0]
+  return `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`
 }
 
 /**

@@ -2949,9 +2949,29 @@ p {
 
 /* Sized against the row boxes rather than the page's default, and given a
    pointer: it is the only checkbox in this table that is a *button* — the ones
-   below it record a row's state, this one changes every row's at once. */
+   below it record a row's state, this one changes every row's at once. And it is
+   the only one in the filter row at all, which it was not: a toggle column's
+   filter used to be a second box of this class at the other end of the same
+   line, meaning something else entirely. It is `.tf-only` now. */
 .tf-check-box {
   cursor: pointer;
+}
+
+/* A toggle column's filter: a named control at the height of the text boxes
+   beside it, lit while it is narrowing (§26.3). The label is what the bare
+   checkbox could not carry — one glyph cannot say whether it ticks rows or hides
+   them — and the size keeps the filter row one row of one kind of thing. */
+.tf-only-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.15rem 0.35rem;
+}
+
+.tf-only {
+  padding: 0.1rem 0.35rem;
+  font-size: var(--step--2);
+  line-height: 1.2;
 }
 
 .tf-input {
@@ -4792,9 +4812,18 @@ canvas.is-frozen {
 /* In a view's heading the box goes to the right-hand end of the line: what you
    are looking at leads, and the way to look at something else is where the eye
    finishes. It takes the buttons that belong to it — `go`, `← back` — along
-   with it, because they are the same control. */
+   with it, because they are the same control.
+
+   …and it may **grow** into the room the heading leaves. At `flex: 0 1 18rem`
+   it could only shrink, so the whole-genome view's box showed
+   `chromosome, chromosome:start-end, o` and the badge sat over the cut: the one
+   line on screen that says what the box takes ended mid-word, at exactly the
+   clause a reader wants. Capped, because a locus box as wide as a monitor is a
+   target with nothing in it. */
 .title-bar > .search-box {
   margin-left: auto;
+  flex: 1 1 18rem;
+  max-width: 34rem;
 }
 
 .stepper {
@@ -7344,6 +7373,18 @@ canvas.is-frozen {
   max-width: 70ch;
 }
 
+/* A caution with a way through, on a gate: the read is large, and the button
+   that starts it is two lines below. `--warn` and not `--danger`, which is the
+   colour a refusal takes (§26.5) — a reader who had learnt that red means "this
+   did not happen" read the over-limit remote scan as a refusal and had no
+   reason to read on to the download that was being offered. */
+.gate-warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-radius: 3px;
+  padding: 0.2rem 0.4rem;
+}
+
 .progress-box {
   display: flex;
   align-items: center;
@@ -9510,9 +9551,31 @@ span.deck-name {
   display: none;
 }
 
+/* **The box keeps the room a locus needs, and the bar breaks in one place.**
+
+   It had `flex-basis: 8rem; min-width: 6rem` under a wrapping bar, so in a cell
+   three across the one control that says where the cell is looking read
+   `IV:1,000,001-1,400,0` — the end of the window, which is the number the reader
+   is after, clipped — while the loose icon buttons after it wrapped one at a
+   time and left a single glyph on a line of its own under the box. An orphaned
+   icon reads as a separate control, and it pushed the cell's ruler down out of
+   line with the maps beside it.
+
+   Twelve rem is a twenty-two character locus at the mono size. The bar now holds
+   two things — the box, and the four zoom steps as one non-breaking group — so
+   when the cell is too narrow for both the break comes between them, always in
+   the same place, and both stay whole. `go` and the `/` badge are gone in a cell
+   (`ui/BrowserView.ts`): the lead's box above the grid owns the key, and Enter
+   submits. */
 .deck-tracks .browser-bar .browser-search {
-  flex-basis: 8rem;
-  min-width: 6rem;
+  flex: 1 1 12rem;
+  min-width: 12rem;
+}
+
+/* No badge in the cell, so no room reserved for one: the 2.1rem `.search-box`
+   keeps for the `/` is exactly the width the last digits of a locus need. */
+.deck-tracks .browser-bar .browser-search > .input {
+  padding-right: 0.4rem;
 }
 
 .deck-tracks.is-unlocked .deck-lock {
