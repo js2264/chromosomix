@@ -59,6 +59,102 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **The 3D structure card is laid out like the cards above it (§25.3).** Nothing on it is unlabelled
+  any more. A grid rule had been pushing the third control of a row onto a second line *in the label
+  column*, so the chords' set appeared as a bare `none` under a toggle stretched across the whole
+  card, and the fog and contact thresholds as sliders with no name at all: `loops as chords` is now
+  label, toggle and set on one line, and each slider has a labelled row of its own — *fog depth*,
+  *threshold* — under the toggle that turns it on. **Every slider prints the number it is at**: a
+  bead radius you cannot read is a figure you cannot reproduce in a second session or write into a
+  methods section. The long selects — structure, compare with, colour by, size by — take the width of
+  the card under their labels instead of truncating to `Yeast_str` and `the same`, and the rows are
+  in one order, each choice before the thing that modifies it: *outside window* now precedes the
+  ghost opacity, which is greyed with its reason while nothing is being ghosted. The homologue picker
+  is *haplotype* and the marks row is *overlays*, which is what the Map and Tracks cards call the
+  same row; both used to read *show*. The chords' toggle is absent while the set is `none`, where it
+  was lit with nothing to show.
+
+- **The model saves through the app's one export row (§25.7).** It was two quiet words, `PNG PDF`, at
+  a fixed 300 dpi — the third export idiom on one screen, and the only one with no resolution in it,
+  so a reader who had chosen 600 dpi in the Export card above got 300 from here and nothing said so.
+  It is now `[resolution] [format] [⭳] [⧉]` like the map's and the browser's, with a line under it
+  saying what was written, and the model goes to the clipboard as readily as a map does. The camera
+  and frame rows are bordered buttons for the same reason: a grey word beside a bordered toggle reads
+  as a caption for it, and nobody knew `side` could be pressed.
+
+- **A turned map reports the window a square map reports (§17.1).** `400 × 400 bins · 1.0 kb` was
+  printed beside `IV:1,000,001-1,399,500 · 399.5 kb`, which is an arithmetic a reader checks and does
+  not get: the rotated lattice counts in half bins, so the last half bin had no column to be measured
+  to. Every window the view reports — the line under the picture, the framing an analysis runs on, a
+  bookmark, what the 1D browser opens at — is on the file's own bin edges now.
+
+- **The analysis framing line says one thing once (§18.4).** It read `1.0 kb bins · balanced ·
+  balanced` on every file with weights, because the balance flag and the score picker's label are the
+  same word — a stutter in the string that is copied into every provenance record and TSV header, and
+  that reads as two normalisations having been applied. And the window in it is the display form, so
+  the drawer's *will run on*, the figure's caption and the map's own summary now agree character for
+  character rather than differing by a base.
+
+- **The readout under the pointer on a map is 1-based, like everything else (§8.9).** Hovering a bin
+  said `IV:1,162,000` while a drag from the same pixel said `1,162,001`, which is the app disagreeing
+  with itself by a base on the one number a reader writes down. The parts of that line are joined by
+  ` · `, as the 1D browser's are in the same slot; three spaces read as a separator on a wide window
+  and as nothing at all on a narrow one. The right-click menu's coordinates carry their thousands
+  separators, and its second item is an **arrowhead** — the word the card that keeps it uses, where
+  *Loop* sent a reader looking under a heading called Arrowheads.
+
+- **A lane's limits are the colour clip's control (§8.8).** Two boxes, the `⇅` mark every autoscale in
+  the app wears — unavailable while there is nothing to go back to — and a line reading *auto · 0 –
+  84.5*. The lit `auto` word it replaces meant one column carried two drawings of *let the data set
+  the range*, lit when on in one and greyed when on in the other. The clip's own row now says which
+  units each of its two numbers is in: `clip (log10)` over the boxes, and the score's word after the
+  caption's pair.
+
+- **The Map, Tracks and Export cards arrive with the picture (§16.5).** Behind the whole-genome gate
+  they used to stand over an empty canvas, clip and all, so a reader nudged a clip, pressed the turn,
+  saw nothing happen and concluded the card was broken. The **overlays** row now holds only the marks
+  that light: the refit is an action, and as the one unlit mark in a row of seven lit ones it read as
+  an overlay that was off — pressed, it threw the reader's pan away. The crosshair and the hover card,
+  which are about both pictures, are offered once per column rather than in both rows lit together.
+
+- **The Groups card's empty state is two sentences.** It was an eleven-line essay on the theory of
+  shared limits, in a card with no control in it, pointing at a bar two panels away as "below them".
+  Its two mode buttons are toggles now, lit when the group is in that state: `unlink` offering to
+  unlink told a reader nothing about whether the group *was* linked, and the picture — two axes that
+  happen to agree — cannot say either.
+
+- **The track-height box says what the tracks are.** It read `90` over lanes that were plainly 46 px
+  tall, because it kept the last number it had applied while stretch, shrink, a group's levelling and
+  a drag on a lane's border all changed the heights behind it — so a press of *down* from 90 made a
+  46-pixel track taller. It reads the lanes now, blank where they disagree, and a press starts from
+  their middle height. Both halves of the pair beside it say they are percentages.
+
+- **The map's PDF says it is an image (§7.2).** The browser's option has always read `PDF (vector)`;
+  the map's read `PDF`, and a biologist who saved one for a figure and opened it in Illustrator
+  expecting paths had been told which they were getting by one card and nothing at all by the other.
+
+- **Five corner buttons on the structure cell, each with its own mark (§25.3).** *Frame the window*
+  wears the refit mark the Map card uses and *enlarge* a distinct one, where two corner-bracket
+  glyphs sat side by side and were told apart only by hovering them. The keys those buttons and the
+  card's camera row print are the keys that are actually bound: `(f)` on a card beside a deck was
+  offering a letter that folds the Files panel. The cell's name is a readout rather than a box that
+  framed itself on hover and then refused every keystroke, and the mode badge in its corner has lost
+  the border that made a readout look like a button nobody could press.
+
+- **The modes on a structure cell have no letters (§25.4), which is what the contract always said.**
+  `e`, `o` and `m` armed them while the model was enlarged — over a model, which is exactly where a
+  bare letter gets pressed by accident — and each of the three belonged to something else, so the
+  shortcuts dialog printed two rows for one key.
+
+- **Where the keys go is visible.** The map, the 1D browser's strip and a table's viewport paint a
+  focus ring on their own edge pixels, so a reader who tabs into one can see which surface the arrow
+  keys will drive; all three took focus in order to receive keys and all three answered a Tab with
+  nothing at all. Inside the picture rather than around it, because a ring around the data reads as
+  part of the figure — and it is not in an exported figure, which is re-rendered rather than grabbed.
+  And the companion map's scale button sits above the band its ruler's labels are in, rather than on
+  top of the first coordinate on its axis — the one number that says whether two pictures are of the
+  same window.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

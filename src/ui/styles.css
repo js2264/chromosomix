@@ -3553,11 +3553,22 @@ p {
   cursor: pointer;
 }
 
-/* No focus ring. The canvas takes focus so it can receive keys, but it is a
-   picture: a blue rectangle around the data reads as part of the figure, and
-   the figure already has a frame of its own. */
-.heatmap-canvas:focus-visible {
-  outline: none;
+/* Which surface the arrow keys will drive, drawn *inside* its own frame.
+
+   All three of these take focus so they can receive keys — the map and the
+   browser pan, a table scrolls — and all three answered a Tab with nothing at
+   all: each carried `outline: none`, on the argument that a blue rectangle
+   around the data reads as part of the figure. That is true of a ring drawn
+   *outside* the picture, so the ring is drawn on the picture's own edge pixels
+   instead (`outline-offset: -2px`). It is painted over the content, as an
+   outline is, and it is not in an exported figure, which is re-rendered rather
+   than grabbed. A keyboard reader has to be able to see which of the two
+   pictures the next arrow press will move. */
+.heatmap-canvas:focus-visible,
+.browser-canvas:focus-visible,
+.tviewport:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3777,10 +3788,16 @@ canvas.is-frozen {
    the map costs the layout nothing at all.
    --------------------------------------------------------------------------- */
 
+/* Above the band the column labels have claimed, not on top of it. At
+   `bottom: 0` this button sat exactly where the ruler draws its first
+   coordinate, so the one number that says which window a companion is showing
+   was the one number hidden behind a control. Twenty pixels is the renderer's
+   own corner band (`drawTicks`, which steps the last *row* label aside by the
+   same figure), so the two agree about where the corner is. */
 .map-settings-corner {
   position: absolute;
   left: 0;
-  bottom: 0;
+  bottom: 20px;
   display: flex;
   flex-direction: column-reverse;
   align-items: flex-start;
@@ -3936,9 +3953,29 @@ canvas.is-frozen {
   margin: 0;
 }
 
+/* The unit after a stepper's box — `px`, `%`. Tight against the box it belongs
+   to, and never the thing that shrinks. */
+.field-unit {
+  flex: 0 0 auto;
+}
+
 /* A stepper inside a pair has no room for the padding a lone one can afford. */
 .field-pair .plot-icon-row > .btn-icon {
   padding: 0.3rem 0.15rem;
+}
+
+/* And it does not wrap. Half a card is not enough for a 2.5 rem box, two 15 px
+   buttons and two gaps, so the row wrapped — which put the `▲` of `text size`
+   alone on a line under the box, three pieces of one control across two lines
+   with no way to tell which chevron belonged to which number. The box gives up
+   the width instead: it holds three digits and a per-cent sign at 2.2 rem. */
+.field-pair .plot-icon-row {
+  flex-wrap: nowrap;
+}
+
+.field-pair .input-step {
+  min-width: 0;
+  width: 2.2rem;
 }
 
 /* A checkbox is the one control that must not stretch: `width: 100%` on it
@@ -8103,21 +8140,13 @@ canvas.is-frozen {
   margin: 0;
 }
 
-/* The auto toggle. Sized to its word and no wider, so the two boxes beside it
-   keep the rest of the row. */
-.ann-auto {
+/* The `auto` word button that used to end this row is gone, and with it a
+   second lit look: a lane's limits now take the colour clip's own idiom — the
+   `⇅` mark, disabled while auto, and a caption under the boxes saying what the
+   range is (`ui/laneSettings.ts`). One drawing of "let the data set the range"
+   in the column instead of two that disagreed about which state was lit. */
+.ann-limits > .clip-auto {
   flex: 0 0 auto;
-  padding: 0.1rem 0.35rem;
-  font-size: var(--step--2);
-  line-height: 1.5;
-}
-
-/* On, and saying so with its own border — the state a tick box used to carry
-   with a tick and a label. */
-.ann-auto.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
 }
 
 /* --- manual annotations ------------------------------------------------ */
@@ -9322,13 +9351,6 @@ span.deck-name {
 
 .structure-toggle {
   justify-content: flex-start;
-}
-
-.structure-export {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 4px;
 }
 
 /* The Structures card (§25): a model's row says whether the cell is drawing it. */
@@ -10995,7 +11017,14 @@ span.deck-name {
 }
 
 /* The structure cell's mode badge (§25.3): what a drag or a click does now,
-   in the top-left corner; the readout sits under it. */
+   in the top-left corner; the readout sits under it.
+
+   No border and no pill. It was drawn as a bordered rounded button, three
+   pixels from five square bordered buttons that *are* buttons, and a reader who
+   clicked it to start the turntable got nothing — it has `pointer-events:
+   none`, because what it reports is what the hand is already doing. The
+   translucent backing and the dim text are how the map's key states a fact over
+   a picture, and this is the same kind of statement. */
 .structure-mode {
   position: absolute;
   left: 6px;
@@ -11003,19 +11032,23 @@ span.deck-name {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px 2px 5px;
-  border-radius: 999px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: 1px solid var(--border);
   color: var(--text-dim);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   pointer-events: none;
   z-index: 2;
 }
+/* The armed modes in the accent, because each of them is a *state the cell is
+   in* rather than a description of an ordinary drag: a click is about to mark,
+   loop, measure or move the centre. `select` is not one of them — the three
+   modes are `mark`, `loop` and `measure` ({@link StructureMode}). */
 .structure-mode[data-mode='centre'],
-.structure-mode[data-mode='select'] {
+.structure-mode[data-mode='mark'],
+.structure-mode[data-mode='loop'],
+.structure-mode[data-mode='measure'] {
   color: var(--accent);
-  border-color: var(--accent);
 }
 .structure-wrap > .structure-readout {
   top: 30px;
@@ -11073,23 +11106,60 @@ span.deck-name {
 }
 
 /* The cell's on/off settings as icon toggles, in rows; a field with a toggle
-   beside its control (the chords' set, the fog's depth). */
+   beside its control (the chords' set).
+
+   `.structure-toggle.is-on` used to be here too, a second lit look with no
+   border in it — dead as well as second, since these toggles carry
+   `aria-pressed` and the one lit rule at the top of this sheet draws them. */
 .structure-toggle-row {
   display: inline-flex;
   gap: 2px;
 }
-.structure-toggle.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.structure-field-with-toggle {
-  display: flex;
+
+/* Label | toggle | select, on one line. `display: flex` alone lost to
+   `.controls-card .field`'s two-column grid, which is more specific: the third
+   child started a *second grid row*, in the label column, so the chords' set
+   appeared as an unlabelled `none` under a toggle stretched across the width of
+   the card. A third track is what the row wanted all along. */
+.structure-settings .field.structure-field-with-toggle {
+  display: grid;
+  grid-template-columns: 7.5rem auto minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: 0.4rem;
 }
-.structure-field-with-toggle > .select,
-.structure-field-with-toggle > .structure-range {
+
+/* A wider label column than a card's 6.5 rem, because this card's labels are
+   two words — `pin contacts`, `outside window`, `ghost opacity` — and at
+   6.5 rem they wrapped to two lines, leaving rows twice the height of their
+   neighbours with the control centred against the pair. */
+.structure-settings .field {
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+}
+
+/* A toggle is a 15 px mark, not a bar. As a grid item it stretched across the
+   whole value column, which read as an empty text box with an icon in the
+   corner of it — and as a *segmented switch* beside the icon-sized toggles of
+   `drawn as` four rows up. */
+.structure-settings .field > .btn-toggle,
+.structure-settings .structure-field-with-toggle > .btn-toggle {
+  justify-self: start;
+}
+
+/* The number a slider is at, after it. Six of these were bare sliders with the
+   value nowhere on screen, which is a bead radius nobody can write into a
+   methods section or reproduce in a second session. */
+.structure-value {
+  flex: 0 0 auto;
+  min-width: 2.2rem;
+  text-align: right;
+}
+
+/* …and the slider takes what the readout leaves. `width: auto` because the
+   rule at the foot of this file gives every slider in this card `100%`, which
+   in a row with a number after it is 100% of the row plus the number. */
+.structure-settings .plot-icon-row > .structure-range {
   flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 

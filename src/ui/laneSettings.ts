@@ -328,28 +328,24 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     title: 'Ceiling of the value axis',
   })
   /**
-   * A toggle button, not a tick box.
+   * The mark the colour clip carries, and for the same act.
    *
-   * The tick box was a third control on a row that already held two number
-   * boxes, and it took the width that made them overflow. A button carries its
-   * state in its own border, needs no label beside it, and — unlike a tick box
-   * — reads as the thing to press to *get back* to auto, which is the only
-   * direction it is ever pressed in: leaving auto happens by typing a bound.
+   * This was the word `auto`, lit while it was on — and the Map card's clip,
+   * one panel over, answers the same question with `⇅` *disabled* while auto
+   * plus a caption saying what auto chose. Two drawings of "let the data set
+   * the range", one lit when on and the other greyed when on, in one column: a
+   * reader who learned either one learned nothing about the other. So this row
+   * takes the clip's idiom whole (§26.6) — the same mark autoscale wears
+   * everywhere, unavailable while there is nothing to go back to, with the pair
+   * in force written under the boxes.
    */
-  const auto = button('auto', () => setAuto(!auto.classList.contains('is-on')), {
-    class: 'btn btn-quiet ann-auto',
+  const auto = iconButton('chevrons-up-down', '', () => setAuto(true), {
+    class: 'btn btn-icon clip-auto',
+    size: 14,
   })
+  const note = el('span', { class: 'clip-note' })
 
-  /**
-   * Put the button in a state, and store it.
-   *
-   * The button is repainted *here* rather than left to the rebuild the store
-   * change will ask for, because the commonest way to leave auto is to type a
-   * bound and press Enter — which leaves the caret in the box, and a rebuild
-   * while a control in the list has the caret is deliberately deferred. Without
-   * this the reader types a limit, sees the lane rescale, and is still looking
-   * at a button that says it is on auto.
-   */
+  /** Put the row in a state, paint it, and store it. */
   const setAuto = (on: boolean): void => {
     const low = Number(min.value)
     const high = Number(max.value)
@@ -365,12 +361,25 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
       }
       return
     }
-    auto.classList.toggle('is-on', on)
-    auto.setAttribute('aria-pressed', String(on))
-    auto.title = on
-      ? 'Rescaling to what is on screen. Type a bound, or press this, to fix the range.'
-      : 'Fixed to the pair beside this. Press to rescale to what is on screen instead.'
+    paintAuto(on, low, high)
     store.restyle(entry.id, { limits: { auto: on, min: low, max: high } })
+  }
+
+  /**
+   * The mark and the caption, from the state the row is in.
+   *
+   * Written here rather than left to the rebuild the store change will ask for,
+   * because the commonest way to leave auto is to type a bound and press Enter
+   * — which leaves the caret in the box, and a rebuild while a control in the
+   * list has the caret is deliberately deferred.
+   */
+  const paintAuto = (on: boolean, low: number, high: number): void => {
+    auto.disabled = on
+    auto.title = on
+      ? 'Back to the data’s own range, which is what this lane is on.'
+      : 'Back to the data’s own range, rescaling to what is on screen as the view moves.'
+    const pair = `${trimNumber(low, 3)} – ${trimNumber(high, 3)}`
+    note.textContent = `${on ? 'auto' : 'clipped'} · ${pair}`
   }
 
   for (const box of [min, max]) {
@@ -381,11 +390,7 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     box.addEventListener('change', () => setAuto(false))
   }
 
-  auto.classList.toggle('is-on', limits.auto)
-  auto.setAttribute('aria-pressed', String(limits.auto))
-  auto.title = limits.auto
-    ? 'Rescaling to what is on screen. Type a bound, or press this, to fix the range.'
-    : 'Fixed to the pair beside this. Press to rescale to what is on screen instead.'
+  paintAuto(limits.auto, Number(min.value), Number(max.value))
 
   return el(
     'div',
@@ -397,6 +402,7 @@ export function limitsField(store: AnnotationStore, entry: AnnotationEntry): HTM
     },
     el('span', { class: 'field-label', text: 'limits' }),
     el('div', { class: 'ann-limits' }, min, max, auto),
+    note,
   )
 }
 

@@ -71,7 +71,7 @@ import { robustRangeOf, rgbOf } from '../structure/colour'
 import { alignTo, displacements, type Alignment } from '../structure/align'
 import { transformValue } from '../render/scale'
 import { settingsField } from '../ui/laneSettings'
-import type { Command } from '../ui/commands'
+import { withKey, type Command } from '../ui/commands'
 import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
 import type { LocusWindow } from '../render/locus'
 import { colormapCss } from '../render/colormaps'
@@ -100,7 +100,7 @@ import {
   type Structure,
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
-import { button, el, fmt } from '../ui/dom'
+import { button, el, fmt, trimNumber } from '../ui/dom'
 import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import type { Modal } from '../ui/Modal'
@@ -110,7 +110,16 @@ import { setReadout } from '../ui/readout'
 import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { VectorPage } from '../ui/vector'
-import { downloadBlob, fileStamp, scaleForDpi, canvasToPng } from '../ui/export'
+import {
+  EXPORT_DPI_CHOICES,
+  canvasToPng,
+  copyPngToClipboard,
+  downloadBlob,
+  fileStamp,
+  scaleForDpi,
+  type ExportFormat,
+} from '../ui/export'
+import { exportRow } from '../ui/exportRow'
 import { DECK_DRAG_TYPE } from './deck'
 import type { DeckCell } from './cell'
 
@@ -169,6 +178,39 @@ const MODEL_SCOPE = 'structure:model'
 export const MANUAL_CHORDS = 'manual'
 /** The colouring by each bead's distance to its bead in the compared model (§25.5). */
 export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
+/**
+ * What the model saves as, in the order the row offers it.
+ *
+ * PNG leads here and PDF leads beside a map, and the difference is what each
+ * picture *is*: a contact map is a raster whatever the file it goes into, while
+ * a model is beads and sticks, so the PDF is a drawing — except of a tube,
+ * which is a lit surface no path can be. The label says nothing about that:
+ * `PDF` is what the file is, and the caveat is one clause of the row's title.
+ */
+const STRUCTURE_EXPORT_FORMATS = [
+  { value: 'png', label: 'PNG' },
+  { value: 'pdf', label: 'PDF' },
+] as const
+
+/**
+ * The letters this cell binds while it is enlarged, written once.
+ *
+ * `ui/commands.ts` holds the app's own keys; these are the model's, and they
+ * exist only inside the dialog (§25.3). One table because each of them is
+ * needed twice — by the command that binds it and by the control that prints
+ * it — and a letter spelled by hand in two places is a letter that comes to be
+ * printed where it is not bound.
+ */
+const STRUCTURE_KEYS = {
+  frame: 'f',
+  all: 'a',
+  beads: '1',
+  sticks: '2',
+  tube: '3',
+  labels: 'l',
+  turntable: 'r',
+} as const
+
 /** The most contact chords drawn from a pinned bead: the strongest, when more pass the threshold. */
 const MAX_CONTACT_CHORDS = 400
 
@@ -209,8 +251,8 @@ const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
 /** What a cell says while the row it draws is not ready. */
 const WAITING = {
   renderer: 'loading the 3D renderer…',
-  none: 'No structure loaded. Drop a g3d here — the text g3dtools takes, or the container it writes.',
-  removed: 'The model this cell was showing was removed. Pick another on the Structures card, or from the menu here.',
+  none: 'No structure loaded. Drop a g3d (text or binary), a .3dg or a bed3d here, or on the Structures card.',
+  removed: 'The model this cell was showing was removed. Pick another on the Structures card.',
   loading: 'reading the structure…',
   empty: 'The structure has no bead on any sequence of this map.',
   lost: 'The GPU took its context away; the model comes back when it is returned.',
@@ -223,7 +265,7 @@ type StructureMode = 'none' | 'mark' | 'loop' | 'measure'
 export class StructurePanel implements DeckCell {
   readonly kind = 'structure' as const
   readonly el: HTMLElement
-  private readonly nameEl: HTMLInputElement
+  private readonly nameEl: HTMLElement
   private readonly note = el('p', { class: 'deck-note structure-note' })
   private readonly wrap = el('div', { class: 'structure-wrap' })
   private readonly keyEl = el('div', { class: 'structure-key hidden' })
@@ -265,6 +307,38 @@ export class StructurePanel implements DeckCell {
   private selectFirst = -1
   private markButton: HTMLButtonElement | null = null
   private loopButton: HTMLButtonElement | null = null
+  /** Re-titled on expand and collapse; see {@link paintKeys}. */
+  private readonly frameButton: HTMLButtonElement
+  /**
+   * How fine and as what the model is saved, held across repaints.
+   *
+   * The card is rebuilt from the row's style whenever anything changes, so a
+   * resolution kept in the row's own select would go back to its default the
+   * next time a slider moved. The Export card's pair are the same two fields
+   * for the same reason (`ui/MatrixPanel.ts`).
+   */
+  private exportDpi = 300
+  private exportFormat: ExportFormat = 'png'
+  /**
+   * Whether a control of the card is mid-gesture, so the card holds still.
+   *
+   * Every write goes to the row's style, the store notifies, and {@link sync}
+   * rebuilds the card from it — which mid-drag replaces the very slider the
+   * hand is holding, so a drag moved the value one step and then stopped dead.
+   * The lanes' own settings defer a rebuild for the same reason (a caret in a
+   * box); here the gesture is a drag, and the slider keeps its own readout in
+   * step while it lasts. Nothing else on this card can change under a drag of
+   * one of its sliders.
+   */
+  private holdingSettings = false
+  /**
+   * What the last save or copy did, under the export row.
+   *
+   * One node, kept rather than rebuilt with the card: a save does not change
+   * the style, so nothing repaints afterwards — but a repaint a moment later
+   * for another reason must not take the line away.
+   */
+  private readonly exportNote = el('span', { class: 'clip-note export-note' })
   private fogFrame = 0
   private fogPending: number | null = null
   private keyClickTimer: number | null = null
@@ -336,25 +410,31 @@ export class StructurePanel implements DeckCell {
 
   constructor(private readonly props: StructurePanelProps) {
     this.camera = cameraOf(recall<unknown>(props.memoryKey(), CAMERA_SCOPE))
-    this.nameEl = el('input', {
-      class: 'input deck-name',
-      type: 'text',
-      value: 'structure',
-      title: 'The session’s 3D model',
+    // A span, not a read-only box. `.deck-name` frames itself on hover and
+    // takes a caret on click, which is the rename control a map's name is
+    // (§16.10) — and this name is the row's, changed on the Structures card.
+    // Drawn as a box it invited a rename and then refused every keystroke.
+    this.nameEl = el('span', {
+      class: 'deck-name',
+      text: 'structure',
+      title: 'The session’s 3D model — renamed on its row in the Structures card',
     })
-    this.nameEl.readOnly = true
-    this.nameEl.addEventListener('pointerdown', (event) => event.stopPropagation())
     this.measureButton = iconButton(
       'ruler',
-      'Measure: drag from one bead to another for the distance between them, kept in the card (m, enlarged)',
+      'Measure: drag from one bead to another for the distance between them, kept in the card',
       () => this.setMode('measure'),
       { class: 'btn btn-icon structure-measure', size: 14 },
     )
-    const frameButton = iconButton('scan', 'Frame what the maps are looking at', () => this.frameLit(), {
+    // `maximize` is the mark the Map card's refit wears, and this is the same
+    // act on the model: put the camera back on what is being looked at. It used
+    // to be `scan`, a dashed square, which sat beside `maximize` on the button
+    // that *enlarges* — two corner-bracket glyphs told apart only by hovering
+    // them, one re-aiming a camera and the other opening a dialog.
+    this.frameButton = iconButton('maximize', '', () => this.frameLit(), {
       class: 'btn btn-icon structure-frame',
       size: 14,
     })
-    const expandButton = iconButton('maximize', 'Enlarge the model, with every setting beside it', () => this.expand(), {
+    const expandButton = iconButton('expand', 'Enlarge the model, with every setting beside it', () => this.expand(), {
       class: 'btn btn-icon structure-expand',
       size: 14,
     })
@@ -364,13 +444,13 @@ export class StructurePanel implements DeckCell {
     // stopping.
     this.markButton = iconButton(
       'map-pin',
-      'Mark a bead: each click marks that bead’s locus, on every map and track (e, enlarged)',
+      'Mark a bead: each click marks that bead’s locus, on every map and track',
       () => this.setMode('mark'),
       { class: 'btn btn-icon structure-select', size: 14 },
     )
     this.loopButton = iconButton(
       'link-2',
-      'Mark a loop: click two beads for a loop between their loci, drawn as a chord (o, enlarged)',
+      'Mark a loop: click two beads for a loop between their loci, drawn as a chord',
       () => this.setMode('loop'),
       { class: 'btn btn-icon structure-loop', size: 14 },
     )
@@ -386,12 +466,14 @@ export class StructurePanel implements DeckCell {
         this.markButton,
         this.loopButton,
         this.measureButton,
-        frameButton,
+        this.frameButton,
         expandButton,
       ),
     )
     this.paintMode()
-    this.paintSettings()
+    // Which paints the settings card too, since the card is where the other
+    // two keys are printed.
+    this.paintKeys()
     // The modifiers are read off the window, since a key goes down wherever
     // the focus is; they are acted on only while this cell is engaged — the
     // pointer over it, its canvas focused, or its dialog open — so Cmd+C in a
@@ -499,7 +581,7 @@ export class StructurePanel implements DeckCell {
 
   syncName(): void {
     const label = this.entry?.label ?? 'structure'
-    if (this.nameEl.value !== label) this.nameEl.value = label
+    if (this.nameEl.textContent !== label) this.nameEl.textContent = label
   }
 
   exportCanvas(dpi: number, _now: Date): HTMLCanvasElement | null {
@@ -679,13 +761,43 @@ export class StructurePanel implements DeckCell {
   }
 
   /**
+   * A title with its key, where the key is bound.
+   *
+   * The same gate {@link commands} puts on the bindings themselves: a letter
+   * reaches the model only while it is enlarged, so a card beside a deck that
+   * printed “(f)” was offering a key that folds the Files panel instead. And
+   * one form for it — `withKey`'s — rather than the three the cell used to
+   * carry: “(m, enlarged)” in the corner, “(f)” on the card, “(F)” everywhere
+   * else in the app. Re-read on every expand and collapse ({@link paintKeys}).
+   */
+  private keyed(text: string, binding: string): string {
+    return withKey(text, this.expanded === null ? undefined : binding)
+  }
+
+  /**
+   * Write the titles that name a key, now that the gate has moved.
+   *
+   * The corner's frame button and the card's camera row are the two places a
+   * key is printed outside the palette, and both are built once and then
+   * hovered much later — so they are re-titled when the dialog opens and
+   * closes rather than trusted to be rebuilt.
+   */
+  private paintKeys(): void {
+    this.frameButton.title = this.keyed('Frame what the maps are looking at', STRUCTURE_KEYS.frame)
+    this.paintSettings()
+  }
+
+  /**
    * What the cell can be told to do, with a key each (§25.3): listed in the
    * palette and bound through it, like every other command of the app.
    */
   commands(): Command[] {
     const style = this.style()
     const has = this.structure !== null
-    const on = (flag: boolean): string => (flag ? 'on' : 'off')
+    // The state is a chip after the title rather than a word inside it
+    // (`ui/commands.ts`): a row reading “Beads (on)” in the shortcuts dialog is
+    // a title that changes under the reader, and the dialog is static.
+    const on = (flag: boolean): 'on' | 'off' => (flag ? 'on' : 'off')
     // **A key only while the model is enlarged.** These are single letters, and
     // the app's own are too: `f` folds the Files panel, `a` the Annotations
     // panel. A structure cell sits *beside* a map, and its commands come first
@@ -694,18 +806,26 @@ export class StructurePanel implements DeckCell {
     // is the whole window and there is nothing else the letter could mean, so
     // that is where they are bound; the palette lists them either way, which is
     // how they are reached from the cell.
+    //
+    // **And the three modes have none at all** (§25.4): a bare letter that arms
+    // a mode is a letter pressed by accident while the pointer happens to be
+    // over the model, which is true in the dialog above all — the model is the
+    // whole window there. `e`, `o` and `m` also each belonged to something else
+    // (breaks, a new tab, the Aesthetics panel), so the shortcuts dialog
+    // printed two rows for one letter and the reader could not tell which it
+    // would do. They are pressed on the buttons, in the corner or on the card.
     const key = (binding: string): { keys?: string } => (this.expanded === null ? {} : { keys: binding })
     return [
-      { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key('f'), enabled: has, run: () => this.frameLit() },
-      { id: 'structure-all', group: 'Structure', title: 'Show the whole model', ...key('a'), enabled: has, run: () => this.frameAll() },
-      { id: 'structure-beads', group: 'Structure', title: `Beads (${on(style.beads)})`, ...key('1'), enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
-      { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, ...key('2'), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
-      { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, ...key('3'), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
-      { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, ...key('l'), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', ...key('e'), enabled: has, run: () => this.setMode('mark') },
-      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', ...key('o'), enabled: has, run: () => this.setMode('loop') },
-      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', ...key('m'), enabled: has, run: () => this.setMode('measure') },
-      { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', ...key('r'), enabled: has, run: () => this.toggleTurning() },
+      { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key(STRUCTURE_KEYS.frame), enabled: has, run: () => this.frameLit() },
+      { id: 'structure-all', group: 'Structure', title: 'Show the whole model', ...key(STRUCTURE_KEYS.all), enabled: has, run: () => this.frameAll() },
+      { id: 'structure-beads', group: 'Structure', title: 'Beads', state: on(style.beads), ...key(STRUCTURE_KEYS.beads), enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
+      { id: 'structure-sticks', group: 'Structure', title: 'Sticks', state: on(style.sticks), ...key(STRUCTURE_KEYS.sticks), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
+      { id: 'structure-tube', group: 'Structure', title: 'Tube', state: on(style.tube), ...key(STRUCTURE_KEYS.tube), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
+      { id: 'structure-labels', group: 'Structure', title: 'Sequence names', state: on(style.labels), ...key(STRUCTURE_KEYS.labels), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
+      { id: 'structure-select', group: 'Structure', title: 'Mark a bead', state: this.mode === 'mark' ? 'on' : 'off', hint: 'Each click marks that bead’s locus', enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: 'Mark a loop', state: this.mode === 'loop' ? 'on' : 'off', hint: 'Click two beads for a loop between their loci', enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: 'Measure', state: this.mode === 'measure' ? 'on' : 'off', hint: 'Drag from one bead to another for the distance between them', enabled: has, run: () => this.setMode('measure') },
+      { id: 'structure-turn', group: 'Structure', title: 'Turntable', state: on(this.turning), hint: 'The model turns slowly by itself', ...key(STRUCTURE_KEYS.turntable), enabled: has, run: () => this.toggleTurning() },
     ]
   }
 
@@ -767,7 +887,7 @@ export class StructurePanel implements DeckCell {
     this.paintMode()
   }
 
-  /** The badge: which of the four things the hand is about to do. */
+  /** The badge: which of the seven things the hand is about to do. */
   private paintMode(): void {
     const mode = this.mode === 'measure'
       ? { icon: 'ruler', text: 'measure', title: 'Drag from one bead to another for the distance between them; Esc to cancel' }
@@ -2054,6 +2174,9 @@ export class StructurePanel implements DeckCell {
       onResize: () => this.remeasure(),
       onClose: () => this.collapse(),
     })
+    // The letters reach the model now, so the titles that name them say so —
+    // the corner's frame button and, through it, the card's camera row.
+    this.paintKeys()
     // Sized once the dialog is laid out, not before: the observer answers
     // the box's new size, and the first frame should not be drawn at the
     // cell's.
@@ -2073,6 +2196,7 @@ export class StructurePanel implements DeckCell {
       home.parent.insertBefore(this.settingsEl, home.next !== null && home.next.parentNode === home.parent ? home.next : null)
     }
     if (!this.destroyed) this.body.append(this.wrap)
+    this.paintKeys()
     requestAnimationFrame(() => this.remeasure())
   }
 
@@ -2084,6 +2208,7 @@ export class StructurePanel implements DeckCell {
    * are built with, so the column reads as one column.
    */
   private paintSettings(): void {
+    if (this.holdingSettings) return
     const style = this.style()
     const structure = this.structure
     const store = this.props.store()
@@ -2104,7 +2229,16 @@ export class StructurePanel implements DeckCell {
       node.max = String(max)
       node.step = String(step)
       node.value = String(value)
-      node.addEventListener('input', () => onChange(Number(node.value)))
+      node.addEventListener('input', () => {
+        // The card holds still for the length of the write; see
+        // {@link holdingSettings}.
+        this.holdingSettings = true
+        try {
+          onChange(Number(node.value))
+        } finally {
+          this.holdingSettings = false
+        }
+      })
       return node
     }
     const toggleIcon = (name: Parameters<typeof icon>[0], title: string, on: boolean, onChange: (on: boolean) => void): HTMLElement => {
@@ -2115,18 +2249,78 @@ export class StructurePanel implements DeckCell {
     const row = (...nodes: HTMLElement[]): HTMLElement => el('div', { class: 'plot-icon-row' }, ...nodes)
     const blockField = (label: string, control: HTMLElement, hint?: string): HTMLElement =>
       el('label', { class: 'field ann-field field-block', title: hint ?? '' }, el('span', { class: 'field-label', text: label }), control)
+    /**
+     * A bounded fraction, with the number it is at printed beside it.
+     *
+     * Six of these used to be bare `<input type=range>`s, and a bead radius
+     * with no number on it is a figure nobody can reproduce — not in a second
+     * session, and not in a methods section. The readout is the shape
+     * `textScaleField` already draws: the value after the control, dim, and
+     * written as the slider moves rather than on release.
+     *
+     * Each is on a labelled row of its own, because a slider that shared a row
+     * with the toggle above it wrapped to the next line and read as a setting
+     * with no name at all.
+     */
+    const sliderField = (
+      label: string,
+      value: number,
+      bounds: { min: number; max: number; step: number },
+      onChange: (v: number) => void,
+      options: { hint?: string; disabled?: string } = {},
+    ): HTMLElement => {
+      const note = el('span', { class: 'clip-note structure-value', text: trimNumber(value, 2) })
+      const input = range(value, bounds.min, bounds.max, bounds.step, (next) => {
+        note.textContent = trimNumber(next, 2)
+        onChange(next)
+      })
+      // Greyed with its reason in the title, never greyed silently (§8.5).
+      input.disabled = options.disabled !== undefined
+      return settingsField(label, row(input, note), options.disabled ?? options.hint)
+    }
     const rows: HTMLElement[] = []
 
-    // Which model, where there is more than one to choose between.
+    // Which structure, where there is more than one to choose between — and
+    // *structure* rather than *model*, which is one set of coordinates inside
+    // one (§25.1): what this picker chooses is the row, and the row is a file.
+    //
+    // A block field, like the three selects under it: the option is a file's
+    // own name and the label column leaves a select about seven characters
+    // wide, which turned `Yeast_structure` into `Yeast_str`.
     const models = (store?.entries ?? []).filter((held) => held.kind === 'structure')
     if (models.length > 1) {
       rows.push(
-        settingsField(
-          'model',
+        blockField(
+          'structure',
           select(models.map((held) => ({ value: held.id, text: held.label })), this.entry?.id ?? '', (value) => this.showModel(value)),
           'Which structure row this cell draws; the Structures card says the same from its side.',
         ),
       )
+    }
+
+    // Compare: another model on this one. Second, beside the picker, because
+    // these are the two selects that decide *which models are on screen* — and
+    // because `colour by: displacement` below is measured against this one, so
+    // offering the colouring first was offering a reading of nothing.
+    const others = models.filter((held) => held.id !== this.entry?.id && held.status === 'ready')
+    if (others.length > 0 || style.compare !== '') {
+      const choices = [{ value: '', text: 'none' }, ...others.map((held) => ({ value: held.id, text: held.label }))]
+      if (style.compare !== '' && !choices.some((choice) => choice.value === style.compare)) {
+        choices.push({ value: style.compare, text: `${style.compare} (no longer in the list)` })
+      }
+      rows.push(
+        blockField(
+          'compare with',
+          select(choices, style.compare, (value) => this.restyle({ compare: value })),
+          'Another structure row, aligned onto this one over the beads the two share and drawn in grey beside it; colour by displacement shows where they differ.',
+        ),
+      )
+      const fit = style.compare === '' ? null : (this.overlayOf(structure ?? ({} as Structure), style), this.compared?.fit ?? null)
+      if (style.compare !== '' && structure !== null) {
+        rows.push(
+          el('p', { class: 'clip-note structure-note-line', text: fit === null ? 'the two models share fewer than four beads' : `${fmt.int(fit.matched)} beads matched · RMSD ${fmt.num(fit.rmsd)} model units` }),
+        )
+      }
     }
 
     // Drawn as: any of the three together.
@@ -2134,9 +2328,9 @@ export class StructurePanel implements DeckCell {
       settingsField(
         'drawn as',
         row(
-          toggleIcon('circle-dot', 'Beads at each place (1)', style.beads, (on) => this.restyle({ beads: on })),
-          toggleIcon('minus', 'Sticks between neighbours (2)', style.sticks, (on) => this.restyle({ sticks: on })),
-          toggleIcon('spline', 'A tube through each run (3)', style.tube, (on) => this.restyle({ tube: on })),
+          toggleIcon('circle-dot', this.keyed('Beads at each place', STRUCTURE_KEYS.beads), style.beads, (on) => this.restyle({ beads: on })),
+          toggleIcon('minus', this.keyed('Sticks between neighbours', STRUCTURE_KEYS.sticks), style.sticks, (on) => this.restyle({ sticks: on })),
+          toggleIcon('spline', this.keyed('A tube through each run', STRUCTURE_KEYS.tube), style.tube, (on) => this.restyle({ tube: on })),
         ),
       ),
     )
@@ -2158,8 +2352,8 @@ export class StructurePanel implements DeckCell {
     const featureSets = (store?.entries ?? []).filter(
       (held) => held.kind !== 'structure' && isIntervalSet(held.kind) && held.status === 'ready',
     )
-    for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} (track)` })
-    for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} (features)` })
+    for (const held of tracks) colourings.push({ value: `${STRUCTURE_COLOUR_TRACK}${held.id}`, text: `${held.label} · track` })
+    for (const held of featureSets) colourings.push({ value: `${STRUCTURE_COLOUR_FEATURES}${held.id}`, text: `${held.label} · features` })
     if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
     colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
     if (this.props.contacts !== undefined) colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
@@ -2167,28 +2361,75 @@ export class StructurePanel implements DeckCell {
     if (!colourings.some((option) => option.value === style.colourBy)) {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
-    rows.push(settingsField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
+    rows.push(blockField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
     const sizeChoices = [{ value: '', text: 'the same everywhere' }, ...tracks.map((held) => ({ value: held.id, text: held.label }))]
     if (style.sizeBy !== '' && !sizeChoices.some((choice) => choice.value === style.sizeBy)) {
       sizeChoices.push({ value: style.sizeBy, text: `${style.sizeBy} (no longer in the list)` })
     }
     rows.push(
-      settingsField(
+      blockField(
         'size by',
         select(sizeChoices, style.sizeBy, (value) => this.restyle({ sizeBy: value })),
         'A track whose value at each bead sets the bead’s size — a second channel beside the colour.',
       ),
     )
-    rows.push(settingsField('bead radius', range(style.beadRadius, 0.05, 1.5, 0.05, (v) => this.restyle({ beadRadius: v }))))
-    rows.push(settingsField('tube radius', range(style.tubeRadius, 0.05, 1, 0.05, (v) => this.restyle({ tubeRadius: v }))))
+    rows.push(sliderField('bead radius', style.beadRadius, { min: 0.05, max: 1.5, step: 0.05 }, (v) => this.restyle({ beadRadius: v })))
+    rows.push(sliderField('tube radius', style.tubeRadius, { min: 0.05, max: 1, step: 0.05 }, (v) => this.restyle({ tubeRadius: v })))
 
-    // Chords: a loop set or the reader's marks, and the map's contacts from the pin.
+    // Which homologue, on a phased model. `haplotype` and not `show`: the marks
+    // row below is `overlays`, and two rows reading `show` on one card is one
+    // name for two questions.
+    if (structure !== null && structure.haplotypes.length > 1) {
+      const haplotypes = [{ value: '', text: 'both homologues' }, ...structure.haplotypes.map((name) => ({ value: name, text: name }))]
+      rows.push(settingsField('haplotype', select(haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))))
+    }
+
+    // Overlays: the names, the ruler, the centre. The word the Map and Tracks
+    // cards use for the same row of marks over a picture.
+    rows.push(
+      settingsField(
+        'overlays',
+        row(
+          toggleIcon(
+            'tag',
+            this.keyed(style.labels ? 'Hide the sequence names' : 'Show the sequence names', STRUCTURE_KEYS.labels),
+            style.labels,
+            (on) => this.restyle({ labels: on }),
+          ),
+          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
+          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
+        ),
+      ),
+    )
+
+    // What is outside the window, and *then* how much of it is left: the
+    // choice before the modifier, because under `hide` there is nothing for an
+    // opacity to be the opacity of — which is why the slider is greyed there,
+    // with the reason in its title, rather than dragged to no effect.
+    rows.push(
+      settingsField(
+        'outside window',
+        select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyle({ others: value as StructureStyle['others'] })),
+        'What becomes of the beads outside the window the maps are looking at.',
+      ),
+    )
+    rows.push(
+      sliderField('ghost opacity', style.opacity, { min: 0, max: 1, step: 0.05 }, (v) => this.restyle({ opacity: v }), {
+        disabled: style.others === 'hide' ? 'Nothing is ghosted while what is outside the window is hidden.' : undefined,
+      }),
+    )
+
+    // Chords: a loop set or the reader's marks, and the map's contacts from the
+    // pin. The toggle is absent while the set is `none` — a lit *show the
+    // chords* with nothing to show is a control that cannot keep its promise
+    // (§8.5), and a reader pressing it could not tell which of the two was why
+    // the model stayed bare.
     const loopRows = (store?.entries ?? []).filter((held) => held.kind === 'pairs' && held.status === 'ready')
     const hasMarks = this.props.manual?.() !== undefined
     const loopChoices: Array<{ value: string; text: string }> = [
       { value: '', text: 'none' },
       ...loopRows.map((held) => ({ value: held.id, text: held.label })),
-      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks (arrowheads)' }] : []),
+      ...(hasMarks ? [{ value: MANUAL_CHORDS, text: 'your marks' }] : []),
     ]
     if (style.loops !== '' && !loopChoices.some((choice) => choice.value === style.loops)) {
       loopChoices.push({ value: style.loops, text: `${style.loops} (no longer in the list)` })
@@ -2198,108 +2439,40 @@ export class StructurePanel implements DeckCell {
         'div',
         { class: 'field ann-field structure-field-with-toggle' },
         el('span', { class: 'field-label', text: 'loops as chords' }),
-        toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on })),
+        ...(style.loops === ''
+          ? []
+          : [toggleIcon('link-2', style.chords ? 'Hide the chords' : 'Show the chords', style.chords, (on) => this.restyle({ chords: on }))]),
         select(loopChoices, style.loops, (value) => this.restyle({ loops: value })),
       ),
     )
     if (this.props.contacts !== undefined) {
       rows.push(
-        el(
-          'div',
-          { class: 'field ann-field structure-field-with-toggle', title: 'The map’s contacts from the pinned bead, as chords to every bead above the threshold — as thick as the contact, in the map’s colour for it. Pin a bead with a click.' },
-          el('span', { class: 'field-label', text: 'contacts from the pin' }),
+        settingsField(
+          'pin contacts',
           toggleIcon('waypoints', style.contactChords ? 'Hide the contact chords' : 'Show the contact chords', style.contactChords, (on) => this.restyle({ contactChords: on })),
-          range(style.contactThreshold, 0, 1, 0.02, (v) => this.restyle({ contactThreshold: v })),
+          'The map’s contacts from the pinned bead, as chords to every bead above the threshold — as thick as the contact, in the map’s colour for it. Pin a bead with a click.',
         ),
       )
-    }
-
-    // What is outside the window, and how much of it is left.
-    rows.push(settingsField('ghost opacity', range(style.opacity, 0, 1, 0.05, (v) => this.restyle({ opacity: v }))))
-    rows.push(
-      settingsField(
-        'outside the window',
-        select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyle({ others: value as StructureStyle['others'] })),
-      ),
-    )
-    if (structure !== null && structure.haplotypes.length > 1) {
-      const haplotypes = [{ value: '', text: 'both homologues' }, ...structure.haplotypes.map((name) => ({ value: name, text: name }))]
-      rows.push(settingsField('show', select(haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))))
+      rows.push(
+        sliderField('threshold', style.contactThreshold, { min: 0, max: 1, step: 0.02 }, (v) => this.restyle({ contactThreshold: v }), {
+          hint: 'How strong a contact has to be, as a fraction of the map’s scale, to be drawn as a chord.',
+        }),
+      )
     }
 
     // Depth: the fog and the slab.
     rows.push(
-      el(
-        'div',
-        { class: 'field ann-field structure-field-with-toggle', title: 'The fog for depth: Space + scroll on the model moves it too.' },
-        el('span', { class: 'field-label', text: 'fog' }),
+      settingsField(
+        'fog',
         toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
-        range(style.fog, 0, 1, 0.05, (v) => this.restyle({ fog: v })),
+        'The fog for depth: Space + scroll on the model moves it too.',
       ),
     )
+    rows.push(sliderField('fog depth', style.fog, { min: 0, max: 1, step: 0.05 }, (v) => this.restyle({ fog: v })))
     rows.push(
-      settingsField(
-        'depth slab',
-        range(style.slab, 0.02, 1, 0.02, (v) => this.restyle({ slab: v })),
-        'Keep only what lies within this fraction of the model’s reach of the centre of rotation, front and back — a way into a dense model. All the way right is everything.',
-      ),
-    )
-
-    // Overlays: the names, the ruler, the centre.
-    rows.push(
-      settingsField(
-        'show',
-        row(
-          toggleIcon('tag', style.labels ? 'Hide the sequence names (l)' : 'Show the sequence names (l)', style.labels, (on) => this.restyle({ labels: on })),
-          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
-          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
-        ),
-      ),
-    )
-
-    // Compare: another model on this one.
-    const others = models.filter((held) => held.id !== this.entry?.id && held.status === 'ready')
-    if (others.length > 0 || style.compare !== '') {
-      const choices = [{ value: '', text: 'none' }, ...others.map((held) => ({ value: held.id, text: held.label }))]
-      if (style.compare !== '' && !choices.some((choice) => choice.value === style.compare)) {
-        choices.push({ value: style.compare, text: `${style.compare} (no longer in the list)` })
-      }
-      rows.push(
-        settingsField(
-          'compare with',
-          select(choices, style.compare, (value) => this.restyle({ compare: value })),
-          'Another structure row, aligned onto this one over the beads the two share and drawn in grey beside it; colour by displacement shows where they differ.',
-        ),
-      )
-      const fit = style.compare === '' ? null : (this.overlayOf(structure ?? ({} as Structure), style), this.compared?.fit ?? null)
-      if (style.compare !== '' && structure !== null) {
-        rows.push(
-          el('p', { class: 'clip-note structure-note-line', text: fit === null ? 'the two models share fewer than four beads' : `${fmt.int(fit.matched)} beads matched · RMSD ${fmt.num(fit.rmsd)} model units` }),
-        )
-      }
-    }
-
-    // Camera: presets, the turntable, framing. Block fields — the label above
-    // the buttons — because three words and a toggle do not fit beside one.
-    rows.push(
-      blockField(
-        'camera',
-        row(
-          button('front', () => this.lookFrom(0, 0), { class: 'btn btn-quiet', title: 'Look from the front' }),
-          button('top', () => this.lookFrom(0, Math.PI / 2 - 0.01), { class: 'btn btn-quiet', title: 'Look from above' }),
-          button('side', () => this.lookFrom(Math.PI / 2, 0), { class: 'btn btn-quiet', title: 'Look from the side' }),
-          toggleIcon('rotate-cw', this.turning ? 'Stop the turntable (r)' : 'Turn the model slowly by itself (r)', this.turning, () => this.toggleTurning()),
-        ),
-      ),
-    )
-    rows.push(
-      blockField(
-        'frame',
-        row(
-          button('the window', () => this.frameLit(), { class: 'btn btn-quiet', title: 'Put the camera on what the maps are looking at (f)' }),
-          button('everything', () => this.frameAll(), { class: 'btn btn-quiet', title: 'Put the camera on the whole model (a)' }),
-        ),
-      ),
+      sliderField('depth slab', style.slab, { min: 0.02, max: 1, step: 0.02 }, (v) => this.restyle({ slab: v }), {
+        hint: 'Keep only what lies within this fraction of the model’s reach of the centre of rotation, front and back. All the way right is everything.',
+      }),
     )
 
     // Measurements: the list, each removable.
@@ -2322,15 +2495,78 @@ export class StructurePanel implements DeckCell {
       rows.push(el('div', { class: 'field field-block' }, el('span', { class: 'field-label', text: 'measurements' }), list))
     }
 
+    // Camera: presets, the turntable, framing. Block fields — the label above
+    // the buttons — because three words and a toggle do not fit beside one.
+    //
+    // Bordered buttons, as every other action in this column is. They were
+    // quiet words, which beside a bordered toggle read as a caption for it: a
+    // reader had no way of knowing the model could be put on its side without
+    // hovering the word `side` and finding a tooltip.
+    rows.push(
+      blockField(
+        'camera',
+        row(
+          button('front', () => this.lookFrom(0, 0), { class: 'btn', title: 'Look from the front' }),
+          button('top', () => this.lookFrom(0, Math.PI / 2 - 0.01), { class: 'btn', title: 'Look from above' }),
+          button('side', () => this.lookFrom(Math.PI / 2, 0), { class: 'btn', title: 'Look from the side' }),
+          toggleIcon(
+            'rotate-cw',
+            this.keyed(this.turning ? 'Stop the turntable' : 'Turn the model slowly by itself', STRUCTURE_KEYS.turntable),
+            this.turning,
+            () => this.toggleTurning(),
+          ),
+        ),
+      ),
+    )
+    rows.push(
+      blockField(
+        'frame',
+        row(
+          button('the window', () => this.frameLit(), {
+            class: 'btn',
+            title: this.keyed('Put the camera on what the maps are looking at', STRUCTURE_KEYS.frame),
+          }),
+          button('everything', () => this.frameAll(), {
+            class: 'btn',
+            title: this.keyed('Put the camera on the whole model', STRUCTURE_KEYS.all),
+          }),
+        ),
+      ),
+    )
+
+    // Export: the app's one export row (`ui/exportRow.ts`) — how fine, what
+    // file, go — and not the pair of quiet words `PNG PDF` this card used to
+    // end with. Those were the third export idiom on one screen, and the only
+    // one with no resolution in it: a reader who had set 600 dpi in the Export
+    // card above got 300 from here and nothing said so.
+    const exportRowEl = exportRow({
+      dpi: {
+        choices: EXPORT_DPI_CHOICES,
+        value: this.exportDpi,
+        onChange: (dpi) => {
+          this.exportDpi = dpi
+        },
+      },
+      formats: STRUCTURE_EXPORT_FORMATS,
+      format: this.exportFormat,
+      formatTitle:
+        'PNG is the picture as the GPU drew it. PDF is a drawing — beads and sticks as paths, ' +
+        'a tube as a raster at the resolution beside it, since a lit surface is not a path.',
+      onFormat: (format) => {
+        this.exportFormat = format === 'pdf' ? 'pdf' : 'png'
+      },
+      onSave: (format, dpi) => void (format === 'pdf' ? this.savePdf(dpi) : this.savePng(dpi)),
+      onCopy: (dpi) => void this.copyModel(dpi),
+      saveTitle: 'Save the model, at the resolution and in the format chosen beside this',
+      copyTitle: 'Copy the model as a PNG, ready to paste',
+    })
     rows.push(
       el(
         'div',
-        { class: 'structure-export' },
-        button('PNG', () => void this.savePng(), { class: 'btn btn-quiet', title: 'Save this picture at 300 dpi' }),
-        button('PDF', () => void this.savePdf(), {
-          class: 'btn btn-quiet',
-          title: 'Save this picture as a PDF: beads and sticks as paths, a tube as a 300 dpi raster — a lit surface is not a path',
-        }),
+        { class: 'field field-block' },
+        el('span', { class: 'field-label', text: 'export' }),
+        exportRowEl.el,
+        this.exportNote,
       ),
     )
 
@@ -2344,10 +2580,47 @@ export class StructurePanel implements DeckCell {
   // Export
   // -------------------------------------------------------------------------
 
-  private async savePng(): Promise<void> {
-    const out = this.exportCanvas(300, new Date())
-    if (out === null) return
-    downloadBlob(await canvasToPng(out), `structure-${fileStamp(new Date())}-300dpi.png`)
+  private async savePng(dpi: number): Promise<void> {
+    const now = new Date()
+    const name = `structure-${fileStamp(now)}-${dpi}dpi.png`
+    this.exportNote.textContent = `saving ${name}…`
+    try {
+      const out = this.exportCanvas(dpi, now)
+      if (out === null) {
+        this.exportNote.textContent = 'nothing to save: no model is drawn'
+        return
+      }
+      const blob = await canvasToPng(out)
+      downloadBlob(blob, name)
+      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+    } catch (err) {
+      this.exportNote.textContent =
+        err instanceof Error ? `export failed: ${err.message}` : 'export failed'
+    }
+  }
+
+  /**
+   * The model on the clipboard, as a PNG, at the row's resolution.
+   *
+   * The same act the Export card's second button performs on the map, and the
+   * reason the row has one here too: a model goes into a slide or a message as
+   * often as it goes into a file, and a reader who had learned the map's pair
+   * had to learn the structure's single button instead.
+   */
+  private async copyModel(dpi: number): Promise<void> {
+    this.exportNote.textContent = 'copying…'
+    try {
+      const out = this.exportCanvas(dpi, new Date())
+      if (out === null) {
+        this.exportNote.textContent = 'nothing to copy: no model is drawn'
+        return
+      }
+      await copyPngToClipboard(canvasToPng(out))
+      this.exportNote.textContent = `copied · ${out.width}×${out.height} px`
+    } catch (err) {
+      this.exportNote.textContent =
+        err instanceof Error ? `copy failed: ${err.message}` : 'copy failed'
+    }
   }
 
   /**
@@ -2359,21 +2632,39 @@ export class StructurePanel implements DeckCell {
    * be, and exports as the raster the GPU drew, on the page the way a deck
    * does.
    */
-  private async savePdf(): Promise<void> {
+  private async savePdf(dpi: number): Promise<void> {
     const view = this.view()
-    if (view === null) return
-    const now = new Date()
-    const width = Math.max(1, this.wrap.clientWidth)
-    const height = Math.max(1, this.wrap.clientHeight)
-    const page = new VectorPage(width, height)
-    if (view.style.tube) {
-      const raster = this.exportCanvas(300, now)
-      if (raster === null) return
-      page.ctx.drawImage(raster, 0, 0, width, height)
-    } else {
-      drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+    if (view === null) {
+      this.exportNote.textContent = 'nothing to save: no model is drawn'
+      return
     }
-    downloadBlob(await page.toBlob({ title: 'structure', created: now }), `structure-${fileStamp(now)}.pdf`)
+    const now = new Date()
+    const name = `structure-${fileStamp(now)}.pdf`
+    this.exportNote.textContent = `saving ${name}…`
+    try {
+      const width = Math.max(1, this.wrap.clientWidth)
+      const height = Math.max(1, this.wrap.clientHeight)
+      const page = new VectorPage(width, height)
+      if (view.style.tube) {
+        // At the row's resolution, not a fixed 300: the reader chose a number
+        // beside this button and the one part of this page that is a raster is
+        // the one part that could have ignored it.
+        const raster = this.exportCanvas(dpi, now)
+        if (raster === null) {
+          this.exportNote.textContent = 'nothing to save: no model is drawn'
+          return
+        }
+        page.ctx.drawImage(raster, 0, 0, width, height)
+      } else {
+        drawStructure(page.ctx, { width, height }, view, PAPER_PALETTE)
+      }
+      const blob = await page.toBlob({ title: 'structure', created: now })
+      downloadBlob(blob, name)
+      this.exportNote.textContent = `${name} · ${fmt.bytes(blob.size)}`
+    } catch (err) {
+      this.exportNote.textContent =
+        err instanceof Error ? `export failed: ${err.message}` : 'export failed'
+    }
   }
 }
 

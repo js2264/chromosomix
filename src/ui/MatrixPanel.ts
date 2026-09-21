@@ -61,7 +61,7 @@ import {
 } from '../render/legend'
 import { laneGrowsInward, laneIsHorizontal } from '../render/lane'
 import { locusAxisFrom, type LocusAxis, type LocusWindow } from '../render/locus'
-import { formatLocus } from '../genome/assembly'
+import { formatLocus, formatPosition } from '../genome/assembly'
 import {
   drawArrowheads,
   drawDiagonalFeatures,
@@ -221,7 +221,7 @@ import {
   PLOT_OPTION_ICONS,
   PLOT_OPTION_KEYS,
   PLOT_OPTION_LABELS,
-  TRACK_OPTIONS,
+  TRACK_ONLY_OPTIONS,
   getPlotOptions,
   setPlotOption,
   subscribePlotOptions,
@@ -326,6 +326,23 @@ function edgeAxis(edge: PlotEdge): 'x' | 'y' {
   return edge === 'left' || edge === 'right' ? 'x' : 'y'
 }
 
+/**
+ * A labelled row whose control takes the whole width under its label.
+ *
+ * `field()`'s block form, for the one case §26.6 keeps it for: a select whose
+ * options are longer than the value column a 6.5 rem label leaves. The rows of
+ * icon toggles build the same shape inline, since their control is a group
+ * rather than one node.
+ */
+function fieldBlock(label: string, control: HTMLElement, hint?: string): HTMLElement {
+  return el(
+    'label',
+    { class: 'field field-block', title: hint ?? '' },
+    el('span', { class: 'field-label', text: label }),
+    control,
+  )
+}
+
 function plotGrip(edge: PlotEdge): HTMLElement {
   const axis = edgeAxis(edge)
   return el('div', {
@@ -347,17 +364,13 @@ const OE_HINT =
   'the picture. Drawn on a scale centred at 1, with a cell of nothing observed left as paper.'
 
 const OE_ON_BASELINE_HINT =
-  'The cells already are the expected values, so there is nothing left to divide by them — ' +
-  'observed over expected of the baseline is 1 wherever it is anything. Choose another score to ' +
-  'get the toggle back.'
+  'The cells already are the expected values, so there is nothing left to divide by them. ' +
+  'Choose another score to get the toggle back.'
 
 const BASELINE_HINT =
-  'The baseline `O/E` divides by, drawn instead of applied: every cell replaced by the mean of ' +
-  'this block at that bin separation, with one scalar between each pair of sequences. Nothing ' +
-  'but the distance decay is in it, which is what makes it worth a look — an O/E is only as ' +
-  'trustworthy as the curve underneath it, and at long separations that curve is averaged over ' +
-  'few cells and moves. Computed from the counts, so it is the denominator of `O/E` over ' +
-  'counts; over `balanced` the same baseline is measured on those instead.'
+  'The baseline O/E divides by, drawn instead of applied: every cell replaced by the mean of ' +
+  'this block at that bin separation. Worth a look because an O/E is only as trustworthy as ' +
+  'the curve underneath it, and at long separations that curve is averaged over few cells.'
 
 /**
  * What a dragged box resolves to: one block, and how much of it.
@@ -777,15 +790,9 @@ export interface DerivePresentation {
 export const MAP_CORRELATION_BINS = 1500
 
 const CORRELATE_HINT =
-  'Replace the square by the Pearson correlation between its rows — the object a compartment ' +
-  'eigenvector is computed from (§18.8). Two bins correlate when they contact the rest of the ' +
-  'sequence in the same pattern, so the checkerboard this draws *is* the A/B compartments, and ' +
-  'it is the same matrix the Compartments task solves. Implies `O/E`, since a correlation of ' +
-  'anything else is a correlation of the distance decay, and balanced counts, since a ' +
-  'correlation of unbalanced O/E is a correlation of the coverage bias. One file, square blocks, and up to ' +
-  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side: it is the one cubic step in the viewer, ` +
-  'so it runs off the main thread — about 3 seconds at a thousand bins a side and eight times ' +
-  'that for each doubling. Choosing another score cancels it.'
+  'Replace the square by the Pearson correlation between its rows, whose checkerboard is the ' +
+  'A/B compartments. Implies O/E and balanced counts; one file, square blocks, up to ' +
+  `${MAP_CORRELATION_BINS.toLocaleString()} bins a side.`
 
 export interface ComparePresentation {
   /** The two file names, in order: above the diagonal, then below it. */
@@ -1037,6 +1044,8 @@ export class MatrixPanel {
   private legendOn = getPlotOptions().legend
   /** Where this panel's export goes while it leads a deck; see {@link setDeckExport}. */
   private deckExport: DeckExport | null = null
+  /** The Export card's clipboard button, re-titled when a deck takes the key. */
+  private copyButton: HTMLButtonElement | null = null
   private readonly heatmap: HeatmapView
   private readonly tooltip: HTMLElement
   private readonly titleNode: HTMLElement
@@ -1203,6 +1212,8 @@ export class MatrixPanel {
   } | null = null
   private divergingApplied: Transform | null = null
   private transform: Transform
+  /** `clip`, or `clip (log10)` under a transform; see {@link paintClipUnits}. */
+  private readonly clipLabel: HTMLElement
   private colormap: string
   private manualVmin: number | undefined
   private manualVmax: number | undefined
@@ -1538,6 +1549,12 @@ export class MatrixPanel {
       this.rescale()
     })
 
+    // The unit the boxes are in, in the label: `clip (log10)`. The caption
+    // under them is in counts, so without it the row shows two number systems
+    // and names neither — a reader who typed the caption's own `0.089` into a
+    // log10 box clipped the map a thousandfold too high and nothing said so.
+    this.clipLabel = el('span', { class: 'field-label' })
+    this.paintClipUnits()
     this.clip = new ClipRange({
       onChange: (clip) => {
         this.manualVmin = clip?.vmin
@@ -1545,8 +1562,10 @@ export class MatrixPanel {
         this.rescale()
       },
       // The boxes are in transformed units; the caption says what those are in
-      // the units the colourbar and the tooltip use.
+      // the units the colourbar and the tooltip use — and in the word for them
+      // the key and the readout under the pointer already use.
       format: (value) => formatCount(inverseTransform(value, this.transform)),
+      unit: () => (this.comparisonLabel() !== null ? '' : this.scoreWord()),
     })
 
     /**
@@ -1560,8 +1579,17 @@ export class MatrixPanel {
      */
     const valueFields: HTMLElement[] = []
     const controls: HTMLElement[] = [
-      field('transform', transformSelect, 'Value transform, matching `metacooler show --transform`.'),
-      field('colormap', colormapSelect, '`afmhot_r` is what `metacooler show` draws (§7.1).'),
+      field(
+        'transform',
+        transformSelect,
+        'How a value becomes a colour — none, log10, log2 or log1p; the same as the metacooler show command’s transform.',
+      ),
+      // `colours`, which is what a lane's own row calls the same control: the
+      // card said `colormap`, the lane row said `colours` and the 3D card says
+      // `colour by`, so one column carried two spellings and three names for
+      // one kind of choice. `colormap` survives as the technical word in SPECS
+      // and in the CLI, where it is a parameter rather than a label.
+      field('colours', colormapSelect, 'The ramp; a ✓ marks a colour-vision-safe one. afmhot_r is what the CLI draws.'),
       // Not `field()`: that wraps its control in a `<label>`, and a label around
       // four inputs and a button focuses whichever one it feels like.
       el(
@@ -1569,10 +1597,15 @@ export class MatrixPanel {
         {
           class: 'field field-clip',
           title:
-            'Where the colourmap starts and saturates, in transformed units. ' +
-            'Auto is the §7.1 default: 0 to the 99th percentile of the values in view.',
+            'Where the colourmap starts and saturates. ' +
+            'Auto is 0 to the 99th percentile of the values in view.',
         },
-        el('span', { class: 'field-label', text: 'clip' }),
+        // The transform in the label, because the boxes are in transformed
+        // units while the caption under them is in the units the colourbar is
+        // labelled in: `-4.182` and `0.000066` are the same bound written two
+        // ways, and with neither of them named a reader typing a clip could not
+        // tell which to type.
+        this.clipLabel,
         this.clip.el,
       ),
     ]
@@ -1594,19 +1627,16 @@ export class MatrixPanel {
         onSmoothChange(smoothSelect.value)
       })
       controls.unshift(
+        // One or two sentences, as a tooltip is (§26.4). What this replaces
+        // was a hundred and thirty words — why a ratio smooths both files,
+        // what an adaptive window does away from the diagonal, why it is off
+        // by default — in a `title` that shows for a few seconds and cannot be
+        // scrolled. That argument is in SPECS §7.5, where it can be read.
         field(
           'smooth',
           smoothSelect,
-          'Replace each cell by the mean of the cells around it, itself included — the box ' +
-            'filter Hi-C figures are usually made with. Applied to each file before two are ' +
-            'compared, and before the O/E division, so a ratio is ' +
-            '`smooth(A) / smooth(B)`: the cells that were empty in one file stop being empty, ' +
-            'and the saturated single pixels a sparse ratio is made of are never produced. ' +
-            'Single-cell features are averaged away with them, which is why it is off by default. ' +
-            'The three adaptive settings size each window separately, widening it where the ' +
-            'counts thin out — which is away from the diagonal, where a fixed window averages ' +
-            'mostly empty cells and stays noisy. Each starts at the fixed window above it. ' +
-            'Picking it turns the O/E on, because that is the picture it is for.',
+          'Average each cell with the cells around it before anything is compared or divided. ' +
+            'Adaptive widens the window where the counts thin out, and turns the O/E on.',
         ),
       )
     }
@@ -1648,11 +1678,12 @@ export class MatrixPanel {
           this.exportDpi = dpi
         },
       },
-      formats: EXPORT_FORMATS.map((format) => ({ value: format, label: format.toUpperCase() })),
+      formats: EXPORT_FORMATS,
       format: this.exportFormat,
       formatTitle:
         'PDF is a one-page document holding the figure losslessly, at the size the DPI implies; ' +
-        'PNG is the same picture as an image.',
+        'PNG is the same picture as an image. A contact map is a raster either way, which is ' +
+        'what the label says: the 1D browser, where nothing is, writes a vector PDF.',
       onFormat: (format) => {
         this.exportFormat = format as ExportFormat
       },
@@ -1665,6 +1696,7 @@ export class MatrixPanel {
       copyTitle: withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
     })
     this.exportStatus = row.note
+    this.copyButton = row.parts.copy
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every
@@ -1694,10 +1726,18 @@ export class MatrixPanel {
         // Tracks card uses: these are the same actions, and a reader should not
         // have to learn them twice because there happens to be a matrix above
         // the tracks this time. The words survive in the tooltips.
+        //
+        // Under a label, like every other row in this card. Three near-identical
+        // vertical arrows with no word over them were the first thing in the
+        // column and the least explained thing in it.
         el(
           'div',
-          { class: 'plot-icon-row' },
-          iconButton(
+          { class: 'field field-block' },
+          el('span', { class: 'field-label', text: 'all tracks' }),
+          el(
+            'div',
+            { class: 'plot-icon-row' },
+            iconButton(
             'chevrons-up-down',
             withKey(
               'Autoscale every track to what is in view — a group resolves as a group',
@@ -1728,6 +1768,7 @@ export class MatrixPanel {
                   { class: 'btn btn-icon', size: 15 },
                 ),
               ]),
+          ),
         ),
         // The same box the browser's Tracks card carries, applying the same rule
         // to the same tracks: the two are one decision taken two ways — fill the
@@ -1736,18 +1777,30 @@ export class MatrixPanel {
         // afterwards.
         ...(options.annotations === undefined
           ? []
-          : [trackHeightField((px) => this.setTrackHeight(px))]),
+          : [
+              trackHeightField((px) => this.setTrackHeight(px), {
+                lanes: () => LANE_EDGES.flatMap((edge) => this.lanes.lanesOn(edge)),
+                subscribe: (onChange) => this.laneStore.subscribe(onChange),
+              }),
+            ]),
         // The four that draw on the matrix used to sit under these, in the same
         // card, separated by a label — and a label is not a card. They are in
-        // Map now, beside the transform and the colourmap they belong with;
-        // stored together all the same, so a crosshair turned off here is off in
-        // the 1D browser too, since it is the same preference about the same
-        // gesture.
+        // Map now, beside the transform and the ramp they belong with; stored
+        // together all the same, so a crosshair turned off here is off in the 1D
+        // browser too, since it is the same preference about the same gesture.
+        //
+        // What is left is the ones this column does not already offer above.
+        // The crosshair and the card are about both pictures and used to be in
+        // both rows, lit together: two identical buttons ten lines apart read as
+        // two settings, and a reader who turned one off watched the other go
+        // dark and wondered what else was coupled. The browser's Tracks card,
+        // which has no Map card over it, still offers the whole list
+        // (`ui/plotOptions.ts`).
         el(
           'div',
           { class: 'field field-block' },
           el('span', { class: 'field-label', text: 'overlays' }),
-          el('div', { class: 'plot-icon-row' }, ...TRACK_OPTIONS.map(optionToggle)),
+          el('div', { class: 'plot-icon-row' }, ...TRACK_ONLY_OPTIONS.map(optionToggle)),
         ),
         // The two legibility numbers on one line, because they are one question
         // asked twice — how easily can this picture be read — and the second is
@@ -1825,16 +1878,20 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      const scoreField = field(
+      // A block field — the label above the select, the select the width of the
+      // card — because the options are the longest in this card: `correlation`,
+      // `expected`, `<column> (column)`. Beside a 6.5 rem label the select was
+      // about seven characters wide and the native arrow ate the last of them,
+      // so the one word a reader checks before reading a map read `balancec`.
+      const scoreField = fieldBlock(
         'score',
         select,
-        'What the cells are. `counts` is the stored pixel value; `balanced` multiplies each ' +
-          'cell by its two bin weights — cooler`s balanced matrix, in which bins the balancer ' +
-          'dropped have no weight and show as blank. Below those are the ones computed here ' +
-          'from the block on screen — `VC`, `VC √` and `ICE` correct the coverage, `expected` ' +
-          'replaces every cell by the distance decay `O/E` divides by, and `correlation` ' +
-          'replaces the square by the compartment matrix — each with its own note on hover. ' +
-          'Last come any further columns this file carries in /pixels, under their own names.',
+        // Two sentences. What this replaces was ninety words describing all
+        // seven entries, in a tooltip that shows for a few seconds — and each
+        // entry that needs a note already carries one on its own option, which
+        // is where a reader hovering that entry will find it.
+        'What the cells are: the stored counts, cooler’s balanced matrix, or a reading ' +
+          'computed here from the block on screen. Each of those has its own note on hover.',
       )
       // **First in both**, and not merely first in the card. It leads the Map
       // card because it is the question the other three answer *about* — what
@@ -1862,14 +1919,12 @@ export class MatrixPanel {
           field(
             'match depth',
             normalise,
-            `Scale ${compare.labels[1]}'s counts so its 99th percentile meets ${compare.labels[0]}'s. ` +
-              'Under `split` that makes the two triangles saturate together; off, one colour is one ' +
-              'count on both sides of the diagonal — the stronger claim, and wrong to read when the ' +
-              'files differ in depth. Under `ratio` and `difference` it divides that difference out ' +
-              'of every cell, which raw counts want and balanced values do not: balanced matrices ' +
-              'already share ICE`s normalisation, and the factor is measured on the near-diagonal ' +
-              'cells where two conditions actually differ — so it shifts the whole map by the ' +
-              'finding. On for counts, off for balanced, unless set here.',
+            // Two sentences, as a tooltip is. The hundred words this replaces
+            // argued when to use it and what it costs under each operation;
+            // that argument is §5.7's and §16.2's, where it can be read twice.
+            `Scale ${compare.labels[1]}’s counts so its 99th percentile meets ${compare.labels[0]}’s, ` +
+              'so the two saturate together. Off, one colour is one count on both sides of the ' +
+              'diagonal — the stronger claim, and wrong to read when the files differ in depth.',
           ),
         )
       }
@@ -1886,11 +1941,9 @@ export class MatrixPanel {
         field(
           'compare',
           opSelect,
-          `How the two files are put together. \`split\` draws ${compare.labels[0]} above the ` +
-            `diagonal and ${compare.labels[1]} below it, each in its own counts. \`ratio\` and ` +
-            '`difference` draw one derived field over the whole square, on a scale centred where ' +
-            'the two agree — the disagreement is then the only thing with any colour in it. Both ' +
-            'match depth automatically, since otherwise the picture is the depth difference.',
+          `How the two files are put together. Split draws ${compare.labels[0]} above the ` +
+            `diagonal and ${compare.labels[1]} below it, each in its own counts; ratio and ` +
+            'difference draw one derived field over the whole square, centred where the two agree.',
         ),
       )
     }
@@ -1908,11 +1961,24 @@ export class MatrixPanel {
     // of thing. Same mark, same lit state, same `aria-pressed` as every overlay.
     const picture: HTMLElement[] = []
 
-    // First of the three, because it is the one that decides what the other two
-    // are *of*: the turn changes the geometry and `O/E` changes the units, and
-    // both of those are read off whatever grid the picture is on. Off by
-    // default (`ui/refine.ts`), so this is the control that turns it on rather
-    // than a light that happens to be lit.
+    // The refit, first: it is the only one of these that is an *action*, and
+    // the one that says what the other three are a picture of. Unlit, as the
+    // recentre-on-diagonal beside it is, because there is no state to read off
+    // either of them.
+    picture.push(
+      iconButton(
+        'maximize',
+        'Undo every pan and zoom (0, or a double click on the plot)',
+        () => this.fit(),
+        { class: 'btn btn-icon', size: 15 },
+      ),
+    )
+
+    // Then the refine, because it decides what the two after it are *of*: the
+    // turn changes the geometry and `O/E` changes the units, and both of those
+    // are read off whatever grid the picture is on. Off by default
+    // (`ui/refine.ts`), so this is the control that turns it on rather than a
+    // light that happens to be lit.
     const refineButton = iconButton(
       REFINE_ICON,
       REFINE_HINT,
@@ -2052,32 +2118,25 @@ export class MatrixPanel {
     // panel's list wears the mark; and this panel still *reads* the answer
     // through `RegionViewProps.circular`, which is what arms the wrapped read.
 
-    // The four marks that draw on the matrix, in the card about the matrix.
-    // They spent a release at the bottom of the Tracks card under a label reading
+    // The marks that draw on the matrix, in the card about the matrix. They
+    // spent a release at the bottom of the Tracks card under a label reading
     // "matrix", two rows below four buttons that do nothing to it — which is a
     // card apologising for holding the wrong things.
     //
-    // Refit leads the row rather than sitting in a row of its own above it. Five
-    // marks fit across the column, and one mark alone under a heading of its own
-    // reads as a category with one member in it — the row was mostly the empty
-    // space beside the button. It goes first because it is the one that *acts*;
-    // the four after it are states.
+    // **Only things that light.** The refit used to lead this row, on the
+    // argument that five marks fit across the column and a row of one reads as
+    // a category with one member. But it is the one mark under `overlays` that
+    // never lights, beside seven that do — so a reader counting what is drawn
+    // on their map found an eighth overlay that was apparently off, and turned
+    // it on by pressing it, and lost their pan. It is in the `picture` row
+    // above with the turn and the diagonal, which is where the actions that are
+    // about the picture rather than about what is drawn over it now live.
     controls.push(
       el(
         'div',
         { class: 'field field-block' },
         el('span', { class: 'field-label', text: 'overlays' }),
-        el(
-          'div',
-          { class: 'plot-icon-row' },
-          iconButton(
-            'maximize',
-            'Undo every pan and zoom (0, or a double click on the plot)',
-            () => this.fit(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-          ...MATRIX_OPTIONS.map(optionToggle),
-        ),
+        el('div', { class: 'plot-icon-row' }, ...MATRIX_OPTIONS.map(optionToggle)),
       ),
     )
 
@@ -2249,6 +2308,7 @@ export class MatrixPanel {
       this.plotEl,
       ...(this.groupsCard === null ? [] : [this.groupsCard.el]),
     ]
+    this.syncCardsShown()
 
     this.el = el(
       'section',
@@ -2512,6 +2572,16 @@ export class MatrixPanel {
    */
   setDeckExport(hook: DeckExport | null): void {
     this.deckExport = hook
+    // The key moves with the act. `Ctrl+C` copies the whole deck once there is
+    // one (`Session`'s map-copy), so the Export card's clipboard button — which
+    // copies *this map* — stopped being the thing the key does, while still
+    // printing it. Two buttons on screen claiming one shortcut and doing
+    // different things is worse than one of them going unlabelled.
+    if (this.copyButton === null) return
+    this.copyButton.title =
+      hook === null
+        ? withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot)
+        : 'Copy this map as a PNG, ready to paste. Ctrl+C copies the whole deck.'
   }
 
   /**
@@ -3541,8 +3611,14 @@ export class MatrixPanel {
    * A view is panned and zoomed before it is exported, and the export keeps
    * that framing — so a figure captioned `XVI` when it shows 200–600 kb of
    * chromosome XVI is wrong in the way that matters, and the reader has no way
-   * to tell from the picture. The suffix is written in the region grammar, so
-   * it can be pasted back into the region box to return to this exact view.
+   * to tell from the picture. The suffix is the **display form** (§26.1),
+   * through `formatLocus`: 1-based inclusive with grouped digits, which is what
+   * the map's own summary, the drawer's *will run on* line and the cell
+   * subtitle all print. It used to be `fmt.int` of the 0-based start, which was
+   * neither that form nor the region grammar it claimed to be — so one framing
+   * appeared on one screen as `IV:1,000,000-1,400,000` in the drawer's head and
+   * `IV:1,000,001-…` under the picture, a one-base disagreement that reads as
+   * two different windows.
    *
    * Omitted only where it would add nothing: an axis with no single coordinate
    * system (a genome, whose axis is contigs), a block with two different axes
@@ -3561,10 +3637,49 @@ export class MatrixPanel {
   private framedSubject(): string {
     const subject = this.exportName
     if (subject.includes(' × ')) return subject
-    const range = this.heatmap.framedRange('rows') ?? this.heatmap.framedRange('cols')
-    if (range === null || range.whole) return subject
+    const range = this.framedBpRange()
+    if (range === null) return subject
     const name = subject.split(':')[0]
-    return `${name}:${fmt.int(Math.round(range.start))}-${fmt.int(Math.round(range.end))}`
+    return formatLocus({ contig: name, start: range.start, end: range.end })
+  }
+
+  /**
+   * The window on screen in base pairs, snapped to whole bins.
+   *
+   * `HeatmapView.framedRange` measures the drawn lattice, and a **turned** map
+   * is drawn on half bins (`render/rotate.ts`): the right half of the last bin
+   * has no column, so the raw answer is half a bin short and the line under the
+   * picture read `400 × 400 bins · 1.0 kb · IV:1,000,001-1,399,500 · 399.5 kb`
+   * — an arithmetic a reader checks and does not get. The turn is a
+   * presentation (§17.2), so the window it reports is the window the square
+   * reports: both ends on a bin edge, which is where the cells are.
+   *
+   * `null` where there is nothing to name — no coordinates, or the whole
+   * sequence from base zero, which the subject already says.
+   */
+  private framedBpRange(): { start: number; end: number } | null {
+    const range = this.heatmap.framedRange('rows') ?? this.heatmap.framedRange('cols')
+    if (range === null || range.whole) return null
+    return {
+      start: this.snapToBin(range.start, 'down'),
+      end: this.snapToBin(range.end, 'up'),
+    }
+  }
+
+  /**
+   * A base-pair coordinate on the nearest bin edge, in the given direction.
+   *
+   * Rounded to the file's own bin size rather than to whatever the lattice
+   * counts in, because that is what a bin *is*: on a square map every edge is
+   * already one and this changes nothing, which is the point — one rule, one
+   * answer, both presentations.
+   */
+  private snapToBin(bp: number, towards: 'up' | 'down'): number {
+    const binsize = this.options.binsize
+    if (!(binsize > 0)) return Math.round(bp)
+    return towards === 'down'
+      ? Math.max(0, Math.floor(bp / binsize) * binsize)
+      : Math.ceil(bp / binsize) * binsize
   }
 
   /**
@@ -3663,8 +3778,15 @@ export class MatrixPanel {
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
-    if (balance) parts.push('balanced')
-    parts.push(choice?.label ?? value)
+    // The flag and the label are two facts about one reading, and on the
+    // commonest file they are the same word: the balanced entry of the score
+    // picker is labelled `balanced`, so pushing both wrote
+    // `1 kb bins · balanced · balanced` into every provenance line and every
+    // TSV header. Pushed once where they agree, both where they do not —
+    // `balanced · correlation` says something neither half says alone.
+    const score = choice?.label ?? value
+    if (balance && score !== 'balanced') parts.push('balanced')
+    parts.push(score)
     return {
       uri,
       rows: [data.rowExtent[0], data.rowExtent[1]],
@@ -3969,12 +4091,12 @@ export class MatrixPanel {
         { label: 'Mark this point' },
         {
           label: 'Vertical line',
-          hint: formatPoint(at.cols),
+          hint: formatPosition(at.cols.contig, at.cols.bp),
           run: () => add({ kind: 'line', axis: 'vertical', at: at.cols }),
         },
         {
           label: 'Horizontal line',
-          hint: formatPoint(at.rows),
+          hint: formatPosition(at.rows.contig, at.rows.bp),
           run: () => add({ kind: 'line', axis: 'horizontal', at: at.rows }),
         },
         {
@@ -3986,8 +4108,12 @@ export class MatrixPanel {
           run: () => add({ kind: 'line', axis: 'both', at: at.rows }),
         },
         {
-          label: 'Loop',
-          hint: `${formatPoint(at.rows)} × ${formatPoint(at.cols)}`,
+          // `Arrowhead`, the word §8.1 and the Manual card's own section use
+          // for this mark: it can be put at any off-diagonal point, and a
+          // reader who marked a *loop* here went looking for it under Loops and
+          // found Arrowheads. What it is usually marking is in the hint.
+          label: 'Arrowhead',
+          hint: `a loop at ${formatPosition(at.rows.contig, at.rows.bp)} × ${formatPosition(at.cols.contig, at.cols.bp)}`,
           run: () => add({ kind: 'arrowhead', a: at.rows, b: at.cols }),
         },
         { label: 'This cell' },
@@ -4935,6 +5061,7 @@ export class MatrixPanel {
    */
   setData(data: MatrixResult, title: string, second?: MatrixResult): void {
     this.data = data
+    this.syncCardsShown()
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader
     // moving from balanced counts to raw ones is re-read on the identical grid,
@@ -6616,7 +6743,20 @@ export class MatrixPanel {
   private syncScaleControls(): void {
     this.transformSelect.value = this.transform
     this.colormapSelect.value = this.colormap
+    this.paintClipUnits()
     this.heatmap.setScale(this.scale())
+  }
+
+  /**
+   * Name the units the clip's two boxes are in, in the row's own label.
+   *
+   * Written here rather than once at build time because the transform is a
+   * control: a reader who moves it from `log1p` to `none` has changed what the
+   * numbers in the boxes mean, and a label that went on saying `(log1p)` would
+   * be the one thing on the card that was wrong rather than merely stale.
+   */
+  private paintClipUnits(): void {
+    this.clipLabel.textContent = this.transform === 'none' ? 'clip' : `clip (${this.transform})`
   }
 
   /**
@@ -6644,6 +6784,7 @@ export class MatrixPanel {
     this.manualVmax = scale.vmax
     this.transformSelect.value = this.transform
     this.colormapSelect.value = this.colormap
+    this.paintClipUnits()
     this.heatmap.setScale(this.scale())
     this.schedule()
   }
@@ -6673,6 +6814,7 @@ export class MatrixPanel {
   }
 
   private rescale(): void {
+    this.paintClipUnits()
     this.heatmap.setScale(this.scale())
     this.options.onScaleChange?.({
       transform: this.transform,
@@ -6693,6 +6835,26 @@ export class MatrixPanel {
    */
   repaint(): void {
     this.schedule()
+  }
+
+  /**
+   * The three cards that describe the picture, while there is no picture.
+   *
+   * Absent rather than live (§8.5). Behind the whole-genome gate — a heading,
+   * what the read would cost, and a button that starts it — the column showed
+   * the whole Map card: a score, eight overlay toggles, a turn, and a clip
+   * reading `auto · 1 – 10` over a canvas with nothing on it. A reader who
+   * nudged the clip there, pressed the turn and saw neither do anything
+   * concluded the card was broken, which is the one thing a control that cannot
+   * act must not be allowed to look like. They arrive with the block, and the
+   * Groups card stays either way: a list of groups is true with or without a
+   * matrix.
+   */
+  private syncCardsShown(): void {
+    const waiting = this.data === null
+    for (const card of [this.exportEl, this.controlsEl, this.plotEl]) {
+      card.classList.toggle('hidden', waiting)
+    }
   }
 
   /** Coalesce redraws to one per animation frame — the §12 60 fps budget. */
@@ -7640,13 +7802,32 @@ export class MatrixPanel {
   }
 
 
-  /** The stretches of sequence one axis currently shows. */
+  /**
+   * The stretches of sequence one axis currently shows, on bin edges.
+   *
+   * The domain is floored and ceiled to whole *units* of the axis, which on a
+   * square map is a bin and on a **turned** one is half of one: the rotated
+   * lattice counts in half bins (`render/rotate.ts`) and the last bin's right
+   * half has no column to be ceiled up to, so the same block came out
+   * `IV:1,000,001-1,399,500 · 399.5 kb` turned and `-1,400,000 · 400.0 kb`
+   * square — 400 bins of 1 kb reported as 399.5 kb, which is an arithmetic a
+   * reader checks. So the window is snapped to the file's own bins afterwards,
+   * which is a no-op on every square map and the missing half bin on a band.
+   */
   private framedWindows(axis: LocusAxis | null, scale: Scale): LocusWindow[] {
     if (axis === null) return []
     const [d0, d1] = scale.domain
     const lo = Math.max(0, Math.floor(d0))
     const hi = Math.min(axis.unitEnd, Math.ceil(d1))
-    return hi > lo ? axis.windows([lo, hi]) : []
+    if (!(hi > lo)) return []
+    return axis.windows([lo, hi]).map((window) => ({
+      ...window,
+      start: this.snapToBin(window.start, 'down'),
+      // Never past the sequence's own end, which `LocusAxis.windows` has
+      // already clamped to and which is not on a bin edge when the last bin is
+      // short.
+      end: Math.min(window.segment.contigLength, this.snapToBin(window.end, 'up')),
+    }))
   }
 
   /**
@@ -7881,7 +8062,7 @@ export class MatrixPanel {
     const counts =
       this.second === null || compare === undefined
         ? `${this.scoreWord()} ${count}`
-        : `${compare.labels[0]} ${count}   ·   ${compare.labels[1]} ${
+        : `${compare.labels[0]} ${count} · ${compare.labels[1]} ${
             Number.isNaN(this.second.data.values[slot])
               ? 'NaN (unbalanced)'
               : fmt.num(this.second.data.values[slot])
@@ -7917,12 +8098,19 @@ export class MatrixPanel {
     // On a turned map the separation *is* the y axis, so it leads: the reader's
     // eye is already on a height and the number under it is what they are asking
     // to have confirmed.
-    const apart = distance === null ? '' : `   ${fmt.bp(distance)} apart`
-    setReadout(
-      (this.turned === null ? `${rowLabel}  ×  ${colLabel}${apart}` : `${rowLabel}${apart}`) +
-        (reading === null ? '' : `   ${reading}`) +
-        `   ${counts}`,
-    )
+    // ` · ` between the parts, which is the separator the 1D browser's readout
+    // uses in the same slot of the same status bar. Three spaces looked like a
+    // separator on a wide window and like nothing at all on a narrow one, where
+    // `115.0 kb apart balanced 0.000417` ran together as one phrase. The
+    // `  ×  ` inside the pair stays: that one names a pair rather than joining
+    // two facts.
+    const parts = [
+      this.turned === null ? `${rowLabel}  ×  ${colLabel}` : rowLabel,
+      ...(distance === null ? [] : [`${fmt.bp(distance)} apart`]),
+      ...(reading === null ? [] : [reading]),
+      counts,
+    ]
+    setReadout(parts.join(' · '))
 
     // The names in full, unabbreviated, and each name written *once*: the axis
     // labels are elided when the blocks are narrow, so the tooltip is often the
@@ -8376,7 +8564,12 @@ function describeAxis(
       : `${first.label} + ${fmt.int(rest.length)} more`
   }
   if (level !== 'bin') return group.label
-  return `${group.label}:${fmt.pos(bpWithin(group, offset, blockStart, binsize))}`
+  // `formatPosition`, so the bin under the pointer is named the way every
+  // other coordinate on screen is: 1-based, grouped (§26.1). It used to print
+  // the 0-based bin start, so hovering a cell said `1,162,000` while dragging
+  // from the same pixel said `1,162,001` and the browser cell agreed with the
+  // drag — the app off by a base on the one number a reader writes down.
+  return formatPosition(group.label, bpWithin(group, offset, blockStart, binsize))
 }
 
 /**
@@ -8483,7 +8676,10 @@ function positionIn(
   blockStart: number,
 ): string | null {
   if (group === undefined || level !== 'bin') return null
-  return fmt.pos(bpWithin(group, offset, blockStart, binsize))
+  // The bin's first base, 1-based, as {@link formatPosition} writes it — the
+  // contig is on the line above, so the number goes on its own rather than
+  // through that helper.
+  return fmt.pos(bpWithin(group, offset, blockStart, binsize) + 1)
 }
 
 /**

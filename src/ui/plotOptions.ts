@@ -80,19 +80,20 @@ export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
   'tooltip',
 ]
 /**
- * The crosshair is in **both** lists, and that is the point rather than an
- * oversight.
+ * The crosshair and the hover card are in **both** lists, because each is
+ * genuinely about both pictures.
  *
- * It is the one preference that is genuinely about both pictures: the guide
- * lines are drawn through the cell under the pointer on the matrix *and* through
- * the position under it in every lane, because they are one pointer over one
- * picture. Offering it only under `tracks` put it in the card about the lanes,
- * where a reader looking at the matrix could not find the control for the lines
- * drawn across the matrix — and moving it to `matrix` would have done the same
- * thing to the reader in the 1D browser, which has no matrix card at all.
+ * The guide lines are drawn through the cell under the pointer on the matrix
+ * *and* through the position under it in every lane, because they are one
+ * pointer over one picture; the card is the same instrument. Offering them only
+ * under `tracks` put them in the card about the lanes, where a reader looking
+ * at the matrix could not find the control for the lines drawn across the
+ * matrix — and putting them only under `matrix` would do the same to the reader
+ * in the 1D browser, which has no Map card at all.
  *
- * Two buttons, one key, one store: pressing either moves both, because both read
- * their lit state from {@link subscribePlotOptions} rather than holding it.
+ * Being in both lists is not being offered twice, and that is what
+ * {@link TRACK_ONLY_OPTIONS} is for: a column with a Map card offers them there
+ * and the Tracks card below it leaves them out.
  */
 export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'dividers',
@@ -103,6 +104,21 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'crosshair',
   'tooltip',
 ]
+
+/**
+ * What a Tracks card offers when a **Map card is above it**.
+ *
+ * Beside a map the two shared preferences appeared in both rows of one column,
+ * ten lines apart and lit together — which reads as two settings, so a reader
+ * turned one off, saw the other go dark, and was left wondering what else was
+ * coupled. §5.8's rule about a second way to do a thing applies with force when
+ * both ways are on screen at once: each control is offered once per column, in
+ * the card about the picture it is mostly about. The 1D browser has no Map
+ * card, so its Tracks card still offers {@link TRACK_OPTIONS} whole.
+ */
+export const TRACK_ONLY_OPTIONS: readonly PlotOptionKey[] = TRACK_OPTIONS.filter(
+  (key) => !MATRIX_OPTIONS.includes(key),
+)
 
 /**
  * The mark each option is drawn as, shared by both Tracks cards.

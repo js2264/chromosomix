@@ -11,10 +11,16 @@
  * Each group lists its members by name and colour, and each name carries the ×
  * that takes it back out. The two mode buttons are buttons rather than menus
  * because each has exactly two states, and a two-item dropdown is a click, a
- * read and a second click for something a button says outright. Both are
- * labelled with **what pressing does**, not with what is currently true: the
- * current state is visible in the picture, and a control that names its own
- * state leaves a reader guessing whether they are reading a label or an action.
+ * read and a second click for something a button says outright.
+ *
+ * Each of them is a **toggle**, lit when the group is in that state, and each
+ * wears one mark rather than swapping between two. They used to be labelled by
+ * what pressing them does — `unlink` offering to unlink — on the argument that
+ * the state is visible in the picture. It is not: a shared axis looks like two
+ * axes that happen to agree, so a reader comparing two tracks could not tell
+ * whether `unlink` meant *these are linked* or *link these*, and the button was
+ * the only place the answer could have been. The action is in the tooltip,
+ * which is where §26.3 puts what a press will do.
  */
 
 import type { GroupSettings } from '../annotations/groups'
@@ -73,14 +79,17 @@ export class GroupsCard {
   private paint(): void {
     const groups = this.options.store.scaleGroups()
     if (groups.size === 0) {
+      // Two sentences: what there is none of, and the one gesture that makes
+      // one, naming the controls by what they say on screen. What this replaces
+      // was eleven lines teaching the theory of shared limits — the longest
+      // paragraph in the column, on every fresh file, in a card with no control
+      // in it — and it pointed at a bar two panels away as "below them".
       this.host.replaceChildren(
         el('p', {
           class: 'hint',
           text:
-            'Put two tracks in one group — from the settings on each row, or by ticking several ' +
-            'and choosing one below them — and they resolve to one pair of limits, which is the ' +
-            'only way two tracks can be compared by eye. A group can then be stacked or drawn in ' +
-            'a single lane.',
+            'No groups yet. Tick two tracks in the Tracks card and choose a group below them, ' +
+            'or set one from a track’s settings; grouped tracks share one scale.',
         }),
       )
       return
@@ -129,39 +138,46 @@ export class GroupsCard {
         fold,
       )
 
+      // Lit means these are in one lane; unlit means a lane each. One mark
+      // either way, as every other icon toggle in this column is.
+      const overlayButton = iconButton(
+        'layers',
+        overlaid
+          ? 'Drawn in one lane. Press to give each of these a lane of its own again'
+          : 'A lane each. Press to draw all of these into one lane, against one axis',
+        () => {
+          settings.setMode(name, overlaid ? 'stacked' : 'overlay')
+          this.options.onChange()
+        },
+        { class: 'btn btn-icon btn-toggle', size: 14 },
+      )
+      overlayButton.setAttribute('aria-pressed', String(overlaid))
+      // And lit means one pair of limits over all of them, which is the claim
+      // the group exists to make.
+      const linkButton = iconButton(
+        'link',
+        shared
+          ? 'One pair of limits over all of them. Press to let every track here find its own, as an ungrouped one does'
+          : 'Each track on its own limits. Press to scale them together, which is what makes them comparable',
+        () => {
+          settings.setScaling(name, shared ? 'each' : 'shared')
+          this.options.onChange()
+        },
+        { class: 'btn btn-icon btn-toggle', size: 14 },
+      )
+      linkButton.setAttribute('aria-pressed', String(shared))
+
       const body = el(
         'div',
         { class: 'group-body' },
         el(
           'div',
           { class: 'plot-icon-row' },
-          // Each of the three is a state the group is *in*, so each is one mark
-          // that changes to the other — `layers` for one lane, rows for several;
-          // a link for one shared axis, a broken one for each track's own. A word
-          // would say the same thing in a column sixteen characters wide that has
-          // four other things to fit in it.
-          iconButton(
-            overlaid ? 'rows-3' : 'layers',
-            overlaid
-              ? 'Stacked: give each of these a lane of its own again'
-              : 'Overlay: draw all of these into one lane, against one axis',
-            () => {
-              settings.setMode(name, overlaid ? 'stacked' : 'overlay')
-              this.options.onChange()
-            },
-            { class: 'btn btn-icon', size: 14 },
-          ),
-          iconButton(
-            shared ? 'unlink' : 'link',
-            shared
-              ? 'Scale each: let every track here find its own limits, as an ungrouped one does'
-              : 'Scale together: one pair of limits over all of them, which is what makes them comparable',
-            () => {
-              settings.setScaling(name, shared ? 'each' : 'shared')
-              this.options.onChange()
-            },
-            { class: 'btn btn-icon', size: 14 },
-          ),
+          // The two states first, then the two levellings, which are actions.
+          // A word for either would say the same thing in a column sixteen
+          // characters wide that has four other things to fit in it.
+          overlayButton,
+          linkButton,
           iconButton(
             'unfold-vertical',
             'Give every track in this group the height of its tallest member',

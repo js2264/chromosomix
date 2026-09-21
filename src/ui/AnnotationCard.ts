@@ -1497,6 +1497,10 @@ const MAX_TRANSPARENCY = 90
 export function transparencyField(store: AnnotationStore): HTMLElement {
   return stepperField({
     label: 'transparency',
+    // Both halves of the pair are percentages and only one of them said so:
+    // `text size` prints `135%` between its chevrons while this printed a bare
+    // `0`, which reads as a different kind of control (§26.2).
+    unit: '%',
     title:
       `Transparency of every track, as a percentage — 0 is opaque, ${MAX_TRANSPARENCY} is ` +
       'nearly gone. Applies to all of them at once.',
