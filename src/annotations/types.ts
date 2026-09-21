@@ -1186,7 +1186,6 @@ export interface StructureStyle {
   beadRadius: number
   /** Tube and stick radius, on the same scale. */
   tubeRadius: number
-  /** Opacity of the lit beads, `0..1`. */
   /**
    * How much of a **ghosted** bead is left (§25.5): 0 gone, 1 as drawn. The
    * beads inside the window and the sequences not ghosted are always drawn

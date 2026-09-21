@@ -43,6 +43,18 @@ const browser = await chromium.launch({
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const errors = []
 
+/** Whether the page is actually drawing the dark palette right now. */
+const isDark = (page) =>
+  page.evaluate(() => {
+    const panel = document.querySelector('.panel-column') ?? document.body
+    const [r, g, b] = getComputedStyle(panel)
+      .backgroundColor.match(/\d+/g)
+      .slice(0, 3)
+      .map(Number)
+    // The dark palette's panels are near-black; the light one's are near-white.
+    return (r + g + b) / 3 < 96
+  })
+
 const YEAST = `${BASE}/demo/yeast/Yeast_microC.metacooler.json`
 const DECK = `${BASE}/demo/yeast/Yeast_deck.metacooler.json`
 const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.metacooler.json`
@@ -246,8 +258,23 @@ await scene('map', async ({ page, shot, fold, opened }) => {
   const turn = await page.$('button[title*="45°"]')
   if (turn) { await turn.click(); await sleep(2500); await shot('21-turned'); await turn.click(); await sleep(1500) }
   // Dark theme with the map open.
+  //
+  // Asserted rather than assumed: a shot named `dark` that comes out light is a
+  // picture that lies about the app, and it is the one kind of gallery defect a
+  // reader cannot catch by looking. `t` cycles system → dark → light, so from a
+  // light machine one press is dark; if the key did not land, say so loudly and
+  // reach the state through the button instead.
   await page.keyboard.press('t')
   await sleep(1200)
+  if (!(await isDark(page))) {
+    errors.push('map: `t` did not reach the dark theme; used the button')
+    await page.click('button[title^="Theme:"]')
+    await sleep(900)
+    while (!(await isDark(page))) {
+      await page.click('button[title^="Theme:"]')
+      await sleep(900)
+    }
+  }
   await shot('22-map-dark')
   await page.keyboard.press('t')
   await sleep(600)
@@ -327,8 +354,16 @@ await scene('deck', async ({ page, shot, fold, opened }) => {
   // The add row: the bar is repainted on every press, so the button is found again.
   if (await page.$('.deck-add-toggle')) { await page.click('.deck-add-toggle'); await sleep(600); await shot('42-deck-add-menu'); await page.click('.deck-add-toggle'); await sleep(400) }
   await shot('43-deck-bar', { clip: { x: 280, y: 90, width: 1360, height: 160 } })
+  // Asserted, for the reason the map's dark shot is — see `22-map-dark`.
   await page.keyboard.press('t')
   await sleep(1200)
+  if (!(await isDark(page))) {
+    errors.push('deck: `t` did not reach the dark theme; used the button')
+    while (!(await isDark(page))) {
+      await page.click('button[title^="Theme:"]')
+      await sleep(900)
+    }
+  }
   await shot('44-deck-dark')
 })
 
