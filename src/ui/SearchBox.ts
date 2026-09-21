@@ -239,8 +239,12 @@ export function locusPlaceholder(options: { first?: string; accepts?: LocusAccep
   if (accepts.sequence === true) parts.push('a sequence')
   if (accepts.genome === true) parts.push('a genome')
   if (accepts.gene === true) parts.push('a gene')
-  const listed = parts.join(', ')
-  return accepts.whole === true ? `${listed}, or * for the whole genome` : listed
+  if (accepts.whole === true) parts.push('* for the whole genome')
+  // `or` before the last of them, whichever it is. A bare comma list reads as
+  // though it were still going — a box offering `a sequence, a genome, a gene`
+  // looks truncated, and the reader goes looking for the rest of the sentence.
+  if (parts.length === 1) return parts[0]
+  return `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`
 }
 
 /**

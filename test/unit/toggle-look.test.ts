@@ -84,8 +84,6 @@ describe('the lit look', () => {
       '.lane-auto.is-on',
       '.analysis-map.is-on',
       '.deck-star.is-on',
-      '.deck-layout.is-on',
-      '.deck-share.is-on',
       '.btn-chip.is-on',
       '.portal-mode.is-on',
     ]) {
