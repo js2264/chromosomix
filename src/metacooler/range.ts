@@ -97,6 +97,42 @@ function tokenize(text: string): Token[] {
 }
 
 /**
+ * Split a list of regions on its separators, leaving thousands separators alone.
+ *
+ * A box that takes several sequences is comma-separated, and every coordinate in
+ * this application is written with thousands separators (§26.1) — so a plain
+ * `split(',')` reads the app's own spelling of a locus, `IV:1,000,001-1,400,000`,
+ * as four regions called `IV:1`, `000`, `001-1` and `400`. The reconstruction
+ * task came back *Expected HYPHEN token missing* for a locus copied out of the
+ * heading directly above its box.
+ *
+ * The rule is the one a reader already has in their head: a comma is part of a
+ * number when a digit is on its left and exactly three digits are on its right.
+ * Everything else separates. So `I, II` and `1,2` are two regions each — a pair
+ * of Ensembl-style contigs is not a mis-grouped number — while
+ * `IV:1,000-2,000, V` is the locus and the sequence a reader meant.
+ */
+export function splitRegionList(text: string): string[] {
+  const out: string[] = []
+  let part = ''
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at]
+    if (char === ',' && !thousandsComma(text, at)) {
+      out.push(part)
+      part = ''
+      continue
+    }
+    part += char
+  }
+  out.push(part)
+  return out.map((one) => one.trim()).filter((one) => one !== '')
+}
+
+function thousandsComma(text: string, at: number): boolean {
+  return /[0-9]$/.test(text.slice(0, at)) && /^[0-9]{3}(?![0-9])/.test(text.slice(at + 1))
+}
+
+/**
  * Port of cooler's `parse_region_string`.
  *
  * Splits on the first `:` only, so a contig whose name contains a colon is

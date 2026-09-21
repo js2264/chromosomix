@@ -7253,9 +7253,21 @@ canvas.is-frozen {
    place; now that they run to their full width there is nothing to line up
    with, and the fixed column was leaving a hand's width of white between
    `bins` and its number. */
+/* The key column may **wrap** rather than hold its widest key: at
+   `max-content` the longest name in the card — `non-zero pixels` — set the
+   column for every row, and in a squeezed General column that left the values
+   85 pixels, which broke `179,175,551` across two lines three pixels short of
+   fitting. A number split mid-digit is misread; a long key over two lines is
+   two words. So the keys give way first, and `minmax(min-content, max-content)`
+   is what says that: the widest key while there is room for it, and its own
+   words when there is not — and the value keeps a floor of its own, because a
+   `1fr` track is what a grid takes the room *out of*, so without one the keys
+   would have held their width and the number would still have broken. 6rem is a
+   grouped nine-figure count; the file's own URI is longer than any floor and
+   wraps, which is what `overflow-wrap` is there for. */
 .kv {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(min-content, max-content) minmax(6rem, 1fr);
   gap: 0.1rem 0.9rem;
   font-size: var(--step--1);
 }

@@ -8167,8 +8167,14 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   folded tab to come back from; a map that thin has nothing. Below about 1,170 pixels the outermost
   column leans off the right edge, which is the one shape this trade cannot avoid.
 - **A column's minimum width is a promise its cards still work at it.** Aesthetics' was 200 pixels,
-  at which its two clip limits read `-4.1` and its selects cut `log10` — so the minimum went up to
-  240 rather than the cards being made to fit a width nothing survives.
+  at which its two clip limits read `-4.1` and its selects cut `log10`; General's was 200, at which
+  the File card's values had forty pixels — so both went up to 240 rather than the cards being made
+  to fit a width nothing survives. Within a card the **keys** give way before the values: a long key
+  over two lines is two words, while a grouped count broken across two lines is misread.
+- **A list of regions is split by `splitRegionList`, never by `split(',')`.** Coordinates carry
+  thousands separators, so the box that takes several sequences has two meanings for one character:
+  a comma is part of a number when a digit is on its left and exactly three digits are on its right,
+  and separates otherwise. `I, II` and `1,2` are two regions each; `IV:1,000,001-1,400,000` is one.
 - **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
   literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
   exists to answer.

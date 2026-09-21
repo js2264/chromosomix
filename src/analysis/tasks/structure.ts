@@ -27,6 +27,7 @@ import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } f
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 import { fmt, resolutionLabel } from '../../units'
+import { splitRegionList } from '../../metacooler/range'
 
 /**
  * What both structure tasks say when no model is loaded.
@@ -279,7 +280,7 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   // it, `IV:1,000,001-1,400,000` is the bins of that stretch. Pricing a locus
   // as its whole sequence is what this used to do, and it reported 1,532 beads
   // for a run that made 400.
-  const parts = region === '' ? [] : region.split(',').map((part) => part.trim()).filter((part) => part !== '')
+  const parts = splitRegionList(region)
   const named = parts.flatMap((part) => {
     const [name, range] = [part.split(':')[0].trim(), part.split(':')[1]]
     const contig = context.contigs.find((held) => held.name === name)

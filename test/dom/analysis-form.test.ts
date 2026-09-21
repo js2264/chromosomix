@@ -583,12 +583,19 @@ describe('a box that takes several sequences (§25.6)', () => {
 
   it('is seeded with the locus when the map is inside one sequence', () => {
     const view = form(RECONSTRUCT_TASK, framed([240, 300]))
-    // **Grouped**, as §26.1 has every box that shows a coordinate write one: the
-    // line above this box reads `II:10,001-70,000 · 1 kb bins`, and the seed used
-    // to come out `II:10001-70000` — two spellings of one window, an inch apart,
-    // in the box a reader is about to edit. `parseHumanized` strips separators
-    // before it does anything else, so the value still parses as it did.
+    // Grouped, as §26.1 has every coordinate on screen written — including in a
+    // box whose own grammar is comma-separated, because `splitRegionList` knows a
+    // thousands comma from a separator. Split plainly, this seed read as `II:10`,
+    // `001` and `70,000`, and the run came back *Expected HYPHEN token missing*.
     expect(view.value.region).toBe('II:10,001-70,000')
+    view.destroy()
+  })
+
+  it('groups the digits for a box that takes one locus too', () => {
+    // The 4C anchor, a box away from the one above in the same column: the two
+    // read alike, which is the whole of §26.1.
+    const view = form(FOURC_TASK, framed([240, 300]))
+    expect(view.value.anchor).toBe('II:10,001-70,000')
     view.destroy()
   })
 

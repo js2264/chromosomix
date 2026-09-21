@@ -555,9 +555,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   open the map was 140 pixels and the locus box 85, showing `IV:1,00` of the reader's own position.
   The columns now shrink to their minimum widths and the picture keeps a floor of 18rem, which gives
   the map 446 pixels at 1366 instead of 140.
-- **Aesthetics' minimum width is what its own controls need.** At 200 pixels the two clip limits read
-  `-4.1` and the `transform` and `colours` selects cut `log10` and `default` — a minimum that the
-  cards below it did not survive. It is 240 now, and the clip pair has a floor of its own.
+- **Aesthetics' and General's minimum widths are what their own cards need.** At 200 pixels the two
+  clip limits read `-4.1` and the `transform` and `colours` selects cut `log10` and `default`; the
+  File card left its values about forty pixels, so `storage mode` read `symme tric- upper` and the
+  file's URI came down the column four characters at a time. Both are 240 now, the clip pair has a
+  floor of its own, and the File card's keys give way before its values do — a long key over two
+  lines is two words, while `179,175,551` broken across two is misread.
+- **A box that takes several sequences accepts a locus written the way the app writes one.** Its
+  grammar is comma-separated and a plain split read `IV:1,000,001-1,400,000` as four regions, so a
+  locus copied out of the heading above the box came back *Expected HYPHEN token missing*.
+  `splitRegionList` knows a thousands comma from a separator — a digit on the left, exactly three on
+  the right — so `I, II` and `1,2` are still two regions each.
 - **A track's name box, and the two coordinate boxes in the Manual annotations card, have floors
   too.** The name box could be squeezed to 32 pixels — four characters of `Pol II / input` — and the
   rectangle form's pair showed `rows I:120,000-18` and `columns I:340,00`, which is worse than a cut

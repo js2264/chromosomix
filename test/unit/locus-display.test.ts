@@ -25,6 +25,7 @@ import {
   typedLocusToRegion,
   windowLabel,
 } from '../../src/genome/assembly'
+import { parseRegionString, splitRegionList } from '../../src/metacooler/range'
 
 describe('formatPosition', () => {
   it('adds the one and groups the digits, like the window beside it', () => {
@@ -131,5 +132,35 @@ describe('the round trip', () => {
 
   it('agrees with formatLocus, which is where the display form was first written', () => {
     expect(regionLabel('IV:1000000-1400000')).toBe(formatLocus({ contig: 'IV', start: 1_000_000, end: 1_400_000 }))
+  })
+})
+
+describe('a list of regions', () => {
+  it('splits on its separators and leaves thousands separators alone', () => {
+    // The defect this exists for: the reconstruction task's box takes several
+    // sequences, comma-separated, and the seed it is given is a locus written the
+    // way §26.1 writes one. Split plainly, `IV:1,000,001-1,400,000` is four
+    // regions and the run comes back `Expected HYPHEN token missing`.
+    expect(splitRegionList('IV:1,000,001-1,400,000')).toEqual(['IV:1,000,001-1,400,000'])
+    expect(splitRegionList('I, II')).toEqual(['I', 'II'])
+    expect(splitRegionList('I,II')).toEqual(['I', 'II'])
+    expect(splitRegionList('IV:1,000-2,000, V')).toEqual(['IV:1,000-2,000', 'V'])
+    // Ensembl-style names: a pair of contigs, not one mis-grouped number. Three
+    // digits on the right is what makes a comma part of a number.
+    expect(splitRegionList('1,2')).toEqual(['1', '2'])
+    expect(splitRegionList('1, 2')).toEqual(['1', '2'])
+    expect(splitRegionList('')).toEqual([])
+    expect(splitRegionList('  ,  ')).toEqual([])
+    // A grouped coordinate is still one region when more follow it.
+    expect(splitRegionList('chr1:1,500,000-2,000,000,chr2')).toEqual([
+      'chr1:1,500,000-2,000,000',
+      'chr2',
+    ])
+  })
+
+  it('hands every part to the range parser unchanged', () => {
+    for (const part of splitRegionList('IV:1,000,001-1,400,000, V')) {
+      expect(() => parseRegionString(part)).not.toThrow()
+    }
   })
 })

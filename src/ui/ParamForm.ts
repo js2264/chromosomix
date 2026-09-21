@@ -512,14 +512,23 @@ function framingRegion(context: AnalysisContext, many = false): string {
   const start = (from - contig.startBin) * framing.binsize
   const end = Math.min(contig.length, (to - contig.startBin) * framing.binsize)
   // 1-based and inclusive, which is how every genome browser writes a locus and
-  // what `types.ts`'s `locus` field already documents the boxes as accepting —
-  // **and grouped**, which is the other half of §26.1. It came out ungrouped, so
-  // an analysis form opened with `IV:1000001-1400000` in its box while the line
-  // directly above it read `IV:1,000,001-1,400,000 · 1 kb bins`: two spellings
-  // of one window, a hand's breadth apart, in the one place a reader is about to
-  // *edit* the number. `parseHumanized` strips separators before anything else,
-  // so what comes back out of the box parses exactly as it did.
-  return `${contig.name}:${fmt.pos(Math.max(1, Math.round(start) + 1))}-${fmt.pos(Math.round(end))}`
+  // what `types.ts`'s `locus` field already documents the boxes as accepting.
+  const first = Math.max(1, Math.round(start) + 1)
+  const last = Math.round(end)
+  // **Grouped, but only where the comma is not already taken.** §26.1 wants the
+  // separators — an analysis form opened with `IV:1000001-1400000` under a line
+  // reading `IV:1,000,001-1,400,000 · 1 kb bins`, two spellings of one window in
+  // the one place a reader is about to edit the number — and `parseHumanized`
+  // strips them before it does anything else, so a grouped seed parses as the
+  // bare one did.
+  //
+  // A box that takes **several** sequences is comma-separated, which is where
+  // this first went wrong: `split(',')` read the seed as `IV:1`, `000`, `001-1`
+  // and `400`, and the reconstruction came back *Expected HYPHEN token missing*
+  // for a locus copied out of the line above its own box. The list is split by
+  // `splitRegionList` now, which knows a thousands comma from a separator, so
+  // every one of these boxes reads the way the rest of the application writes.
+  return `${contig.name}:${fmt.pos(first)}-${fmt.pos(last)}`
 }
 
 /**

@@ -10,7 +10,7 @@
 import { structureFromBeads, type ModelBead } from '../../annotations/g3d'
 import type { FeatureSet, StructureModel } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
+import { parseRegionString, splitRegionList } from '../../metacooler/range'
 import { logBinCurve, logLogSlope } from '../expected'
 import {
   boolParam,
@@ -114,7 +114,7 @@ export const runStructureMap: TaskRunner = async (job) => {
   const alpha = numParam(job.params, 'alpha', 3)
   // The first of what the box names: the box is seeded with every sequence
   // on screen (§25.6), and the picture is of one.
-  const wanted = strParam(job.params, 'region', '').split(',')[0].split(':')[0].trim()
+  const wanted = (splitRegionList(strParam(job.params, 'region', ''))[0] ?? '').split(':')[0].trim()
   const pictured = sequences.find((sequence) => sequence.name === wanted) ?? sequences[0]
   const haplotypes = haplotypesOf(model)
   const binsize = job.mc.binsize
@@ -569,9 +569,7 @@ function tooBig(n: number): string {
 function regionSpans(job: JobContext, text: string): Span[] | null | { missing: string } {
   if (text === '') return null
   const out: Span[] = []
-  for (const part of text.split(',')) {
-    const trimmed = part.trim()
-    if (trimmed === '') continue
+  for (const trimmed of splitRegionList(text)) {
     const span = regionSpan(job, trimmed)
     if (span === undefined) return { missing: parseRegionString(trimmed)[0] }
     if (span !== null) out.push(span)

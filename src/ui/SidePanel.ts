@@ -208,7 +208,13 @@ export const GENERAL_PANEL: SidePanelSpec = {
   // elided anyway, and it was taking room from two columns that spend theirs on
   // controls rather than on a key/value list.
   defaultWidth: 288,
-  minWidth: 200,
+  // **What the File card needs.** It was 200, and at 200 the key/value grid left
+  // the values about forty pixels: `storage mode` read `symme tric- upper` and
+  // the file's own URI came down the column four characters at a time. The keys
+  // here are the longest in the application — `non-zero pixels` beside a grouped
+  // count — so the floor is what those two need side by side. Same correction as
+  // Aesthetics' below, and for the same reason: a minimum is a promise.
+  minWidth: 240,
   maxWidth: 560,
   closeIcon: 'file-cog',
   openIcon: 'file-cog',
