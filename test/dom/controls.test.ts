@@ -295,10 +295,15 @@ describe('the colour clip', () => {
     box.dispatchEvent(new Event('change'))
   }
 
-  it('opens in auto, with nothing to hand back', () => {
+  it('opens in auto, with nothing to hand back and nothing to say', () => {
     const { clip } = make()
     expect(clip.el.classList.contains('clip-manual')).toBe(false)
     expect(clip.el.querySelector<HTMLButtonElement>('.clip-auto')?.disabled).toBe(true)
+    // **No caption until a block has been scaled.** It used to print
+    // `auto · 0 – 1` from the placeholder the control starts on, which behind
+    // the whole-genome gate is a caption for a picture that is not there.
+    expect(textsOf(clip.el, '.clip-note')[0]).toBe('')
+    clip.setValues({ vmin: 0, vmax: 42 }, true)
     expect(textsOf(clip.el, '.clip-note')[0].startsWith('auto ·')).toBe(true)
   })
 

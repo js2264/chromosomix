@@ -1527,6 +1527,10 @@ const MIN_OPACITY = 10
 export function everyTrackOpacityField(store: AnnotationStore): HTMLElement {
   return stepperField({
     label: 'opacity',
+    // Both halves of the pair are percentages and only one of them said so:
+    // `text size` prints `135%` between its chevrons while this printed a bare
+    // `0`, which reads as a different kind of control (§26.2).
+    unit: '%',
     title:
       `Opacity of every track, as a percentage — 100 is solid, ${MIN_OPACITY} is nearly gone. ` +
       'Applies to all of them at once.',

@@ -116,7 +116,13 @@ describe('a companion’s score picker', () => {
     // put it last was the same five fields in a different order on a companion.
     const fit = harness()
     expect(fieldsIn(fit.panel.el.querySelector('.map-settings'))[0]).toBe('score')
-    expect(fieldsIn(harness({ corner: false }).panel.controlsEl)[0]).toBe('score')
+    // Among the *value* fields of the card, which is what the menu holds all
+    // of: the card also opens with `picture`, the row of things that decide
+    // what kind of picture this is (§16.5), and that row is there whether or
+    // not the turn is offered now that the refit stands in it.
+    const VALUES = ['score', 'smooth', 'transform', 'colours', 'clip']
+    const card = fieldsIn(harness({ corner: false }).panel.controlsEl)
+    expect(card.filter((label) => VALUES.includes(label))[0]).toBe('score')
   })
 
   it('reports the choice, resolved to the entry rather than to its id', () => {

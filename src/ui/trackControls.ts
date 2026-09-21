@@ -121,18 +121,84 @@ export function smallestLaneSize(
   return Number.isFinite(smallest) ? laneSize(smallest) : null
 }
 
+/**
+ * The height every lane in a stack shares, or `null` when they differ.
+ *
+ * What a bulk control has to be able to say: `90` over a stack of 46-pixel
+ * lanes is the box lying about the picture beside it, and there is no honest
+ * single number for a stack that has been dragged about. Measured over *lanes*
+ * for the reason {@link setTrackHeight} writes over them — two tracks overlaid
+ * in one lane are one height.
+ */
+export function commonLaneSize(
+  lanes: ReadonlyArray<{ members: readonly AnnotationEntry[] }>,
+): number | null {
+  let held: number | null = null
+  for (const lane of lanes) {
+    for (const member of lane.members) {
+      const size = laneSize(member.style.size)
+      if (held === null) held = size
+      else if (held !== size) return null
+    }
+  }
+  return held
+}
+
+/**
+ * The middle height in a stack — where a press starts when they disagree.
+ *
+ * Not the floor and not the last number typed: a reader nudging *down* from a
+ * stack of 46-pixel lanes means a bit less than 46, and starting from either of
+ * the other two answers is a jump they did not ask for.
+ */
+export function medianLaneSize(
+  lanes: ReadonlyArray<{ members: readonly AnnotationEntry[] }>,
+): number | null {
+  const sizes: number[] = []
+  for (const lane of lanes) {
+    for (const member of lane.members) sizes.push(laneSize(member.style.size))
+  }
+  if (sizes.length === 0) return null
+  sizes.sort((a, b) => a - b)
+  const middle = Math.floor(sizes.length / 2)
+  return sizes.length % 2 === 1 ? sizes[middle] : laneSize((sizes[middle - 1] + sizes[middle]) / 2)
+}
+
 /** What {@link stepperField} needs to know about the number it is showing. */
 export interface StepperSpec {
   /** The word above the row. */
   label: string
   /** On the box, and on each button after "smaller"/"larger". */
   title: string
+  /**
+   * The unit, printed after the box: `px`, `%`.
+   *
+   * A number with no unit beside a number that has one reads as two different
+   * kinds of control — which is what `text size ▼ 135% ▲` beside
+   * `transparency ▼ 0 ▲` was, two percentages where only one said so.
+   */
+  unit?: string
   /** One press. */
   step: number
   min: number
   max: number
-  /** What the box should read right now, or `null` to leave it alone. */
+  /**
+   * What the box should read right now, or `null` for **blank**.
+   *
+   * Blank is the honest answer where the thing this sets has no one value —
+   * lanes of three different heights — and it is why `null` does not mean
+   * "leave it alone": a box left showing the last number applied is a box
+   * claiming the stack is that height (§26.6).
+   */
   read(): number | null
+  /**
+   * Where a press starts while the box is blank.
+   *
+   * Optional, and only for a control whose value can disagree with itself:
+   * nudging from an empty box would otherwise start at the minimum, so a press
+   * of *less* on a stack of 46-pixel lanes made every one of them 13.
+   */
+  start?(): number | null
   /** What a press or a committed edit means. Already clamped and rounded. */
   apply(value: number): void
   /**
@@ -183,7 +249,7 @@ export function stepperField(spec: StepperSpec): HTMLElement {
   const sync = (): void => {
     if (input === document.activeElement) return
     const value = spec.read()
-    if (value !== null) input.value = String(clamp(value))
+    input.value = value === null ? '' : String(clamp(value))
   }
 
   const commit = (): void => {
@@ -219,7 +285,7 @@ export function stepperField(spec: StepperSpec): HTMLElement {
   // anything else moves the value — a stretch, a drag on a lane's border — and
   // stepping from the stale one would undo that first.
   const nudge = (delta: number): void => {
-    const now = spec.read() ?? Number(input.value)
+    const now = spec.read() ?? spec.start?.() ?? Number(input.value)
     const next = clamp((Number.isFinite(now) ? now : spec.min) + delta * spec.step)
     input.value = String(next)
     spec.apply(next)
@@ -239,7 +305,14 @@ export function stepperField(spec: StepperSpec): HTMLElement {
     'div',
     { class: 'field field-block field-stepper' },
     el('span', { class: 'field-label', text: spec.label }),
-    el('div', { class: 'plot-icon-row' }, down, input, up),
+    el(
+      'div',
+      { class: 'plot-icon-row' },
+      down,
+      input,
+      up,
+      ...(spec.unit === undefined ? [] : [el('span', { class: 'clip-note field-unit', text: spec.unit })]),
+    ),
   )
   // The source outlives this control — a card is rebuilt on every navigation and
   // nothing hands the outgoing one a teardown — so the listener retires itself
@@ -276,22 +349,42 @@ export function fieldPair(left: HTMLElement, right: HTMLElement): HTMLElement {
  * into a window are found one at a time, and ten was a jump straight past them.
  * Typing still works, and typing is how ninety is reached in one gesture.
  */
-export function trackHeightField(apply: (px: number) => void): HTMLElement {
-  // No `read`: this control is the only thing that writes the number, and a lane
-  // dragged by its border is *one* lane rather than the height every track would
-  // be given. It keeps what was last applied, so the second file of a session is
-  // one press away from the height chosen for the first.
+export function trackHeightField(
+  apply: (px: number) => void,
+  source?: {
+    /** The lanes on screen, for the number the box shows. */
+    lanes(): ReadonlyArray<{ members: readonly AnnotationEntry[] }>
+    /** Told when a lane is resized behind the box's back. */
+    subscribe(onChange: () => void): () => void
+  },
+): HTMLElement {
+  // **Read from the lanes**, not from what this box last wrote. It used to keep
+  // the number it had applied, on the argument that nothing else writes "the
+  // height every track would be given" — but three controls two rows above it
+  // do: stretch rewrites every lane, shrink levels them down, a group levels
+  // its members, and a lane border drags. So the box read `90` over lanes that
+  // were plainly 46 px, and a press of *down* made a 46-pixel track taller.
+  // Blank where they disagree, because there is no true single number then, and
+  // a press starts from the middle one rather than from the floor.
+  //
+  // `held` survives as the fallback: with no lanes at all there is nothing to
+  // read, and the second file of a session is one press away from the height
+  // chosen for the first.
   let held = DEFAULT_TRACK_HEIGHT
+  const lanes = (): ReadonlyArray<{ members: readonly AnnotationEntry[] }> => source?.lanes() ?? []
   return stepperField({
     label: 'track height',
     title: `Height for every track, in pixels. ${LANE_MIN_SIZE} is the floor.`,
+    unit: 'px',
     step: 1,
     min: LANE_MIN_SIZE,
     max: LANE_MAX_SIZE,
-    read: () => held,
+    read: () => (lanes().length === 0 ? held : commonLaneSize(lanes())),
+    start: () => medianLaneSize(lanes()) ?? held,
     apply: (value) => {
       held = laneSize(value)
       apply(held)
     },
+    subscribe: source === undefined ? undefined : (onChange) => source.subscribe(onChange),
   })
 }

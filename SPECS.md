@@ -774,6 +774,12 @@ sideways to fit inside a boundary the molecule has not got. Each button greys it
 there is nothing in its direction to go to, and they navigate through the ordinary road, so three
 presses and three presses of the back button are the same journey in reverse (§5.5).
 
+The `‹ ›` pair **beside the title** is not that back arrow: it steps to the previous and next
+sequence — the `[` and `]` keys as buttons (§5.5) — named by the neighbour it would open in its
+tooltip, and greyed at either end, so a reader at the last sequence is told so rather than left
+pressing a dead control. Two chevrons beside a title are the universal history pair, so the contract
+has to say which of the two these are.
+
 **And there is no back arrow in the bar, and no map/tracks cycle button.** Both were controls with
 a shorter road already beside them: going back is the browser's own back, which the bar's
 navigation has always fed, and *tracks only / map only / both* is the eye beside the map in the
@@ -1309,6 +1315,16 @@ diverges from what a reader reproduces locally.
 Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
 URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
 
+**Both unit systems on that row are named**, because both are on screen at once: the boxes are in
+transformed units, so the row is labelled `clip (log10)` from the transform in force, and the line
+under them prints the same pair in the units the colourbar is labelled in, followed by the word for
+them — `auto · 0.000066 – 0.089 balanced`. Unnamed, the two read as a contradiction, and a reader
+who typed the caption's own number into a `log10` box clipped the map a thousandfold too high. The
+line is **absent until a block has been scaled**: `auto · 1 – 10` beside a view that has drawn
+nothing is a caption for a picture that is not there. On screen the ramp picker is called
+**colours**, which is what a lane's own row calls the same kind of choice; `colormap` is the word for
+it here and on the command line, where it is a parameter rather than a label.
+
 **What the app *opens* with is its own choice**, as the overlay defaults are (§7.2). Parity is a
 property of the machinery — the same colormap table, the same indexing, the same percentile rule —
 not of which entry the picker starts on, so the viewer opens on its own white → yellow → red → black
@@ -1381,6 +1397,12 @@ per frame on the main thread and therefore belongs in a worker. It is a known
 limitation of the drawing, not of the data: the numbers behind every pixel, the
 readout, the axes and the export are all taken from the reader's grid.
 
+**Keyboard pan and zoom are supported**, so the picture takes focus — and says so: the focus ring is
+drawn on the canvas's own edge pixels (`outline-offset: -2px`) rather than around it, since a ring
+outside the figure reads as part of the figure while a reader tabbing into a map still has to be able
+to see which of two pictures the next arrow press will move. It is not in an exported figure, which
+is re-rendered rather than grabbed.
+
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
 and `fills` takes the shading out from under their lines, which is the envelope and an area track's
@@ -1394,6 +1416,10 @@ same drawing code rather than screen-grabbed, so the labels and hairlines are dr
 enlarged, and the framing — pan and zoom included — is what is on screen. The PDF is one page holding
 one lossless image, written by the app; its page size in points is derived from the CSS size, so the
 DPI is a fact about the paper rather than a name.
+
+The map's format option is therefore labelled **PDF (image)** and the browser's **PDF (vector)**: a
+biologist who saved a map as `PDF` for a figure and opened it in Illustrator expecting paths had been
+told which they were getting by one card and nothing at all by the other.
 
 **The 1D browser's PDF is vector**, and that is the one place the two exports differ. A contact map is
 a raster honestly — twelve thousand bins are pixels and writing them as a million rectangles would be
@@ -1803,6 +1829,12 @@ one shape: a domain is a square on the diagonal, a corner peak is a small square
 against a whole arm is neither. An on-diagonal rectangle is drawn as the same triangle a BED domain
 is on a turned map, since that is what it is.
 
+**One word for the mark: an arrowhead.** It is what this card's own section is called and what the
+glyph is — a mark stood off a cell along its 45° axis — and it can be put at any off-diagonal point
+rather than only at a loop. So the map's right-click menu offers *Arrowhead*, with *a loop at r × c*
+as its hint, where it used to offer *Loop* and send a reader looking for their mark under a heading
+called Arrowheads; the structure card's chord source is *your marks* for the same reason (§25.5).
+
 **Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
 and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
 a **drag**: press at one corner, let go at the other, with the map's own marquee and its coordinate
@@ -2058,6 +2090,12 @@ stored by one and ignored by the other. The **controls over the canvas** (`ui/La
 `ui/LaneLimitEditor.ts`) are parameterised by a host element, because that is the only thing that
 differs: in the browser the layer and the canvas share an origin, and beside the map the layer is
 positioned against the grid and offset per frame.
+
+**A lane's limits are the colour clip's control** (§7.1, `ui/ClipRange.ts`'s idiom): two number
+boxes, the `⇅` mark every autoscale in the app wears — unavailable while there is nothing to go back
+to — and a line under them reading *auto · min – max* or *clipped · min – max*. It was a lit `auto`
+word, which made one column carry two drawings of *let the data set the range*: lit when on here,
+greyed when on beside the map. A reader who learned either learned nothing about the other.
 
 Two constraints are permanent and are why this is a shared module rather than a shared file. Every
 mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarter turn is
@@ -3930,12 +3968,23 @@ untouched throughout: closing the deck leaves exactly what closing the last comp
 would.
 
 A companion's scale controls ride **on its picture**: a button in the bottom-left corner of the map,
-opening a menu upward over it, holding the five fields that say what the numbers are and how they
-are drawn — the score, the baseline, the transform, the ramp and the clip. Not the overlay marks,
+**above the band the ruler's labels sit in** — the same twenty pixels the renderer keeps for that
+corner, because at the very bottom the button covered the first coordinate on the axis, which is the
+one number a reader uses to check that two pictures are of the same window — opening a menu upward
+over it, holding the five fields that say what the numbers are and how they are drawn — the score,
+the baseline, the transform, the ramp and the clip. Not the overlay marks,
 which act on a picture the reader is already pointing at and are slower to reach through a menu than
 through the row they came from; and not an export, which the deck's bar now offers for all of them
 at once. A fold *under* each panel — what this replaces — pushed every other panel of the deck down
 by the height of whatever was open in it.
+
+**A card that cannot act is absent** (§8.5). The Map, Tracks and Export cards arrive with the block
+and not before: behind the whole-genome gate — a heading, what the read would cost, and the button
+that starts it — the column used to show the whole Map card over an empty canvas, clip and all, and a
+reader who nudged the clip there and saw nothing happen concluded the card was broken. The **overlays**
+row holds only the marks that light: the refit, which is an action, stands with the turn and the
+recentre in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
+read as an overlay that was off, and turned on by a press that threw the reader's pan away.
 
 The deck's controls ride **above the grid**, and each panel's scale controls ride **inside that panel**.
 They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
@@ -4153,6 +4202,14 @@ A cell `(b1, b2)` goes to `x = (b1 + b2) / 2` and `y = (b2 - b1) / 2`, both in b
 the same bases per pixel. A **true rotation**: nothing is stretched, a domain's two edges meet at a
 right angle over its midpoint, and a base pair measured up the side is the same length as one
 measured along the bottom.
+
+**The window reported is the same window either way.** The rotated lattice counts in half bins, so
+the right half of the last bin has no column to be measured to and the summary line under a turned
+map read `400 × 400 bins · 1.0 kb · IV:1,000,001-1,399,500 · 399.5 kb` — an arithmetic a reader
+checks and does not get. Every window this view reports — the line under the picture, the framing an
+analysis runs on, a bookmark, what the 1D browser opens at — is snapped to the file's own bin edges,
+which changes nothing on a square map and restores the missing half bin on a band. The turn is a
+presentation (§17.2), and a presentation that moved the window would not be one.
 
 The consequence to hold on to is that **height is half of separation**. A contact between two bins
 100 kb apart sits 50 kb above the axis. The y axis is therefore *labelled* in separation, which is
@@ -4620,6 +4677,15 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
 is on.
+
+**The framing line is one string in one grammar.** The window it names is the display form (§26.1),
+written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
+subtitle agree character for character, where the head once said `IV:1,000,000-1,400,000` and the
+picture under it `IV:1,000,001-…`, a one-base disagreement that reads as two windows. The reading is
+named **once**: the balance flag and the score picker's label are both the word `balanced` on the
+commonest file, and pushing both wrote `1 kb bins · balanced · balanced` into every provenance line
+and every TSV header, which reads as two normalisations having been applied. Where the two differ,
+both are said — `balanced · correlation` says what neither half says alone.
 
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
@@ -7365,7 +7431,7 @@ recipe in the drawer, as the Synthetic card does (§18.5).
 ### 25.3 The deck of cells
 
 **The structure cell** draws **one** structure row — the one the reader chose from the Structures
-card or from the cell's own **model** picker, remembered per file, or the first of the list where
+card or from the cell's own **structure** picker, remembered per file, or the first of the list where
 none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
 same row**, is the one it draws; and **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
@@ -7390,13 +7456,22 @@ the ghost opacity** — 0.15 by default, a trace — and that slider is the one 
 everything else is drawn whole. *Outside the window* has three answers: *ghost* (the default),
 *hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
 how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
-says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
+says what a figure carries. On/off settings are icon toggles, **lit when on** (§26.3): drawn as, chords, pin contacts, fog,
+overlays. Every slider carries a **readout of the number it is at** beside it — a bead radius with
+its value nowhere on screen is a figure nobody can reproduce — and a slider whose setting does
+nothing is **greyed with its reason in its tooltip**: the ghost opacity while *outside the window*
+is *hide*. The card's rows are in one order, choices before the things that modify them: structure,
+compare with (and its RMSD note), drawn as, colour by, size by, bead radius, tube radius, haplotype,
+overlays, outside the window, ghost opacity, loops as chords, pin contacts, threshold, fog, fog
+depth, depth slab, measurements, camera, frame, export.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
 primitives, placed by the session whenever the deck has a structure cell and taken out when it has
 none, the column scrolling over all of them as one — and not a menu in the cell: a view's settings are in that column, and the model is a
-view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
+view. The cell keeps **five corner buttons** — mark a bead, mark a loop, measure (§25.4), frame the
+window, enlarge — the frame wearing the same mark the Map card's refit does and the enlarge its own,
+since two corner-bracket glyphs side by side were told apart only by hovering them; the dialog
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
 camera controls — and gives it back where it was. The card also carries **size by**
 (a track whose value at each bead sets its size, half to nearly twice the radius over the track's
@@ -7408,27 +7483,34 @@ the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more 
 ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
 at most eighty labels, and no zero tick: a chain's start is where its name is),
 **camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
-**frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
-`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` mark a bead,
-`o` mark a loop, `m` measure, `r` turntable — **bound only while the model is enlarged**, and listed
-in the palette either way. They are single letters and so are the app's own (`f` folds the Files
-panel, `a` the Annotations panel); a cell sits *beside* a map and its commands come first in the
-palette's list, so binding them there took those letters from the panels for as long as a model was
-on screen. In the dialog the model is the whole window and there is nothing else a letter could
-mean. A phased file draws both homologues,
+**frame** (the window, everything) — all of them **bordered buttons** like every other action in the
+column (§26.6), since a quiet word beside a bordered toggle reads as a caption for it. The cell's actions are **commands** in the palette with keys —
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
+**bound only while the model is enlarged**, and listed in the palette either way; the three modes
+have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
+the new tab and the Aesthetics panel that each already had one of them. They are single letters and
+so are the app's own (`f` folds the Files panel, `a` the Annotations panel); a cell sits *beside* a
+map and its commands come first in the palette's list, so binding them there took those letters from
+the panels for as long as a model was on screen. In the dialog the model is the whole window and
+there is nothing else a letter could mean. And a key is **printed on a control only where it is
+bound**, through `withKey` (§26.4): the corner's *frame* and the card's *frame* and *turntable* are
+retitled when the dialog opens and closes, because a card beside a deck reading `(f)` was offering a
+letter that folds a panel instead. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
-them** and remembered per file, as a panel column is; the cell's own canvas, key, labels and menu are
+them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
 what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
 back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
 *move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
 elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
-the fog forward or pushes it back, which the menu's *fog* slider also sets, 0 to 1, 0.6 the depth the
-cell always had), or *select* (§25.4). A **tap** of the centre key alone shows or hides the **centre
+the fog forward or pushes it back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the
+cell always had), or *mark*, *loop* or *measure* (§25.4). It is a **readout and not a control** —
+no border and no pill, the translucent backing the map's key has — because a bordered pill three
+pixels from five bordered buttons is a button a reader presses and nothing happens. A **tap** of the centre key alone shows or hides the **centre
 of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
-which the menu's *centre and axes* toggle also does; the keys act only while the pointer is over the
+which the card's *overlays* row also does; the keys act only while the pointer is over the
 cell, its canvas is focused or its dialog is open. It opens when a structure is dropped or named by URL while a map or
 the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
 link's `3d`; a second structure replaces the picture rather than adding a cell.
@@ -7523,7 +7605,14 @@ the window are, and hidden with them under *outside the window: hide*), a **doub
 alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
 window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
 **arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
-sets, so a loop marked on the map or in loop mode is a chord on the model.
+sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
+set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
+was a *show the chords* that could not show one, and a reader pressing it could not tell which of
+the two controls was why the model stayed bare (§8.5).
+
+The homologue picker on a phased model is labelled **haplotype** and the row of name, ruler and
+centre marks **overlays** — the word the Map and Tracks cards use for the same kind of row. Both read
+*show* before, which is one name for two questions on one card.
 
 **Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
 contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
@@ -7650,10 +7739,13 @@ and loses them when every pair weighs the same.
 
 ### 25.7 Export
 
-Beads and sticks export as **paths** through `structure/painter.ts`, projected through the same
-camera the screen was; a tube is a lit surface no `arc` can be and exports as the raster the GPU
-drew, at 300 dpi; the deck's figure takes the cell's canvas like any other. Both say which on
-the button.
+The card's last row is **the export row** (§26.6) — `[resolution] [format] [⭳] [⧉]` with a line
+under it — so a model is saved the way a map and a browser are, and at the resolution the reader
+chose rather than at a fixed one. Beads and sticks export as **paths** through
+`structure/painter.ts`, projected through the same camera the screen was; a tube is a lit surface no
+`arc` can be and exports as the raster the GPU drew, **at the row's own resolution**; the deck's
+figure takes the cell's canvas like any other, at the deck's 300 dpi (§16.5). The clipboard takes a
+PNG, as it does for a map.
 
 **A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**

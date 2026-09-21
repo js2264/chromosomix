@@ -53,6 +53,12 @@ const LUCIDE = [
   'zoom-in',
   'zoom-out',
   'maximize',
+  // Enlarging a cell into a dialog, which is not the same act as re-framing
+  // what is in it: the structure cell had `maximize` on the one and `scan` on
+  // the other, two corner-bracket glyphs side by side. `maximize` is the refit
+  // mark the Map card already uses, so `expand`'s diagonal arrows take the
+  // dialog.
+  'expand',
   'crosshair',
   'move-diagonal-2',
   'git-compare',
