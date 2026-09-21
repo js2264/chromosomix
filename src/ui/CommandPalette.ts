@@ -12,7 +12,7 @@
 
 import { Modal } from './Modal'
 import { el } from './dom'
-import { keyLabel, type Command } from './commands'
+import { groupRank, keyLabel, stateChip, type Command } from './commands'
 
 /**
  * Score a command against a query. `null` means no match; lower is better.
@@ -40,6 +40,9 @@ export function scoreCommand(command: Command, query: string): number | null {
 export function openCommandPalette(commands: Command[], onClose?: () => void): Modal {
   let selection = 0
   let visible: Command[] = []
+  // "Search commands" is the command that opened this, and a palette that
+  // offers to open the palette is the one row in it that cannot mean anything.
+  const offered = commands.filter((command) => command.id !== 'palette')
 
   const input = el('input', {
     class: 'input',
@@ -62,10 +65,16 @@ export function openCommandPalette(commands: Command[], onClose?: () => void): M
 
       const render = (): void => {
         const query = input.value
-        visible = commands
+        visible = offered
           .map((command) => ({ command, score: scoreCommand(command, query) }))
           .filter((entry): entry is { command: Command; score: number } => entry.score !== null)
-          .sort((a, b) => a.score - b.score)
+          // With nothing typed every score is 0, and `sort` on equal keys left
+          // the list in registry order — App's two commands, then File's nine,
+          // then whatever the session had appended since. Unqueried, the list is
+          // the reference table and is printed in the reference order; once
+          // something is typed, the match is what the reader is looking at and
+          // the group is only the tie-break.
+          .sort((a, b) => a.score - b.score || groupRank(a.command.group) - groupRank(b.command.group))
           .map((entry) => entry.command)
         if (selection >= visible.length) selection = Math.max(0, visible.length - 1)
 
@@ -90,6 +99,7 @@ export function openCommandPalette(commands: Command[], onClose?: () => void): M
                       ? []
                       : [el('span', { class: 'palette-hint', text: command.hint })]),
                   ),
+                  ...stateChip(command),
                   ...(command.keys === undefined
                     ? []
                     : [el('kbd', { class: 'kbd', text: keyLabel(command.keys) })]),

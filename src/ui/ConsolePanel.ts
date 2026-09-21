@@ -50,6 +50,7 @@
  */
 
 import { button, el, fmt } from './dom'
+import { durationText } from '../units'
 import { KEYS, withKey } from './commands'
 import { copyTextToClipboard, downloadBlob, fileStamp } from './export'
 import { icon, iconButton, type IconName } from './icons'
@@ -174,11 +175,6 @@ function dayLabel(day: string, now: number): string {
   if (day === dayOf(now)) return 'today'
   if (day === dayOf(now - 24 * 60 * 60 * 1000)) return 'yesterday'
   return day
-}
-
-/** `1.4 s`, `340 ms` — a duration beside a command, in the units it deserves. */
-function durationText(ms: number): string {
-  return ms >= 1000 ? `${fmt.num(Math.round(ms / 100) / 10)} s` : `${Math.round(ms)} ms`
 }
 
 /**
@@ -376,7 +372,6 @@ export class ConsolePanel {
 
   private paintToggle(): void {
     const held = actionCount()
-    this.toggle.classList.toggle('is-off', !this.opened)
     this.toggle.replaceChildren(icon('terminal'))
     const count = held === 0 ? 'nothing recorded yet' : `${fmt.int(held)} recorded`
     this.toggle.title = withKey(

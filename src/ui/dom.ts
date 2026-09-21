@@ -3,10 +3,9 @@
  *
  * There is no framework here on purpose: the whole app is a handful of views
  * over data that arrives once, so a virtual DOM would buy nothing that a
- * `textContent` assignment does not. What *is* worth centralising is number
- * formatting — a genomes table full of raw `4573673`s is unreadable, and the
- * unassigned QC statistic of §7.4 is specified down to its thousands
- * separators.
+ * `textContent` assignment does not. Number formatting lives in `src/units.ts`,
+ * where a worker can reach it, and is re-exported here so the views keep one
+ * import.
  */
 
 export type Child = Node | string | null | undefined | false
@@ -96,103 +95,7 @@ export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild)
 }
 
-const INTEGER = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 })
-const DECIMAL = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 })
-/**
- * Three *significant* digits, for values too small to have three decimal ones.
- *
- * A balanced cell is a fraction — the whole matrix sums to about one contact
- * per bin — so at 5 kb on a bacterial genome the typical value is a few times
- * `1e-4` and every number in the readout rounded to `0` or `0.001`. Two cells
- * three-fold apart printed the same string, and a reader checking a ratio
- * against the counts under it was shown a pair that could not produce it.
- */
-const SIGNIFICANT = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 3 })
-
-export const fmt = {
-  /** `4573673` → `4,573,673`. */
-  int(value: number): string {
-    if (!Number.isFinite(value)) return '—'
-    return INTEGER.format(value)
-  },
-  /**
-   * Compact but honest: integers keep their separators, floats keep 3 places —
-   * and floats too small for three decimal places keep three significant ones
-   * instead, down to `1e-7`, below which the digits go in an exponent rather
-   * than behind a run of zeros nobody can count.
-   */
-  num(value: number): string {
-    if (!Number.isFinite(value)) return '—'
-    if (Number.isInteger(value)) return INTEGER.format(value)
-    const size = Math.abs(value)
-    if (size >= 1e-3) return DECIMAL.format(value)
-    return size >= 1e-7 ? SIGNIFICANT.format(value) : value.toExponential(2)
-  },
-  /** `0.083` → `8.3%`. */
-  pct(fraction: number, digits = 1): string {
-    if (!Number.isFinite(fraction)) return '—'
-    return `${(fraction * 100).toFixed(digits)}%`
-  },
-  /**
-   * A base-pair coordinate written out in full — `1,224,000`.
-   *
-   * For the readout under the pointer, where {@link bp}'s `1.22 Mb` names a
-   * ten-kilobase neighbourhood of a cell that is one kilobase wide: a reader
-   * comparing two cells three bins apart was shown the same string for both.
-   */
-  pos(value: number): string {
-    if (!Number.isFinite(value)) return '—'
-    return INTEGER.format(Math.round(value))
-  },
-  /** Base pairs with a unit, for axis readouts. */
-  bp(value: number): string {
-    if (!Number.isFinite(value)) return '—'
-    if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)} Mb`
-    if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(1)} kb`
-    return `${INTEGER.format(value)} bp`
-  },
-  /** Byte counts for the debug panel (§12). */
-  bytes(value: number): string {
-    if (!Number.isFinite(value)) return '—'
-    const units = ['B', 'kB', 'MB', 'GB', 'TB']
-    let scaled = value
-    let unit = 0
-    while (scaled >= 1024 && unit < units.length - 1) {
-      scaled /= 1024
-      unit++
-    }
-    return `${unit === 0 ? scaled : scaled.toFixed(1)} ${units[unit]}`
-  },
-}
-
-/**
- * A number as the *starting point for an edit*, rather than as a readout.
- *
- * `fmt.num` is for text a reader reads; this is for what goes inside a number
- * box they are about to nudge. `-4.678` is something to nudge,
- * `-4.678039550781250` — which is what `String(value)` gives for a float that
- * came off a colour scale or out of a bigWig header — is not.
- *
- * Four significant digits, without the exponent `toPrecision` would print for an
- * ordinary number, and the exponent form kept for the magnitudes where the
- * alternative is a box reading `0` or fifteen digits of integer.
- *
- * @param maxDecimals A cap on the places kept, for a box whose value is read off
- * a lane 44 pixels tall: past three, the digits are below what the picture can
- * show and they cost the box its whole width. Uncapped by default, which is what
- * the colour clip wants — its units are the transform's, not the data's.
- */
-export function trimNumber(value: number, maxDecimals = Number.POSITIVE_INFINITY): string {
-  if (!Number.isFinite(value)) return ''
-  const abs = Math.abs(value)
-  // Below the first bound a fixed-point rendering is all zeroes and above the
-  // second it is a wall of digits; in both, the exponent is the shorter true
-  // answer. Checked before the cap, so `maxDecimals` never turns 1.2e-7 into 0.
-  if (abs !== 0 && (abs < 1e-4 || abs >= 1e6)) return value.toExponential(3)
-  const rounded = Number(value.toPrecision(4))
-  if (!Number.isFinite(maxDecimals)) return String(rounded)
-  return String(Number(rounded.toFixed(Math.max(0, maxDecimals))))
-}
+export { fmt, trimNumber } from '../units'
 
 /** Trailing-edge debounce, for the table's search and filter boxes. */
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {

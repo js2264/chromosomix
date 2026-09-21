@@ -43,7 +43,7 @@ describe('once it is reporting', () => {
     const view = new LoadingView('Opening big.matrix')
     view.report(1_000_000, 4_000_000, 'downloading the matrix')
     expect(textOf(view)).toContain('downloading the matrix')
-    expect(textOf(view)).toBe('downloading the matrix — 976.6 kB of 3.8 MB')
+    expect(textOf(view)).toBe('downloading the matrix — 1.0 MB of 4.0 MB')
     expect(bar(view).value).toBeCloseTo(0.25, 5)
     expect(view.el.querySelector('.progress-box')?.classList.contains('hidden')).toBe(false)
   })

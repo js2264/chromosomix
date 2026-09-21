@@ -129,7 +129,6 @@ export class TabStrip {
     // box around the only thing there is.
     this.el.classList.toggle('single', tabs.length === 1)
     this.add.disabled = !canAdd
-    this.add.classList.toggle('is-off', !canAdd)
     // A tab that has *gone* — closed while its name was being typed — takes its
     // rename with it, which is the only honest answer: there is nothing left to
     // name.
@@ -184,12 +183,10 @@ export class TabStrip {
 
     const close = button('', () => this.props.onClose(index), {
       class: 'btn btn-icon tab-close',
-      title: withKey(
+      title:
         total === 1
           ? 'Empty this session. The last tab is not closed — there would be nothing to drop a file on'
           : 'Close this session, and put its worker down',
-        KEYS.closeSession,
-      ),
     })
     close.replaceChildren(icon('x', { size: 13 }))
 

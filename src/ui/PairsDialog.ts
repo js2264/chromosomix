@@ -37,7 +37,7 @@
  * a copy of it in their downloads folder.
  */
 
-import { el } from './dom'
+import { el, fmt } from './dom'
 import { Modal } from './Modal'
 import { formatBp, roundToSeries } from '../pairs/import'
 import { ladderSizes, MAX_LADDER_RUNGS } from '../pairs/ladder'
@@ -119,7 +119,7 @@ function dialogBody(props: PairsDialogProps, done: (binning: PairsBinning) => vo
     costNote.textContent =
       `${nBins.toLocaleString()} bins at ${formatBp(base)}` +
       `${records === null ? '' : `, over ${records.toLocaleString()} records`}` +
-      ` — at most ${maxPixels.toLocaleString()} stored pixels (${formatBytes(maxPixels * BYTES_PER_PIXEL)}).`
+      ` — at most ${maxPixels.toLocaleString()} stored pixels (${fmt.bytes(maxPixels * BYTES_PER_PIXEL)}).`
 
     // The one thing worth warning about before a long read: a grid so fine
     // that most pixels hold a single contact is a scatter plot of the file
@@ -224,17 +224,4 @@ function binCount(probe: PairsProbeResult, binSize: number): number {
   let total = 0
   for (const contig of probe.contigs) total += Math.ceil(contig.length / binSize)
   return total
-}
-
-/** `134217728` → `128 MB`. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${Math.round(bytes)} B`
-  const units = ['kB', 'MB', 'GB', 'TB']
-  let value = bytes / 1024
-  let at = 0
-  while (value >= 1024 && at < units.length - 1) {
-    value /= 1024
-    at++
-  }
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[at]}`
 }

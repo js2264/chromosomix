@@ -17,6 +17,7 @@
  */
 
 import { LocusAxis, type LocusSegment } from '../render/locus'
+import { parseRegionString } from '../metacooler/range'
 import { NameIndex } from './naming'
 
 /** One sequence, as every source of an assembly reports one. */
@@ -370,6 +371,81 @@ export function findContig(assembly: Assembly, name: string): Contig | null {
  */
 export function formatLocus(range: LocusRange): string {
   return `${range.contig}:${(range.start + 1).toLocaleString('en-US')}-${range.end.toLocaleString('en-US')}`
+}
+
+/**
+ * A single base or bin start as the reader reads it: `IV:1,162,001`.
+ *
+ * The one-base half of {@link formatLocus}, for the readouts that name a
+ * position rather than a window — the bin under the pointer, the base a
+ * context menu was opened on — so they add the one and group the digits the
+ * same way the window beside them does.
+ */
+export function formatPosition(contig: string, bp0: number): string {
+  return `${contig}:${(bp0 + 1).toLocaleString('en-US')}`
+}
+
+/**
+ * A state or hash region string, as the reader reads it.
+ *
+ * The state carries cooler's grammar — `IV:1000000-1400000`, 0-based and
+ * half-open, because that is what `metacooler show --range` takes and what a
+ * link has to keep meaning. Nobody reads that: what is shown is
+ * {@link formatLocus} of it, `IV:1,000,001-1,400,000`, and a bare name — a
+ * sequence, a genome — is shown as itself. A string the tokenizer would refuse
+ * comes back unchanged, so a refusal is still about what was typed.
+ */
+export function regionLabel(region: string): string {
+  const parsed = splitRegion(region)
+  if (parsed === null) return region
+  const [contig, start, end] = parsed
+  if (start === null) return region
+  if (end === null) return `${contig}:${(start + 1).toLocaleString('en-US')}-`
+  return formatLocus({ contig, start, end })
+}
+
+/**
+ * What a reader typed into a map or table locus box, as the region string the
+ * parser takes.
+ *
+ * The box shows 1-based inclusive coordinates ({@link regionLabel}), so what is
+ * typed into it is read the same way — pressing Enter on the value the box shows
+ * must change nothing, and a locus pasted from IGV or UCSC, or copied off this
+ * app's own map, must land on the bases it names. The start loses one and the
+ * end stays, which is the whole of the inclusive-to-half-open conversion. Every
+ * spelling `metacooler/range.ts` accepts is accepted here — commas, `kb` and
+ * `Mb`, spaces, a second coordinate omitted — plus the en dash and `..`, which
+ * other browsers write and the tokenizer does not take. A bare name or a genome
+ * name has no coordinates and passes through; so does anything the tokenizer
+ * refuses, so that the parser's own wording is what the reader sees.
+ */
+export function typedLocusToRegion(text: string): string {
+  const typed = text.trim()
+  const parsed = splitRegion(typed)
+  if (parsed === null) return typed
+  const [contig, start, end] = parsed
+  if (start === null) return typed
+  const from = Math.max(0, start - 1)
+  return end === null ? `${contig}:${from}-` : `${contig}:${from}-${end}`
+}
+
+/**
+ * `[name, start, end]` of a region string, or `null` where the tokenizer would
+ * refuse it — the caller then hands the string on untouched.
+ *
+ * `reversed`, because a window across a circle's origin runs backwards
+ * (§8.15) and is a legal thing to show and to type. Only the coordinate half
+ * is normalised: a name may legally contain `..`.
+ */
+function splitRegion(text: string): [string, number | null, number | null] | null {
+  const colon = text.indexOf(':')
+  if (colon < 0) return [text, null, null]
+  const suffix = text.slice(colon + 1).replace(/–|\.\./g, '-')
+  try {
+    return parseRegionString(`${text.slice(0, colon)}:${suffix}`, { reversed: true })
+  } catch {
+    return null
+  }
 }
 
 /** The genome-wide unit interval a locus covers, or `null` for an unknown name. */

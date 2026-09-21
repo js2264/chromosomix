@@ -40,6 +40,7 @@ import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
 import { transparencyField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
+import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
 import {
   LANE_EDGES,
@@ -1639,33 +1640,31 @@ export class MatrixPanel {
     // both. Two buttons labelled by format made the choice of file into the
     // action itself, which left the resolution stranded in a row of its own two
     // lines above the thing it applied to.
-    const dpiSelect = el('select', {
-      class: 'select',
-      title: 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.',
-    })
-    for (const dpi of EXPORT_DPI_CHOICES) {
-      dpiSelect.appendChild(el('option', { value: String(dpi), text: `${dpi} dpi` }))
-    }
-    dpiSelect.value = String(this.exportDpi)
-    dpiSelect.addEventListener('change', () => {
-      this.exportDpi = Number(dpiSelect.value)
-    })
-
-    const formatSelect = el('select', {
-      class: 'select',
-      title:
+    const row = exportRow({
+      dpi: {
+        choices: EXPORT_DPI_CHOICES,
+        value: this.exportDpi,
+        onChange: (dpi) => {
+          this.exportDpi = dpi
+        },
+      },
+      formats: EXPORT_FORMATS.map((format) => ({ value: format, label: format.toUpperCase() })),
+      format: this.exportFormat,
+      formatTitle:
         'PDF is a one-page document holding the figure losslessly, at the size the DPI implies; ' +
         'PNG is the same picture as an image.',
+      onFormat: (format) => {
+        this.exportFormat = format as ExportFormat
+      },
+      onSave: () => void this.savePlot(),
+      onCopy: () => void this.copyPlot(),
+      saveTitle: withKey(
+        'Save the figure, at the resolution and in the format chosen beside this',
+        KEYS.savePlot,
+      ),
+      copyTitle: withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
     })
-    for (const format of EXPORT_FORMATS) {
-      formatSelect.appendChild(el('option', { value: format, text: format.toUpperCase() }))
-    }
-    formatSelect.value = this.exportFormat
-    formatSelect.addEventListener('change', () => {
-      this.exportFormat = formatSelect.value as ExportFormat
-    })
-
-    this.exportStatus = el('span', { class: 'clip-note export-note' })
+    this.exportStatus = row.note
 
     // Its own card, and the first one, because saving the figure is not a
     // property of the picture — it is the thing a reader does *after* every
@@ -1677,35 +1676,7 @@ export class MatrixPanel {
       'div',
       { class: 'controls-card' },
       cardTitle('Export', 'download', 'controls-title'),
-      el(
-        'div',
-        { class: 'panel-controls' },
-        el(
-          'div',
-          { class: 'export-row' },
-          dpiSelect,
-          formatSelect,
-          iconButton(
-            'download',
-            withKey(
-              'Save the figure, at the resolution and in the format chosen beside this',
-              KEYS.savePlot,
-            ),
-            () => this.savePlot(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-          // Beside the download rather than under it: they are the same figure
-          // going to two places. The clipboard takes a PNG whatever the format
-          // beside it says — see `KEYS.copyPlot`.
-          iconButton(
-            'clipboard-copy',
-            withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
-            () => this.copyPlot(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-        ),
-        this.exportStatus,
-      ),
+      row.body,
     )
 
     this.plotEl = el(

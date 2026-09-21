@@ -28,6 +28,10 @@ import type { AnalysisRunner, JobState } from '../analysis/runner'
 import type { AnalysisContext, AnalysisTask, TaskGroup } from '../analysis/types'
 import { el, fmt } from './dom'
 import { iconButton } from './icons'
+import { durationText } from '../units'
+
+/** Re-exported: the text moved to `src/units.ts`, and this is where callers found it. */
+export { durationText }
 
 export interface AnalysisPanelOptions {
   runner: AnalysisRunner
@@ -36,24 +40,6 @@ export interface AnalysisPanelOptions {
   onOpen(task: AnalysisTask): void
   /** The id of the task whose drawer is up, so one row can be marked. */
   active(): string | null
-}
-
-/**
- * How long a run took, in the largest unit that still says something.
- *
- * Milliseconds below a second, because the difference between 40 ms and 900 ms
- * is the difference between free and noticeable; one decimal of a second up to
- * a minute; minutes and seconds past that, since `112.4 s` is a number a reader
- * has to divide. Exported because the drawer prints the same fact under the
- * result and a second spelling of it would make the two look like two different
- * measurements.
- */
-export function durationText(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return '—'
-  if (ms < 1000) return `${Math.round(ms)} ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`
-  const seconds = Math.round(ms / 1000)
-  return `${Math.floor(seconds / 60)} m ${seconds % 60} s`
 }
 
 /** What the chip says, and how loudly. */

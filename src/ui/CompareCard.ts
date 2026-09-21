@@ -186,7 +186,7 @@ export class CompareCard {
           ? 'Take the lower-left triangle out of the picture, keeping the file open'
           : 'Draw the second map again',
       () => this.props.onToggleShown(which),
-      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     eye.setAttribute('aria-pressed', String(shown))
     return el(

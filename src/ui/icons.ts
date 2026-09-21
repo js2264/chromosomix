@@ -185,16 +185,33 @@ export function iconButton(
   name: IconName,
   title: string,
   onClick: () => void,
-  options: { class?: string; size?: number } = {},
+  options: { class?: string; size?: number; pressed?: boolean } = {},
 ): HTMLButtonElement {
   const node = document.createElement('button')
   node.type = 'button'
   node.className = options.class ?? 'btn btn-icon'
   node.title = title
   node.setAttribute('aria-label', title)
+  if (options.pressed !== undefined) node.setAttribute('aria-pressed', String(options.pressed))
   node.appendChild(icon(name, options.size === undefined ? {} : { size: options.size }))
   node.addEventListener('click', onClick)
   return node
+}
+
+/**
+ * Say which way a toggle is flipped, in the one way the whole app says it.
+ *
+ * `aria-pressed`, and the stylesheet lights the button from that alone — so a
+ * toggle declares its state once and is drawn, named to a screen reader, and
+ * testable from the same word. Five classes used to do this and each drew its
+ * own look: `.is-on` lit three of them, `.is-off` *dimmed* two others, and a
+ * dimmed live control is indistinguishable from a disabled one — a reader who
+ * had learned that grey means "you cannot" was being told, by the same grey,
+ * "this is off, press it". Lit means on here, plain means off, and nothing
+ * live is ever dimmed.
+ */
+export function setPressed(node: HTMLElement, pressed: boolean): void {
+  node.setAttribute('aria-pressed', String(pressed))
 }
 
 /**

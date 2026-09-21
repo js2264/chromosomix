@@ -48,6 +48,7 @@ import { transfersFor } from '../../worker/protocol'
 import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
+import { fmt } from '../../units'
 import { overlapWith } from '../featureset'
 import {
   contigIndexOf,
@@ -2948,7 +2949,7 @@ async function alignmentSamples(
       // sits in the name column's gutter: a sentence of advice there widens the
       // gutter for every lane in the stack. The number and the way out are what
       // a reader can act on; the bigWig-sidecar suggestion lives in §8.13.
-      note: `${formatBytes(forecast)} of reads — zoom in`,
+      note: `${fmt.bytes(forecast)} of reads — zoom in`,
     }
   }
 
@@ -3123,7 +3124,7 @@ async function readsFor(
   }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > READ_BYTE_CAP) {
-    return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
+    return { ...empty, note: `${fmt.bytes(forecast)} of reads here — zoom in` }
   }
 
   const piles: ReadPile[] = []
@@ -3238,13 +3239,6 @@ function residuesFor(region: Region): { start: number; bases: Uint8Array } | und
     return { start, bases: held.subarray(start, end) }
   }
   return undefined
-}
-
-/** `8.4 MB`, for a refusal that has to name a number a reader can act on. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1 << 30) return `${(bytes / (1 << 30)).toFixed(1)} GB`
-  if (bytes >= 1 << 20) return `${(bytes / (1 << 20)).toFixed(1)} MB`
-  return `${Math.max(1, Math.round(bytes / 1024))} kB`
 }
 
 // ---------------------------------------------------------------------------

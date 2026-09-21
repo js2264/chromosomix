@@ -24,6 +24,10 @@ import { cellsOf, selectionOf } from '../state/ViewState'
 import type { DerivedRung, Rung } from '../metacooler/coarsen'
 import type { ViewState } from '../types'
 import { el } from './dom'
+import { resolutionLabel } from '../units'
+
+/** Re-exported: the label moved to `src/units.ts`, and this is where callers found it. */
+export { resolutionLabel }
 
 /**
  * The four things the root crumb can be.
@@ -181,29 +185,6 @@ export function rootTable(
   // A genome or a pair is by definition below the genomes table; `whole` and
   // `overview` are neither, and keep the file's own default.
   return state.genome === undefined ? fallback : 'genomes'
-}
-
-/**
- * `1 kb`, `50 kb`, `1 Mb` — a bin size, written the way a reader says it.
- *
- * Not `fmt.bp`, and the difference is the decimal: that formatter is for
- * measured lengths and always carries one, so a 1 kb rung came out `1.0 kb` and
- * a 1 Mb one `1.00 Mb`. A resolution is a round number by construction — it is
- * what `cooler zoomify` was given — so the places are trimmed and only the ones
- * that say something survive: `12.5 kb` keeps its half, `1 kb` does not gain a
- * zero. Falls back to base pairs below a kilobase, which is where a Micro-C
- * ladder starts.
- */
-export function resolutionLabel(bp: number): string {
-  if (!Number.isFinite(bp) || bp <= 0) return '—'
-  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
-  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
-  return `${trim(bp)} bp`
-}
-
-/** Two places at most, and none where they would all be zeros. */
-function trim(value: number): string {
-  return String(Number(value.toFixed(2)))
 }
 
 /**

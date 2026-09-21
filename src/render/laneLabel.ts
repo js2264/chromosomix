@@ -26,6 +26,7 @@
 
 import { laneIsHorizontal, laneRect, laneText, valueAcross, type LaneFrame } from './lane'
 import { formatLimit, normaliser } from './tracks'
+import { fmt } from '../units'
 
 /** A rectangle in canvas pixels: what a pointer is tested against. */
 export type LabelBox = [x: number, y: number, width: number, height: number]
@@ -316,18 +317,11 @@ export function progressDetail(pending: { done: number; total: number }): {
 } {
   const text =
     pending.total > 0
-      ? `fetching ${bytesLabel(pending.done)} of ${bytesLabel(pending.total)}`
+      ? `fetching ${fmt.bytes(pending.done)} of ${fmt.bytes(pending.total)}`
       : pending.done > 0
-        ? `fetching… ${bytesLabel(pending.done)}`
+        ? `fetching… ${fmt.bytes(pending.done)}`
         : 'fetching…'
   return { kind: 'progress', text, done: pending.done, total: pending.total }
-}
-
-function bytesLabel(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`
-  if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} kB`
-  return `${Math.round(bytes)} B`
 }
 
 export interface LaneLabelBoxes {

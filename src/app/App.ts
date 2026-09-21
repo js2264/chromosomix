@@ -1254,6 +1254,7 @@ export class App implements SessionHost {
       this.warn(
         `${MAX_SESSIONS} sessions is the limit. Each one holds a worker and, for a whole-file ` +
           'view, a matrix in memory — close one to open another.',
+        'Too many tabs',
       )
       return null
     }
@@ -1668,7 +1669,7 @@ export class App implements SessionHost {
       tabs.push(config)
     }
     if (tabs.length === 0) {
-      this.warn('There is nothing open in this window to save.')
+      this.warn('There is nothing open in this window to save.', 'Nothing to save')
       return
     }
     const now = new Date()
@@ -1692,7 +1693,7 @@ export class App implements SessionHost {
   openWorkspaceFile(text: string, label: string, base?: string): void {
     const read = parseWorkspaceFile(text)
     if (isRefusal(read)) {
-      this.warn(refusalMessage(read, label))
+      this.warn(refusalMessage(read, label), 'That workspace could not be read')
       return
     }
     // A published workspace names its files relative to its own folder, so they
@@ -1723,7 +1724,7 @@ export class App implements SessionHost {
   private openShareDialog(): void {
     const config = this.current?.exportConfig() ?? null
     if (config === null) {
-      this.warn('There is nothing open in this tab to share.')
+      this.warn('There is nothing open in this tab to share.', 'Nothing to share')
       return
     }
     this.modal?.close()
@@ -1771,6 +1772,7 @@ export class App implements SessionHost {
         read === null
           ? 'That shared link could not be read. It may have been cut short in transit.'
           : refusalMessage(read, 'That shared link'),
+        'That link could not be opened',
       )
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       return false
@@ -1976,7 +1978,6 @@ export class App implements SessionHost {
           this.sessions.length === 1
             ? 'The last tab is emptied rather than closed — there would be nothing to drop a file on.'
             : undefined,
-        keys: KEYS.closeSession,
         run: () => this.closeSession(this.active),
       },
       {
@@ -2228,11 +2229,20 @@ export class App implements SessionHost {
     })
   }
 
-  /** A refusal that is not about a file, so it has no error view to live in. */
-  private warn(message: string): void {
+  /**
+   * A refusal that is not about a file, so it has no error view to live in.
+   *
+   * The caller names the subject, because the caller is the only one who knows
+   * it. A dialog headed "Not this time" for every refusal told the reader that
+   * something had been declined and made them read the paragraph to find out
+   * what — and read it again, later, to remember which of the three refusals
+   * they had seen. "Nothing to share" is answered before it is finished being
+   * read.
+   */
+  private warn(message: string, title: string): void {
     if (this.modal !== null) return
     this.modal = new Modal({
-      title: 'Not this time',
+      title,
       body: () => el('p', { text: message }),
       onClose: () => {
         this.modal = null

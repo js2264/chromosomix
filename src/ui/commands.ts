@@ -32,7 +32,6 @@ export const KEYS = {
   palette: 'mod+p',
   newSession: 'o',
   saveSession: 'mod+s',
-  closeSession: 'mod+w',
   /**
    * Call the tab in front something other than its file.
    *
@@ -214,6 +213,18 @@ export interface Command {
   /** Key binding, or undefined for a palette-only command. */
   keys?: string
   /**
+   * For a command that flips something: which way it is flipped right now.
+   *
+   * A palette that lists "Show the labels" and "Hide the labels" as the same
+   * row under two names makes the reader read the row to find out what the app
+   * is currently doing — and gets it backwards half the time, because the title
+   * names the *outcome* and the eye reads it as the state. So a toggle is
+   * titled once, by its noun, and wears its state as a chip: `Labels [on]` runs
+   * the same command whichever way it reads, and the row says what pressing it
+   * will change.
+   */
+  state?: 'on' | 'off'
+  /**
    * Whether the command can act right now. A command that cannot is listed as
    * disabled rather than hidden: a palette that changes shape as you navigate
    * cannot be learned.
@@ -264,8 +275,51 @@ export function keyLabel(keys: string): string {
   const mac = isMac()
   return keys
     .split('+')
-    .map((part) => (part === 'mod' ? (mac ? '⌘' : 'Ctrl') : part.length === 1 ? part.toUpperCase() : part))
+    .map((part) =>
+      part === 'mod' ? (mac ? '⌘' : 'Ctrl') : (NAMED_KEYS[part] ?? (part.length === 1 ? part.toUpperCase() : part)),
+    )
     .join(mac ? '' : '+')
+}
+
+/**
+ * The keys whose glyph is not a name.
+ *
+ * A badge reading `` ` `` is a smudge at the top of a `<kbd>` — a reader cannot
+ * tell it from `'` at 11 px, and cannot say it out loud to a colleague looking
+ * over their shoulder. The word is longer and it is the thing they would say.
+ * Only the marks that are genuinely unreadable are spelled out: `/` and `\\`
+ * are unmistakable at any size and stay as they are.
+ */
+const NAMED_KEYS: Record<string, string> = { '`': 'backtick' }
+
+/**
+ * The order the groups are printed in, wherever the whole registry is listed.
+ *
+ * The palette and the shortcuts dialog list the same commands and used to list
+ * them in two different orders — insertion order in one, group-discovery order
+ * in the other — so a reader who had learned where "Whole genome" sits in one
+ * found it somewhere else in the other. One order, and it is the order of a
+ * session: what the app is (App), what you open (File), where you go (Go), what
+ * you see (View), and where the help is (Help).
+ */
+export const GROUP_ORDER = ['App', 'File', 'Go', 'View', 'Help'] as const
+
+/** Group rank for a sort, with anything unlisted after the named ones. */
+export function groupRank(group: string): number {
+  const at = (GROUP_ORDER as readonly string[]).indexOf(group)
+  return at < 0 ? GROUP_ORDER.length : at
+}
+
+/**
+ * The state chip a toggle command wears — `on` / `off` — or nothing.
+ *
+ * One element, built in one place, because the palette row and the shortcuts
+ * row are two printings of one fact and a second spelling of the chip would
+ * make them look like two different things.
+ */
+export function stateChip(command: Command): HTMLElement[] {
+  if (command.state === undefined) return []
+  return [el('span', { class: 'kbd cmd-state', text: command.state })]
 }
 
 /** Does this event match a binding such as `mod+p` or `?`. */

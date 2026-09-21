@@ -102,7 +102,7 @@ export class GroupsCard {
         () => {
           for (const member of members) store.update(member.id, { visible: !shown })
         },
-        { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+        { class: 'btn btn-icon ann-eye', size: 14 },
       )
       eye.setAttribute('aria-pressed', String(shown))
 

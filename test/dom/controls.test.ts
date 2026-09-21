@@ -162,10 +162,13 @@ describe('fmt', () => {
     expect(fmt.bp(4_600_000)).toBe('4.60 Mb')
   })
 
-  it('writes bytes in binary units', () => {
+  // Decimal, in thousands, because that is what the OS and every browser's
+  // download dialog show the same reader about the same file — see `src/units.ts`.
+  it('writes bytes in decimal units, as the operating system does', () => {
     expect(fmt.bytes(512)).toBe('512 B')
-    expect(fmt.bytes(2048)).toBe('2.0 kB')
-    expect(fmt.bytes(5 * 1024 * 1024)).toBe('5.0 MB')
+    expect(fmt.bytes(2000)).toBe('2.0 kB')
+    expect(fmt.bytes(5_000_000)).toBe('5.0 MB')
+    expect(fmt.bytes(18_100_000)).toBe('18.1 MB')
   })
 
   it('writes a fraction as a percentage', () => {
@@ -186,8 +189,8 @@ describe('the ‹ › pair', () => {
       noun: 'genome',
     })
     const [back, on] = all<HTMLButtonElement>(node, 'button')
-    expect(back.title).toBe('Previous genome: MAG_004')
-    expect(on.title).toBe('Next genome: MAG_006')
+    expect(back.title).toBe('Previous genome: MAG_004 ([)')
+    expect(on.title).toBe('Next genome: MAG_006 (])')
     expect(back.disabled).toBe(false)
     expect(on.disabled).toBe(false)
   })

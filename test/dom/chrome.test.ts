@@ -194,8 +194,10 @@ describe('the stepper', () => {
   it('names the neighbour it would open', () => {
     const node = stepper({ neighbours: { prev: 'MAG_01', next: 'MAG_03' }, noun: 'genome', onStep: () => {} })
     const [prev, next] = all<HTMLButtonElement>(node, 'button')
-    expect(prev.title).toBe('Previous genome: MAG_01')
-    expect(next.title).toBe('Next genome: MAG_03')
+    // The key that does the same thing, because a tooltip is where a reader
+    // who is already pointing at the button discovers there is a faster way.
+    expect(prev.title).toBe('Previous genome: MAG_01 ([)')
+    expect(next.title).toBe('Next genome: MAG_03 (])')
     expect(prev.disabled).toBe(false)
   })
 
@@ -203,6 +205,7 @@ describe('the stepper', () => {
     const node = stepper({ neighbours: { prev: null, next: 'MAG_02' }, noun: 'contig', onStep: () => {} })
     const [prev, next] = all<HTMLButtonElement>(node, 'button')
     expect(prev.disabled).toBe(true)
+    // No key on the dead end: there is nothing for it to reach.
     expect(prev.title).toBe('No previous contig')
     expect(next.disabled).toBe(false)
   })

@@ -2391,7 +2391,7 @@ export class PanelDeck {
         }
         this.paintBar()
       },
-      { class: `btn btn-icon deck-lock${this.leadLocked ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon deck-lock', pressed: this.leadLocked, size: 14 },
     )
 
     // The preset row's honest replacement, and the only control here that is

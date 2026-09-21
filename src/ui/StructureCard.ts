@@ -274,7 +274,7 @@ export class StructureCard {
         if (shown) this.options.onHide?.()
         else this.options.onShow?.(entry)
       },
-      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     node.setAttribute('aria-pressed', String(shown))
     node.disabled = !ready || this.options.onShow === undefined

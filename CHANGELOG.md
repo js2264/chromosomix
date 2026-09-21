@@ -10,6 +10,64 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Changed
+
+- **The interface has one grammar, and SPECS.md §26 states it.** A deep audit of every reader-facing
+  surface found the same kinds of drift in twenty places at once — not bugs in any one panel, but
+  disagreements *between* panels, which is the one class of defect no reviewer of one file can catch.
+  Six locus boxes asked for the same thing in five phrasings; five different looks said "this is on";
+  bytes were spelled three ways; the two views of one genome disagreed about whether a coordinate is
+  0-based. §26 is now the contract for what the surfaces share — coordinates, units, toggles, words,
+  colour, shapes — and this release brings the shared machinery into line with it.
+
+- **Coordinates a reader sees are 1-based inclusive everywhere, and a locus box accepts what it
+  shows (§26.1).** `formatPosition`, `regionLabel` and `typedLocusToRegion` join `formatLocus` in
+  `genome/assembly.ts` as the only place a coordinate is formatted or read, and the round trip is a
+  test: pressing Enter on the value a box is already showing cannot move the view by a base. What is
+  typed now also takes the spellings other browsers write — an en dash, Ensembl's `..`, `kb` and `Mb`
+  — because a reader arrives by pasting.
+
+- **One spelling of every quantity, reachable from a worker (§26.2).** `src/units.ts` holds it, and
+  the four duplicate byte-and-duration formatters that had grown in the console, the pairs dialog,
+  the lane labels and the annotations worker are gone. **Byte counts are now decimal**, in thousands:
+  the 18.1 MB file your browser is downloading is called `18.1 MB` here too, where it used to read
+  `17.3 MB`.
+
+- **A toggle that is off is no longer greyed (§26.3).** Dimming is how this app draws a control you
+  *cannot* use, so an eye, a lock or a panel fold that dimmed itself when off was saying "unavailable"
+  in the one vocabulary a reader had already learned. Off is now drawn plain and on is lit, one rule
+  in the stylesheet draws every toggle in the application from the ARIA state it already carried, and
+  a test refuses a second look. Two toggles in the 3D panel that were lit nowhere at all now light.
+
+- **A price is no longer red.** The cost beside a scan was drawn in the refusal colour, which in this
+  app means "this did not happen". Cost is a fact about what is being offered, and reads as one.
+
+- **Menus, toasts, tooltips, the modal, the feature card and the console carry the theme's shadow.**
+  Ten floating surfaces each wrote their own ink-black `box-shadow`, none of which changed with the
+  theme — so on the dark theme they sat flat against the page with a 1 px border to lift them.
+
+- **The shortcuts dialog and the command palette are two printings of one registry.** Same group
+  order, same greying of what cannot act, and the gesture tables print *your* platform's modifier
+  instead of `⌥ / Alt` for you to choose from — which is also how they were able to disagree about
+  the one gesture that genuinely differs between platforms. The palette no longer offers to open the
+  palette. A toggle command is titled by its noun and wears its state as a chip, rather than being
+  named for an outcome the eye reads as a state.
+
+- **Small-print captions and the borders you have to see now meet contrast.** `--text-faint` on white
+  was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
+  a tick on a scale — was 1.94:1 against a 3:1 bar.
+
+### Removed
+
+- **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
+  reader who missed by one key lost the session rather than a tab. The command stays in the palette.
+
+- **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
+  share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
+  read.
+
 ## [0.13.0] - 2026-09-20
 
 ### Added

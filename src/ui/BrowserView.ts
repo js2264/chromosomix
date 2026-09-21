@@ -195,6 +195,7 @@ import {
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
+import { exportRow } from './exportRow'
 import { searchKey } from './SearchBox'
 import { revealTrack } from './revealTrack'
 import { cardTitle, iconButton } from './icons'
@@ -2667,64 +2668,40 @@ export class BrowserView {
    * being a row at the foot of the card that holds the rest.
    */
   private exportCard(): HTMLElement {
-    const dpiSelect = el('select', {
-      class: 'select select-dpi',
-      title: 'Dots per inch of the saved figure. 96 is what is on screen; 300 is print.',
+    const row = exportRow({
+      dpi: {
+        choices: EXPORT_DPI_CHOICES,
+        value: this.exportDpi,
+        onChange: (dpi) => {
+          this.exportDpi = dpi
+        },
+      },
+      formats: BROWSER_EXPORT_FORMATS,
+      format: this.exportFormat,
+      onFormat: (format) => {
+        this.exportFormat = format as BrowserExportFormat
+        syncDpi()
+      },
+      onSave: () => void this.savePlot(),
+      onCopy: () => void this.copyPlot(),
+      saveTitle: withKey('Save the figure, in the format chosen beside this', KEYS.savePlot),
+      copyTitle: withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
+      class: 'export-row-flex',
     })
-    for (const dpi of EXPORT_DPI_CHOICES) {
-      dpiSelect.appendChild(el('option', { value: String(dpi), text: `${dpi} dpi` }))
-    }
-    dpiSelect.value = String(this.exportDpi)
-    dpiSelect.addEventListener('change', () => {
-      this.exportDpi = Number(dpiSelect.value)
-    })
-    const formatSelect = el('select', { class: 'select select-format' })
-    for (const format of BROWSER_EXPORT_FORMATS) {
-      formatSelect.appendChild(el('option', { value: format.value, text: format.label }))
-    }
-    formatSelect.value = this.exportFormat
+    row.note.replaceWith(this.exportStatus)
     // A vector PDF has no resolution, so the resolution *goes* rather than
     // sitting there greyed out — which also gives the format the width it needs
     // to say "vector" on one line, the only line the row has.
     const syncDpi = (): void => {
-      dpiSelect.hidden = this.exportFormat === 'pdf'
+      if (row.parts.dpi !== null) row.parts.dpi.hidden = this.exportFormat === 'pdf'
     }
-    formatSelect.addEventListener('change', () => {
-      this.exportFormat = formatSelect.value as BrowserExportFormat
-      syncDpi()
-    })
     syncDpi()
 
     return el(
       'div',
       { class: 'controls-card' },
       cardTitle('Export', 'download', 'controls-title'),
-      el(
-        'div',
-        { class: 'panel-controls' },
-        el(
-          'div',
-          { class: 'export-row export-row-flex' },
-          dpiSelect,
-          formatSelect,
-          iconButton(
-            'download',
-            withKey('Save the figure, in the format chosen beside this', KEYS.savePlot),
-            () => this.savePlot(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-          // Beside the download rather than under it: they are the same figure
-          // going to two places. The clipboard takes a PNG whatever the format
-          // beside it says — see `KEYS.copyPlot`.
-          iconButton(
-            'clipboard-copy',
-            withKey('Copy the figure as a PNG, ready to paste', KEYS.copyPlot),
-            () => this.copyPlot(),
-            { class: 'btn btn-icon', size: 15 },
-          ),
-        ),
-        this.exportStatus,
-      ),
+      row.body,
     )
   }
 

@@ -29,6 +29,17 @@ export interface Suggestion {
 
 export interface SearchBoxOptions {
   placeholder: string
+  /**
+   * Draw a bordered `go` beside the box.
+   *
+   * For the boxes a reader *aims* with rather than types into by reflex — the
+   * map's and the browser's locus bars, where the text came from somewhere else
+   * and the gesture is paste-then-click. Enter still submits either way; the
+   * button is there so that the one thing you can do with the box is visible
+   * from across the room, which on a filter box it already is (the list moves as
+   * you type) and here it is not.
+   */
+  go?: boolean
   /** The box's own tooltip: what typing here will do. */
   title?: string
   /** What it holds before anyone types — the current region, usually. */
@@ -78,9 +89,12 @@ export class SearchBox {
     this.input.addEventListener('blur', () => window.setTimeout(() => this.close(), 150))
     this.el = el(
       'div',
-      { class: 'search-box' },
+      { class: options.go === true ? 'search-box search-box-go' : 'search-box' },
       this.input,
       searchKey(),
+      ...(options.go === true
+        ? [button('go', () => this.submit(), { class: 'btn', title: 'Go to what is in the box' })]
+        : []),
       ...(options.suggest === undefined ? [] : [this.hits]),
     )
   }
@@ -184,6 +198,45 @@ export function featureSuggestions(store: AnnotationStore, text: string): Sugges
     label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
     value: `${hit.contig}:${hit.start}-${hit.end}`,
   }))
+}
+
+/** What a locus box says it takes, beyond coordinates. */
+export interface LocusAccepts {
+  /** A bare sequence name — the whole of one chromosome or contig. */
+  sequence?: boolean
+  /** A genome's name, on a file that holds more than one. */
+  genome?: boolean
+  /** A gene or feature name, where an annotation is loaded to search. */
+  gene?: boolean
+  /** `*`, for everything at once. */
+  whole?: boolean
+}
+
+/**
+ * What a locus box offers, in one sentence, built the same way everywhere.
+ *
+ * Six boxes across the app asked for the same thing in five different phrasings
+ * — `contig, or contig:start-end` in the tables, `genome, contig, or
+ * contig:start-end` on one of them, `a genome, or a contig` on the overview,
+ * and `chrI:1,000-20,000, a sequence, a gene, or * for the whole genome` in the
+ * two browser bars, which named `chrI` on a yeast assembly whose sequences are
+ * called `I`. So: one builder, one order, and the *example* is taken from the
+ * file in front of the reader rather than from a human genome they may not have
+ * open.
+ *
+ * @param first The assembly's first sequence name, used as the example when it
+ * is short enough to leave room for the coordinates — past a dozen characters a
+ * scaffold name is the whole box and says less than the word `contig` does.
+ */
+export function locusPlaceholder(options: { first?: string; accepts?: LocusAccepts }): string {
+  const first = options.first !== undefined && options.first.length <= 12 ? options.first : 'contig'
+  const accepts = options.accepts ?? {}
+  const parts = [`${first}:1,000-20,000`]
+  if (accepts.sequence === true) parts.push('a sequence')
+  if (accepts.genome === true) parts.push('a genome')
+  if (accepts.gene === true) parts.push('a gene')
+  const listed = parts.join(', ')
+  return accepts.whole === true ? `${listed}, or * for the whole genome` : listed
 }
 
 /**

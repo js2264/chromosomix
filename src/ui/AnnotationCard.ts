@@ -1011,7 +1011,7 @@ export class AnnotationCard {
       entry.visible ? 'eye' : 'eye-off',
       entry.visible ? 'Hide, keeping the settings' : 'Show again',
       () => this.props.store.update(entry.id, { visible: !entry.visible }),
-      { class: `btn btn-icon ann-eye${entry.visible ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     node.setAttribute('aria-pressed', String(entry.visible))
     return node

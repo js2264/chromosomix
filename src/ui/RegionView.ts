@@ -273,12 +273,17 @@ export function zoomedRegion(
 /**
  * One zoom step, as a button: the mark for the direction and the factor beside it.
  *
+ * Exported with {@link ZOOM_STEPS} so the 1D browser's bar draws the same four
+ * buttons from the same pair: the two bars are the same control over two
+ * pictures of one genome, and two sets of zoom buttons that did not match was
+ * the app telling a reader that zooming means something different on each.
+ *
  * `btn-keyed`'s shape without its key badge — a mark, a word, one baseline —
  * because four bare magnifiers in a row cannot be told apart and four words
  * without marks cannot be told from the controls either side of them. Bordered
  * like `go` next to it: these move the view.
  */
-function zoomButton(
+export function zoomButton(
   step: { factor: number; label: string; out: boolean },
   onClick: () => void,
 ): HTMLButtonElement {

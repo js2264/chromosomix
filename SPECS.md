@@ -7564,3 +7564,131 @@ called intervals. It is the file §25.2 reads, so it reads straight back here an
 - **A resolution picker for a binary g3d**: the finest opens; the others are named under the row.
 - **Metadata columns as a colouring** and the Sequences card's ticks over the model: the key's
   chips and the haplotype solo cover the case a reader meets.
+
+## 26. The interface's own grammar
+
+Every section above governs one surface. This one governs what the surfaces have in common, and it
+exists because the audit that produced it found the same drift in twenty places at once: six locus
+boxes asking for the same thing in five phrasings, five ways of drawing a toggle that is on, three
+spellings of a byte count, two coordinate conventions in two views of one genome. None of those is a
+bug in the surface that has it. Each is a disagreement *between* surfaces, which is a thing no
+section about one surface can see and no reviewer of one file can catch.
+
+So the rules here are stated once and are binding on all of them. A new control that needs a look, a
+word, a unit or a coordinate takes the one below; a surface that wants a different one changes this
+section first.
+
+### 26.1 Coordinates: three forms, and which is for a reader
+
+A genome coordinate exists in exactly three forms in this application and they must never be
+confused:
+
+| Form | Grammar | Where it lives |
+|---|---|---|
+| **Machine** | cooler's: 0-based, half-open, ungrouped — `IV:1000000-1400000` | The session state, a `#`-hash link, `metacooler show --range`, every worker message, every file on disk |
+| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips |
+| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box |
+
+The machine form cannot change: it is what a shared link has to keep meaning and what the reference
+implementation takes. The display form cannot change either, because it is what IGV, UCSC, samtools,
+Ensembl and every paper print, and a viewer that showed a locus a base off from the one a reader's
+`bedtools` output names would be wrong in the way that is hardest to notice and worst to find.
+
+**The law is the round trip.** A locus box shows the display form and accepts the typed form, so
+pressing Enter on a value the box is already showing must not move the view by a base.
+`typedLocusToRegion(regionLabel(r)) === r` for every region with coordinates, and
+`test/unit/locus-display.test.ts` holds it. The four helpers in `genome/assembly.ts` are the only
+place any of this is written: `formatLocus` for a window, `formatPosition` for a single base or bin
+start, `regionLabel` for a state string, `typedLocusToRegion` for what was typed. A view that formats
+a coordinate itself is a view that will drift.
+
+The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
+and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name and `*`
+have no coordinates and pass through untouched — as does anything the tokenizer refuses, so that a
+refusal is about what the reader typed rather than about what a helper made of it.
+
+**Copying is not displaying.** What the clipboard takes is 1-based inclusive and **ungrouped**, so it
+pastes into a terminal, a spreadsheet or a BED-adjacent tool without separators to strip.
+
+### 26.2 Units: one spelling of each quantity
+
+`src/units.ts` holds the one formatter for every quantity the app prints, and it imports nothing —
+no DOM, no `ui/` — so the annotations worker and the g3d parser print what the cards print.
+
+- **Bytes are decimal**, in thousands: `18.1 MB`. Not because 1024s are wrong but because the
+  operating system, the browser's download dialog and the file's own listing all show the reader
+  1000s about the same file, and a viewer that called an 18.1 MB download `17.3 MB` was reporting a
+  second size for it.
+- **A bin size** takes `resolutionLabel`: `1 kb`, `12.5 kb`, `1 Mb` — trimmed, because a resolution
+  is a round number by construction. **A measured span** takes `fmt.bp` and keeps its decimal:
+  `400.0 kb` says it was measured to the hundred bases.
+- **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local, six
+  characters.
+- A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.
+
+### 26.3 What a toggle looks like
+
+**Lit means on. Plain means off. Nothing live is ever dimmed.**
+
+The last clause is the one that was being broken: `.btn:disabled` is drawn by dimming, so a toggle
+that dimmed itself when off was telling a reader who had learned "grey means you cannot" that a
+track's eye was off and should be pressed. A control that is off is drawn exactly like a control
+that has never been pressed, and the *lit* state is what carries the difference.
+
+The state is read from the ARIA attribute the control already needs — `aria-pressed` for a toggle,
+`aria-expanded` for a fold — so a toggle cannot be drawn without also being announced, and one rule
+in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the selector list and
+refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
+stands down for `:disabled`.
+
+A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
+its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
+text is its label, so the label carries the state.
+
+### 26.4 Words on controls
+
+- **Button labels are lowercase** — `go`, `save`, `connect a folder` — except format names and proper
+  nouns (`PDF`, `BEDPE`, `Google Drive`) and the zoom steps (`10×`). Field labels and select options
+  too; a sub-head is written lowercase in the source and uppercased by the stylesheet, so one
+  spelling survives a change of mind about the look.
+- **One word per thing, app-wide.** A session in front of a reader is a **tab**. A stretch of DNA is
+  a **sequence** in prose and a **chromosome** or **contig** only on the surfaces that report what a
+  file itself calls it. A 1D dataset is a **track**. The occupants of the deck are **cells**; the map
+  in one is a **map**. A file of beads is a **structure** and one set of its coordinates a **model**
+  (§25.1). A reader **connects a folder** and **signs in to** a provider.
+- **A hint is one sentence and never more.** No section numbers, no backticks, no naming of the
+  module that implements it: a reader who needs `§18.6` is reading the wrong document. Where a group
+  of controls shares a caveat, it is said once at the group rather than on each.
+- **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
+  read by someone already pointing at the thing, which is exactly when "is there a faster way" is
+  asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.
+  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`).
+
+### 26.5 Colour means one thing each
+
+`--danger` is a refusal and nothing else — never a price, never a caution, never emphasis. `--warn`
+is "look at this before you trust it". `--ok` is a thing that finished. A **price** is `--text-dim`,
+because a cost is a fact about what is being offered and not a warning about the answer. `--accent`
+is what a reader can act on, and text set *in* an accent fill takes `--on-accent`.
+
+### 26.6 One shape per job
+
+- **A locus box** is built by `SearchBox` and its placeholder by `locusPlaceholder`, whose example is
+  taken from the assembly in front of the reader rather than from a genome they may not have open.
+- **A navigation bar** is `[title] [‹ ›] [box] [go] [⊖10× ⊖3× ⊕3× ⊕10×] [bookmark]`, and the zoom
+  steps come from `RegionView`'s own pair so the map's bar and the browser's are the same control
+  over two pictures of one genome.
+- **An export row** is `[resolution] [format] [⭳] [⧉]` with a line under it, built by
+  `ui/exportRow.ts`; a card with no resolution to offer omits it and one that writes a file rather
+  than a picture omits the clipboard. Data leaves by a bordered button named for its format.
+- **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
+- **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
+  other four do.
+- **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
+  literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
+  exists to answer.
+
+### 26.7 The words for a state
+
+A thing that can run says exactly one of: **never run**, **queued**, **running**, **done**,
+**failed**, **cancelled**, or **reading…** while it fetches. No surface invents a seventh.

@@ -656,7 +656,6 @@ export class SidePanel {
     // would beat it.
     this.el.style.width = this.collapsed ? '' : `${this.width}px`
     this.toggle.classList.toggle('hidden', !this.available)
-    this.toggle.classList.toggle('is-off', this.collapsed)
     this.toggle.replaceChildren(icon(this.collapsed ? this.spec.openIcon : this.spec.closeIcon))
     this.toggle.title = withKey(
       this.collapsed ? `Show the ${this.spec.title} panel` : `Fold the ${this.spec.title} panel`,

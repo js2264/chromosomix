@@ -50,12 +50,21 @@
    */
   --bg-muted: #e9eaec;
   --border: #d2d3d6;
-  --border-strong: #a5a7ab;
+  --border-strong: #8d8f93;
   --text: #17181a;
   --text-dim: #54565a;
-  --text-faint: #7b7d81;
+  --text-faint: #68696d;
   --accent: #1f5fa9;
   --accent-soft: #dce8f7;
+  /*
+   * Text and marks set *in* an accent fill, rather than on the page.
+   *
+   * Six rules wrote `#fff` here and one wrote `white`, which was right on the
+   * light theme by luck: the dark theme's accent is a pale blue, and white on
+   * it is the one combination in this sheet that fails at any size. A token,
+   * so a filled button is legible in both.
+   */
+  --on-accent: #ffffff;
   --danger: #a32020;
   --danger-soft: #fbe2e2;
   --ok: #1d6b3f;
@@ -93,6 +102,13 @@
    */
   --shadow-1: 0 1px 2px rgb(24 24 26 / 7%), 0 1px 1px rgb(24 24 26 / 4%);
   --shadow-2: 0 6px 18px -10px rgb(24 24 26 / 30%), 0 2px 5px -3px rgb(24 24 26 / 16%);
+  /*
+   * `--shadow-2` turned over, for the two surfaces that rise out of an edge
+   * rather than dropping onto the page — the status popover above the bar, and
+   * the console out of the bottom of the window. Same weight, opposite side, so
+   * the app has one depth and not two.
+   */
+  --shadow-up: 0 -6px 18px -10px rgb(24 24 26 / 30%), 0 -2px 5px -3px rgb(24 24 26 / 16%);
 }
 
 :root {
@@ -155,12 +171,13 @@
   --bg-raised: #232529;
   --bg-muted: #161719;
   --border: #3e4044;
-  --border-strong: #5a5c61;
+  --border-strong: #727478;
   --text: #eeeff1;
   --text-dim: #b3b5b9;
   --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
+  --on-accent: #131416;
   --danger: #ef8a8a;
   --danger-soft: #3b2020;
   --ok: #6cc48f;
@@ -172,6 +189,7 @@
      is the spread rather than the density. */
   --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 1px rgb(0 0 0 / 28%);
   --shadow-2: 0 8px 22px -10px rgb(0 0 0 / 66%), 0 2px 6px -3px rgb(0 0 0 / 44%);
+  --shadow-up: 0 -8px 22px -10px rgb(0 0 0 / 66%), 0 -2px 6px -3px rgb(0 0 0 / 44%);
   }
 }
 
@@ -182,12 +200,13 @@
   --bg-raised: #232529;
   --bg-muted: #161719;
   --border: #3e4044;
-  --border-strong: #5a5c61;
+  --border-strong: #727478;
   --text: #eeeff1;
   --text-dim: #b3b5b9;
   --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
+  --on-accent: #131416;
   --danger: #ef8a8a;
   --danger-soft: #3b2020;
   --ok: #6cc48f;
@@ -196,6 +215,7 @@
   --tab-rest: #2a2b2e;
   --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 1px rgb(0 0 0 / 28%);
   --shadow-2: 0 8px 22px -10px rgb(0 0 0 / 66%), 0 2px 6px -3px rgb(0 0 0 / 44%);
+  --shadow-up: 0 -8px 22px -10px rgb(0 0 0 / 66%), 0 -2px 6px -3px rgb(0 0 0 / 44%);
 }
 
 * {
@@ -319,6 +339,7 @@ p {
 }
 
 .kbd {
+  font-variant-numeric: slashed-zero tabular-nums;
   font-family: var(--mono);
   font-size: var(--step--2);
   padding: 0.05rem 0.35rem;
@@ -328,6 +349,17 @@ p {
   background: var(--bg-raised);
   color: var(--text-dim);
   white-space: nowrap;
+}
+
+/* `on` / `off` after a toggle command's title, in the palette and the shortcuts
+   list. Built like a `.kbd` because it sits in the same column as one and a
+   second chip shape in one row would read as a second kind of thing; set in
+   words rather than in a mark, because a dot or a tick beside "Labels" says
+   that there is a state without saying which one it is. */
+.cmd-state {
+  font-family: var(--sans);
+  border-bottom-width: 1px;
+  letter-spacing: 0.02em;
 }
 
 /* A key printed *inside* a button, after its label. Quieter than a standing
@@ -718,10 +750,9 @@ p {
   }
 }
 
-.tab-new.is-off {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
+/* Nothing here: the `+` at the session limit is `disabled`, and `.btn:disabled`
+   already draws a control a reader cannot use. A second, deeper dimming on top
+   of it said the same thing twice and said it differently. */
 
 /* The session's own DOM, parented here on activation. Laid out as though it
    were not there: a wrapper that took part in layout would put a block between
@@ -906,15 +937,11 @@ p {
   vertical-align: -0.1em;
 }
 
-.deck-star {
-  opacity: 0.45;
-}
-
-.deck-star.is-on {
-  opacity: 1;
-  color: var(--accent);
-}
-
+/* A star that is not the lead's is *off*, not unavailable — so it is drawn
+   plain and the lit look above says which one is starred. It used to rest at
+   45% opacity, which in a bar whose other buttons dim to 45% when they are
+   disabled meant the deck had four greyed stars and one blue one, and no way to
+   tell "not starred" from "cannot be starred". */
 .deck-star.is-on svg {
   fill: currentColor;
 }
@@ -1157,14 +1184,32 @@ p {
   background: none;
 }
 
-.btn.lane-auto.is-on {
-  color: var(--accent);
-}
-
 .input-tiny {
   width: 4.2rem;
   padding: 0.05rem 0.2rem;
   font-size: var(--step--2);
+}
+
+/* A locus box with a `go` beside it. `.search-box` is already the flex row; what
+   this adds is the gap, and the badge moved off the button — `/` is positioned
+   against the box and would otherwise sit on top of `go`. See `ui/SearchBox.ts`
+   on which boxes earn the button. */
+.search-box-go {
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.search-box-go > .search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.search-box-go > .btn {
+  flex: 0 0 auto;
+}
+
+.search-box-go > .search-key {
+  right: 2.9rem;
 }
 
 /* The box that drops its hits under itself. `relative` is the whole job: the
@@ -1186,7 +1231,7 @@ p {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg-raised);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  box-shadow: var(--shadow-2);
 }
 
 .browser-hit,
@@ -1901,7 +1946,7 @@ p {
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 -6px 20px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-up);
   color: var(--text);
   /* `visibility` rather than `display`, so the panel keeps its size and the bar
      does not reflow the instant the pointer arrives. */
@@ -1972,14 +2017,42 @@ p {
   gap: 0.3rem;
 }
 
-/* A fold button whose panel is folded. The two panel toggles need to say which
-   state they are in, and only one of them can do it by swapping its icon: the
-   file sidebar's arrow points the way it will move, while the annotations
-   toggle is a `layers` mark that means the same thing either way. Dimming is
-   what carries it there, and it costs the other button nothing. */
-.btn-icon.is-off {
-  color: var(--text-faint);
-  opacity: 0.65;
+/* WHAT A TOGGLE LOOKS LIKE, ONCE, FOR EVERY TOGGLE IN THE APPLICATION.
+
+   Lit means on. Plain means off. Nothing live is ever dimmed.
+
+   Five idioms used to say this and they did not agree. `[aria-pressed]` lit the
+   plot toggles; `.is-on` lit the annotation flip, the deck's layout and share,
+   and three controls in the 3D panel; `[aria-expanded]` lit the map's settings
+   button; and `.is-off` *dimmed* the eyes, the deck's lock, the panel folds and
+   the console's — which is the one of the five that was actively wrong, because
+   `.btn:disabled` is also drawn by dimming. A reader who had learned that grey
+   means "you cannot press this" was being told by the same grey that a track's
+   eye was off and should be pressed. So: one selector list, one look, and the
+   state is read from the ARIA attribute the control already had to carry for a
+   screen reader — which means a toggle cannot now be drawn without also being
+   announced, and `test/unit/toggle-look.test.ts` holds the list to this.
+
+   `:not(:disabled)`, because a pressed control that has since become
+   unavailable is unavailable first: the dimming has to win, or a lit-and-dead
+   button says the opposite of what it is. */
+.btn-toggle[aria-pressed='true']:not(:disabled),
+.btn-icon[aria-pressed='true']:not(:disabled),
+.btn-icon[aria-expanded='true']:not(:disabled),
+.ann-flip.is-on,
+.structure-select.is-on,
+.structure-loop.is-on,
+.structure-measure.is-on,
+.lane-auto.is-on,
+.analysis-map.is-on,
+.deck-star.is-on,
+.deck-layout.is-on,
+.deck-share.is-on,
+.btn-chip.is-on,
+.portal-mode.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* Centred, and moving. A line of grey text in the corner reads as a page that
@@ -2115,7 +2188,7 @@ p {
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-2);
   padding: 0.2rem;
 }
 
@@ -2552,11 +2625,6 @@ p {
   white-space: nowrap;
 }
 
-.btn-chip.is-on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 
 .btn-quiet {
   border-color: transparent;
@@ -2675,7 +2743,7 @@ p {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg-raised);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-2);
   font-size: var(--step--1);
 }
 
@@ -3726,11 +3794,6 @@ canvas.is-frozen {
   color: var(--text-dim);
 }
 
-.map-settings-toggle[aria-expanded='true'] {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
 
 /* Over the picture, not beside it, and wide enough for the clip's two boxes.
    `max-height` with a scroll, because a panel one sixth of a window tall is
@@ -3747,7 +3810,7 @@ canvas.is-frozen {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  box-shadow: var(--shadow-2);
   font-size: var(--step--1);
 }
 
@@ -4024,11 +4087,6 @@ canvas.is-frozen {
   color: var(--text-dim);
 }
 
-.btn-toggle[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 
 /* A toggle whose mark is a word — `O/E`, and nothing else so far.
 
@@ -4141,7 +4199,7 @@ canvas.is-frozen {
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 
@@ -4319,7 +4377,7 @@ canvas.is-frozen {
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
+  box-shadow: var(--shadow-2);
 }
 
 .toast-text {
@@ -4774,7 +4832,7 @@ canvas.is-frozen {
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
+  box-shadow: var(--shadow-2);
   font-size: var(--step--1);
   line-height: 1.35;
 }
@@ -5747,11 +5805,6 @@ canvas.is-frozen {
   gap: 0.15rem;
 }
 
-.portal-mode.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
 
 .portal-body {
   display: flex;
@@ -6591,7 +6644,7 @@ canvas.is-frozen {
   border-radius: var(--radius);
   background: var(--bg-raised);
   color: var(--text);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-2);
   font-size: var(--step--1);
   line-height: 1.45;
   text-align: left;
@@ -7764,15 +7817,6 @@ canvas.is-frozen {
   padding: 0.2rem;
 }
 
-.ann-eye.is-off {
-  color: var(--text-faint);
-}
-
-.ann-flip.is-on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 
 /* The name reads as text and edits as a field: no border and no background
    until it is hovered or has the caret, so a row of them is a list of names
@@ -8727,15 +8771,6 @@ canvas.is-frozen {
   flex: 1 1 auto;
 }
 
-.deck-layout.is-on,
-.deck-share.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.deck-lock.is-off {
-  color: var(--text-faint);
-}
 
 .deck-add {
   display: flex;
@@ -9900,8 +9935,12 @@ span.deck-name {
   color: var(--text-dim);
 }
 
+/* Nothing of its own. A scan costs more than a single run and the sentence
+   beside it says so; colouring the number amber as well made the *price* read
+   as a caution about the result, and `--warn` in this app means "look at this
+   before you trust it". Cost is `--text-dim` either way. */
 .analysis-cost.is-scan {
-  color: var(--danger);
+  font-variant-numeric: tabular-nums;
 }
 
 .analysis-refusal {
@@ -10465,8 +10504,10 @@ span.deck-name {
   border-bottom: 1px solid var(--border);
 }
 
+/* The chosen map's tab carries the lit look with the weight added: this is a
+   tab strip, where which one is current has to be readable from the shape of
+   the row and not only from its colour. */
 .analysis-map.is-on {
-  border-color: var(--accent);
   font-weight: 600;
 }
 
@@ -10709,7 +10750,7 @@ span.deck-name {
   max-height: 90%;
   background: var(--bg-sunken);
   border-top: 1px solid var(--border-strong);
-  box-shadow: 0 -12px 24px -18px rgb(0 0 0 / 55%);
+  box-shadow: var(--shadow-up);
 }
 
 .console-drawer.collapsed {
@@ -10978,10 +11019,6 @@ span.deck-name {
 }
 .structure-wrap > .structure-readout {
   top: 30px;
-}
-.structure-select.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 /* A sequence's row on the key: a picker for its colour, a button for its name. */
 .structure-key-seq {
