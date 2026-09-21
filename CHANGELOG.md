@@ -82,6 +82,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   and a model made by either published tool mean the same thing by it. What is refused is named in
   §25.8: no restarts, no alternation between dispersion and structure, no physical unit.
 
+- **A yellow bead on every telomere (§25.5).** A toggle under *overlays* in the 3D structure card marks
+  the ends of each linear sequence. It is careful about what it claims, because the end of a *chain*
+  is not the end of a *chromosome*: the start is a first bead at base zero, which the model says by
+  itself; the far end is claimed only where this session knows the sequence's true length — the
+  file's own, not a lower bound read off its last feature — so a model of `IV:1,000,000–1,400,000`
+  gets none, and neither does a sequence ticked **circular** in the Chromosomes table. Names are
+  matched as everywhere else, so a g3d written `chr4` finds a cooler's `IV`. Drawn through the same
+  channel a reader's own mark is, so the beads are the same size under every drawing and every
+  colouring, and the vector export carries them without a second road.
+
+- **A grip on every Structures row, and an empty cell that takes one (§25.3).** With several models
+  loaded, the row's own button always meant *the* structure cell, wherever it happened to be.
+  Dragging a row into an empty cell of the deck now says where as well as which, and the cell becomes
+  the structure cell drawing that model. The drag carries the row under a type of this application's
+  own, so an empty cell can tell a model from a file while the drag is still in the air; its hint
+  offers both.
+
+- **The colour scale is the reader's (§25.5).** A picker under *colour by* lists every colormap the
+  application carries. *The colouring's own* — the default — keeps the existing rule, that a track's
+  beads take the lane's colormap and contacts take the map's, so a bead and the picture beside it
+  cannot disagree at the same value; choosing one overrides both. Offered only for a ramp, since a
+  colouring by sequence or haplotype is levels and has no scale to change.
+
 ### Changed
 
 - **The interface has one grammar, and SPECS.md §26 states it.** A deep audit of every reader-facing
@@ -677,6 +700,29 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **A marked bead is the colour you gave it, not black (§25.4).** Every bead drawn for one of the
+  reader's own 1D annotations came out black on screen, whatever colour the Manual annotations card
+  showed beside it — and the same mark exported to PDF came out right, because the 2D painter takes
+  a colour as a colour. The sphere's material asked for **vertex** colours as well as the instance
+  colour it actually uses; `USE_COLOR`'s shader multiplies in a `color` attribute a plain sphere has
+  not got, a missing attribute reads as `(0, 0, 0)`, and the instance colour was multiplied into that
+  zero. (`defaultAttributeValues` would have supplied a white one, but three defines it only on
+  `ShaderMaterial`.) Dropping the flag is the whole fix; the colour has always come from the card.
+
+- **Ghosting is a transparency now, not a pale colour (§25.5).** A ghosted bead — one outside the
+  deck's window, or clicked away in the key — was its own colour *mixed towards the page*, which on
+  a white page reads as washed-out rather than faint, left the geometry fully opaque so it still hid
+  whatever was behind it, and at an opacity of **0** left a page-coloured bead punching a hole in the
+  model rather than getting out of the way. It is real alpha now: the hue is kept, what is behind
+  shows through, and 0 is **gone**. The 2D painter always did it this way, so a model on screen and
+  the same model in an exported PDF no longer disagree about what ghosting means.
+
+- **The model turns without limit (§25.5).** A drag used to stop dead a hair short of the poles, so
+  turning a globule over to see its far side ran into a wall halfway through the gesture. Both
+  angles now wrap: the model goes over the top and keeps going. The clamp was a turntable's
+  convention for keeping a horizon level, and a structure has no horizon; nothing in the arithmetic
+  needed it, the camera's frame being orthonormal at every elevation.
 
 - **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
   way round, on the argument that a band along a genomic axis is what a contact map is *for* — which

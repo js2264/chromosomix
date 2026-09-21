@@ -443,3 +443,69 @@ export function centroidOf(
   }
   return { x: cx, y: cy, z: cz, radius }
 }
+
+/** What the session can say about one sequence, for {@link telomereBeads}. */
+export interface SequenceFacts {
+  /** Length in base pairs. */
+  length: number
+  /**
+   * Whether that length is the file's own rather than a lower bound read off
+   * the last feature (`genome/assembly.ts`'s `lengthsAreExact`).
+   */
+  exact: boolean
+  /** Whether the reader has declared the sequence circular (§8.15). */
+  circular: boolean
+}
+
+/**
+ * The beads that sit at a **telomere**: the two ends of each linear sequence.
+ *
+ * A telomere is the end of a *chromosome*, and the thing this has to be careful
+ * about is that the end of a **chain** is not the same claim. A model of
+ * `IV:1,000,000–1,400,000` has two chain ends and no telomeres at all, and
+ * painting them would be the picture telling a reader something the data never
+ * said. So each end is asked for separately and on its own evidence:
+ *
+ * - **The start** is knowable from the model alone: a first bead that begins at
+ *   base zero is the start of the sequence, whatever else is or is not known.
+ * - **The end** is not. It takes a length to compare against, and a length that
+ *   is the file's own rather than a lower bound — an assembly inferred from a
+ *   feature file says a chromosome is *at least* as long as its last feature,
+ *   and measuring a telomere against that would find one at the end of every
+ *   model by construction. Where `facts` cannot answer, or answers with a lower
+ *   bound, the far end is left unmarked rather than guessed at.
+ * - **A circular sequence has neither.** A bacterial chromosome, a plasmid, a
+ *   mitochondrion: the reader says so in the Chromosomes table (§8.15), and a
+ *   circle has no ends for a telomere to be at.
+ *
+ * The tolerance on the far end is one bead: a model at 5 kb whose last bead
+ * covers 1,525,000–1,530,000 of a 1,531,933 bp chromosome reaches it as nearly
+ * as a bead can.
+ *
+ * Beads the file left unplaced are skipped, so a chain that begins with a gap
+ * is measured from the first bead that is actually somewhere.
+ */
+export function telomereBeads(
+  structure: Structure,
+  facts: (name: string) => SequenceFacts | null,
+): number[] {
+  const out: number[] = []
+  const { set } = structure
+  for (const chain of structure.chains) {
+    const known = facts(structure.contigs[chain.contig] ?? '')
+    if (known?.circular === true) continue
+    let first = -1
+    let last = -1
+    for (const bead of chain.beads) {
+      if (structure.present[bead] !== 1) continue
+      if (first < 0) first = bead
+      last = bead
+    }
+    if (first < 0) continue
+    if (set.start[first] === 0) out.push(first)
+    if (last !== first && known !== null && known.exact && set.end[last] >= known.length - structure.width) {
+      out.push(last)
+    }
+  }
+  return out
+}

@@ -447,6 +447,20 @@ never a lane. A model can also be *made* from the map (§25.6). A **model** is o
 haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
 file was modelled at, inferred from its starts and independent of the map's bin size.
 
+### telomere *(on a model)*
+
+The end of a **linear** sequence, marked on the 3D model with a yellow bead (§25.5). Not the same as
+the end of a **chain**: a model of part of a chromosome has two chain ends and no telomeres, so the
+start is claimed only for a first bead at base zero and the far end only where the session knows the
+sequence's true length — the file's own, not a lower bound read off its last feature. A sequence
+ticked **circular** in the Chromosomes table (§8.15) has none at all.
+
+### ghosted
+
+Drawn at the **ghost opacity** rather than whole (§25.5): what lies outside the deck's window, and
+what the reader clicked away in the key. A real transparency — the bead keeps its hue and lets what
+is behind it through — and at an opacity of **0** it is gone, drawn no more than a hidden bead is.
+
 ### method *(of a model made from the map)*
 
 Which published reading of a contact count *Model from the map* uses (§25.6), and they are two

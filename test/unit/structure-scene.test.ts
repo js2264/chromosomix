@@ -19,6 +19,8 @@ import {
   centroidOf,
   distanceBetween,
   lociOf,
+  telomereBeads,
+  type SequenceFacts,
 } from '@/structure/scene'
 
 function rows(lines: string[]): string {
@@ -171,5 +173,80 @@ describe('the bridge from a locus to its beads', () => {
     expect(sphere.x * s.scale).toBeCloseTo(0.75, 5)
     expect(sphere.radius * s.scale).toBeCloseTo(2, 5)
     expect(centroidOf(s, [])).toBeNull()
+  })
+})
+
+
+/**
+ * The telomeres: the two ends of a linear sequence, and only where the model
+ * and the session between them can actually say so (§25.5).
+ */
+describe('telomeres', () => {
+  /** `chrA`'s beads run 0…40 kb; the model's width is 10 kb. */
+  const linear = (length: number): SequenceFacts => ({ length, exact: true, circular: false })
+
+  it('marks both ends of a sequence the model covers whole', () => {
+    // chrA's last bead starts at 40 kb and is 10 kb wide, so a 50 kb chrA is
+    // covered to its end. chrB is two beads of one homologue each.
+    const found = telomereBeads(scene(), (name) => (name === 'chrA' ? linear(50000) : linear(20000)))
+    const set = scene().set
+    const loci = found.map((bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`)
+    expect(loci).toContain('chrA:0')
+    expect(loci).toContain('chrA:40000')
+  })
+
+  it('marks neither end of a sequence the reader declared circular', () => {
+    const found = telomereBeads(scene(), () => ({ length: 50000, exact: true, circular: true }))
+    expect(found).toEqual([])
+  })
+
+  it('leaves the far end alone where the length is a lower bound, and keeps the start', () => {
+    // An assembly inferred from a feature file says a chromosome is *at least*
+    // as long as its last feature — against which every model ends at a
+    // telomere, which is why the far end is not claimed from one.
+    const set = scene().set
+    const found = telomereBeads(scene(), () => ({ length: 50000, exact: false, circular: false }))
+    const loci = found.map((bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`)
+    expect(loci).toContain('chrA:0')
+    expect(loci).not.toContain('chrA:40000')
+  })
+
+  it('leaves the far end alone where the session knows nothing of the sequence', () => {
+    const set = scene().set
+    const loci = telomereBeads(scene(), () => null).map(
+      (bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`,
+    )
+    expect(loci).toContain('chrA:0')
+    expect(loci).not.toContain('chrA:40000')
+  })
+
+  it('does not call the edge of a modelled region a telomere', () => {
+    // The same beads against a chromosome ten times as long: this model is a
+    // fragment of it, and a fragment has no telomere at either end. The start
+    // is still base zero, so that one is real; the far end is not.
+    const set = scene().set
+    const loci = telomereBeads(scene(), () => linear(500000)).map(
+      (bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`,
+    )
+    expect(loci).not.toContain('chrA:40000')
+    expect(loci).toContain('chrA:0')
+  })
+
+  it('reaches the end within a bead, which is as near as a bead can get', () => {
+    const set = scene().set
+    const near = telomereBeads(scene(), () => linear(59000)).map(
+      (bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`,
+    )
+    expect(near).toContain('chrA:40000')
+    const far = telomereBeads(scene(), () => linear(61000)).map(
+      (bead) => `${set.contigs[set.contig[bead]]}:${set.start[bead]}`,
+    )
+    expect(far).not.toContain('chrA:40000')
+  })
+
+  it('gives a one-bead chain one telomere, not the same bead twice', () => {
+    const one = buildStructure(parseG3d(rows(['chrC 0 0 0 0'])))
+    if (one === null) throw new Error('no model')
+    expect(telomereBeads(one, () => linear(10000))).toEqual([0])
   })
 })

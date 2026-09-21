@@ -7788,7 +7788,12 @@ describing the whole model while the slab was showing a slice of it. Lit, always
 always** — a model has no horizon, and perspective made the same distance read shorter at the back;
 the camera remembered per file. What is **outside the window, or ghosted from the key, is drawn at
 the ghost opacity** — 0.15 by default, a trace — and that slider is the one opacity there is:
-everything else is drawn whole. *Outside the window* has three answers: *ghost* (the default),
+everything else is drawn whole. It is a **real transparency**: a ghosted bead keeps its own hue and
+lets whatever is behind it through, and at **0 it is gone** — not drawn, and not in the way of the
+model behind it either. It used to be a colour mixed towards the page, which on a white page reads
+as *pale* rather than as *faint*, still hid what was behind it, and at zero left a page-coloured bead
+punching a hole in the picture; the 2D painter always had it right, so the same model on screen and
+in an exported PDF disagreed about what ghosting meant. *Outside the window* has three answers: *ghost* (the default),
 *hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
 how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
 says what a figure carries. On/off settings are icon toggles, **lit when on** (§26.3): drawn as, chords, pin contacts, fog,
@@ -7837,7 +7842,11 @@ a dialog with every setting in a sidebar beside it, **dragged wider or narrower 
 them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
 what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
-back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
+back. A **badge in the top-left corner** says what the hand is about to do, and goes accent for a mode the
+reader is *in* rather than one the hand is passing through: *turn* (a drag orbits, **without limit** —
+neither angle stops, so the model turns over the top and keeps going rather than hitting a wall
+halfway through a drag; the clamp that used to hold the horizon level was a turntable's convention
+and a structure has no horizon),
 *move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
 elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
 the fog forward or pushes it back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the
@@ -7846,9 +7855,17 @@ no border and no pill, the translucent backing the map's key has — because a b
 pixels from five bordered buttons is a button a reader presses and nothing happens. A **tap** of the centre key alone shows or hides the **centre
 of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
 which the card's *overlays* row also does; the keys act only while the pointer is over the
-cell, its canvas is focused or its dialog is open. It opens when a structure is dropped or named by URL while a map or
-the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
-link's `3d`; a second structure replaces the picture rather than adding a cell.
+cell, its canvas is focused or its dialog is open. The three **sticky** modes — *mark*, *loop* and
+*measure* — stay on until pressed again, so each button is lit while its mode runs (§26.3) and the
+badge names it. It opens when a structure is dropped or named by URL while a map or
+the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, from a
+link's `3d`, or by **dragging a row of the Structures card into an empty cell**; a second structure
+replaces the picture rather than adding a cell. Every row of that card carries a **grip** for it,
+because a reader with three models loaded has the row's own button — which always means *the*
+structure cell, wherever it is — and no way to say *that one, there*; dragging says where as well as
+which, and an empty cell is a place somebody already made room in. The drag carries the row's id
+under a type of this application's own, so an empty cell can tell a model from a file while the drag
+is still in the air, and the cell's hint offers both.
 
 **The tracks cell** is the session's own browser over the lead file's sequences — the same store,
 client, groups and marks — drawing only the tracks **placed on it**: the location control lists
@@ -7949,6 +7966,18 @@ The homologue picker on a phased model is labelled **haplotype** and the row of 
 centre marks **overlays** — the word the Map and Tracks cards use for the same kind of row. Both read
 *show* before, which is one name for two questions on one card.
 
+**Telomeres.** A toggle under *overlays* puts a **yellow bead on every telomere** — the palette's own
+yellow, drawn through the same channel a reader's mark is and therefore at the same larger radius,
+in the same place under every drawing and every colouring, and in the vector export without a second
+road. What counts as one is careful, because the end of a *chain* is not the end of a *chromosome*:
+the **start** is a first bead that begins at base zero, which the model says by itself; the **end**
+takes the sequence's true length to measure against, so it is claimed only where this session knows
+one that is the file's own rather than a lower bound read off the last feature — a model of
+`IV:1,000,000–1,400,000` has two chain ends and no telomeres, and neither has a sequence the reader
+ticked **circular** in the Chromosomes table (§8.15), which has no ends at all. Names are matched as
+everywhere else, so a g3d written `chr4` finds a cooler's `IV`. Where the far end cannot be
+established it is left unmarked rather than guessed at.
+
 **Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
 contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
 least the threshold slider's fraction of the way up the map's own colour scale — the transformed
@@ -7966,6 +7995,14 @@ tube in this model's frame, and the card says how many beads matched and the roo
 distance between them. *Colour by displacement* colours each bead of this model by its distance to
 its bead in the other, on a ramp, which is where the two disagree. Fewer than four shared beads is
 no fit, and the card says so.
+
+**The colour scale is the reader's**, where the colouring has one: a picker under *colour by* lists
+every colormap this application carries, and *the colouring's own* — the default — keeps the rule
+below, that a track's beads take the lane's colormap and contacts the map's, so a bead and the
+picture beside it cannot disagree at the same value. It is offered only for a **ramp**: a colouring
+by sequence or haplotype is levels and has no scale to change, and a control that does nothing under
+the default colouring is one a reader tries and then distrusts. The key follows the choice, because
+a legend naming one ramp over a model drawn on another is a legend that lies.
 
 One picker, on the picture: **sequence**, **haplotype**, **position along the chain**, the file's
 own **score** and any column it carries; and, from the session, **a track's values** at each

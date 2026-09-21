@@ -1449,6 +1449,7 @@ export class PanelDeck {
         name: ref.uri,
         onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onStructure: (id) => this.showStructure(id),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1507,6 +1508,7 @@ export class PanelDeck {
         // is the cell that opens — {@link add} would look for the *first* empty
         // one, which in a 2 × 2 with three gaps is not the one they aimed at.
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
+        onStructure: (id) => this.showStructure(id),
         onClose: () => this.remove(slot),
       })
       return slot

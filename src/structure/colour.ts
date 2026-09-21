@@ -31,10 +31,14 @@ import { categoryColour } from '../render/meta'
 import { colormapCss } from '../render/colormaps'
 import type { StructureStyle } from '../annotations/types'
 import {
+  STRUCTURE_COLOUR_CONTACTS,
+  STRUCTURE_COLOUR_DISPLACEMENT,
+  STRUCTURE_COLOUR_DISTANCE,
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
   STRUCTURE_COLOUR_SCORE,
   STRUCTURE_COLOUR_SEQUENCE,
+  STRUCTURE_COLOUR_TRACK,
 } from '../annotations/types'
 import type { Structure } from './scene'
 
@@ -59,6 +63,28 @@ export interface ColourSource {
   colormap?: string
 }
 
+/**
+ * Whether a colouring is drawn on a **ramp**, and so has a scale to change.
+ *
+ * Asked of the colouring rather than of a resolved {@link BeadColours}, because
+ * the settings card is painted before the colours are: a control that waited
+ * for them would never appear at all. Kept beside {@link resolveColours} so the
+ * two cannot drift about which colourings are ramps.
+ *
+ * A colouring by a *field* of the file is left out deliberately. It goes
+ * through §8.16's machinery, which decides levels or ramp from the column's own
+ * values, and the answer is the lane's to give rather than this module's.
+ */
+export function usesRamp(colourBy: string): boolean {
+  return (
+    colourBy === STRUCTURE_COLOUR_POSITION ||
+    colourBy === STRUCTURE_COLOUR_DISTANCE ||
+    colourBy === STRUCTURE_COLOUR_CONTACTS ||
+    colourBy === STRUCTURE_COLOUR_DISPLACEMENT ||
+    colourBy.startsWith(STRUCTURE_COLOUR_TRACK)
+  )
+}
+
 /** One resolved colouring: three views of the same decision. */
 export interface BeadColours {
   /** `r, g, b` per bead in `0..1`, for an instance buffer. */
@@ -79,6 +105,18 @@ export type StructureKey =
 export const UNSET_COLOUR = '#9a9a9a'
 
 /**
+ * What a telomere bead is drawn in (§25.5): the palette's own yellow.
+ *
+ * `CATEGORY_PALETTE`'s yellow rather than a fresh one, because it is the yellow
+ * everything else in this application means when it means yellow, and because
+ * Okabe–Ito is the one palette here chosen for being legible to a colour-blind
+ * reader. It can collide with a sequence the palette also gave yellow to; a
+ * telomere bead is drawn at `MARKED_BEAD` times the radius and sits at the end
+ * of a fibre, which is enough to tell the two apart.
+ */
+export const TELOMERE_COLOUR = '#f0e442'
+
+/**
  * Resolve the colouring a style names, over a structure.
  *
  * `source` is consulted only for a `colourBy` this module cannot resolve on
@@ -92,11 +130,13 @@ export function resolveColours(
   source: ColourSource | null = null,
 ): BeadColours {
   const by = style.colourBy
+  // The reader's ramp where they chose one; each colouring's own otherwise.
+  const ramp = style.colormap === '' ? null : style.colormap
   if (by === STRUCTURE_COLOUR_SEQUENCE || by === '') return bySequence(structure, style.sequenceColours)
   if (by === STRUCTURE_COLOUR_HAPLOTYPE) return byHaplotype(structure)
-  if (by === STRUCTURE_COLOUR_POSITION) return byPosition(structure)
+  if (by === STRUCTURE_COLOUR_POSITION) return byPosition(structure, ramp)
   if (by === STRUCTURE_COLOUR_SCORE) return byField(structure, STRUCTURE_COLOUR_SCORE)
-  if (source !== null) return bySource(structure, source)
+  if (source !== null) return bySource(structure, source, ramp)
   if (by.includes(':')) return bySequence(structure, style.sequenceColours)
   return byField(structure, by)
 }
@@ -164,19 +204,20 @@ function byHaplotype(structure: Structure): BeadColours {
 }
 
 /** A ramp from each chain's first bead to its last. */
-function byPosition(structure: Structure): BeadColours {
+function byPosition(structure: Structure, ramp: string | null = null): BeadColours {
   const set = structure.set
+  const colormap = ramp ?? STRUCTURE_RAMP
   const css = new Array<string>(set.length).fill(UNSET_COLOUR)
   for (const chain of structure.chains) {
     const n = chain.beads.length
     for (let k = 0; k < n; k++) {
-      css[chain.beads[k]] = colormapCss(STRUCTURE_RAMP, n > 1 ? k / (n - 1) : 0)
+      css[chain.beads[k]] = colormapCss(colormap, n > 1 ? k / (n - 1) : 0)
     }
   }
   return {
     rgb: rgbOf(css),
     css,
-    key: { kind: 'ramp', title: 'position along the sequence', colormap: STRUCTURE_RAMP, min: 0, max: 1 },
+    key: { kind: 'ramp', title: 'position along the sequence', colormap, min: 0, max: 1 },
   }
 }
 
@@ -196,7 +237,7 @@ function byField(structure: Structure, key: string): BeadColours {
 }
 
 /** A value or a colour per bead from outside the row. */
-function bySource(structure: Structure, source: ColourSource): BeadColours {
+function bySource(structure: Structure, source: ColourSource, ramp: string | null = null): BeadColours {
   const n = structure.set.length
   const css = new Array<string>(n).fill(UNSET_COLOUR)
   if (source.colours !== undefined) {
@@ -204,7 +245,9 @@ function bySource(structure: Structure, source: ColourSource): BeadColours {
     return { rgb: rgbOf(css), css, key: { kind: 'none', title: source.label } }
   }
   const values = source.values ?? new Float32Array(n).fill(Number.NaN)
-  const colormap = source.colormap ?? STRUCTURE_RAMP
+  // The reader's choice first, then the source's own — a track's lane scale,
+  // the map's colormap for contacts — and `STRUCTURE_RAMP` for the rest.
+  const colormap = ramp ?? source.colormap ?? STRUCTURE_RAMP
   const range = source.range ?? robustRangeOf(values)
   const span = range.max - range.min
   for (let i = 0; i < n; i++) {

@@ -1154,6 +1154,15 @@ export const STRUCTURE_COLOUR_DISTANCE = 'distance'
 export const STRUCTURE_COLOUR_CONTACTS = 'contacts'
 /** The reader's own marks: a line colours its bead, a rectangle its run (§25.5). */
 export const STRUCTURE_COLOUR_MARKS = 'marks'
+/**
+ * Each bead's distance to its bead in the **compared** model (§25.5).
+ *
+ * Here with its siblings rather than in `panels/StructurePanel.ts`, where it
+ * used to live: `structure/colour.ts` has to know which colourings are ramps,
+ * and a constant it could only reach through the panel would have made the
+ * panel and its own colour module import each other.
+ */
+export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 /** `track:<row id>` — a loaded track's values at each bead, on the lane's limits. */
 export const STRUCTURE_COLOUR_TRACK = 'track:'
 /** `features:<row id>` — a feature set's colour where a bead overlaps one. */
@@ -1241,6 +1250,31 @@ export interface StructureStyle {
   /** A genomic ruler along each chain: a tick every nice step, labelled. */
   ruler: boolean
   /**
+   * The ramp a continuous colouring is drawn on, or `''` for each one's own.
+   *
+   * `''` rather than `'viridis'` as the default, because the default is not one
+   * ramp: a track's beads are drawn on **the lane's** colormap so that a bead
+   * and the lane beside it cannot disagree at the same value (§25.5), and only
+   * the colourings with no scale of their own fall back to `STRUCTURE_RAMP`. A
+   * name here overrides both, which is the reader asking for it.
+   *
+   * Nothing for a colouring by sequence, haplotype or a category: those are
+   * levels, not a ramp, and the control is not shown for them.
+   */
+  colormap: string
+  /**
+   * A yellow bead on every **telomere** — the two ends of each linear sequence
+   * (§25.5).
+   *
+   * Drawn through the same channel the reader's own marks are, so a telomere
+   * stands out of the fibre at the same size whatever the model is drawn as and
+   * whatever it is coloured by, and so the vector export carries them without a
+   * second road. What counts as one is `telomereBeads`, and it is careful:
+   * a sequence the reader declared circular has none, and the far end of a
+   * sequence is only claimed where the session knows its true length.
+   */
+  telomeres: boolean
+  /**
    * The map's contacts from the pinned bead as chords (§25.5): to every bead
    * whose contact sits at least {@link contactThreshold} of the way up the
    * map's colour scale, as thick as the contact and coloured on that scale.
@@ -1277,6 +1311,8 @@ export function defaultStructureStyle(): StructureStyle {
     sizeBy: '',
     slab: 1,
     ruler: false,
+    telomeres: false,
+    colormap: '',
     contactChords: false,
     contactThreshold: 0.5,
     compare: '',
@@ -1348,6 +1384,11 @@ export function structureStyleOf(value: unknown): StructureStyle {
     sizeBy: typeof row['sizeBy'] === 'string' && (row['sizeBy'] as string).length <= 200 ? (row['sizeBy'] as string) : '',
     slab: bounded(row['slab'], 0.02, 1, fallback.slab),
     ruler: row['ruler'] === true,
+    telomeres: row['telomeres'] === true,
+    colormap:
+      typeof row['colormap'] === 'string' && (row['colormap'] as string).length <= 64
+        ? (row['colormap'] as string)
+        : '',
     contactChords: row['contactChords'] === true,
     contactThreshold: bounded(row['contactThreshold'], 0, 1, fallback.contactThreshold),
     compare: typeof row['compare'] === 'string' && (row['compare'] as string).length <= 200 ? (row['compare'] as string) : '',

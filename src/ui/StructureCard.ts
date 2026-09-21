@@ -29,9 +29,9 @@ import type { AnnotationLoader } from '../annotations/loader'
 import type { AnnotationStore } from '../annotations/store'
 import type { AnnotationEntry } from '../annotations/types'
 import { chooseFiles, filesFrom } from './chooseFiles'
-import { button, dragHasFiles, el } from './dom'
+import { STRUCTURE_DRAG_TYPE, button, dragHasFiles, el } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
-import { cardTitle, iconButton } from './icons'
+import { cardTitle, icon, iconButton } from './icons'
 
 export interface StructureCardOptions {
   store: AnnotationStore
@@ -139,6 +139,42 @@ export class StructureCard {
     return active instanceof HTMLInputElement || active instanceof HTMLSelectElement
   }
 
+  /**
+   * The handle that carries a model into the deck.
+   *
+   * The Tracks card has had one of these since there were two tracks to put in
+   * an order, and a reader with three models loaded had no way to say *that
+   * one, there* but the row's own button — which always means the one structure
+   * cell, wherever it happens to be. Dragging says where as well as which, and
+   * an empty cell is a place a reader has already made room in.
+   *
+   * Reordering is not what this one does: the Structures card has no order to
+   * change. It carries the id, under a type of its own, to whatever catches it.
+   */
+  private grip(entry: AnnotationEntry): HTMLElement {
+    const node = el(
+      'span',
+      {
+        class: 'ann-grip',
+        title: 'Drag into an empty cell of the deck to draw this model there',
+        attrs: { draggable: 'true', 'data-grip': entry.id },
+      },
+      icon('grip-vertical', { size: 12 }),
+    )
+    node.addEventListener('dragstart', (event) => {
+      if (event.dataTransfer === null) return
+      event.dataTransfer.effectAllowed = 'copy'
+      // Some browsers cancel a drag that carries nothing at all.
+      event.dataTransfer.setData('text/plain', entry.label)
+      event.dataTransfer.setData(STRUCTURE_DRAG_TYPE, entry.id)
+      // The row, not the handle: a twelve-pixel ghost says nothing about what
+      // is being moved.
+      const row = node.closest('.ann-row')
+      if (row instanceof HTMLElement) event.dataTransfer.setDragImage(row, 12, 12)
+    })
+    return node
+  }
+
   private row(entry: AnnotationEntry): HTMLElement {
     const shown = this.options.shown?.() === entry.id
     const row = el('div', {
@@ -149,6 +185,7 @@ export class StructureCard {
       el(
         'div',
         { class: 'ann-head' },
+        this.grip(entry),
         this.swatch(entry),
         this.name(entry),
         this.visibility(entry),

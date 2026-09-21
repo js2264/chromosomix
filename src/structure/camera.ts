@@ -19,9 +19,12 @@
 
 /** Everything about where the eye is. All lengths are in the scene's normalised units. */
 export interface Camera {
-  /** Round the vertical axis, radians. */
+  /** Round the vertical axis, radians, wrapped to `(−π, π]`. */
   azimuth: number
-  /** Above the horizontal plane, radians, clamped short of the poles. */
+  /**
+   * Above the horizontal plane, radians, wrapped to `(−π, π]` — and **not
+   * clamped**, so the model turns over the top and keeps going.
+   */
   elevation: number
   /** From the target to the eye. */
   distance: number
@@ -43,18 +46,40 @@ export function defaultCamera(): Camera {
   }
 }
 
-/** Short of straight up or down, where an orbit camera loses its bearings. */
-const POLE = Math.PI / 2 - 0.02
-
 const MIN_DISTANCE = 0.05
 const MAX_DISTANCE = 1000
 
-/** Turn the eye round the target. */
+/** An angle in `(−π, π]`, so a long drag cannot walk the number off to infinity. */
+function wrap(angle: number): number {
+  const turn = 2 * Math.PI
+  const at = ((angle + Math.PI) % turn + turn) % turn
+  return at - Math.PI
+}
+
+/**
+ * Turn the eye round the target. **Neither angle stops.**
+ *
+ * The elevation used to be clamped a hair short of the poles, which is the
+ * turntable convention: it keeps the horizon level and the model the right way
+ * up, at the price of a wall the reader runs into halfway through a drag. A
+ * structure is not a landscape and has no horizon to keep level — what a reader
+ * wants of a globule is to keep turning it until the face they want is towards
+ * them, and being stopped dead partway is the one thing a model in the hand
+ * never does.
+ *
+ * Nothing in the arithmetic needed the clamp. {@link basis} is orthonormal at
+ * every elevation — `right` is perpendicular to `forward` for all of them, and
+ * both are unit — so past the pole the frame stays valid and `up` simply tilts
+ * through the horizontal and on over, which is the model going overhead and
+ * coming down the far side upside down. That is what turning something over
+ * looks like. The angles wrap rather than grow, so a minute of dragging leaves
+ * the same numbers a second of it would.
+ */
 export function orbit(camera: Camera, dAzimuth: number, dElevation: number): Camera {
   return {
     ...camera,
-    azimuth: camera.azimuth + dAzimuth,
-    elevation: Math.max(-POLE, Math.min(POLE, camera.elevation + dElevation)),
+    azimuth: wrap(camera.azimuth + dAzimuth),
+    elevation: wrap(camera.elevation + dElevation),
   }
 }
 
@@ -232,8 +257,10 @@ export function cameraOf(value: unknown): Camera {
       ? ([target[0], target[1], target[2]] as [number, number, number])
       : fallback.target
   return {
-    azimuth: number('azimuth', -1e6, 1e6, fallback.azimuth),
-    elevation: number('elevation', -POLE, POLE, fallback.elevation),
+    // Both angles wrap rather than clamp, and a stored one from a version that
+    // clamped is a legal angle either way.
+    azimuth: wrap(number('azimuth', -1e6, 1e6, fallback.azimuth)),
+    elevation: wrap(number('elevation', -1e6, 1e6, fallback.elevation)),
     distance: number('distance', MIN_DISTANCE, MAX_DISTANCE, fallback.distance),
     target: point,
     projection: row['projection'] === 'orthographic' ? 'orthographic' : 'perspective',

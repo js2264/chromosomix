@@ -48,10 +48,49 @@ describe('the eye and its axes', () => {
     expect(up[1]).toBeGreaterThan(0)
   })
 
-  it('stops short of the poles', () => {
-    const camera = orbit(defaultCamera(), 0, 10)
-    expect(camera.elevation).toBeLessThan(Math.PI / 2)
-    expect(orbit(defaultCamera(), 0, -10).elevation).toBeGreaterThan(-Math.PI / 2)
+  it('turns over the top and keeps going, in both directions', () => {
+    // No pole to stop at: a drag that would once have hit a wall halfway now
+    // carries the model all the way over and round.
+    const start = { ...defaultCamera(), azimuth: 0, elevation: 0 }
+    let camera = start
+    const step = Math.PI / 12
+    const seen: number[] = []
+    for (let k = 0; k < 24; k++) {
+      camera = orbit(camera, 0, step)
+      seen.push(camera.elevation)
+    }
+    // A whole turn of elevation, and back where it began.
+    expect(camera.elevation).toBeCloseTo(0, 10)
+    // It passed the pole rather than piling up against it.
+    expect(seen.some((e) => e > Math.PI / 2 - 1e-9)).toBe(true)
+    expect(seen.some((e) => e < -Math.PI / 2 + 1e-9)).toBe(true)
+    // …and the other way round too.
+    let back = start
+    for (let k = 0; k < 24; k++) back = orbit(back, 0, -step)
+    expect(back.elevation).toBeCloseTo(0, 10)
+  })
+
+  it('stays an orthonormal frame past the pole, which is why the clamp could go', () => {
+    // The clamp was a convention, not a safeguard: the basis is well formed at
+    // every elevation, so nothing downstream breaks when one goes past π/2.
+    for (const elevation of [0, 1, Math.PI / 2, 2, 3, -2.5, Math.PI]) {
+      const { forward, right, up } = basis({ ...defaultCamera(), azimuth: 0.7, elevation })
+      const dot = (a: readonly number[], b: readonly number[]): number =>
+        a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+      expect(dot(forward, forward)).toBeCloseTo(1, 10)
+      expect(dot(right, right)).toBeCloseTo(1, 10)
+      expect(dot(up, up)).toBeCloseTo(1, 10)
+      expect(dot(forward, right)).toBeCloseTo(0, 10)
+      expect(dot(forward, up)).toBeCloseTo(0, 10)
+      expect(dot(right, up)).toBeCloseTo(0, 10)
+    }
+  })
+
+  it('keeps both angles in a turn rather than letting a long drag run away', () => {
+    let camera = defaultCamera()
+    for (let k = 0; k < 500; k++) camera = orbit(camera, 0.3, 0.2)
+    expect(Math.abs(camera.azimuth)).toBeLessThanOrEqual(Math.PI)
+    expect(Math.abs(camera.elevation)).toBeLessThanOrEqual(Math.PI)
   })
 })
 
@@ -124,7 +163,7 @@ describe('the gestures', () => {
     expect(halfHeight(fitted)).toBeLessThan(3)
   })
 
-  it('reads a stored camera back clamped, and the default from junk', () => {
+  it('reads a stored camera back clamped or wrapped, and the default from junk', () => {
     expect(cameraOf(null)).toEqual(defaultCamera())
     const read = cameraOf({
       azimuth: 1,
@@ -135,7 +174,9 @@ describe('the gestures', () => {
       fov: 5,
     })
     expect(read.azimuth).toBe(1)
-    expect(read.elevation).toBeLessThan(Math.PI / 2)
+    // The angles wrap rather than clamp: 9 radians is 9 − 2π of a turn, which
+    // is the same place, and not the pole a clamp would have parked it at.
+    expect(read.elevation).toBeCloseTo(9 - 2 * Math.PI, 10)
     expect(read.distance).toBe(1000)
     expect(read.target).toEqual(defaultCamera().target)
     expect(read.projection).toBe('orthographic')

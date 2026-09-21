@@ -31,6 +31,8 @@
 
 import { formatLocus } from '../genome/assembly'
 import type { AnnotationEntry, StructureStyle, TrackSampleSet } from '../annotations/types'
+import { STRUCTURE_COLOUR_DISPLACEMENT } from '../annotations/types'
+export { STRUCTURE_COLOUR_DISPLACEMENT }
 import {
   STRUCTURE_COLOUR_HAPLOTYPE,
   STRUCTURE_COLOUR_POSITION,
@@ -68,7 +70,8 @@ import {
   trackSource,
 } from '../structure/sources'
 import type { ColourSource } from '../structure/colour'
-import { robustRangeOf, rgbOf } from '../structure/colour'
+import { robustRangeOf, rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
+import { COLORMAP_NAMES } from '../render/colormaps'
 import { alignTo, displacements, type Alignment } from '../structure/align'
 import { transformValue } from '../render/scale'
 import { settingsField } from '../ui/laneSettings'
@@ -98,6 +101,8 @@ import {
   centroidOf,
   distanceBetween,
   lociOf,
+  telomereBeads,
+  type SequenceFacts,
   type Structure,
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
@@ -135,6 +140,13 @@ export interface StructurePanelProps {
   client?(): AnnotationClient | undefined
   /** The reader's bookmarks, named on the model at their beads. */
   bookmarks?(): BookmarkStore | undefined
+  /**
+   * What the session knows about a sequence by name — its length, whether that
+   * length is the file's own rather than a lower bound, and whether the reader
+   * declared it circular (§8.15). `null` where it cannot say, which is what
+   * stops *mark telomeres* claiming the end of a sequence nobody measured.
+   */
+  sequence?(name: string): SequenceFacts | null
   /**
    * The lead map's own values between one place and many — the row through
    * the pinned bead, for *colour by contacts* (§25.5). `null` where the lead
@@ -178,7 +190,6 @@ const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
 export const MANUAL_CHORDS = 'manual'
 /** The colouring by each bead's distance to its bead in the compared model (§25.5). */
-export const STRUCTURE_COLOUR_DISPLACEMENT = 'displacement'
 /**
  * What the model saves as, in the order the row offers it.
  *
@@ -380,6 +391,8 @@ export class StructurePanel implements DeckCell {
   private renderer: StructureRenderer | null = null
   /** Samples of a track at each bead, fetched through the session's worker. */
   private samples: SampleCache | null = null
+  /** The telomeres of the model in hand: asked every frame, answered from the whole set. */
+  private telomereCache: { key: string; from: Structure; beads: readonly number[] } | null = null
   /** The loops drawn as chords, kept while nothing about them changed. */
   private chords: { key: string; list: Array<readonly [number, number]> } | null = null
   /** A picking mode this cell is taking part in (`ui/mapPick.ts`). */
@@ -1669,7 +1682,7 @@ export class StructurePanel implements DeckCell {
         this.measureFirst >= 0 && this.hovered.length > 0 && this.hovered[0] !== this.measureFirst
           ? [...this.measures, [this.measureFirst, this.hovered[0]] as const]
           : this.measures,
-      marks: this.markedBeads(structure),
+      marks: this.markedBeads(structure, style),
       ruler: style.ruler ? this.rulerOf(structure) : NO_TICKS,
       overlay: this.overlayOf(structure, style),
     }
@@ -1683,15 +1696,33 @@ export class StructurePanel implements DeckCell {
    * and a rectangle are not places and are not here: the chord says the one,
    * the colouring says the other.
    */
-  private markedBeads(structure: Structure): ReadonlyArray<{ bead: number; colour: string }> {
+  private markedBeads(structure: Structure, style: StructureStyle): ReadonlyArray<{ bead: number; colour: string }> {
     const marks = this.props.manual?.()?.marks ?? []
-    if (marks.length === 0) return NO_MARKS
     const out: Array<{ bead: number; colour: string }> = []
+    // The telomeres first, so a place the reader marked themselves is drawn
+    // over one this found: their own mark is the one they are looking for.
+    if (style.telomeres) {
+      for (const bead of this.telomeres(structure)) out.push({ bead, colour: TELOMERE_COLOUR })
+    }
     for (const mark of marks) {
       if (mark.kind !== 'line') continue
       for (const bead of beadsAt(structure, mark.at.contig, mark.at.bp)) out.push({ bead, colour: mark.colour })
     }
     return out.length === 0 ? NO_MARKS : out
+  }
+
+  /**
+   * The beads at a telomere, cached against the model and what the session
+   * knows, because it is asked on every frame and answers from the whole set.
+   */
+  private telomeres(structure: Structure): readonly number[] {
+    const ask = this.props.sequence
+    const key = `${structure.set.length}|${structure.contigs.join(',')}|${ask === undefined ? '' : 'k'}`
+    if (this.telomereCache?.key !== key || this.telomereCache.from !== structure) {
+      const beads = telomereBeads(structure, (name) => ask?.(name) ?? null)
+      this.telomereCache = { key, from: structure, beads }
+    }
+    return this.telomereCache.beads
   }
 
   /**
@@ -2371,6 +2402,25 @@ export class StructurePanel implements DeckCell {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
     rows.push(blockField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
+    // The ramp, but only where the colouring is one. Sequence and haplotype are
+    // levels and have no scale to change, and a control that does nothing under
+    // the default colouring is one a reader tries and then distrusts.
+    if (usesRamp(style.colourBy)) {
+      rows.push(
+        blockField(
+          'colour scale',
+          select(
+            [
+              { value: '', text: 'the colouring’s own' },
+              ...COLORMAP_NAMES.map((name) => ({ value: name, text: name })),
+            ],
+            style.colormap,
+            (value) => this.restyle({ colormap: value }),
+          ),
+          'The ramp this colouring is drawn on; left at its own, a track’s beads take the lane’s colormap and contacts take the map’s.',
+        ),
+      )
+    }
     const sizeChoices = [{ value: '', text: 'the same everywhere' }, ...tracks.map((held) => ({ value: held.id, text: held.label }))]
     if (style.sizeBy !== '' && !sizeChoices.some((choice) => choice.value === style.sizeBy)) {
       sizeChoices.push({ value: style.sizeBy, text: `${style.sizeBy} (no longer in the list)` })
@@ -2406,6 +2456,14 @@ export class StructurePanel implements DeckCell {
             (on) => this.restyle({ labels: on }),
           ),
           toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
+          toggleIcon(
+            'unfold-horizontal',
+            style.telomeres
+              ? 'Hide the telomeres'
+              : 'Mark the telomeres: a yellow bead on each end of every linear sequence whose true length this session knows',
+            style.telomeres,
+            (on) => this.restyle({ telomeres: on }),
+          ),
           toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
         ),
       ),

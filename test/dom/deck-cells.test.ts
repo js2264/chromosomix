@@ -768,20 +768,35 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
     const press = (which: string): void => cell.querySelector<HTMLButtonElement>(which)?.click()
+    // Each of the three says it is on, in the class the stylesheet draws the
+    // pressed look from and in the attribute a screen reader reads. All three,
+    // because a mode that is on and does not look it is one the reader has to
+    // guess their way out of.
+    const on = (which: string): boolean => {
+      const button = cell.querySelector(which)
+      return button?.classList.contains('is-on') === true && button.getAttribute('aria-pressed') === 'true'
+    }
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
     press('.structure-select')
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('mark')
-    expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(true)
+    expect(on('.structure-select')).toBe(true)
     // One mode at a time: arming the next disarms the one that was on.
     press('.structure-loop')
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('loop')
-    expect(cell.querySelector('.structure-select')?.classList.contains('is-on')).toBe(false)
+    expect(on('.structure-loop')).toBe(true)
+    expect(on('.structure-select')).toBe(false)
     press('.structure-measure')
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('measure')
-    expect(cell.querySelector('.structure-loop')?.classList.contains('is-on')).toBe(false)
+    expect(on('.structure-measure')).toBe(true)
+    expect(on('.structure-loop')).toBe(false)
     // …and pressing the one that is on turns it off.
     press('.structure-measure')
     expect(cell.querySelector('.structure-mode')?.textContent).toBe('turn')
+    expect(on('.structure-measure')).toBe(false)
+    // The badge names the mode, which is what the stylesheet accents it by —
+    // `mark`, not the `select` the button's class is still called.
+    press('.structure-select')
+    expect(cell.querySelector<HTMLElement>('.structure-mode')?.dataset['mode']).toBe('mark')
   })
 
   it('offers the reader\'s arrowheads as chords, the fog, the centre and the three drawings on the card', () => {

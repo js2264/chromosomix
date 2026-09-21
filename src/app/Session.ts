@@ -117,6 +117,7 @@ import {
   type AssemblyOrigin,
   type Contig,
 } from '../genome/assembly'
+import type { SequenceFacts } from '../structure/scene'
 import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
@@ -4667,6 +4668,37 @@ export class Session {
    */
   private circularHeld: { key: string; store: CircularStore } | null = null
 
+  /**
+   * What is known about one sequence by name, for the structure cell's
+   * telomeres (§25.5): how long it is, whether that length is the file's own
+   * rather than a lower bound, and whether the reader declared it circular.
+   *
+   * Matched through {@link NameIndex} rather than by string equality, because a
+   * g3d written `chr4` and a cooler written `IV` are the same chromosome and
+   * the reader should not have to rename a file to see its telomeres. `null`
+   * where there is no assembly, or no sequence of that name in it — which the
+   * caller reads as *do not claim anything about this sequence's ends*.
+   */
+  private sequenceFacts(name: string): SequenceFacts | null {
+    const assembly = this.assembly
+    if (assembly === null) return null
+    if (this.sequenceNames?.from !== assembly) {
+      this.sequenceNames = { from: assembly, index: NameIndex.for(assembly.contigs.map((held) => held.name)) }
+    }
+    const matched = this.sequenceNames.index.find(name)
+    if (matched === null) return null
+    const contig = assembly.contigs.find((held) => held.name === matched.name)
+    if (contig === undefined) return null
+    return {
+      length: contig.length,
+      exact: lengthsAreExact(assembly),
+      circular: this.circularStore()?.has(contig.name) ?? false,
+    }
+  }
+
+  /** The name index of the assembly in hand, rebuilt when that assembly changes. */
+  private sequenceNames: { from: Assembly; index: NameIndex } | null = null
+
   private circularStore(): CircularStore | null {
     const key = this.sessionKey()
     if (key === null) return null
@@ -5595,6 +5627,7 @@ export class Session {
         manual: () => this.annotations?.manual,
         client: () => this.annotations?.client,
         bookmarks: () => this.bookmarkStore ?? undefined,
+        sequence: (name) => this.sequenceFacts(name),
         // The lead map's own block, read in place: the row through the
         // pinned bead, on the scale the map draws with (§25.5).
         contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,

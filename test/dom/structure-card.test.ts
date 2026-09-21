@@ -12,6 +12,7 @@ import { AnnotationStore } from '@/annotations/store'
 import type { AnnotationLoader } from '@/annotations/loader'
 import type { AnnotationEntry, ComputedSource } from '@/annotations/types'
 import { defaultStyle } from '@/annotations/types'
+import { STRUCTURE_DRAG_TYPE } from '@/ui/dom'
 import { StructureCard } from '@/ui/StructureCard'
 import { all, setUpDom, type DomTeardown } from '../support/dom'
 
@@ -81,6 +82,37 @@ describe('the Structures card', () => {
     expect(rows[1].textContent).toMatch(/Model from the map/)
     expect(rows[1].querySelector('.ann-origin')?.textContent).toBe('chr1:1–30,000 at 5 kb')
     expect(card.el.querySelector('.ann-drop-label')?.textContent).toBe('Load a structure')
+  })
+
+  it('gives every row a grip that carries the model into the deck', () => {
+    const { store, card } = make()
+    seed(store, 'a.g3d', { kind: 'detached', name: 'a.g3d' })
+    seed(store, 'b.g3d', { kind: 'detached', name: 'b.g3d' })
+    const rows = all<HTMLElement>(card.el, '.ann-row')
+    expect(rows).toHaveLength(2)
+    // One per row, and each carrying its own model — the point of the gesture
+    // being *that one, there* where the row's button always means the one cell.
+    for (const row of rows) {
+      const grip = row.querySelector<HTMLElement>('.ann-grip')
+      expect(grip?.getAttribute('draggable')).toBe('true')
+      expect(grip?.dataset['grip']).toBe(row.dataset['id'])
+    }
+    // The drag carries the id under this app's own type, which is what lets an
+    // empty cell tell a model apart from a file while the drag is still up.
+    const carried = new Map<string, string>()
+    const transfer = {
+      effectAllowed: '',
+      setData: (type: string, value: string) => carried.set(type, value),
+      setDragImage: () => {},
+    }
+    const grip = rows[1].querySelector<HTMLElement>('.ann-grip')
+    const event = new Event('dragstart', { bubbles: true }) as Event & { dataTransfer: unknown }
+    Object.defineProperty(event, 'dataTransfer', { value: transfer })
+    grip?.dispatchEvent(event)
+    expect(carried.get(STRUCTURE_DRAG_TYPE)).toBe('b.g3d')
+    // …and something under `text/plain` too, because a browser cancels a drag
+    // that carries nothing at all.
+    expect(carried.get('text/plain')).toBeDefined()
   })
 
   /**

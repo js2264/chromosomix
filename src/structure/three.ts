@@ -44,6 +44,7 @@ import {
   DirectionalLight,
   Fog,
   FrontSide,
+  InstancedBufferAttribute,
   InstancedMesh,
   LineBasicMaterial,
   LineSegments,
@@ -66,12 +67,18 @@ import {
 } from 'three'
 
 import { basis, eyeOf, halfHeight, project } from './camera'
-import { hexOf, parseColour } from './colour'
+import { hexOf } from './colour'
 import { MARKED_BEAD } from './painter'
 import type { StructureView } from './painter'
 import { centroidOf } from './scene'
 import type { Structure } from './scene'
 import type { BeadColours } from './colour'
+
+/** The attribute {@link ghostable} reads each bead's alpha from. */
+const GHOST_ALPHA = 'ghostAlpha'
+
+/** Below this an alpha is *gone*: the fragment is discarded and writes no depth. */
+const GHOST_GONE = 0.004
 
 /** What the renderer clears to and writes labels in, read off the page. */
 export interface RenderPalette {
@@ -193,8 +200,7 @@ export class StructureRenderer {
 
   setPalette(palette: RenderPalette): void {
     this.palette = palette
-    // Ghosted and paled colours are mixed with the background, so they are
-    // colours of the page as well as of the model.
+    // The fog and the ink are the page's, so a change of theme is a recolour.
     this.recolour()
     this.render()
   }
@@ -532,6 +538,7 @@ export class StructureRenderer {
 
     if (drawBeads) {
       this.beads = new InstancedMesh(new SphereGeometry(1, 16, 12), surface(lit), Math.max(1, count))
+      this.beads.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(count, true))
       this.beads.count = count
       at = 0
       for (let i = 0; i < n; i++) {
@@ -581,6 +588,7 @@ export class StructureRenderer {
           surface(lit),
           pairs.length,
         )
+        this.sticks.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(pairs.length, true))
         const q = new Quaternion()
         const up = new Vector3(0, 1, 0)
         const dir = new Vector3()
@@ -628,6 +636,7 @@ export class StructureRenderer {
               owner[s] = run[t < 0.5 ? k : k + 1]
             }
             geometry.setAttribute('color', new BufferAttribute(new Float32Array(geometry.attributes.position.count * 3), 3))
+            geometry.setAttribute(GHOST_ALPHA, ghostAttribute(geometry.attributes.position.count, false))
             const mesh = new Mesh(geometry, surface(lit, true))
             mesh.userData['owner'] = owner
             mesh.userData['radial'] = RADIAL
@@ -677,53 +686,61 @@ export class StructureRenderer {
     const { structure } = view
     const n = structure.set.length
     const rgb = view.colours.rgb
-    const background = parseColour(this.palette.background)
+    // **The colour is the bead's own, ghosted or not.** Fading is alpha
+    // (`ghostable`), not a mix towards the page: a ghosted bead keeps its hue,
+    // lets the model behind it through rather than painting over it, and at an
+    // opacity of zero is gone rather than page-coloured and still in the way.
     const colourOf = (i: number, out: Color): void => {
-      // A ghosted bead is its colour mixed towards the page by the style's
-      // ghost opacity — 0.15 leaves a trace — which reads as transparency on
-      // a page with nothing behind the model.
-      const ghost = view.lit !== null && view.lit[i] === 0
-      const mix = ghost ? 1 - view.style.opacity : 0
-      out.setRGB(
-        rgb[i * 3] + (background[0] - rgb[i * 3]) * mix,
-        rgb[i * 3 + 1] + (background[1] - rgb[i * 3 + 1]) * mix,
-        rgb[i * 3 + 2] + (background[2] - rgb[i * 3 + 2]) * mix,
-      )
+      out.setRGB(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2])
     }
+    const alphaOf = (i: number): number => (view.lit !== null && view.lit[i] === 0 ? view.style.opacity : 1)
     const colour = new Color()
     if (this.beads !== null) {
+      const alpha = this.beads.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
       for (let at = 0; at < this.pickBeads.length; at++) {
         colourOf(this.pickBeads[at], colour)
         this.beads.setColorAt(at, colour)
+        alpha.setX(at, alphaOf(this.pickBeads[at]))
       }
       if (this.beads.instanceColor !== null) this.beads.instanceColor.needsUpdate = true
+      alpha.needsUpdate = true
     }
     if (this.sticks !== null) {
       const pairs = this.sticks.userData['pairs'] as Array<[number, number]>
+      const alpha = this.sticks.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
       const other = new Color()
       for (let p = 0; p < pairs.length; p++) {
         colourOf(pairs[p][0], colour)
         colourOf(pairs[p][1], other)
         colour.lerp(other, 0.5)
         this.sticks.setColorAt(p, colour)
+        // A stick spanning the edge of the window fades to the mean of its two
+        // ends, so the fibre thins into the ghost rather than stopping dead.
+        alpha.setX(p, (alphaOf(pairs[p][0]) + alphaOf(pairs[p][1])) / 2)
       }
       if (this.sticks.instanceColor !== null) this.sticks.instanceColor.needsUpdate = true
+      alpha.needsUpdate = true
     }
     for (const tube of this.tubes) {
       const owner = tube.userData['owner'] as Int32Array
       const radial = tube.userData['radial'] as number
       const attribute = tube.geometry.getAttribute('color') as BufferAttribute
       const array = attribute.array as Float32Array
+      const alpha = tube.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute
+      const alphas = alpha.array as Float32Array
       for (let s = 0; s < owner.length; s++) {
         colourOf(owner[s], colour)
+        const a = alphaOf(owner[s])
         for (let ring = 0; ring <= radial; ring++) {
           const v = s * (radial + 1) + ring
           array[v * 3] = colour.r
           array[v * 3 + 1] = colour.g
           array[v * 3 + 2] = colour.b
+          alphas[v] = a
         }
       }
       attribute.needsUpdate = true
+      alpha.needsUpdate = true
     }
     if (this.halos !== null) {
       ;(this.halos.material as MeshBasicMaterial).color.setHex(hexOf(this.palette.ink))
@@ -884,7 +901,18 @@ export class StructureRenderer {
       if (kept.length > 0) {
         const mesh = new InstancedMesh(
           new SphereGeometry(1, 16, 12),
-          new MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 }),
+          // **No `vertexColors`.** The colour of a marked bead comes from the
+          // instance, through `setColorAt`, and asking for vertex colours as
+          // well made every one of them *black*: `vertexColors` defines
+          // `USE_COLOR`, whose shader does `vColor.rgb *= color`, and `color`
+          // is an attribute a plain sphere has not got. A missing attribute
+          // reads as `(0, 0, 0)` — `defaultAttributeValues` would have said
+          // otherwise but exists only on `ShaderMaterial` — and the next line
+          // of the same chunk multiplies the instance colour into that zero.
+          // So a mark drawn in the colour the Manual annotations card gave it
+          // came out black, while the same mark in an exported PDF came out
+          // right, the 2D painter taking the colour as a colour.
+          new MeshStandardMaterial({ roughness: 0.55, metalness: 0 }),
           kept.length,
         )
         const matrix = new Matrix4()
@@ -1053,9 +1081,70 @@ export class StructureRenderer {
 
 /** The material a bead, a stick or a tube is drawn in: shaded, or flat. */
 function surface(lit: boolean, vertexColors = false): MeshStandardMaterial | MeshBasicMaterial {
-  return lit
-    ? new MeshStandardMaterial({ roughness: 0.6, metalness: 0.05, vertexColors })
-    : new MeshBasicMaterial({ vertexColors })
+  return ghostable(
+    lit
+      ? new MeshStandardMaterial({ roughness: 0.6, metalness: 0.05, vertexColors })
+      : new MeshBasicMaterial({ vertexColors }),
+  )
+}
+
+/**
+ * Let a material draw each bead at its own alpha, from a {@link GHOST_ALPHA}
+ * attribute.
+ *
+ * **Ghosting used to be a colour, and a colour is not transparency.** A ghosted
+ * bead was its own colour mixed towards the page, which on a white page reads
+ * as *pale* — the thing behind it is still hidden, because the geometry is
+ * still opaque and still writes depth, and at an opacity of zero the bead does
+ * not disappear, it becomes a white bead that punches a hole in whatever it is
+ * in front of. The 2D painter never had this problem (`painter.ts` sets
+ * `globalAlpha` and always has), so the same model exported to PDF and drawn on
+ * screen disagreed about what ghosting meant. This is the screen catching up:
+ * the alpha is real, `0` is gone and `1` is as drawn, exactly as §25.5 says.
+ *
+ * One attribute serves both kinds of geometry because GLSL does not care which
+ * it came from: on an `InstancedMesh` an `InstancedBufferAttribute` of this name
+ * is one value per instance, and on a plain `Mesh` a `BufferAttribute` of it is
+ * one per vertex, and `attribute float` reads either.
+ *
+ * A fragment under {@link GHOST_GONE} is **discarded** rather than blended.
+ * That is what makes zero mean *gone*: a discarded fragment writes no depth, so
+ * a bead the reader has faded all the way out stops hiding the model behind it
+ * instead of standing there invisibly in the way.
+ *
+ * `defaultAttributeValues` is the safety net for a geometry that has no such
+ * attribute at all — the overlay's tubes, anything added later. Without it a
+ * missing attribute reads as zero and every fragment would discard, which is a
+ * model that silently does not draw.
+ */
+function ghostable<T extends MeshStandardMaterial | MeshBasicMaterial>(material: T): T {
+  material.transparent = true
+  // `defaultAttributeValues` is a real property of every three material and is
+  // missing from its types, so it is reached through a narrow cast rather than
+  // left out — without it a geometry with no such attribute reads zero and
+  // discards every fragment, which is a model that silently does not draw.
+  const defaults = material as unknown as { defaultAttributeValues?: Record<string, number[]> }
+  defaults.defaultAttributeValues = { ...defaults.defaultAttributeValues, [GHOST_ALPHA]: [1] }
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = `attribute float ${GHOST_ALPHA};\nvarying float vGhostAlpha;\n${shader.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>\n\tvGhostAlpha = ${GHOST_ALPHA};`,
+    )
+    shader.fragmentShader = `varying float vGhostAlpha;\n${shader.fragmentShader}`.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>\n\tif ( vGhostAlpha < ${GHOST_GONE.toFixed(4)} ) discard;\n\tgl_FragColor.a *= vGhostAlpha;`,
+    )
+  }
+  // Without a key of its own three would hand this material a program compiled
+  // for an unpatched one of the same kind, and the attribute would never exist.
+  material.customProgramCacheKey = () => GHOST_ALPHA
+  return material
+}
+
+/** One value per instance or per vertex, filled opaque, for {@link ghostable}. */
+function ghostAttribute(count: number, instanced: boolean): BufferAttribute | InstancedBufferAttribute {
+  const values = new Float32Array(Math.max(1, count)).fill(1)
+  return instanced ? new InstancedBufferAttribute(values, 1) : new BufferAttribute(values, 1)
 }
 
 /** Which beads are drawn at all under this view. */
