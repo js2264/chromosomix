@@ -11017,6 +11017,16 @@ span.deck-name {
   grid-template-columns: 9rem minmax(0, 1fr);
 }
 
+/* A locus box holds a locus. The box took its intrinsic width — about twenty
+   characters of the face it is set in — and the value it is seeded with is
+   `IV:1,000,001-1,400,000`, which is twenty-two: the form opened with the last
+   four characters of its own default cut off, in the box a reader is most likely
+   to edit. 14rem is that locus with room to type past it, and the field's own
+   24rem cap still governs the label beside it. */
+.param-row .param-region {
+  width: 14rem;
+}
+
 /* A number box keeps its own width so that its unit stays on its line.
    `.controls-card .input-num` is 100% of the cell, which is right in a 15rem
    card and wrong here: the box filled the whole control column and the word

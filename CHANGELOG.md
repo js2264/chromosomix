@@ -574,6 +574,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rectangle form's pair showed `rows I:120,000-18` and `columns I:340,00`, which is worse than a cut
   word because `I:120,000-18` is itself a valid thing to type. Each axis box is now as wide as the
   example it offers, and takes a line of its own rather than being halved.
+- **An analysis form's locus box is wide enough for a locus.** It took its intrinsic width — about
+  twenty characters — and the value it is seeded with is twenty-two, so the form opened with the last
+  four characters of its own default cut off, in the box a reader is most likely to edit.
 - **An analysis form's locus box is grouped, like every other box that shows a coordinate.** It
   opened with `IV:1000001-1400000` directly under a line reading `IV:1,000,001-1,400,000 · 1 kb
   bins`: two spellings of one window, in the one place a reader is about to edit the number.
