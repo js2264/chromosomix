@@ -542,6 +542,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **The shortcuts dialog reads as rows rather than as paragraphs.** Fourteen of the View group's
+  twenty-one titles came out on two lines beside a one-line key, and the twenty state chips sat at
+  eleven different left edges — a ragged edge down the one part of that list a reader scans
+  vertically, looking for what is currently on — while a third of the dialog's width stood empty. A
+  command row is three columns now, key, thing and state, with the chips in a column of their own.
+
 - **A number box no longer clips the number it holds.** `opacity` was drawn `10C` at full: two fixed
   halves of a 200-pixel column left each of that pair a hundred pixels for a label, two chevrons, a
   box and a unit, and the box is what gave way. The pair sits side by side where there is room for

@@ -4446,8 +4446,15 @@ canvas.is-frozen {
    three columns of short rows, and at 46rem it was two — which made the View
    group's twenty-one rows the height of the dialog on their own and pushed the
    gesture tables under it out of sight. */
+/* Wider than the other dialogs, because it is the only one that is a *table*.
+
+   Three columns of `[key] [what it does] [state]`, and at 56rem each got 16rem
+   — enough for the key and about eleven characters of the sentence, so *Read
+   this genome as tracks* came out on two lines and *Track text* on two. At 68rem
+   a column holds the longest title in the registry on one line, and the whole
+   reference reads as rows rather than as paragraphs. */
 .modal-shortcuts {
-  width: min(56rem, 100%);
+  width: min(68rem, 100%);
 }
 
 /* **Every dialog's body is inset, and no dialog has to remember it.**
@@ -4922,8 +4929,17 @@ canvas.is-frozen {
   column-gap: 1.5rem;
 }
 
+/* A group may break across a column *boundary*, and its heading may not be
+   left at the foot of one. Held whole, View's twenty-one rows had to fit in a
+   single 16rem column — so the third column stood empty while fourteen of those
+   twenty-one titles wrapped onto a second line beside a one-line key. The
+   heading stays with what it heads, which is the part that actually mattered. */
 .shortcut-group {
-  break-inside: avoid;
+  break-inside: auto;
+}
+
+.shortcut-group h3 {
+  break-after: avoid;
 }
 
 /* The two gesture tables are a pair and are read as one: what a drag, a wheel
@@ -4948,11 +4964,31 @@ canvas.is-frozen {
   color: var(--text-dim);
 }
 
+/* A gesture row: a phrase, then what it does.
+
+   Flex, and the phrase decides its own width — `drag on the chromosome bar` and
+   `Shift + Alt + drag` are what the key column holds here, and a fixed track
+   narrow enough for `Ctrl+P` would have the sentence drawn over the top of them.
+   The command rows below are the other shape. */
 .shortcut-row {
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
   padding: 0.15rem 0;
+}
+
+/* A command row: three columns — the key, the thing, and the state.
+
+   A flex row let each chip sit wherever its own title ended, so a column of
+   twenty switches had `on` and `off` at eleven different left edges — a ragged
+   edge down the one part of the list a reader scans vertically, looking for what
+   is currently on. In a column the chips line up and the eye reads them as a
+   set. The key column can be fixed here because the widest binding in the
+   registry is `Ctrl+P`, and narrowing it to that is what gives the titles the
+   room to stay on one line. */
+.shortcut-grid:not(.shortcut-gestures) .shortcut-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
 }
 
 /* The same dimming, and the same number, as `.palette-row.disabled`: the two
@@ -4964,8 +5000,12 @@ canvas.is-frozen {
 }
 
 .shortcut-row > .kbd {
-  flex: 0 0 6.5rem;
   text-align: center;
+}
+
+/* No shrink, and no growth past the phrase: a gesture's own words. */
+.shortcut-gestures .shortcut-row > .kbd {
+  flex: 0 0 auto;
 }
 
 .shortcut-text {
