@@ -8,8 +8,8 @@
  * The guard tested `Number.isFinite(Number(input.value))`, and `Number('')` is
  * 0, which is finite: clearing the track-height box therefore committed
  * `clamp(0)`, and every lane in the stack collapsed to the twelve-pixel floor.
- * Clearing the transparency box (`ui/AnnotationCard.ts`, same control, floor 0)
- * restyled every annotation to opacity 1 the same way.
+ * Clearing the opacity box (`ui/AnnotationCard.ts`, the same control) restyled
+ * every track to its floor the same way.
  *
  * A `type="number"` input makes it worse rather than better: it reports an empty
  * string for a cleared box *and* for everything it could not parse — `abc`,

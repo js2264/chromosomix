@@ -861,6 +861,11 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 - **a chromosome list differing in count, order, name or length** — every coordinate in the picture
   is an index into one such list.
 
+**The card asks for it only once there is a first map.** The zone is labelled *load a map into the
+lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
+absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
+(§8.5). A session with no map has one drop zone on that card, asking for a contact map.
+
 Either file can be closed. Closing the second returns to one map; closing the first promotes the
 second, so the map that remains is an ordinary one. `uri2` is part of the view state, so a comparison
 is a link — for two remote files, which is the same limit `uri` has always had (§11).
@@ -1010,7 +1015,15 @@ opens a text box is worse than either alone.
 The **General column lists the sequences** under the Genome card: every contig, its length, a bar of
 its length against the longest, and a click that shows the whole of it. A filter appears above a
 dozen of them and the list is capped, because a `chrom.sizes` is as likely to be forty thousand
-scaffolds as sixteen chromosomes.
+scaffolds as sixteen chromosomes. Under the list, what the ticks have done — `4 of 16 ticked` — and a
+button that undoes it, *show the whole genome*. The count is said of the ticks and not of the list,
+because a reader looking at nine rows of sixteen reads *showing 4 of 16* as a claim about the rows.
+
+Under the Sequences card, the **Genome minimap**: the same sequences drawn end to end with the
+current view marked on them, and one line under it saying what a click and a drag do. It says the
+gesture and nothing else — the card above it already carries the sequence count and the assembly's
+length — and it writes the window in the display form (§26.1), so the strip and the locus bar name
+the same place with the same digits.
 
 ### 5.9 One genome, many nomenclatures
 
@@ -1470,11 +1483,18 @@ pixels. Nothing may be renumbered or compacted to make it disappear — `genome_
 and display time only. Silently reindexing to hide it would corrupt every downstream lookup.
 
 **One retained number — confirmed.** The fraction of contigs and bins that are unassigned is shown
-once, as a read-only statistic in the file info panel. It is a direct diagnostic of binning quality, a
-metagenomics reader will look for it, and a reviewer will expect it. It is a number, not a view: it
-opens nothing, selects nothing, and is not a row in any table. Label it as a QC statistic
-("unassigned: 1,204 contigs / 8.3% of bins"), not as a genome. This is the sole exception to the rule
-above and does not weaken it — no code path reaches `__unbinned__` through this statistic.
+once, as a read-only statistic in the **Binning QC card** of the General column. It is a direct
+diagnostic of binning quality, a metagenomics reader will look for it, and a reviewer will expect it.
+It is a number, not a view: it opens nothing, selects nothing, and is not a row in any table. Label it
+as a QC statistic — "unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)", each quantity whole, since
+a count of contigs beside a percentage of bins leaves a reader to assemble either one from two
+sentences — and not as a genome, with one clause under it saying it is never drawn. This is the sole
+exception to the rule above and does not weaken it — no code path reaches `__unbinned__` through this
+statistic.
+
+It is also the only place it is **counted**. The File card's `genomes` row leaves it out, because the
+genomes table a hand's width below that card does: two numbers for one fact on one screen is what
+sends a reader hunting for a forty-ninth organism in a list of forty-eight.
 
 ---
 
@@ -1730,13 +1750,14 @@ empty — on a file that cannot carry them. A fourth, **Bookmarks** (§8.10), si
 in this list because nothing in it is an annotation: it holds places rather than things drawn at
 them.
 
-**Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
-on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
-comparison), **tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number,
-resolved as lines or areas), and **bed-like files** (any
-number, resolved as genomic segments). Each is placed on any of the map's four edges — above, below,
-or down either side — or on several at once; each carries its own limits, style, colour and value
-scaling; and any set of tracks may share one autoscale group.
+**Linear annotations** — headed **Tracks** on screen, which is also what its rows, its tooltips and
+every other surface call them; *annotation* survives as the column's name and in the two card names
+below. Three drop areas, and everything they hold is drawn *beside* the map, never on it: **one GTF**
+(at most one, because a second gene model over the first is a smear rather than a comparison),
+**tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number, resolved as lines
+or areas), and **bed-like files** (any number, resolved as genomic segments). Each is placed on any
+of the map's four edges — above, below, or down either side — or on several at once; each carries its
+own limits, style, colour and value scaling; and any set of tracks may share one autoscale group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -1757,7 +1778,10 @@ because the column descends from what came out of a file to what a reader put th
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
 entered as coordinates or picked by clicking the map. This is the card that makes a figure, and
-nothing in it comes from a file.
+nothing in it comes from a file. They leave through the app's one export row (§26.6) with no
+resolution and no clipboard, since a BED is not a picture, and its two options are named for the
+marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
+*loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
 The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
 third is two intervals rather than one interval and a shape, because the boxes people draw are not
@@ -1803,7 +1827,7 @@ browser does — read out of the file rather than computed here.
 
 **Contig-naming contract.** bigWig is keyed on chromosome names, which here are **contig** names from
 `/contigs`, not genome names. On load, intersect the bigWig's chrom list with `chromnames` and report
-the overlap explicitly ("16 of 16 contigs matched"). Silent zero-overlap is the most likely support
+the overlap explicitly ("16 of 16 sequences matched"). Silent zero-overlap is the most likely support
 question and must be impossible.
 
 **On a file with a genome layer the report is about genomes** (§8.5). The same arithmetic that is
@@ -2180,7 +2204,9 @@ and one drawn only inside the track would say the band stops where the track doe
 **Every one of these gestures copies what it framed.** Shift-drag writes `chrIV:500001-510000` — no
 thousands separators, a plain hyphen, 1-based inclusive, which is the difference between a string
 that pastes into samtools, bedtools, IGV and this app's own locus boxes and one that only looks
-right. The app's *display* format uses an en dash and grouped digits, and that one is for reading.
+right. The *display* format is the same string with the digits grouped — `chrIV:500,001-510,000`,
+still a plain hyphen (§26.1) — and the en dash is for a range of **values** (`0 – 111`), so a reader
+can tell the two apart at a glance rather than meeting one window written three ways.
 Option-drag, which selects a box, writes both axes in the order this app always names them —
 `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what that stretch would
 produce on its own, separated by a character no coordinate grammar uses. In the browser a drag
@@ -7284,11 +7310,15 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
 Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, **show in the deck** — which puts the model in the structure cell, opening the cell
-where the deck has none, and reads *shown in the deck* on the row the cell is drawing — and
-**bed3d**, the model out (§25.7). The card's own load zone names the three formats. A computed
-row that came back from a reload is detached and offers **recompute**, which opens its recipe in
-the drawer, as the Synthetic card does (§18.5).
+computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+head is what shows and hides: it puts the model in the structure cell, opening the cell where the deck
+has none, and takes the cell away again, with the row's accent bar saying which row the cell is
+drawing. There is no second control for that and no button labelled with what is already true
+(§26.3, §26.7) — a *shown in the deck* button beside the eye was two controls for one act, and a
+reader who pressed the lit one expecting it to un-show got nothing. The card's own load zone names
+the three formats and, like every other zone that asks for a file, says it takes a drop or a click.
+A computed row that came back from a reload is detached and offers **recompute**, which opens its
+recipe in the drawer, as the Synthetic card does (§18.5).
 
 ### 25.3 The deck of cells
 

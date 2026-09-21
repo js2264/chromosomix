@@ -8,7 +8,8 @@
  * `__unbinned__` is visible at all, it opens nothing and selects nothing, and the
  * panel receives four integers rather than an index — so no code path can reach
  * the reserved genome through it. A regression here does not throw; it grows a
- * link.
+ * link. It is also the only place it is *counted*: the File card's `genomes` row
+ * leaves it out, because the genomes table beside that card does.
  *
  * **A cooler is not a badly-binned metacool.** It was never binned, so there is
  * no binning to report on: a row reading `genomes 0` invites the question of
@@ -166,13 +167,19 @@ describe('the binning QC statistic', () => {
         },
       }),
     )
+    // Each quantity whole — a count and its own share — where the line used to
+    // pair a count of contigs with a percentage of *bins* and leave the other
+    // half of each to a paragraph under it (§7.4).
     expect(view.el.querySelector('.qc-stat')?.textContent).toBe(
-      'unassigned: 1,204 contigs / 8.3% of bins',
+      'unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)',
     )
-    // §7.4: it opens nothing and selects nothing.
-    expect(all(view.el, '.qc button')).toHaveLength(0)
-    expect(all(view.el, '.qc a')).toHaveLength(0)
-    expect(all(view.el, '.qc input')).toHaveLength(0)
+    // §7.4: it opens nothing and selects nothing. The card's own fold chevron is
+    // not a door — it is the one control every heading in every column carries,
+    // and it reaches nothing but this card's own body.
+    const doors = all(view.el, '.qc button, .qc a, .qc input').filter(
+      (node) => node.closest('.card-head') === null,
+    )
+    expect(doors).toHaveLength(0)
   })
 
   it('says so when there is no __unbinned__ genome at all', () => {
@@ -203,27 +210,50 @@ describe('the binning QC statistic', () => {
         },
       }),
     )
-    expect(view.el.querySelector('.qc-stat')?.textContent).toBe('unassigned: 0 contigs / 0.0% of bins')
+    expect(view.el.querySelector('.qc-stat')?.textContent).toBe(
+      'unassigned: 0 contigs (0.0%) · 0 bins (0.0%)',
+    )
   })
 })
 
+/**
+ * The stored metadata, and the shape it is drawn in.
+ *
+ * It had two: an uppercase iconed heading with a hint under it when the file
+ * stored nothing, a plain `▶ Metadata` disclosure when it stored something — so
+ * the absence was announced more loudly than the presence, and a reader moving
+ * between a cooler and a metacool watched one strip of this column change its
+ * typography rather than fill and empty. It is a card in both states now, like
+ * every other block in the column (§26.6), and folded when there is JSON in it.
+ */
 describe('the stored metadata', () => {
-  it('is folded away, and is the file’s own JSON', () => {
+  it('is a card, folded away, holding the file’s own JSON', () => {
     const view = panel(openResult({ metadata: { study: 'Hum53', replicate: 1 } }))
-    const details = view.el.querySelector('details.meta')
-    expect(details?.querySelector('summary')?.textContent).toBe('Metadata')
-    expect(JSON.parse(details?.querySelector('pre')?.textContent ?? '{}')).toEqual({
+    const card = cardNamed(view, 'Metadata')
+    expect(card?.classList.contains('is-folded')).toBe(true)
+    expect(card?.querySelector('.card-fold')?.getAttribute('aria-expanded')).toBe('false')
+    expect(JSON.parse(card?.querySelector('pre')?.textContent ?? '{}')).toEqual({
       study: 'Hum53',
       replicate: 1,
     })
   })
 
-  it('says there is none rather than showing an empty box', () => {
+  it('says there is none rather than showing an empty box, in the same card', () => {
     const view = panel(openResult({ metadata: {} }))
+    const card = cardNamed(view, 'Metadata')
+    expect(card?.classList.contains('is-folded')).toBe(false)
     expect(all(view.el, 'details.meta')).toHaveLength(0)
-    expect(view.el.querySelector('.meta-empty')?.textContent).toContain('No metadata was stored')
+    expect(card?.textContent).toContain('No metadata was stored')
   })
 })
+
+/** The card whose heading reads `name`, whatever else the column is holding. */
+function cardNamed(view: InfoPanel, name: string): HTMLElement | null {
+  for (const head of all(view.el, '.card > .card-head')) {
+    if (head.textContent?.trim().startsWith(name) === true) return head.parentElement
+  }
+  return null
+}
 
 describe('the two hosts the shell fills', () => {
   it('takes the record card down when the view has no record', () => {

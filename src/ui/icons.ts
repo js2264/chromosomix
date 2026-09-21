@@ -95,8 +95,8 @@ export function icon(name: IconName, options: { size?: number; class?: string } 
  * opinion about where the control sits — the gesture is one gesture because it
  * is one implementation.
  *
- * A heading that is not a card's — the empty-metadata box uses one — keeps the
- * type and loses the control; see {@link foldCard}.
+ * A heading used outside a card keeps the type and loses the control; see
+ * {@link foldCard}.
  *
  * @param extra Classes the heading needs *as well* — `controls-title` for the
  * cards in the Aesthetics column, which are folded into the panel header in the
@@ -156,9 +156,9 @@ function foldChevron(text: string): HTMLButtonElement {
  * everything the card holds *except* the heading — a rule the stylesheet can
  * state once for every card in the application rather than each card hiding its
  * own parts. Which is also why this walks up exactly one level and checks what
- * it found: a heading used somewhere that is not a card — the empty-metadata
- * box is the one — has nothing to fold, and quietly doing nothing is better than
- * hiding half of a box that was never built to lose it.
+ * it found: a heading used somewhere that is not a card has nothing to fold, and
+ * quietly doing nothing is better than hiding half of a box that was never built
+ * to lose it.
  *
  * The choice is **not remembered**, following the Genome minimap this was
  * generalised from: the house mechanisms for a per-reader preference are modules

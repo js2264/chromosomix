@@ -21,7 +21,7 @@
 
 import { BaseCache } from '../annotations/bases'
 import { featureLabel } from '../annotations/featureset'
-import { findFeatures, hitLabel, paddedSpan } from '../annotations/search'
+import { findFeatures, hitLabel, hitLocus, paddedSpan } from '../annotations/search'
 import {
   OVERLAY_DIM,
   extentFor,
@@ -205,7 +205,7 @@ import {
   SELECTION_FONT,
   SELECTION_PAD,
 } from '../render/heatmap'
-import { transparencyField } from './AnnotationCard'
+import { everyTrackOpacityField } from './AnnotationCard'
 import { openLaneMenu, readCanvasPalette } from './MatrixPanel'
 import {
   PLOT_OPTION_ICONS,
@@ -810,7 +810,7 @@ export class BrowserView {
     // that armed it is *not* going away — it lives in the shell — and it learns
     // the mode is over from this call. The map's panel does the same, for the
     // same reason: without it, navigating with the mode on leaves a button
-    // reading "Done" that nothing will ever answer.
+    // reading "done" that nothing will ever answer.
     this.cancelPicking()
     this.featureDialog?.close()
     this.featureDialog = null
@@ -2780,7 +2780,7 @@ export class BrowserView {
         // beside the export: both are properties of how readable the picture is,
         // and `track text` above them is the toggle that decides whether there
         // is any writing on it at all.
-        fieldPair(textScaleField(), transparencyField(this.props.store)),
+        fieldPair(textScaleField(), everyTrackOpacityField(this.props.store)),
       ),
     )
   }
@@ -3884,7 +3884,10 @@ export class BrowserView {
     // not share a line is the one that writes the string.
     for (const hit of findFeatures(this.props.store, raw)) {
       hits.push({
-        label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+        // The gene's own span, not the padded window this row opens: the two
+        // differ by a quarter of the gene's length, and the number in a hit is
+        // the one a reader copies (§26.1).
+        label: `${hitLabel(hit)} · ${hitLocus(hit)} · ${hit.source}`,
         locus: `${hit.contig}:${Math.max(1, hit.start + 1)}-${hit.end}`,
       })
     }

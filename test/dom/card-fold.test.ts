@@ -136,11 +136,11 @@ describe('folding a card', () => {
   })
 
   it('leaves a heading that is not a card’s alone', () => {
-    // `.meta-empty` — one heading over one sentence saying the file stored no
-    // metadata. There is nothing under it to put away, and hiding the sentence
-    // would leave a box that says only "Metadata" and means nothing.
+    // The guard, not a place: every block in every column is a card now (§26.6),
+    // and this is what keeps a heading used outside one from offering a control
+    // that would hide half of a box never built to lose it.
     const head = cardTitle('Metadata', 'info')
-    const node = el('div', { class: 'meta-empty' }, head, el('p', { text: 'No metadata.' }))
+    const node = el('div', { class: 'not-a-card' }, head, el('p', { text: 'No metadata.' }))
     document.body.appendChild(node)
     head.click()
     expect(node.classList.contains('is-folded')).toBe(false)

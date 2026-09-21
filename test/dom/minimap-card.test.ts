@@ -102,11 +102,15 @@ describe('the strip', () => {
     view.card.destroy()
   })
 
-  it('says what the assembly is and what the two gestures do', () => {
+  // The note used to lead with the sequence count and the assembly's total
+  // length. Both are in the card directly above this one, two rows apart from
+  // here, so the note said them a second time and pushed the gestures — the one
+  // thing on it a reader can act on — onto a third line. It is the gestures now.
+  it('says what the two gestures do, and leaves the counts to the card above', () => {
     const view = open()
     const note = view.card.el.querySelector('.minimap-note')?.textContent ?? ''
-    expect(note).toContain('4 sequences')
-    expect(note).toContain('4.0 kb')
+    expect(note).not.toContain('4 sequences')
+    expect(note).not.toContain('4.0 kb')
     expect(note).toMatch(/click/i)
     expect(note).toMatch(/drag/i)
     view.card.destroy()
@@ -201,9 +205,14 @@ describe('a 1D window', () => {
     last.card.destroy()
   })
 
-  it('reads out where it is, in the coordinates it will emit', () => {
+  // **In the display form, not the one it emits.** The readout wrote the 0-based
+  // half-open range the card thinks in, so the same window appeared twice on one
+  // screen — here and in the locus box — with starts a base apart. §26.1 gives
+  // every character a reader reads to `formatLocus`; what the card *emits* is
+  // still the machine form, which `opens a region on release` holds.
+  it('reads out where it is, as the locus box writes it', () => {
     const view = open({ kind: 'window', range: { contig: 'II', start: 200, end: 600 } })
-    expect(whereOf(view.card)).toBe('II:200–600')
+    expect(whereOf(view.card)).toBe('II:201-600')
     view.card.destroy()
   })
 })
@@ -250,7 +259,7 @@ describe('a 2D block', () => {
       rows: { contig: 'II', start: 0, end: 1000 },
       columns: { contig: 'IV', start: 0, end: 1000 },
     })
-    expect(whereOf(view.card)).toBe('rows II:0–1,000 · columns IV:0–1,000')
+    expect(whereOf(view.card)).toBe('rows II:1-1,000 · columns IV:1-1,000')
     view.card.destroy()
   })
 
@@ -351,7 +360,7 @@ describe('moving from the strip', () => {
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 160 }))
     expect(view.card.selection).toEqual({ contig: 'II', start: 200, end: 600 })
     // The readout follows the gesture rather than the stale location behind it.
-    expect(whereOf(view.card)).toContain('II:200–600')
+    expect(whereOf(view.card)).toContain('II:201-600')
     window.dispatchEvent(new MouseEvent('mouseup', { clientX: 160 }))
     expect(view.card.selection).toBeNull()
     view.card.destroy()
