@@ -9665,9 +9665,13 @@ span.deck-name {
   grid-column: 1 / -1;
 }
 
+/* Wraps. A key's caption is usually two words — `sequence`, `displacement` — and
+   `nowrap` kept those on one line at no cost; but the one case that is a
+   sentence, *displacement — choose a model to compare with*, ran off the end of
+   a key 60% of a narrow cell wide and was cut mid-word. A caption that has to be
+   long is worth two lines. */
 .structure-key-title {
   color: var(--text-dim);
-  white-space: nowrap;
 }
 
 .structure-key-ramp {

@@ -564,6 +564,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **The 3D card's `colour by` no longer reads `displacement from the cor…`.** The option did not fit
+  the column even as a full-width block; the `compare with` row directly above it names the model,
+  so the option says `displacement` and the key's caption with it. A caption that does have to be
+  long — *displacement — choose a model to compare with* — wraps now instead of being cut mid-word.
+
 - **A figure's axes no longer print runs of zeros.** A P(s) ordinate climbed `0.001`, `0.0001`,
   `0.00001`, `0.000001`, `0.0000001` and the log-log slope beside it reached eight zeros — at which
   point a reader cannot tell one tick from the next without counting, which is the whole of what an

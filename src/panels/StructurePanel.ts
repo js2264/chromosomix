@@ -1882,7 +1882,7 @@ export class StructurePanel implements DeckCell {
       this.overlayOf(structure, this.style())
       const fit = this.compared?.fit ?? null
       if (fit === null) return { label: 'displacement — choose a model to compare with' }
-      return { label: 'displacement from the compared model', values: displacements(structure, fit), colormap: 'viridis' }
+      return { label: 'displacement', values: displacements(structure, fit), colormap: 'viridis' }
     }
     if (by === STRUCTURE_COLOUR_DISTANCE) return distanceSource(structure, this.pinned)
     if (by === STRUCTURE_COLOUR_CONTACTS) {
@@ -2361,7 +2361,12 @@ export class StructurePanel implements DeckCell {
     if (this.props.manual?.() !== undefined) colourings.push({ value: STRUCTURE_COLOUR_MARKS, text: 'your marks' })
     colourings.push({ value: STRUCTURE_COLOUR_DISTANCE, text: 'distance to the pinned bead' })
     if (this.props.contacts !== undefined) colourings.push({ value: STRUCTURE_COLOUR_CONTACTS, text: 'contacts with the pinned bead (the map’s row)' })
-    if (style.compare !== '') colourings.push({ value: STRUCTURE_COLOUR_DISPLACEMENT, text: 'displacement from the compared model' })
+    // `displacement`, not `displacement from the compared model`: the row above
+    // this one is `compare with` and it names the model, and the longer text did
+    // not fit the column even as a full-width block — it read `displacement from
+    // the cor…`, which is a value clipped mid-word in the control that is
+    // reporting it.
+    if (style.compare !== '') colourings.push({ value: STRUCTURE_COLOUR_DISPLACEMENT, text: 'displacement' })
     if (!colourings.some((option) => option.value === style.colourBy)) {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }

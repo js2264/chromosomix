@@ -58,6 +58,32 @@ const AUDIT = () => {
     }
   }
 
+  // 1b. A `<select>` whose chosen option does not fit.
+  //
+  //     A select clips its option text and reports `scrollWidth === clientWidth`
+  //     while doing it, so the check above cannot see it — and this is the one
+  //     control where the clipped string is the *answer*: `colour by
+  //     [displacement from the cor…]` in a 3D card, `PDF (imag` in an export
+  //     row. Measured against the font the select is actually drawn in, less the
+  //     arrow's own room.
+  const ruler = document.createElement('canvas').getContext('2d')
+  for (const n of document.querySelectorAll('select')) {
+    if (!vis(n)) continue
+    const chosen = n.options[n.selectedIndex]
+    if (chosen === undefined) continue
+    const cs = getComputedStyle(n)
+    ruler.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+    const wanted = ruler.measureText(chosen.text).width
+    const padding = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+    // The arrow is drawn by the platform inside the box; 14 px covers every
+    // engine this app is used on, and the check is a pixel short rather than a
+    // pixel eager so a glyph's own bearing does not raise a false alarm.
+    const room = n.clientWidth - padding - 14
+    if (wanted > room + 1) {
+      out.clipped.push({ el: `${name(n)} (option)`, text: chosen.text, need: Math.round(wanted), got: Math.round(room) })
+    }
+  }
+
   // 2. Siblings drawn on top of one another. Only text against text, and only
   //    where they are laid out in a row: a badge over a sentence is the defect.
   const rows = document.querySelectorAll('.shortcut-row, .palette-row, .field, .ann-row, .seq-row, .kv, .status-bar')
