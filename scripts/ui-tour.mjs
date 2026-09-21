@@ -254,9 +254,13 @@ await scene('map', async ({ page, shot, fold, opened }) => {
   if (add) { await add.click(); await sleep(700); await shot('19-resolution-dialog'); await page.keyboard.press('Escape'); await sleep(300) }
   // Zoom buttons and the locus box.
   await shot('20-crumb-bar', { clip: { x: 280, y: 90, width: 1360, height: 120 } })
-  // The turn.
+  // **The other presentation, and it is the square one.** `ViewState.turn` is
+  // *absent means turned* (`src/types.ts`), so every map above this line is
+  // already at 45° with distance up the side — and one press of this button is
+  // what puts the square back. The shot was called `21-turned`, which named the
+  // state it was leaving.
   const turn = await page.$('button[title*="45°"]')
-  if (turn) { await turn.click(); await sleep(2500); await shot('21-turned'); await turn.click(); await sleep(1500) }
+  if (turn) { await turn.click(); await sleep(2500); await shot('21-square'); await turn.click(); await sleep(1500) }
   // Dark theme with the map open.
   //
   // Asserted rather than assumed: a shot named `dark` that comes out light is a

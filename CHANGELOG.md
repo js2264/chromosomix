@@ -542,6 +542,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A record card no longer says every number twice with nothing to say why.** On a metagenome the
+  Genome card read `length 7,310,635 bp`, then fifteen rows later `Length 7,310,635` — and
+  `n_contigs 2,153` then `Contigs 2,153` — because `/genomes` guarantees three columns and the
+  file's creator had joined a MAG-QC table in beside them. Both sets stay, for the reason §5.1 keeps
+  them in the table, with one quiet line between them headed *joined in with the file*.
+
 - **A store that has not been published yet says so in the singular and the plural.** The message
   interpolated the store's name in front of *is not generated yet*, and half the built-in names are
   noun phrases of the wrong number — so IGV's read *IGV genome sessions is not generated yet*.

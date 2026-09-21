@@ -384,9 +384,11 @@ describe('the record card', () => {
 
   it('leads with the guaranteed columns and keeps the file’s own after them', () => {
     const fields = recordFields(PAYLOAD, 0)
+    // With the divider between the two sets — see `RecordField.divider`.
     expect(fields.map((row) => row.key)).toEqual([
       'length',
       'n_bins',
+      'joined in with the file',
       'completeness',
       'taxonomy',
     ])

@@ -32,6 +32,19 @@ export interface RecordField {
   value: string
   /** Hover text for the key, where the column needs a caveat. */
   title?: string
+  /**
+   * A quiet line across the grid instead of a row, naming what follows it.
+   *
+   * One use: the break between the columns the **format** guarantees and the
+   * ones the file's **creator** joined in. On a metagenome those two sets
+   * overlap — `length 7,310,635 bp` and then `Length 7,310,635`, `n_contigs
+   * 2,153` and then `Contigs 2,153` — and a card that listed them as eighteen
+   * equal rows said every number twice with nothing to say why. Dropping the
+   * creator's copy is not the answer (§5.1: a column somebody joined in is a
+   * column they meant, and the first time the two disagree the difference is
+   * the finding); saying which is which is.
+   */
+  divider?: boolean
 }
 
 export interface RecordSpec {
@@ -96,11 +109,19 @@ export function recordFields(
     ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
   ]
 
+  const core = new Set(CORE_ORDER)
   const fields: RecordField[] = [...(options.lead ?? [])]
+  let broke = false
   for (const key of ordered) {
     if (skip.has(key)) continue
     const column = payload.data[key]
     if (column === undefined) continue
+    // The one break: everything after this is a column somebody added to the
+    // file rather than one the format promises. See {@link RecordField.divider}.
+    if (!broke && !core.has(key) && fields.length > (options.lead ?? []).length) {
+      fields.push({ key: 'joined in with the file', value: '', divider: true })
+      broke = true
+    }
     if (payloadColumnIsText(column)) {
       const text = column[row] ?? ''
       fields.push({ key, value: text === '' ? '—' : text })
@@ -133,10 +154,14 @@ export function recordCard(spec: RecordSpec): HTMLElement {
     el(
       'div',
       { class: 'kv kv-record' },
-      ...spec.fields.flatMap((field) => [
-        el('div', { class: 'k', text: field.key, title: field.title ?? field.key }),
-        el('div', { class: 'v', text: field.value, title: field.value }),
-      ]),
+      ...spec.fields.flatMap((field) =>
+        field.divider === true
+          ? [el('div', { class: 'kv-divider', text: field.key })]
+          : [
+              el('div', { class: 'k', text: field.key, title: field.title ?? field.key }),
+              el('div', { class: 'v', text: field.value, title: field.value }),
+            ],
+      ),
     ),
   )
 }

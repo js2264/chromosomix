@@ -59,7 +59,35 @@ describe('findRow', () => {
 describe('recordFields', () => {
   it('leads with the guaranteed columns and keeps the rest in file order', () => {
     const keys = recordFields(GENOMES, 0).map((field) => field.key)
-    expect(keys).toEqual(['length', 'n_contigs', 'n_bins', 'completeness', 'taxonomy'])
+    // The divider between the two sets is a row of the list, because that is
+    // what the grid renders — see `RecordField.divider` on why the card has to
+    // say which columns the *format* guarantees and which the file's creator
+    // joined in: on a metagenome the two overlap, and eighteen equal rows said
+    // `length 7,310,635 bp` and then `Length 7,310,635` with nothing to say why.
+    expect(keys).toEqual([
+      'length',
+      'n_contigs',
+      'n_bins',
+      'joined in with the file',
+      'completeness',
+      'taxonomy',
+    ])
+  })
+
+  it('marks the divider as one, so nothing reads it as a column with no value', () => {
+    const fields = recordFields(GENOMES, 0)
+    const divider = fields.find((f) => f.divider === true)
+    expect(divider?.key).toBe('joined in with the file')
+    expect(divider?.value).toBe('')
+    expect(fields.filter((f) => f.divider === true)).toHaveLength(1)
+  })
+
+  it('draws no divider where the file adds nothing of its own', () => {
+    const core = {
+      ...GENOMES,
+      columns: GENOMES.columns.filter((c) => !['completeness', 'taxonomy'].includes(c)),
+    }
+    expect(recordFields(core, 0).some((f) => f.divider === true)).toBe(false)
   })
 
   it('formats a length as base pairs and a float as a float', () => {

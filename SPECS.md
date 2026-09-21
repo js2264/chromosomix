@@ -8053,6 +8053,14 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
 - **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local, six
   characters.
 - A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.
+- **A record card says which columns are the format's and which the file's.** On a metagenome the two
+  sets overlap: `/genomes` guarantees `length`, `n_contigs` and `n_bins`, and a creator who joined a
+  MAG-QC table in brings `Length`, `Contigs` and sixteen more — so the card listed every number
+  twice with nothing to say why. Dropping the creator's copy would be wrong for the reason §5.1
+  gives for keeping it in the table: a column somebody added is a column they meant, and the first
+  time the two disagree the difference is the finding. So the card draws one quiet line between
+  them, headed *joined in with the file*.
+
 - **A table cell is not a summary.** The Chromosomes table's `length` column prints `1,531,933` while
   the Sequences card beside it prints `1.53 Mb`, and both are right: a table holds the values a
   reader reads off exactly and copies out, so it groups the digits and keeps them all, while a

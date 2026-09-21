@@ -5663,6 +5663,21 @@ canvas.is-frozen {
   display: block;
 }
 
+/* The one line across a record card's grid: where the format's own columns end
+   and the ones the file's creator joined in begin (`ui/RecordCard.ts`). Spans
+   both tracks, set like a card's own sub-heads, and carries a rule so it reads
+   as a division rather than as a row whose value went missing. */
+.kv-divider {
+  grid-column: 1 / -1;
+  margin-top: 0.4rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--step--2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
 .btn-close {
   flex: 0 0 auto;
   display: inline-flex;
