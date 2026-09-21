@@ -2424,8 +2424,8 @@ export class PanelDeck {
         title: adding
           ? 'Put the row away without opening anything.'
           : cellsOnly
-            ? 'Open one more cell beside these: the session’s 3D structure, or tracks alone.'
-            : 'Open one more cell beside these: a map from a file or a URL, the session’s 3D ' +
+            ? 'Open one more cell beside these: this tab’s 3D structure, or tracks alone.'
+            : 'Open one more cell beside these: a map from a file or a URL, this tab’s 3D ' +
               'structure, or tracks alone.',
       },
     )

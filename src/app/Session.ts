@@ -1347,7 +1347,7 @@ export class Session {
           group: 'File',
           title: 'Copy this plot to the clipboard',
           hint:
-            'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
+            'The figure as a PNG, at the Export card\'s resolution, ready to paste — though with text ' +
             'selected the same key still copies the text.',
           keys: KEYS.copyPlot,
           yieldsToText: true,
@@ -1437,8 +1437,8 @@ export class Session {
         group: 'View',
         title: this.mapOnly ? 'The map and its tracks' : 'Read this genome as tracks',
         hint: this.mapOnly
-          ? 'Puts the tracks back beside the map. Nothing was hidden while they were away.'
-          : 'Takes the matrix out of the picture and lays its chromosomes end to end. The map ' +
+          ? 'Puts the tracks back beside the map — nothing was hidden while they were away.'
+          : 'Takes the matrix out of the picture and lays its chromosomes end to end; the map ' +
             'stays open, and the same key comes back to it.',
         keys: KEYS.mapToggle,
         enabled: this.canHideMap,
@@ -1464,9 +1464,9 @@ export class Session {
         title: this.deck === null ? 'Copy this plot to the clipboard' : 'Copy the deck to the clipboard',
         hint:
           this.deck === null
-            ? 'The figure as a PNG, at the Export card\'s resolution, ready to paste. With text ' +
+            ? 'The figure as a PNG, at the Export card\'s resolution, ready to paste — though with text ' +
               'selected the same key still copies the text.'
-            : 'Every panel as one PNG, laid out as it is on screen, ready to paste. With text ' +
+            : 'Every panel as one PNG, laid out as it is on screen, ready to paste — though with text ' +
               'selected the same key still copies the text.',
         keys: KEYS.copyPlot,
         yieldsToText: true,
@@ -1554,7 +1554,7 @@ export class Session {
         title: isMetacool ? 'Whole metagenome' : 'Whole genome',
         hint: isMetacool
           ? 'Costs a full pixel scan; it never starts on its own.'
-          : 'One bounded read. It asks first when the block is large, and is refused if it would not fit this machine.',
+          : 'One bounded read: it asks first when the block is large, and is refused if it would not fit this machine.',
         keys: KEYS.whole,
         enabled: file !== null,
         run: () => {

@@ -153,7 +153,7 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   baseline: {
     label: 'track floor',
     hint:
-      'A rule along the bottom edge of every track lane. What tells four stacked ' +
+      'A rule along the bottom edge of every track lane — what tells four stacked ' +
       'coverage tracks apart from one tall one.',
   },
   fills: {
@@ -165,7 +165,7 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   outline: {
     label: 'track outline',
     hint:
-      'A dark rule along the top of every track, over its own colour. What makes four ' +
+      'A dark rule along the top of every track, over its own colour — what makes four ' +
       'stacked areas four legible shapes rather than four blocks of ink.',
   },
   gutter: {

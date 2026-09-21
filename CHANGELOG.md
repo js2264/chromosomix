@@ -542,6 +542,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **Six hints that were two sentences are one.** A rule under a track and the reason it is there are
+  one thought, not two; so are a bounded read and the gate on it, and a `⌘C` that yields to a text
+  selection. §26.4 now also says which two lines are *not* that hint and are not held to it — a
+  toggle may add what its off state does, and an empty state teaches the gesture that fills it —
+  because both are facts a control cannot show, and pretending otherwise was going to cost the app
+  eleven useful clauses.
+
+- **`add a cell…` no longer offers "the session's 3D structure".** The word is *tab* (§26.4).
+
 - **The map's bar names its window twice, not three times.** The region view printed the locus as its
   own heading, again in the summary line directly under it, and a third time in the box at the top
   right — `IV:1,000,001-1,400,000` three times on one bar, all the same string. The summary's own

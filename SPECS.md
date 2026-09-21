@@ -8084,9 +8084,13 @@ text is its label, so the label carries the state.
   file itself calls it. A 1D dataset is a **track**. The occupants of the deck are **cells**; the map
   in one is a **map**. A file of beads is a **structure** and one set of its coordinates a **model**
   (§25.1). A reader **connects a folder** and **signs in to** a provider.
-- **A hint is one sentence and never more.** No section numbers, no backticks, no naming of the
-  module that implements it: a reader who needs `§18.6` is reading the wrong document. Where a group
-  of controls shares a caveat, it is said once at the group rather than on each.
+- **A hint is one sentence and never more.** No section numbers, no backticks, no Markdown, no
+  naming of the module that implements it: a reader who needs `§18.6` is reading the wrong document.
+  Where a group of controls shares a caveat, it is said once at the group rather than on each. Two
+  kinds of line are not that hint and are not held to it: **a toggle** may add what its *off* state
+  does, because that is a second fact and the control cannot show it (*"Track names, their value
+  ranges and feature names. Off leaves the lines alone."*); and **an empty state** teaches the
+  gesture that fills it, which is the only thing it is for. Nothing else gets a second sentence.
 - **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
   read by someone already pointing at the thing, which is exactly when "is there a faster way" is
   asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.
