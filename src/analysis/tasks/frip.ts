@@ -47,12 +47,12 @@ export const GENOME_SAMPLE_TARGET = 200_000
 export const FEATURE_SAMPLES = 50
 
 const PARAMS: readonly ParamSpec[] = [
-  { kind: 'track', key: 'tracks', label: 'Tracks', multiple: true },
-  { kind: 'featureSet', key: 'features', label: 'Features' },
+  { kind: 'track', key: 'tracks', label: 'tracks', multiple: true },
+  { kind: 'featureSet', key: 'features', label: 'features' },
   {
     kind: 'number',
     key: 'resolution',
-    label: 'Read features at',
+    label: 'read features at',
     unit: 'bp',
     hint: `0 is auto: about ${FEATURE_SAMPLES} samples across a feature of the set’s median width.`,
     default: 0,
@@ -62,7 +62,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'perFeature',
-    label: 'Also score every feature',
+    label: 'score every feature',
     hint: 'One row per feature, so a FRiP carried by a handful of them can be seen to be.',
     default: false,
   },
@@ -88,8 +88,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${tracks.toLocaleString()} track${tracks === 1 ? '' : 's'}, each read twice: once over the ` +
-      'features and once over the assembly, both through the bigWig’s own zoom levels. ' +
-      'Progress is reported per track and it can be cancelled at any point.',
+      'features and once over the assembly, both through the bigWig’s own zoom levels.',
   }
 }
 

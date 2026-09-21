@@ -88,13 +88,19 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequence',
     key: 'sequence',
-    label: 'Reference',
+    label: 'reference',
     hint: 'The FASTA to search. Its own sequences, in its own order.',
   },
   {
     kind: 'text',
     key: 'pattern',
-    label: 'Sequence',
+    // **motif**, not *sequence*. A sequence is a chromosome or a contig
+    // everywhere else in this app — the Sequences card lists them, *Cis and
+    // trans per sequence* counts over them — so a task called *Find a sequence*
+    // with a field called *Sequence* read as "jump to chrIV", which is the
+    // locus box's job. The thing being searched for is a motif; the thing being
+    // searched is the reference.
+    label: 'motif',
     placeholder: 'GGTCANNNTGACC',
     hint:
       'IUPAC: A C G T U, and the ambiguity codes R Y S W K M B D H V N. Spaces are ignored, ' +
@@ -103,7 +109,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'bothStrands',
-    label: 'Both strands',
+    label: 'both strands',
     // On by default, because a motif that is not palindromic occurs on both
     // strands of a double-stranded molecule whether or not anybody searched for
     // it, and a reader who asked where `GGTCA` is and got half the sites would
@@ -115,7 +121,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'limit',
-    label: 'Most sites',
+    label: 'most sites',
     // The ceiling is written from the constant rather than typed out, so a hint
     // promising a number the scan does not honour cannot come back by drift.
     hint:
@@ -215,7 +221,7 @@ function totalBases(context: AnalysisContext): number {
 
 export const MOTIF_TASK: AnalysisTask = {
   id: 'motif',
-  title: 'Find a sequence',
+  title: 'Find a motif',
   blurb: 'Every place a motif occurs, as sites and as a density track.',
   group: 'tracks',
   // The residues live in the annotations worker and are never shipped out
@@ -238,7 +244,7 @@ export const MOTIF_TASK: AnalysisTask = {
   availability: (context) =>
     context.entries.some((entry) => entry.kind === 'sequence')
       ? READY
-      : waitingFor('Load a FASTA — the reference to search. Its residues are what this reads.'),
+      : waitingFor('Load a FASTA to search.'),
   params: PARAMS,
   // The two lanes `annotations/motifTrack.ts` argues for: a set of sites answers
   // "where exactly" and is a picket fence at chromosome scale; a density answers

@@ -99,7 +99,8 @@ const ALL_MAPS = '\u0000all-maps' as const
 import { formatIntervals } from '../annotations/export'
 import { writeBed3d } from '../annotations/g3d'
 import { recallParams, rememberParams } from '../analysis/memory'
-import { durationText } from './AnalysisPanelCard'
+import { durationText, stopPromise } from './AnalysisPanelCard'
+import { runClock } from '../units'
 import { profileCurve, profileFigure, type PlotFigure } from './analysisPlots'
 import { button, el, fmt } from './dom'
 import { canvasToPng, copyTextToClipboard, downloadBlob, fileStamp, scaleForDpi } from './export'
@@ -116,6 +117,15 @@ import { VectorPage } from './vector'
  * this window, not a train of thought about this file.
  */
 const WIDTH_KEY = 'metacooler-viewer:analysis-drawer:width'
+
+/**
+ * Where an output that is not a picture went, as the four answers there are.
+ *
+ * A key rather than the sentence itself, because it is what decides which
+ * outputs of one run share a block: two lanes are one note and a lane beside an
+ * overlay is two, and comparing keys is how that is said.
+ */
+type Elsewhere = 'lane' | 'structure' | 'overlay' | 'loose'
 
 /** Below this there is no room for a figure and its axis labels at once. */
 const MIN_WIDTH = 380
@@ -255,9 +265,16 @@ function recallParamsFor(task: AnalysisTask, uri: string): Params {
  * before it starts. `null` means there are none to state, which is what a local
  * file answers, and a `0 requests` beside a free task would be an answer to a
  * question nobody asked.
+ *
+ * **The note's terminal full stop is stripped before the join**, and that is one
+ * line rather than an edit to nine tasks: a note that ends its sentence properly
+ * came out as `… 1 block read from the file. · 1 request`, a full stop followed
+ * by a middle dot, in the one line a reader checks before spending compute.
+ * Fixed here because the join is here; a task that writes a sentence should not
+ * have to know what will be appended to it.
  */
 function costText(estimate: CostEstimate): string {
-  const parts = [estimate.note]
+  const parts = [estimate.note.replace(/\.\s*$/, '')]
   if (estimate.requests !== null && estimate.requests > 0) {
     parts.push(`${fmt.int(estimate.requests)} request${estimate.requests === 1 ? '' : 's'}`)
   }
@@ -312,15 +329,14 @@ function takesEscape(node: HTMLElement): boolean {
  *
  * The time and not the date, because the history is this session's: eight runs
  * of one task all happened this afternoon, and a date beside each of them would
- * be eight copies of today. A provenance with no readable timestamp answers a
- * dash rather than `Invalid Date`, which is the sort of thing a reader
- * reasonably reports as a bug in the analysis.
+ * be eight copies of today. Through `units.runClock`, which is the one place
+ * this app turns an instant into six characters — this file used to hold a
+ * second copy of that arithmetic and print the raw ISO string two hundred lines
+ * below it, so the same field read `20:49:46` on the run stepper and
+ * `2026-09-20T20:49:46.151Z` on the result line.
  */
-function runClock(result: TaskResult): string {
-  const at = new Date(result.provenance.createdAt)
-  return Number.isNaN(at.getTime())
-    ? '—'
-    : at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+function finishedAt(result: TaskResult): string {
+  return runClock(result.provenance.createdAt)
 }
 
 /**
@@ -345,7 +361,7 @@ function runDifference(shown: TaskResult, latest: TaskResult, task: AnalysisTask
     if (paramText(before) === paramText(after)) continue
     parts.push(`${spec.label}: ${paramText(before)} (latest: ${paramText(after)})`)
   }
-  const when = `Finished ${runClock(shown)}.`
+  const when = `Finished ${finishedAt(shown)}.`
   return parts.length === 0
     ? `${when} The same parameters as the latest run.`
     : `${when} ${parts.join(' · ')}`
@@ -506,7 +522,7 @@ export class AnalysisDrawer {
       class: 'btn btn-quiet',
       title:
         'Take a new snapshot of the framing and run again. The result on screen is a record of ' +
-        'the view it was computed from, so it is left as it is until this finishes (§18.4).',
+        'the view it was computed from, so it is left as it is until this finishes.',
     })
     this.runButton = button('run', () => this.run(), { class: 'btn' })
     // Its label is written in {@link paintRun}, because on a deck it names the
@@ -521,23 +537,29 @@ export class AnalysisDrawer {
         'Run this task once per map on screen, one after another. Each result is filed against ' +
         'the map it was measured from, so a batch leaves a row per panel.',
     })
-    this.cancelButton = button('cancel', () => this.cancel(), {
-      class: 'btn btn-quiet',
-      title: 'Stop this job. The worker checks between chunks, so it stops at the next one.',
-    })
-    this.cliButton = button('copy CLI command', () => this.copyCliCommand(), {
-      class: 'btn btn-quiet',
-    })
+    // **Bordered, and beside Run.** It was a borderless `btn-quiet` after the
+    // cost sentence, which put the one control that stops a forty-second scan at
+    // the far end of a row of prose, in the weight this app uses for a link. The
+    // principle is §5.4's, about a bar: a control styled differently from its
+    // neighbours is a control a reader wonders about. Its sentence comes from
+    // `stopPromise`, so the drawer and the panel row agree about what the press
+    // does — and is set per task in {@link syncRun}, because the two venues stop
+    // differently.
+    this.cancelButton = button('cancel', () => this.cancel(), { class: 'btn' })
+    // Bordered, like the copy beside it. These two are how a result leaves the
+    // app for a methods section or a shell, and unbordered they read as captions
+    // of the line above them (§18.7).
+    this.cliButton = button('copy CLI command', () => this.copyCliCommand(), { class: 'btn' })
     this.progressEl = el('div', { class: 'analysis-progress' }, this.progressFill)
     this.recordEl = el(
       'div',
       { class: 'plot-icon-row hidden' },
       this.recordNote,
       button('copy provenance', () => this.copyProvenance(), {
-        class: 'btn btn-quiet',
+        class: 'btn',
         title:
           'The task, its version, every parameter, the framing, the file and the build — the ' +
-          'same lines every export carries at its head (§18.4).',
+          'same lines every export carries at its head.',
       }),
       // The other half of the same fact, for the reader whose next file is the
       // second of two hundred. Whether it can be pressed, and what it says when
@@ -577,12 +599,16 @@ export class AnalysisDrawer {
           { class: 'analysis-run' },
           this.runButton,
           this.runAllButton,
-          // The price beside the button and before the controls that only exist
+          // Directly after the buttons that start it, so the row reads as its
+          // two actions and then its two readings: run · cancel · price · bar.
+          // It used to sit after the cost sentence, where a reader looking for
+          // the way to stop a scan had a line of prose to read first.
+          this.cancelButton,
+          // The price beside the button and before the bar that only exists
           // while it is running (§18.6): what a task costs is what decides
           // whether to press Run, so it is read on the way to the button and not
           // after it.
           this.costEl,
-          this.cancelButton,
           this.progressEl,
         ),
         this.noteEl,
@@ -963,6 +989,7 @@ export class AnalysisDrawer {
     }
 
     this.cancelButton.classList.toggle('hidden', !busy)
+    this.cancelButton.title = `Stop this job. ${stopPromise(task.venue)}`
     const determinate = state.status === 'running' && state.total > 0
     this.progressEl.classList.toggle('hidden', !determinate)
     if (determinate && state.status === 'running') {
@@ -1098,7 +1125,7 @@ export class AnalysisDrawer {
         text:
           at === 0
             ? `latest of ${runs.length} runs`
-            : `run ${runs.length - at} of ${runs.length} · ${runClock(runs[at])}`,
+            : `run ${runs.length - at} of ${runs.length} · ${finishedAt(runs[at])}`,
         title: runDifference(runs[at], runs[0], task),
       }),
       newer,
@@ -1240,7 +1267,14 @@ export class AnalysisDrawer {
 
     const provenance = result.provenance
     this.recordEl.classList.remove('hidden')
-    this.recordNote.textContent = `computed in ${durationText(result.ms)} · ${provenance.createdAt}`
+    // `computed in 16 ms at 20:49:46`. The ISO string with its milliseconds and
+    // its Z is what `copy provenance` beside this line writes and what every
+    // export carries at its head; on screen it is twenty-four characters of
+    // which the reader wants six, and a reader who read one in a sentence
+    // reasonably took it for machine output that had leaked. The exact stamp is
+    // one hover away and is the same string the clipboard takes.
+    this.recordNote.textContent = `computed in ${durationText(result.ms)} at ${finishedAt(result)}`
+    this.recordNote.title = provenance.createdAt
     this.paintCli(provenance)
 
     // The things the reader must be told that are not errors — *412 of 5,000
@@ -1267,20 +1301,70 @@ export class AnalysisDrawer {
                   : 'No output was produced. The reason is above.',
             }),
           ]
-        : result.outputs.map((output) => this.block(output, provenance))),
+        : this.outputBlocks(result.outputs, provenance)),
     )
   }
 
-  private block(output: TaskOutput, provenance: Provenance): HTMLElement {
-    // The two that are not pictures go elsewhere — while there *is* an
-    // elsewhere. On a file with no Annotations panel a profile is drawn here
-    // like any other figure, and an interval set keeps its sentence but says the
-    // true thing about where its coordinates are.
-    if (output.kind === 'intervals') return this.elsewhere(output, provenance)
-    if (output.kind === 'profile' && this.options.hasLanes()) {
-      return this.elsewhere(output, provenance)
+  /**
+   * The run's outputs, with the ones that went elsewhere gathered.
+   *
+   * A figure is its own block. The outputs that are *not* pictures share one
+   * sentence about where they went, and that sentence is printed once for the
+   * run rather than once per output — which is the whole of this method. Spatial
+   * tracks makes three lanes, and three lanes used to mean three dashed boxes
+   * each repeating the same thirty words, with a lone TSV under each: the reader
+   * scanned three identical paragraphs to find three buttons, and the drawer
+   * looked as though it had produced prose. Now it is one sentence and three
+   * named rows.
+   *
+   * Consecutive and by destination, not a sort: a task that returns a lane, a
+   * matrix and a second lane meant those two lanes to be read either side of the
+   * picture, and the order a runner returns its outputs in is the order §18.7
+   * says the drawer shows them in.
+   */
+  private outputBlocks(outputs: readonly TaskOutput[], provenance: Provenance): HTMLElement[] {
+    const blocks: HTMLElement[] = []
+    let run: { where: Elsewhere; items: TaskOutput[] } | null = null
+    const flush = (): void => {
+      if (run === null) return
+      blocks.push(this.elsewhere(run.where, run.items, provenance))
+      run = null
     }
-    // Everything else is a `FigureBlock`: the figure, the slim strip of controls
+    for (const output of outputs) {
+      const where = this.elsewhereOf(output)
+      if (where === null) {
+        flush()
+        blocks.push(this.block(output, provenance))
+      } else if (run !== null && run.where === where) {
+        run.items.push(output)
+      } else {
+        flush()
+        run = { where, items: [output] }
+      }
+    }
+    flush()
+    return blocks
+  }
+
+  /**
+   * Where an output went instead of being drawn here, or `null` for a figure.
+   *
+   * The two that are not pictures go elsewhere — while there *is* an elsewhere.
+   * On a file with no Annotations panel a profile is drawn here like any other
+   * figure (§8.5 gives it no card to be a row on), and an interval set still has
+   * no picture to be drawn as, so it keeps a sentence and says the true thing
+   * about where its coordinates are.
+   */
+  private elsewhereOf(output: TaskOutput): Elsewhere | null {
+    if (output.kind === 'intervals') {
+      if (output.entryKind === 'structure') return 'structure'
+      return this.options.hasLanes() ? 'overlay' : 'loose'
+    }
+    return output.kind === 'profile' && this.options.hasLanes() ? 'lane' : null
+  }
+
+  private block(output: TaskOutput, provenance: Provenance): HTMLElement {
+    // Everything here is a `FigureBlock`: the figure, the slim strip of controls
     // over it, and the button that opens the whole settings column beside it at
     // the size of the window (§18.13). What the reader sets there is what the
     // PNG and the PDF below draw, because both are handed the figure as it
@@ -1311,13 +1395,13 @@ export class AnalysisDrawer {
     }
     return [
       button('bigWig', () => write('bigwig'), {
-        class: 'btn btn-quiet',
+        class: 'btn',
         title:
           'Written here, byte for byte — no bedGraphToBigWig step. What IGV, deepTools and ' +
           'pyBigWig open.',
       }),
       button('bedGraph', () => write('bedgraph'), {
-        class: 'btn btn-quiet',
+        class: 'btn',
         title:
           'One line per bin that has a value; bins with none are omitted, never written as 0.',
       }),
@@ -1330,44 +1414,58 @@ export class AnalysisDrawer {
    * A profile is a lane and a called interval is an overlay (§18.5, §18.7), and
    * both are ordinary rows on the Annotations panel from the moment they arrive
    * — the same implementation a loaded bigWig or BED gets, not a second one. The
-   * line is here so the drawer does not look as though the run produced nothing,
-   * and the TSV is here because §18.7's *every output offers TSV* has no
-   * exceptions.
+   * sentence is here so the drawer does not look as though the run produced
+   * nothing, and the TSV is here because §18.7's *every output offers TSV* has
+   * no exceptions.
    *
-   * The sentence has to know whether that panel exists. It used to say the same
+   * **The sentence is about the run and the rows are about the outputs**, which
+   * is what stopped it being printed N times. It says where and the rows say
+   * what: a name and its export buttons, one line each. What the sentence no
+   * longer says is what a lane *is* — "one value per bin, so it is a lane rather
+   * than a picture, with the colour, limits, edges and figure every other track
+   * has" is teaching, and the reader can see the lane on the map. Nor does it
+   * say what a bed3d is read by, which is on the bed3d button's own tooltip.
+   *
+   * It does have to know whether that panel exists. It used to say the same
    * thing on every file, which on a `.metacool` sent a reader to a card that is
    * not on screen — the one shape of wrongness a sentence about *where something
-   * went* must never have. A profile does not reach this method there at all
-   * (see {@link block}); an interval set does, because a set of coordinates has
-   * no picture to be drawn as either way, and it says plainly that the BED
-   * beside it is the way to get them.
+   * went* must never have. A profile does not reach here on such a file at all
+   * (see {@link elsewhereOf}); an interval set does, because a set of
+   * coordinates has no picture to be drawn as either way, and it says plainly
+   * that the BED beside it is the way to get them.
    */
-  private elsewhere(output: TaskOutput, provenance: Provenance): HTMLElement {
-    const lanes = this.options.hasLanes()
-    const where =
-      output.kind === 'profile'
-        ? 'one value per bin, so it is a lane rather than a picture: it is on the Synthetic ' +
-          'tracks card in the Annotations panel, with the colour, limits, edges and figure ' +
-          'every other track has.'
-        : output.kind === 'intervals' && output.entryKind === 'structure'
-          ? 'a 3D model: it is on the Structures card in the Annotations panel, and the deck’s ' +
-            'structure cell shows it — open one from the deck’s bar if none is on screen. ' +
-            'Take it as a bed3d, which this app and g3dtools read back.'
-          : lanes
-          ? 'a set of intervals, so it is an overlay: it is on the Annotations panel, drawn on ' +
-            'the map it was called from.'
-          : 'a set of intervals. This file carries no annotation layer, so there is no overlay ' +
-            'to draw them on — take them as a BED, which this app reads back on any file that ' +
-            'has one.'
+  private elsewhere(
+    where: Elsewhere,
+    outputs: readonly TaskOutput[],
+    provenance: Provenance,
+  ): HTMLElement {
+    const many = outputs.length > 1
+    const sentence =
+      where === 'lane'
+        ? many
+          ? `${fmt.int(outputs.length)} tracks added to the Synthetic tracks card in the Annotations panel.`
+          : 'Added to the Synthetic tracks card in the Annotations panel.'
+        : where === 'structure'
+          ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
+            'structure cell (add one from the deck’s bar if none is open).'
+          : where === 'overlay'
+            ? many
+              ? `${fmt.int(outputs.length)} overlays added to the Annotations panel, drawn on the map they were called from.`
+              : 'Added to the Annotations panel as an overlay, drawn on the map it was called from.'
+            : 'This file carries no annotation layer, so there is no overlay to draw these on. ' +
+              'Take them as a BED, which this app reads back on any file that has one.'
     return el(
       'div',
       { class: 'analysis-elsewhere' },
-      el('span', { text: `“${output.label}” is ${where}` }),
-      el(
-        'div',
-        { class: 'plot-icon-row' },
-        ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
-        this.tsvButton(output, provenance),
+      el('span', { text: sentence }),
+      ...outputs.map((output) =>
+        el(
+          'div',
+          { class: 'plot-icon-row' },
+          el('span', { class: 'analysis-elsewhere-name', text: output.label, title: output.label }),
+          ...(output.kind === 'intervals' ? [this.bedButton(output, provenance)] : []),
+          this.tsvButton(output, provenance),
+        ),
       ),
     )
   }
@@ -1390,7 +1488,7 @@ export class AnalysisDrawer {
     const structure = output.entryKind === 'structure'
     const format = structure ? 'bed3d' : output.payload.kind === 'pairs' ? 'BEDPE' : 'BED'
     return button(format, () => this.saveIntervals(output, provenance), {
-      class: 'btn btn-quiet',
+      class: 'btn',
       title: structure
         ? 'The model as a bed3d — chrom, start, end, x, y, z — which this app and g3dtools read back'
         : `The called intervals as a ${format} — what bedtools reads, and what this app reads back`,
@@ -1417,12 +1515,20 @@ export class AnalysisDrawer {
     )
   }
 
+  /**
+   * The output as a table of numbers, with the provenance above them.
+   *
+   * **Bordered**, like every other way data leaves this app (§26.6). It was a
+   * `btn-quiet` — grey text with no border — in a strip that also held a
+   * bordered icon button, so the one control that gets the numbers out read as a
+   * caption naming the table's format.
+   */
   private tsvButton(output: TaskOutput, provenance: Provenance): HTMLButtonElement {
     return button('TSV', () => this.saveTsv(output, provenance), {
-      class: 'btn btn-quiet',
+      class: 'btn',
       title:
         'The numbers as a table, with the provenance above them — what makes a figure ' +
-        'checkable by the person reading it (§18.7).',
+        'checkable by the person reading it.',
     })
   }
 
@@ -1552,8 +1658,8 @@ export class AnalysisDrawer {
     this.cliButton.disabled = unknown
     this.cliButton.title = unknown
       ? `This build does not have the task ${provenance.task}, so it cannot write its flags.`
-      : 'The same run as a `metacooler-run` line — the file, the window, the balancing and ' +
-        'every parameter — for the other two hundred files.'
+      : 'The same run as a metacooler-run command line — the file, the window, the balancing ' +
+        'and every parameter — for the other two hundred files.'
   }
 
   /**

@@ -293,7 +293,7 @@ export const runInsulation: TaskRunner = async (job) => {
 
     finish(unit, size, sums)
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   const round = units.filter((unit) => unit.circular).length
   if (round > 0) {

@@ -222,7 +222,9 @@ describe('the units a form asks in', () => {
   it('asks insulation for a diamond in bins', () => {
     const view = form(INSULATION_TASK)
     expect(view.value.window).toBe(10)
-    expect(labels(view).join(' ')).toContain('Window')
+    // Lowercase, since field labels are (§26.4): every label in this form was
+    // Title-case while every label on the cards beside it was not.
+    expect(labels(view).join(' ')).toContain('window')
     view.destroy()
   })
 })
@@ -295,11 +297,11 @@ describe('ticking several sequences', () => {
 
   it('has a None that empties it and an All that fills it', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     expect(view.value.sequences).toEqual([])
     expect(asks(view, '0 of 3 ticked')).toBe(true)
 
-    buttonNamed(view.el, 'All')?.click()
+    buttonNamed(view.el, 'all')?.click()
     expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
     view.destroy()
   })
@@ -311,7 +313,7 @@ describe('ticking several sequences', () => {
    */
   it('leaves an emptied list empty when the context changes under it', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     view.setContext(context())
     expect(view.value.sequences).toEqual([])
     view.destroy()
@@ -330,7 +332,7 @@ describe('ticking several sequences', () => {
 
   it('refuses a run with nothing ticked, and says what to do', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     const refusal = COMPARTMENTS_TASK.estimate(context(), view.value).refusal ?? ''
     expect(refusal).toMatch(/tick at least one/i)
     view.destroy()

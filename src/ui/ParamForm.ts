@@ -742,6 +742,24 @@ export class ParamForm {
   }
 
   /**
+   * The two-column row for a control a `<label for>` cannot name.
+   *
+   * A `<button>` is not a labelable element, so the same shape has to be built
+   * out of a `<div>` and an id'd word the control points back at with
+   * `aria-labelledby`. Same grid, same alignment as every `labelled` row beside
+   * it — which is the point: a reader's eye should find the control in one place
+   * down the form, whatever kind of control it is.
+   */
+  private named(spec: ParamSpec, control: HTMLElement, labelId: string): HTMLElement {
+    return el(
+      'div',
+      { class: 'field param-field' },
+      el('span', { class: 'field-label', text: spec.label, id: labelId }),
+      control,
+    )
+  }
+
+  /**
    * The full-width row: a word above a *group* of controls.
    *
    * What the overlay marks already use, and for the same reason — four buttons
@@ -1110,7 +1128,21 @@ export class ParamForm {
     sync()
     return {
       spec,
-      wrapper: this.wrap(spec, this.blocked(spec, el('div', { class: 'plot-icon-row' }, node), labelId)),
+      // **`labelled`, because one button is not a group.** It was `blocked`, the
+      // full-width shape the overlay marks use — which put the word on one line
+      // and a lone `on` pill on the next, with the hint beside the *label* since
+      // that is what the row's first column then held. The reader read label and
+      // hint as a sentence about the parameter and had nothing to connect the
+      // detached pill to. `blocked` is for a real group: a checklist, a box with
+      // a slider beside it, four marks in a row.
+      // In a `plot-icon-row`, because a grid cell stretches what is put in it
+      // and an `on` button as wide as a 15 rem control column is a button whose
+      // size says something it does not mean. The row is one flex item wide and
+      // starts where every other control on the form starts.
+      wrapper: this.wrap(
+        spec,
+        this.named(spec, el('div', { class: 'plot-icon-row' }, node), labelId),
+      ),
       shown: false,
       sync,
     }
@@ -1272,11 +1304,11 @@ export class ParamForm {
       'div',
       { class: 'param-check-actions' },
       button(
-        'All',
+        'all',
         () => this.commit(spec.key, this.context.contigs.map((contig) => contig.name)),
         { class: 'btn btn-quiet', title: 'Tick every sequence' },
       ),
-      button('None', () => this.commit(spec.key, []), {
+      button('none', () => this.commit(spec.key, []), {
         class: 'btn btn-quiet',
         title: 'Untick every sequence',
       }),
@@ -1445,10 +1477,6 @@ export class ParamForm {
       title:
         'A contig, or a contig and a span — the same thing the locus boxes take. On a ' +
         'metagenome a genome name is one too, and means the whole of it.',
-      // The locus box's own 24 rem is a width for a toolbar. In a column it
-      // overflows the card, and a grid track cannot shrink an element below the
-      // width it asks for.
-      style: { width: '100%' },
     })
     const note = el('p', { class: 'hint param-map-note hidden' })
 
@@ -1458,7 +1486,7 @@ export class ParamForm {
     const pickable = spec.pickable === true && this.context.hasMap
     const arm = !pickable
       ? null
-      : button('Pick on map', () => (isArmed() ? disarmPick() : armPick()), {
+      : button('pick on map', () => (isArmed() ? disarmPick() : armPick()), {
           class: 'btn btn-toggle param-pick',
           title:
             'Then Shift-drag along either axis of the map. That gesture normally zooms; while ' +
@@ -1487,7 +1515,12 @@ export class ParamForm {
       if (arm !== null) {
         const armed = isArmed()
         arm.setAttribute('aria-pressed', String(armed))
-        arm.textContent = armed ? 'Pointing…' : 'Pick on map'
+        // *pointing…* and not the Manual card's *done*, because the two are
+        // genuinely different modes: this arm ends itself after one pick, and
+        // that card's stays on until the reader says so. What the two share is
+        // the resting label and the lit look, which is what a reader carries
+        // from one surface to the other.
+        arm.textContent = armed ? 'pointing…' : 'pick on map'
         note.classList.toggle('hidden', !armed)
         note.textContent = armed
           ? 'Shift-drag along either axis of the map. Escape to stop.'

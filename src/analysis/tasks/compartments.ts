@@ -82,7 +82,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
+    label: 'sequences',
     /**
      * **Several**, and every one of them ticked to begin with.
      *
@@ -107,7 +107,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'contacts',
-    label: 'Contacts',
+    label: 'contacts',
     /**
      * **Cis by default**, and the reason is what a default is for: the answer
      * most readers want, at a price most files can pay. A per-chromosome
@@ -139,17 +139,17 @@ const PARAMS: readonly ParamSpec[] = [
     options: [
       {
         value: 'cis',
-        label: 'Cis only',
+        label: 'cis only',
         hint: 'One correlation per sequence, over its own contacts. The cheapest, and per chromosome.',
       },
       {
         value: 'both',
-        label: 'Cis and trans',
+        label: 'cis and trans',
         hint: 'One correlation over everything ticked. Each half keeps its own expectation.',
       },
       {
         value: 'trans',
-        label: 'Trans only',
+        label: 'trans only',
         hint: 'Between sequences alone, so no distance decay enters the answer. Needs two or more.',
       },
     ],
@@ -157,7 +157,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * cooltools' `ignore_diags`, spelled the same way and meaning the same
      * thing: `0` keeps every cell, `1` drops the main diagonal, `2` drops it and
@@ -183,7 +183,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'components',
-    label: 'Components',
+    label: 'components',
     hint: 'E1 is the compartment track; E2 and E3 occasionally say something.',
     default: 1,
     min: 1,
@@ -194,7 +194,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'featureSet',
     key: 'phaseFeatures',
-    label: 'Phase by gene density',
+    label: 'phase by gene density',
     optional: true,
     noneLabel: 'Do not use a gene model',
     hint: 'Positive is made to mean the compartment these features are dense in.',
@@ -203,7 +203,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequence',
     key: 'phaseSequence',
-    label: 'Phase by GC content',
+    label: 'phase by GC content',
     optional: true,
     noneLabel: 'Do not use a sequence',
     hint: 'Used when no gene model is chosen.',
@@ -212,7 +212,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minR',
-    label: 'Least convincing correlation',
+    label: 'least convincing correlation',
     hint: 'Below this the sign is left alone and the drawer says the phasing was ambiguous.',
     default: 0.1,
     min: 0,
@@ -224,7 +224,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'saddle',
-    label: 'Also draw the saddle',
+    label: 'draw the saddle',
     hint: 'The compartment claim in one square, with AA, BB and AB under it.',
     default: true,
     section: 'Saddle',
@@ -232,7 +232,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'quantiles',
-    label: 'Quantile groups',
+    label: 'quantile groups',
     default: 50,
     min: 5,
     max: 100,
@@ -346,8 +346,7 @@ function estimateCis(
       `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
       `correlation each — up to ${(bytes / 1e6).toFixed(0)} MB held at once, over at most ` +
       `${widest.toLocaleString()} bins. ` +
-      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped. ` : ''}` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped.` : ''}`,
   }
 }
 
@@ -441,8 +440,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: reads * (balance ? 5 : 4),
     bytes,
     note:
-      `${tooFine}${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build it ` +
-      'from. Progress is reported as it goes and it can be cancelled at any point.',
+      `${tooFine}${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build ` +
+      'it from.',
   }
 }
 

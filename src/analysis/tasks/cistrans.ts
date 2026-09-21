@@ -44,30 +44,30 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
+    label: 'sequences',
     hint: 'Which to report. The pass reads the whole file either way.',
   },
   {
     kind: 'choice',
     key: 'normalise',
-    label: 'Off-diagonal value',
+    label: 'off-diagonal value',
     default: 'enrichment',
     options: [
       {
         value: 'enrichment',
-        label: 'Against indifference',
+        label: 'against indifference',
         hint:
           'Contacts over what the two sequences’ own trans coverage predicts. 1 is what any two ' +
           'sequences of that depth would give; a fusion is far above it.',
       },
-      { value: 'raw', label: 'Raw contacts' },
-      { value: 'bins', label: 'Per bin pair', hint: 'Divided by the two sequences’ bin counts.' },
+      { value: 'raw', label: 'raw contacts' },
+      { value: 'bins', label: 'per bin pair', hint: 'Divided by the two sequences’ bin counts.' },
     ],
   },
   {
     kind: 'number',
     key: 'minContacts',
-    label: 'Least contact worth listing',
+    label: 'least contact worth listing',
     hint: 'Raw contacts, before any normalisation. Keeps one stray read out of the top of the table.',
     default: 10,
     min: 0,
@@ -76,7 +76,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxEdges',
-    label: 'Pairs to list',
+    label: 'pairs to list',
     default: 500,
     min: 10,
     integer: true,
@@ -84,7 +84,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'matrix',
-    label: 'Also draw the square',
+    label: 'draw the square',
     hint: `Skipped above ${MATRIX_SEQUENCE_LIMIT.toLocaleString()} sequences, where it is not a picture.`,
     default: true,
   },
@@ -114,9 +114,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: null,
     bytes: null,
     note:
-      'Walks the whole pixel table once, sorting every contact by the sequences of its two ends. ' +
-      'Like a marginal, it cannot be taken from one sequence’s square — a chromosome’s own block ' +
-      'knows nothing about the contacts leaving it. Progress is reported and it can be cancelled.',
+      'One pass over the whole pixel table: like a marginal, this cannot be taken from one ' +
+      'sequence’s square.',
   }
 }
 

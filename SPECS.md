@@ -2117,7 +2117,7 @@ of that appearing beside the map without being asked for, redrawing itself on ev
 version of the same claim in the same session — and the two would disagree at every level but the
 finest.
 
-What is kept is one sentence: *the reader can point at a locus.* The 4C task's **Pick on map** button
+What is kept is one sentence: *the reader can point at a locus.* The 4C task's *pick on map* button
 arms `ui/mapPick.ts`; the next drag on a map names a locus for that form and the button goes out. It
 is a mode on a picture, so it disarms after **one** pick and it disarms on Escape, and both rules are
 in the module rather than in the map — the map's whole job is to ask `isArmed` before it decides what
@@ -4427,8 +4427,16 @@ The second half is a correction to what this section first said, and the case th
 a map with no loops loaded. That task applies perfectly well to the file; it is one drag-and-drop from
 running. Hiding it does not spare the reader a broken promise — it teaches them the application does
 not do aggregate peak analysis. So a task in that state is listed, dimmed, and carries a line saying
-what to load: *Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile
-up on it.* A greyed row with an instruction on it is not an unkept promise; it is the menu.
+what to load: *Load a loop set (BEDPE), or a feature set (BED, GTF).* A greyed row with an instruction
+on it is not an unkept promise; it is the menu.
+
+The line takes one shape — *`<Verb>` a `<thing>` (`<formats>`).* — and **a group whose every waiting
+row is waiting on the same thing carries it once**, under the heading rather than on each row. Ten of
+the sixteen tasks read the matrix, so a 1D browser session drew ten rows under ON THE MAP each
+carrying the identical *Open a contact map.*: a column twice as tall as its content, in which the one
+gate that differed was the hardest line in it to find. Rows whose sentences differ keep their own, and
+every greyed row carries its own reason in its tooltip whether or not the sentence is printed under
+it.
 
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
@@ -4441,9 +4449,11 @@ provenance names the assembly rather than a block.
 
 **A locus a reader can point at is picked on the map, not typed.** Reading
 coordinates off a picture in order to type them back in beside it is asking
-twice. So `RegionParam.pickable` puts a **Pick on map** button next to the locus
-box; pressing it arms `ui/mapPick.ts`, the next Shift-drag on the map fills the
-box instead of zooming, and the button goes out (§8.9). An *arm* rather than a
+twice. So `RegionParam.pickable` puts a *pick on map* button next to the locus
+box — **next to**, in the same row and the same cell of the label grid, because
+the argument above depends on the two being one control; pressing it arms
+`ui/mapPick.ts`, the next Shift-drag on the map fills the box instead of zooming,
+and the button goes out (§8.9). An *arm* rather than a
 mode the form leaves on: a reader who wanted one anchor should not find their
 next three attempts to zoom quietly redefining it.
 
@@ -4456,8 +4466,11 @@ point for a typed correction rather than a replacement for one. The button is
 offered only where there is a map to point at, since the panel exists without
 one.
 
-**The Analysis drawer** is the workspace: parameters, a **Run** button with the price beside it,
-progress, results, exports. It is anchored to the right of the body, full height, resizable by its left
+**The Analysis drawer** is the workspace: parameters, a **Run** button with **cancel** beside it and
+the price after the pair, progress, results, exports. The row's controls are ordinary bordered buttons
+like everything else in a bar (§5.4), and so are the exports under the results: the control that stops
+a forty-second scan and the ones that get the numbers out of the application are the two a reader most
+needs to find, and drawn borderless they read as captions. It is anchored to the right of the body, full height, resizable by its left
 edge with its width remembered, and it overlays the content and the two right columns rather than
 squeezing them — at three quarters of the window there is nothing left to squeeze.
 
@@ -4500,6 +4513,15 @@ lets a task like compartment phasing (§18.8) be a dropdown rather than a second
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
+
+**The form is the cards' form.** A label is one to three lowercase words in the same column down the
+whole form, a select's options are lowercase, and one hint is one sentence beside the control it is
+about — §26.4's rules, and this is the surface that was breaking all three. A label and its control
+share a row: a single on/off button is not a group, and the full-width shape is for a group that is
+genuinely one — a checklist, a number with a slider beside it, four marks in a row — whose hint then
+goes *under* the group rather than beside the word above it. A hint never repeats what the control's
+own label or first option already says: a select whose first option reads *every sequence* does not
+need a line telling the reader to leave it empty, and it has no empty to leave.
 
 **A control the file cannot be asked about is not shown.** The descriptor still lists it and states the
 rule — an option that needs a `/genomes` table, a switch that is only a question where there is no such
@@ -4671,6 +4693,16 @@ insulation on an unloaded contig is one diagonal band; an APA window is one smal
 explicit action, a progress bar, a cancel, and a pre-flight figure in requests and bytes. Two tasks are
 in this class, and both are honest about being so.
 
+**The estimate is a price and nothing else, and its class is said in words rather than in a colour.**
+*One pass over the whole pixel table*, *154 strips along their diagonals*, *up to 40 MB at a time* —
+followed by the requests and the bytes. It is `--text-dim` whatever it costs, because a cost is a fact
+about what is being offered rather than a warning about the answer (§26.5), and `--danger` beside
+**Run** means the one thing it means everywhere: this will not happen. Nor does the line promise
+progress or a cancel. It used to end *progress is reported as it goes and it can be cancelled at any
+point* on every scan — eighteen copies of a promise the bar and the button beside it make by
+existing — which spent the one line a reader checks before spending compute on reassurance instead of
+a figure.
+
 Three specific gates, each stated because each is a place the naive implementation is wrong:
 
 1. **Whole-genome 4C is not a bounded read, and the read planner says so.** With rows set to the anchor
@@ -4801,6 +4833,19 @@ tests assert rather than the text.
 number in a figure checkable by the person reading the figure. Where an output has both, the two are not
 alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
 them, which is a header a BED consumer would choke on and a reader needs.
+
+**Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
+where — *3 tracks added to the Synthetic tracks card in the Annotations panel.* — and each row under it
+is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
+three lanes drawn as three dashed boxes each repeating the same thirty words, each with a lone TSV
+under it, made a run of three exports read as a run of three paragraphs. The sentence also does not say
+what a lane *is*, or which tools read a bed3d: the reader can see the lane on the map, and the format's
+button carries its own tooltip.
+
+**The result line is `computed in 2.0 s at 20:49:46`.** A clock on the wall, in the reader's own hours,
+and never the ISO instant — which is what *copy provenance* beside it puts on the clipboard and what
+every export carries at its head, and which read in a sentence as machine output that had leaked. The
+exact stamp is that line's tooltip, so it is one hover from the words and identical to the copy.
 
 ### 18.8 The catalogue
 
@@ -5726,7 +5771,10 @@ bundler can leave the rest out.
 
 **Controls are in two places, and the split is the point.** A **slim strip** sits over every figure
 with the two or three controls that are reached for constantly — the mark, the two log axes, the
-legend, *Fit*; a colormap for a matrix; a filter box for a table. Everything else is one button
+legend, *fit*; a colormap for a matrix; a filter box for a table. They are bordered buttons in both
+states, because §26.3's *lit means on, plain means off* has no third state where a toggle stops
+looking like a control, and so are the figure's exports in the strip above it: `TSV`, `PNG` and `PDF`
+in a bar beside a bordered icon read as buttons or as captions of the title, and they are buttons. Everything else is one button
 away, in the **same dialog the 3D model opens in**: the figure at the size of the window, every
 control in a resizable column beside it, the grip and the hide toggle behaving as they do there.
 That shell is `ui/StageDialog.ts` and the two are callers of it rather than two implementations of
@@ -5749,6 +5797,18 @@ typed none — which is a second bookmark and not a second window: the single so
 holds. The gesture is taken in the capture phase, because the chart pans on a drag and a picture
 sliding under the box being drawn on it is the one thing this must not do; ECharts' own brush is not
 used, since it arrives with a toolbox of buttons over the picture and zooms both axes always.
+
+**A boolean is one of two shapes, and a tick box is neither.** A *named parameter* — smooth, fill
+under, the grid, the tooltip — is a label and an `on`/`off` button on one row, which is what every
+settings column in this app already draws. A *compact set of named things* — the two axis scales, a
+table's columns — is a row of buttons each carrying its own name and lighting when it is on, which is
+what the overlay marks already draw. Both are `btn-toggle` with `aria-pressed`, so one stylesheet rule
+lights them (§26.3), and the figure's settings had a third idiom that was neither.
+
+**A column head is aligned with its column**, left for text and right for numbers. A `<th>` centres
+itself by default, which put every head over the middle of a column of left-aligned cells; and a head
+is a button that sorts, so it has a name — a blank one is a control whose tooltip reads *Sort by* and
+whose column the reader has to infer from its rows.
 
 **New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
 summaries of the ordinate. The last three are rules with parameters rather than plots of the data,

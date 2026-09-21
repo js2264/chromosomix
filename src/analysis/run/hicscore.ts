@@ -146,7 +146,7 @@ export const runHicScore: TaskRunner = async (job) => {
     const local = hicScore(band, { diagonals, minValid, ignoreDiags })
     for (let i = 0; i < local.length; i++) scores[unit.span.from + i] = local[i]
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   if (circularUnits > 0) {
     job.note(

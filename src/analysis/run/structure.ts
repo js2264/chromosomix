@@ -59,6 +59,7 @@ import {
 } from '../../structure/versusMap'
 import { blockCovers, spanOfContig, squareFor, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
+import { regionLabel, typedLocusToRegion } from '../../genome/assembly'
 
 const NO_STRUCTURE = {
   unchosen: 'No structure was chosen. Load a g3d or bed3d and pick it under Structure.',
@@ -323,15 +324,40 @@ export const runSpatialTracks: TaskRunner = async (job) => {
     })
     if (centre !== null) outputs.push(profile('structure-radial', 'Radial position', radial, '#1f5fa9'))
     outputs.push(profile('structure-compaction', `Local compaction (±${Math.round(window)} beads)`, compaction, '#0f8a5f'))
-    if (anchor !== null) outputs.push(profile('structure-distance', `Distance to ${locusText}`, toLocus, '#c0392b'))
+    if (anchor !== null) {
+      // *The centre of*, because the anchor is a centroid: a 400 kb window named
+      // bare read as though the distance were to a point.
+      outputs.push(
+        profile('structure-distance', `Distance to the centre of ${locusName(locusText)}`, toLocus, '#c0392b'),
+      )
+    }
   }
   if (locusText !== '' && !outputs.some((output) => output.id.startsWith('structure-distance'))) {
-    job.note(`No bead of the model lies at ${locusText}, so the distance track was not made.`)
+    job.note(`No bead of the model lies at ${locusName(locusText)}, so the distance track was not made.`)
   }
   return outputs
 }
 
-/** The model's point at a typed locus: the mean of the beads its middle lands on. */
+/**
+ * A locus as a reader's own coordinates, for a name that will be read.
+ *
+ * The parameter holds what was typed or picked — 1-based inclusive, ungrouped,
+ * `IV:1000001-1400000` — and naming a structure row and three lanes with it put
+ * the one string on the Structures card that had no separators directly under a
+ * framing line that did: `3D model · IV:1000001-1400000` over
+ * `IV:1,000,000-1,400,000 · 1.0 kb bins`, two spellings of one window. Through
+ * the round trip §26.1 defines, so the display form comes out of the same two
+ * helpers every locus box uses; a bare sequence or genome name has no
+ * coordinates and comes back as itself.
+ */
+function locusName(typed: string): string {
+  return regionLabel(typedLocusToRegion(typed))
+}
+
+/**
+ * The model's point at a typed locus: the centroid of every bead the locus
+ * covers, which is what the tracks below call its centre.
+ */
 function anchorPoint(
   set: FeatureSet,
   model: StructureModel,
@@ -692,7 +718,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     smacofStep(kept, n, coords, weights, before)
     const after = stressOf(kept, n, coords, weights)
     stress = after
-    job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toExponential(2)}`)
+    job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toPrecision(3)}`)
     if (before - after < 1e-6 * before) {
       steps++
       break
@@ -713,7 +739,7 @@ export const runReconstruct: TaskRunner = async (job) => {
       ? sequences.size === 1
         ? [...sequences][0]
         : `${sequences.size} sequences`
-      : regionText
+      : locusName(regionText)
   const fit = fitOf(kept, n, coords, weights)
 
   if (dropped > 0) {
@@ -735,7 +761,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     id: 'reconstructed-fit',
     label: `Model from the map · ${subject}`,
     columns: [
-      { key: 'what', label: '', kind: 'text' },
+      { key: 'what', label: 'Quantity', kind: 'text' },
       { key: 'value', label: 'Value', kind: 'text' },
     ],
     rows: [
@@ -754,7 +780,11 @@ export const runReconstruct: TaskRunner = async (job) => {
               : 'nothing: every counted pair alike',
       },
       { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
-      { what: 'Weighted stress', value: stress.toExponential(3) },
+      // Three significant digits rather than an exponent: `3.994e-2` beside
+      // `0.881` reads as a number on a different scale, and a stress is read as
+      // the fraction it is. `toPrecision` keeps the exponent only for the
+      // magnitudes where a fixed point would be all zeros.
+      { what: 'Weighted stress', value: stress.toPrecision(3) },
       { what: 'Spearman ρ (1/d vs contacts)', value: Number.isNaN(fit.rho) ? '—' : fit.rho.toFixed(3) },
     ],
   }

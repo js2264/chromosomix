@@ -95,7 +95,7 @@ export const runMagQc: TaskRunner = async (job) => {
   })
   const covered = new Uint8Array(job.mc.nBins)
 
-  job.progress(0, 1, 'Reading pixels')
+  job.progress(0, 1, 'reading pixels')
   await job.mc.scanPixels({
     onChunk: (chunk) => {
       job.throwIfCancelled()
@@ -111,7 +111,7 @@ export const runMagQc: TaskRunner = async (job) => {
       }
       return true
     },
-    onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+    onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
   })
   job.throwIfCancelled()
 
@@ -279,7 +279,7 @@ export const runMagPurity: TaskRunner = async (job) => {
   )
   const accumulator = new ContigPurityAccumulator(layout.contigs.length, genomeOfContig)
 
-  job.progress(0, 1, 'Reading pixels')
+  job.progress(0, 1, 'reading pixels')
   await job.mc.scanPixels({
     onChunk: (chunk) => {
       job.throwIfCancelled()
@@ -292,7 +292,7 @@ export const runMagPurity: TaskRunner = async (job) => {
       }
       return true
     },
-    onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+    onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
   })
   job.throwIfCancelled()
   if (accumulator.droppedPartners > 0) {
@@ -479,7 +479,7 @@ export const runMagSplit: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(candidates.length, candidates.length, 'Done')
+  job.progress(candidates.length, candidates.length, 'done')
 
   const count = rows.filter((row) => row.flagged === 'yes').length
   job.note(

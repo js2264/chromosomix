@@ -38,14 +38,14 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'total',
-    label: 'Total coverage',
+    label: 'total coverage',
     hint: 'Every contact touching the bin. Flat on a correctly balanced file.',
     default: true,
   },
   {
     kind: 'toggle',
     key: 'fraction',
-    label: 'Cis fraction',
+    label: 'cis fraction',
     hint: 'Of the contacts a bin has, how many stay on its own sequence.',
     // Off, like the other two. **Total coverage** is what this task is opened
     // for — it is the marginal that says whether a pale stretch is a depth
@@ -57,19 +57,19 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'cis',
-    label: 'Cis coverage',
+    label: 'cis coverage',
     default: false,
   },
   {
     kind: 'toggle',
     key: 'trans',
-    label: 'Trans coverage',
+    label: 'trans coverage',
     default: false,
   },
   {
     kind: 'toggle',
     key: 'balance',
-    label: 'Use balancing weights',
+    label: 'use balancing weights',
     hint:
       'Worth turning on to check the balancing itself: a balanced file should have a flat ' +
       'total, so one that is not is a file whose weights do not fit it.',
@@ -111,9 +111,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: null,
     bytes: null,
     note:
-      'Walks the whole pixel table once. A marginal counts every contact touching a bin, so ' +
-      'unlike the other tracks on this panel it cannot be taken from one sequence’s square. ' +
-      'Progress is reported as it goes and it can be cancelled at any point.',
+      'One pass over the whole pixel table: a marginal counts every contact touching a bin, so ' +
+      'it cannot be taken from one sequence’s square.',
   }
 }
 

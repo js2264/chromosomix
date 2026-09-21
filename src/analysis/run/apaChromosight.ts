@@ -168,7 +168,7 @@ export async function chromosightPileup(
     }
     done += group.length
   }
-  job.progress(used.length, used.length, 'Done')
+  job.progress(used.length, used.length, 'done')
   job.throwIfCancelled()
 
   if (windows.length === 0) {

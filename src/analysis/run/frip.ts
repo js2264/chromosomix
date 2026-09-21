@@ -175,7 +175,7 @@ export const runFrip: TrackTaskRunner = async (job) => {
       }
     }
   }
-  job.progress(entries.length, entries.length, 'Done')
+  job.progress(entries.length, entries.length, 'done')
 
   job.note(
     `Features read at ${featureStep.toLocaleString()} bp and the assembly at ` +

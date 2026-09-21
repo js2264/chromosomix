@@ -203,7 +203,7 @@ async function readSquare(
   for (let i = 0; i < spans.length; i++) {
     for (let j = i; j < spans.length; j++) {
       job.throwIfCancelled()
-      job.progress(done, reads, 'Reading')
+      job.progress(done, reads, 'reading')
       done++
       if (block !== null) {
         // The block is dense over its own extents, so the two runs index into it
@@ -383,7 +383,7 @@ async function runSquare(
       return
     }
     await job.breathe()
-    job.progress(options.step.at, options.step.of, `Correlating ${label}`)
+    job.progress(options.step.at, options.step.of, `correlating ${label}`)
   })
 
   // The correlation matrix is consumed in place by the deflation, so the saddle
@@ -547,7 +547,7 @@ export const runCompartments: TaskRunner = async (job) => {
       job.note(`${message}, so it was skipped. Open the file at a coarser resolution to include it.`)
       continue
     }
-    job.progress(s, squares.length, `Compartments on ${label}`)
+    job.progress(s, squares.length, `compartments on ${label}`)
     const done = await runSquare(job, selection, {
       contacts,
       ignoreDiags,
@@ -594,7 +594,7 @@ export const runCompartments: TaskRunner = async (job) => {
     },
   )
 
-  job.progress(squares.length, squares.length, 'Done')
+  job.progress(squares.length, squares.length, 'done')
   return outputs
 }
 

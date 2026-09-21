@@ -44,7 +44,7 @@ export const runCisTrans: TaskRunner = async (job) => {
     block.colExtent[1] === mc.nBins
 
   if (wholeFileBlock && block !== undefined) {
-    job.progress(0, 1, 'Summing the block on screen')
+    job.progress(0, 1, 'summing the block on screen')
     // The block holds every off-diagonal pair twice, once at `(i, j)` and once
     // at `(j, i)`, so only the upper triangle is walked. Adding both would double
     // every trans total *and* every trans expectation, which cancels in the
@@ -65,7 +65,7 @@ export const runCisTrans: TaskRunner = async (job) => {
           `${DEFAULT_COUNT_COLUMN}. These numbers are of the counts.`,
       )
     }
-    job.progress(0, 1, 'Reading pixels')
+    job.progress(0, 1, 'reading pixels')
     await mc.scanPixels({
       onChunk: (chunk) => {
         job.throwIfCancelled()
@@ -81,7 +81,7 @@ export const runCisTrans: TaskRunner = async (job) => {
         }
         return true
       },
-      onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+      onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
     })
   }
   job.throwIfCancelled()
@@ -240,7 +240,7 @@ export const runCisTrans: TaskRunner = async (job) => {
     if (edges.length > maxEdges) {
       job.note(
         `${edges.length.toLocaleString()} sequence pairs pass the threshold and the strongest ` +
-          `${maxEdges.toLocaleString()} are listed. Raise *Pairs to list* to see more.`,
+          `${maxEdges.toLocaleString()} are listed. Raise “pairs to list” to see more.`,
       )
     }
   }

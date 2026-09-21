@@ -118,6 +118,28 @@ function stoppable(state: JobState): boolean {
   return state.status === 'running' || state.status === 'queued'
 }
 
+/**
+ * What pressing stop does, in the two ways it can be true.
+ *
+ * Exported because there are **two** stop controls for one job — this column's
+ * icon on the row and the drawer's `cancel` beside Run — and they were telling
+ * a reader two different things about the same press. A task in the analysis
+ * worker is genuinely cooperative: it reads the cancelled set between chunks and
+ * abandons the work. A task in the annotations worker is a single synchronous
+ * pass that never returns to its event loop, so the message is not read until
+ * the pass is over and pressing stop discards the answer rather than preventing
+ * it. That is still worth doing — the row ends *cancelled*, nothing is cached
+ * and no lane is adopted — and it is not what "stops at the next chunk"
+ * describes. These passes are bounded by what the worker will hold (a reference
+ * over `FASTA_BYTE_CAP` is refused at load), so the wait is seconds, which is
+ * why the honest sentence is acceptable and the false one was not.
+ */
+export function stopPromise(venue: AnalysisTask['venue']): string {
+  return venue === 'annotations'
+    ? 'This one runs in a single pass, so the result is discarded rather than cut short.'
+    : 'The worker checks between chunks, so it stops at the next one.'
+}
+
 /** One task's row, held so a state change repaints three nodes rather than all. */
 interface Row {
   task: AnalysisTask
@@ -136,6 +158,25 @@ interface Row {
   batch: HTMLElement
   /** The cell the chip and the stop share, so the stop can come and go. */
   cell: HTMLElement
+  /** Which heading this row sits under, for the shared waiting line. */
+  group: TaskGroup
+}
+
+/**
+ * One heading, and the line its rows share when they all wait on one thing.
+ *
+ * The line exists because §18.1's *a greyed row carries a sentence saying what
+ * to load* is right about the sentence and says nothing about how many times to
+ * print it. Ten of the sixteen tasks read the matrix, so a 1D-browser session
+ * drew ten rows under ON THE MAP each carrying the identical *Open a contact
+ * map.* — a column twice as tall as its content, in which the one gate that
+ * differed (APA's loop set) was the hardest line to find. When every waiting row
+ * of a group says the same thing it is said once, here; when they differ, each
+ * row keeps its own.
+ */
+interface Group {
+  group: TaskGroup
+  needs: HTMLElement
 }
 
 export class AnalysisPanelCard {
@@ -144,6 +185,7 @@ export class AnalysisPanelCard {
 
   private readonly unsubscribe: () => void
   private readonly rows: Row[] = []
+  private readonly groupNotes: Group[] = []
   /**
    * The task list the rows were built from, joined; `null` before the first one.
    *
@@ -209,6 +251,7 @@ export class AnalysisPanelCard {
 
   private rebuild(tasks: readonly AnalysisTask[]): void {
     this.rows.length = 0
+    this.groupNotes.length = 0
     if (tasks.length === 0) {
       this.el.replaceChildren(
         el('p', {
@@ -224,6 +267,11 @@ export class AnalysisPanelCard {
     const nodes: HTMLElement[] = []
     for (const group of this.groups(tasks)) {
       nodes.push(el('h3', { class: 'analysis-group', text: TASK_GROUP_LABELS[group] }))
+      // Under the heading and above the first row, hidden until {@link paint}
+      // finds that every waiting row below it is waiting on the same thing.
+      const needs = el('p', { class: 'analysis-group-needs hidden' })
+      this.groupNotes.push({ group, needs })
+      nodes.push(needs)
       for (const task of tasks.filter((item) => item.group === group)) {
         const row = this.row(task)
         this.rows.push(row)
@@ -254,23 +302,11 @@ export class AnalysisPanelCard {
     // Beside the chip and before the stop, so the row reads left to right as
     // "how far through this map, how far through the deck, and the way to stop".
     const batch = el('span', { class: 'analysis-chip analysis-batch hidden' })
-    // Two sentences, because the two venues stop differently and a tooltip that
-    // claimed the better one for both would be a promise the reader watches go
-    // unkept. A task in the analysis worker is genuinely cooperative: it reads
-    // the cancelled set between chunks and abandons the work. A task in the
-    // annotations worker is a single synchronous pass that never returns to its
-    // event loop, so the message is not read until the pass is over — pressing
-    // Stop discards the answer rather than preventing it. That is still worth
-    // doing (the row ends cancelled, nothing is cached and no lane is adopted),
-    // and it is not what "stops at the next chunk" describes. These passes are
-    // bounded by what the worker will hold — a reference over `FASTA_BYTE_CAP`
-    // is refused at load — so the wait is seconds, which is why the honest
-    // sentence is acceptable and a false one would not be.
+    // The sentence is {@link stopPromise}'s, so this icon and the drawer's
+    // `cancel` make the same promise about the same press.
     const stop = iconButton(
       'circle-stop',
-      task.venue === 'annotations'
-        ? `Stop ${task.title}. This one runs in a single pass, so the result is discarded rather than cut short.`
-        : `Stop ${task.title}. The worker checks between chunks, so it stops at the next one.`,
+      `Stop ${task.title}. ${stopPromise(task.venue)}`,
       () => this.options.runner.cancel(task.id),
       { class: 'btn btn-icon', size: 14 },
     )
@@ -314,16 +350,47 @@ export class AnalysisPanelCard {
       event.preventDefault()
       open()
     })
-    return { task, el: node, chip, blurb, needs, stop, batch, cell }
+    return { task, el: node, chip, blurb, needs, stop, batch, cell, group: task.group }
   }
 
   // -------------------------------------------------------------------------
   // Painting
   // -------------------------------------------------------------------------
 
+  /**
+   * The sentence a group says for all of its waiting rows, or `''`.
+   *
+   * `''` for a group with one waiting row — moving that row's own line up to the
+   * heading would put it further from the row it is about for no saving — and
+   * for a group whose waiting rows ask for different things, where each row's
+   * line is the only place its own answer can be.
+   */
+  private sharedNeeds(waiting: readonly string[]): string {
+    if (waiting.length < 2) return ''
+    return waiting.every((needs) => needs === waiting[0]) ? waiting[0] : ''
+  }
+
   private paint(): void {
     const active = this.options.active()
     const context = this.options.context()
+    const waitingIn = new Map<TaskGroup, string[]>()
+    for (const row of this.rows) {
+      const available =
+        context === null ? { state: 'waiting' as const, needs: 'Open a file.' } : row.task.availability(context)
+      if (available.state === 'waiting') {
+        const held = waitingIn.get(row.group) ?? []
+        held.push(available.needs)
+        waitingIn.set(row.group, held)
+      }
+    }
+    const shared = new Map<TaskGroup, string>()
+    for (const [group, needs] of waitingIn) shared.set(group, this.sharedNeeds(needs))
+    for (const note of this.groupNotes) {
+      const text = shared.get(note.group) ?? ''
+      note.needs.textContent = text
+      note.needs.classList.toggle('hidden', text === '')
+    }
+
     for (const row of this.rows) {
       const available =
         context === null ? { state: 'waiting' as const, needs: 'Open a file.' } : row.task.availability(context)
@@ -334,8 +401,10 @@ export class AnalysisPanelCard {
       if (waiting) row.el.setAttribute('aria-disabled', 'true')
       else row.el.removeAttribute('aria-disabled')
       row.el.tabIndex = waiting ? -1 : 0
-      row.needs.textContent = waiting ? available.needs : ''
-      row.needs.classList.toggle('hidden', !waiting)
+      // Nothing under the row where the heading above it already says it.
+      const own = waiting && available.needs !== shared.get(row.group) ? available.needs : ''
+      row.needs.textContent = own
+      row.needs.classList.toggle('hidden', own === '')
 
       const state = this.options.runner.stateOf(row.task.id)
       const chip = chipFor(state)
@@ -353,7 +422,10 @@ export class AnalysisPanelCard {
       // column of five rows with a red box in one of them reads as an alarm
       // rather than as a job that stopped. The chip is already red.
       row.blurb.textContent = chip.detail === '' ? row.task.blurb : chip.detail
-      row.el.title = chip.detail
+      // A greyed row carries its reason in its own tooltip whether or not the
+      // sentence is printed under it, so a reader pointing at the seventh row of
+      // a waiting group is answered where they are pointing.
+      row.el.title = waiting ? available.needs : chip.detail
 
       const stop = stoppable(state)
       if (stop && row.stop.parentNode === null) row.cell.appendChild(row.stop)

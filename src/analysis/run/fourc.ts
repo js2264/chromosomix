@@ -77,8 +77,8 @@ export const runFourC: TaskRunner = async (job) => {
   const text = strParam(job.params, 'anchor', '').trim()
   if (text === '') {
     job.note(
-      'No anchor was chosen. Type a locus — `chrIV:500,000-510,000`, or a whole sequence by ' +
-        'name — or press “Pick on map” and drag along either axis.',
+      'No anchor was chosen. Type a locus, or a whole sequence by name, or press “pick on map” ' +
+        'and drag along either axis.',
     )
     return []
   }
@@ -270,7 +270,7 @@ async function cisProfile(
   overExpected = false,
   overCoverage = false,
 ): Promise<Float32Array> {
-  job.progress(0, 1, `Reading ${anchor.label}`)
+  job.progress(0, 1, `reading ${anchor.label}`)
   // The view's block only where it holds the column being asked for.
   // `usableBlock` vouches for the resolution and the balancing and not for the
   // value column — it is whatever the map happens to be drawn from — so a caller
@@ -461,11 +461,11 @@ async function transProfile(
       return true
     },
     onProgress: (done, total) => {
-      if (!stopped) job.progress(done, total, 'Reading pixels')
+      if (!stopped) job.progress(done, total, 'reading pixels')
     },
   })
   job.throwIfCancelled()
-  job.progress(1, 1, 'Done')
+  job.progress(1, 1, 'done')
 
   return accumulator.finish(weights === null ? null : (bin) => Number.isFinite(weights[bin]))
 }

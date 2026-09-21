@@ -55,21 +55,21 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'cells',
-    label: 'Cells',
+    label: 'cells',
     default: 'all',
     options: [
       {
         value: 'all',
-        label: 'Every cell in the file',
+        label: 'every cell in the file',
         hint: 'What the choice is made from, so this is the answer that helps make it.',
       },
-      { value: 'selected', label: 'The ticked ones only' },
+      { value: 'selected', label: 'the ticked ones only' },
     ],
   },
   {
     kind: 'number',
     key: 'nearFrom',
-    label: 'Near band, from',
+    label: 'near band, from',
     unit: 'bp',
     hint: 'Below this a contact is mostly self-ligation and unligated ends rather than structure.',
     default: NEAR_FROM,
@@ -80,7 +80,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'nearTo',
-    label: 'Near band, to',
+    label: 'near band, to',
     unit: 'bp',
     default: NEAR_TO,
     min: 1,
@@ -90,7 +90,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'mitoticTo',
-    label: 'Mitotic band, to',
+    label: 'mitotic band, to',
     unit: 'bp',
     hint: 'The near band’s upper edge is this band’s lower one; beyond it is the far band.',
     default: MITOTIC_TO,
@@ -119,8 +119,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `One pass over each of ${counted.toLocaleString()} cells’ own pixels — the same reads a ` +
-      'pseudo-bulk of them costs, and in the same order, with one accumulator per cell instead ' +
-      'of one shared. Progress is counted in cells and it can be cancelled at any point.',
+      'pseudo-bulk of them costs, with one accumulator per cell instead of one shared.',
   }
 }
 

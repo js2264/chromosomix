@@ -18,21 +18,21 @@ import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } f
 import { READY, waitingFor } from '../types'
 
 const PARAMS: readonly ParamSpec[] = [
-  { kind: 'track', key: 'tracks', label: 'Tracks', multiple: true },
+  { kind: 'track', key: 'tracks', label: 'tracks', multiple: true },
   {
     kind: 'choice',
     key: 'over',
-    label: 'Compare over',
+    label: 'compare over',
     default: 'bins',
     options: [
-      { value: 'bins', label: 'Fixed bins', hint: 'Everywhere, including the empty majority.' },
-      { value: 'features', label: 'A feature set', hint: 'Only where something is happening.' },
+      { value: 'bins', label: 'fixed bins', hint: 'Everywhere, including the empty majority.' },
+      { value: 'features', label: 'a feature set', hint: 'Only where something is happening.' },
     ],
   },
   {
     kind: 'number',
     key: 'binsize',
-    label: 'Bin size',
+    label: 'bin size',
     /**
      * 100 bp, and **unitless on the form**.
      *
@@ -57,13 +57,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'featureSet',
     key: 'features',
-    label: 'Features',
+    label: 'features',
     when: (params) => params.over === 'features',
   },
   {
     kind: 'choice',
     key: 'method',
-    label: 'Method',
+    label: 'method',
     default: 'spearman',
     options: [
       { value: 'spearman', label: 'Spearman', hint: 'Rank-based; robust to one very deep locus.' },

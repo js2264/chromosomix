@@ -59,6 +59,82 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **A waiting analysis group says what it needs once, not once per row (§18.1).** Ten of the sixteen
+  tasks read the matrix, so a 1D browser session drew ten rows under ON THE MAP each carrying the
+  identical *Open a contact map — this one reads the matrix itself.* — a column twice as tall as its
+  content, in which the one gate that differed (APA's loop set) was the hardest line in it to find.
+  When every waiting row of a group is waiting on the same thing the sentence is printed once, under
+  the heading; rows whose sentences differ keep their own; and every greyed row carries its reason in
+  its tooltip either way. The sentences also take one shape now — *Open a contact map.*, *Load a
+  structure (g3d, .3dg or bed3d).*, *Load a FASTA to search.* — where there were five phrasings, one
+  of them not a sentence, and one of which told a Dip-C reader holding a `.3dg` that their file would
+  not do.
+
+- **The analysis drawer's form looks like the cards it opens over (§18.2).** Every field label and
+  every select option in every task was Title-case while every label on the three panels beside it
+  was lowercase, so the drawer read as a different application bolted to the side of this one. All of
+  them are lowercase now, and a label is one to three words in one column down the form, so
+  *minimum separation* and *log bins per step* stop breaking into two lines. **A number keeps its
+  unit on its line**: the box filled the whole control column and dropped *bins* underneath itself,
+  which is how a reader comes to type base pairs into a box that wanted bins. **A single on/off
+  button shares its label's row** instead of floating on a line of its own under a hint that was
+  aligned with the label rather than with it.
+
+- ***pick on map* sits next to the locus box, which is what §18.1 always said it did.** The wrapper
+  holding the box and the button was `display: contents`, which dissolved it into a two-column grid —
+  so the button wrapped onto the next row and landed in the label column, flush under *distance to*
+  and reading as a form action of its own. It is also spelled the way the Manual annotations card
+  spells it, since it is the same gesture.
+
+- **A run's cost line is a price and nothing else (§18.6).** Every scan ended *progress is reported as
+  it goes and it can be cancelled at any point* — eighteen copies of a promise the progress bar and
+  the cancel button beside it make by existing, filling the one line a reader checks before spending
+  compute with reassurance instead of a figure. It now says what will be read, and the sentence no
+  longer ends in a full stop that the appended request count followed with a middle dot.
+
+- ***cancel* is a bordered button beside *run*, and so are the exports (§18.1, §18.7).** The control
+  that stops a forty-second scan was borderless grey text at the far end of a row of prose, in the
+  weight this app uses for a link; `TSV`, `bed3d`, `PNG`, `PDF`, *copy provenance* and *copy CLI
+  command* were the same, so the buttons that get a result out of the application read as captions.
+
+- **Where a result went is one sentence for the run (§18.7).** Spatial tracks makes three lanes, and
+  three lanes were three dashed boxes each repeating the same thirty words — *is one value per bin, so
+  it is a lane rather than a picture…* — with a lone TSV under each. It is now one line saying where
+  they went and one row per output: its name and its exports. The 3D model's note no longer opens by
+  telling you that the thing called *3D model* is a 3D model.
+
+- **A result line reads `computed in 16 ms at 20:49:46`.** It used to print the ISO instant with its
+  milliseconds and its `Z` in the middle of a sentence, which reads as machine output that has leaked;
+  that exact stamp is what *copy provenance* beside it writes, and is now the line's tooltip.
+
+- **The running line is the step, not the task's name again.** *Contact probability P(s) — Reading
+  pixels* was two thirds a repeat of the heading directly above it, and pushed the one new word to the
+  end. A one-step job now says `reading pixels`; a chain still names its step, where the step is news.
+
+- **A figure's `log x` is a button when it is off (§18.13).** It was borderless, so an unlit axis
+  toggle was plain grey text beside a dropdown — a label, as far as the eye is concerned, in exactly
+  the state where a reader needs to see that there is something to press. The figure settings' tick
+  boxes are now the same `on`/`off` button the form and the lane settings use, so one figure's
+  booleans have one shape, and *Fit*, *Reset*, *Show all* and *Colours* are lowercase like every other
+  button — the last of them now reading *reset colours*, which is what pressing it does.
+
+- **A figure's column heads are aligned with their columns and have names.** A `<th>` centres itself,
+  so every head sat over the middle of a column of left-aligned cells; and the *Model from the map*
+  table's first head was blank, which made it a sort button whose tooltip read *Sort by* and whose
+  column had to be inferred from its rows. A weighted stress reads `0.0399` rather than `3.994e-2`
+  beside a Spearman ρ of `0.881`.
+
+- **A structure and its lanes are named with a reader's coordinates (§25.6, §26.1).** *3D model ·
+  IV:1000001-1400000* sat one line above the framing's *IV:1,000,000-1,400,000* — the one string on
+  the Structures card with no separators in it — and *Distance to IV:1000001-1400000* named a 400 kb
+  stretch as though the distance were to a point. It is *Distance to the centre of
+  IV:1,000,001-1,400,000* now, which is what the code measures.
+
+- ***Find a sequence* is *Find a motif*.** A sequence is a chromosome or a contig everywhere else in
+  this application, so a task called *Find a sequence* with a field called *Sequence* read as "jump to
+  chrIV" — which is the locus box's job. The field is *motif*; the reference it searches is
+  *reference*.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
@@ -67,6 +143,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
   share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
   read.
+
+- **Hints that told you to empty a dropdown.** *Leave empty for every sequence in the file* sat beside
+  a select whose first option reads *every sequence* on five tasks: an instruction for a text box that
+  has not existed for some time, naming a gesture the control cannot take. The *Model from the map*
+  form's three paragraph-long hints are one line each, with the three weighting cases on the options
+  themselves, and its example no longer names `chrIV` on a file whose sequences are `I`…`XVI`. The
+  heading *FROM THE RECORDS* — the parser's word for a `.pairs` file's rows — is *From the .pairs
+  file*, over a box labelled `.pairs URL`.
 
 ## [0.13.0] - 2026-09-20
 

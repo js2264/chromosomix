@@ -55,7 +55,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
     job.progress(i, entries.length, names[i])
     columns.push(await valuesFor(job, entries[i], regions, step))
   }
-  job.progress(entries.length, entries.length, 'Correlating')
+  job.progress(entries.length, entries.length, 'correlating')
 
   const method = strParam(job.params, 'method', 'spearman')
   const n = entries.length
