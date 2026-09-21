@@ -66,7 +66,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'HDF5, but not a cooler or metacool',
     advice: [
       'The file opened as HDF5 but carries neither a cooler nor a metacooler format attribute.',
-      'Check you picked the right file; `metacooler attrs <file>` prints what is actually there.',
+      'Check you picked the right file; metacooler attrs <file> prints what is actually there.',
     ],
   },
   'mmetacool-root': {
@@ -105,7 +105,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Contigs are not grouped by genome',
     advice: [
       'The viewer requires contig-ordering = genome-then-length, because that is what makes each genome one contiguous bin range — every view depends on it.',
-      'Re-create the file with the default ordering: `metacooler create ... --contig-order genome-then-length`.',
+      'Re-create the file with the default ordering: metacooler create ... --contig-order genome-then-length.',
       'Files built from a cooler (cool ordering) or from a FASTA-ordered assembly land here; this is a known and deliberate exclusion.',
     ],
   },
@@ -113,14 +113,14 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Variable-bin file',
     advice: [
       'This viewer supports fixed-bin files only. Fragment-level and contig-level metacools have variable bins and are refused.',
-      'Produce a fixed-bin file with `metacooler binnify <file> --binsize <bp>` and open that.',
+      'Produce a fixed-bin file with metacooler binnify <file> --binsize <bp> and open that.',
     ],
   },
   'unbinned-not-displayable': {
     title: 'Unassigned contigs are not a genome',
     advice: [
       '__unbinned__ holds every contig binning failed to assign. It is a bookkeeping row, not an organism, and there is nothing coherent to display for it.',
-      'Its size is reported once, as a QC statistic, in the file info panel.',
+      'Its size is reported once, as a QC statistic, under Binning QC in the General column.',
     ],
   },
   'dense-too-large': {
@@ -134,7 +134,6 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Unknown genome or contig',
     advice: [
       'The label before the colon matched neither a genome nor a contig in this file.',
-      'Genome and contig namespaces can collide; when they do, the genome wins.',
     ],
   },
   'scool-listing-cost': {
@@ -148,9 +147,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
   'hicpro-no-bins': {
     title: 'This is half of a contact map',
     advice: [
-      'A HiC-Pro map is two files: the `.matrix` of pixel counts, and the `_abs.bed` beside it that says which genomic interval each bin id means. Neither is a map on its own.',
+      'A HiC-Pro map is two files: the .matrix of pixel counts, and the _abs.bed beside it that says which genomic interval each bin id means. Neither is a map on its own.',
       'Drop the two together, or connect the folder they are in and pick the matrix there — the bin file comes with it.',
-      'For a URL whose bin file is somewhere unguessable, name it: `<matrix>#bins=<url>`.',
+      'For a URL whose bin file is somewhere unguessable, name it: <matrix>#bins=<url>.',
     ],
   },
   'hicpro-load-cost': {
@@ -158,7 +157,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     advice: [
       'A HiC-Pro matrix is a list of pixels as text with no index, so there is no way to reach a region without reading everything before it.',
       'It is read once and then behaves exactly like a cooler — every region and every zoom afterwards is instant.',
-      'For a fine resolution, convert it instead: `cooler load -f coo <bins> <matrix> out.cool`.',
+      'For a fine resolution, convert it instead: cooler load -f coo <bins> <matrix> out.cool.',
     ],
   },
   'cell-not-found': {
@@ -179,7 +178,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Not available in the viewer',
     advice: [
       'This operation exists in the metacooler CLI but not here, because the browser reader deliberately never reads the table it would need.',
-      'Run the equivalent `metacooler` command locally.',
+      'Run the equivalent metacooler command locally.',
     ],
   },
   'genome-coordinate-suffix': {
@@ -224,7 +223,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Too much to download for this operation',
     advice: [
       'This action reads every pixel, which over the network means fetching the whole file.',
-      'Run it on a local copy, or publish a genome edge list beside the file (`metacooler network --level genome --header`).',
+      'Run it on a local copy, or publish a genome edge list beside the file (metacooler network --level genome --header).',
     ],
   },
   'bad-uri': {
@@ -233,7 +232,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
   },
   format: {
     title: 'This file does not match the format',
-    advice: ['`metacooler check <file>` reports what is wrong without raising.'],
+    advice: ['metacooler check <file> lists what is wrong with it.'],
   },
 }
 
@@ -245,7 +244,13 @@ export class ErrorView {
     const viewerError = error instanceof ViewerError ? error : null
     const guidance =
       viewerError === null
-        ? { title: 'Something went wrong', advice: ['This is not one of the format refusals; the message below is the underlying failure.'] }
+        ? {
+            title: 'Something went wrong',
+            advice: [
+              'This is not one of the format refusals; the message above is the underlying ' +
+                'failure. Try again, and copy that message if you report it.',
+            ],
+          }
         : GUIDANCE[viewerError.code]
 
     const entries = extractEntries(viewerError)

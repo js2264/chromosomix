@@ -95,7 +95,7 @@ function dialogBody(props: PairsDialogProps, done: (binning: PairsBinning) => vo
   const costNote = el('p', { class: 'hint pairs-cost' })
   const warning = el('p', { class: 'hint pairs-warning' })
 
-  const start = el('button', { class: 'btn btn-primary', text: 'Build the map' })
+  const start = el('button', { class: 'btn btn-primary', text: 'build the map' })
 
   const currentBase = (): number => {
     const typed = Number(baseInput.value)

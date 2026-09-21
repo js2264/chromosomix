@@ -11,7 +11,7 @@
  * Three of the tests are about a promise made in prose elsewhere and only
  * keepable here. **Every run is a row**, so a batch over six maps is six rows
  * rather than one: the panel paints what the log holds and the log holds one
- * entry per job. **The output toggle is the choice between a script and an
+ * entry per job. **The provenance toggle is the choice between a script and an
  * archive**, and it governs the clipboard as well as the screen — a reader who
  * turns it off to paste clean commands must not find eleven `#` lines per
  * command on their clipboard anyway. And **a day is the unit**, because "what
@@ -272,11 +272,17 @@ describe('the rows', () => {
     expect(days[0].querySelector('.console-day-count')?.textContent).toBe('2 lines')
   })
 
+  // Two sentences: what will appear, and where it is kept. The deck-batch aside
+  // it used to carry — *one line per map* — is §23.1's argument about the log's
+  // shape rather than something a reader opening an empty panel can act on.
   it('says what it is for while it holds nothing', () => {
     const panel = mount()
     panel.toggle.click()
     expect(rows(panel)).toHaveLength(0)
-    expect(panel.el.querySelector('.console-empty')?.textContent).toContain('one line per map')
+    const empty = panel.el.querySelector('.console-empty')?.textContent ?? ''
+    expect(empty).toContain('Nothing recorded yet.')
+    expect(empty).toContain('kept for a week')
+    expect(empty).not.toContain('one line per map')
   })
 
   it('follows a run that arrives while it is open', () => {
@@ -288,23 +294,41 @@ describe('the rows', () => {
   })
 })
 
-describe('the output toggle', () => {
+/**
+ * The provenance toggle, which is a `btn-toggle` and not a checkbox.
+ *
+ * It was a ticked box labelled *output* — a word that beside a column of
+ * commands reads as the numbers the runs produced, which is the one thing it
+ * does not show — and a checkbox is for choosing rows in a list rather than for
+ * a setting (§26.3). So the tests press a button and read `aria-pressed`.
+ */
+describe('the provenance toggle', () => {
+  it('is a labelled toggle that says whether it is on', () => {
+    const panel = mount()
+    const box = panel.el.querySelector<HTMLButtonElement>('.console-output-box')
+    if (box === null) throw new Error('no provenance toggle')
+    expect(box.tagName).toBe('BUTTON')
+    expect(box.textContent).toBe('provenance')
+    expect(box.classList.contains('btn-toggle')).toBe(true)
+    expect(box.getAttribute('aria-pressed')).toBe('false')
+    box.click()
+    expect(box.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows the provenance and hides it again', () => {
     run('a.cool')
     const panel = mount()
     panel.toggle.click()
     expect(panel.el.querySelectorAll('.console-detail')).toHaveLength(0)
 
-    const box = panel.el.querySelector<HTMLInputElement>('.console-output-box')
-    if (box === null) throw new Error('no output toggle')
-    box.checked = true
-    box.dispatchEvent(new Event('change'))
+    const box = panel.el.querySelector<HTMLButtonElement>('.console-output-box')
+    if (box === null) throw new Error('no provenance toggle')
+    box.click()
     expect(
       Array.from(panel.el.querySelectorAll('.console-detail')).map((node) => node.textContent),
     ).toEqual(['# task: insulation v1', '# param window: 10'])
 
-    box.checked = false
-    box.dispatchEvent(new Event('change'))
+    box.click()
     expect(panel.el.querySelectorAll('.console-detail')).toHaveLength(0)
   })
 
@@ -318,10 +342,9 @@ describe('the output toggle', () => {
     expect(copied[0]).toContain('metacooler-run insulation a.cool --window 10')
     expect(copied[0]).not.toContain('# param window: 10')
 
-    const box = panel.el.querySelector<HTMLInputElement>('.console-output-box')
-    if (box === null) throw new Error('no output toggle')
-    box.checked = true
-    box.dispatchEvent(new Event('change'))
+    const box = panel.el.querySelector<HTMLButtonElement>('.console-output-box')
+    if (box === null) throw new Error('no provenance toggle')
+    box.click()
     findButton(panel, 'copy').click()
     await Promise.resolve()
     expect(copied[1]).toContain('# param window: 10')

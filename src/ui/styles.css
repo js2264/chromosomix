@@ -124,6 +124,20 @@
    */
   --tabstrip-h: 2.4rem;
 
+  /*
+   * How much of the window the status bar takes: one line of `--step--1` inside
+   * `.app-foot`'s padding and its top border.
+   *
+   * Named for the corner notes, which anchored to the viewport's own bottom
+   * edge and therefore landed *on* the bar — covering the memory figure a
+   * reader watches during a large open, and half of the validation button,
+   * for the four seconds the note stays. Not read from the element, because
+   * the bar is specified never to grow (see `.app-foot`): a number that the
+   * bar's own rules keep true is the cheapest way for a note in a different
+   * subtree to know where the bar's roof is.
+   */
+  --foot-h: 1.8rem;
+
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
 
@@ -2643,14 +2657,14 @@ p {
 .btn-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
   /* The base `.btn:hover` turns text and border to the accent, which on a
      filled button is accent on accent — invisible. Overridden to darken
      instead, so the hover reads as a press rather than as a disappearance. */
-  color: #fff;
+  color: var(--on-accent);
   filter: brightness(1.12);
 }
 
@@ -4207,6 +4221,14 @@ canvas.is-frozen {
   width: min(46rem, 100%);
 }
 
+/* The keyboard sheet, and the one dialog that is wider than wide: its body is
+   three columns of short rows, and at 46rem it was two — which made the View
+   group's twenty-one rows the height of the dialog on their own and pushed the
+   gesture tables under it out of sight. */
+.modal-shortcuts {
+  width: min(56rem, 100%);
+}
+
 /* **Every dialog's body is inset, and no dialog has to remember it.**
 
    Each one used to name its own body class and set its own padding, which is a
@@ -4341,7 +4363,10 @@ canvas.is-frozen {
    .mcool written from a pairs import, which runs while the map it came from is
    already on screen. Bottom-right rather than top, because the top-right is the
    theme and menu corner and a note that covers a control is worse than one that
-   covers nothing. */
+   covers nothing — and above the status bar rather than in the window's own
+   corner, because that is what the bottom-right *had* been covering: the memory
+   figure a reader watches during a large open, and half of the validation
+   button (`--foot-h`). */
 
 /* The column every note is placed in, newest nearest the corner.
 
@@ -4357,7 +4382,7 @@ canvas.is-frozen {
 .toast-stack {
   position: fixed;
   right: 1rem;
-  bottom: 1rem;
+  bottom: calc(var(--foot-h, 1.8rem) + 0.5rem);
   z-index: 90;
   display: flex;
   flex-direction: column-reverse;
@@ -4598,14 +4623,24 @@ canvas.is-frozen {
   padding: 0.3rem;
 }
 
+/* The badge sits on the title's line, not in the middle of the row. Centred,
+   a key drifted to wherever the hint's height put it — `Ctrl+S` level with the
+   second line of its paragraph, `F2` half way down a seven-line one — and the
+   eye scanning the right-hand edge for keys found them at random heights
+   instead of paired with the names they belong to. */
 .palette-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.35rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.palette-row > .kbd,
+.palette-row > .cmd-state {
+  margin-top: 0.1rem;
 }
 
 .palette-row.selected {
@@ -4636,7 +4671,12 @@ canvas.is-frozen {
   color: var(--text);
 }
 
+/* Always on its own line. `flex-wrap` let a short hint sit beside its title
+   and a long one drop beneath, so one list had two row shapes and, on the
+   one-line rows, nothing said where the command's name ended and the
+   explanation began. */
 .palette-hint {
+  flex-basis: 100%;
   font-size: var(--step--1);
   color: var(--text-dim);
 }
@@ -4649,19 +4689,34 @@ canvas.is-frozen {
   gap: 0.5rem;
 }
 
+/* The key groups *flow*: a multi-column block, not a grid. As a grid each
+   group took a row of its own, so App's two rows sat beside File's seven and
+   left a hand's width of nothing under them, and Go's eight beside View's
+   twenty-one left half a column empty — a reference sheet that scrolls past
+   white space reads as unfinished. Columns fill: a short group is followed by
+   the next one, and `break-inside: avoid` keeps a group whole, which is what
+   the headings are for. */
 .shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 0.4rem 1.5rem;
+  columns: 16rem 3;
+  column-gap: 1.5rem;
+}
+
+.shortcut-group {
+  break-inside: avoid;
 }
 
 /* The two gesture tables are a pair and are read as one: what a drag, a wheel
-   and a double click do on the map, against what they do on the tracks. A wider
-   floor than the key groups above, because these rows are sentences — below
-   about 18rem they wrap and the comparison stops lining up — and `auto-fit`
-   still collapses them to one column on a phone. */
+   and a double click do on the map, against what they do on the tracks. So
+   they stay a *grid* of two where the keys above them flow — a column break
+   in the middle of one of these tables would put half of a comparison under
+   the other half. A wider floor than the key groups, because these rows are
+   sentences: below about 18rem they wrap and the comparison stops lining up,
+   and `auto-fit` still collapses them to one column on a phone. */
 .shortcut-gestures {
+  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.4rem 1.5rem;
+  columns: auto;
 }
 
 .shortcut-group h3 {
@@ -4677,6 +4732,14 @@ canvas.is-frozen {
   align-items: baseline;
   gap: 0.6rem;
   padding: 0.15rem 0;
+}
+
+/* The same dimming, and the same number, as `.palette-row.disabled`: the two
+   lists are two printings of one registry, and one of them listing `G` as a
+   live key on a file that has no genomes table is the kind of disagreement a
+   reader settles by pressing the key and distrusting the app. */
+.shortcut-row.disabled {
+  opacity: 0.45;
 }
 
 .shortcut-row > .kbd {
@@ -5478,28 +5541,36 @@ canvas.is-frozen {
 
 /* One row of four, which is what the set is: four places, offered at once, none
    of them the recommended one. A wrapping flex row would not do it — at this
-   page's 52rem their natural widths put three up and strand the fourth — so
-   the row is a grid of four equal columns, and what gives instead is the
-   label: it wraps to a second line rather than the row breaking. */
+   page's 52rem their natural widths put three up and strand the fourth — so it
+   is a grid of four tracks that never breaks the row.
+
+   The tracks are `auto` rather than equal. Equal columns are 200px at this
+   page's width, and *sign in to Dropbox…* needs 210 of them in the container's
+   own font, so on every desktop it alone stacked onto a second line: one button
+   of four permanently taller and centred over two lines, in a row whose whole
+   point is that the four read as a set. Auto tracks give each label the width of
+   its words while the row has room — measured at this page's 52rem the four come
+   to 804px of the 832 available — and when it has not (a narrower window, a
+   wider font) they shrink together and the longest wraps first, which is the
+   fallback §24.2 argues rather than a broken row. */
 .picker-providers {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, auto);
   gap: 0.6rem;
 }
 
-/* A column narrower than its label, on purpose. `min-width: 0` because a grid
-   item defaults to `auto` and would push the column out rather than wrap;
-   `white-space: normal` because a button's label does not wrap by default; and
-   the buttons are all the height of the tallest, which the grid does for free
-   and is what keeps a two-line label from looking like a mistake.
+/* `min-width: 0` so a squeezed track may go narrower than its label and wrap
+   it, rather than pushing the row out; `white-space: normal` because a button's
+   label does not wrap by default; and the buttons are all the height of the
+   tallest, which the grid does for free and is what keeps a wrapped label from
+   looking like a mistake.
 
    The padding and the gap are under the row's own selector rather than beside
-   these, so they beat `.btn-mark`'s wherever the two end up in the file:
-   tighter here buys the shorter labels a single line at this page's width, and
-   *sign in to Dropbox…*, which no honest padding fits, takes its second. It is
-   close enough to the edge that a wider font puts more of them on two lines,
-   which is why the grid is what holds the row together rather than the labels:
-   four buttons of equal height read as a set whichever way each one breaks. */
+   these, so they beat `.btn-mark`'s wherever the two end up in the file. Tighter
+   than a `.btn-mark` elsewhere, and tighter by 0.15rem a side than it was: with
+   auto tracks the four labels come to within a pixel of the row at this page's
+   width, and the point of the change is that the longest one is not wrapped by
+   a rounding — so the row is given a few pixels it does not need. */
 .picker-provider {
   min-width: 0;
   white-space: normal;
@@ -5509,7 +5580,7 @@ canvas.is-frozen {
 
 .picker-providers > .picker-provider {
   gap: 0.4rem;
-  padding: 0.55rem 0.75rem;
+  padding: 0.55rem 0.6rem;
 }
 
 /* Two across once four columns would be narrower than the words in them —
@@ -5595,7 +5666,11 @@ canvas.is-frozen {
   background: var(--accent-soft);
 }
 
-/* The add tile is dashed: it is a door, not a store. */
+/* The two door tiles are dashed: a door asks for an address, where every tile
+   beside it opens a catalogue that is already there. Only the custom one was,
+   which left *Connect to a UCSC hub* — the other door, and the one a reader is
+   most likely to meet holding a URL — looking like a store they could browse,
+   solid-bordered and indistinguishable from a hub they had already remembered. */
 .store-tile-add {
   border-style: dashed;
 }
@@ -5892,7 +5967,7 @@ canvas.is-frozen {
   padding: 0 0.3rem;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: var(--step--2);
   text-align: center;
 }
@@ -6249,7 +6324,7 @@ canvas.is-frozen {
   border: 1px solid transparent;
   border-radius: 3px;
   background: color-mix(in srgb, var(--accent) calc(var(--strength, 0) * 100%), var(--bg-sunken));
-  color: color-mix(in srgb, #fff calc(var(--strength, 0) * 100%), var(--text));
+  color: color-mix(in srgb, var(--on-accent) calc(var(--strength, 0) * 100%), var(--text));
   font: inherit;
   font-family: var(--mono);
   cursor: pointer;
@@ -10803,14 +10878,12 @@ span.deck-name {
   white-space: nowrap;
 }
 
-.console-output {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: var(--step--1);
-  color: var(--text-dim);
+/* The provenance toggle. A `btn-toggle` beside the three word buttons rather
+   than a ticked box: a checkbox is for choosing rows in a list, and the lit
+   border is what says this one is on (§26.3). */
+.console-output-box {
+  flex: 0 0 auto;
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .console-list {

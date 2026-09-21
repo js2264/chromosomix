@@ -94,10 +94,10 @@ async function connectBody(): Promise<HTMLElement> {
   return body as HTMLElement
 }
 
-/** The Drive pane: one section, whose title names the service. */
+/** The Drive pane: one section, headed by the tile's own name. */
 function accountSection(body: HTMLElement): HTMLElement {
   const section = all(body, '.connect-section').find((node) =>
-    (node.querySelector('h3')?.textContent ?? '').includes('Connect to your Google Drive'),
+    (node.querySelector('h3')?.textContent ?? '').includes('Google Drive'),
   )
   expect(section).toBeDefined()
   return section as HTMLElement
@@ -129,17 +129,19 @@ describe('the Google Drive pane', () => {
     // possible and nothing to type. The folder box is on this same pane, and
     // it is not on screen until the sign-in has happened.
     const body = await connectBody()
-    expect(textsOf(body, '.connect-section h3')).toEqual(['Connect to your Google Drive'])
+    // Headed by the tile above it, not by an imperative: a tab that renames
+    // its subject on being pressed reads as a further step (§20).
+    expect(textsOf(body, '.connect-section h3')).toEqual(['Google Drive'])
     const section = accountSection(body)
     const head = section.querySelector('.connect-head') as HTMLElement
-    expect(head.querySelector('h3')?.textContent).toBe('Connect to your Google Drive')
+    expect(head.querySelector('h3')?.textContent).toBe('Google Drive')
     // The ? is a real button on the title's line, and the tip is what it
     // describes: a keyboard reaches it and a screen reader reads it.
     const help = head.querySelector<HTMLButtonElement>('.connect-help')
     expect(help?.textContent).toBe('?')
     expect(help?.getAttribute('aria-describedby')).toBe(head.querySelector('.connect-tip')?.id)
     expect(head.querySelector('.connect-tip')?.getAttribute('role')).toBe('tooltip')
-    expect(buttonLabels(section)).toEqual(['?', 'sign in with Google'])
+    expect(buttonLabels(section)).toEqual(['?', 'sign in to Google'])
     expect(all<HTMLInputElement>(section, 'input')).toEqual([])
     expect(body.textContent).not.toMatch(/API key/i)
     expect(body.textContent).not.toMatch(/client id stored/i)
@@ -196,7 +198,7 @@ describe('the Google Drive pane', () => {
 describe('the site’s registration, which no reader is asked for', () => {
   it('says so, and offers no sign-in, on a site built without a client id', async () => {
     const section = accountSection(await connectBody())
-    const signIn = buttonNamed(section, 'sign in with Google')
+    const signIn = buttonNamed(section, 'sign in to Google')
     // Disabled rather than absent: the sentence beside it names the one thing
     // a reader can do — ask the site's maintainer — and hiding the button
     // would hide what the sentence is about.
@@ -211,7 +213,7 @@ describe('the site’s registration, which no reader is asked for', () => {
   it('offers the sign-in on a site built with one, without printing it', async () => {
     site.googleClientId = CLIENT_ID
     const section = accountSection(await connectBody())
-    expect(buttonNamed(section, 'sign in with Google')?.disabled).toBe(false)
+    expect(buttonNamed(section, 'sign in to Google')?.disabled).toBe(false)
     expect(section.textContent).not.toContain(CLIENT_ID)
     expect(section.textContent).not.toMatch(/not set up/i)
     expect(googleState().configured).toBe(true)
@@ -224,7 +226,7 @@ describe('signing in', () => {
     stub({ access_token: 'ya29.TOKEN', expires_in: 3599 })
     const section = accountSection(await connectBody())
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
 
     expect(asked?.client_id).toBe(CLIENT_ID)
@@ -249,12 +251,12 @@ describe('signing in', () => {
     expect(all<HTMLInputElement>(section, 'input')).toEqual([])
     expect(buttonLabels(section)).not.toContain('connect this folder')
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
 
     // The big button is gone — there is nothing left for it to do — and the
     // two boxes and their button have taken its place, under one title still.
-    expect(textsOf(section, 'h3')).toEqual(['Connect to your Google Drive'])
+    expect(textsOf(section, 'h3')).toEqual(['Google Drive'])
     expect(buttonLabels(section)).toEqual(['?', 'sign out', 'connect this folder'])
     expect(all<HTMLInputElement>(section, 'input')).toHaveLength(2)
     expect(section.querySelector('.drive-folder')?.className).not.toContain('hidden')
@@ -266,7 +268,7 @@ describe('signing in', () => {
     const section = accountSection(await connectBody())
     expect(buttonLabels(section)).not.toContain('sign out')
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
     expect(buttonLabels(section)).toContain('sign out')
 
@@ -276,7 +278,7 @@ describe('signing in', () => {
     expect(bearerFor(GCS)).toBeNull()
     expect(accessHeadersFor(DRIVE)['Authorization']).toBeUndefined()
     // The pane is back to its first state: the sign-in, and no folder box.
-    expect(buttonLabels(section)).toEqual(['?', 'sign in with Google'])
+    expect(buttonLabels(section)).toEqual(['?', 'sign in to Google'])
     expect(all<HTMLInputElement>(section, 'input')).toEqual([])
   })
 
@@ -292,7 +294,7 @@ describe('signing in', () => {
     const section = accountSection(await connectBody())
     expect(googleScripts()).toEqual([])
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
 
     const script = all<HTMLScriptElement>(document, 'script').find((node) =>
@@ -309,9 +311,9 @@ describe('signing in', () => {
     // network that blocked accounts.google.com for a moment must not disable
     // this for the life of the tab.
     expect(googleScripts()).toEqual([])
-    expect(buttonNamed(section, 'sign in with Google')?.disabled).toBe(false)
+    expect(buttonNamed(section, 'sign in to Google')?.disabled).toBe(false)
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
     expect(googleScripts()).toEqual(['https://accounts.google.com/gsi/client'])
     // Settled rather than left pending, so this test leaves the module's
@@ -327,11 +329,11 @@ describe('signing in', () => {
     stub({ error: 'access_denied', error_description: 'The user denied the request' })
     const section = accountSection(await connectBody())
 
-    buttonNamed(section, 'sign in with Google')?.click()
+    buttonNamed(section, 'sign in to Google')?.click()
     await settled()
 
     expect(section.textContent).toContain('access_denied')
-    expect(buttonNamed(section, 'sign in with Google')?.disabled).toBe(false)
+    expect(buttonNamed(section, 'sign in to Google')?.disabled).toBe(false)
     expect(bearerFor(DRIVE)).toBeNull()
   })
 })
@@ -365,7 +367,7 @@ describe('where a sign-in cannot work at all', () => {
       'Google Drive',
       'Dropbox',
     ])
-    expect(textsOf(body, '.connect-section h3')).toEqual(['Connect to your Google Drive'])
+    expect(textsOf(body, '.connect-section h3')).toEqual(['Google Drive'])
     expect(body.querySelector('.connect-head .connect-help')).not.toBeNull()
     expect(buttonLabels(body.querySelector('.connect-section') as HTMLElement)).toEqual(['?'])
     expect(body.textContent).toContain('Not on the desktop app')

@@ -586,15 +586,25 @@ function tickedBeyondShards(front: StoreFront, facets: FacetSelection): boolean 
 /**
  * What a store that could not be read says, in the reader's terms.
  *
- * A built-in that answers 404 is *not generated yet* — the shipped stores are
+ * A built-in that is not there is *not generated yet* — the shipped stores are
  * written by a workflow and a fresh fork has not run it — and saying "the host
  * answered 404" would send a reader to check a URL that is perfectly correct.
+ *
+ * **Not there arrives in two shapes and they are one state.** A 404 is the
+ * plain one; a page of HTML is the other, and it is what a dev server and every
+ * SPA-fallback host answer for a file they have not got. The second used to
+ * print the diagnosis — the raw URL, "did not answer with JSON", "a dev server
+ * with no generated stores" — which is a sentence for whoever runs the site and
+ * not for the biologist who pressed the IGV tile. So a built-in says the same
+ * thing either way, and a URL the reader typed keeps its URL, because on that
+ * one the address *is* what they can act on (§10).
  */
 export function storeFailure(
   result: Exclude<Awaited<ReturnType<typeof fetchStore>>, { ok: true }>,
   ref: StoreRef,
 ): string {
-  if (result.reason === 'missing' && ref.builtin) {
+  const notJson = result.reason === 'refused' && result.refusal.reason === 'not-json'
+  if (ref.builtin && (result.reason === 'missing' || notJson)) {
     return (
       `${ref.label} is not generated yet; the Stores workflow publishes it. ` +
       'Run it once (Actions → Stores → Run workflow) and this fills in.'
@@ -602,16 +612,13 @@ export function storeFailure(
   }
   // `refusalMessage` is the *workspace* reader's wording, and for the one
   // refusal both formats share it names the wrong kind of file: a store served
-  // as HTML — which is what a dev server answers for a store it has not
-  // generated — read "is not a JSON file, so it is not a saved workspace",
-  // about a thing nobody was trying to open. The other refusals it gives are
-  // about the config format and cannot arise here.
+  // as HTML read "is not a JSON file, so it is not a saved workspace", about a
+  // thing nobody was trying to open. The other refusals it gives are about the
+  // config format and cannot arise here.
   if (result.reason === 'refused') {
     const where = ref.url ?? ref.label
-    return result.refusal.reason === 'not-json'
-      ? `${where} did not answer with JSON, so it is not a store. A host that serves a page ` +
-          'instead of the file — a dev server with no generated stores, or a sign-in wall — ' +
-          'answers exactly like this.'
+    return notJson
+      ? `${where} answered with a page, not a store file — a sign-in wall answers like this.`
       : refusalMessage(result.refusal, where)
   }
   return result.message

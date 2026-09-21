@@ -115,7 +115,12 @@ function commandRow(command: Command): HTMLElement {
 export function openShortcuts(commands: Command[], onClose?: () => void): Modal {
   return new Modal({
     title: 'Keyboard shortcuts',
-    variant: 'modal-wide',
+    // Wider than the other wide dialogs, because this one's content is three
+    // columns of short rows: at 46rem the key block was two columns, the View
+    // group's twenty-one rows set the dialog's height on its own, and the two
+    // gesture tables — the part a reader new to a genome browser needs most —
+    // began exactly at the bottom edge with none of their rows showing.
+    variant: 'modal-shortcuts',
     ...(onClose === undefined ? {} : { onClose }),
     body: () => {
       const bound = commands.filter((command) => command.keys !== undefined)
@@ -128,13 +133,14 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
       // The palette's order (`commands.ts` → `GROUP_ORDER`), so the two lists of
       // the one registry read the same way round.
       const ordered = [...groups].sort(([a], [b]) => groupRank(a) - groupRank(b))
-      // Two blocks, not one flow. The keys are short rows and pack into as many
-      // columns as the dialog is wide; the two gesture tables are the long ones
-      // and are the pair a reader compares — "what does a drag do here, and what
-      // does it do there" — so they are placed side by side rather than left to
-      // fall wherever the group count happens to put them. They used to be
-      // wherever auto-placement dropped them, which meant adding or removing one
-      // command group somewhere else in the app silently reflowed this dialog.
+      // Two blocks, not one flow. The keys are short rows and *flow* into as
+      // many columns as the dialog is wide (`.shortcut-grid` is a multi-column
+      // block, so a two-row group is followed by the next group rather than by
+      // a hole the height of the tallest group beside it); the two gesture
+      // tables are the long ones and are the pair a reader compares — "what
+      // does a drag do here, and what does it do there" — so they stay a grid
+      // of two side by side rather than falling wherever the group count
+      // happens to put them.
       return el(
         'div',
         { class: 'shortcut-body' },
@@ -194,16 +200,25 @@ export function openAbout(
   onClose?: () => void,
 ): Modal {
   return new Modal({
-    title: '(meta)cooler',
+    // Titled for what it is, like every other dialog. It was the brand, which
+    // `.modal-title` uppercases — and the mark is written *(meta)cooler*
+    // everywhere else, so shouted in caps it read as a different word.
+    title: 'About this viewer',
     ...(onClose === undefined ? {} : { onClose }),
     body: () =>
       el(
         'div',
         { class: 'about-body' },
+        // The one place a reader holding a bigWig and no contact map is told
+        // this application is for them too (§24.2). It was inside the landing
+        // page's drop target, where it was a paragraph that cost the page its
+        // fold (`ui/LoadBox.ts`); said here it is a clause in the sentence that
+        // was already naming what opens.
         el('p', {
           text:
-            'A viewer for .metacool multi-genome Hi-C contact maps, and for the cooler files ' +
-            'they extend. It runs entirely in this page: there is no backend, no upload and no ' +
+            'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files they ' +
+            'extend, and for the tracks, genomes and 3D models beside them — with or without a ' +
+            'map. It runs entirely in this page: there is no backend, no upload and no ' +
             'preprocessing step.',
         }),
         // Same substitution as `FilePicker.ts`, and for the same reason: the

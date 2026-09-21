@@ -27,17 +27,24 @@
  * ## What `works` is for
  *
  * §8.5's doctrine is that a control which cannot keep its promise is absent
- * rather than disabled, and the two doors part company on one place. Google's
- * OAuth registers an `http`/`https` origin, so the desktop build's
- * `app://viewer` cannot sign in at all (`auth/google.ts`). The dialog still
- * offers Drive, because a reader who went looking for it is owed the sentence
- * saying why it is not there; the landing page offers a row of things to press
- * and a button that leads only to an explanation is not one of them. So the
- * fact is recorded once, here, and each door reads it its own way.
+ * rather than disabled, and the two doors part company on the sign-ins. A
+ * sign-in needs two things this page does not choose: a **build** that can be
+ * registered — Google's OAuth registers an `http`/`https` origin, so the
+ * desktop build's `app://viewer` cannot sign in at all (`auth/google.ts`) —
+ * and a **site** that was built with the registration, the client id or the
+ * app key its maintainer provides (`config/siteDefaults.ts`, §24.7). Either
+ * one missing leaves the same press behind the button: an explanation.
+ *
+ * So `works` is both facts, and the two doors read them their own way. The
+ * dialog still offers the tile, because a reader who went looking for Drive is
+ * owed the sentence saying why it is not there, and its pane keeps a disabled
+ * button beside that sentence so the sentence has a subject (§20). The landing
+ * page offers a row of things to press, and a button that leads only to an
+ * explanation is not one of them (§24.2).
  */
 
-import { DROPBOX_SIGN_IN_AVAILABLE } from '../auth/dropbox'
-import { GOOGLE_SIGN_IN_AVAILABLE } from '../auth/google'
+import { DROPBOX_SIGN_IN_AVAILABLE, readAppKey } from '../auth/dropbox'
+import { GOOGLE_SIGN_IN_AVAILABLE, readClientId } from '../auth/google'
 import { directoryPickerSupported } from '../browse/local'
 import { IS_STANDALONE } from '../version'
 import type { IconName } from './icons'
@@ -92,13 +99,20 @@ export function providerFronts(): ProviderFront[] {
     label: 'Google Drive',
     verb: 'sign in to Google…',
     mark: 'googledrive',
-    works: GOOGLE_SIGN_IN_AVAILABLE,
+    works: GOOGLE_SIGN_IN_AVAILABLE && readClientId() !== null,
   })
   // The one provider with an account and no key (§24.9). Signed in by a code
   // the reader pastes, which needs no registered address, so the desktop build
-  // keeps it where it loses Drive.
+  // keeps it where it loses Drive — but it still needs the site's app key, and
+  // a site built without one has nothing behind the button either.
   if (DROPBOX_SIGN_IN_AVAILABLE) {
-    out.push({ id: 'dropbox', label: 'Dropbox', verb: 'sign in to Dropbox…', mark: 'dropbox', works: true })
+    out.push({
+      id: 'dropbox',
+      label: 'Dropbox',
+      verb: 'sign in to Dropbox…',
+      mark: 'dropbox',
+      works: readAppKey() !== null,
+    })
   }
   return out
 }

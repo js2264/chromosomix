@@ -1,12 +1,13 @@
 /**
  * The form that adds a bucket, and the only copy of it.
  *
- * Two screens ask for a bucket — the credentials dialog, which is where keys are
- * managed, and the Connect dialog, which is where a *folder* is attached and a
- * bucket is one of the two kinds. `ui/BucketsCard.ts` states the rule this file
- * exists to keep: two copies of six fields writing one `localStorage` key is two
- * places for the validation to drift apart, and the half that drifts is always
- * the one opened less.
+ * One screen asks for a bucket now — the Connect dialog, where a *folder* is
+ * attached and a bucket is one of the four kinds it can be. It was two, the
+ * credentials dialog beside it, and this file exists because of what that
+ * costs: two copies of six fields writing one `localStorage` key is two places
+ * for the validation to drift apart, and the half that drifts is always the one
+ * opened less. It stays one function for the same reason, against the next
+ * screen that wants one.
  *
  * ## Public first, and it is one field
  *
@@ -22,8 +23,8 @@
  * classify the prefix before describing it — a question answerable only in terms
  * of the five fields the answer then reveals, which is backwards. Whether a
  * scope is signed now *follows* from whether a key was typed into it: all three
- * of region, key id and secret, or none of them, which is the one rule `save`
- * still has to enforce.
+ * of region, key id and secret, or none of them, which is the one rule the
+ * button still has to enforce.
  *
  * What the form no longer explains, the pane's `?` does (`ui/ConnectCard.ts` on
  * `bucketHelp`): where a key is kept and what that costs, and the two policies a
@@ -31,11 +32,13 @@
  *
  * ## What it does not do
  *
- * No "test connection" button, for `BucketsCard`'s reason: the listing *is* the
- * test, against the same signature and the same preflight as every later read,
- * and a separate probe would be a second code path whose passing would mean
- * nothing about the first. Saving lands the reader in the folder view, which is
- * the honest version of the same reassurance.
+ * No "test connection" button: the listing *is* the test, against the same
+ * signature and the same preflight as every later read, and a separate probe
+ * would be a second code path whose passing would mean nothing about the first.
+ * Pressing *connect this bucket* lands the reader in the folder view, which is
+ * the honest version of the same reassurance — and is why the button says
+ * *connect* rather than *save*, after a door that said *connect a bucket…*
+ * (§20.3). It does save the bucket; the Files column is where that shows.
  */
 
 import { button, el, field } from './dom'
@@ -120,7 +123,7 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
   // nothing: the common case is a URL and the box stays shut, and whether the
   // scope is signed follows from whether a key was actually typed into it.
   let open = false
-  const more = button('Additional settings', () => setOpen(!open), { class: 'btn bucket-more' })
+  const more = button('additional settings', () => setOpen(!open), { class: 'btn bucket-more' })
   more.setAttribute('aria-controls', keyFields.id)
   more.prepend(icon('chevron-down', { size: 14 }))
   function setOpen(next: boolean): void {
@@ -129,7 +132,7 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
     more.classList.toggle('is-on', next)
     more.setAttribute('aria-expanded', String(next))
     more.replaceChildren(icon(next ? 'chevron-up' : 'chevron-down', { size: 14 }))
-    more.append('Additional settings')
+    more.append('additional settings')
   }
   setOpen(false)
 
@@ -198,6 +201,6 @@ export function bucketForm(props: BucketFormProps): HTMLElement {
     el('div', { class: 'bucket-more-row' }, more),
     keyFields,
     error,
-    el('div', { class: 'bucket-actions' }, button('save', save, { class: 'btn btn-primary' })),
+    el('div', { class: 'bucket-actions' }, button('connect this bucket', save, { class: 'btn btn-primary' })),
   )
 }

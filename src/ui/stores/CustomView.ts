@@ -88,7 +88,7 @@ export class CustomView {
         'aria-label': hub ? 'the text of a hub' : 'the text of a store file',
         placeholder: hub
           ? 'hub myHub\nshortLabel My hub\n\ngenome hg38\n\ntrack signal\nbigDataUrl https://…/signal.bw\ntype bigWig'
-          : '{ "kind": "metacooler.store", "name": "My shelf", "entries": [ … ] }',
+          : '{ "kind": "metacooler.store", "name": "My store", "entries": [ … ] }',
       },
     }) as HTMLTextAreaElement
     this.baseInput = el('input', {
@@ -106,7 +106,7 @@ export class CustomView {
             el('p', {
               class: 'hint',
               text: hub
-                ? 'A UCSC track hub: the hub.txt that names a genomes.txt and a trackDb per assembly. Its genomes and every track this viewer can draw become a shelf you can narrow, open and remember. An assembly hub opens its own .2bit as the sequence, with its tracks on the shelf beside it.'
+                ? 'A UCSC track hub: the hub.txt that names a genomes.txt and a trackDb per assembly. Its genomes and every track this viewer can draw become a store you can narrow, open and remember. An assembly hub opens its own .2bit as the sequence, with its tracks in the store beside it.'
                 : 'A store is one JSON file a lab publishes beside its data — its maps, genomes and saved sessions, with columns to narrow on. Nothing is fetched until you press open.',
             }),
             el(

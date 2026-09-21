@@ -177,18 +177,39 @@ describe('downloading a store’s catalogue', () => {
 
 describe('a store that did not answer with a store', () => {
   /**
-   * The message a dev server earns by answering `index.html` for a store it has
-   * not generated. It used to come from the *workspace* reader — "is not a JSON
-   * file, so it is not a saved workspace" — which named a kind of file nobody
-   * in this drawer was trying to open.
+   * A shipped store answering `index.html` is the *same state* as one answering
+   * 404 — not generated yet — and now says so. It used to print the diagnosis
+   * instead: the raw URL, "did not answer with JSON", and "a dev server with no
+   * generated stores", which is a sentence for whoever runs the site and not
+   * for the biologist who pressed the tile. (The earlier version of this test
+   * pinned that URL; what it was really pinning was that the message no longer
+   * came from the *workspace* reader — "is not a JSON file, so it is not a
+   * saved workspace" — which named a kind of file nobody here was opening.)
    */
-  it('says it is not a store, and does not mention workspaces', () => {
+  it('reads a built-in served as a page as a store that is not generated yet', () => {
     const text = storeFailure(
       { ok: false, reason: 'refused', refusal: { reason: 'not-json' }, message: '' },
       { id: 'encode', label: 'ENCODE', url: 'https://host/stores/encode.json', builtin: true },
     )
-    expect(text).toContain('is not a store')
+    expect(text).toContain('ENCODE is not generated yet')
+    expect(text).toContain('Actions → Stores → Run workflow')
     expect(text).not.toContain('workspace')
-    expect(text).toContain('https://host/stores/encode.json')
+    expect(text).not.toContain('dev server')
+  })
+
+  /**
+   * A URL the reader typed keeps its URL, because there the address is the one
+   * thing they can act on (§10) — and loses the explanation of what answers
+   * like that, which is the site's business rather than theirs.
+   */
+  it('names the address a reader typed, in one sentence', () => {
+    const text = storeFailure(
+      { ok: false, reason: 'refused', refusal: { reason: 'not-json' }, message: '' },
+      { id: 'mine', label: 'My store', url: 'https://host/mine.json', builtin: false },
+    )
+    expect(text).toContain('https://host/mine.json')
+    expect(text).toContain('not a store file')
+    expect(text).not.toContain('dev server')
+    expect(text).not.toContain('workspace')
   })
 })

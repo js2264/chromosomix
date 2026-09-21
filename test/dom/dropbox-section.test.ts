@@ -105,7 +105,7 @@ function visibleText(node: HTMLElement): string {
 /** Sign in through the pane, the way a reader does. */
 async function signInThrough(node: HTMLElement): Promise<void> {
   serve({ access_token: 'sl.TOKEN', expires_in: 14_400 })
-  buttonNamed(node, 'sign in with Dropbox')?.click()
+  buttonNamed(node, 'sign in to Dropbox')?.click()
   await until(() => opened.length > 0)
   const code = all<HTMLInputElement>(node, 'input')[0]
   code.value = 'CODE-FROM-THE-PAGE'
@@ -138,7 +138,7 @@ describe('the site’s registration, which no reader is asked for', () => {
   it('says so, and offers no sign-in, on a site built without an app key', () => {
     site.dropboxAppKey = null
     const node = section()
-    const signIn = buttonNamed(node, 'sign in with Dropbox')
+    const signIn = buttonNamed(node, 'sign in to Dropbox')
     // Disabled rather than absent: the sentence beside it names the one thing
     // a reader can do — ask the site's maintainer.
     expect(signIn?.disabled).toBe(true)
@@ -153,7 +153,7 @@ describe('the site’s registration, which no reader is asked for', () => {
 
   it('offers the sign-in on a site built with one, without printing it', () => {
     const node = section()
-    expect(buttonNamed(node, 'sign in with Dropbox')?.disabled).toBe(false)
+    expect(buttonNamed(node, 'sign in to Dropbox')?.disabled).toBe(false)
     expect(node.textContent).not.toContain(APP_KEY)
     expect(node.textContent).not.toMatch(/not set up/i)
   })
@@ -165,7 +165,7 @@ describe('signing in', () => {
     const node = section()
     expect(node.querySelector('.connect-code')?.className).toContain('hidden')
 
-    buttonNamed(node, 'sign in with Dropbox')?.click()
+    buttonNamed(node, 'sign in to Dropbox')?.click()
     await until(() => opened.length > 0)
 
     expect(opened).toHaveLength(1)
@@ -205,7 +205,7 @@ describe('signing in', () => {
   it('shows what Dropbox refused, and leaves the flow where it was', async () => {
     site.dropboxAppKey = APP_KEY
     const node = section()
-    buttonNamed(node, 'sign in with Dropbox')?.click()
+    buttonNamed(node, 'sign in to Dropbox')?.click()
     await until(() => opened.length > 0)
 
     serve({ error: 'invalid_grant' }, 400)
@@ -214,7 +214,7 @@ describe('signing in', () => {
     await until(() => (node.textContent ?? '').includes('invalid_grant'))
 
     expect(node.textContent).toMatch(/invalid_grant/)
-    expect(node.textContent).toMatch(/press sign in with Dropbox again/i)
+    expect(node.textContent).toMatch(/press sign in to Dropbox again/i)
     expect(bearerFor(LIST)).toBeNull()
     // Still on screen, so the reader can paste the next code into it.
     expect(node.querySelector('.connect-code')?.className).not.toContain('hidden')
@@ -249,7 +249,7 @@ describe('the way in, and the way out', () => {
 
     expect(bearerFor(LIST)).toBeNull()
     // Back to the first state: the sign-in, and nothing that needs one.
-    expect(buttonLabels(node)).toContain('sign in with Dropbox')
+    expect(buttonLabels(node)).toContain('sign in to Dropbox')
     expect(buttonLabels(node)).not.toContain('browse my Dropbox')
     expect(buttonLabels(node)).not.toContain('sign out')
   })
@@ -258,7 +258,8 @@ describe('the way in, and the way out', () => {
 describe('the pane, before anything is pressed', () => {
   it('is one title with a ? at its right, and the sign-in under it', () => {
     const node = section()
-    expect(textsOf(node, 'h3')).toEqual(['Connect to your Dropbox'])
+    // The tile's own name, as every pane of that dialog is headed (§20).
+    expect(textsOf(node, 'h3')).toEqual(['Dropbox'])
     const head = node.querySelector('.connect-head') as HTMLElement
     const help = head.querySelector<HTMLButtonElement>('.connect-help')
     expect(help?.textContent).toBe('?')
@@ -266,8 +267,8 @@ describe('the pane, before anything is pressed', () => {
     expect(head.querySelector('.connect-tip')?.getAttribute('role')).toBe('tooltip')
     // The ?, the sign-in, and the finish button of the code box that is not
     // yet on screen; nothing else.
-    expect(buttonLabels(node)).toEqual(['?', 'sign in with Dropbox', 'finish'])
-    expect(buttonNamed(node, 'sign in with Dropbox')?.className).toContain('btn-signin')
+    expect(buttonLabels(node)).toEqual(['?', 'sign in to Dropbox', 'finish'])
+    expect(buttonNamed(node, 'sign in to Dropbox')?.className).toContain('btn-signin')
   })
 
   it('names the grant and where the token lives, behind the ?', () => {

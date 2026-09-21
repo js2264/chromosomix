@@ -14,12 +14,19 @@
  * because a download that silently did not happen is worse than one that says
  * so.
  *
- * The same corner serves a second, simpler case: something the reader did not
- * ask for has already happened and they need to be told once. The share dialog
- * puts the link on the clipboard the instant it exists, and a clipboard that
- * changed under somebody without a word is how a reader loses whatever they had
- * copied before. {@link messageToast} is that one line — same box, same ×, no
- * bar, gone in four seconds.
+ * The same corner serves a second, simpler case: something happened away from
+ * whatever the reader is looking at, and they need to be told once — the store
+ * drawer's *copy link*, the console asked to copy a log that has nothing in it.
+ * {@link messageToast} is that one line: same box, same ×, no bar, gone in four
+ * seconds.
+ *
+ * **A surface that has a line of its own does not use this one.** The share
+ * dialog used to raise a corner note to say it had copied the link, which put
+ * the answer to a gesture made in a dialog nine hundred pixels away from it,
+ * in different words from the ones its own copy button produced; it writes into
+ * its own note now (`ui/ShareDialog.ts`). The corner is for what has no such
+ * place, which is why both callers left are panels raising a line about
+ * something that is not on screen.
  */
 
 import { el } from './dom'
@@ -126,11 +133,11 @@ function toastShell(
  *
  * Not about overlap any more — {@link stack} is what keeps two notes off each
  * other, and it keeps *every* pair off each other rather than only this one.
- * What is left here is a rule about repetition: the share dialog copies the
- * link when it opens and copies the shortened one a second or two later, well
- * inside the four seconds the first note stays, and "Link copied" twice in a
- * column is a second row saying nothing the first did not. A progress note is
- * never a repeat of the note beside it, which is why it does not take part.
+ * What is left here is a rule about repetition: these notes answer a press, and
+ * a press repeated inside the four seconds the first note stays — *copy link*
+ * twice on a store, *copy* twice on an empty log — would otherwise stack a
+ * second row saying nothing the first did not. A progress note is never a
+ * repeat of the note beside it, which is why it does not take part.
  */
 let standing: (() => void) | null = null
 
@@ -179,7 +186,9 @@ export function progressToast(
 ): ProgressToast {
   const fill = el('div', { class: 'toast-fill' })
   const bar = el('div', { class: 'toast-bar' }, fill)
-  const note = el('p', { class: 'toast-note', text: 'Starting…' })
+  // The app's one spelling of the state, as the status bar and the two
+  // progress views write it (§26.7).
+  const note = el('p', { class: 'toast-note', text: 'starting…' })
   const { root, close, remove } = toastShell(message, bar, note)
 
   let timer: ReturnType<typeof setTimeout> | null = null

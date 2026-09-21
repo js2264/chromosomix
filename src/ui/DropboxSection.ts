@@ -107,7 +107,7 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
     }
 
     const signIn = signInButton(
-      state.expiresAt !== null ? 'sign in again' : 'sign in with Dropbox',
+      state.expiresAt !== null ? 'sign in again' : 'sign in to Dropbox',
       'dropbox',
       () => {
         error.textContent = ''
@@ -183,7 +183,7 @@ export function dropboxSection(done: (id: string) => void): HTMLElement | null {
   return el(
     'div',
     { class: 'connect-section' },
-    connectHead('Connect to your Dropbox', 'dropbox', dropboxHelp()),
+    connectHead('Dropbox', 'dropbox', dropboxHelp()),
     actions,
     codeRow,
     error,

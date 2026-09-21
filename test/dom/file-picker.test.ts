@@ -2,7 +2,7 @@
 /**
  * The landing page, and the load box the two dialogs are made of.
  *
- * Three things are on the page and they are named: **Load files**, **Mount a
+ * Three things are on the page and they are named: **Load files**, **Connect a
  * local or remote folder** and **Connect to a data store**. What the tests
  * below pin is that each is exactly one thing — one drop area with one URL
  * box, one row of place buttons, one row of tiles — and that neither row costs
@@ -23,6 +23,18 @@ import type { ProviderId } from '@/ui/connectFronts'
 import { connectedFolders, disconnectFolder } from '@/browse/connected'
 import { icon } from '@/ui/icons'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
+
+// A site built with both registrations, which is what a published site is and
+// what the row of four is a row of: a sign-in the site cannot make loses its
+// button here (`ui/connectFronts.ts`, §24.2), and the test runner makes no
+// build-time define, so without this the row would be two.
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: {
+    googleClientId: 'test.apps.googleusercontent.com',
+    googleApiKey: null,
+    dropboxAppKey: 'a1b2c3d4e5f6g7h',
+  },
+}))
 
 let teardown: DomTeardown
 
@@ -86,7 +98,9 @@ describe('the landing page', () => {
     const { el } = build()
     expect(textsOf(el, '.picker-heading')).toEqual([
       'Load files',
-      'Mount a local or remote folder',
+      // One verb for one act: *mount* was this heading's word alone, over
+      // buttons that said connect and a dialog that said open (§26.4).
+      'Connect a local or remote folder',
       'Connect to a data store',
     ])
     // Each heading leads with a mark, because three bold lines in one column

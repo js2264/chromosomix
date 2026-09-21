@@ -5811,7 +5811,7 @@ written, and each is absolute rather than a degradation:
 
 **The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
 URL box, the store tiles and the version picker, leaves the landing page's folder row with the one
-place this build can reach — under *Mount a folder*, since a heading naming two kinds over a row
+place this build can reach — under *Connect a folder*, since a heading naming two kinds over a row
 holding one is the same false promise in smaller type — and says in one sentence that this copy
 opens local files only and where to go for the rest. A build that offered a URL field
 which could never succeed would be a worse artefact than one that does not offer it.
@@ -5875,8 +5875,15 @@ which is the only tile that needs them, in the order a reader meets them — the
 public Drive link fails without it; the account, because a private one fails afterwards with a key
 in place; the folder, because it needs the account. Since then the key and the client id have
 become the site's (§24.7), and each of the two panes that sign a reader in is **one title, a
-`?` and a button** (`ui/connectHead.ts`): *Connect to your Google Drive* or *Connect to your
-Dropbox* on the left of a line, a `?` at its far right, and one large sign-in button under it.
+`?` and a button** (`ui/connectHead.ts`): *Google Drive* or *Dropbox* on the left of a line, a `?`
+at its far right, and one large sign-in button under it. **Every pane is headed by its own tile's
+name** — *This machine*, *A bucket*, *Google Drive*, *Dropbox* — because a tab that renames its
+subject on being pressed reads as a further step rather than as the thing pressed; two of the four
+were imperatives, and *Connect to your Dropbox* under a tile saying *Dropbox* was the dialog asking
+twice. What a pane is *for* is the dialog's title. The sign-in button says **sign in to Google** /
+**sign in to Dropbox**, in the words the door said one press earlier (§24.2), and the bucket pane's
+says **connect this bucket** rather than *save*: it does save the bucket, but what the reader
+pressed a door for is the listing, and that is what happens (§20.3).
 Everything the pane has to say about the service — what the grant is, where the token lives,
 what is kept — is behind the `?`, shown on hover, on focus, or pinned by a click for a screen
 with no hover; what is on the pane itself is what a reader acts on: the button, the reason it is
@@ -5885,10 +5892,17 @@ error. On the Drive pane the folder box — a name, a link or id, *connect this 
 screen until the sign-in has happened, and appears under the button the moment it has, on the
 same pane, under the same title; there is no second heading. A build that cannot offer a provider
 does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
-build's Drive pane keeps its title and its `?` and says under them why there is no button. The
-The Files column's *Open a local/remote folder* opens the dialog, and so do three of the four
-buttons in the landing page's *Mount a local or remote folder* row — those carry the pane to open
-on, since a reader who pressed *sign in to Dropbox* has already chosen and must not be asked again.
+build's Drive pane keeps its title and its `?` and says under them why there is no button.
+
+**One verb names this door wherever it is.** The dialog is *Connect a folder*; the landing page's
+heading, the Files column's button and the command palette all say *connect a local or remote
+folder*. There were three — the landing page said *Mount*, jargon used nowhere else in the app, the
+dialog it opened was titled *Open a local/remote folder*, and every button and every sentence about
+the result said *connect* — so a reader pressed under one word, landed on a second and was
+reassured in a third. A file is opened; a folder is connected (§26.4). The Files column's button
+opens the dialog, and so do three of the four buttons in the landing page's row — those carry the
+pane to open on, since a reader who pressed *sign in to Dropbox* has already chosen and must not be
+asked again.
 The fourth, *choose a folder…*, opens **the directory picker itself**: it is one gesture, the
 browser draws it, and a dialog in front of it would be asking the reader to press the same words
 twice (§24.2). Both screens call `connectDirectory` (`browse/connected.ts`) and therefore cannot
@@ -5947,6 +5961,14 @@ The rule inside a scope is **all three signing fields or none**; a row holding o
 rather than downgraded to an unsigned one, because falling back would turn a mistyped secret into a
 bucket that 403s on data the reader believes they have a key for.
 
+The form's one button is **connect this bucket**. It was *save*, from when the same form stood in a
+credentials dialog where saving was the whole of it; behind a door that said *connect a bucket…*,
+beside a Drive pane that says *connect this folder*, *save* promised a stored setting rather than
+the listing the reader came for — and the listing is what pressing it produces. There is no *test
+connection* button, because that listing **is** the test: the same signature and the same preflight
+as every later read, where a separate probe would be a second code path whose passing would mean
+nothing about the first.
+
 ### 20.4 The fifth column, and the one that is not about the open file
 
 §16.5 says the side columns are the session's furniture and each describes the one file the session
@@ -5958,12 +5980,13 @@ the reader it is for.
 
 **It is there while a place is connected, and not otherwise** (`App.refreshFilesPanel`), which is
 §8.5's rule as the other four columns already follow it. It used to be there unconditionally,
-because its own *Open a local/remote folder* was the only door to a folder and a column nobody can
-see is not a door. The landing page now offers the four places itself (§24.2), so what that rule
-was buying on the first screen is an empty column beside a row of buttons saying the same thing.
+because its own *connect a local or remote folder* was the only door to a folder and a column
+nobody can see is not a door. The landing page now offers the four places itself (§24.2), so what
+that rule was buying on the first screen is an empty column beside a row of buttons saying the same
+thing.
 Connecting one opens the column on it (`reveal`), because the answer to the gesture is in there;
 disconnecting the last one takes it away again. The doors are elsewhere and stay elsewhere: the
-landing page — which is what a new tab is — and *Open a local/remote folder* in the command
+landing page — which is what a new tab is — and *Connect a local or remote folder* in the command
 palette.
 
 `f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
@@ -5995,7 +6018,7 @@ always meant.
 window is connected to — a directory on this machine included — and a row hands back the file with
 the credential the listing used; `ui/pickFromFolders.ts` is the same view in a dialog, which the
 column's own places open and which a drag out of it resolves through. With nothing connected it says
-so and names the column's *Open a local/remote folder* rather than offering an empty listing.
+so and names the column's *connect a local or remote folder* rather than offering an empty listing.
 
 **The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps,
 Structures, an empty cell of a deck — used to carry a box to paste a URL into, folded away behind
@@ -6349,12 +6372,16 @@ order it ran the first time, with the afternoon around it left in as the context
 commands were for. The **save** button writes exactly that as `.sh`, and — being a file leaving the
 app — records itself.
 
-The **output** toggle is the choice between a script and an archive. Off, a row is its command and
-the caveats that qualify it; on, each row is preceded by the full provenance block — the build, the
-task and its version, the framing in words, every parameter one per line — which is the header every
-exported file already opens with (§18.4). It is off by default, because eleven `#` lines per row is
-a log nobody scans, and it governs the clipboard as well as the screen: a reader who turned it off
-to paste clean commands must not find the provenance on their clipboard anyway.
+The **provenance** toggle is the choice between a script and an archive. Off, a row is its command
+and the caveats that qualify it; on, each row is preceded by the full provenance block — the build,
+the task and its version, the framing in words, every parameter one per line — which is the header
+every exported file already opens with (§18.4). It is off by default, because eleven `#` lines per
+row is a log nobody scans, and it governs the clipboard as well as the screen: a reader who turned
+it off to paste clean commands must not find the provenance on their clipboard anyway. It is named
+for what it shows, in the word the Analysis drawer's *copy provenance* already uses for the same
+block: it read *output*, which beside a column of commands names the one thing it is not — what the
+runs produced. And it is a toggle rather than a ticked box (§26.3), which leaves the header's
+controls one shape each: three word buttons, a toggle, and the cross.
 
 The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'s notes about what a
 shell cannot be told — a remote file, a window across several sequences, a parameter naming a set
@@ -6517,13 +6544,18 @@ the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which t
 *Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
 a click on the target opens the same file dialog, and the same action drawn twice is a choice a
 reader has to make between two controls that do one thing. The target says both things it does —
-drop, or click — and carries inside it the sentence about what opens as what, which is the one
-place a reader holding a bigWig and no contact map is told this application is for them too. It is
-shallower than it was: a box deep enough to be the page said that dragging was the way in, and
-there are two sections under it that have to be seen. *Mount a local or remote folder* is a row of four buttons, side by side and
+drop, or click — and no more; what opens as what is stated once, in **About**, whose first sentence
+names the tracks, genomes and 3D models this viewer opens with or without a map, because a reader
+holding a bigWig and no contact map has to be told somewhere that this application is for them too.
+It is shallower than it was, and it carries no paragraph: a box deep enough to be the page said
+that dragging was the way in, and there are two sections under it that have to be seen.
+*Connect a local or remote folder* is a row of four buttons, side by side and
 of equal height, wrapping a long label to a second line rather than breaking the row — *choose a
 folder…*, which opens the directory picker itself, and *connect a bucket…*, *sign in to Google…*
-and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a **grid** of tiles — the lab's
+and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. Their
+**widths** are their labels' rather than equal, so that at the page's own width every label gets one
+line and the four read as the set they are; a narrower window or a wider font shrinks them together
+and wraps the longest first, which is the fallback and not the resting state. *Connect to a data store* is a **grid** of tiles — the lab's
 own figures, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every store the reader connected, and the
 two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
 wrap, which was right while there were five and the set was the page's whole offer: a fifth tile on a
@@ -6547,10 +6579,14 @@ second copy of one. The ellipsis on every label covers both cases — something 
 here or in a dialog.
 
 Which places are offered, and what each button says, is decided once in `ui/connectFronts.ts` and
-read by both doors. Two things follow from that. A build that cannot make a Google sign-in work —
-the desktop one, whose `app://viewer` is not an origin Google's console will register — keeps its
-Drive **tile**, whose pane is the sentence saying why, and loses its **button**, because a row of
-things to press is not where a reader is sent to read an explanation (§8.5). And *this machine* is
+read by both doors. Two things follow from that. A sign-in that cannot work keeps its **tile**,
+whose pane is the sentence saying why, and loses its **button**, because a row of things to press is
+not where a reader is sent to read an explanation (§8.5) — and it cannot work for either of two
+reasons, which the row treats alike: a **build** that cannot be registered (the desktop one, whose
+`app://viewer` is not an origin Google's console will register) or a **site** built without the
+registration its maintainer provides (§24.7), where the pane's disabled button and the sentence
+beside it name the one thing a reader can do — ask them — and the landing page would be offering a
+bold sign-in answered by an environment variable's name. And *this machine* is
 worded identically on both screens: Chromium and the desktop build hold a directory as a grant that
 survives a reload, while Firefox and Safari hand over a snapshot of the file list that does not
 (§20), so the button reads *choose a folder…* on the first and *choose a folder (this visit)…* on
@@ -6558,9 +6594,9 @@ the second — wherever it is drawn, since both now run the same picker. *Choose
 the same marked button the panes use, so one gesture looks the same wherever it is met.
 
 **The Files column is no longer on the first screen, and that is what the row buys.** It used to be
-there from the first paint and never withdrawn, because its own *Open a local/remote folder* was
-the only door to a folder; it is now there exactly while a place is connected, like the four
-columns beside it (§16.5, §8.5). Mounting one opens it on the folder, which is the only thing a
+there from the first paint and never withdrawn, because its own *connect a local or remote folder*
+was the only door to a folder; it is now there exactly while a place is connected, like the four
+columns beside it (§16.5, §8.5). Connecting one opens it on the folder, which is the only thing a
 reader who has just connected one wants next.
 
 **The two doors are named for the errand, and carry the marks of what they open.** *Connect to a
@@ -6609,7 +6645,7 @@ column's, on the backslash key — punctuation, like the console's backtick, so 
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette has *Open or close the stores*. The header holds
 nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*Open a local/remote folder* and the file crumb's *Open a file* said a second time.
+*connect a local or remote folder* and the file crumb's *Open a file* said a second time.
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
