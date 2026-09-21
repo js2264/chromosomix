@@ -10875,6 +10875,16 @@ span.deck-name {
   width: auto;
 }
 
+/* …and the field it is in is wider than the others, because what the button
+   leaves was not enough: at the shared 24rem cap the box had about 130 pixels
+   and `distance to` opened reading `IV:1,000,001-`, its own default cut in the
+   middle. §18.1's promise is that the button stays beside the box, so the room
+   comes from the field instead — the hint beside it has a drawer's width to
+   spare — and the box ends up with the 165 pixels a grouped locus needs. */
+.param-row > .param-field:has(> .param-locus) {
+  max-width: 31rem;
+}
+
 /* Never squeezed to an ellipsis by the box beside it: it is a two-word
    instruction, and a reader has to be able to read it to know the map has
    changed what it does. */

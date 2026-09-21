@@ -576,7 +576,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   example it offers, and takes a line of its own rather than being halved.
 - **An analysis form's locus box is wide enough for a locus.** It took its intrinsic width — about
   twenty characters — and the value it is seeded with is twenty-two, so the form opened with the last
-  four characters of its own default cut off, in the box a reader is most likely to edit.
+  four characters of its own default cut off, in the box a reader is most likely to edit. A row with
+  *pick on map* beside the box had about 130 pixels and read `IV:1,000,001-`; §18.1 promises the
+  button stays beside the box, so the room comes from the field, whose hint has a drawer's width to
+  spare.
 - **An analysis form's locus box is grouped, like every other box that shows a coordinate.** It
   opened with `IV:1000001-1400000` directly under a line reading `IV:1,000,001-1,400,000 · 1 kb
   bins`: two spellings of one window, in the one place a reader is about to edit the number.
