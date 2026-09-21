@@ -205,5 +205,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 68,
+      "commit": "fdcbebe",
+      "title": "Add pastis-NB likelihood method for structure modeling",
+      "branch": "js/gracious-lamport-wnolad",
+      "date": "2026-09-21T16:22:20Z"
+    }
+  ]
 }
