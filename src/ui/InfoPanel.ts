@@ -67,7 +67,7 @@
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
 import { resolutionLabel } from '../units'
-import { cardTitle, icon, iconButton } from './icons'
+import { cardTitle, foldable, icon, iconButton } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
@@ -217,11 +217,14 @@ export class InfoPanel {
         el(
           'div',
           { class: 'card' },
-          el(
-            'h3',
-            { class: 'file-head card-head' },
-            icon('file', { size: 13 }),
-            el('span', { class: 'file-name', text: 'File' }),
+          foldable(
+            el(
+              'h3',
+              { class: 'file-head card-head' },
+              icon('file', { size: 13 }),
+              el('span', { class: 'file-name', text: 'File' }),
+            ),
+            'File',
           ),
           this.fileTable(this.props.info),
         ),
@@ -239,27 +242,30 @@ export class InfoPanel {
     return el(
       'div',
       { class: 'card card-file' },
-      el(
-        'h3',
-        { class: 'file-head card-head' },
-        el('span', {
-          class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
-          text: which === 1 ? '◥' : '◣',
-          title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
-        }),
-        el('span', { class: 'file-name', text: `File ${which}` }),
-        ...(close === undefined
-          ? []
-          : [
-              iconButton(
-                'x',
-                which === 1
-                  ? 'Close this file. The other takes its place and the map goes back to one.'
-                  : 'Close this file and go back to one map.',
-                () => close(which),
-                { class: 'btn btn-icon btn-close', size: 13 },
-              ),
-            ]),
+      foldable(
+        el(
+          'h3',
+          { class: 'file-head card-head' },
+          el('span', {
+            class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
+            text: which === 1 ? '◥' : '◣',
+            title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
+          }),
+          el('span', { class: 'file-name', text: `File ${which}` }),
+          ...(close === undefined
+            ? []
+            : [
+                iconButton(
+                  'x',
+                  which === 1
+                    ? 'Close this file. The other takes its place and the map goes back to one.'
+                    : 'Close this file and go back to one map.',
+                  () => close(which),
+                  { class: 'btn btn-icon btn-close', size: 13 },
+                ),
+              ]),
+        ),
+        `File ${which}`,
       ),
       this.fileTable(info),
     )

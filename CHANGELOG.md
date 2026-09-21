@@ -542,6 +542,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **The File card folds, like every other card in every column.** It and its pair in compare mode
+  were the only two headings in the app built by hand rather than by the shared one, so the General
+  column had three cards of which two folded and one did not (§26.6).
+
+- **The landing page's privacy note ends where everything above it ends.** Its 80-character measure
+  was on the bordered box rather than on the prose inside it, so the last thing on the page stopped
+  two hundred pixels short of the eight store tiles — with an accent bar down its edge making the
+  ragged end unmissable. The sentence keeps its measure.
+
 - **The shortcuts dialog reads as rows rather than as paragraphs.** Fourteen of the View group's
   twenty-one titles came out on two lines beside a one-line key, and the twenty state chips sat at
   eleven different left edges — a ragged edge down the one part of that list a reader scans

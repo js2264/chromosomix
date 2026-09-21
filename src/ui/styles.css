@@ -5643,11 +5643,19 @@ canvas.is-frozen {
      page, so every pixel it takes is a pixel of the fold. */
   font-size: var(--step--1);
   line-height: 1.4;
-  max-width: 80ch;
 }
 
+/* The measure is on the *prose*, not on the box.
+
+   On the box it capped the bordered card at 80ch — 635 px against the 832 px
+   every other block on the landing page is — so the last thing on the page
+   stopped two hundred pixels short of the eight store tiles above it, and the
+   accent bar down its edge made the ragged end unmissable. A line of eighty
+   characters is still what the sentence wants; it just does not want the border
+   to end where the sentence does. */
 .privacy-text {
   flex: 1 1 auto;
+  max-width: 80ch;
 }
 
 /* Reserves nothing once dismissed, but keeps the layout from jumping. */

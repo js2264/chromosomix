@@ -180,6 +180,31 @@ function foldCard(head: HTMLElement): void {
   if (chevron instanceof HTMLElement) chevron.title = folded ? 'Expand' : 'Collapse'
 }
 
+/**
+ * Give a heading built by hand the fold every `cardTitle` has.
+ *
+ * Two headings in the app cannot come from {@link cardTitle}: the File card's
+ * pair in compare mode wears a `◥` / `◣` glyph where the mark goes and a close
+ * button where the chevron goes, and neither is an icon from the set. They were
+ * therefore the only cards in any column that did not fold — three cards in the
+ * General column, two of which folded and one of which did not, which is the
+ * kind of disagreement §26.6 exists to settle. This appends the chevron and
+ * wires the same gesture, so a heading that is not built here still behaves
+ * like one.
+ *
+ * `stopPropagation` on whatever already sits at the end of the heading: a close
+ * button inside a strip that folds on click would fold the card on its way to
+ * closing the file.
+ */
+export function foldable(head: HTMLElement, name: string): HTMLElement {
+  for (const control of head.querySelectorAll('button')) {
+    control.addEventListener('click', (event) => event.stopPropagation())
+  }
+  head.appendChild(foldChevron(name))
+  head.addEventListener('click', () => foldCard(head))
+  return head
+}
+
 /** A button whose whole content is one icon. The title is the accessible name. */
 export function iconButton(
   name: IconName,
