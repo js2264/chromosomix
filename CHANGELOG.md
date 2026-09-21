@@ -526,6 +526,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   chrIV" — which is the locus box's job. The field is *motif*; the reference it searches is
   *reference*.
 
+### Removed
+
+- **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
+  reader who missed by one key lost the session rather than a tab. The command stays in the palette.
+
+- **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
+  share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
+  read.
+
+- **The About dialog no longer ends with a sentence about a list it does not have.** A site that
+  publishes no build manifest drew *This deployment does not publish a list of past builds.* under a
+  picker that was not there; the row takes itself away instead. A pinned build keeps its note, where
+  the missing list is a reader stranded in an old commit and the button beside it is the way back.
+
+- **The filter box over the IGV genomes is absent until there is something to narrow.** It stood
+  above the red banner of a store that had failed to load, offering a box to type into with nothing
+  behind it.
+
+- **One sentence of advice on an unknown locus is gone.** *Genome and contig namespaces can collide;
+  when they do, the genome wins* describes the parser rather than the reader's situation, and a name
+  that collides never reaches that refusal.
+
 ### Fixed
 
 - **A locus is written with a hyphen everywhere, including the places the audit did not reach.**
@@ -714,30 +736,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The pair view opens either genome by name.** There was one door, labelled `open rows genome →`,
   which is not a phrase and did not say which of the two it opened.
-
-### Removed
-
-- **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
-  reader who missed by one key lost the session rather than a tab. The command stays in the palette.
-
-- **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
-  share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
-  read.
-
-- **The About dialog no longer ends with a sentence about a list it does not have.** A site that
-  publishes no build manifest drew *This deployment does not publish a list of past builds.* under a
-  picker that was not there; the row takes itself away instead. A pinned build keeps its note, where
-  the missing list is a reader stranded in an old commit and the button beside it is the way back.
-
-- **The filter box over the IGV genomes is absent until there is something to narrow.** It stood
-  above the red banner of a store that had failed to load, offering a box to type into with nothing
-  behind it.
-
-- **One sentence of advice on an unknown locus is gone.** *Genome and contig namespaces can collide;
-  when they do, the genome wins* describes the parser rather than the reader's situation, and a name
-  that collides never reaches that refusal.
-
-### Fixed
 
 - **A heading in a right-aligned table column keeps its beginning.** `estimated completeness` read
   `ed completeness` and `weighted r` read `hted r`: `text-overflow` cannot reach the text inside a
