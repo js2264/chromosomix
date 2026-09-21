@@ -97,9 +97,13 @@ describe('the columns', () => {
 })
 
 describe('the heading says what the file holds', () => {
-  it('counts the cells', () => {
+  // The count is the toolbar's, once. It used to be in the heading as well, a
+  // few lines above the row count, and neither of the two landing tables beside
+  // this one carries one — the three are near twins and should read like it.
+  it('names itself without repeating the row count', () => {
     const { view } = make()
-    expect(view.el.querySelector('h2')?.textContent).toBe('Cells (4)')
+    expect(view.el.querySelector('h2')?.textContent).toBe('Cells')
+    expect(view.el.querySelector('.table-status')?.textContent).toBe('4 rows')
   })
 
   it('says that ticks are summed, in words', () => {

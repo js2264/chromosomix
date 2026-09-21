@@ -38,6 +38,7 @@ import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
+import { typedLocusToRegion } from '../genome/assembly'
 import { button, el, fmt } from './dom'
 import { resolutionLabel } from '../units'
 import type { ScaleState } from './GenomeView'
@@ -50,11 +51,11 @@ import {
   type DerivePresentation,
   type TurnPresentation,
 } from './MatrixPanel'
-import { overviewTarget } from './Overview'
+import { REMOTE_SCAN_BYTE_LIMIT, overviewTarget } from './Overview'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { SearchBox, featureSuggestions } from './SearchBox'
+import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 
 export interface WholeViewProps {
   client: ReaderClient
@@ -181,6 +182,24 @@ export interface WholeViewProps {
   offerLevel: boolean
   /** What one axis unit is called here: a chromosome, or a contig. */
   noun: string
+  /**
+   * The assembly's first sequence name, for the locus box's example (§26.6).
+   *
+   * Absent on a file whose sequences this view has not been told about, and then
+   * the builder writes the neutral word instead.
+   */
+  first?: string
+  /**
+   * Where the pixels come from, and how many bytes of them there are.
+   *
+   * The gate priced the read in stored pixels and said nothing about the
+   * download, while the metagenome's gate next to it quoted the bytes and said
+   * nothing about the pixels — and over a network the cost a lab pays is the
+   * download (§7.3, §18.6). Both gates state both figures now, and this view
+   * had neither of them.
+   */
+  sourceKind?: 'local' | 'remote'
+  sourceBytes?: number
   /**
    * Ask the reader which genome each contig belongs to, for the tooltip.
    *
@@ -340,23 +359,34 @@ export class WholeView {
     this.problem = el('p', { class: 'inline-error hidden' })
     const store = props.annotations?.store
     this.search = new SearchBox({
-      placeholder:
-        store === undefined
-          ? `${props.noun}, or ${props.noun}:start-end`
-          : `${props.noun}, ${props.noun}:start-end, or a gene`,
+      // The shared builder (§26.6). Spelled out as a list of nouns, this one
+      // came to 46 characters — `chromosome, chromosome:start-end, or a gene` —
+      // in a box about 260 pixels wide, so it was cut mid-word at exactly the
+      // clause that says a gene name works here, which is the clause a reader of
+      // a whole-genome picture most wants.
+      placeholder: locusPlaceholder({
+        first: props.first,
+        accepts: { sequence: true, gene: store !== undefined },
+      }),
+      go: true,
       title:
         `Open one ${props.noun}, or a range within it` +
         (store === undefined ? '. ' : ', or a gene from the starred model. ') +
         'The same box the / key opens.',
+      // 1-based inclusive in, the machine form out (§26.1): what a reader types
+      // here is what they read off the map, and the region reader behind this
+      // takes cooler's half-open interval.
       onSubmit: (text) => {
-        if (text !== '') props.onOpenRegion(text)
+        if (text !== '') props.onOpenRegion(typedLocusToRegion(text))
       },
       // What the comment on the title bar promises: a whole-genome map of a
       // mammal is three pixels per chromosome arm, so "go to MYC" has to be
       // answerable by typing.
+      // `display`, for the reason the sequence bar's box takes it: this box
+      // reads what it shows back through `typedLocusToRegion`.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text) }),
+        : { suggest: (text: string) => featureSuggestions(store, text, 'display') }),
     })
     this.gate = el('div', { class: 'gate hidden' })
     this.progressBar.max = 1
@@ -616,18 +646,31 @@ export class WholeView {
    * going missing when it is absent.
    */
   private renderGate(): void {
-    const { nnz } = this.props
+    const { nnz, sourceBytes, sourceKind } = this.props
     const counted = nnz === null ? '' : ` — ${fmt.int(nnz)} of them —`
+    // **And the bytes.** A remote cooler was offered `compute whole genome` with
+    // its pixel count and no mention of the download, while the metagenome's
+    // gate beside it quoted the bytes and nothing else: over a network the cost
+    // a lab actually pays is the download, and the gate that was about to fetch
+    // eighteen megabytes did not say so (§7.3, §18.6).
+    const priced =
+      sourceBytes === undefined
+        ? ''
+        : ` — ${fmt.bytes(sourceBytes)} ${sourceKind === 'remote' ? 'downloaded' : 'read'}`
     const rung = this.props.onOpenRung === undefined ? null : this.cheaperRung()
     const lines: HTMLElement[] = [
       el(
         'p',
         {},
         el('strong', {
+          // `resolutionLabel`, not `fmt.bp`: a bin size is a round number by
+          // construction (§26.2), and this sentence said `at 1.0 kb` under a
+          // resolution chip saying `1 kb` and beside a File card saying
+          // `1,000 bp` — three spellings of one number on one screen.
           text: `Whole genome at ${resolutionLabel(this.props.binsize)} reads every stored pixel of the file`,
         }),
-        `${counted} and sums them into ${this.resolutionPhrase()}. Once per file; the picture ` +
-          'is kept while it is open.' +
+        `${counted} and sums them into ${this.resolutionPhrase()}${priced}. Once per file; the ` +
+          'picture is kept while it is open.' +
           // A selection reads the whole file too: the sequences it wants are
           // scattered through the pixels, so there is no smaller span to walk.
           (this.props.selection === undefined
@@ -635,12 +678,27 @@ export class WholeView {
             : ' A selection costs the same pass: its sequences are spread through the file.'),
       ),
     ]
+    if (sourceKind === 'remote' && sourceBytes !== undefined && sourceBytes > REMOTE_SCAN_BYTE_LIMIT) {
+      // The warning the metagenome's gate has always given, on the gate that
+      // reads the same pixels of the same file. A caution with a way through, so
+      // `--warn` and not `--danger` (§26.5) — the button is right below it.
+      lines.push(
+        el('p', {
+          class: 'hint gate-warn',
+          text:
+            `Reading this file over HTTP means downloading all ${fmt.bytes(sourceBytes)} of it, ` +
+            `which is past the ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)} this page starts on a click.`,
+        }),
+      )
+    }
     if (rung !== null) {
       lines.push(
         el(
           'p',
           {},
-          el('strong', { text: `Opening the file at ${resolutionLabel(rung.binsize)} draws the same picture` }),
+          el('strong', {
+            text: `Opening the file at ${resolutionLabel(rung.binsize)} draws the same picture`,
+          }),
           ` from far fewer pixels — the cells are ${this.resolutionPhrase().replace(/^cells of /, '')} ` +
             'either way, and every region after it opens quicker too.',
         ),
@@ -706,6 +764,9 @@ export class WholeView {
     if (this.plan.contigsPerCell > 1) {
       return `cells of ${fmt.int(this.plan.contigsPerCell)} ${this.props.noun}s`
     }
+    // A bin size takes `resolutionLabel` (§26.2). `fmt.bp` wrote `cells of
+    // about 3.0 kb` beside a chip reading `1 kb`, and a reader looks for a
+    // difference between `3.0 kb` and `3 kb` that is not there.
     return `cells of about ${resolutionLabel(this.props.binsize * this.plan.binsPerCell)}`
   }
 

@@ -45,7 +45,7 @@ import { button, el, fmt } from './dom'
 import type { ScaleState } from './GenomeView'
 import { cardTitle } from './icons'
 import { MatrixPanel, blockSummary, type AnnotationContext } from './MatrixPanel'
-import { SearchBox } from './SearchBox'
+import { SearchBox, locusPlaceholder } from './SearchBox'
 
 /**
  * Above this, a remote full scan is refused outright. A scan reads every pixel,
@@ -137,18 +137,18 @@ export function wholeFileLevelCard(
     text: WHOLE_FILE_LEVELS.find((choice) => choice.value === current)?.hint ?? '',
   })
   select.addEventListener('change', () => onChange(select.value as WholeFileLevel))
+  // **`Level`, which is what the picker picks.** It was `Scan`, over a list
+  // whose default — `bin × bin` — §7.3 explicitly calls the pooled whole-file
+  // read rather than one of the scans, so the card's name contradicted its own
+  // first option. And the paragraph under the per-level hint stated the cost a
+  // third time: the view's summary line says it, and the gate beside it says it
+  // with the file's own figures in it.
   return el(
     'section',
     { class: 'card' },
-    cardTitle('Scan', 'scan'),
+    cardTitle('Level', 'scan'),
     el('div', { class: 'field' }, el('span', { class: 'field-label', text: 'level' }), select),
     hint,
-    el('p', {
-      class: 'hint',
-      text:
-        'Every other view costs a bounded read. All three of these are one pass over every ' +
-        'non-zero pixel of the file.',
-    }),
   )
 }
 
@@ -157,6 +157,18 @@ export interface OverviewProps {
   binsize: number
   sourceKind: 'local' | 'remote'
   sourceBytes: number
+  /**
+   * Stored pixels in the file, where it says — the other half of the price.
+   *
+   * The gate quoted bytes and the whole-genome gate beside it quoted pixels, so
+   * the same read was priced in two currencies on two levels of one picker
+   * (§7.3, §18.6). Both say both now. `undefined` where the file declares no
+   * `nnz`, and then the sentence is written without it rather than going
+   * missing.
+   */
+  nnz?: number
+  /** What one axis unit is called here — a contig, or a chromosome (§26.4). */
+  noun?: string
   /** Sidecar edge list advertised by a catalog, if any. */
   edgeListUrl?: string
   /**
@@ -284,7 +296,14 @@ export class Overview {
     this.panelHost = el('div', { class: 'overview-host hidden' })
     this.summary = el('p', { class: 'summary' })
     this.search = new SearchBox({
-      placeholder: 'a genome, or a contig',
+      // The shared builder (§26.6). This box takes a genome or a sequence and
+      // nothing else, so that is what it lists — in the order and the grammar
+      // every other locus box in the application uses.
+      placeholder: locusPlaceholder({
+        first: props.genomeNames[0],
+        accepts: { sequence: true, genome: true },
+      }),
+      go: true,
       title:
         'Open one genome of this file by name. A name that is not a genome is tried as a ' +
         'contig, which is the other thing an axis of this map is made of.',
@@ -460,9 +479,15 @@ export class Overview {
       // already states the cost honestly — which is exactly what a confirmation
       // needs and what an unconditional refusal wastes. The user knows their
       // connection; this page does not.
+      // `--warn`, not `--danger`. The comment above says it: this is a caution
+      // with a way through, and the button that goes through it is two lines
+      // below. `inline-error` is the colour a refusal takes — a failed
+      // validation row, an error view — so a reader who had learnt that red
+      // means "this did not happen" read a refusal and had no reason to read on
+      // (§26.5).
       this.gate.appendChild(
         el('p', {
-          class: 'inline-error',
+          class: 'hint gate-warn',
           text:
             `Scanning this file over HTTP means downloading all ${fmt.bytes(sourceBytes)} of it, ` +
             `which is past the ${fmt.bytes(REMOTE_SCAN_BYTE_LIMIT)} this page starts on a click.`,
@@ -485,12 +510,33 @@ export class Overview {
       return
     }
 
-    const cost =
-      sourceKind === 'remote'
-        ? `This will download the whole file (${fmt.bytes(sourceBytes)}).`
-        : `This will read every pixel of the file (${fmt.bytes(sourceBytes)}).`
-    this.gate.appendChild(el('p', { text: cost }))
-    this.gate.appendChild(button('compute overview', () => void this.scan()))
+    // **The whole-genome gate's own sentence, and its own button.** §7.3 asks
+    // that every level of the whole-file picture be gated behind the same
+    // sentence and the same button, and these two were neither: one said
+    // "This will read every pixel of the file (13.8 MB)" over a button reading
+    // `compute overview`, the other quoted the pixel count and the cell size
+    // over `compute whole genome` — so a reader switching level in one picker
+    // watched the gate change shape, and a metagenomics reader who pressed
+    // **whole genome** in the toolbar was asked to compute an *overview*, a word
+    // that appears nowhere else on screen.
+    //
+    // Both figures, because a reader on a network pays the bytes and a reader on
+    // a local disk pays the pixels, and the gate cannot know which of them is
+    // reading.
+    const price =
+      this.props.nnz === undefined ? '' : ` — ${fmt.int(this.props.nnz)} of them —`
+    const cell = this.level === 'genome' ? 'genome pair' : `${this.props.noun ?? 'contig'} pair`
+    this.gate.appendChild(
+      el(
+        'p',
+        {},
+        el('strong', { text: 'The whole genome reads every stored pixel of the file' }),
+        `${price} and sums them into one cell per ${cell} — ` +
+          `${fmt.bytes(sourceBytes)} ${sourceKind === 'remote' ? 'downloaded' : 'read'}. ` +
+          'Once per file; the picture is kept while it is open.',
+      ),
+    )
+    this.gate.appendChild(button('compute whole genome', () => void this.scan()))
   }
 
   private cancel(): void {

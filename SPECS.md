@@ -701,7 +701,15 @@ Opening a file lands here, not on a heatmap. Columns:
 - non-zero pixel count (§4), sortable, marked as a proxy
 
 Sortable and filterable on all columns; free-text search over genome names. Clicking a row opens the
-genome view. Selecting two rows opens the genome-pair view.
+genome view. Ticking any number of rows and pressing *show selected →* opens them as one map — each
+on the diagonal, every pair's block off it (§5.3, §7.3). One ticked row is named on the button and
+two are named as a pair, because a name says what is about to open where a count does not.
+
+The four columns the format guarantees are labelled in the application's own words — `name`,
+`length`, `contigs`, `bins` — with the file's identifier in the header's tooltip. Only those four:
+a discovered column is the creator's to name and is rendered under the name they gave it, including
+where that duplicates a core column, since a viewer that folded one away would be deciding a column
+is redundant and would be wrong the first time the two disagreed.
 
 Rationale: it costs two small reads, it is the operation a metagenomics user actually performs, and
 a 400×400 heatmap of scalars is less informative than a sortable MAG table with quality metrics.
@@ -764,6 +772,14 @@ sizes rather than one because a single step is always wrong twice — three pres
 or one press past the locus — and they are ordinary bordered buttons like everything else in the
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
+
+**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's, the
+1D browser's and a deck's tracks cell's (§26.6). The browser's carried two unlabelled magnifiers at
+1.8× instead, which is a factor nobody can predict or undo, so a reader who had learnt that one
+press is 3× on the map got something else on the tracks beside it; and the `−` / `+` keys drive the
+3× pair rather than a factor of their own. In a tracks cell the bar is the box and the four steps
+alone: no `go`, since Enter submits and the lead's bar above the grid carries the button, and no `/`
+badge, since one key cannot open two boxes and the lead's is the one it opens.
 
 Every press moves the window about its own **centre**, which leaves what you were looking at in the
 middle of what comes back. Against an end of the sequence the window slides in rather than asking
@@ -997,7 +1013,18 @@ ticks. Two decimals of a megabase is ten kilobases, so a window narrower than th
 measured in megabases wrote the same number under every tick — an axis of `4.60 Mb`, four times over,
 under a picture zoomed in to answer exactly the question it was there for. The unit is chosen so that
 two decimals can tell one tick from the next, and it steps down when they cannot rather than growing
-a third: `4.6 Mb`, then `4605 kb`, then `4601520 bp`. Nobody reads a fourth decimal off an axis.
+a third: `4.6 Mb`, then `4,605 kb`, then `4601520 bp`. Nobody reads a fourth decimal off an axis. On
+one axis every tick keeps the step's decimals and a four-digit kilobase is grouped like every other
+number on screen (§26.1): trimmed per tick, a row read `1.05 Mb 1.1 Mb 1.15 Mb 1.2 Mb`, which is two
+precisions alternating along a single ruler.
+
+**How many ticks it draws comes from how wide it is.** Ten was a constant chosen for the browser at
+full width, and the same ruler is drawn in a deck cell a third as wide, where ten labels ran into
+each other — `1250 kb1255 kb1260 kb` — and a coordinate axis whose numbers touch is the one part of a
+browser a reader cannot read around. The gap a label needs is the heatmap's own, so the two rulers of
+one genome thin out by one rule. And where the surface around the strip already captions it — the
+Chromosomes table's bar says `16 sequences · 12.11 Mb` over it — the ruler draws its boundary marks
+and no caption of its own: two captions for one strip say the strip is two things.
 
 **The plot is the whole column, not the stack.** The canvas reaches the foot of the column rather
 than the foot of the last lane, so pointing anywhere under the tracks names a coordinate, draws the
@@ -1464,14 +1491,20 @@ handing the *same renderers* a context that emits PDF operators instead of pixel
 second drawing of the view to keep in step; text is Helvetica, one of the fourteen fonts every reader
 has, so nothing is embedded. A vector page has no resolution, so the DPI control is *absent* while
 one is chosen rather than greyed out — which is also what puts the format's full name and the button
-on one line.
+on one line. The clipboard button in the same row takes a PNG whatever the format beside it says, so
+while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
+a raster rasterised at a number they could no longer see or change.
 
 ### 7.3 Genome × genome overview — gated, not default
 
 Available, but never automatic, because it costs a full pixel scan (§4):
 
 - **Local files:** explicit user action, progress indicator, cancellable.
-- **Remote files:** refused above a byte threshold, since a full scan means downloading the file.
+- **Remote files:** **warned above a byte threshold, with the download offered** — the scan streams
+  in bounded windows, so only the bytes are large, and the reader knows their connection where this
+  page does not. A caution with a way through takes `--warn` and not the colour of a refusal
+  (§26.5): red over a button that proceeds is a reader told no by the picture and yes by the words.
+  A full scan means downloading the file.
   Offered when a sidecar edge list is advertised in the catalog. **`metacooler network --level genome`
   is the right producer** — it emits a `node1 / node2 / value` TSV (optionally with `--header`) to a
   file or stdout, which for a few hundred MAGs is a few KB of text: no HDF5, no range requests, one
@@ -1505,7 +1538,13 @@ the cheapest thing to land on.
 mandatory rather than optional: the rule is not "warn when it looks expensive" but that a pass over
 every pixel never starts on its own, and a threshold would make it hold on large files and lapse on
 small ones. So the bin level is gated whatever the file declares `nnz` to be, behind the same
-sentence and the same button as the scans. It is also labelled and divided by **genome** rather than
+sentence, the same two figures and the same button as the scans: `compute whole genome` over one
+sentence naming the stored pixels it will read, the cells it will sum them into, and the bytes it
+will read or download. Both figures on every gate, because the pixels are what a local read costs
+and the bytes are what a remote one costs, and a gate cannot know which of the two a reader is
+paying. One gate said `compute overview` — a word that appeared nowhere else on screen, under a
+toolbar button reading *whole genome* — and priced itself in bytes alone while its sibling priced
+itself in pixels alone. It is also labelled and divided by **genome** rather than
 by contig — the axis is the whole metagenome at every level, 2,082 contig hairlines over 48 blocks
 are a grey wash, and an axis label that names a genome opens that genome. A *selection* follows the
 same rule one level down, because it is the same rule: its axis names **what was ticked**. Tick
@@ -2114,7 +2153,50 @@ it measured: the chip before each name, one box per end of the range, the spot f
 button, the row the handle sits on. A block that only *draws* can never be pointed at, and that is
 precisely how the same two numbers came to be editable in the browser and inert beside the map. The
 two surfaces differ only in the constants they pass — a lane beside a map can be sixteen pixels tall
-and its text nine; a lane in the browser is ninety and its name is what identifies the row.
+and its text nine; a lane in the browser is ninety and its name is what identifies the row. The
+**name** carries the weight in both, because it is what identifies the row and the feature names
+under it are the contents: at one size and one weight, `genes` read as the first item in a row of
+gene names.
+
+**Written over the data, the block sits on a plate.** In the browser it has a column of its own; the
+margin beside a map belongs to the heatmap's own labels and a bottom canvas cannot grow backwards to
+make one, so there the block is drawn over the lane and a halo around each glyph was the whole of the
+protection. On a sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange
+bars through every letter and `230 features in view` lay across a density block. A plate in the halo
+colour at 0.85 keeps the argued placement and makes the words readable — the lane under it stays
+visible as a shape, because the first eighty pixels of a peak set are data a reader may be counting.
+A name longer than its lane is **cut in the middle** there as it is in a column, since a clipped name
+is a different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`,
+which is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range
+line would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the
+name on one line rather than under it.
+
+**Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
+base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
+A lane tooltip that said `IV:1.18 Mb` over 1 kb bins was ten bins coarser than the picture beside it
+and in a different grammar from the matrix readout a pixel above.
+
+**A group's name is said where there is room for it.** The bar that marks a run of lanes sharing one
+axis is drawn in the plot's own margin, six pixels, which cannot hold nine-pixel type — so beside a
+map the bar is unnamed and the lane's tooltip names the group instead. An unexplained coloured rule
+in the first member's colour reads as a mark rather than as a group, and the Groups card should not
+be the only place to find out why three lanes are joined by a line.
+
+**The sequence lane's axis starts at `[0, 1]` and moves like any other track's.** It was pinned, and
+the pin was only half kept: the lane recorded its limit boxes as click targets, the editor stored
+whatever was typed in them and the settings card offered `limits … auto`, while the lane alone
+withheld the autoscale mark that is the way back. Yeast GC sits between 0.35 and 0.45, so narrowing
+the axis is the natural move and the reader was then stuck. `[0, 1]` survives as the default, which
+is what keeps two views of one genome matching until somebody deliberately changes one.
+
+**A value axis is a fact about the data in the window, not about the lane's width.** Autoscale
+resolves over the values the file states inside the window, quantised by the file's own summary
+level, and a lane narrower than a thousand pixels is sampled as though it were that wide. Taken from
+the drawn pixels instead, the same ATAC track over the same 400 kb read `0 – 111` on a 680-pixel
+lane, `0 – 86.9` on a 560-pixel one and `0 – 36.9` in a deck cell — so the right-hand stack of one
+map disagreed with the bottom one and two cells of one deck disagreed with each other about the same
+file, which is the one conclusion a picture of one file must not invite (§16.2). The ceiling can then
+sit a little above the highest mean drawn, which is the trade every other browser makes.
 
 The rest follows the same shape. **Groups** are a fact about the tracks rather than about a view
 (`annotations/groups.ts`), so one `GroupSettings` per open file is handed to both surfaces, one
@@ -2760,8 +2842,19 @@ a stretch of variants seven bases apart at whole-contig zoom drew as several
 hundred three-pixel marks that merged into one solid bar in whichever ink was
 laid down last, reading as a single three-kilobase variant. Collapsing says the
 true thing: there are many here. For every other feature lane the floor is zero
-and the rule is the `span / 2` it has always been — a peak one pixel wide *is*
-one pixel of genome.
+and the width one feature needs is the `2` it has always been — a peak one pixel
+wide *is* one pixel of genome.
+
+**The count it is measured against is the fullest row the lane will use**, which
+for a stranded set is a band per strand rather than the whole window in one row.
+Measured over the window, a gene set that this lane spreads across two bands was
+declared unpackable at half the features it can actually draw apart: the same 230
+yeast genes over the same 400 kb came out as named boxes on a 680-pixel lane and
+as a solid grey density block on a 455-pixel one, so opening a side panel made
+the gene track look as though the annotation had been lost. Not the rows the lane
+has *room* for, either — the packing reaches for a second row only where two
+features overlap, so four rows do nothing for four hundred records sitting two to
+a pixel, which is the case the rule exists for.
 
 **A VCF can say what genome it is on, exactly.** Its
 `##contig=<ID=…,length=…>` block is a `chrom.sizes` written inside the file:
@@ -3078,9 +3171,21 @@ the rows it was **allotted** rather than the rows it used, because a band that p
 two rows still has to sit where the allotment put it.
 
 None of this reaches the collapsed picture. Past the point where there are more features than the
-lane can draw apart, the lane is a count profile (§8.14's rule, unchanged) drawn in the lane's own
+lane can draw apart, the lane is a count profile (§8.14's rule) drawn in the lane's own
 colour: a density is a number, not a category, and colouring it by the first feature in each pixel
 would be a claim about the other four hundred.
+
+**A name is bounded, and it stays inside the lane.** A name below its feature may overhang it — a
+gene four pixels wide has a name worth ten times that, and that zoom is what the placement exists
+for — but by four times its feature's width or eighty pixels, whichever is more, and past that the
+name is cut in the middle. Unbounded, a forty-six-character peak name (its caller's run id plus a
+counter) was written under a three-pixel peak across a dozen unlabelled neighbours, so one peak in
+twenty carried a name and every name read as the label for the group it lay across. And the text is
+nudged inside the lane's own ends rather than left to the clip, because **a browser must never print
+a gene name that is not in the file**: `MSW1` was drawn as `SW1`, `HEH2` as `HE` and `MUS81` as
+`US81`, every one of them a plausible yeast symbol that a reader would search for or cite. Inside a
+feature the name is dropped where the window has cut the box, since a name centred in half a box is
+centred on a place the feature does not have.
 
 **Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows }` — a nested optional
 record in the shape `reads` is one and for the same reasons: the fields mean nothing to a value

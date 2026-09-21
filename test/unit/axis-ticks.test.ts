@@ -499,9 +499,12 @@ describe('formatBpTick, given the gap between two ticks', () => {
     expect(formatBpTick(5_000_000, 1_000_000)).toBe('5 Mb')
   })
 
+  // …and a four-digit kilobase is grouped like every other number on screen
+  // (§26.1). It was the one ungrouped four-digit figure in the app, sitting on
+  // the axis directly under a locus box reading `IV:1,246,215`.
   it('steps down to the kilobase rather than to a third decimal', () => {
-    expect(formatBpTick(4_605_000, 5_000)).toBe('4605 kb')
-    expect(formatBpTick(4_601_520, 10)).toBe('4601.52 kb')
+    expect(formatBpTick(4_605_000, 5_000)).toBe('4,605 kb')
+    expect(formatBpTick(4_601_520, 10)).toBe('4,601.52 kb')
   })
 
   it('steps down to the base pair when even that is not enough', () => {
@@ -521,7 +524,8 @@ describe('formatBpTick, given the gap between two ticks', () => {
     expect(formatBpTick(120_000)).toBe('120 kb')
     // …and a round number keeps its zeros, which a blanket strip would eat: a
     // 4600 with no decimal point in it is not four thousand six hundred with
-    // trailing zeros to spare.
-    expect(formatBpTick(4_600_000, 1_000)).toBe('4600 kb')
+    // trailing zeros to spare. Grouped, because a step was given and the number
+    // is therefore a tick of an axis rather than a lone position.
+    expect(formatBpTick(4_600_000, 1_000)).toBe('4,600 kb')
   })
 })

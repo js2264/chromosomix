@@ -99,11 +99,19 @@ describe('what a lane can be controlled with', () => {
     }
   })
 
-  it('keeps a sequence lane pinned, since GC is a fraction', () => {
-    // An axis that is not [0, 1] is not a fraction any more, so the same genome
-    // would look different in two views.
+  it('starts a sequence lane at [0, 1] and lets a reader move it', () => {
+    // It used to be pinned, on the argument that an axis which is not [0, 1] is
+    // not a fraction any more. The pin was only ever half kept: the lane
+    // recorded its limits as click targets, the editor stored what was typed,
+    // and the settings card offered `limits [0] [1] auto` — while the lane
+    // alone withheld the autoscale mark that is the way back from a typed pair.
+    // Yeast GC sits between 0.35 and 0.45, so narrowing the axis is the natural
+    // move and the reader was then stuck. `[0, 1]` survives as the *default*,
+    // which is what keeps two views of one genome matching.
     expect(drawsAProfile('sequence')).toBe(true)
-    expect(hasAMovableAxis('sequence')).toBe(false)
+    expect(hasAMovableAxis('sequence')).toBe(true)
+    // …and it is still not a bigWig: smoothing and the rest of the track row
+    // are about a measured signal, and GC is computed from the bases.
     expect(hasTrackControls('sequence')).toBe(false)
   })
 

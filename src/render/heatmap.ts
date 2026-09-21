@@ -986,8 +986,16 @@ export interface AxisSpanSet {
 /** Position ticks per axis, as `_MAX_POSITION_TICKS` in `ops/show.py`. */
 export const MAX_POSITION_TICKS = 6
 
-/** On-screen room one tick label needs before another may be placed. */
-const TICK_MIN_GAP_PX = 78
+/**
+ * On-screen room one tick label needs before another may be placed.
+ *
+ * Exported because the 1D browser's ruler thins out by the same rule (§5.8). It
+ * used to ask for ten ticks whatever its pixel width, which is a figure chosen
+ * for a page-wide window: in a deck cell a third that wide the labels ran into
+ * each other — `1250 kb1255 kb1260 kb` — and a coordinate axis whose numbers
+ * touch is the one part of a browser that cannot be read around.
+ */
+export const TICK_MIN_GAP_PX = 78
 
 /**
  * The same, for an axis ruled one sequence at a time ({@link AxisSpan}).
@@ -1108,6 +1116,15 @@ export function bpTicks(
  * `4.6 Mb` at whole-chromosome zoom, `4605 kb` at five-kilobase ticks,
  * `4601520 bp` at ten. Without it the spelling is unchanged, which is what the
  * paragraph above promises about a lone position.
+ *
+ * **Given the step, the zeros stay and four digits are grouped**, because then
+ * the number is one tick of an axis rather than a position on its own. Trimmed
+ * per tick, one row read `1.05 Mb 1.1 Mb 1.15 Mb 1.2 Mb` — two precisions
+ * alternating along a single ruler, which reads as two kinds of measurement —
+ * and the kilobase branch wrote `1250 kb` under a locus box saying
+ * `IV:1,246,215`, the one ungrouped four-digit number on the screen (§26.1).
+ * A lone position keeps `ops/show.py`'s spelling exactly, which is what the
+ * paragraph above is about.
  */
 export function formatBpTick(position: number, step?: number): string {
   for (const [scale, unit] of [
@@ -1121,9 +1138,24 @@ export function formatBpTick(position: number, step?: number): string {
     // axis — so the unit gives way rather than the precision.
     const decimals = step > 0 ? Math.max(0, Math.ceil(-Math.log10(step / scale))) : 2
     if (decimals > 2) continue
-    return `${trimZeros((position / scale).toFixed(decimals))} ${unit}`
+    const written = (position / scale).toFixed(decimals)
+    return `${scale === 1e3 ? groupThousands(written) : written} ${unit}`
   }
   return `${Math.round(position)} bp`
+}
+
+/**
+ * `4601.52` → `4,601.52`, and the decimals left alone.
+ *
+ * Not `toLocaleString` on the number: that formatter caps the fraction at three
+ * digits and rounds to get there, so the string a tick was already measured at
+ * would come back a different string. The separators are the only thing added.
+ */
+function groupThousands(text: string): string {
+  const dot = text.indexOf('.')
+  const whole = dot < 0 ? text : text.slice(0, dot)
+  const grouped = Number(whole).toLocaleString('en-US')
+  return dot < 0 ? grouped : `${grouped}${text.slice(dot)}`
 }
 
 /**
@@ -4595,29 +4627,49 @@ export class HeatmapView {
     ctx.fillStyle = this.opts.labelColor
 
     // Columns run a quarter turn anticlockwise, as matplotlib rotates
-    // categorical x tick labels: a contig name needs the block's height, and a
-    // block is rarely more than a few pixels wide.
+    // categorical x tick labels — **but only where the block is narrower than
+    // its own name.** A contig name usually needs the block's height, because a
+    // block on a whole-genome axis is a few pixels wide; a square map of one
+    // contig has one block as wide as the picture, and a name stood on its end
+    // over that reads as a stray mathematical symbol floating above it rather
+    // than as the label of the thing underneath. The test is per block, so an
+    // axis of sixteen chromosomes turns every name and an axis of one does not.
     //
-    // `inMargin` asks whether the gutter can actually *hold* a rotated label,
-    // not merely whether it is non-zero. A 6 px gutter is non-zero and fits
-    // nothing, so the old test drew every column label upward off the top of
-    // the canvas — present in the DOM, invisible on screen.
+    // `inMargin` asks whether the gutter can actually *hold* a label, not merely
+    // whether it is non-zero. A 6 px gutter is non-zero and fits nothing, so the
+    // old test drew every column label upward off the top of the canvas —
+    // present in the DOM, invisible on screen.
     const inMargin = m.top >= LABEL_GAP * 2
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = inMargin ? 'left' : 'right'
     let last = -Infinity
     for (const block of cols) {
       const centre = plot.x + this.colScale.toPixel(visibleCentre(block, this.colScale.domain))
       if (centre < plot.x || centre > plot.x + plot.width) continue
       if (centre - last < LABEL_MIN_GAP) continue
       last = centre
+      // The block's drawn width, clipped to the picture: a block running off the
+      // left edge is only as wide as the part of it a name could sit over.
+      const from = Math.max(plot.x, plot.x + this.colScale.toPixel(block.start))
+      const to = Math.min(plot.x + plot.width, plot.x + this.colScale.toPixel(block.end))
+      const room = Math.abs(to - from)
+      const flat = ctx.measureText(block.label).width + LABEL_GAP <= room
+      const y = plot.y - (inMargin ? 3 : -3)
       ctx.save()
-      ctx.translate(centre, plot.y - (inMargin ? 3 : -3))
-      ctx.rotate(-Math.PI / 2)
-      if (!inMargin) ctx.strokeText(block.label, 0, 0)
-      ctx.fillText(block.label, 0, 0)
+      if (flat) {
+        ctx.textAlign = 'center'
+        ctx.textBaseline = inMargin ? 'bottom' : 'top'
+        if (!inMargin) ctx.strokeText(block.label, centre, y)
+        ctx.fillText(block.label, centre, y)
+      } else {
+        ctx.textAlign = inMargin ? 'left' : 'right'
+        ctx.textBaseline = 'middle'
+        ctx.translate(centre, y)
+        ctx.rotate(-Math.PI / 2)
+        if (!inMargin) ctx.strokeText(block.label, 0, 0)
+        ctx.fillText(block.label, 0, 0)
+      }
       ctx.restore()
     }
+    ctx.textBaseline = 'middle'
 
     const rowsInMargin = m.left >= LABEL_GAP * 2
     ctx.textAlign = rowsInMargin ? 'right' : 'left'

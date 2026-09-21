@@ -27,6 +27,24 @@ import type { AnnotationClient } from './worker/client'
  */
 export const FETCH_PAD = 0.5
 
+/**
+ * The narrowest lane the resolution is chosen for, in pixels.
+ *
+ * Two pictures of one window have to be drawn from one set of numbers, or their
+ * value axes disagree and a reader holding a deck's cells against each other is
+ * shown a difference that is in the layout rather than in the file. A lane
+ * narrower than this asks for the level a lane this wide would ask for: at 1024
+ * pixels a 400 kb window comes back in 512-base means, which is finer than a
+ * 265-pixel cell can draw and is the same answer the lead gets.
+ *
+ * A thousand and not ten thousand, because the cost is real — a finer level is
+ * more blocks decoded and, over HTTP, more bytes — and this is the width at
+ * which every lane the application actually lays out beside a map or in a cell
+ * is covered. Past it a lane asks for what it can draw, since there the detail
+ * reaches the screen.
+ */
+const SAMPLE_PIXELS_FLOOR = 1024
+
 /** A request that is running, and what it was asked under. */
 interface Running {
   cancel: () => void
@@ -195,7 +213,23 @@ export class SampleCache {
     const view = options.axis.windows(options.domain)
     if (view.length === 0) return cached?.samples ?? null
 
-    const pixels = Math.max(1, options.pixels)
+    // **A floor under the width, so two pictures of one window read the same
+    // data.** The bucket used to come off the lane's own pixel count alone, and
+    // a lane's pixel count is a fact about the layout rather than about the
+    // genome: a tracks cell three across asked for one summary level and the
+    // same track beside the lead map asked for a finer one, so the two lanes
+    // were drawn from different numbers and autoscaled to different ceilings —
+    // the same ATAC track over the same 400 kb reading `0 – 111` in one and
+    // `0 – 36.9` in the other, which a reader comparing two cells of a deck can
+    // only read as the data differing (§8.8, §16.2).
+    //
+    // Every lane narrower than {@link SAMPLE_PIXELS_FLOOR} therefore samples as
+    // though it were that wide. It costs a narrow lane a finer level than it can
+    // draw — at most three buckets, so a few thousand intervals rather than a
+    // few hundred — and it buys the one thing a deck is for, which is two
+    // pictures that can be held against each other. A wider lane still asks for
+    // what it can draw, because there the detail is on screen.
+    const pixels = Math.max(SAMPLE_PIXELS_FLOOR, options.pixels)
     const bases = view.reduce((sum, window) => sum + (window.end - window.start), 0)
     // Rounded to a power of two so a slow zoom does not refetch every frame: the
     // file's zoom levels are powers of two apart anyway, so anything finer would

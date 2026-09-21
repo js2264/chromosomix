@@ -99,10 +99,14 @@ function tick(view: GenomesTable, name: string): void {
 describe('the columns', () => {
   it('leads with the ones the format guarantees, in that order', () => {
     const { view } = make()
+    // In the app's own words, not the file's identifiers: the four the format
+    // guarantees are the four this table knows the names of, and the File card
+    // beside it calls the same things `contigs` and `bins`. Everything after
+    // them is whatever the creator joined in, rendered under its own name.
     expect(textsOf(view.el, '.th span:first-child').slice(0, 4)).toEqual([
       'name',
       'length',
-      'n_bins',
+      'bins',
       'completeness',
     ])
   })
@@ -116,7 +120,9 @@ describe('the columns', () => {
     const { view } = make()
     const heads = all<HTMLElement>(view.el, '.th')
     const last = heads[heads.length - 1]
-    expect(last.textContent?.trim()).toBe('nnz rows (proxy)')
+    // The words §5.1 uses for it, which are the File card's words too: `nnz
+    // rows` was the worker's name for a slice of `bin1_offset`.
+    expect(last.textContent?.trim()).toBe('non-zero pixels (proxy)')
     expect(last.title).toContain('NOT a contact count')
   })
 
@@ -212,13 +218,17 @@ describe('the other doors', () => {
     expect(made.wholes).toBe(1)
   })
 
+  // 1-based inclusive in, the machine form out (§26.1). This box used to hand
+  // the digits to the region reader untouched, which reads them 0-based and
+  // half-open — so the same coordinates named one window here and another in
+  // the browser's box over the same file.
   it('takes a window without opening the genome around it', () => {
     const { view, regions } = make()
     const box = view.el.querySelector<HTMLInputElement>('.search-input')
     if (box === null) throw new Error('no locus box')
     box.value = 'contig_9:1200000-1210000'
     box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    expect(regions).toEqual(['contig_9:1200000-1210000'])
+    expect(regions).toEqual(['contig_9:1199999-1210000'])
   })
 
   it('ignores an empty box rather than opening nothing', () => {

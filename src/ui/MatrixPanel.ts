@@ -7262,6 +7262,23 @@ export class MatrixPanel {
     })
   }
 
+  /**
+   * How many pixels this panel's lanes have across, for a cell matching it.
+   *
+   * A lane's summary level comes off its pixel count, and a pixel count is a
+   * fact about the layout rather than about the genome — so a tracks cell three
+   * across and the same track beside this map asked for two different levels
+   * over one window and autoscaled to two different ceilings (§8.8, §16.2).
+   * `annotations/samples.ts` floors every lane at 1024 px, which makes the two
+   * agree at every width this application lays out below that; past it — a
+   * 1-across deck in a wide window — the lead asks for the finer level it can
+   * actually draw, and a cell wanting to be held against it asks for this
+   * instead of for its own width. See `BrowserViewProps.sampleWidth`.
+   */
+  laneAcrossPixels(): number {
+    return this.heatmap.cssSize.width
+  }
+
   /** What this panel is showing, in its own cells, or `null` with no block. */
   viewport(): { rows: [number, number]; cols: [number, number] } | null {
     return this.data === null ? null : this.heatmap.cellWindow()

@@ -1492,6 +1492,7 @@ export class PanelDeck {
         onClose: () => this.remove(slot),
         onFollow: (range) => this.followColumns(range),
         onDragChange: (dragging) => this.setArranging(dragging),
+        leadSampleWidth: () => this.lead?.laneAcrossPixels() ?? 0,
       })
       const windows = this.leadWindows()
       if (windows !== null) slot.cell.applyWindow(windows)

@@ -177,6 +177,12 @@ describe('a variant lane, drawn', () => {
     // 400 variants over 8000 bases is one every 20 — a quarter of a pixel here,
     // well inside the floor. Drawn individually they merge into one bar in
     // whichever ink went down last, which reads as a single 8 kb variant.
+    //
+    // Four rows do not rescue it, and that is why the threshold asks about the
+    // *strand bands* rather than about the rows the lane has room for: a record
+    // set with no strand in it is one band, the packing only reaches for a
+    // second row when two features overlap, and these do not overlap — they
+    // merely sit a quarter of a pixel apart, all of them in row zero.
     const rows = Array.from({ length: 400 }, (_, i) => `chrV ${1000 + i * 15} . A G 60 PASS .`)
     const layout = layoutFeatures(frameOf(0, 8000), axisOf(), vcf(rows), 4, VARIANT_MIN_WIDTH)
     expect(layout.dense).toBe(true)

@@ -16,6 +16,7 @@
  */
 
 import { button, el } from './dom'
+import { formatLocus } from '../genome/assembly'
 import { KEYS, keyLabel } from './commands'
 import { findFeatures, hitLabel, hitLocus } from '../annotations/search'
 import type { AnnotationStore } from '../annotations/store'
@@ -184,23 +185,40 @@ export class SearchBox {
 }
 
 /**
- * Feature hits as this box's suggestions, with a **contact map's** window behind
- * each one.
+ * Feature hits as a box's suggestions, in whichever grammar that box speaks.
  *
- * The `value` is the whole reason this is written here rather than shared with
- * the browser's list: `metacooler/range.ts` reads a region as 0-based half-open,
- * exactly as `FeatureHit` carries it, while the browser's loci are 1-based
- * inclusive, and one window string for both would be off by a base on one of the
- * two, silently and for ever. The *label* is shared, because a label is read
- * rather than parsed and §26.1 gives every coordinate a reader reads one form —
- * and because what belongs on it is the gene's own span. It printed `hit.start`,
- * which is the padded window's start: a quarter of the gene's length before the
- * gene, and a base off the box the click then filled.
+ * `FeatureHit` carries the window 0-based and half-open, which is the machine
+ * form (§26.1) and is what `metacooler/range.ts` takes; a box that **shows** a
+ * locus and reads back what it shows speaks the display form, 1-based and
+ * inclusive. This used to answer in the machine form only, and the hint under
+ * the browser's box said so — which was true until the browser's box began
+ * reading what was typed as the display form, at which point picking a gene off
+ * the list landed a base to the left of the gene.
+ *
+ * So the base is a parameter, named at the call site, and the label always
+ * matches the value: a row that prints one coordinate over a box that fills with
+ * another is the defect either way round.
+ *
+ * The *label* is `hitLocus`, which writes the gene's **own** span. It used to
+ * print `hit.start` — the start of the padded window the click then navigates
+ * to, which is a quarter of the gene's length before the gene — so the row named
+ * a coordinate the gene does not begin at.
+ *
+ * @param form `'machine'` for a box whose value is a region string handed
+ * straight to the region reader — the map's — and `'display'` for one a reader
+ * reads and Enter re-reads through `typedLocusToRegion`.
  */
-export function featureSuggestions(store: AnnotationStore, text: string): Suggestion[] {
+export function featureSuggestions(
+  store: AnnotationStore,
+  text: string,
+  form: 'machine' | 'display' = 'machine',
+): Suggestion[] {
   return findFeatures(store, text).map((hit) => ({
     label: `${hitLabel(hit)} · ${hitLocus(hit)} · ${hit.source}`,
-    value: `${hit.contig}:${hit.start}-${hit.end}`,
+    value:
+      form === 'display'
+        ? formatLocus({ contig: hit.contig, start: hit.start, end: hit.end })
+        : `${hit.contig}:${hit.start}-${hit.end}`,
   }))
 }
 
@@ -240,10 +258,12 @@ export function locusPlaceholder(options: { first?: string; accepts?: LocusAccep
   if (accepts.genome === true) parts.push('a genome')
   if (accepts.gene === true) parts.push('a gene')
   if (accepts.whole === true) parts.push('* for the whole genome')
-  // `or` before the last of them, whichever it is. A bare comma list reads as
-  // though it were still going — a box offering `a sequence, a genome, a gene`
-  // looks truncated, and the reader goes looking for the rest of the sentence.
-  if (parts.length === 1) return parts[0]
+  // `or` before the last one, whatever the last one is. It was put in with the
+  // `*` and nowhere else, so a box that does not take `*` read
+  // `contig:1,000-20,000, a sequence, a genome, a gene` — a list with no
+  // conjunction, which reads as an unfinished sentence rather than as a set of
+  // alternatives.
+  if (parts.length < 2) return parts[0]
   return `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`
 }
 

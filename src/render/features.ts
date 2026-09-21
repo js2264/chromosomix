@@ -35,7 +35,27 @@ import {
   dominantOf,
   peakOf,
 } from './barchart'
+import { cutMiddle } from './laneLabel'
 import { VARIANT_MIN_WIDTH } from './variants'
+
+/**
+ * How far past its own feature a name below may run: this many times its width,
+ * or {@link OVERHANG_PX}, whichever is more.
+ *
+ * Four, because a gene four pixels wide has a name worth ten times that and is
+ * exactly the case the overhang exists for, while a name a dozen times wider
+ * than its peak is a label for the peaks either side of it.
+ */
+const OVERHANG_TIMES = 4
+
+/**
+ * The overhang a name gets whatever its feature's width, in pixels.
+ *
+ * Enough for a short gene symbol — `YDR001C` — so the bound never costs the
+ * zoom where individual genes are the point, which is the zoom the below-the-
+ * feature placement was built for.
+ */
+const OVERHANG_PX = 80
 import {
   canvasToAcross,
   laneGrowsInward,
@@ -181,7 +201,38 @@ export function layoutFeatures(
   // The width one feature needs is its drawn floor plus the gap that makes two
   // read as two — which for everything but a variant lane is the two pixels it
   // has always been.
-  const dense = placements.length > span / Math.max(2, leastWidth + ROW_GAP)
+  //
+  // **Asked of the fullest row the lane will use, not of the whole lane.** The
+  // test used to be `span / 2` over every feature in the window, whatever the
+  // lane was about to do with them — so a stranded gene set, which this lane
+  // spreads over a band per strand, was measured as though all of it went in
+  // one row. The same 230 yeast genes over the same window then drew as named
+  // boxes on a 680-pixel lane and as a solid grey density block on a
+  // 455-pixel one, because 230 falls either side of `span / 2` across that
+  // range: opening a side panel made the gene track appear to have been lost
+  // (§8.14, §8.16).
+  //
+  // Not `maxRows` either, which is the room the lane *has* rather than the rows
+  // it will fill: the packing moves a feature to a second row only when it
+  // **overlaps** one already there, so four rows do nothing for four hundred
+  // peaks that merely sit two to a pixel — they all land in row zero and merge
+  // into a bar, which is the case this rule exists for.
+  //
+  // The bands are a fact about the file (`strandBands`), so this answer does not
+  // move as a reader narrows a column, which is the whole complaint.
+  const bands = banded ? strandBands(set) : [0]
+  const spread = bands.length > 1 && frame.thickness / bands.length >= MIN_BAND_ROW ? bands : [0]
+  const needed = Math.max(2, leastWidth + ROW_GAP)
+  const fullest =
+    spread.length === 1
+      ? placements.length
+      : Math.max(
+          ...spread.map(
+            (strand) =>
+              placements.filter((placement) => sign(set.strand[placement.index]) === strand).length,
+          ),
+        )
+  const dense = fullest > span / needed
 
   // Widened **into the placement**, here, once — so the box that is drawn, the
   // box that is clicked and the box the packing keeps a row clear for are one
@@ -216,8 +267,7 @@ export function layoutFeatures(
   // stranded BED lands in. A band needs only {@link MIN_BAND_ROW}: a glyph and
   // the gap under it. Where both fit, the bands win and the labels go back
   // inside the features, which is what a lane that short does anyway.
-  const bands = banded ? strandBands(set) : [0]
-  if (bands.length > 1 && frame.thickness / bands.length >= MIN_BAND_ROW) {
+  if (spread.length > 1) {
     const rows = Math.max(maxRows, bands.length)
     const shares = shareRows(rows, bands.length)
     let offset = 0
@@ -1107,6 +1157,26 @@ function line(
  * a band to itself, so the name goes below and may run past a feature far
  * narrower than it — which is what makes a gene track legible at the zoom where
  * the genes, rather than their density, are the point.
+ *
+ * **Two bounds on that overhang, both of them corrections.**
+ *
+ * A name may be a few times wider than its feature and no more
+ * ({@link OVERHANG_TIMES}, {@link OVERHANG_PX}). Unbounded, a 46-character MACS
+ * name — its caller's run id plus a counter — was written under a peak three
+ * pixels wide and spanned a dozen unlabelled neighbours, so one peak in twenty
+ * carried a name and each name read as the label for the group it lay across.
+ * Past the bound the name is cut in the middle rather than dropped, because
+ * `LM331_…peak_1116` still says which set the peak is from and a reader who
+ * wants the rest hovers it.
+ *
+ * And the text is kept **inside the lane**, which is where the false gene names
+ * came from: a name centred on a feature at the edge of the window was cut by
+ * the lane's own clip, so `MSW1` was drawn as `SW1`, `HEH2` as `HE` and `MUS81`
+ * as `US81` — every one of them a plausible yeast symbol that a reader would
+ * search for or cite. A browser must never print a gene name that is not in the
+ * file (§8.16); the codebase's own rule for a group bar says the same thing
+ * ("half a group's name is a different group's name"), and there the name is
+ * dropped. Here it is nudged inward, which keeps it.
  */
 function labelFeatures(
   ctx: CanvasRenderingContext2D,
@@ -1129,27 +1199,46 @@ function labelFeatures(
   // last name written *in the same row*, so two of them never overlap — which
   // is the only thing that makes an overhanging label readable at all.
   const lastRight = new Float64Array(layout.rows).fill(Number.NEGATIVE_INFINITY)
+  // The lane's own ends, in reading order. A name may not be written past them:
+  // whatever falls outside is cut by the clip, and a cut name is another name.
+  const edgeLo = Math.min(frame.alongFrom, frame.alongTo) + 1
+  const edgeHi = Math.max(frame.alongFrom, frame.alongTo) - 1
   for (const placement of layout.placements) {
     const name = set.name[placement.index]
     if (name === '') continue
     const width = placement.along1 - placement.along0
-    const text = ctx.measureText(name).width
     const middle = (placement.along0 + placement.along1) / 2
 
     if (band === 0) {
+      const text = ctx.measureText(name).width
       // Inside the feature: only where it genuinely fits, because a name that
-      // overflows its box is a name attached to whatever is next to it.
+      // overflows its box is a name attached to whatever is next to it — and
+      // only where the box itself is whole, since a name centred in a box the
+      // window cut in half is centred on a place the feature does not have.
       if (width < 18 || text + 6 > width) continue
+      if (middle - text / 2 < edgeLo || middle + text / 2 > edgeHi) continue
       laneText(ctx, frame, name, middle, placement.row * rowHeight + rowHeight / 2, {
         halo: paint.haloColour,
       })
       continue
     }
 
-    const from = middle - text / 2
+    // As wide as the name, or as wide as the overhang allows — whichever is
+    // smaller, and below a readable minimum nothing at all.
+    const allowed = Math.max(width * OVERHANG_TIMES, OVERHANG_PX)
+    const measure = (part: string): number => ctx.measureText(part).width
+    const fitted = measure(name) <= allowed ? name : cutMiddle(measure, name, allowed)
+    const text = measure(fitted)
+    if (text <= 0) continue
+    // Nudged inside the lane, and only then tested against its neighbour: a
+    // feature half off the left edge keeps its name by moving it right, which
+    // is what JBrowse does, and a feature so far out that nothing of it is
+    // visible has already been dropped by the layout.
+    const centre = Math.min(Math.max(middle, edgeLo + text / 2), edgeHi - text / 2)
+    const from = centre - text / 2
     if (from < lastRight[placement.row] + 4) continue
-    lastRight[placement.row] = middle + text / 2
-    laneText(ctx, frame, name, middle, placement.row * rowHeight + rowHeight - band / 2 - 1, {
+    lastRight[placement.row] = centre + text / 2
+    laneText(ctx, frame, fitted, centre, placement.row * rowHeight + rowHeight - band / 2 - 1, {
       halo: paint.haloColour,
     })
   }

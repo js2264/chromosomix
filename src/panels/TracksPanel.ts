@@ -60,6 +60,17 @@ export interface TracksPanelProps {
   onFollow(range: LocusRange): void
   /** The grip before the name was taken hold of, or let go. */
   onDragChange(dragging: boolean): void
+  /**
+   * How wide the lead's lanes are, so this cell's lanes read the same data.
+   *
+   * Forwarded straight to `BrowserViewProps.sampleWidth`, which explains what it
+   * buys: a summary level chosen from a cell's own 265 pixels is a different
+   * level from the one chosen from the lead's, and the same track over the same
+   * window then autoscales to two ceilings — a difference in the layout wearing
+   * the clothes of a difference in the data. `0` for a deck with no lead map, in
+   * which case there is nothing to agree with and the floor decides.
+   */
+  leadSampleWidth?(): number
 }
 
 /** The part of the props the session supplies; the deck adds the rest. */
@@ -197,6 +208,9 @@ export class TracksPanel implements DeckCell {
       map: this.props.id,
       hoverSource: this.source,
       onLocusChange: () => this.report(),
+      ...(this.props.leadSampleWidth === undefined
+        ? {}
+        : { sampleWidth: () => this.props.leadSampleWidth?.() ?? 0 }),
     })
     this.browser = view
     this.builtFrom = context
