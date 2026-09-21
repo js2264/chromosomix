@@ -27,6 +27,15 @@
  * Both are asserted through the panel's own `analysisFraming`, which is the
  * seam the runner takes, so what is pinned is the string a result would actually
  * be stamped with.
+ *
+ * **And the panel is driven the way a view drives it**, which is the part this
+ * file got wrong the first time and is the reason the first of those two came
+ * back unnoticed. Every view calls `setResolution(binsize × binsPerCell)`
+ * before `setData`, so a panel holding a pooled block has an *effective*
+ * `options.binsize`; a harness that only called `setData` left it at the file's
+ * own, which is the number being asserted — so the assertion passed against a
+ * panel in a state no view ever puts one in, while the real app reported
+ * `80.0 kb bins` again. {@link install} exists so no case here can forget it.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -69,6 +78,21 @@ function panelAt(binsize: number): MatrixPanel {
   return panel
 }
 
+/**
+ * Put a block on a panel **as a view does**: the effective resolution first,
+ * then the block.
+ *
+ * `WholeView`, `RegionView`, `GenomeView` and `PairView` all end their read
+ * with `setResolution(props.binsize * (result.binsPerCell ?? 1))` immediately
+ * before `setData`, and `regrid` does the same for a refined block. Calling
+ * `setData` alone leaves `options.binsize` at the file's own — which is what
+ * this file asserts, so the assertion could not fail however wrong the code was.
+ */
+function install(panel: MatrixPanel, fileBinsize: number, data: MatrixResult): void {
+  panel.setResolution(fileBinsize * ((data as { binsPerCell?: number }).binsPerCell ?? 1))
+  panel.setData(data, '16')
+}
+
 /** The label's parts, which is how it is written and how it reads. */
 function parts(panel: MatrixPanel): string[] {
   const framing = panel.analysisFraming('f.mcool')
@@ -79,7 +103,7 @@ function parts(panel: MatrixPanel): string[] {
 describe('the bin size a framing reports', () => {
   it('is the file’s own, on a view drawn cell for bin', () => {
     const panel = panelAt(20_000)
-    panel.setData(block(64), '16')
+    install(panel, 20_000, block(64))
     expect(parts(panel)).toContain('20.0 kb bins')
   })
 
@@ -87,7 +111,7 @@ describe('the bin size a framing reports', () => {
     // The regression: `20,000 × 4` came out as `80.0 kb bins`, and every loop
     // set called from this picture was stamped with it.
     const panel = panelAt(20_000)
-    panel.setData(block(64, 4), '16')
+    install(panel, 20_000, block(64, 4))
     const written = parts(panel)
     expect(written).toContain('20.0 kb bins')
     expect(written).not.toContain('80.0 kb bins')
@@ -95,12 +119,12 @@ describe('the bin size a framing reports', () => {
 
   it('says the pooling separately, because it is a fact about the picture', () => {
     const panel = panelAt(20_000)
-    panel.setData(block(64, 4), '16')
+    install(panel, 20_000, block(64, 4))
     expect(parts(panel)).toContain('4 per drawn cell')
     // …and says nothing at all where there is no pooling, which is every view a
     // reader is zoomed into and the case the line must stay short for.
     const plain = panelAt(20_000)
-    plain.setData(block(64), '16')
+    install(plain, 20_000, block(64))
     expect(parts(plain).some((part) => part.includes('per drawn cell'))).toBe(false)
   })
 
@@ -109,7 +133,7 @@ describe('the bin size a framing reports', () => {
     // the label no longer folds it into the bin size. Both are needed: a task
     // reads this to decline the view's block (`run/blocks.ts`).
     const panel = panelAt(20_000)
-    panel.setData(block(64, 4), '16')
+    install(panel, 20_000, block(64, 4))
     const framing = panel.analysisFraming('f.mcool')!
     expect(framing.binsize).toBe(20_000)
     expect(framing.binsPerCell).toBe(4)
@@ -119,7 +143,7 @@ describe('the bin size a framing reports', () => {
 describe('the region a framing names', () => {
   it('is the subject itself when the whole sequence is on screen', () => {
     const panel = panelAt(20_000)
-    panel.setData(block(64), '16')
+    install(panel, 20_000, block(64))
     expect(parts(panel)[0]).toBe('16')
   })
 
@@ -131,7 +155,7 @@ describe('the region a framing names', () => {
     // The turn is a setting the block is derived under, so it goes in before
     // the block does — `setTurn`'s own note says why.
     panel.setTurn({ on: true, direction: 'up' })
-    panel.setData(block(64), '16')
+    install(panel, 20_000, block(64))
     const subject = parts(panel)[0]
     const range = /^(?<name>.+):(?<from>-?[\d,]+)-(?<to>-?[\d,]+)$/.exec(subject)
     if (range !== null) {

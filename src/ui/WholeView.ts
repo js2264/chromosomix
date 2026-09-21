@@ -369,9 +369,21 @@ export class WholeView {
     this.panelHost = el('div', { class: 'whole-host' })
 
     this.panel = new MatrixPanel({
-      // The bin size of the grid actually on screen. Pooling is not a mode the
-      // panel has to know about: a block of 3 kb cells is a block of 3 kb bins.
-      binsize: props.binsize * this.plan.binsPerCell,
+      // **The open map's own bin size**, as every other view passes, and *not*
+      // this view's pooled grid. The argument seeds two fields that mean
+      // different things: `options.binsize`, the effective resolution, which
+      // `setResolution` overwrites with `binsize × binsPerCell` before the
+      // first block is drawn; and `baseBinsize`, the open map's own, captured
+      // once and never updated (`MatrixPanel.openBinsize`).
+      //
+      // Passing the pooled number here set `options.binsize` to the value it
+      // was about to be given anyway, and `baseBinsize` to one three times too
+      // large for the rest of the session — so the key in the map's corner,
+      // which multiplies it by `binsPerCell` again, captioned a 3 kb block
+      // `9.0 kb`, on the picture *and* in the exported figure. This view is the
+      // only one that knows its grid before it reads, which is why it was the
+      // only one that could get this wrong.
+      binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(presentationOf(props.compare) === undefined

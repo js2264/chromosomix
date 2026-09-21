@@ -1379,6 +1379,23 @@ the client stamps the session's cap onto every request and the reader applies it
 which is also why there is no control for this in the interface. It is an escape hatch for somebody
 reading the code, not a setting.
 
+**Two numbers describe one grid, and they are not the same number.** The **effective** resolution is
+what a drawn cell covers — the read's own bin size times its pooling — and it is what the line above
+the map states, what the coordinate readout and the axes are in, and what an exported figure's
+caption says. The **open map's** bin size is what the session was opened at, whatever any one block
+was read at; it is what the corner key and an analysis framing multiply a block's pooling into, and
+it is what a laddered file's rung ratio is measured against. A view hands the second to the panel and
+the panel derives the first from each block as it arrives, because only the block knows how coarse
+the answer came back.
+
+**They must agree wherever both are shown, and the key is the one that leaves the app.** The line
+above the map and the key in its corner are one claim said twice, and the key is also the key an
+exported figure carries — so a figure whose caption is wrong is defended by nothing, and the number
+in a methods section is the number nobody can check. A whole-genome view that handed the panel its
+*pooled* grid made the two disagree, captioning a 3.0 kb block `9.0 kb` on screen and in every
+export of it, because the key multiplied the pooling in a second time. The same mistake reached the
+provenance line of every computed track (§18.4).
+
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
 and `fills` takes the shading out from under their lines, which is the envelope and an area track's
@@ -4577,6 +4594,15 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
 is on.
+
+**The bin size is the file's own, and the pooling is recorded beside it rather than multiplied in.**
+They are two facts and a task needs both separately: no task is ever *computed* at the pooled number
+— `run/blocks.ts` refuses a pooled block outright, so every task reads the file at its own resolution
+— while a task that borrows the view's block must not pretend the block is finer than it is. Folded
+together they are neither: a 20 kb file looked at four bins to the cell reported `80.0 kb bins`, a
+resolution that never existed, on results not measured at it, and that line is what a loop set
+exported to a collaborator is defended by. It is the §7.2 distinction, on the one path where the
+wrong number outlives the session.
 
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute

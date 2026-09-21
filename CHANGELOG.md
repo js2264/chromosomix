@@ -45,6 +45,33 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   onto every request beside the bucket key and the reader applies it before dispatch — the same
   arrangement, and for the same reason, as `withAccess`.
 
+### Fixed
+
+- **The map's corner key reported a pooled cell as `binsPerCell` times its real size (§7.2).** On a
+  whole yeast genome the line above the map said `3.0 kb` and the key in the corner said `9.0 kb`,
+  and the key is the one that leaves the app — it is the key an exported figure carries, so the
+  caption was wrong on every export of a pooled view, which is exactly the failure that number is
+  printed to prevent.
+
+  One constructor argument feeds two fields that mean different things: `options.binsize`, the
+  **effective** resolution, which `setResolution` overwrites from every block; and `baseBinsize`,
+  **the open map's own**, captured once and never updated. The key multiplies a block's pooling into
+  the second. `WholeView` is the only view that plans its grid before it reads, so it was the only
+  one that could hand the constructor a pooled number — right for the first field, wrong for the
+  second for the rest of the session. It now passes the file's own bin size like every other view,
+  and `MatrixPanelOptions.binsize` says which of the two it is so the next view cannot guess wrong.
+
+- **The same number was wrong in every computed track's provenance line (§18.4).** `analysisFraming`
+  read `options.binsize` where its own type says "the file's own bin size", so a 20 kb file looked at
+  four bins to the cell stamped `80.0 kb bins` on every result — a resolution that never existed, on
+  numbers not measured at it, on the line a loop set exported to a collaborator is defended by.
+
+  This is the second time that line has been fixed, and the reason it came back is worth recording:
+  the test that pins it drove the panel with `setData` alone, while every real view calls
+  `setResolution` first. The two fields agree until that call, so the assertion passed against a
+  state no view ever produces. The harness now installs a block the way a view installs one, and
+  fails without the fix.
+
 ### Changed
 
 - `POOLED_CELL_CAP` is now `pooledCellCap()`. The constant would have been a trap the moment the cap

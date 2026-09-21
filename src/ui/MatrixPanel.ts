@@ -401,7 +401,28 @@ export interface SelectedRegion {
 }
 
 export interface MatrixPanelOptions {
-  /** Bin size in bp, for the coordinate readout. */
+  /**
+   * **The open map's own bin size** in bp — never a pooled grid's.
+   *
+   * It seeds two fields that mean different things, which is why it has to be
+   * said here rather than left to each view to guess:
+   *
+   * - `options.binsize`, the **effective** resolution — the read's bin size
+   *   times its pooling. {@link MatrixPanel.setResolution} overwrites it from
+   *   every block, including a refined one, before the block is drawn. It is
+   *   what the coordinate readout, the axes and the figure caption are in.
+   * - `baseBinsize`, **the open map's own** — captured here, once, and never
+   *   updated. It is what {@link MatrixPanel.openBinsize} answers, and it is
+   *   the number the corner key and an analysis framing multiply `binsPerCell`
+   *   into.
+   *
+   * At construction there is no block, so for a view that reads before it knows
+   * how coarse the answer will be the two are the same and either meaning would
+   * do. A view that plans its grid *first* — `WholeView` is the only one — can
+   * pass the pooled number and be right about the first field and wrong about
+   * the second for the rest of the session. Pass the file's own; the effective
+   * one arrives through `setResolution`.
+   */
   binsize: number
   /** Offered aggregation levels; omit for views with no level toggle. */
   levels?: Array<'bin' | 'contig'>
@@ -3682,8 +3703,18 @@ export class MatrixPanel {
     // reads the file at its own resolution. The pooling is a fact about the
     // picture rather than about the numbers, so it is said as one, and only
     // where there is any.
-    if (this.options.binsize > 0) {
-      parts.push(`${fmt.bp(this.options.binsize)} bins`)
+    //
+    // {@link openBinsize} and **not** `options.binsize`, which is the pooled
+    // number this paragraph exists to keep out. That is the whole of how the
+    // regression came back: the fix read `options.binsize` when it meant the
+    // file's, the two agreed at construction, and `setResolution` then made
+    // them differ on the first block — so `80.0 kb bins · 4 per drawn cell`
+    // came back on every pooled view while the test that pins this went on
+    // passing, because its harness never called `setResolution` and every real
+    // view does.
+    const fileBinsize = this.openBinsize()
+    if (fileBinsize > 0) {
+      parts.push(`${fmt.bp(fileBinsize)} bins`)
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
@@ -3693,7 +3724,10 @@ export class MatrixPanel {
       uri,
       rows: [data.rowExtent[0], data.rowExtent[1]],
       cols: [data.colExtent[0], data.colExtent[1]],
-      binsize: this.options.binsize,
+      // `AnalysisFraming.binsize` is documented as "the file's own bin size",
+      // and a task converting base pairs to bins with a pooled one asks for a
+      // window `binsPerCell` times too wide.
+      binsize: fileBinsize,
       binsPerCell,
       balance,
       value,
