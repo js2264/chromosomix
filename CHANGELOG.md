@@ -566,8 +566,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   locus copied out of the heading above the box came back *Expected HYPHEN token missing*.
   `splitRegionList` knows a thousands comma from a separator — a digit on the left, exactly three on
   the right — so `I, II` and `1,2` are still two regions each.
-- **A track's name box, and the two coordinate boxes in the Manual annotations card, have floors
-  too.** The name box could be squeezed to 32 pixels — four characters of `Pol II / input` — and the
+- **The two coordinate boxes in the Manual annotations card have floors of their own.** The
   rectangle form's pair showed `rows I:120,000-18` and `columns I:340,00`, which is worse than a cut
   word because `I:120,000-18` is itself a valid thing to type. Each axis box is now as wide as the
   example it offers, and takes a line of its own rather than being halved.

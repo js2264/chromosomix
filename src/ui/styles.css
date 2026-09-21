@@ -8328,14 +8328,8 @@ canvas.is-frozen {
    has to be told apart from. Tighter marks, and the name keeps the row's own
    text size: a name set smaller than everything else on the row would read as a
    different kind of thing. */
-/* Wrapping, with a floor on the name: at the Annotations column's own minimum
-   width the head's eight controls left the name box 32 pixels, which is four
-   characters of a track called `Pol II / input`. The trailing controls drop to a
-   second line instead, and only at that width — at the column's default the row
-   is one line as before. */
 .ann-head {
   gap: 0.2rem;
-  flex-wrap: wrap;
 }
 
 .ann-row .ann-star,
@@ -8355,8 +8349,15 @@ canvas.is-frozen {
    until it is hovered or has the caret, so a row of them is a list of names
    rather than a form. */
 .ann-name {
+  /* **No floor, and the row does not wrap.** Both were tried: a floor of 7rem
+     with a wrapping head put the eye and the close button on a second line and
+     doubled the height of every row in a card that is scrolled more than any
+     other — and the head has only about 204 pixels at the column's default
+     width, of which the grip, the tick, the swatch and the three buttons take
+     119. A name that shrinks and can be read in full from its tooltip is the
+     better of the two; a track list twice as tall is not. */
   flex: 1 1 auto;
-  min-width: 7rem;
+  min-width: 2rem;
   text-align: left;
   background: none;
   border: 1px solid transparent;
