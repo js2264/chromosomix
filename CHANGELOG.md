@@ -550,6 +550,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The side columns give way before the picture does.** Four columns come to about 1,180 pixels at
+  their own widths, and the centre could be squeezed to nothing: on a 1366-wide laptop with all four
+  open the map was 140 pixels and the locus box 85, showing `IV:1,00` of the reader's own position.
+  The columns now shrink to their minimum widths and the picture keeps a floor of 18rem, which gives
+  the map 446 pixels at 1366 instead of 140.
+- **Aesthetics' minimum width is what its own controls need.** At 200 pixels the two clip limits read
+  `-4.1` and the `transform` and `colours` selects cut `log10` and `default` — a minimum that the
+  cards below it did not survive. It is 240 now, and the clip pair has a floor of its own.
+- **A track's name box, and the two coordinate boxes in the Manual annotations card, have floors
+  too.** The name box could be squeezed to 32 pixels — four characters of `Pol II / input` — and the
+  rectangle form's pair showed `rows I:120,000-18` and `columns I:340,00`, which is worse than a cut
+  word because `I:120,000-18` is itself a valid thing to type. Each axis box is now as wide as the
+  example it offers, and takes a line of its own rather than being halved.
+- **An analysis form's locus box is grouped, like every other box that shows a coordinate.** It
+  opened with `IV:1000001-1400000` directly under a line reading `IV:1,000,001-1,400,000 · 1 kb
+  bins`: two spellings of one window, in the one place a reader is about to edit the number.
+- **A dialog headed with a file's name no longer uppercases it.** The enlarged 3D cell read
+  `YEAST_STRUCTURE` over a card, a tab and a Structures row all reading `Yeast_structure`, and the
+  `.pairs` binning dialog did the same to the file it names. A heading that is a category is still
+  uppercased; one that is a name keeps the file's own spelling.
+- **An empty console no longer offers copy, save and clear.** The first two wrote a file with nothing
+  in it and the third forgot nothing. §26.3's rule cuts both ways: a control with nothing to act on
+  is dimmed.
+- **A table says where the file's own columns end.** A MAG-QC table joined into a metacool brings its
+  own `Length` and `Contigs`, so the header read `name length contigs bins Length GC-content …` —
+  identical numbers under two capitalisations, with no way to tell which one a sort was using. The
+  first joined column now carries a rule down its side and each joined header a tooltip saying so,
+  which is the header's half of the record card's *joined in with the file*.
+- **Two remote-file refusals stopped saying their own advice twice.** The byte-range and
+  transit-compression errors each explained, in the pink diagnosis box, the two things the advice
+  list directly underneath them was about to explain again in different words. The diagnosis keeps
+  what only it knows — which host, which URL, what came back instead of a 206 — and the advice keeps
+  the remedy, which now also names GEO and SRA.
+- **One hint spelled the near-diagonal without its hyphen**, two forms away from another that
+  spelled it with one.
+
 - **A locus box's placeholder is cut to the box, clause by clause, rather than clipped mid-word.**
   `I:1,000-20,000, a sequence, a genome, or a gene` wants 458 pixels and the browser's bar at 1366 is
   336 of them, so the box showed `I:1,000-20,000, a sequence, a ge` — an input clips a placeholder

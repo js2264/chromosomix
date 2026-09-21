@@ -583,7 +583,12 @@ describe('a box that takes several sequences (§25.6)', () => {
 
   it('is seeded with the locus when the map is inside one sequence', () => {
     const view = form(RECONSTRUCT_TASK, framed([240, 300]))
-    expect(view.value.region).toBe('II:10001-70000')
+    // **Grouped**, as §26.1 has every box that shows a coordinate write one: the
+    // line above this box reads `II:10,001-70,000 · 1 kb bins`, and the seed used
+    // to come out `II:10001-70000` — two spellings of one window, an inch apart,
+    // in the box a reader is about to edit. `parseHumanized` strips separators
+    // before it does anything else, so the value still parses as it did.
+    expect(view.value.region).toBe('II:10,001-70,000')
     view.destroy()
   })
 

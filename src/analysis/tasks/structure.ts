@@ -214,7 +214,7 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'alpha',
     label: 'exponent α',
-    hint: 'Distance = c^(−1/α); 3 is the usual value, 1 flattens the near diagonal, 6 stretches it.',
+    hint: 'Distance = c^(−1/α); 3 is the usual value, 1 flattens the near-diagonal, 6 stretches it.',
     default: 3,
     min: 0.5,
     max: 6,

@@ -200,6 +200,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     advice: [
       'The viewer reads a few kilobytes at a time; without Accept-Ranges: bytes it would have to download the whole file.',
       'Host the file on object storage with range support (any S3-compatible bucket), or download it and drop it here instead.',
+      'GEO and SRA download endpoints serve no ranges, so a URL from either cannot be opened in place.',
     ],
   },
   'remote-compressed': {

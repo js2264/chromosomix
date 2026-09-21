@@ -59,6 +59,9 @@ export function openPairsDialog(props: PairsDialogProps): Modal {
   let confirmed = false
   const modal = new Modal({
     title: `Bin ${props.fileLabel}`,
+    // The file's name is in the heading and nowhere else in this dialog, so the
+    // heading is the one place it must be spelled the way the file spells it.
+    titleIsName: true,
     body: (close) =>
       dialogBody(props, (binning) => {
         confirmed = true

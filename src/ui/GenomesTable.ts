@@ -248,16 +248,27 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
     ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
   ]
 
+  // Where the format's own columns end. Everything from here on was joined in
+  // by whoever made the file, and the first of them carries the rule that says
+  // so — the header's half of the record card's *joined in with the file*.
+  const first = ordered.find((name) => !CORE_ORDER.includes(name))
   const columns: ColumnDef[] = ordered.map((name) => {
     const column = payload.data[name]
     const core = CORE_LABELS[name]
     const label = core?.label ?? name
-    const title = core === undefined ? {} : { title: core.title }
+    const joined = name === first ? { joined: true } : {}
+    const title =
+      core !== undefined
+        ? { title: core.title }
+        : // No label of ours, by §5.1 — but the reader hovering a second
+          // `Length` deserves to be told which one they are sorting by.
+          { title: `${name} — joined in with the file, not part of the format` }
     if (payloadColumnIsText(column)) {
       return {
         key: name,
         label,
         ...title,
+        ...joined,
         kind: 'string',
         width: name === 'name' ? 'minmax(10rem, 1.4fr)' : 'minmax(7rem, 1fr)',
         // An empty fixed-length string is padding, not a value: treating it as
@@ -276,6 +287,7 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
       key: name,
       label,
       ...title,
+      ...joined,
       kind: 'number',
       align: 'right',
       width: 'minmax(5.5rem, 0.7fr)',

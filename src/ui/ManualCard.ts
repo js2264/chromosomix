@@ -555,13 +555,25 @@ export class ManualCard {
  * `aria-label` says it again for a reader who is not looking at the box at all.
  */
 function axisBox(axis: 'rows' | 'columns', placeholder: string): HTMLInputElement {
-  return el('input', {
+  const box = el('input', {
     class: 'input',
     type: 'text',
     placeholder,
     title: axis,
     attrs: { 'aria-label': axis },
   })
+  // **As wide as the example it offers, or on a line of its own.** The two boxes
+  // share a row that shrinks them to nothing rather than wrapping: in a 288-pixel
+  // column the rectangle form's pair had 115 pixels each and read
+  // `rows I:120,000-18` and `columns I:340,00` — a half-locus, which is worse
+  // than a cut word because `I:120,000-18` is itself a valid thing to type.
+  //
+  // `ch` is the advance of one digit in the face the box is set in, so the basis
+  // *is* the placeholder's width; `.manual-row` wraps, so a pair that cannot sit
+  // side by side takes a line each instead of splitting the difference. The
+  // arrowhead form's shorter pair still fits across.
+  box.style.flexBasis = `calc(${placeholder.length}ch + 1.2rem)`
+  return box
 }
 
 /**

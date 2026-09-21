@@ -284,7 +284,14 @@ export const AESTHETICS_PANEL: SidePanelSpec = {
   side: 'right',
   order: 1,
   defaultWidth: 256,
-  minWidth: 200,
+  // **What its own controls need.** It was 200, and at 200 this column crushed
+  // the things it exists to hold: the two clip limits read `-4.1` and the
+  // `transform` and `colours` selects cut `log10` and `default`. A minimum is a
+  // promise that the cards below still work at it, and this one was not keeping
+  // it — a drag to the floor was as bad as the window being too narrow, and
+  // since the columns now give way before the picture does (`.content`'s
+  // `min-width`) the floor is reached by more than a drag.
+  minWidth: 240,
   maxWidth: 480,
   closeIcon: 'chart-spline',
   openIcon: 'chart-spline',
@@ -655,6 +662,13 @@ export class SidePanel {
     // folded, the strip is one number in the stylesheet and an inline width here
     // would beat it.
     this.el.style.width = this.collapsed ? '' : `${this.width}px`
+    // …and the floor it may be squeezed to when the window cannot hold every
+    // column at its width. The drag's own minimum, because that is the width
+    // this column's cards are built to survive; the picture takes the rest and
+    // keeps a floor of its own (see `.content`'s `min-width`). Four columns at
+    // their minima plus that floor come to 1,168 pixels, so nothing overflows on
+    // any laptop, and at 1366 the map gets 486 instead of 140.
+    this.el.style.minWidth = this.collapsed ? '' : `${this.spec.minWidth}px`
     this.toggle.classList.toggle('hidden', !this.available)
     this.toggle.replaceChildren(icon(this.collapsed ? this.spec.openIcon : this.spec.closeIcon))
     this.toggle.title = withKey(

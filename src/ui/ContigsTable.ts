@@ -138,12 +138,21 @@ export class ContigsTable {
       ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
     ].filter((name) => !hidden.has(name))
 
+    // The first column the file's creator joined in, marked so the header shows
+    // where the format's own two end — the same break the record card draws.
+    const firstJoined = ordered.find((name) => !CORE_ORDER.includes(name))
     const columns: ColumnDef[] = ordered.map((name) => {
       const column = payload.data[name]
+      const joined = name === firstJoined ? { joined: true } : {}
+      const note = CORE_ORDER.includes(name)
+        ? {}
+        : { title: `${name} — joined in with the file, not part of the format` }
       if (payloadColumnIsText(column)) {
         return {
           key: name,
           label: name,
+          ...note,
+          ...joined,
           kind: 'string',
           width: name === 'name' ? 'minmax(12rem, 1.4fr)' : 'minmax(7rem, 1fr)',
           value: (row) => (column[row] === '' ? undefined : column[row]),
@@ -152,6 +161,8 @@ export class ContigsTable {
       return {
         key: name,
         label: name,
+        ...note,
+        ...joined,
         kind: 'number',
         align: 'right',
         width: 'minmax(6rem, 0.7fr)',

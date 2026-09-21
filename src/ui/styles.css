@@ -1533,7 +1533,15 @@ p {
  */
 .content {
   flex: 1 1 auto;
-  min-width: 0;
+  /* **The picture's floor.** It was `0`, which made the centre the only thing in
+     the row that could be squeezed to nothing: the columns are what a reader
+     opens, but the map is what they opened the file for, and a column has a
+     folded tab to come back from while a 140-pixel map has nothing. 18rem is a
+     readable locus bar and a map worth looking at; below it the columns are
+     already at their own floors and the outermost one leans off the right edge,
+     which is the one shape this trade cannot avoid and is reached only by four
+     columns on a screen under about 1,090 pixels. */
+  min-width: 18rem;
   min-height: 0;
   overflow: auto;
   padding: 1rem;
@@ -1569,8 +1577,15 @@ p {
    positioned children up with the cards, which is where the handle used to go.
    The heading staying put while the cards move under it is the same fact seen
    from the front. */
+/* `0 1 auto`, not `0 0 auto`: a column may be squeezed when the window has run
+   out of room. Four columns at their own widths come to about 1,180 pixels, so
+   on a 1366-wide laptop with all four open the picture was left 140 of them —
+   a map two glyphs wide, with the reader's own locus cut to `IV:1,00`. The
+   columns give way first now, down to the floor `SidePanel.paint` writes beside
+   the width, and `.content` holds a floor of its own so the picture is never
+   the thing that goes. */
 .panel-column {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   background: var(--bg-sunken);
   overflow: hidden;
   padding: 0.75rem 0.9rem 1rem;
@@ -4375,10 +4390,16 @@ canvas.is-frozen {
 }
 
 /* A grid, not a flex row: two equal columns and a button, each one bounded by
-   its track rather than by what an `<input type=number>` would like to be. */
+   its track rather than by what an `<input type=number>` would like to be.
+
+   The floor is what a clip limit actually reads as — `-4.182`, a sign and five
+   figures, which is 4.8rem in the face these are set in. At `minmax(0, …)` the
+   pair shrank with the column and showed `-4.1` at the width the column's own
+   minimum allowed, which is a limit a reader cannot check against the `auto ·`
+   line under it. The column's minimum went up to meet this. */
 .clip-boxes {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(4.8rem, 1fr) minmax(4.8rem, 1fr) auto;
   align-items: center;
   gap: 0.3rem;
 }
@@ -4707,6 +4728,25 @@ canvas.is-frozen {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
+}
+
+/* A heading that is a name rather than a category: the file's own spelling, in
+   the text colour, because it is the subject of the dialog and not a label on
+   it. See `ModalProps.titleIsName`. */
+.modal-title.is-name {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+}
+
+/* Where the file's own columns end and what its creator joined in begins. One
+   rule down the left of the first joined column, header and cells alike, which
+   is the table's form of the record card's `.kv-divider`: without it a CheckM
+   table's `Length` sat beside the format's `length` as though the two were one
+   run of fields. See `ColumnDef.joined`. */
+.thead-row > .th.is-joined,
+.tr > .td.is-joined {
+  border-left: 1px solid var(--border);
 }
 
 /* --- one feature's card ------------------------------------------------ */
@@ -5131,19 +5171,32 @@ canvas.is-frozen {
 }
 
 /* The map's bar has four more controls than a box, and they are one toolbar:
-   the locus box, `go`, the four zoom steps and the bookmark. Held together and
-   not allowed to wrap inside itself, so when the bar is too narrow to keep them
-   beside the title the whole toolbar drops to the next line still in order —
-   rather than the box staying up and the zoom steps breaking away underneath
-   the title, which is what a wrapping row of six items does and what gave this
-   one bar three shapes at three window widths. */
+   the locus box, `go`, the four zoom steps and the bookmark. They keep their
+   order and they keep to the right, and the box has a floor: below it the
+   toolbar wraps rather than squeezing the box.
+
+   It used to be `nowrap` with `min-width: 0`, so the row held one line at every
+   width by taking the room out of the box — and on a 1366-wide laptop with all
+   four columns open the box was **85 pixels** holding
+   `IV:1,000,001-1,400,000`, which is the reader's own position cut to
+   `IV:1,00`. A second line of zoom buttons is a shape; a locus you cannot read
+   is a defect. The box's floor is what keeps the wrap to two shapes rather than
+   the three an unconstrained row gave: everything on one line, or the box on
+   its own with the steps under it. */
 .title-bar > .title-tools {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.35rem;
   margin-left: auto;
   min-width: 0;
+}
+
+.title-bar > .title-tools > .search-box {
+  flex: 1 1 13rem;
+  min-width: 13rem;
+  max-width: 34rem;
 }
 
 .stepper {
@@ -8263,8 +8316,14 @@ canvas.is-frozen {
    has to be told apart from. Tighter marks, and the name keeps the row's own
    text size: a name set smaller than everything else on the row would read as a
    different kind of thing. */
+/* Wrapping, with a floor on the name: at the Annotations column's own minimum
+   width the head's eight controls left the name box 32 pixels, which is four
+   characters of a track called `Pol II / input`. The trailing controls drop to a
+   second line instead, and only at that width — at the column's default the row
+   is one line as before. */
 .ann-head {
   gap: 0.2rem;
+  flex-wrap: wrap;
 }
 
 .ann-row .ann-star,
@@ -8285,7 +8344,7 @@ canvas.is-frozen {
    rather than a form. */
 .ann-name {
   flex: 1 1 auto;
-  min-width: 2rem;
+  min-width: 7rem;
   text-align: left;
   background: none;
   border: 1px solid transparent;
@@ -8589,8 +8648,13 @@ canvas.is-frozen {
   color: var(--text-dim);
 }
 
+/* Wrapping, because the pair of coordinate boxes in it would rather take a line
+   each than be cut in half — see `axisBox`, which sizes each one to the example
+   it offers. A row of two buttons never reaches the wrap, their bases being
+   their own width. */
 .manual-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
 }
 

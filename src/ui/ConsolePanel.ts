@@ -221,6 +221,27 @@ export class ConsolePanel {
 
   private readonly listEl = el('div', { class: 'console-list' })
   private readonly countEl = el('span', { class: 'console-count' })
+  /**
+   * The three that need a line to act on, greyed while there is none.
+   *
+   * An empty console offered *copy*, *save* and *clear*: the first two wrote a
+   * file with nothing in it and the third forgot nothing, and §26.3's rule cuts
+   * both ways — a lit control is one that is on, and a control that cannot do
+   * anything is dimmed. The table beside this one greys its own *clear filters*
+   * for exactly this reason.
+   */
+  private readonly copyButton = button('copy', () => this.copyAll(), {
+    class: 'btn',
+    title: 'Every line, as a script: the commands bare and everything else commented.',
+  })
+  private readonly saveButton = button('save', () => this.save(), {
+    class: 'btn',
+    title: 'The same text, as a file.',
+  })
+  private readonly clearButton = button('clear', () => this.clear(), {
+    class: 'btn',
+    title: 'Forget every line. Anything still running keeps running.',
+  })
   private readonly outputBox: HTMLButtonElement
   private readonly emptyEl: HTMLElement
   private readonly unsubscribe: () => void
@@ -293,18 +314,9 @@ export class ConsolePanel {
         // Bordered, like every other control in a bar (§26.6). They were three
         // borderless words, which read as headings beside the panel's own
         // count — and *clear* is the one word here that destroys something.
-        button('copy', () => this.copyAll(), {
-          class: 'btn',
-          title: 'Every line, as a script: the commands bare and everything else commented.',
-        }),
-        button('save', () => this.save(), {
-          class: 'btn',
-          title: 'The same text, as a file.',
-        }),
-        button('clear', () => this.clear(), {
-          class: 'btn',
-          title: 'Forget every line. Anything still running keeps running.',
-        }),
+        this.copyButton,
+        this.saveButton,
+        this.clearButton,
         iconButton('x', 'Close the console. Nothing stops recording.', () => this.setOpen(false), {
           class: 'btn-close',
           size: 14,
@@ -503,6 +515,9 @@ export class ConsolePanel {
       held.length === 0
         ? ''
         : `${fmt.int(held.length)} line${held.length === 1 ? '' : 's'}, newest last`
+    for (const control of [this.copyButton, this.saveButton, this.clearButton]) {
+      control.disabled = held.length === 0
+    }
 
     const wanted: HTMLElement[] = []
     const keep = new Map<string, { node: HTMLElement; signature: string }>()

@@ -8060,6 +8060,11 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
   gives for keeping it in the table: a column somebody added is a column they meant, and the first
   time the two disagree the difference is the finding. So the card draws one quiet line between
   them, headed *joined in with the file*.
+- **A table draws the same break in its header**, as a rule down the left of the first joined column
+  (`ColumnDef.joined`), and gives each joined header the tooltip *joined in with the file, not part of
+  the format*. Without it the header read `name length contigs bins Length GC-content …`: two columns
+  of identical numbers, told apart by one capital letter, and no way to know which one a click was
+  sorting by.
 
 - **An axis is spelled by `axisNumber`, and a log axis is decades.** Past four decimal places a
   fixed-point tick stops being a number and becomes a run of zeros — a P(s) ordinate climbed to
@@ -8094,6 +8099,12 @@ stands down for `:disabled`.
 A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
 its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
 text is its label, so the label carries the state.
+
+The rule cuts both ways: **a control with nothing to act on is dimmed.** An empty console offered
+*copy*, *save* and *clear* at full strength — the first two would have written a file with nothing in
+it, the third forgotten nothing — and a table greys its own *clear filters* when there is no filter
+to clear. `disabled`, with the tooltip still saying what the control is for, so pointing at it
+answers *why not*.
 
 ### 26.4 Words on controls
 
@@ -8144,6 +8155,20 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 - **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
 - **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
   other four do.
+- **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**
+  A head carrying something out of a file (the enlarged cell's structure, the `.pairs` file being
+  binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been
+  changed is a different name, and `YEAST_STRUCTURE` over a card, a tab and a Structures row all
+  reading `Yeast_structure` was four names for one file.
+- **The picture is never the thing that gives way.** The side columns may be squeezed to their own
+  minimum widths when the window cannot hold them all, and `.content` keeps a floor of 18rem: four
+  columns at their widths come to about 1,180 pixels, so on a 1366-wide laptop with all four open the
+  map used to be left 140 of them, with the reader's own locus cut to `IV:1,00`. A column has a
+  folded tab to come back from; a map that thin has nothing. Below about 1,170 pixels the outermost
+  column leans off the right edge, which is the one shape this trade cannot avoid.
+- **A column's minimum width is a promise its cards still work at it.** Aesthetics' was 200 pixels,
+  at which its two clip limits read `-4.1` and its selects cut `log10` — so the minimum went up to
+  240 rather than the cards being made to fit a width nothing survives.
 - **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
   literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
   exists to answer.

@@ -512,8 +512,14 @@ function framingRegion(context: AnalysisContext, many = false): string {
   const start = (from - contig.startBin) * framing.binsize
   const end = Math.min(contig.length, (to - contig.startBin) * framing.binsize)
   // 1-based and inclusive, which is how every genome browser writes a locus and
-  // what `types.ts`'s `locus` field already documents the boxes as accepting.
-  return `${contig.name}:${Math.max(1, Math.round(start) + 1)}-${Math.round(end)}`
+  // what `types.ts`'s `locus` field already documents the boxes as accepting —
+  // **and grouped**, which is the other half of §26.1. It came out ungrouped, so
+  // an analysis form opened with `IV:1000001-1400000` in its box while the line
+  // directly above it read `IV:1,000,001-1,400,000 · 1 kb bins`: two spellings
+  // of one window, a hand's breadth apart, in the one place a reader is about to
+  // *edit* the number. `parseHumanized` strips separators before anything else,
+  // so what comes back out of the box parses exactly as it did.
+  return `${contig.name}:${fmt.pos(Math.max(1, Math.round(start) + 1))}-${fmt.pos(Math.round(end))}`
 }
 
 /**

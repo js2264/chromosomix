@@ -49,7 +49,7 @@ const AUDIT = () => {
 
   // 1. Text that does not fit the box it is in. `overflow: hidden` with an
   //    ellipsis is a choice; without one it is a value cut mid-character.
-  for (const n of document.querySelectorAll('button, .kbd, .field-label, .clip-note, td, .td, option, input, select, .seq-len, .ann-name, .shortcut-text, .palette-title, .card-head span, .status-item')) {
+  for (const n of document.querySelectorAll('button, .kbd, .field-label, .clip-note, td, .td, .kv-key, .kv-value, option, input, select, .seq-len, .ann-name, .shortcut-text, .palette-title, .card-head span, .status-item')) {
     if (!vis(n)) continue
     const cs = getComputedStyle(n)
     if (cs.textOverflow === 'ellipsis') continue
@@ -297,6 +297,16 @@ const openAll = async (page) => {
     for (const b of await page.$$(`button[title^="${t}"]`)) {
       if (await b.isVisible() && (await b.getAttribute('aria-expanded')) !== 'true') { await b.click(); await sleep(400) }
     }
+  }
+  // …and every card inside them, because a folded card is measured as invisible
+  // and a card nobody opened is a card nobody audited. The Manual annotations
+  // card is the one this was missed on: it starts folded, and its two axis boxes
+  // were showing `rows I:120,000-18`. Three passes, since opening a card can
+  // reveal another that is folded inside it.
+  for (let pass = 0; pass < 3; pass++) {
+    const folded = await page.$$('button.card-fold[aria-expanded="false"]')
+    if (folded.length === 0) break
+    for (const b of folded) if (await b.isVisible()) { await b.click(); await sleep(250) }
   }
   await sleep(1200)
 }
