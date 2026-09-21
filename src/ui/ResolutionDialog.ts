@@ -163,8 +163,8 @@ function dialogBody(
     el('p', {
       class: 'hint',
       text:
-        `${props.fileLabel} carries ${describeRungs(props.rungs)}. Any whole multiple of one of ` +
-        'those can be drawn, computed as it is read — nothing written, nothing downloaded.',
+        `${props.fileLabel} carries ${describeRungs(props.rungs)}, and any whole multiple of one ` +
+        'of those can be drawn, computed as it is read — nothing written, nothing downloaded.',
     }),
     el('div', { class: 'res-ask-row' }, box, units),
     verdict,

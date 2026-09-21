@@ -183,9 +183,9 @@ export function openStoredData(props: StoredDataProps): Modal {
         el('p', {
           class: 'hint',
           text:
-            'All of it is on this computer and none of it has been anywhere else. File contents ' +
-            'are never among it: what is kept is which files were open and how you had them set ' +
-            'up, never a copy of the data.',
+            'All of it is on this computer and none of it has been anywhere else — and file ' +
+            'contents are never among it: what is kept is which files were open and how you had ' +
+            'them set up, never a copy of the data.',
         }),
         props.items.length === 0
           ? el('p', { text: 'Nothing is being kept.' })

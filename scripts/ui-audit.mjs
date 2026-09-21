@@ -133,8 +133,14 @@ const AUDIT = () => {
     ['the word session', /\bsessions?\b/i],
     ['en dash in a locus', /:\s*[\d,]+\s*–/],
   ]
+  // A store's own rows are a *reader's file*, published by whoever generated the
+  // store, and this section governs what the app says rather than how somebody
+  // else's data is spelled — the same reason `portal-name` is not held to the
+  // casing rule above.
+  const STORE_DATA = /gallery-card-line|portal-name|portal-chip|genomes-card|gallery-card-title/
   for (const n of document.querySelectorAll('button, .hint, .clip-note, p, .field-label, .shortcut-text, .palette-title, .palette-hint, h1, h2, h3, option, label, .ann-note, .deck-note')) {
     if (!vis(n)) continue
+    if (STORE_DATA.test(String(n.className))) continue
     const t = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
     if (t === '') continue
     for (const [why, re] of BAD) if (re.test(t)) out.punctuation.push({ el: name(n), why, text: t.slice(0, 96) })
@@ -150,7 +156,7 @@ const AUDIT = () => {
   // column tab, a store tile and a task row are buttons whose content is data —
   // a file's name, a chromosome's name, a section's name — and §26.4 is about
   // what the app calls its own actions, not about how a reader's file is spelled.
-  const DATA_BUTTON = /seq-go|crumb|panel-tab|action-bar|store-tile|picker-provider|analysis-task|tab-label|palette-row|shortcut-row|ann-name|search-hit|res-rung|tf-|structure-key/
+  const DATA_BUTTON = /seq-go|crumb|panel-tab|action-bar|store-tile|picker-provider|analysis-task|tab-label|palette-row|shortcut-row|ann-name|search-hit|res-rung|tf-|structure-key|portal-name|gallery-card-title|genomes-card/
   for (const n of document.querySelectorAll('button.btn, button[class*="btn-"]')) {
     if (!vis(n)) continue
     if (DATA_BUTTON.test(String(n.className))) continue
@@ -265,6 +271,52 @@ await look('chromosomes', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`
 await look('whole genome', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('w'); await sleep(3500) })
 await look('drawer', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); const r = p.locator('.analysis-task', { hasText: 'Contact probability' }).first(); if (await r.count()) { await r.click(); await sleep(2500) } })
 await look('embed', async (p) => { await p.goto(`${BASE}/?embed=1&config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000) }, { width: 1000, height: 640 })
+await look('error view', async (p) => {
+  await p.goto(`${BASE}/#uri=${BASE}/demo/yeast/does-not-exist.cool&view=region&region=IV:1-1000`)
+  await p.waitForSelector('.view-error, .view-picker, .heatmap-canvas', { timeout: 60000 })
+  await sleep(2500)
+})
+await look('connect dialog', async (p) => {
+  await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500)
+  const bucket = p.locator('.picker-provider', { hasText: /bucket/i }).first()
+  if (await bucket.count()) { await bucket.click(); await sleep(1200) }
+})
+await look('store drawer', async (p) => {
+  await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500)
+  await p.keyboard.press('\\'); await sleep(1500)
+})
+await look('console', async (p) => {
+  await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
+  await p.keyboard.press('`'); await sleep(1200)
+})
+await look('stored data', async (p) => {
+  await p.goto(BASE, { waitUntil: 'networkidle' }); await sleep(2500)
+  await p.keyboard.press('Control+p'); await sleep(500)
+  await p.keyboard.type('remember'); await sleep(400)
+  await p.keyboard.press('Enter'); await sleep(1200)
+})
+await look('resolution dialog', async (p) => {
+  await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
+  const add = await p.$('.res-add'); if (add) { await add.click(); await sleep(900) }
+})
+await look('lane settings', async (p) => {
+  await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
+  const map = await p.locator('.heatmap-canvas').first().boundingBox()
+  if (map) { await p.mouse.click(map.x + map.width * 0.45, map.y + map.height + 40); await sleep(1000) }
+})
+await look('map context menu', async (p) => {
+  await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
+  const map = await p.locator('.heatmap-canvas').first().boundingBox()
+  if (map) { await p.mouse.click(map.x + map.width * 0.5, map.y + map.height * 0.5, { button: 'right' }); await sleep(900) }
+})
+await look('genome view', async (p) => {
+  await p.goto(`${BASE}/?config=${MOCK}`, { waitUntil: 'networkidle' }); await sleep(10000)
+  const row = p.locator('.view-genomes .tr .td:not(.td-check)').first()
+  if (await row.count()) { await row.click(); await sleep(4000) }
+  await openAll(p)
+})
+await look('deck dark', async (p) => { await p.goto(`${BASE}/?config=${DECK}`, { waitUntil: 'networkidle' }); await sleep(12000); await openAll(p) }, { dark: true })
+await look('browser 1366', async (p) => { await p.goto(`${BASE}/?config=${TRACKS}`, { waitUntil: 'networkidle' }); await sleep(10000); await openAll(p) }, { width: 1366, height: 768 })
 
 console.log(JSON.stringify(findings, null, 1))
 console.log(`\n${findings.length} findings`)

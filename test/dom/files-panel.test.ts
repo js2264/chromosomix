@@ -218,11 +218,13 @@ describe('the two verbs on a row', () => {
     await vi.waitFor(() => expect(loaded).toHaveLength(1))
   })
 
+  // *tab*, not *session*: the strip's own word (§26.4), and `session` is this
+  // codebase's name for the object rather than a reader's for the thing.
   it('opens it as a session of its own from the second mark, and says which it is', async () => {
     const { el, loaded, openedNew } = await rows()
     const fresh = all<HTMLButtonElement>(el, '.row-verb-new')
     expect(fresh).toHaveLength(1)
-    expect(fresh[0].title).toContain('new session')
+    expect(fresh[0].title).toContain('new tab')
     // The same pair every store row carries: a `+`, then the new-session mark,
     // both icons and nothing else.
     expect(all<HTMLButtonElement>(el, '.row-verb').map((node) => node.textContent)).toEqual(['', ''])

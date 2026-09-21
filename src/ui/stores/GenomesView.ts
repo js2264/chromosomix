@@ -183,7 +183,7 @@ export class GenomesView {
           ? null
           : iconButton(
               'new-session',
-              `Open ${genome.label} in a new session — the sequence and every track IGV ships for it, in the 1D browser.`,
+              `Open ${genome.label} in a new tab — the sequence and every track IGV ships for it, in the 1D browser.`,
               () => this.props.host.open(session),
               { class: 'btn btn-icon row-verb row-verb-new gallery-card-open', size: 16 },
             ),
@@ -194,7 +194,9 @@ export class GenomesView {
         el('span', { class: 'portal-chip', text: genome.assembly }),
         tracks === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: `${tracks} ${tracks === '1' ? 'track' : 'tracks'}` }),
       ),
-      session === null ? el('p', { class: 'hint gallery-card-line', text: 'No session was published for this genome.' }) : null,
+      session === null
+        ? el('p', { class: 'hint gallery-card-line', text: 'IGV published no session for this genome.' })
+        : null,
       genome.files.length === 0
         ? null
         : el(

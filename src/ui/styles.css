@@ -11533,11 +11533,18 @@ span.deck-name {
 .console-row-copy {
   flex: 0 0 auto;
   opacity: 0;
+  /* **Inert while it is invisible**, the rule `.btn.tab-close` states and for the
+     same reason: `opacity: 0` hides a button and does not stop it taking a
+     click, so the last twenty pixels of every unhovered row were an armed copy
+     button. A reader dragging to select a line, or clicking one to bring its
+     run up, could land on it without ever seeing it. */
+  pointer-events: none;
 }
 
 .console-row:hover .console-row-copy,
 .console-row-copy:focus-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* On a phone the console is the whole of the bottom half, and the two columns

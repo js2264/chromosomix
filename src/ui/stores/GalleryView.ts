@@ -96,7 +96,7 @@ export class GalleryView {
         el('h4', { class: 'gallery-card-title', text: entry.label }),
         iconButton(
           'new-session',
-          `Open ${entry.label} in a new session — the figure with every track it names.`,
+          `Open ${entry.label} in a new tab — the figure with every track it names.`,
           () => this.props.host.open(entry),
           { class: 'btn btn-icon row-verb row-verb-new gallery-card-open', size: 16 },
         ),

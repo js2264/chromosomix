@@ -542,6 +542,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A copy button you could not see could still be clicked.** The console's per-row copy sits at
+  `opacity: 0` until its row is hovered, but `opacity` hides a button without disarming it — so the
+  last twenty pixels of every resting row were a live target, and a reader dragging to select a line
+  could land on it. Inert while invisible now, which is the rule the tab's own × already followed.
+
+- **Nine HTTP header names in the range-source's refusals were wrapped in backticks**, which reach a
+  reader as backticks (§26.4). They are named in quotes, like every other literal the app mentions
+  in prose.
+
+- **Five more places said *session* where the word is *tab*** — a store row's two verbs, the
+  selection tray's, and the Files panel's. IGV's own noun stays IGV's: *IGV published no session for
+  this genome* says whose session it is.
+
 - **A record card no longer says every number twice with nothing to say why.** On a metagenome the
   Genome card read `length 7,310,635 bp`, then fifteen rows later `Length 7,310,635` — and
   `n_contigs 2,153` then `Contigs 2,153` — because `/genomes` guarantees three columns and the
