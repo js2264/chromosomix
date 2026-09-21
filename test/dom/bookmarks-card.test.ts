@@ -267,7 +267,10 @@ describe('the list', () => {
     const chips = Array.from(app.card.el.querySelectorAll('.bookmark-row')).map(
       (row) => row.querySelector('.bookmark-res')?.textContent ?? null,
     )
-    expect(chips).toEqual(['10.0 kb', null])
+    // The bin size, spelled as every other bin size in the app is — a
+    // resolution is round by construction and takes `resolutionLabel` (§26.2),
+    // so a bookmark's chip and the crumb it was taken under agree.
+    expect(chips).toEqual(['10 kb', null])
   })
 
   it('carries an arrow on every row, which is the whole affordance', () => {

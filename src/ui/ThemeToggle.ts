@@ -29,12 +29,23 @@ import { icon, type IconName } from './icons'
 export type ThemeChoice = 'light' | 'dark' | 'system'
 
 const KEY = 'metacooler-viewer:theme'
-const ORDER: ThemeChoice[] = ['system', 'light', 'dark']
 
 const ICON: Record<ThemeChoice, IconName> = {
   system: 'monitor',
   light: 'sun',
   dark: 'moon',
+}
+
+/**
+ * What the machine is doing, where it can be asked.
+ *
+ * `false` where there is no `matchMedia` — a test environment, an old engine —
+ * which makes the cycle `system → dark → light`, the order for the light
+ * default the stylesheet itself falls back to.
+ */
+function osPrefersDark(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
 function read(): ThemeChoice {
@@ -100,12 +111,37 @@ export class ThemeToggle {
     this.paint()
   }
 
+  /**
+   * The next choice in the cycle, ordered against the *machine's* scheme.
+   *
+   * A fixed `system → light → dark` order spends its first press on a choice
+   * that changes nothing: on a light OS — which is most of them, and every
+   * screenshot this app's gallery was taken on — pressing once selects `light`,
+   * the page does not move, and the icon changes to a sun that now reads as a
+   * claim that the page is *already* light. A reader presses the button, sees
+   * nothing happen, and concludes it is broken or that there is no dark theme.
+   *
+   * So the first press goes to the *opposite* of what the machine is doing, the
+   * second to the same as the machine (explicitly, which is what pins a figure
+   * light on a dark laptop), and the third back to following it. Every
+   * three-state cycle on a fixed OS has one visually silent step; this puts it
+   * last, where the monitor icon coming back reads as "follow the OS again"
+   * rather than as a control that did not work.
+   */
   private next(): ThemeChoice {
-    return ORDER[(ORDER.indexOf(this.choice) + 1) % ORDER.length]
+    const dark = osPrefersDark()
+    const opposite: ThemeChoice = dark ? 'light' : 'dark'
+    if (this.choice === 'system') return opposite
+    return this.choice === opposite ? (dark ? 'dark' : 'light') : 'system'
   }
 
   private paint(): void {
     this.el.replaceChildren(icon(ICON[this.choice]))
     this.el.title = withKey(`Theme: ${this.choice}. Click for ${this.next()}`, KEYS.theme)
+    // The name a screen reader announces, not only the description: it was the
+    // constant "colour theme", so three presses said the same four syllables
+    // and the state was never spoken. `MapPanel`'s lock button mirrors its
+    // title for the same reason.
+    this.el.setAttribute('aria-label', this.el.title)
   }
 }

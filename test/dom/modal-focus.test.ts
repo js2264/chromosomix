@@ -127,7 +127,7 @@ describe('the page behind the backdrop', () => {
   })
 
   it('gets the caret back on close, which an inert subtree would refuse', () => {
-    const opener = background('Share this session as a link')
+    const opener = background('Share this tab as a link')
     opener.focus()
     const { modal } = dialog()
     expect(document.activeElement).not.toBe(opener)

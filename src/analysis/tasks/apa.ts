@@ -413,7 +413,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'seed',
     key: 'seed',
     label: 'Seed',
-    hint: 'The same seed gives the same control twice (§18.4).',
+    hint: 'The same seed gives the same control twice.',
     default: 1,
     when: (params) => params.norm === 'matched',
     section: 'Control',

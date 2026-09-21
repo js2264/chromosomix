@@ -191,7 +191,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'seed',
     key: 'seed',
     label: 'Seed',
-    hint: 'The same seed gives the same band twice (§18.4).',
+    hint: 'The same seed gives the same band twice.',
     default: 1,
     when: (params) => params.band === 'bootstrap',
     section: 'Summary',

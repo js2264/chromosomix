@@ -794,9 +794,12 @@ export class StructurePanel implements DeckCell {
   commands(): Command[] {
     const style = this.style()
     const has = this.structure !== null
-    // The state is a chip after the title rather than a word inside it
-    // (`ui/commands.ts`): a row reading “Beads (on)” in the shortcuts dialog is
-    // a title that changes under the reader, and the dialog is static.
+    // The state as a chip the palette and the shortcuts dialog draw, not as a
+    // parenthesis in the title: "Beads (on)" is a third convention for one kind
+    // of thing — beside the overlays' nouns and the panels' — and typing
+    // "beads" gave a row that looked unlike every other switch in the list
+    // (§26.4). It is also a title that would change under a reader looking at a
+    // dialog that does not repaint.
     const on = (flag: boolean): 'on' | 'off' => (flag ? 'on' : 'off')
     // **A key only while the model is enlarged.** These are single letters, and
     // the app's own are too: `f` folds the Files panel, `a` the Annotations
@@ -822,9 +825,9 @@ export class StructurePanel implements DeckCell {
       { id: 'structure-sticks', group: 'Structure', title: 'Sticks', state: on(style.sticks), ...key(STRUCTURE_KEYS.sticks), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
       { id: 'structure-tube', group: 'Structure', title: 'Tube', state: on(style.tube), ...key(STRUCTURE_KEYS.tube), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
       { id: 'structure-labels', group: 'Structure', title: 'Sequence names', state: on(style.labels), ...key(STRUCTURE_KEYS.labels), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      { id: 'structure-select', group: 'Structure', title: 'Mark a bead', state: this.mode === 'mark' ? 'on' : 'off', hint: 'Each click marks that bead’s locus', enabled: has, run: () => this.setMode('mark') },
-      { id: 'structure-loop', group: 'Structure', title: 'Mark a loop', state: this.mode === 'loop' ? 'on' : 'off', hint: 'Click two beads for a loop between their loci', enabled: has, run: () => this.setMode('loop') },
-      { id: 'structure-measure', group: 'Structure', title: 'Measure', state: this.mode === 'measure' ? 'on' : 'off', hint: 'Drag from one bead to another for the distance between them', enabled: has, run: () => this.setMode('measure') },
+      { id: 'structure-select', group: 'Structure', title: 'Mark a bead', state: on(this.mode === 'mark'), hint: 'Each click marks that bead’s locus', enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: 'Mark a loop', state: on(this.mode === 'loop'), hint: 'Click two beads for a loop between their loci', enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: 'Measure', state: on(this.mode === 'measure'), hint: 'Drag from one bead to another for the distance between them', enabled: has, run: () => this.setMode('measure') },
       { id: 'structure-turn', group: 'Structure', title: 'Turntable', state: on(this.turning), hint: 'The model turns slowly by itself', ...key(STRUCTURE_KEYS.turntable), enabled: has, run: () => this.toggleTurning() },
     ]
   }

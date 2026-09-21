@@ -276,9 +276,12 @@ describe('the + past the coarse end', () => {
     built.crumb.render({ uri: 'f.cool', view: 'region', region: 'I' })
     expect(built.crumb.el.querySelector('.crumb-res')).not.toBeNull()
     expect(built.crumb.el.querySelector('.res-add')).not.toBeNull()
-    // …and the slider has nowhere to go, so it does not pretend to.
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    expect(slider.disabled).toBe(true)
+    // …and the slider is **not drawn at all**. It used to be drawn disabled,
+    // which the code's own comment called furniture: a greyed track beside a
+    // single stop invites a drag that does nothing, and §8.5's rule is that a
+    // control which cannot keep its promise is absent. It returns with the
+    // second rung, which is what the `+` beside it makes.
+    expect(built.crumb.el.querySelector('.res-slider')).toBeNull()
   })
 
   it('is absent where the session offers no way to add one', () => {

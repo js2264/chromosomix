@@ -20,6 +20,7 @@
 
 import { KEYS, keyBadge, withKey } from './commands'
 import { icon } from './icons'
+import { windowLabel } from '../genome/assembly'
 import { cellsOf, selectionOf } from '../state/ViewState'
 import type { DerivedRung, Rung } from '../metacooler/coarsen'
 import type { ViewState } from '../types'
@@ -231,6 +232,9 @@ export class Breadcrumb {
       return
     }
     this.trail(state)
+    // No ladder in a browser: there is no matrix to read at a coarser grid, and
+    // often no cooler behind the tracks at all.
+    if (state.view === 'browser') return
     // **Last, after the place.** The resolution is not a step of the trail: it
     // does not contain the crumbs before it and clicking it does not go
     // anywhere — it is how finely the same place is drawn. It spent a release as
@@ -244,6 +248,17 @@ export class Breadcrumb {
   /** The trail proper: file → table → genome → contig → region. */
   private trail(state: ViewState): void {
     this.push(this.props.fileLabel, () => this.props.onOpenFile(), false, 'file')
+    // **The 1D browser has a trail too**, and it used to have none: the host was
+    // emptied in that branch, so the row that says which assembly and which
+    // chromosome a reader is on vanished the moment the map's eye was pressed
+    // and came back when it was pressed again. §5.5 gives every view a trail
+    // and §21.3 has an embed carry "the ordinary breadcrumb"; a UCSC or IGV
+    // reader looks for this row first, and "up" from a chromosome was not one
+    // click anywhere in this view.
+    if (state.view === 'browser') {
+      this.pushBrowser(state)
+      return
+    }
     this.pushEntryPicker()
     this.pushRootPicker(state)
     this.pushCells(state)
@@ -286,9 +301,52 @@ export class Breadcrumb {
       if (state.region2 !== undefined) {
         this.push(`${contig} × ${state.region2.split(':')[0]}`, undefined, true)
       } else if (hasCoordinates) {
-        this.push(state.region, undefined, true)
+        // The window alone, under the crumb that already names the sequence —
+        // as the `contig × contig2` branch one line above does. It used to push
+        // the whole region string, so the row ended "› IV › IV:1000000-1400000"
+        // with the view's own heading and its locus box printing the same
+        // string underneath: three copies of one place in three typefaces, and
+        // a reader scanning them for a difference that is not there.
+        this.push(windowLabel(state.region), undefined, true)
       }
     }
+  }
+
+  /**
+   * A browser's trail: `genome › Whole genome › IV › 1,000,001-1,400,000`.
+   *
+   * The root is the whole assembly rather than a table, because a genome opened
+   * as tracks has no table to go back up to — the chromosomes table is a
+   * cooler's view of its own `/chroms` (§5.8) — and "the whole genome" is both
+   * where a browser opens and the one place above the sequence in front of the
+   * reader. No picker on it for the same reason: there is no second table to
+   * pick, and a control with nothing to offer is absent rather than greyed
+   * (§8.5).
+   *
+   * The locus is already the display form (`ViewState.locus` is 1-based
+   * inclusive, written by `formatLocus`), so the sequence name is what is
+   * before the colon and the window is what is after it. Under the sequence's
+   * own crumb the window is printed alone: the map's last crumb repeated the
+   * contig it hangs under, which put the same string on screen three times
+   * running.
+   */
+  private pushBrowser(state: ViewState): void {
+    const locus = state.locus
+    const whole: ViewState = { uri: state.uri, view: 'browser' }
+    this.push(
+      ROOT_LABEL.whole,
+      locus === undefined ? undefined : () => this.props.onNavigate(whole),
+      locus === undefined,
+    )
+    if (locus === undefined) return
+    const colon = locus.lastIndexOf(':')
+    const contig = colon < 0 ? locus : locus.slice(0, colon)
+    this.push(
+      contig,
+      colon < 0 ? undefined : () => this.props.onNavigate({ ...whole, locus: contig }),
+      colon < 0,
+    )
+    if (colon >= 0) this.push(locus.slice(colon + 1), undefined, true)
   }
 
   /**
@@ -499,23 +557,31 @@ export class Breadcrumb {
       class: 'res-stops',
       attrs: listed ? { role: 'radiogroup', 'aria-label': 'resolution' } : {},
     })
-    const slider = el('input', {
-      class: 'res-slider',
-      type: 'range',
-      title: `Drag to a coarser or finer resolution — ${rungs
-        .map((rung) => resolutionLabel(rung.binsize))
-        .join(', ')}`,
-      attrs: {
-        min: '0',
-        max: String(Math.max(1, rungs.length - 1)),
-        step: '1',
-        'aria-label': 'resolution',
-      },
-    }) as HTMLInputElement
-    slider.value = String(at)
-    // A one-rung ladder has nothing to slide along; the `+` beside it is the
-    // only control there is, and a dead slider next to it would be furniture.
-    if (rungs.length < 2) slider.disabled = true
+    // **A one-rung ladder is drawn without a slider.** There is nothing to slide
+    // along, and the comment that used to stand here said so and then disabled
+    // the control anyway — which is furniture by its own account, and against
+    // the rule §8.5 and §18.1 both state: a control that cannot keep its
+    // promise is absent, not greyed. A plain `.cool` is the commonest file a
+    // lab opens, so the dead slider was on the row every reader looks at, and a
+    // greyed track beside a single chip invites a drag that does nothing. It
+    // comes back with the second rung, which is what the `+` beside it makes.
+    const slider =
+      rungs.length < 2
+        ? null
+        : (el('input', {
+            class: 'res-slider',
+            type: 'range',
+            title: `Drag to a coarser or finer resolution — ${rungs
+              .map((rung) => resolutionLabel(rung.binsize))
+              .join(', ')}`,
+            attrs: {
+              min: '0',
+              max: String(rungs.length - 1),
+              step: '1',
+              'aria-label': 'resolution',
+            },
+          }) as HTMLInputElement)
+    if (slider !== null) slider.value = String(at)
 
     for (const [index, rung] of rungs.entries()) {
       // **The `*` is part of the label, not a decoration beside it.** A reader
@@ -575,7 +641,7 @@ export class Breadcrumb {
     // On `change`, not `input`: dragging across a five-rung ladder would
     // otherwise re-open the file at every rung it passed over, which is four
     // reads nobody asked for and a picture that flickers through them.
-    slider.addEventListener('change', () => {
+    slider?.addEventListener('change', () => {
       const picked = rungs[Number(slider.value)]
       if (picked !== undefined && rungs.indexOf(picked) !== at) this.pick(picked)
     })
@@ -591,7 +657,7 @@ export class Breadcrumb {
             'not change.',
         },
         el('span', { class: 'res-label', text: 'resolution' }),
-        slider,
+        ...(slider === null ? [] : [slider]),
         stops,
         ...(onAdd === undefined
           ? []
@@ -605,7 +671,7 @@ export class Breadcrumb {
                     'aria-label': 'Add a resolution',
                     title:
                       'Look at this map at a resolution the file does not store — any whole ' +
-                      'number of its own bins added up (§3.4).',
+                      'number of its own bins added up.',
                   },
                   on: { click: () => onAdd() },
                 },
@@ -685,18 +751,35 @@ export class Breadcrumb {
       }
       menu.appendChild(item)
     }
+    arrow.setAttribute('aria-expanded', 'false')
     arrow.addEventListener('click', (event) => {
       event.stopPropagation()
       const opening = menu.classList.contains('hidden')
       menu.classList.toggle('hidden', !opening)
+      arrow.setAttribute('aria-expanded', String(opening))
       if (opening) {
         // Placed against the viewport from the arrow's own rect: the crumb row
         // scrolls horizontally, and a scroller clips what hangs out of it.
         const rect = arrow.getBoundingClientRect()
         menu.style.top = `${rect.bottom + 4}px`
         menu.style.left = `${rect.left}px`
-        // One outside click closes it; `once` means no listener outlives the menu.
-        window.addEventListener('click', () => menu.classList.add('hidden'), { once: true })
+        // An outside click closes it, **and so does Escape**, which was the one
+        // way out this menu did not have: every other transient surface in the
+        // app takes it (the drawers, the console, the right-click menu, a
+        // modal), so a floating list over the map was the only thing a reader
+        // could not back out of by the key they press to back out of anything.
+        // Each listener removes the other, so neither outlives the menu.
+        const close = (): void => {
+          menu.classList.add('hidden')
+          arrow.setAttribute('aria-expanded', 'false')
+          window.removeEventListener('click', close)
+          window.removeEventListener('keydown', onKey, true)
+        }
+        const onKey = (event: KeyboardEvent): void => {
+          if (event.key === 'Escape') close()
+        }
+        window.addEventListener('click', close, { once: true })
+        window.addEventListener('keydown', onKey, true)
       }
     })
     this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))

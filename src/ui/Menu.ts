@@ -12,6 +12,15 @@
  * it. Positioned there rather than against a container for the reason the
  * breadcrumb's own menu is: the plot sits in a scroll port, and a scroller clips
  * what hangs out of it.
+ *
+ * **It is driven by the keyboard once it is up**, which it was not: a menu of
+ * plain buttons appended to `<body>`, with no role and nothing focused, left a
+ * reader who had opened it with the mouse — the only way in, since the heatmap
+ * canvas takes no focus — to reach *Copy coordinates* by tabbing through every
+ * panel of the window, because the menu is the last thing in the document. So
+ * the first row takes focus when it opens, the arrows walk the rows, and
+ * closing hands focus back to whatever had it, which is how every other menu on
+ * the reader's machine behaves.
  */
 
 import { el } from './dom'
@@ -44,17 +53,27 @@ export function openMenu(x: number, y: number, items: readonly MenuItem[]): void
   closeMenu()
   if (items.length === 0) return
 
-  const menu = el('div', { class: 'crumb-menu context-menu' })
+  const menu = el('div', {
+    class: 'crumb-menu context-menu',
+    attrs: { role: 'menu', tabindex: '-1' },
+  })
+  // The rows a key can move between: the headings are not among them, and
+  // neither is a row that cannot act.
+  const rows: HTMLButtonElement[] = []
   for (const item of items) {
     if (item.run === undefined) {
-      menu.appendChild(el('div', { class: 'context-menu-head', text: item.label }))
+      menu.appendChild(
+        el('div', { class: 'context-menu-head', text: item.label, attrs: { role: 'presentation' } }),
+      )
       continue
     }
     const node = el('button', {
       class: `crumb-menu-item${item.disabled === true ? ' disabled' : ''}`,
       type: 'button',
+      attrs: { role: 'menuitem' },
       ...(item.hint === undefined ? {} : { title: item.hint }),
     })
+    if (item.disabled !== true) rows.push(node)
     node.appendChild(el('span', { text: item.label }))
     if (item.hint !== undefined) {
       node.appendChild(el('span', { class: 'context-menu-hint', text: item.hint }))
@@ -77,6 +96,9 @@ export function openMenu(x: number, y: number, items: readonly MenuItem[]): void
   menu.style.left = `${left}px`
   menu.style.top = `${top}px`
 
+  // Captured before anything is focused, so closing can put the caret back
+  // where the reader left it — on the lane, the canvas or the row they had.
+  const opener = document.activeElement
   const close = (): void => {
     if (open !== close) return
     open = null
@@ -84,9 +106,30 @@ export function openMenu(x: number, y: number, items: readonly MenuItem[]): void
     window.removeEventListener('keydown', onKey, true)
     window.removeEventListener('scroll', close, true)
     window.removeEventListener('resize', close)
+    if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+  }
+  const step = (delta: number): void => {
+    if (rows.length === 0) return
+    const at = rows.findIndex((row) => row === document.activeElement)
+    // From nowhere, a step down is the first row and a step up the last, which
+    // is what a reader pressing ↑ at a freshly opened menu is asking for.
+    const next = at < 0 ? (delta > 0 ? 0 : rows.length - 1) : (at + delta + rows.length) % rows.length
+    rows[next]?.focus()
   }
   const onKey = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') close()
+    if (event.key === 'Escape') {
+      close()
+      return
+    }
+    if (event.key === 'ArrowDown') step(1)
+    else if (event.key === 'ArrowUp') step(-1)
+    else if (event.key === 'Home') rows[0]?.focus()
+    else if (event.key === 'End') rows[rows.length - 1]?.focus()
+    else return
+    // Only for the keys this menu answers: the page below must go on receiving
+    // everything else, and an arrow key that also scrolled the view behind the
+    // menu would move the thing the menu is about.
+    event.preventDefault()
   }
   open = close
   // `once` on a listener added in this tick would fire on the very click that
@@ -97,4 +140,9 @@ export function openMenu(x: number, y: number, items: readonly MenuItem[]): void
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('scroll', close, true)
   window.addEventListener('resize', close)
+  // The first row that can act, so the arrows have somewhere to start and a
+  // reader who opened this from the keyboard is standing in it. The menu itself
+  // where every row is dead, which is a menu that is only a heading and a
+  // reason — still Escapable, and announced as a menu.
+  ;(rows[0] ?? menu).focus()
 }

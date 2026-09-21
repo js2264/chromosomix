@@ -69,6 +69,7 @@ import {
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
+import { resolutionLabel } from '../units'
 import {
   canvasToPng,
   copyPngToClipboard,
@@ -1033,7 +1034,7 @@ export class PanelDeck {
       refused.length === 0
         ? ''
         : `${refused.join(', ')} ${refused.length === 1 ? 'has' : 'have'} no ` +
-          `${fmt.bp(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
+          `${resolutionLabel(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
     )
   }
 
@@ -2456,8 +2457,9 @@ export class PanelDeck {
     const share = button('match all scales', () => this.matchScales(), {
       class: 'btn deck-share',
       title:
-        `Use ${starName}’s colour limits on every panel; nudge a panel’s clip afterwards and it ` +
-        'is on its own again.',
+        `Draw every panel on ${starName}’s clip, so one colour is one number of contacts across ` +
+        'the deck. A press rather than a setting: nudge a panel’s clip afterwards and it is on ' +
+        'its own values again.',
     })
 
     const resolutions = button('match all resolutions', () => this.matchResolutions(), {

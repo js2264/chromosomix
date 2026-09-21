@@ -64,7 +64,7 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'seed',
     label: 'Seed',
     when: (params) => params.shuffle === true,
-    hint: 'The same seed gives the same null twice (§18.4).',
+    hint: 'The same seed gives the same null twice.',
     default: 1,
   },
 ]

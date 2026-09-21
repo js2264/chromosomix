@@ -605,7 +605,7 @@ export class ConsolePanel {
           title: `${KIND_LABEL[entry.kind]} — ${STATUS_LABEL[entry.status]}`,
         },
         entry.status === 'running'
-          ? el('span', { class: 'analysis-spinner' })
+          ? el('span', { class: 'analysis-spinner', attrs: { 'aria-hidden': 'true' } })
           : icon(MARK[entry.kind], { size: 13 }),
       ),
       lines,

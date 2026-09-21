@@ -95,7 +95,7 @@ export const runHicScore: TaskRunner = async (job) => {
   if (region !== '' && planned.length === 0) {
     job.note(
       `This file has no sequence called ${parseRegionString(region)[0]}, under that spelling or ` +
-        `any this viewer knows of (§5.9). It has ` +
+        `any this viewer knows of. It has ` +
         `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
     )
     return []

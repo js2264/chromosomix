@@ -238,13 +238,19 @@ describe('compareRefusal', () => {
     ).toBeNull()
   })
 
-  it('refuses a file with a genome layer, naming §8.5', () => {
+  it('refuses a file with a genome layer, naming the file and the reason', () => {
     const refusal = compareRefusal(opened(), opened({ hasGenomes: true, uri: 'b.metacool' }), {
       primary: CONTIGS,
       second: [...CONTIGS],
     })
     expect(refusal).toContain('genome layer')
-    expect(refusal).toContain('§8.5')
+    expect(refusal).toContain('b.metacool')
+    // And **not** a section number. This string is read in a dialog, and the
+    // app never links the document it would point into (§26.4): the sentence
+    // after it is what makes the refusal followable — thousands of
+    // independently assembled organisms agree about a contig name by
+    // coincidence rather than by construction.
+    expect(refusal).not.toContain('§')
   })
 
   it('refuses two bin sizes, naming both', () => {

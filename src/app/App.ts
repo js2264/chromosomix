@@ -123,21 +123,20 @@ const APP_TITLE = '(meta)cooler'
  * every other door to a file in the app.
  */
 const ADD_FILE_HINT =
-  'A second map comes up beside the one that is open rather than instead of it, and anything ' +
-  'else is drawn on top — the same routing a dropped file takes.'
+  'A second map comes up beside the one open, and anything else is drawn on top.'
 
 /**
  * What the header's plug promises, read by its tooltip and by its command.
  *
- * It names the *lasting* half, because that is the whole difference from the
- * button beside it: what a reader gets is not a file but a column they can keep
- * working out of. The second sentence is the claim that makes it one control
- * rather than two — a directory and a bucket are browsed identically — and it is
- * true of the code rather than a slogan (`browse/folder.ts`).
+ * It names the four kinds in one clause, because that is the claim that makes
+ * this one control rather than four: a directory, a bucket, a Drive folder and
+ * a Dropbox are browsed identically, which is true of the code rather than a
+ * slogan (`browse/folder.ts`). "Kept in the Files panel" carries the lasting
+ * half — what a reader gets is not a file but a column they can keep working
+ * out of — in the one line a hint is allowed (§26.4).
  */
 const CONNECT_HINT =
-  'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed in the Files ' +
-  'panel and still there when you come back.'
+  'A folder here, a bucket, a Google Drive folder or a Dropbox, kept in the Files panel.'
 
 /**
  * How many sessions may be open at once.
@@ -148,6 +147,15 @@ const CONNECT_HINT =
  * anyone opens deliberately and well short of what makes a laptop swap.
  */
 const MAX_SESSIONS = 12
+
+/**
+ * A toggle command's state, in §26.7's words.
+ *
+ * Written once here because eleven overlay rows, five panel folds, the console,
+ * the stores and refine-on-zoom all wear it, and a second spelling — `(on)`,
+ * `shown`, `open` — would make one kind of thing look like four in one list.
+ */
+const chipOf = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
 
 export class App implements SessionHost {
   private readonly sessions: Session[] = []
@@ -293,6 +301,19 @@ export class App implements SessionHost {
    * wrong exactly when somebody copies it.
    */
   private readonly brandLink: HTMLAnchorElement | null = null
+  /**
+   * The header's link button, held so that {@link syncShare} can withdraw it.
+   *
+   * There is nothing to put in a link until something is open, and §8.5's rule
+   * is that such a control is unavailable rather than live-and-refusing: it is
+   * disabled with the reason in its tooltip, exactly as the palette's own
+   * *Share* row has been all along.
+   */
+  private readonly shareButton: HTMLButtonElement = iconButton(
+    'link',
+    'Share this tab as a link',
+    () => this.openShareDialog(),
+  )
 
   constructor(root: HTMLElement) {
     this.breadcrumbSlot = el('div', { class: 'breadcrumb-slot' })
@@ -393,11 +414,23 @@ export class App implements SessionHost {
     })
 
     // The title is the way home. It reads as one, so it should behave as one:
-    // clicking it returns to the file picker, which is the only view above
-    // every other (§5.1).
-    const home = button('(meta)cooler', () => this.current?.toPicker(), {
+    // clicking it goes to the file picker, which is the only view above every
+    // other (§5.1).
+    //
+    // **In a new tab, whenever this one holds something.** It used to call
+    // `toPicker()`, which empties the tab in front — the file let go of, the
+    // annotation worker stopped, the deck and the comparison destroyed — and
+    // that is the one thing the way home must not do: every web page has
+    // taught a reader that the logo is safe to press, and a dropped local
+    // file cannot be re-opened without another gesture (§11). The file crumb
+    // stopped navigating to the picker for exactly this reason, and two doors
+    // one row apart with opposite safety is the kind of thing a reader learns
+    // by losing an afternoon's tracks. An empty tab *is* the picker, so the
+    // new tab is the whole answer; a tab that is already empty has nothing to
+    // lose and goes straight there.
+    const home = button('(meta)cooler', () => this.goHome(), {
       class: 'brand-name brand-home',
-      title: 'Back to the file picker',
+      title: 'The file picker — in a new tab, so this one is kept',
     })
 
     const palette = button('', () => this.openPalette(), { class: 'action-bar' })
@@ -479,13 +512,15 @@ export class App implements SessionHost {
         // whose hover says so — goes back to the picker and replaces. That is
         // the same add-versus-replace line this side draws between a dropped
         // workspace and the startup offer.
-        iconButton('link', 'Share this session as a link', () => this.openShareDialog()),
+        // Held, because it is the one header button whose promise depends on
+        // the tab: with nothing open there is no view to put in a link, and an
+        // always-live button that answers with a refusal dialog is §8.5's own
+        // failure — the palette's copy of this command has been gated on the
+        // same test all along.
+        this.shareButton,
         iconButton(
           'save',
-          withKey(
-            'Save this workspace as a file — every tab, to open again later',
-            KEYS.saveSession,
-          ),
+          withKey('Save every tab as a file, to open again later', KEYS.saveSession),
           () => this.exportWorkspace(),
         ),
         // Before the theme, and after the two that take something *out* of this
@@ -1252,7 +1287,7 @@ export class App implements SessionHost {
   private newSession(): Session | null {
     if (this.sessions.length >= MAX_SESSIONS) {
       this.warn(
-        `${MAX_SESSIONS} sessions is the limit. Each one holds a worker and, for a whole-file ` +
+        `${MAX_SESSIONS} tabs is the limit. Each one holds a worker and, for a whole-file ` +
           'view, a matrix in memory — close one to open another.',
         'Too many tabs',
       )
@@ -1316,6 +1351,16 @@ export class App implements SessionHost {
     this.analysisPanel.setContent([session.analysisHost])
     this.drawerSlot.replaceChildren(session.drawerHost)
     this.applyPanels(session)
+    // **And the bar under it**, because what it counts is a property of what is
+    // mounted. Its own contract is that the numbers are the active tab's and
+    // change when the tab does, and the only thing that called it was
+    // `activity()` — which a session raises when it has *read* something. A tab
+    // that has read nothing never raises it, so opening a second tab left the
+    // first file's bytes under an empty landing page and switching back kept
+    // whatever the other one had counted. Here rather than in
+    // {@link activate}, because the boot parents a session without going
+    // through it.
+    this.status?.refresh()
     // The tab's own name where it has one (a Drive file's, a store row's), the
     // file's otherwise — the same line the tab strip shows.
     document.title = session.state === null ? APP_TITLE : `${session.label} — ${APP_TITLE}`
@@ -1370,6 +1415,47 @@ export class App implements SessionHost {
       })),
       this.sessions.length < MAX_SESSIONS,
     )
+    this.syncShare()
+  }
+
+  /**
+   * The picker, without taking the tab in front down with it.
+   *
+   * A new tab where there is anything to keep, and this tab where there is
+   * not: an empty tab is the picker already, so opening a second one would
+   * answer "take me home" with two identical empty tabs. At the tab limit
+   * {@link newSession} refuses and says why, which is the honest answer to
+   * *and one more* — nothing is emptied on the way.
+   */
+  private goHome(): void {
+    const session = this.current
+    if (session === undefined || session.state === null) session?.toPicker()
+    else this.newSession()
+  }
+
+  /**
+   * Whether there is anything in this tab to put in a link.
+   *
+   * The state, not `exportConfig()`, and they are the same answer: that method
+   * returns `null` exactly when the tab has no view state, and asking it
+   * instead would serialise every track, mark and bookmark in the session — on
+   * every repaint, which is every track loaded and every mark placed — to
+   * discover a boolean. The palette's *Share* row is gated on this same getter,
+   * because a header button that opens a refusal while the palette greys the
+   * same command out is one of the two lying about the state.
+   */
+  private get canShare(): boolean {
+    return (this.current?.state ?? null) !== null
+  }
+
+  private syncShare(): void {
+    const ready = this.canShare
+    this.shareButton.disabled = !ready
+    const title = ready
+      ? 'Share this tab as a link'
+      : 'Share this tab as a link — open a file first'
+    this.shareButton.title = title
+    this.shareButton.setAttribute('aria-label', title)
   }
 
   /**
@@ -1532,6 +1618,9 @@ export class App implements SessionHost {
   stateChanged(session: Session, options: { replace: boolean }): void {
     this.remember()
     if (session !== this.current) return
+    // A navigation is how a tab comes to hold something, or stops holding it,
+    // so it is also when the link button becomes available or goes.
+    this.syncShare()
     this.writeHash(session.state, options)
     // The other bar, for a window that has one. `moved` is silent until a host
     // has asked to be told, so an embed nobody is driving posts nothing at all
@@ -1908,19 +1997,21 @@ export class App implements SessionHost {
       {
         id: 'connect-folder',
         group: 'File',
-        title: 'Open a local/remote folder',
+        // *Connect*, because that is what happens to a folder everywhere else in
+        // the app (§24.2): a file is opened, a place is connected, and this row
+        // was the last one that said "open" about a folder.
+        title: 'Connect a local or remote folder',
         hint: CONNECT_HINT,
         run: () => this.openConnectDialog(),
       },
       {
         id: 'open-store',
         group: 'File',
-        title: 'Open or close the stores',
-        hint:
-          'The lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected, as a drawer ' +
-          'down the left. Nothing is fetched until you open one.',
+        title: 'Stores',
+        hint: 'The lab’s data, IGV’s genomes, 4DN, ENCODE, as a drawer down the left.',
         keys: KEYS.stores,
         enabled: this.storeDrawer !== null,
+        ...(this.storeDrawer === null ? {} : { state: chipOf(this.storeDrawer.isOpen) }),
         run: () => this.storeDrawer?.toggle.click(),
       },
       {
@@ -1933,7 +2024,7 @@ export class App implements SessionHost {
       {
         id: 'new-session',
         group: 'File',
-        title: 'New session',
+        title: 'New tab',
         hint: 'Another tab, with its own file, tracks and settings.',
         // `o`, not ⌘T: every browser claims ⌘T for a tab of its own and never
         // lets the page see it, so the binding was one a reader could read in
@@ -1945,11 +2036,12 @@ export class App implements SessionHost {
       {
         id: 'save-workspace',
         group: 'File',
-        title: 'Save this workspace',
-        hint:
-          'Every open tab as one file: the views, every track with its settings, the groups, the ' +
-          'marks, the bookmarks. Drop it back on the page and they all come back. The link button ' +
-          'beside it shares one tab instead.',
+        title: 'Save every tab as a file',
+        // One line, which is what the registry promises for a hint. The
+        // paragraph that was here listed what the file holds and then pointed
+        // at "the link button beside it" — a header button that is beside
+        // nothing in this list, and whose command is three rows down.
+        hint: 'Every tab, its tracks and its settings, as one file you can drop back on the page.',
         keys: KEYS.saveSession,
         enabled: file,
         run: () => this.exportWorkspace(),
@@ -1957,12 +2049,14 @@ export class App implements SessionHost {
       {
         id: 'rename-session',
         group: 'File',
-        title: 'Rename this session',
-        hint:
-          'Call the tab something other than its file — the condition, the run, the figure it is ' +
-          'for. Four tabs on four copies of `matrix_1000.mcool` are otherwise four identical ' +
-          'labels. The name travels in the saved workspace and in the share link; clearing the ' +
-          'box hands the tab back to its file name. Double-clicking the tab does the same thing.',
+        title: 'Rename this tab',
+        // Five lines of rationale used to stand here — why a name helps, what
+        // it travels in, how to clear it, and the gesture that does the same
+        // thing — with the file name in Markdown backticks that nothing on
+        // this surface renders. A palette is scanned, so the row keeps the one
+        // sentence that says what the command is for; the rest is in the
+        // rename box's own tooltip and in §5.6.
+        hint: 'Name the tab for its condition or its figure; the name travels with the link.',
         keys: KEYS.renameSession,
         enabled: file,
         run: () => {
@@ -1973,7 +2067,7 @@ export class App implements SessionHost {
       {
         id: 'close-session',
         group: 'File',
-        title: 'Close this session',
+        title: 'Close this tab',
         hint:
           this.sessions.length === 1
             ? 'The last tab is emptied rather than closed — there would be nothing to drop a file on.'
@@ -1983,7 +2077,7 @@ export class App implements SessionHost {
       {
         id: 'next-session',
         group: 'Go',
-        title: 'Next session',
+        title: 'Next tab',
         keys: KEYS.nextSession,
         enabled: this.sessions.length > 1,
         run: () => this.activate((this.active + 1) % this.sessions.length),
@@ -1991,7 +2085,7 @@ export class App implements SessionHost {
       {
         id: 'prev-session',
         group: 'Go',
-        title: 'Previous session',
+        title: 'Previous tab',
         keys: KEYS.prevSession,
         enabled: this.sessions.length > 1,
         run: () =>
@@ -2011,12 +2105,23 @@ export class App implements SessionHost {
     // one place in this app that promises to list everything it can do. A
     // command with no `keys` is a palette-only command, which is a state the
     // registry already has a word for.
+    //
+    // **Titled by the noun, with the state as a chip** (§26.4). They were
+    // `${overlays[key] ? 'Hide' : 'Show'} label`, which made the shortcuts
+    // dialog — a reference card, printed from this same list — read "N Hide
+    // track text · U Show name column · D Show dividers": ten rows whose verb
+    // records what the app happened to be doing when the dialog was opened, so
+    // a reader looking for "the labels key" scans for two words and one looking
+    // for *Show crosshair* does not find it at all. The noun is the same row
+    // whichever way it is set, and `Command.state` says which way that is.
     for (const key of Object.keys(PLOT_OPTION_LABELS) as Array<keyof typeof PLOT_OPTION_LABELS>) {
+      const { label } = PLOT_OPTION_LABELS[key]
       list.push({
         id: `overlay-${key}`,
         group: 'View',
-        title: `${overlays[key] ? 'Hide' : 'Show'} ${PLOT_OPTION_LABELS[key].label}`,
+        title: label.charAt(0).toUpperCase() + label.slice(1),
         hint: PLOT_OPTION_LABELS[key].hint,
+        state: chipOf(overlays[key]),
         ...(PLOT_OPTION_KEYS[key] === undefined ? {} : { keys: PLOT_OPTION_KEYS[key] }),
         run: () => void togglePlotOption(key),
       })
@@ -2026,84 +2131,112 @@ export class App implements SessionHost {
       {
         id: 'refine-on-zoom',
         group: 'View',
-        title: refineEnabled()
-          ? 'Stop reading finer data as you zoom'
-          : 'Read finer data as you zoom',
-        hint:
-          'On, zooming past what the block in hand can show reads the window again at a finer ' +
-          'grid — one bounded read, the map held still while it happens, and never below the ' +
-          'file’s own bins. Off is the default and the older behaviour: one read per view, and a ' +
-          'zoom that magnifies it. The same switch is the first button on a map’s picture row.',
+        title: 'Refine on zoom',
+        // One line, and it no longer sends the reader to a button that is not
+        // there: `MatrixPanel`'s `OFFER_REFINE` is false, because refinement is
+        // one preference across a whole deck rather than a property of one
+        // map, so the picture row holds the turn and the baseline and this is a
+        // palette command only (§2).
+        hint: 'Zooming past the block in hand reads the window again at a finer grid.',
+        state: chipOf(refineEnabled()),
         run: () => void toggleRefine(),
       },
       {
         id: 'fold-sidebar',
         group: 'View',
-        title: 'Fold or show the General panel',
+        title: 'General panel',
+        hint: 'A reference card about the open file: what it is, its genome, its metadata.',
         keys: GENERAL_PANEL.keys,
         enabled: file,
+        state: chipOf(!this.generalPanel.isCollapsed),
         run: () => this.generalPanel.toggle.click(),
       },
       {
         id: 'fold-files',
         group: 'View',
-        title: 'Fold or show the Files panel',
-        hint: 'The folders you have connected, and what is in them.',
+        title: 'Files panel',
+        // Gated like its four siblings, which it was not. The argument for
+        // leaving it live — that its own *connect a folder* was the one door to
+        // one, so the column had to be reachable before anything was open — has
+        // moved out of this column: the landing page offers the four places
+        // itself and §20.4 now says the column exists exactly when a folder is
+        // connected. Which makes `f` with none connected the very thing the
+        // Annotations gate exists to prevent: a key that folds an invisible
+        // column, and so appears to do nothing.
+        hint:
+          connectedFolders().length > 0
+            ? 'The folders you have connected, and what is in them.'
+            : 'Connect a folder first — there is no Files column until you have one.',
         keys: FILES_PANEL.keys,
-        // No `enabled` gate, unlike its four siblings. They describe the open
-        // file and have nothing to show without one; this describes the places
-        // you connected, which are there before anything is open and are most
-        // useful exactly then.
+        enabled: connectedFolders().length > 0,
+        state: chipOf(!this.filesPanel.isCollapsed),
         run: () => this.filesPanel.toggle.click(),
       },
       {
         id: 'fold-annotations',
         group: 'View',
-        title: 'Fold or show the Annotations panel',
-        hint: 'A metacool carries no annotations (§8.5), so it has no panel to fold.',
+        // The hint is computed from the state, because it is the *reason* and
+        // the reason has three branches. As a constant it said "A metacool
+        // carries no annotations, so it has no panel to fold" — on a landing
+        // page with no file at all, where the metacool is not the reader's, and
+        // beside an enabled command on a `.cool` whose Annotations column is on
+        // screen while the sentence says it has none.
+        title: 'Annotations panel',
+        hint: !file
+          ? 'Open a file first.'
+          : isMetacool
+            ? 'Absent on a metacool, which carries no annotations.'
+            : 'The tracks, structures, marks and bookmarks on this file.',
         keys: ANNOTATION_PANEL.keys,
         // The same gate the button is under: it is `hidden` on a file with a
         // genome layer, and a shortcut that folds an invisible column is a key
         // that appears to do nothing.
         enabled: file && !isMetacool,
+        state: chipOf(!this.annotationsPanel.isCollapsed),
         run: () => this.annotationsPanel.toggle.click(),
       },
       {
         id: 'fold-aesthetics',
         group: 'View',
-        title: 'Fold or show the Aesthetics panel',
-        hint: 'A table view offers none, so there is nothing to fold there.',
+        title: 'Aesthetics panel',
+        hint: file ? 'How the picture is drawn: colours, scales, overlays, export.' : 'Open a file first.',
         keys: AESTHETICS_PANEL.keys,
         enabled: file,
+        state: chipOf(!this.aestheticsPanel.isCollapsed),
         run: () => this.aestheticsPanel.toggle.click(),
       },
       {
         id: 'fold-analysis',
         group: 'View',
-        title: 'Fold or show the Analysis panel',
+        title: 'Analysis panel',
         hint: 'What can be computed from this file, as against what is drawn on it.',
         keys: ANALYSIS_PANEL.keys,
         enabled: file,
+        state: chipOf(!this.analysisPanel.isCollapsed),
         run: () => this.analysisPanel.toggle.click(),
       },
       {
         id: 'console',
         group: 'View',
-        title: 'Open or close the console',
-        hint:
-          'Every run, open and export this window has made, as the commands that repeat them ' +
-          '(§23). Kept for a week, in this browser.',
+        title: 'Console',
+        hint: 'Every run, open and export this window has made, as commands that repeat them.',
         keys: KEYS.console,
         // Absent in an embed, where there is no panel to open — the command
         // list is the shortcuts dialog and the palette, and both must describe
         // what this window actually answers.
         enabled: this.consolePanel !== null,
+        ...(this.consolePanel === null ? {} : { state: chipOf(this.consolePanel.isOpen) }),
         run: () => this.consolePanel?.toggle.click(),
       },
       {
         id: 'theme',
         group: 'View',
-        title: 'Cycle the theme: system, light, dark',
+        // Not "system, light, dark" any more: the cycle is ordered against the
+        // machine's own scheme, so on a light OS it is system, dark, light
+        // (`ui/ThemeToggle.ts` argues why). The row names the control and the
+        // button's own tooltip says what the next press will do.
+        title: 'Cycle the theme',
+        hint: 'System follows the machine; every press changes what is on screen.',
         keys: KEYS.theme,
         run: () => this.theme.el.click(),
       },
@@ -2122,18 +2255,15 @@ export class App implements SessionHost {
       {
         id: 'share',
         group: 'File',
-        title: 'Share this session as a link',
+        title: 'Share this tab as a link',
         run: () => this.openShareDialog(),
-        enabled: this.current?.exportConfig() !== null,
+        enabled: this.canShare,
       },
       {
         id: 'stored-data',
         group: 'Help',
         title: 'What this browser is remembering',
-        hint:
-          'Everything kept on this computer — which files were open, how they were set up, and ' +
-          'any bucket keys — with a button that clears all of it. No file contents are ever ' +
-          'among it.',
+        hint: 'Everything this computer has kept, with a button that clears all of it.',
         run: () => void this.openStoredDataDialog(),
       },
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },

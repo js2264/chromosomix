@@ -63,6 +63,7 @@ import {
 import { COUNT_SCORE, scoreChoices, scoreFor } from '../ui/scores'
 import type { ScaleState } from '../ui/GenomeView'
 import { el, fmt } from '../ui/dom'
+import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
 import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
@@ -691,11 +692,11 @@ export class MapPanel {
       // honesty, and not one this panel has. Where there is no number the
       // sentence simply does not offer one.
       this.sayResolution(
-        `${here === undefined ? 'staying where it is' : `staying at ${fmt.bp(here)}`}: ` +
-          `this file has no ${fmt.bp(bp)} level` +
+        `${here === undefined ? 'staying where it is' : `staying at ${resolutionLabel(here)}`}: ` +
+          `this file has no ${resolutionLabel(bp)} level` +
           (rungs.length === 0
             ? ', and carries one resolution only.'
-            : ` — it has ${rungs.map((rung) => fmt.bp(rung.binsize)).join(', ')}.`),
+            : ` — it has ${rungs.map((rung) => resolutionLabel(rung.binsize)).join(', ')}.`),
       )
       return false
     }
@@ -1409,7 +1410,7 @@ export class MapPanel {
     this.panel.setData(result, label)
     this.armRefine(result, info, state)
     this.nameEl.title =
-      `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
+      `${this.uri} — ${resolutionLabel(info.binsize ?? 0)} bins, ` +
       `${fmt.int(result.nrows)}×${fmt.int(result.ncols)} cells` +
       (state.view === 'whole' ? ' (whole file)' : '')
   }
@@ -1453,7 +1454,7 @@ export class MapPanel {
       // line every other refusal here goes in.
       onInstalled: (block) => {
         this.nameEl.title =
-          `${this.uri} — ${fmt.int(info.binsize ?? 0)} bp bins, ` +
+          `${this.uri} — ${resolutionLabel(info.binsize ?? 0)} bins, ` +
           `${fmt.int(block.nrows)}×${fmt.int(block.ncols)} cells`
       },
       onError: (err) => this.say(err instanceof Error ? err.message : String(err)),

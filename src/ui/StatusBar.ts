@@ -30,7 +30,11 @@ export interface StatusBarProps {
    * A function rather than a client, because there is one status bar and one
    * reader *per open session*: the numbers on the bar are the active tab's, and
    * they change when the tab does. `null` is a session that has not opened
-   * anything — the bar then has nothing to count and says so.
+   * anything, and the two items that are about a file — the byte counter and
+   * the validation check — are then **absent** rather than dashed: an em dash
+   * that never fills in reads as a number that failed to load, which is the
+   * argument the memory item has always applied to itself, and a check button
+   * that silently does nothing is what §8.5 forbids outright.
    */
   client(): ReaderClient | null
 }
@@ -40,6 +44,8 @@ export class StatusBar {
 
   private readonly readsSummary: HTMLElement
   private readonly readsDetail: HTMLElement
+  /** The whole `read` item, held so a tab with no file can do without it. */
+  private readonly readsItem: HTMLElement
   private readonly validationLabel: HTMLElement
   private readonly validationDetail: HTMLElement
   private readonly validationItem: HTMLElement
@@ -68,18 +74,24 @@ export class StatusBar {
 
   constructor(private readonly props: StatusBarProps) {
     this.readsSummary = el('span', { class: 'status-value', text: '—' })
-    this.readsDetail = el('div', { class: 'status-pop kv' })
+    this.readsDetail = pop('status-read-pop', 'kv')
+    this.readsItem = item('read', this.readsSummary, this.readsDetail)
 
-    this.validationLabel = el('span', { class: 'status-value', text: 'not run' })
-    this.validationDetail = el('div', { class: 'status-pop' })
+    this.validationLabel = el('span', { class: 'status-value', text: NEVER_RUN })
+    this.validationDetail = pop('status-validation-pop')
+    // **No `title`.** This was the one item on the bar carrying a native
+    // tooltip, and it said something its own hover panel did not: the panel
+    // that opens on the pointer described the light checks and stopped, while
+    // the invitation to run the deep scan waited a second and a half behind it
+    // in a second surface. Two hover surfaces on one control, disagreeing about
+    // what the control does. One panel, and the offer is in it (§6.3 keeps the
+    // deep scan an explicit action rather than something the bar advertises).
     this.validationItem = el(
       'button',
       {
         class: 'status-item status-action',
         type: 'button',
-        title:
-          'Light checks ran at open. Click to run the deep scan — every pixel, ' +
-          'exactly as `metacooler check --deep` does. Cheap locally, expensive over the network.',
+        attrs: { 'aria-describedby': 'status-validation-pop' },
       },
       el('span', { class: 'status-key', text: 'validation' }),
       this.validationLabel,
@@ -96,16 +108,10 @@ export class StatusBar {
     })
 
     this.memoryValue = el('span', { class: 'status-value', text: '—' })
-    this.memoryDetail = el('div', { class: 'status-pop' })
-    this.memoryItem = el(
-      'div',
-      { class: 'status-item status-usage' },
-      el('span', { class: 'status-key', text: 'memory' }),
-      this.memoryValue,
-      this.memoryDetail,
-    )
+    this.memoryDetail = pop('status-memory-pop')
+    this.memoryItem = item('memory', this.memoryValue, this.memoryDetail, 'status-usage')
     this.cpuValue = el('span', { class: 'status-value', text: '—' })
-    this.cpuDetail = el('div', { class: 'status-pop' })
+    this.cpuDetail = pop('status-cpu-pop')
 
     this.el = el(
       'footer',
@@ -118,22 +124,10 @@ export class StatusBar {
       // About dialog states it in full — and this is the one surface where it
       // was competing with the instruments for a line that has to stay one line.
       this.coordinates,
-      el(
-        'div',
-        { class: 'status-item status-right' },
-        el('span', { class: 'status-key', text: 'read' }),
-        this.readsSummary,
-        this.readsDetail,
-      ),
+      this.readsItem,
       this.validationItem,
       this.memoryItem,
-      el(
-        'div',
-        { class: 'status-item status-usage' },
-        el('span', { class: 'status-key', text: 'cpu' }),
-        this.cpuValue,
-        this.cpuDetail,
-      ),
+      item('cpu', this.cpuValue, this.cpuDetail, 'status-usage'),
     )
 
     // Once a second: the CPU reading is a three-second average, so faster would
@@ -227,6 +221,8 @@ export class StatusBar {
    */
   refresh(): void {
     const client = this.props.client()
+    this.readsItem.classList.toggle('hidden', client === null)
+    this.validationItem.classList.toggle('hidden', client === null)
     if (client === null) {
       this.reader = null
       this.readsSummary.textContent = '—'
@@ -254,11 +250,14 @@ export class StatusBar {
     this.validation?.cancel()
     this.validation = null
     this.validationItem.classList.remove('ok', 'bad')
-    this.validationLabel.textContent = 'not run'
+    this.validationLabel.textContent = NEVER_RUN
     this.validationDetail.replaceChildren(
       el('p', {
         class: 'hint',
-        text: 'Light checks ran at open: attributes, group presence, table lengths, the /chroms soft link.',
+        text:
+          'Light checks ran at open: attributes, group presence, table lengths, the /chroms ' +
+          'soft link. Click to scan every pixel, as the metacooler check --deep command does — ' +
+          'cheap locally, slow over the network.',
       }),
     )
   }
@@ -292,13 +291,15 @@ export class StatusBar {
       this.validationLabel.textContent = 'cancelled'
       return
     }
-    this.validationLabel.textContent = 'scanning…'
+    // §26.7's word, not a sixth of our own: a thing that can run says *running*
+    // — or the percentage, once there is a total to take one against.
+    this.validationLabel.textContent = 'running'
     this.validationItem.classList.remove('ok', 'bad')
     const task = client.cancellable<'validateDeep'>(
       { kind: 'validateDeep' },
       (done, total) => {
         this.validationLabel.textContent =
-          total === 0 ? 'scanning…' : `${Math.round((done / total) * 100)}% · click to stop`
+          total === 0 ? 'running' : `${Math.round((done / total) * 100)}% · click to stop`
       },
     )
     this.validation = task
@@ -306,7 +307,13 @@ export class StatusBar {
       const result = await task.promise
       this.validation = null
       if (result.ok) this.validationLabel.replaceChildren(icon('check', { size: 14 }))
-      else this.validationLabel.textContent = `${result.problems.length} problem(s)`
+      else {
+        // Spelled, not bracketed: every other count in the app resolves its own
+        // plural, and `3 problem(s)` is form-letter language on a bar whose
+        // other values are clean figures.
+        const n = result.problems.length
+        this.validationLabel.textContent = `${fmt.int(n)} problem${n === 1 ? '' : 's'}`
+      }
       this.validationItem.classList.toggle('ok', result.ok)
       this.validationItem.classList.toggle('bad', !result.ok)
       this.validationDetail.replaceChildren(
@@ -332,6 +339,54 @@ export class StatusBar {
 function keyValue(key: string, value: string): HTMLElement[] {
   return [el('div', { class: 'k', text: key }), el('div', { class: 'v', text: value })]
 }
+
+/**
+ * A hover panel, named so its item can point at it.
+ *
+ * `role="tooltip"` and an `id`, because the rows inside are the whole of what
+ * the item has to say and a reader on a screen reader was told only the
+ * headline: `aria-describedby` on the item is what carries the five counters,
+ * the memory ceiling and the note under them into the accessible description.
+ */
+function pop(id: string, extra?: string): HTMLElement {
+  return el('div', {
+    class: extra === undefined ? 'status-pop' : `status-pop ${extra}`,
+    attrs: { role: 'tooltip', id },
+  })
+}
+
+/**
+ * One instrument on the bar: its word, its value, and the panel it opens.
+ *
+ * **Focusable**, which the three read-only ones were not: they were plain
+ * `div`s, so the `:focus-visible` rule the stylesheet already writes for them
+ * could never fire and the breakdown behind them — the request and byte
+ * counters a reader on a metered bucket is watching — was reachable by pointer
+ * only. `tabindex` rather than `<button>`: pressing them does nothing, and a
+ * button that does nothing is a control that lies. The one item that *is* a
+ * button builds itself, because it has a press to answer and a class that says
+ * how the answer came out.
+ */
+function item(word: string, value: HTMLElement, detail: HTMLElement, extra = ''): HTMLElement {
+  return el(
+    'div',
+    {
+      class: extra === '' ? 'status-item' : `status-item ${extra}`,
+      attrs: { tabindex: '0', 'aria-describedby': detail.id },
+    },
+    el('span', { class: 'status-key', text: word }),
+    value,
+    detail,
+  )
+}
+
+/**
+ * The word for a check that has not been asked for (§26.7).
+ *
+ * *never run*, not *not run*: the second could be read as "was refused", and
+ * the Analysis panel's chips have used the first for the same state all along.
+ */
+const NEVER_RUN = 'never run'
 
 /** How often the usage figures are redrawn. */
 const USAGE_TICK_MS = 1000

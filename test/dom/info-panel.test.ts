@@ -94,7 +94,11 @@ describe('the file card', () => {
     const rows = table(view)
     expect(rows['uri']).toBe('sample.metacool')
     expect(rows['layout']).toBe('metacool')
-    expect(rows['bin size']).toBe('1,000 bp')
+    // The bin size as the crumb above it spells it. The card used to print the
+    // file's raw attribute, `1,000 bp`, which made one number read as three
+    // settings across one screen — `1 kb` in the crumb, `1.0 kb` in the map's
+    // title, `1,000 bp` here (§26.2).
+    expect(rows['bin size']).toBe('1 kb')
     expect(rows['ordering']).toBe('genome-then-length')
     expect(rows['storage mode']).toBe('symmetric-upper')
     expect(rows['format']).toBe('HDF5::Cooler v3')

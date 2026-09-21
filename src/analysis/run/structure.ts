@@ -580,7 +580,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   if (spans !== null && !Array.isArray(spans)) {
     job.note(
       `This file has no sequence called ${spans.missing}, under that spelling or ` +
-        `any this viewer knows of (§5.9). It has ` +
+        `any this viewer knows of. It has ` +
         `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
     )
     return []
@@ -594,7 +594,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   if (job.framing.normalise !== null) {
     job.note(
       `The view is drawn ${job.framing.normalise}-normalised and the model is solved on the counts ` +
-        'underneath: no read can ask for that normalisation (§18.4).',
+        'underneath: no read can ask for that normalisation.',
     )
   }
 

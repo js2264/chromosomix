@@ -342,7 +342,9 @@ export class AnalysisPanelCard {
 
       row.chip.className = chip.tone === '' ? 'analysis-chip' : `analysis-chip ${chip.tone}`
       row.chip.replaceChildren(
-        ...(chip.spinner ? [el('span', { class: 'analysis-spinner' })] : []),
+        ...(chip.spinner
+          ? [el('span', { class: 'analysis-spinner', attrs: { 'aria-hidden': 'true' } })]
+          : []),
         chip.text,
       )
       row.batch.textContent = chip.batch

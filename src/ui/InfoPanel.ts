@@ -66,6 +66,7 @@
 
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
+import { resolutionLabel } from '../units'
 import { cardTitle, icon, iconButton } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
@@ -269,7 +270,7 @@ export class InfoPanel {
       ['uri', info.uri],
       ['layout', info.layout.kind],
       ['source', info.sourceKind === 'local' ? `local file (${fmt.bytes(info.sourceBytes)})` : `remote (${fmt.bytes(info.sourceBytes)})`],
-      ['bin size', info.binsize === null ? '—' : `${fmt.int(info.binsize)} bp`],
+      ['bin size', info.binsize === null ? '—' : resolutionLabel(info.binsize)],
       ['bin type', String(info.info['bin-type'] ?? '—')],
       ['ordering', String(info.info['ordering'] ?? '—')],
       ['storage mode', String(info.info['storage-mode'] ?? '—')],

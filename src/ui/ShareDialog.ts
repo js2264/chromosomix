@@ -89,7 +89,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
       tabindex: '0',
       role: 'textbox',
       'aria-readonly': 'true',
-      'aria-label': 'The link to this session',
+      'aria-label': 'The link to this tab',
     },
     text: 'preparing…',
   })
@@ -215,7 +215,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   }
 
   const modal = new Modal({
-    title: 'Share this session',
+    title: 'Share this tab',
     // The wide panel, because the narrow one is narrower than this body wants to
     // be: the link and its button sit on one row, and in `min(34rem, 100%)` the
     // row wrapped the button under a box already too short to show a useful
@@ -283,7 +283,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
         el('span', {
           class: 'hint',
           text:
-            'This session is over a local file, so it is not offered to a shortener: the ' +
+            'This tab is over a local file, so it is not offered to a shortener: the ' +
             'recipient gets the tracks and the marks and is asked for the file, and sending a ' +
             'filename to a third party would buy nothing.',
         }),

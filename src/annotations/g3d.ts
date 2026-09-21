@@ -44,6 +44,7 @@
 import { FeatureBuilder, type StructureSchema } from './featureset'
 import { forEachRow, isInteger } from './parse'
 import { DETAIL_SEP, type FeatureSet } from './types'
+import { resolutionLabel } from '../units'
 
 /**
  * The detail key a phased file's rows carry, so the §8.16 picker finds the
@@ -413,33 +414,23 @@ export function g3dSummary(set: FeatureSet): string {
   const model = set.model
   const beads = `${count(set.length)} bead${set.length === 1 ? '' : 's'}`
   if (model === undefined) return beads
-  const parts = [beads, spacing(model.width)]
+  const parts = [beads, resolutionLabel(model.width)]
   if (model.haplotypes.length > 1) parts.push(`${model.haplotypes.length} haplotypes`)
   parts.push(`${count(set.contigs.length)} sequence${set.contigs.length === 1 ? '' : 's'}`)
   return parts.join(DETAIL_SEP)
 }
 
 /**
- * A number with its thousands separated, and a base-pair spacing in the unit
- * that reads — `5 kb`, `1.04 Mb`, `250 bp`.
+ * A number with its thousands separated.
  *
- * Written here rather than imported from `ui/dom.ts`, because this module is
- * read in the annotations worker, and a worker that imports the DOM helpers
- * for a number format is a worker that has a bundle it did not ask for.
+ * The spacing beside it used to be written here too, as a private copy of
+ * `resolutionLabel`, because this module is read in the annotations worker and
+ * `ui/dom.ts` would have brought the DOM helpers with it. `src/units.ts`
+ * imports nothing, so the copy is gone and a bead spacing is spelled the way
+ * every other bin size in the app is spelled.
  */
 function count(value: number): string {
   return value.toLocaleString('en-US')
-}
-
-function spacing(bp: number): string {
-  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
-  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
-  return `${count(bp)} bp`
-}
-
-/** Two decimals at most, and none where they would be zeros. */
-function trim(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '')
 }
 
 // ---------------------------------------------------------------------------

@@ -75,10 +75,11 @@ than beside it:
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
 - **it is a preference, and it is off.** The default is the behaviour that keeps this clause
-  absolute: a block read once, and a zoom that magnifies it. Refinement is one press away on the
-  map's own controls — first of the three switches that change *what picture this is*, before the
-  turn and the baseline — because a zoom that reads is a zoom that can wait, and a wait nobody asked
-  for is a surprise rather than a feature.
+  absolute: a block read once, and a zoom that magnifies it. Refinement is a palette command — *Refine
+  on zoom* — rather than a switch on a map's picture row, which holds the turn and the baseline: the
+  preference is one setting for the whole window, and a control on one map of a deck would claim it
+  was that map's. A zoom that reads is a zoom that can wait, and a wait nobody asked for is a surprise
+  rather than a feature.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
@@ -806,6 +807,16 @@ from the modal's own right edge.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+**Every view has a trail, the 1D browser included**, where it reads `genome → Whole genome → IV →
+1,000,001-1,400,000`: a genome opened as tracks has no chromosomes table to go up to, so its root is
+the whole assembly, which is both where a browser opens and the one place above the sequence in
+front of the reader. Without it the row appeared and vanished as the map's eye was pressed, and the
+assembly a reader was looking at was named only on a tab and in a foldable column.
+
+**The last crumb is the window alone**, under the crumb that names the sequence: the heading and the
+locus box below it print the same place, and a row ending `› IV › IV:1,000,001-1,400,000` above two
+more copies of that string is three readings of one fact in three typefaces.
+
 **And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
 whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
 bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
@@ -824,6 +835,11 @@ anywhere, so it sits at the **far end of the bar, past the coordinates**, where 
 picture belong. It spent a release as the second crumb, between the file name and the table, which
 read as *this file, then this resolution, then these chromosomes* and put a control readers change
 constantly at the one end of the row they scroll past on the way to the box they type in.
+
+**A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
+`resolution  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an exception
+to it: a control that cannot keep its promise is absent rather than greyed, and a plain `.cool` is
+the commonest file a lab opens. The slider arrives with the second rung, which is what the `+` makes.
 
 It is a **slider over a row of labelled stops** rather than a dropdown, and the stops say `1 kb`,
 `50 kb`, `1 Mb` rather than `1000`, `50000`, `1000000`. A ladder is an *ordered* thing with a fixed
@@ -856,8 +872,19 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation.
 
+**The reader's word is *tab*.** Every string on screen says tab — *New tab*, *Rename this tab*,
+*Close this tab*, *Share this tab* — because a tab is what is on screen and *session* is a word the
+strip never shows: "Close this session" read as something larger than closing the thing being looked
+at. *Session* stays as the implementation's word, in this document and in the code. The every-tab
+file keeps its own name, said as *Save every tab as a file*, because it genuinely is a different
+thing. No key closes one: ⌘W is the browser's chord for closing the window, and a binding that is
+right about what it does and wrong about what it closes costs a workspace.
+
 Three things are per *window* rather than per session, because they are preferences about this window
-rather than facts about a file: the theme, and the fold and width of each column.
+rather than facts about a file: the theme, and the fold and width of each column. The theme's cycle
+is ordered against the machine's own scheme — from *system* to the opposite of what the OS is doing,
+then to the same as it, then back to following it — so that the first press changes the picture; a
+fixed order spends it on the choice that repaints nothing and reads as a control that does not work.
 
 Two tabs on one file share nothing. The per-session memory is keyed on the session id as well as the
 URI, so a second view of the same map starts with no tracks, no filters and no marks.
@@ -922,7 +949,11 @@ rather than an axis of matrix bins. §8.4's rule is unchanged and is what makes 
 
 Lengths come from whatever named them, in descending order of trust: a `chrom.sizes` declares them, a
 BBI header carries them, and a feature file yields only the furthest coordinate it mentions — which
-is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described.
+is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described. A
+**label**, and once per surface: the Genome card's `lengths` row reads `inferred (rounded up)`, the
+browser's summary line ends ` · lengths inferred (rounded up)`, and the way out of it — drop a
+`chrom.sizes` or a bigWig — is said once, in the card, where the row it corrects is. It was said
+four times on one screen, in sentences, of which the longest was the longest line on the page.
 
 The two shapes of session convert into each other. Dropping a `.cool` on the tracks makes the tab its
 map, tracks and all; closing the map from the File card falls back to a browser on the cooler's own
@@ -1262,7 +1293,10 @@ counts. All O(1).
 
 The full Python `validate()` reads whole `bins` columns, the whole `genome_id` column, both offset
 arrays and three pixel windows. Acceptable on local disk, unacceptable over HTTP. Offered as an
-explicit debug action only.
+explicit debug action only: the status bar says **never run** until it is pressed, and the offer —
+what a press will scan, and what it costs over a network — is in the panel the item opens rather
+than in a second tooltip behind it. The item is absent altogether while no file is open, since there
+is nothing to check and a check button that silently does nothing is what §8.5 forbids.
 
 ### 6.4 Balancing
 
@@ -3439,7 +3473,12 @@ hierarchy that HiGlass has no concept of.
 
 ## 10. Refusals and errors
 
-Every refusal names the file's actual state and the concrete fix.
+Every refusal names the file's actual state and the concrete fix — **and its title names the
+subject**: *Nothing to share*, *Too many tabs*, *That workspace could not be read*. A dialog headed
+the same way for every refusal makes a reader read the paragraph to find out what was declined, and
+read it again later to remember which of them they had seen. Where a refusal can be avoided
+altogether it is: a control that has nothing to act on is unavailable, with the reason in its
+tooltip, rather than live and answering with a dialog (§8.5).
 
 | Condition | Message |
 |---|---|
@@ -3994,8 +4033,14 @@ useful for, so a deck control living there would be missing precisely where it i
 placement is also the plainest statement of §16.2's split: shared controls above the grid, per-panel
 controls on the picture they control.
 
-The grid is inside `.content`, which pins the light palette for its whole subtree, so the maps do not
-change colour in the dark theme and no rule had to be written to keep them from it.
+The grid is inside `.content`, which pins the light palette **while it holds a picture** — a deck's
+grid, a map's heatmap or a browser's stage — so the maps do not change colour in the dark theme and
+no rule had to be written to keep them from it. The furniture framing a picture is pinned with it,
+since a locus box in dark chrome beside a light map belongs to neither. The pin used to be on
+`.content` itself, and every view mounts there: a reader who chose dark got the landing page, the
+Genomes and Chromosomes tables, the whole-genome gate and the error view as a white sheet inside a
+dark frame. A drop zone and a table of chromosome lengths are not figures that will be exported, and
+the argument for pinning was only ever about the ones that are.
 
 ### 16.6 Links
 
@@ -6304,11 +6349,15 @@ can offer. A same-origin frame is deliberately not caught: the pickers work ther
 Not a smaller header: the breadcrumb row with three things added, and what is on it is what a figure
 in somebody else's page owes its reader.
 
-**The mark and the name**, left. In a window the brand is the way home — back to the picker, which is
-one click away and catastrophic in a frame, since it would throw away the figure the page named with
-no back button to return by (§21.2). So it is a link *out*: this same view in the full application, in
-a new tab, with `embed` dropped from the query string and the fragment carried across untouched. Its
-address is rewritten on every navigation, so copying it copies where the reader actually is.
+**The mark and the name**, left. In a window the brand is the way home — the picker, **in a new tab**,
+so the tab in front keeps its file, its tracks and its deck: every page has taught a reader that the
+logo is safe to press, and a dropped local file cannot be re-opened without another gesture (§11),
+which is the same reason the file crumb stopped navigating to the picker. An empty tab *is* the
+picker, so a tab with nothing in it goes straight there rather than opening a second empty one. In a
+frame there is no new tab to open and nothing may be thrown away either (§21.2), so it is a link
+*out*: this same view in the full application, in a new tab, with `embed` dropped from the query
+string and the fragment carried across untouched. Its address is rewritten on every navigation, so
+copying it copies where the reader actually is.
 
 **The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
 session fills in a window, with its own frame taken off so the row reads as one bar.
@@ -7797,10 +7846,11 @@ Ensembl and every paper print, and a viewer that showed a locus a base off from 
 **The law is the round trip.** A locus box shows the display form and accepts the typed form, so
 pressing Enter on a value the box is already showing must not move the view by a base.
 `typedLocusToRegion(regionLabel(r)) === r` for every region with coordinates, and
-`test/unit/locus-display.test.ts` holds it. The four helpers in `genome/assembly.ts` are the only
+`test/unit/locus-display.test.ts` holds it. The helpers in `genome/assembly.ts` are the only
 place any of this is written: `formatLocus` for a window, `formatPosition` for a single base or bin
-start, `regionLabel` for a state string, `typedLocusToRegion` for what was typed. A view that formats
-a coordinate itself is a view that will drift.
+start, `regionLabel` for a state string, `windowLabel` for the one crumb that hangs under the name it
+would otherwise repeat, `typedLocusToRegion` for what was typed. A view that formats a coordinate
+itself is a view that will drift.
 
 The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
 and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name and `*`

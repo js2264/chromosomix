@@ -405,6 +405,27 @@ export function regionLabel(region: string): string {
 }
 
 /**
+ * The window of a region string, without the sequence it is on:
+ * `1,000,001-1,400,000`.
+ *
+ * {@link regionLabel} minus the name, for the one surface that has already said
+ * the name: the breadcrumb's last crumb hangs under the sequence's own crumb,
+ * and printing the whole locus there put `IV` twice in one row and the same
+ * string three times on one screen (§5.5). Nowhere else may use it — a
+ * coordinate with no sequence on it is not a locus, and it is legible only
+ * directly under the crumb that names one. A region with no coordinates, or one
+ * the tokenizer refuses, falls back to {@link regionLabel} so the crumb still
+ * says something true.
+ */
+export function windowLabel(region: string): string {
+  const parsed = splitRegion(region)
+  if (parsed === null) return regionLabel(region)
+  const [, start, end] = parsed
+  if (start === null || end === null) return regionLabel(region)
+  return `${(start + 1).toLocaleString('en-US')}-${end.toLocaleString('en-US')}`
+}
+
+/**
  * What a reader typed into a map or table locus box, as the region string the
  * parser takes.
  *
