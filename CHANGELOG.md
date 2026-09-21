@@ -59,6 +59,42 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **The map's heading and its locus box print the locus a reader reads (§5.4).** They showed the
+  region string the state carries — `IV:1000000-1400000` — directly above a summary line reading
+  `IV:1,000,001-1,399,500`, so one screen named one window at two starts a base apart and copying a
+  coordinate from the line into the box moved the picture by a base. Both now print
+  `IV:1,000,001-1,400,000`, as the 1D browser's box and the tracks cell's already did, and the box
+  converts what you type on the way in — so pressing Enter on what it is showing changes nothing, and
+  a locus pasted from IGV, UCSC or a methods section lands on the bases it names. The box also asks
+  for what it takes in the one phrasing every locus box uses, and carries its own `go`.
+
+- **The deck's bar says what its controls do (§16.5).** *fix all scales* and *fix all resolutions*
+  read as repairs to a Juicebox or HiGlass user and are now **match all scales** / **match all
+  resolutions**, the verb this app already uses for the one-off act of putting one picture on
+  another's footing; their tooltips are a sentence each instead of a paragraph ending in a spec
+  citation. *add a map…* is **add a cell…**, because the row it opens also holds the 3D structure and
+  a stack of tracks — and the tracks cell had no other road on screen, hidden behind a button
+  promising a map. In that row, *3D structure* and *tracks* lead with the verb their neighbours do:
+  **add a 3D structure**, which now carries its reason once the deck has one, and **add a tracks
+  cell**. The × that closed the whole deck is a bordered **close deck**: it was the same bare mark a
+  cell's own close is, a finger's width above it, and one of the two takes every companion map and
+  the tracks loaded for them.
+
+- **The first map's chain moved from the bar to the first map's own heading (§16.5).** Taking one
+  cell off the shared navigation is a statement about that cell, and every companion's chain has
+  always sat on it; the lead's sat in the bar, where the same glyph at two heights read as a lock
+  over the whole deck. The three chains — the lead's, a map's and the tracks cell's — now say the
+  same two sentences and are drawn the same way, lit while a cell is following and plain while it is
+  not, where a cell moving on its own used to have its chain greyed like a control you cannot press.
+
+- **A deck with an empty cell beside a structure counted a map it had no room for.** The line read
+  `1 of 3 maps` over a deck of a map, a 3D structure and one vacancy — the `of` now counts only the
+  cells that can hold a map. The `N across` picker says *cells* rather than *maps*, since it lays out
+  the structure and tracks cells too, and no longer prints the backticks it was written with.
+
+- **The `+` edges say what the cell they open can hold.** Beside the 1D browser they promised
+  "drop a cooler on one", which is the one thing a deck with no map to follow has to refuse.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

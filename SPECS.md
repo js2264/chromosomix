@@ -732,12 +732,26 @@ Within a genome, a `contig` or `contig:start-end` selection. Range parsing mirro
 
 1. label is a **genome name** → whole-genome extent; a coordinate suffix on a genome name is an
    **error**, not silently ignored
-2. otherwise a **contig**, optionally `contig:start-end` (**0-based, half-open** — cooler semantics,
-   verified against `cooler.util.parse_region`, not the docstrings)
+2. otherwise a **contig**, optionally `contig:start-end` — the region *string* is cooler's
+   (**0-based, half-open**, verified against `cooler.util.parse_region`, not the docstrings), and it
+   is what the state, the hash and `metacooler show --range` carry
 3. neither → error listing available genomes and contigs, truncated to ~20 of each
 
 Genome and contig namespaces can collide; genome wins, as in Python. The UI labels which kind a
 search matched.
+
+**What a reader reads and types is the display form** (§26.1). The heading, the locus box's value
+and the zoom steps' tooltips print `formatLocus` of that region string — `IV:1,000,001-1,400,000`,
+1-based inclusive with grouped digits, which is what IGV, UCSC, samtools and every paper print — and
+the box reads what was typed back through `typedLocusToRegion`, accepting every spelling the
+tokenizer takes plus an en dash and Ensembl's `..`. All three used to print the region string
+itself, so the heading and the block summary immediately under it named one window at two starts a
+base apart, and a coordinate copied out of one and into the other moved the picture by a base. The
+conversion sits at the box rather than on the reader: pressing Enter on the value the box is already
+showing must change nothing, which is the round trip §26.1 states as a law. The box's example is
+`locusPlaceholder`'s, like every other locus box (§26.6), written from this view's own noun —
+`contig:1,000-20,000` — because a coordinate suffix on a genome name is an error here and the name
+this view is of may be a genome's.
 
 **Zoom is four buttons beside the box**, because what they change is the coordinate the box holds.
 The scroll wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller —
@@ -2180,7 +2194,9 @@ and one drawn only inside the track would say the band stops where the track doe
 **Every one of these gestures copies what it framed.** Shift-drag writes `chrIV:500001-510000` — no
 thousands separators, a plain hyphen, 1-based inclusive, which is the difference between a string
 that pastes into samtools, bedtools, IGV and this app's own locus boxes and one that only looks
-right. The app's *display* format uses an en dash and grouped digits, and that one is for reading.
+right. The app's *display* format is the same 1-based inclusive locus with its digits grouped —
+`chrIV:500,001-510,000` — and that one is for reading; the hyphen is the same, since a spaced en dash
+is this app's mark for a range of *values* rather than for a locus (§26.1).
 Option-drag, which selects a box, writes both axes in the order this app always names them —
 `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what that stretch would
 produce on its own, separated by a character no coordinate grammar uses. In the browser a drag
@@ -3682,7 +3698,7 @@ session with companions costs the session it would have been, plus the companion
 | Pan and zoom | yes (§16.3) | opt out |
 | Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
 | Transform and colormap | seeded from the lead | yes |
-| `vmin` / `vmax` | opt in | yes |
+| `vmin` / `vmax` | one press (§16.5) | yes |
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
 
@@ -3743,8 +3759,11 @@ The clip is still the panel's own from then on. `vmax` is a number of contacts, 
 different depths do not have the same one — one clip across a deck draws the shallower file as an
 empty rectangle. This is §5.7's argument reached from the other side: there, one grid forces one
 scale and the second file is rescaled onto it with **match depth**; here, two grids allow two scales,
-and the reader opts *in* to sharing with **one scale**, off by default because it is the stronger
-claim.
+and a reader who knows the libraries are comparable presses **match all scales**, which copies the
+starred map's clip onto every panel once (§16.5). A press rather than a setting, because a setting
+could not keep its promise: left on, every later nudge of any panel's clip either had to be undone
+or left the deck claiming a shared scale it no longer had. After the press each clip is honestly its
+panel's own again, which is the stronger claim made only where it is true.
 
 ### 16.3 The navigation lock
 
@@ -3826,7 +3845,7 @@ The panels are a CSS grid of equal columns, as many across as the reader asked f
 edge (§16.9) or with the picker in the deck's bar. Equal always: a comparison whose halves are
 different sizes is one the eye has to correct for.
 
-**The session's heading leaves the first cell.** The view's title, its locus box, its back link and
+**The session's heading leaves the first cell.** The view's title, its locus box, its zoom steps and
 its block summary answer *what am I looking at*, which is one question however many pictures are on
 screen — so in a deck they are hoisted above the grid and cell 0 holds the map and its file name,
 exactly as every other cell does. Left inside, they made the first cell a head taller than the
@@ -3852,17 +3871,34 @@ was three presses, each shuffling everything in between. The lead has a name lik
 and **no grip** — it is the session's own view re-parented into cell 0, and which file a session is
 of is not a thing that should change by dragging.
 
-The deck's bar holds only what is shared: the master chain, one scale for all, how many across, and
-the whole deck as one figure — saved, or copied to the clipboard, which is what `⌘C` reaches while a
-deck is on. Adding a map is the `+` on an edge and rearranging is the grip, so neither is a button
-here — a bar that repeats what the pictures already offer is a second place to look for the same
-thing.
+**Every cell's chain sits in its own heading, the lead's included.** Taking a cell off the shared
+navigation (§16.3) is a statement about that cell, so the control for it belongs on it, beside the
+star. The lead's used to be in the bar, which put one glyph at two heights meaning the same
+per-cell thing — and the one in the bar, among controls that act on every cell, read as a lock over
+the whole deck rather than as the first map's own. It is drawn like every other toggle in the
+application: lit while the cell is following, plain while it is not, and dimmed never (§26.3).
+
+The deck's bar holds what is shared, in the order the work is done: **add a cell…**, which opens the
+row that takes a file, a published URL, the session's 3D structure or a stack of tracks (§16.11);
+**match all scales** and **match all resolutions**, two presses that each copy the starred map's
+clip or bin size onto every panel once; how many across; and the whole deck as one figure — saved,
+or copied to the clipboard, which is what `⌘C` reaches while a deck is on.
+
+Rearranging is the grip and is not a button here. **Adding is**, and that is the one thing the bar
+repeats: a `+` on an edge draws an *empty* cell for something to be dropped on, and a published
+cooler has nothing to drop — the URL box is the only road it can take (§11) — while the tracks cell
+has no other road on screen at all. The toggle is named for what the row opens, a *cell*, rather
+than for the map that is only one of the four things in it.
 
 It is **read from the left**, in one run, with exactly one control across the gap at the far right:
-the × that closes the deck. Everything else in the bar adjusts a deck that is staying, and a
-destructive control in among them is one a hand reaches by accident; a window's close has been at
-that end for thirty years. What it closes is every companion **and every track that was only there
-for them** — a bigWig dropped on a companion's edge is an import into the session's one track list,
+**close deck**, a bordered word like every other control in the bar (§5.4). Everything else in the
+bar adjusts a deck that is staying, and a destructive control in among them is one a hand reaches by
+accident; a window's close has been at that end for thirty years. It was the same bare × a cell's
+own close is, on the argument that the two would read as one gesture at two scales — and what they
+read as is two identical marks a finger's width apart, one taking a cell and the other taking every
+companion and the tracks loaded for them, which is the accidental reach this placement exists to
+prevent. What it closes is every companion **and every track that was only there for them** — a
+bigWig dropped on a companion's edge is an import into the session's one track list,
 so closing the maps it was drawn on would otherwise leave it loaded, invisible, and holding a row
 that says it is drawn nowhere. A track that is also on the first map is being read against a
 picture that is staying, so it keeps its lane there and loses only the companions'. The first map is
@@ -3915,9 +3951,9 @@ workers on the way past a table. Same file **by path**, so changing the resoluti
 and opening a different file does not. The carrying is the session's and not the store's — the
 address bar is obeyed exactly as written, or a pasted link would show a deck nobody sent.
 
-Nothing else is in the hash. The lock, the drawn column count and "one scale" live in the
-per-file session memory (§8.6) beside the table filters, on the same grounds: the hash has never
-carried a pan or a zoom, so there is nothing there for a lock to be consistent with, and how many
+Nothing else is in the hash. The lock and the drawn column count live in the per-file session
+memory (§8.6) beside the table filters, on the same grounds: the hash has never carried a pan or a
+zoom, so there is nothing there for a lock to be consistent with, and how many
 columns the grid has is furniture in the sense the width of a side panel is. Which cells are empty is
 *not* furniture and is in the hash, because it is part of the list of maps rather than part of how
 they are arranged — a deck of three with a gap in the middle is a different deck from a deck of
@@ -3967,7 +4003,8 @@ A `+` down the right-hand edge of the map, and another along the bottom. Pressin
 the first of it and every other cell standing empty as a drop target. The empty cells are filled in
 any order, from a drop, a file chooser or a URL, or never.
 
-This is the feature's only entry point that a reader can *find*. Before it, the first companion was
+This is the first entry point a reader can *find*, and until there is a deck it is the only one —
+once there is, its bar offers *add a cell…* beside it (§16.5). Before either, the first companion was
 reachable only through the command palette, so nothing on screen said several maps side by side was
 a thing this viewer did — and the one gesture a reader would try, dropping a second cooler on the
 map, means *load a track* (§8.3).
@@ -3986,11 +4023,12 @@ that has already been placed. A ragged last row, which is what closing a map out
 leaves, is squared up by the next press for the same reason: the holes are drop targets and the
 rectangle is the shape that was drawn.
 
-The column count a `+` sets is remembered per file beside the layout presets (§8.6) and **overrides
-them**. The two answer different questions — a preset arranges however many maps are here, a drawn
-count says what shape the deck is — and a deck that reflowed into a row the moment a map was closed
-would not be an arrangement at all. Exactly one of the two is in force, so a lit preset never
-disagrees with the grid.
+The column count a `+` sets is remembered per file (§8.6), and the bar's **N across** picker is the
+other way to set it. The two write the same number, so the grid and the picker cannot disagree.
+There are no layout presets to override any more: a row of lit presets arranged however many maps
+happened to be open, which is not a shape a reader states, and a deck that reflowed into a row the
+moment a map was closed was not an arrangement at all. The picker is the honest replacement, and it
+is also the only way a deck that arrived in a link can be reshaped — a `+` only ever grows one.
 
 **An empty cell is a real cell.** It takes a slot in `maps`, travels through a link as `~`, counts
 towards the six-panel ceiling, and can be moved and closed like any other. It does **not** count
@@ -4060,6 +4098,12 @@ adopt the view, be told the lead's window as loci, remeasure, repaint, export a 
 destroyed. Everything the deck says to a *map* by name — a lock member, a lane floor, a bin size,
 a colour scale, the star — it goes on saying to the maps only. A cell holds no file, so it takes no
 share of the read budget (§16.7) and is not an empty card either; the bar counts it as neither.
+
+Both are opened from the deck's add row — *add a 3D structure*, which is greyed with its reason in
+its own tooltip once the deck has one (§18.1), and *add a tracks cell*. Each leads with a verb, like
+the rest of that row: labelled `3D structure` and `tracks`, as they were, two nouns at the end of a
+row opened by a button saying *add* read as kinds of thing the URL box takes rather than as two more
+cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
 maps and the `~` of a vacancy are. A deck holds one structure cell — a second `3d` is dropped on

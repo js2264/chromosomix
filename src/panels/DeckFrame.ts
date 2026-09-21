@@ -43,18 +43,52 @@ export interface DeckFrameProps {
   onGrow(direction: GrowDirection, picked?: PickedFile): void
 }
 
+/** What the cells an edge opens may hold, which is what its note is worded from. */
+export type DeckHolds = 'maps' | 'cells'
+
 /**
  * The tooltip each edge carries, which is also the whole of the feature's
  * documentation for a reader who never opens a changelog.
+ *
+ * Worded from **what the deck this edge would grow can hold**, because one
+ * wording could not be true of both. It said *drop a cooler on one* wherever it
+ * appeared, and beside the 1D browser that invites the one act such a deck
+ * refuses (§25 stage D): its cells are a structure and stacks of tracks, and a
+ * map there opens as a session of its own. The frame the session puts round a
+ * view before there is a deck does not know which it will be, so it names
+ * neither kind and says the half that is true either way.
+ *
+ * Two sentences at most, and no section numbers: a note read off the end of a
+ * cursor is read in a second (§26.4).
  */
-const NOTES: Record<GrowDirection, string> = {
-  beside:
-    'Open a cell beside this map. The maps stay where they are and a column of empty cards ' +
-    'appears next to them — drop a cooler on one, or drop a file here, to fill it. Every map in ' +
-    'a deck shows the same region and moves with the others (§16).',
-  below:
-    'Open a row of cells below these maps. Same navigation, same region, one row further down — ' +
-    'which is the arrangement for a second condition rather than a second sample.',
+function notes(holds: DeckHolds | undefined): Record<GrowDirection, string> {
+  if (holds === 'maps') {
+    return {
+      beside:
+        'Open a cell beside these maps — drop a cooler on it, or drop a file here, to fill it. ' +
+        'Every map in a deck shows the same region and moves with the others.',
+      below:
+        'Open a row of cells below these maps, which is the arrangement for a second condition ' +
+        'rather than a second sample.',
+    }
+  }
+  if (holds === 'cells') {
+    return {
+      beside:
+        'Open a cell beside these — for the 3D structure, or another stack of tracks. A map opens ' +
+        'as a session of its own.',
+      below:
+        'Open a row of cells below these — for the 3D structure, or another stack of tracks. A ' +
+        'map opens as a session of its own.',
+    }
+  }
+  return {
+    beside:
+      'Open a cell beside this one. What is on screen stays where it is and a card appears ' +
+      'beside it — drop a file on the card, or here, to fill it.',
+    below:
+      'Open a row of cells below this one. Same navigation, same place, one row further down.',
+  }
 }
 
 export class DeckFrame {
@@ -62,6 +96,17 @@ export class DeckFrame {
   private readonly body = el('div', { class: 'deck-frame-body' })
   private readonly edges: Record<GrowDirection, HTMLButtonElement>
   private readonly room: Record<GrowDirection, boolean> = { beside: true, below: true }
+  /**
+   * What the cells these edges open may hold, once somebody knows.
+   *
+   * Pushed by the deck ({@link setHolds}) rather than asked of it, because the
+   * frame outlives every lead it frames: the session hands it a map's view, a
+   * browser's, and a map's again, and a note written once would describe
+   * whichever was first. `undefined` until then — see {@link notes}.
+   */
+  private holds: DeckHolds | undefined
+  /** The refusal {@link setRoom} last gave, so a note can be written again. */
+  private refusal = ''
 
   constructor(private readonly props: DeckFrameProps) {
     this.edges = {
@@ -112,22 +157,44 @@ export class DeckFrame {
    * {@link edge}.
    */
   setRoom(room: Record<GrowDirection, boolean>, note: string): void {
+    this.refusal = note
     for (const direction of ['beside', 'below'] as const) {
-      const edge = this.edges[direction]
       this.room[direction] = room[direction]
-      edge.classList.toggle('is-disabled', !room[direction])
-      edge.title = room[direction] ? NOTES[direction] : note
-      edge.setAttribute('aria-label', edge.title)
-      edge.setAttribute('aria-disabled', String(!room[direction]))
+      this.edges[direction].classList.toggle('is-disabled', !room[direction])
+      this.edges[direction].setAttribute('aria-disabled', String(!room[direction]))
+      this.paintNote(direction)
     }
   }
 
+  /**
+   * What the cells these edges would open can hold (§25 stage D).
+   *
+   * Told on every paint of the deck's bar, which is every render: a session
+   * moves between a map lead and the browser with the deck intact, and the edge
+   * that invites a cooler beside the maps must not go on inviting one beside a
+   * browser that has to refuse it.
+   */
+  setHolds(holds: DeckHolds): void {
+    if (this.holds === holds) return
+    this.holds = holds
+    this.paintNote('beside')
+    this.paintNote('below')
+  }
+
+  /** The note on one edge: what it opens, or why it cannot. */
+  private paintNote(direction: GrowDirection): void {
+    const edge = this.edges[direction]
+    edge.title = this.room[direction] ? notes(this.holds)[direction] : this.refusal
+    edge.setAttribute('aria-label', edge.title)
+  }
+
   private edge(direction: GrowDirection): HTMLButtonElement {
+    const note = notes(undefined)[direction]
     const node = el('button', {
       class: `deck-grow deck-drop is-${direction}`,
-      title: NOTES[direction],
+      title: note,
       type: 'button',
-      attrs: { 'aria-label': NOTES[direction], 'aria-disabled': 'false' },
+      attrs: { 'aria-label': note, 'aria-disabled': 'false' },
     })
     node.append(icon('plus', { size: 16 }))
     node.addEventListener('click', () => {

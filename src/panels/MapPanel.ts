@@ -777,6 +777,17 @@ export class MapPanel {
       : `Run analyses against ${fileLabel(this.uri)} instead`
   }
 
+  /**
+   * Draw and name this map's chain from the state it is in.
+   *
+   * The second sentence is the one every chain in the deck says: *click to move
+   * it on its own*, *click to put it back in step*. The three surfaces that
+   * carry the icon each had their own pair of verbs — press or click, unhook or
+   * move on its own, bring back or put back — which reads as three controls
+   * wearing one glyph (§25.3). The first sentence stays each surface's own,
+   * because what they are doing genuinely differs: a tracks cell follows the
+   * maps *and* they follow it, and the lead drives.
+   */
   syncLock(): void {
     const wanted = this.props.isLocked()
     const refusal = this.props.lockNote()
@@ -786,7 +797,7 @@ export class MapPanel {
       ? 'Following the other maps. Click to move this one on its own.'
       : wanted
         ? (refusal ?? 'Not following the other maps.')
-        : 'Moving on its own. Click to bring it back in step with the others.'
+        : 'Moving on its own. Click to put it back in step with the others.'
     this.lockButton.setAttribute('aria-pressed', String(following))
     this.lockButton.setAttribute('aria-label', this.lockButton.title)
     this.el.classList.toggle('is-unlocked', !following)
@@ -1577,10 +1588,10 @@ export class VacantPanel {
         text: drawn
           ? 'Drop a cooler here, or click to choose. Leaving it empty is fine — the link keeps it.'
           : remembered
-            ? 'This cell held that file and it could not be re-opened (§11). Drop it here again ' +
-              'and the panel comes back where it was.'
-            : 'The link left this cell with no file a page can fetch by name (§11). Drop one ' +
-              'here, or click to choose.',
+            ? 'This cell held that file and it could not be re-opened. Drop it here again and the ' +
+              'panel comes back where it was.'
+            : 'The link left this cell with no file a page can fetch by name. Drop one here, or ' +
+              'click to choose.',
       }),
       input,
     )

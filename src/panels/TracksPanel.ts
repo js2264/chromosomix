@@ -239,9 +239,12 @@ export class TracksPanel implements DeckCell {
   private syncChain(): void {
     this.el.classList.toggle('is-unlocked', !this.linked)
     this.chain.replaceChildren(icon(this.linked ? 'link' : 'unlink', { size: 14 }))
+    // The same second sentence a map's chain says and the lead's: one glyph,
+    // one pair of verbs (§25.3). The first is this cell's own, because it is the
+    // one surface the maps follow back.
     this.chain.title = this.linked
-      ? 'Following the maps, and they follow it. Press to unhook this cell.'
-      : 'Not following the maps. Press to hook this cell to them again.'
+      ? 'Following the maps, and they follow it. Click to move this cell on its own.'
+      : 'Moving on its own. Click to put it back in step with the maps.'
     this.chain.setAttribute('aria-pressed', String(this.linked))
   }
 

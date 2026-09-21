@@ -80,7 +80,7 @@ import {
 } from '../ui/export'
 import { VectorPage } from '../ui/vector'
 import { KEYS, withKey } from '../ui/commands'
-import { iconButton } from '../ui/icons'
+import { icon, iconButton, setPressed } from '../ui/icons'
 import type { PickedFile } from '../browse/folder'
 import { DeckFrame } from './DeckFrame'
 import type { DeckCell } from './cell'
@@ -448,6 +448,19 @@ const NO_MAP_LEAD =
   'This deck is of tracks and a structure beside the browser. A map opens as a session of its ' +
   'own — drop it on the tab strip, or open it first and put the tracks beside it.'
 
+/**
+ * What the structure button promises, and what it says once it cannot.
+ *
+ * A deck holds one structure cell (§16.11), so the button is greyed rather than
+ * hidden once there is one — a road a reader has found and pressed should not
+ * vanish, and §18.1's rule for a greyed control is that it carries the reason
+ * in its own tooltip. Left with the opening sentence on it, it was a promise it
+ * could no longer keep.
+ */
+const ADD_STRUCTURE = 'Open a cell drawing the session’s 3D structure beside the maps'
+
+const ONE_STRUCTURE = 'The deck already holds its one structure cell.'
+
 const NO_ROOM =
   `A deck stops at ${MAX_PANELS} maps, which is a backstop rather than a judgement about how ` +
   'many are useful: every panel is a worker and, for a whole-file view, a block held in memory, ' +
@@ -466,6 +479,22 @@ export class PanelDeck {
   private readonly leadStar = iconButton('star', '', () => this.setStarred(LEAD_MAP), {
     class: 'btn btn-icon deck-star is-on',
     size: 13,
+  })
+  /**
+   * The lead's half of the chain, beside its star — see {@link syncLeadLock}.
+   *
+   * In the lead cell's own heading and not in the deck's bar, where it was: the
+   * chain is a *per-cell* control, the one thing each cell says about itself
+   * (§16.5), and a companion's sits in its own heading. In the bar it was the
+   * same glyph at two heights, and the one among controls that act on every
+   * cell read as a lock over the whole deck rather than as the first map's own.
+   *
+   * Titled and drawn by {@link syncLeadLock}, because what it says depends on
+   * which way it is flipped.
+   */
+  private readonly leadLock = iconButton('link', '', () => this.toggleLeadLock(), {
+    class: 'btn btn-icon deck-lock',
+    size: 14,
   })
   /**
    * Where the lead view's own heading goes while a deck is on.
@@ -626,9 +655,9 @@ export class PanelDeck {
     if (typeof star === 'string' && star !== '') this.starred = star
     this.looks = this.recallLooks()
 
-    this.structureButton = button('3D structure', () => this.add({ kind: 'structure' }), {
+    this.structureButton = button('add a 3D structure', () => this.add({ kind: 'structure' }), {
       class: 'btn deck-add-structure',
-      title: 'Open a cell drawing the session’s 3D structure beside the maps',
+      title: ADD_STRUCTURE,
     })
     this.urlInput = el('input', {
       class: 'input input-tiny deck-url',
@@ -653,11 +682,15 @@ export class PanelDeck {
       // one-shot copy of it from four different rows was four doors to one room.
       //
       // The one cell that is not a file: the session's 3D model, in a cell of
-      // its own (§25). Greyed rather than hidden where the deck has one, since
-      // a deck holds one structure cell and a button that did nothing would
-      // read as a bug.
+      // its own (§25). Greyed rather than hidden where the deck has one, with
+      // the reason on it — see {@link ADD_STRUCTURE}.
       this.structureButton,
-      button('tracks', () => this.add({ kind: 'tracks' }), {
+      // **Both lead with the verb**, like every other button in the row. They
+      // read `3D structure` and `tracks`, which in a row opened by a button
+      // that says *add* parse as two kinds of thing the URL box takes rather
+      // than as two more cells to open — and the tracks cell has no other road
+      // a reader can find (§16.11).
+      button('add a tracks cell', () => this.add({ kind: 'tracks' }), {
         class: 'btn deck-add-tracks',
         title: 'Open a cell of tracks alone beside the maps — put tracks on it from the Tracks card',
       }),
@@ -939,7 +972,7 @@ export class PanelDeck {
   }
 
   /**
-   * Draw every panel on the starred map's clip — the *fix all scales* press.
+   * Draw every panel on the starred map's clip — the *match all scales* press.
    *
    * **An action, and no longer a mode.** It used to be a switch that stayed on,
    * and a switch makes a promise it cannot keep: the moment it is lit, every
@@ -956,7 +989,7 @@ export class PanelDeck {
    * state. Every other panel is told directly: a companion's scale is its own
    * and is in no state to be restored from.
    */
-  private fixScales(): void {
+  private matchScales(): void {
     const look = this.starredLook()
     if (look === null) return
     if (this.starred !== LEAD_MAP) this.props.onLeadScale?.(look)
@@ -975,17 +1008,17 @@ export class PanelDeck {
   }
 
   /**
-   * Read every panel at the starred map's bin size — the *fix all resolutions*
-   * press.
+   * Read every panel at the starred map's bin size — the *match all
+   * resolutions* press.
    *
-   * An action for {@link fixScales}'s reason, and **exact** for
+   * An action for {@link matchScales}'s reason, and **exact** for
    * {@link MapPanel.useBinsize}'s: a file that has not got that level stays
    * where it is and says so under its own map, rather than being moved to the
    * nearest thing and leaving the deck at two resolutions under a button that
    * has just claimed one. The first map is named in the deck's own line instead,
    * since it is the one panel with no frame of its own to be told in.
    */
-  private fixResolutions(): void {
+  private matchResolutions(): void {
     const binsize = this.starredBinsize()
     if (binsize === undefined || !Number.isFinite(binsize) || binsize <= 0) return
     const refused: string[] = []
@@ -1011,7 +1044,7 @@ export class PanelDeck {
    * it: the whole claim a deck makes is that its pictures are of one place and
    * can be read against each other, and half of them at 1 kb beside the rest at
    * 10 kb is a claim it is no longer making. The same rule
-   * {@link fixResolutions} follows — exact, or the panel stays where it is and
+   * {@link matchResolutions} follows — exact, or the panel stays where it is and
    * says why — because *this file has not got that level* is a fact about the
    * file that no amount of good intention changes.
    *
@@ -2261,8 +2294,43 @@ export class PanelDeck {
         ? el('span', { class: 'deck-name', text: name, title })
         : renameBox(name, title, rename),
       this.leadStar,
+      this.leadLock,
     )
     this.paintStars()
+    this.syncLeadLock()
+  }
+
+  /**
+   * The first map's chain: take it off the deck's navigation, or put it back.
+   *
+   * Seeding before the catch-up, so putting the first map back in step over a
+   * deck that has not moved leaves the deck knowing where it is looking rather
+   * than nowhere — which is what the next companion catches up to.
+   */
+  private toggleLeadLock(): void {
+    this.leadLocked = !this.leadLocked
+    if (this.leadLocked) {
+      this.seedFromLead()
+      this.lock.catchUp(LEAD)
+    }
+    this.syncLeadLock()
+  }
+
+  /**
+   * Draw and name the lead's chain from the state it is in.
+   *
+   * The same two sentences a companion's chain says (`MapPanel.syncLock`) and a
+   * tracks cell's: what it is doing now, then what a click does. One icon
+   * saying *press* on one cell and *click* on another, and *unhook* on one and
+   * *move it on its own* on the next, read as three controls (§25.3).
+   */
+  private syncLeadLock(): void {
+    this.leadLock.replaceChildren(icon(this.leadLocked ? 'link' : 'unlink', { size: 14 }))
+    this.leadLock.title = this.leadLocked
+      ? 'The first map is driving the deck. Click to move it on its own.'
+      : 'The first map is moving on its own. Click to put it back in step.'
+    this.leadLock.setAttribute('aria-label', this.leadLock.title)
+    setPressed(this.leadLock, this.leadLocked)
   }
 
   private applyLayout(): void {
@@ -2320,28 +2388,47 @@ export class PanelDeck {
     // the budget divides by, but it is not empty.
     const empty = this.slots.filter((slot) => slot.ref.kind === 'vacant').length
 
-    // The one control that puts a map *into* the deck, and the reason it is
+    // The one control that puts a cell *into* the deck, and the reason it is
     // here: the row of boxes below the bar takes a file or a URL, and until now
     // nothing on screen opened it. It was reachable from the command palette
     // alone — so a reader with a published cooler and a deck in front of them
     // had a drop rectangle for a local file and no way at all to name a remote
-    // one, which is the road §11 exists for. A `+` on an edge draws a *cell*
-    // (§16.9); this opens a map.
+    // one, which is the road §11 exists for. A `+` on an edge draws an *empty*
+    // cell (§16.9); this one opens a cell with something in it.
+    //
+    // **`add a cell…`, not `add a map…`.** The row it opens ends in a structure
+    // cell and a tracks cell, and the tracks cell has no other road on screen —
+    // so the promise of a map was hiding the two cells that are not one, under
+    // the deck's own word for its occupants (§16.11).
     const adding = !this.addRow.classList.contains('hidden')
-    this.structureButton.disabled = this.hasStructure()
-    this.addRow.classList.toggle('is-cells-only', this.props.mapsAllowed?.() === false)
+    const cellsOnly = this.props.mapsAllowed?.() === false
+    const hasStructure = this.hasStructure()
+    this.structureButton.disabled = hasStructure
+    this.structureButton.title = hasStructure ? ONE_STRUCTURE : ADD_STRUCTURE
+    this.addRow.classList.toggle('is-cells-only', cellsOnly)
+    // And the `+` edges say the same thing the row does: what a cell here can
+    // hold. Told on every paint, because a session moves between a map lead and
+    // the browser with the deck intact.
+    this.edges.setHolds(cellsOnly ? 'cells' : 'maps')
     const addMap = button(
-      adding ? 'cancel' : 'add a map…',
+      adding ? 'cancel' : 'add a cell…',
       () => (adding ? this.hideAdd() : this.promptAdd()),
       {
-        class: `btn deck-add-toggle${adding ? ' is-on' : ''}`,
-        title:
-          'Open one more map beside these: choose a file, or paste the URL of a published one. It ' +
-          'lands in the first empty cell if the deck has one, and at the end if it has not.',
+        // **Not lit while the row is open.** Lit means *on* in this application
+        // (§26.3), and a control reading `cancel` drawn like a mode that is on
+        // is the way out of the row wearing the look of a state to leave. It is
+        // bordered, like the row it opens and like the drawer's own cancel.
+        class: 'btn deck-add-toggle',
+        title: adding
+          ? 'Put the row away without opening anything.'
+          : cellsOnly
+            ? 'Open one more cell beside these: the session’s 3D structure, or tracks alone.'
+            : 'Open one more cell beside these: a map from a file or a URL, the session’s 3D ' +
+              'structure, or tracks alone.',
       },
     )
 
-    // **Two actions, not two modes**, and bordered like the chain beside them
+    // **Two actions, not two modes**, and bordered like everything else here
     // because that is what they are: things that *do* something, pressed once
     // and finished, in a bar whose other members are the download and the copy.
     //
@@ -2352,47 +2439,33 @@ export class PanelDeck {
     // press says a thing that stays true — *these are all on that one's numbers
     // now* — and the very next nudge is honestly their own again.
     //
+    // **`match`, not `fix`.** Nothing here is broken, and a reader who has used
+    // Juicebox or HiGlass reads *fix* as repair; `match` is the verb §5.7
+    // already uses for the one-off act of putting a second picture on the
+    // first's footing (*match depth*), which is exactly what these two do.
+    //
     // Both read from the **starred** map, which is the one every other "all of
     // them" in this app is measured from: it is what a task runs against
     // (§18.2), and making it what the scale and the rung come from too is one
     // idea rather than three.
+    //
+    // The tooltips say what the press does and what it does not promise, in one
+    // sentence each: the argument for a press rather than a setting is this
+    // comment's job and the spec's, not the cursor's (§26.4).
     const starName = this.starredName()
-    const share = button('fix all scales', () => this.fixScales(), {
+    const share = button('match all scales', () => this.matchScales(), {
       class: 'btn deck-share',
       title:
-        `Draw every panel on ${starName}’s clip — the starred map — so the same colour is the ` +
-        'same number of contacts across the deck. True only where the libraries are comparable, ' +
-        'which is why it is a press rather than a setting: nudge any panel’s clip afterwards and ' +
-        'that panel is on its own values again (§7.1).',
+        `Use ${starName}’s colour limits on every panel; nudge a panel’s clip afterwards and it ` +
+        'is on its own again.',
     })
 
-    const resolutions = button('fix all resolutions', () => this.fixResolutions(), {
+    const resolutions = button('match all resolutions', () => this.matchResolutions(), {
       class: 'btn deck-resolutions',
       title:
-        `Read every panel at ${starName}’s bin size — the starred map. A file that has no such ` +
-        'level stays where it is and says so under its own map, rather than being moved to the ' +
-        'nearest thing and leaving the deck at two resolutions. Changing the first map’s ' +
-        'resolution does this on its own.',
+        `Read every panel at ${starName}’s bin size; a file with no such level stays where it is ` +
+        'and says so under its own map.',
     })
-
-    const leadLock = iconButton(
-      this.leadLocked ? 'link' : 'unlink',
-      this.leadLocked
-        ? 'The first map is driving the deck. Click to let it move on its own.'
-        : 'The first map is moving on its own. Click to put it back in step.',
-      () => {
-        this.leadLocked = !this.leadLocked
-        if (this.leadLocked) {
-          // Seeded first, so putting the first map back in step over a deck that
-          // has not moved leaves the deck knowing where it is looking rather
-          // than nowhere — which is what the next companion catches up to.
-          this.seedFromLead()
-          this.lock.catchUp(LEAD)
-        }
-        this.paintBar()
-      },
-      { class: 'btn btn-icon deck-lock', pressed: this.leadLocked, size: 14 },
-    )
 
     // The preset row's honest replacement, and the only control here that is
     // about the deck's *shape*. Without it a deck that arrived in a link could
@@ -2402,7 +2475,11 @@ export class PanelDeck {
       columns.appendChild(el('option', { value: String(n), text: `${n} across` }))
     }
     columns.value = String(this.columnsNow())
-    columns.title = 'How many maps in a row. A `+` on an edge opens cells; this arranges them.'
+    // Cells, not maps: this lays out the structure and tracks cells too, and it
+    // offers `3 across` over a deck whose summary says one map. And the mark is
+    // written plain — a backtick in a `title` is drawn as a backtick, which
+    // reads as a typo (§26.4).
+    columns.title = 'How many cells in a row. The + on an edge opens cells; this arranges them.'
     columns.addEventListener('change', () => this.setColumns(Number(columns.value)))
 
     const save = iconButton(
@@ -2431,15 +2508,21 @@ export class PanelDeck {
     // is at the far end of it, which is where a window's close has been for
     // thirty years. What it closes is stated rather than implied — the maps and
     // whatever was loaded only for them ({@link closeDeck}).
-    const close = iconButton(
-      'x',
-      'Close the deck: every companion map, and any track loaded only for them. The first map, ' +
-        'and everything drawn on it, stays exactly as it is.',
-      () => this.closeDeck(),
-      // The same bare mark a panel's own close is, so the two read as one
-      // gesture at two scales: this one takes the row, that one takes a cell.
-      { class: 'btn-close deck-close', size: 14 },
-    )
+    //
+    // **A bordered word, not a bare ×.** It was the same 14 px mark a cell's own
+    // close is, on the argument that the two would read as one gesture at two
+    // scales — and on screen they read as one gesture full stop: two identical
+    // marks a finger's width apart, one taking a cell and the other taking every
+    // companion and the tracks loaded for them, which back navigation does not
+    // bring back. The bar already speaks in words, and §5.4's own rule is that a
+    // control styled unlike its neighbours is one a reader wonders about. So the
+    // bare mark stays the cell's, and the deck's says what it is.
+    const close = button('close deck', () => this.closeDeck(), {
+      class: 'btn deck-close',
+      title:
+        'Every companion map goes, and any track loaded only for them. The first map, and ' +
+        'everything drawn on it, stays.',
+    })
 
     // How many maps is a fact about *what is being looked at*, so it goes in the
     // line that already says that — beside the block's size and the window's
@@ -2451,16 +2534,23 @@ export class PanelDeck {
     // empty until the first block lands, and a line opening with a bullet is a
     // sentence with its first clause missing.
     const said = this.deckNote.previousElementSibling?.textContent ?? ''
-    // Singular where there is one, which is a state a reader does see: pressing
-    // "add a map" builds the deck and shows its bar *before* a file has been
+    // Singular where there is one, which is a state a reader does see: asking
+    // for a map builds the deck and shows its bar *before* a file has been
     // chosen, and "1 maps" over one map is the deck's first sentence.
-    const count = empty === 0 ? `${filled} map${filled === 1 ? '' : 's'}` : `${filled} of ${cells} maps`
+    // `of` however many cells could hold a map, which is not every cell: a
+    // structure or a tracks cell is neither a map nor a vacancy (§16.11), and
+    // counting one in promised a third map to a deck with room for two.
+    const mapCells = filled + empty
+    const count =
+      empty === 0 ? `${filled} map${filled === 1 ? '' : 's'}` : `${filled} of ${mapCells} maps`
     this.deckNote.textContent = `${said === '' ? '' : ' · '}${count}`
+    // Two sentences (§26.4). What the deck's own controls do is on them, and
+    // what a chain does is on the chain — said once, at the control, rather
+    // than a third time in a paragraph hanging off a count.
     this.deckNote.title =
       `A deck of ${this.rows()} × ${this.columnsNow()}` +
       (empty === 0 ? '' : `, ${empty} empty — drop a file on one to open it there`) +
-      '. One navigation across every panel: the region, the level and the score are shared, ' +
-      'and each panel keeps its own colour scale. The chain on a panel takes it off the lead.'
+      '. One navigation across every panel, and each panel keeps its own colour scale.'
 
     // One left-aligned run, and one button at the far right.
     //
@@ -2471,16 +2561,20 @@ export class PanelDeck {
     // which half a control was in said nothing about what it did. Everything
     // that *adjusts* the deck now reads left to right in one run, and the only
     // thing across the gap is the one that ends it.
-    // Adding a map first, then the two presses, then the chain, then the shape,
-    // then the two exports — which is the order a reader works in: get the maps
-    // on screen, put them on one footing, decide whether they move together,
-    // arrange them, take the picture. The one control that ends the deck stays
-    // across the gap.
+    // Adding a cell first, then the two presses, then the shape, then the two
+    // exports — which is the order a reader works in: get the maps on screen,
+    // put them on one footing, arrange them, take the picture. The one control
+    // that ends the deck stays across the gap.
+    //
+    // **The chain is not here any more.** It was the *first map's* own lock
+    // wearing the deck's bar, so one glyph sat at two heights meaning the same
+    // per-cell thing — and the one in the bar, among controls that act on every
+    // cell, read as a lock over the whole deck. It now sits in the lead cell's
+    // heading beside its star, where every other cell's chain is (§16.5).
     this.toolbar.replaceChildren(
       addMap,
       share,
       resolutions,
-      leadLock,
       columns,
       save,
       copy,
