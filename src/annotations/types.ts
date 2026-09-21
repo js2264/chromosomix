@@ -1027,10 +1027,20 @@ function defaultSize(kind: AnnotationKind): number {
   // that a heterozygous site shows two alleles rather than a coin flip.
   if (kind === 'alignments') return 90
   if (kind === 'reads') return 180
-  // A structure's lane is its beads as boxes — the same picture a peak set is,
-  // and a phased file is two rows of them. The model itself is drawn in a cell
-  // of the deck, which has no height here to speak of (§25).
-  return 16
+  // Everything else is a row of glyphs against the genome: a peak set, a BED, a
+  // variant track, a loop set, and a structure's beads as boxes — the same
+  // picture a peak set is, with a phased file two rows of them. The model
+  // itself is drawn in a cell of the deck, which has no height here to speak of
+  // (§25).
+  //
+  // Twenty-four rather than sixteen, and the eight pixels buy the lane its own
+  // label. A name is written across the lane it names, and the rule that keeps a
+  // click target off the resize border (`laneLabel.clearOfGrip`) fails on a
+  // sixteen-pixel lane — so `ATAC peaks` was drawn through the calls it named
+  // and had no box to click, leaving the swatch as the only thing on the lane a
+  // reader could reach. §8.16's sixteen still holds for a lane dragged short;
+  // this is only where one opens.
+  return 24
 }
 
 /**

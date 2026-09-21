@@ -17,9 +17,8 @@
 
 import { button, el } from './dom'
 import { KEYS, keyLabel } from './commands'
-import { findFeatures, hitLabel } from '../annotations/search'
+import { findFeatures, hitLabel, hitLocus } from '../annotations/search'
 import type { AnnotationStore } from '../annotations/store'
-import { fmt } from './dom'
 
 /** One offered answer: what it reads as, and what it puts in the box. */
 export interface Suggestion {
@@ -185,17 +184,22 @@ export class SearchBox {
 }
 
 /**
- * Feature hits as this box's suggestions, in a **contact map's** coordinates.
+ * Feature hits as this box's suggestions, with a **contact map's** window behind
+ * each one.
  *
- * The base is the whole reason this is written here rather than shared with the
- * browser's list: `metacooler/range.ts` reads a region as 0-based half-open,
- * exactly as `FeatureHit` carries it, while `genome/assembly.ts` reads the
- * browser's loci as 1-based inclusive. One string for both would be off by a
- * base on one of the two, silently and for ever.
+ * The `value` is the whole reason this is written here rather than shared with
+ * the browser's list: `metacooler/range.ts` reads a region as 0-based half-open,
+ * exactly as `FeatureHit` carries it, while the browser's loci are 1-based
+ * inclusive, and one window string for both would be off by a base on one of the
+ * two, silently and for ever. The *label* is shared, because a label is read
+ * rather than parsed and §26.1 gives every coordinate a reader reads one form —
+ * and because what belongs on it is the gene's own span. It printed `hit.start`,
+ * which is the padded window's start: a quarter of the gene's length before the
+ * gene, and a base off the box the click then filled.
  */
 export function featureSuggestions(store: AnnotationStore, text: string): Suggestion[] {
   return findFeatures(store, text).map((hit) => ({
-    label: `${hitLabel(hit)} · ${hit.contig}:${fmt.int(hit.start)} · ${hit.source}`,
+    label: `${hitLabel(hit)} · ${hitLocus(hit)} · ${hit.source}`,
     value: `${hit.contig}:${hit.start}-${hit.end}`,
   }))
 }

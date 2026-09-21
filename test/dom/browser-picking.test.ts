@@ -378,10 +378,13 @@ describe('the mode', () => {
     expect(view.marks).toHaveLength(0)
   })
 
-  it('gives it back on Done, and again when another form arms over it', () => {
+  // `done`, lowercase: every button label in this app is (§26.4), and a
+  // capitalised one in a column of lowercase verbs read as a dialog's primary
+  // action rather than as the way out of a mode.
+  it('gives it back on done, and again when another form arms over it', () => {
     const view = open()
     view.press('Lines', 'pick on track')
-    view.press('Lines', 'Done')
+    view.press('Lines', 'done')
     expect(view.armed('Lines')).toBe(false)
 
     view.press('Lines', 'pick on track')

@@ -59,6 +59,96 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **The General column is four cards, and one of them no longer changes shape with the file.** Binning
+  QC was a bare heading — argued once as "plain, like Reads and Validation", both of which have since
+  moved to the status bar — and the stored metadata was an uppercase iconed heading when a file held
+  none and a small `▶ Metadata` disclosure when it held some, so its *absence* was announced more
+  loudly than its presence and a reader switching between two files watched that strip change its
+  typography rather than fill and empty. Both are cards now, headed and folded like every other block
+  in every column (§26.6), with the JSON folded away by default.
+
+- **The unassigned statistic states both of its numbers whole.** It read `unassigned: 12,818 contigs /
+  9.3% of bins` — a count of one thing beside a percentage of another — and then a paragraph under it
+  gave the other half of each, so a metagenomics reader assembled either quantity from two sentences
+  in two units. One line now: `unassigned: 12,818 contigs (62.3%) · 17,178 bins (9.3%)`, with one
+  clause under it saying what it is.
+
+- **The File card no longer counts a genome the table under it does not list.** It said `genomes 49`
+  a hand's width above a genomes table reading `48 rows`, because `__unbinned__` occupies a genome
+  index and is not a genome (§7.4). The QC line is the one place it is counted.
+
+- **A long value in the File or Genome card wraps instead of being cut off.** The card was meant to
+  scroll sideways; what a reader actually saw was `http://127.0.0.1:5` and `inferred from the feat`
+  chopped at the card's edge with no ellipsis and no scrollbar drawn, which reads as a rendering
+  fault rather than as a long path.
+
+- **The Genome minimap and the locus bar name the same window.** The strip wrote the 0-based
+  half-open range it thinks in, so the same window appeared twice on one screen with starts a base
+  apart — under a tooltip insisting they were the same numbers. It writes the display form now, and
+  its note is the gesture alone: the sequence count and the assembly's length are the first two rows
+  of the card directly above it.
+
+- **A search hit names the gene, not the window it opens.** `NTH1 (YDR001C) · IV:449,655` was the
+  start of a *padded* window — a quarter of the gene's length before the gene begins, and a base off
+  the locus box the click then filled. It is the feature's own span now, in both the map's list and
+  the browser's, which is the number a reader copies into a primer tool or a paper.
+
+- **The Contact maps card asks for a second map only once there is a first.** With no map open it
+  drew two identical rectangles, the lower one offering a *second map* to fill *the lower-left
+  triangle* — of nothing — and both opened the same file the same way. The zone is also named for
+  what it does, *load a map into the lower triangle*, so it is not mistaken for the deck's companion
+  cell, which is what HiCRep and the deck bar mean by a second map.
+
+- **A Structures row has one control for being drawn.** The eye and a *show in the deck* button did
+  the same thing, and while the cell was drawing the row the button relabelled itself *shown in the
+  deck* and went on showing — so pressing the lit one, which is what anybody would do to un-show,
+  did nothing. The eye shows and hides; the row's accent bar says which row the cell has. Its `bed3d`
+  now sits after the word *export*, like the Metadata card's TSV.
+
+- **The marks you draw leave through the same export row as everything else**, minus the resolution
+  and the clipboard, because a BED is not a picture. Its options are named for the marks they write —
+  *arrowheads & rectangles (BEDPE)*, which is what the sub-heads above them say, rather than *loops &
+  boxes*, which named the loops track two cards up.
+
+- **The row that says which axis is which can be read.** The Arrowheads and Rectangles boxes put the
+  axis in brackets after a full locus — `I:340000 (columns)` — and in half a 288-pixel column the
+  brackets were the part that got cut, so the one word telling a reader which box was rows and which
+  was columns was the one word they could not see. It goes in front now: `columns I:340,000`.
+
+- **A track's name is no longer pushed under an ellipsis by a star.** The outline star stood on every
+  feature row and took the width `ATAC peaks` needed, so the two rows a reader has to tell apart read
+  `ATAC` and `ATAC p…`. It appears on hover or focus; the filled one, which says which set the search
+  reads, never hides.
+
+- **Ticking two tracks shows the bar that acts on them.** It was rendered under the rows, which on a
+  list of seven put it off the bottom of the column — so ticking boxes visibly did nothing and the
+  ticks read as highlighting. It is above the rows.
+
+- **Peak sets, BED files, loop sets and structure lanes open at 24 px rather than 16.** At sixteen the
+  lane's own name was drawn through the calls it named and had no click target at all, because the
+  rule that keeps a label clear of the resize border cannot be met in that height.
+
+- **One word for one thing, in the left column.** A track is a *track* in the Tracks card's tooltips
+  rather than an *annotation*; the empty autoscale group is *no group* in a row as well as in the
+  batch bar; the card-wide fader is *opacity* from 10 to 100, as the per-row slider has always been,
+  instead of *transparency* from 0 to 90 — which had a reader subtracting to check that two controls
+  over one value agreed. Every track row counts *sequences*, the word the FASTA row, the Sequences
+  card and the minimap use, rather than *contigs* over a file whose breadcrumb says Chromosomes.
+
+- **The three drop zones in the Annotations column say the same thing in the same shape.** Each names
+  its formats and then says *Drop one here, or click to choose*: the Tracks zone said neither that
+  nor six of the formats it reads, so a reader holding a bedGraph or a 2bit was told this viewer would
+  not take it, and the Structures zone said four things where its neighbours said one.
+
+- **Numbers on a track row are grouped, and a value range is written with an en dash.** A bigWig
+  reaching 1599 wrote `0.16 to 1599` two rows under `12,110,231 bp`.
+
+- **Smaller wording.** The Sequences card says `4 of 16 ticked · show the whole genome`, since
+  *showing 4 of 16* under a list of nine visible rows is read as a count of the rows. A model's
+  provenance line no longer reads `balanced · balanced`. The Metadata annotations card explains the
+  level rule only where the level actually refuses a column. The lane's autoscale glyph carries one
+  clause instead of a two-sentence lesson in a gesture said twice elsewhere.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

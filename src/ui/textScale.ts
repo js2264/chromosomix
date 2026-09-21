@@ -195,8 +195,8 @@ function round(px: number): number {
  * it is right. The ends grey out, so the range is visible without being tried.
  *
  * Built by a factory and mounted twice, exactly as `trackHeightField` and
- * `transparencyField` are: one preference about one thing, offered in the two
- * places a reader is standing when they want it.
+ * `everyTrackOpacityField` are: one preference about one thing, offered in the
+ * two places a reader is standing when they want it.
  */
 export function textScaleField(): HTMLElement {
   const readout = el('span', { class: 'clip-note text-scale-note' })

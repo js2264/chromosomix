@@ -139,8 +139,8 @@ export interface StepperSpec {
    * Tell the box when the number changed behind its back, if it can.
    *
    * Optional, because not every number has anybody else who can move it. Where
-   * one does — the transparency lives in the annotation store, and a single
-   * row's own settings write the same field — a box that did not listen would
+   * one does — the opacity lives in the annotation store, and a single row's
+   * own settings write the same field — a box that did not listen would
    * show the value it last applied rather than the value in force.
    */
   subscribe?(onChange: () => void): () => void
@@ -257,7 +257,7 @@ export function stepperField(spec: StepperSpec): HTMLElement {
 /**
  * Two fields side by side, where each is narrow enough to share a line.
  *
- * Not a general layout: it exists because text size and transparency are one
+ * Not a general layout: it exists because text size and opacity are one
  * question asked twice — how legible is this picture — and a column that put
  * them on two lines separated by a track-height box read as three unrelated
  * settings. Two is the limit; a third would give each of them a box four digits

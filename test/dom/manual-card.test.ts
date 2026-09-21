@@ -247,7 +247,12 @@ describe('drawing a rectangle on the map', () => {
 })
 
 describe('the list', () => {
-  it('writes a box the way its own form would take it back', () => {
+  // Grouped digits, which is what every other coordinate on screen wears
+  // (§26.1) — and what the boxes above take back, since they accept commas. The
+  // rows wrote the ungrouped form their own inputs *emit*, which made this card
+  // the one place a locus appeared without separators, under placeholders that
+  // had them.
+  it('writes a box as the reader reads it, which its own form takes back', () => {
     const card = mount()
     card.type('Rectangles', ['I:120000-180000', 'IV:340000-400000'])
     card.press('Rectangles', 'add')
@@ -256,9 +261,9 @@ describe('the list', () => {
     const rows = Array.from(document.querySelectorAll('.manual-where')).map(
       (node) => node.textContent ?? '',
     )
-    expect(rows[0]).toBe('▭ I:120000-180000 × IV:340000-400000')
+    expect(rows[0]).toBe('▭ I:120,000-180,000 × IV:340,000-400,000')
     // One extent for a box on the diagonal, which is what its form takes back.
-    expect(rows[1]).toBe('▭ I:500000-600000')
+    expect(rows[1]).toBe('▭ I:500,000-600,000')
   })
 
   it('recolours and removes a box like any other mark', () => {

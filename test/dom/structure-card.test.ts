@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The Structures card (§25): every model as a row, with the two things a model
- * row is for — into the deck, out as a bed3d — and the provenance of a
- * computed one.
+ * row is for — into the deck by its eye, out as a bed3d — and the provenance of
+ * a computed one.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -83,28 +83,45 @@ describe('the Structures card', () => {
     expect(card.el.querySelector('.ann-drop-label')?.textContent).toBe('Load a structure')
   })
 
-  it('puts a model in the deck and says which one is there', () => {
+  /**
+   * **The eye is the row's one show/hide.** There was a *show in the deck* text
+   * button here as well, which did the same thing, relabelled itself *shown in
+   * the deck* while the cell was drawing the row, and went on calling `onShow`
+   * when pressed in that state — so the obvious gesture, pressing the lit one to
+   * un-show, did nothing. §26.3 and §26.7: the lit control is the state, and no
+   * button is labelled with what is already true.
+   */
+  it('puts a model in the deck with the eye, and says which one is there', () => {
     const shown: string[] = []
+    const hidden: number[] = []
     let current: string | null = null
-    const { store, card } = make({ onShow: (entry) => shown.push(entry.id), shown: () => current })
+    const { store, card } = make({
+      onShow: (entry) => shown.push(entry.id),
+      onHide: () => hidden.push(1),
+      shown: () => current,
+    })
     seed(store, 'a.g3d', { kind: 'detached', name: 'a.g3d' })
     seed(store, 'b.g3d', { kind: 'detached', name: 'b.g3d' })
-    const buttons = all<HTMLButtonElement>(card.el, '.structure-show')
-    expect(buttons).toHaveLength(2)
-    expect(buttons.map((b) => b.textContent)).toEqual(['show in the deck', 'show in the deck'])
-    buttons[1].click()
+    expect(all(card.el, '.structure-show')).toHaveLength(0)
+    const eyes = all<HTMLButtonElement>(card.el, '.ann-eye')
+    expect(eyes).toHaveLength(2)
+    expect(eyes.map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    eyes[1].click()
     expect(shown).toEqual(['b.g3d'])
     current = 'b.g3d'
     card.refresh()
-    const after = all<HTMLButtonElement>(card.el, '.structure-show')
-    expect(after.map((b) => b.textContent)).toEqual(['show in the deck', 'shown in the deck'])
+    const after = all<HTMLButtonElement>(card.el, '.ann-eye')
+    expect(after.map((eye) => eye.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
     expect(all<HTMLElement>(card.el, '.ann-row.is-shown').map((row) => row.dataset['id'])).toEqual(['b.g3d'])
+    // …and the lit one takes it back out, which is what a reader presses it for.
+    after[1].click()
+    expect(hidden).toEqual([1])
   })
 
-  it('offers no deck button where no deck is possible, and disables both until the row is ready', () => {
+  it('offers no eye where no deck is possible, and disables the export until the row is ready', () => {
     const { store, card } = make()
     seed(store, 'late.g3d', { kind: 'detached', name: 'late.g3d' }, 'loading')
-    expect(card.el.querySelector('.structure-show')).toBeNull()
+    expect(card.el.querySelector<HTMLButtonElement>('.ann-eye')?.disabled).toBe(true)
     const bed3d = card.el.querySelector<HTMLButtonElement>('.structure-bed3d')
     expect(bed3d?.disabled).toBe(true)
     expect(card.el.querySelector('.ann-row')?.textContent).toMatch(/reading…/)

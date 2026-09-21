@@ -78,7 +78,11 @@ export class BookmarksCard {
   private readonly unsubscribe: () => void
 
   constructor(private readonly props: BookmarksCardProps) {
-    this.here = button('this view', () => this.saveFramed(), {
+    // `save this view`, a verb: the three rows above this one on the Manual card
+    // pair `add` with `pick on map` or `draw on map`, and after three of those a
+    // button reading `this view` alone reads as a caption for the box beside it
+    // rather than as the second way to fill it.
+    this.here = button('save this view', () => this.saveFramed(), {
       class: 'btn',
       title: 'Save the stretch of genome on screen, at the resolution it is open at',
     })

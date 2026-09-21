@@ -156,8 +156,12 @@ export class LaneControls {
     const named = entries.map((entry) => entry.label).join(', ')
     return iconButton(
       'chevrons-up-down',
-      `Scale ${named} to what is in view, and follow it as the view moves. ` +
-        `Typing a limit turns it off; ${CEILING_LABEL} over the lane moves the ceiling.`,
+      // One clause, like the same glyph's title in the Tracks card. It carried
+      // two sentences, the second a modifier tutorial — and that gesture is
+      // already said twice, in the lane menu that exists to carry it and in the
+      // shortcuts dialog; a 13-pixel glyph is not the third place. A hint says
+      // what a control wants of the reader.
+      `Autoscale ${named} to what is in view`,
       () => {
         for (const entry of entries) {
           const current = this.store.byId(entry.id)?.style.limits ?? entry.style.limits

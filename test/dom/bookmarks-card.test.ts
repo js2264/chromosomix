@@ -175,7 +175,7 @@ describe('saving a place', () => {
 
   it('takes the window on screen, from the card and from the title line alike', () => {
     const app = mount()
-    app.press('this view')
+    app.press('save this view')
     expect(app.store.marks[0]).toMatchObject({ contig: 'II', start: 120000, end: 180000 })
     app.framed = { contig: 'II', start: 300000, end: 320000 }
     // The button beside `go` calls the same method, which is why it is public.
@@ -187,7 +187,7 @@ describe('saving a place', () => {
   it('says why it cannot, rather than doing nothing', () => {
     const app = mount()
     app.framed = null
-    app.press('this view')
+    app.press('save this view')
     expect(app.store.marks).toEqual([])
     expect(app.note()).toMatch(/not at one place/)
 
@@ -205,7 +205,7 @@ describe('saving a place', () => {
     // sequence that they are not.
     const app = mount()
     app.framed = { contig: 'chr', start: 4_500_000, end: 150_000, wrapped: true }
-    app.press('this view')
+    app.press('save this view')
     expect(app.store.marks).toEqual([])
     expect(app.note()).toMatch(/across the sequence/)
     expect(app.note()).not.toMatch(/not at one place/)
@@ -215,9 +215,9 @@ describe('saving a place', () => {
     // The reason: anybody who cannot remember whether the first press worked
     // presses it again, and two identical rows is the worst of the three answers.
     const app = mount()
-    app.press('this view')
+    app.press('save this view')
     expect(app.note()).toBeNull()
-    app.press('this view')
+    app.press('save this view')
     expect(app.store.marks).toHaveLength(1)
     expect(app.note()).toMatch(/already bookmarked/)
   })
@@ -225,7 +225,7 @@ describe('saving a place', () => {
   it('disables *this view* when there is no map, and enables it when there is', () => {
     const app = mount()
     const here = Array.from(app.card.el.querySelectorAll('button')).find(
-      (b) => b.textContent === 'this view',
+      (b) => b.textContent === 'save this view',
     )
     expect(here?.disabled).toBe(false)
     app.available = false
@@ -248,7 +248,7 @@ describe('the list', () => {
 
   it('reads a nameless place as its coordinates alone', () => {
     const app = mount()
-    app.press('this view')
+    app.press('save this view')
     const row = app.card.el.querySelector('.bookmark-row')
     expect(row?.querySelector('.bookmark-name')).toBeNull()
     expect(row?.querySelector('.bookmark-coords')?.textContent).toBe('II:120,000-180,000')
@@ -272,7 +272,7 @@ describe('the list', () => {
 
   it('carries an arrow on every row, which is the whole affordance', () => {
     const app = mount()
-    app.press('this view')
+    app.press('save this view')
     expect(app.card.el.querySelector('.bookmark-go svg')).not.toBeNull()
   })
 

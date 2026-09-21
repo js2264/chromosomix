@@ -204,8 +204,10 @@ try {
   if (await structures.count()) await structures.scrollIntoViewIfNeeded()
   await sleep(400)
   await shot('12-structures-card')
-  // Back to the loaded model from its row, then the cell's own picker.
-  const show = structures.locator('.structure-show').first()
+  // Back to the loaded model from its row — the eye is the row's show/hide now
+  // that the *show in the deck* button beside it is gone — then the cell's own
+  // picker.
+  const show = structures.locator('.ann-eye').first()
   if (await show.count()) { await show.click(); await sleep(3000) }
   await fold('Fold the Annotations panel')
   await sleep(600)

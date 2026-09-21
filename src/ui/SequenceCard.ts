@@ -9,7 +9,7 @@
  * and the session turns a change into a navigation.
  *
  * Which is why it lives here rather than in either of them: two cards would be
- * two lists, two filters and two ways of saying "showing 4 of 16", and a reader
+ * two lists, two filters and two ways of saying "4 of 16 ticked", and a reader
  * who hid the map would meet the second one wearing the first one's clothes.
  * What differs between the surfaces is only the sentence the tick's tooltip
  * says, which is a prop.
@@ -164,12 +164,19 @@ export function sequenceCard(props: SequenceCardProps): HTMLElement {
       box.closest('.seq-row')?.classList.toggle('is-on', on)
     }
     const count = selection.names.length
+    // **`ticked`, not `showing`.** Under a list of sixteen rows of which nine are
+    // on screen, "showing 1 of 16" is read as a count of the list and sends the
+    // reader looking for the other fifteen; and beside a map framed on 400 kb of
+    // chromosome IV it contradicts the crumb outright. What the number is about
+    // is the boxes, so it says so. The button after it is a verb, because a link
+    // that read "the whole genome" was the object of the sentence in front of it
+    // rather than something to press.
     chosen.replaceChildren(
       ...(count === 0
         ? []
         : [
-            el('span', { text: `showing ${fmt.int(count)} of ${fmt.int(contigs.length)} — ` }),
-            button('the whole genome', () => selection.clear(), {
+            el('span', { text: `${fmt.int(count)} of ${fmt.int(contigs.length)} ticked · ` }),
+            button('show the whole genome', () => selection.clear(), {
               class: 'seq-all',
               title: props.clearTitle,
             }),

@@ -763,8 +763,11 @@ p {
   display: contents;
 }
 
-/* The batch bar, under the rows it acts on. Only there while two or more are
-   ticked, because everything on it is meaningless for one. */
+/* The batch bar, above the rows it acts on. Only there while two or more are
+   ticked, because everything on it is meaningless for one — and above them
+   because under them it was below the fold: a reader who ticked two tracks at
+   the top of a list of seven saw nothing appear, and read the ticks as
+   highlighting rather than as a selection with a bar. */
 .ann-batch {
   display: flex;
   flex-wrap: wrap;
@@ -1748,10 +1751,7 @@ p {
 /* A card narrower than its own contents scrolls sideways inside the column,
    instead of spilling over the column's edge or forcing it wider than the
    reader dragged it. */
-.panel-column .card,
-.panel-column .qc,
-.panel-column .meta,
-.panel-column .meta-empty {
+.panel-column .card {
   overflow-x: auto;
 }
 
@@ -1768,9 +1768,6 @@ p {
    sidebar fills the column so that its last card — a contig list — can take the
    height the cards above it leave and scroll there. */
 .panel-column-body > .card,
-.panel-column-body > .qc,
-.panel-column-body > .meta,
-.panel-column-body > .meta-empty,
 /* …and the same again one level down, because `>` walks the *DOM* and a
    session's cards sit inside a `.panel-host`. That host is `display: contents`,
    so as far as layout is concerned the cards are the body's flex items — but as
@@ -1778,10 +1775,7 @@ p {
    the one set of cards that never got the rule the comment describes. Which is
    why the Annotations column, and only the Annotations column, scrolled card by
    card instead of as a whole. */
-.panel-column-body > .panel-host > .card,
-.panel-column-body > .panel-host > .qc,
-.panel-column-body > .panel-host > .meta,
-.panel-column-body > .panel-host > .meta-empty {
+.panel-column-body > .panel-host > .card {
   flex: 0 0 auto;
 }
 
@@ -6797,14 +6791,20 @@ canvas.is-frozen {
   margin-top: 0;
 }
 
-/* A value is never elided and never wrapped: the card scrolls sideways instead.
-   A URI cut off at `Hum66.met…` and a genome name broken into three lines are
-   the same failure — the panel is where you go to *read* the identity of what is
-   on screen, and a name you cannot read whole is not an identity. The value
-   track is sized to its content (`max-content`, which `1fr` may grow but never
-   shrink below), so the grid is as wide as it needs to be and `.panel-column
-   .card`'s `overflow-x` does the rest. The `title` on every value stays, for the
-   reader who would rather hover than scroll. */
+/* A value is never elided: the panel is where you go to *read* the identity of
+   what is on screen, and a name you cannot read whole is not an identity. It
+   used to be *never wrapped* either, with the card scrolling sideways instead —
+   and what that produced on screen was `http://127.0.0.1:5` and `inferred from
+   the feat`, hard-cut at the card's edge with no ellipsis and no scrollbar
+   drawn, which reads as a rendering fault rather than as a long path. So a long
+   value wraps: the value track may shrink (`minmax(0, 1fr)`), and `overflow-wrap:
+   anywhere` breaks a URL that has no spaces in it. Nothing is lost that the
+   sideways scroll delivered, because it was not delivering it. Short values —
+   which is nearly all of them — have nothing to wrap and are unchanged, and the
+   `title` on every value stays for the reader who would rather hover.
+
+   The record card keeps the old bargain and says so in its own rule: a binner's
+   `MetaTOR_MAG_0087` over three lines is not shorter, only harder to read. */
 /* The key column takes what its longest key needs and no more. It was a fixed
    9rem, set when the values were elided and had to start at a predictable
    place; now that they run to their full width there is nothing to line up
@@ -6812,7 +6812,7 @@ canvas.is-frozen {
    `bins` and its number. */
 .kv {
   display: grid;
-  grid-template-columns: max-content minmax(max-content, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.1rem 0.9rem;
   font-size: var(--step--1);
 }
@@ -6823,7 +6823,7 @@ canvas.is-frozen {
 
 .kv .v {
   font-family: var(--mono);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 /* The bordered "card" treatment, now carrying the File block: that is the
@@ -6925,9 +6925,9 @@ canvas.is-frozen {
    auto` puts it there and keeps it there as the word beside it changes length,
    which is what makes a column of five headings line their chevrons up.
 
-   Hidden unless the heading belongs to something that folds, so the
-   empty-metadata box keeps its heading and does not offer a control that would
-   do nothing. */
+   Hidden unless the heading belongs to something that folds, so a heading used
+   outside a card keeps its type and does not offer a control that would do
+   nothing. */
 .card-head > .card-fold {
   display: none;
 }
@@ -7227,11 +7227,14 @@ canvas.is-frozen {
   row-gap: 0.2rem;
 }
 
-/* The key does not wrap either — a column name is one token and reads badly
-   broken across lines. The value already has this from `.kv`, and here it is
-   what matters most: `MetaTOR_MAG_0087` split over three lines is not shorter,
-   only harder to read. Both extend past the card, and the card scrolls. */
-.kv-record .k {
+/* Neither track wraps here — a column name is one token and reads badly broken
+   across lines, and `MetaTOR_MAG_0087` split over three lines is not shorter,
+   only harder to read. Both extend past the card, and the card scrolls. This is
+   the one `.kv` that keeps that bargain: its keys and values are the *file's*
+   own identifiers, where the File card's are ours and its one long value is a
+   path. */
+.kv-record .k,
+.kv-record .v {
   white-space: nowrap;
 }
 
@@ -7251,20 +7254,12 @@ canvas.is-frozen {
   gap: 0.6rem;
 }
 
-/* Plain, like Reads and Validation: it is one number, not a headline. */
-.qc {
-  padding: 0 0.1rem;
-}
-
-.qc-head {
-  margin: 0 0 0.2rem;
-  font-size: var(--step--1);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-  font-weight: 600;
-}
-
+/* Binning QC is a card like every other block in the column (§26.6). It was a
+   bare `h4`, argued as "plain, like Reads and Validation: it is one number, not a
+   headline" — and both of those blocks have since moved to the status bar, which
+   left this one the only unbordered thing in a column of cards, reading as
+   something that had fallen out of the File card above it. One number is still
+   all it holds; a card's heading is how this column says what a block is. */
 .qc-stat {
   font-family: var(--mono);
   font-size: var(--step-0);
@@ -7272,6 +7267,10 @@ canvas.is-frozen {
   margin: 0 0 0.25rem;
 }
 
+/* The one disclosure left in the app: the error view's "what the file actually
+   says", where the JSON under it is evidence a reader opens once. The General
+   column's Metadata block used this shape too and is a card now (§26.6), which
+   is why this rule names its remaining user rather than a place in a panel. */
 .meta > summary {
   cursor: pointer;
   color: var(--text-dim);
@@ -7776,10 +7775,37 @@ canvas.is-frozen {
 
 /* Which feature set the search reads. Filled for the one it does — a `fill` on
    the glyph, which beats the `fill="none"` the icon builder writes — and an
-   outline on every other one that could be it. */
+   outline on every other one that could be it.
+
+   The outline appears on **hover or focus** and takes no width until it does.
+   It used to stand on every feature row, and it was taking the room the name
+   needed: `ATAC peaks` and `ATAC` are told apart by the word the star had
+   pushed under the ellipsis, in the column whose one job is to say which track
+   is which — while `Pol II / input`, longer and starless, fitted. The filled
+   one never hides: which set the search reads is a fact about the picture, and a
+   fact a reader has to hover to learn is a fact nobody finds. */
 .ann-star {
   flex: 0 0 auto;
   color: var(--text-faint);
+}
+
+/* Collapsed rather than `display: none`, so the Tab order still reaches it: a
+   reader who does not hover can still star a set. */
+.ann-star:not(.is-on) {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.ann-row:hover > .ann-head > .ann-star:not(.is-on),
+.ann-star:not(.is-on):focus-visible {
+  width: auto;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+  opacity: 1;
+  overflow: visible;
 }
 
 .ann-star:hover {
@@ -9331,16 +9357,15 @@ span.deck-name {
   margin-top: 4px;
 }
 
-/* The Structures card (§25): a model's row says whether the cell is drawing it. */
+/* The Structures card (§25): a model's row says whether the cell is drawing it,
+   with the accent bar down its edge and the lit eye in its head. There was a
+   *shown in the deck* text button lit here as well; it is gone, with the button
+   that duplicated the eye (§26.3 — a control says what pressing it does). */
 .structure-card .structure-actions {
   gap: 6px;
 }
 .structure-card .ann-row.is-shown {
   box-shadow: inset 3px 0 0 var(--accent, #1f5fa9);
-}
-.structure-card .structure-show.is-on {
-  color: var(--accent, #1f5fa9);
-  font-weight: 600;
 }
 
 .structure-note:empty {

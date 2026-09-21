@@ -38,7 +38,7 @@ import {
 } from '../annotations/manual'
 import type { GroupSettings } from '../annotations/groups'
 import { AnnotationStore } from '../annotations/store'
-import { transparencyField } from './AnnotationCard'
+import { everyTrackOpacityField } from './AnnotationCard'
 import { KEYS, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { cardTitle, icon, iconButton } from './icons'
@@ -1757,7 +1757,7 @@ export class MatrixPanel {
         // "these are the same tracks" has to mean.
         this.options.annotations === undefined
           ? textScaleField()
-          : fieldPair(textScaleField(), transparencyField(this.options.annotations.store)),
+          : fieldPair(textScaleField(), everyTrackOpacityField(this.options.annotations.store)),
       ),
     )
     // The matrix's own labels are the one thing a scale change does not simply
@@ -3024,7 +3024,7 @@ export class MatrixPanel {
     // away. Ended here rather than left to be garbage-collected, because the
     // card that armed it is *not* going away — it lives in the shell — and it
     // learns the mode is over from this call. Without it, navigating with the
-    // mode on leaves a button reading "Done" that nothing will ever answer.
+    // mode on leaves a button reading "done" that nothing will ever answer.
     this.cancelPicking()
     this.unsubscribePlotOptions()
     this.unsubscribePick()
@@ -3663,8 +3663,14 @@ export class MatrixPanel {
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
-    if (balance) parts.push('balanced')
-    parts.push(choice?.label ?? value)
+    const score = choice?.label ?? value
+    // Not twice. The balanced *score* is labelled `balanced` (`ui/scores.ts`),
+    // so pushing the balance word and then the score's own label wrote
+    // `… · 1.0 kb bins · balanced · balanced` on every computed row's
+    // provenance line — the one line whose job is to say exactly what a model or
+    // a track was computed from, reading as though the machine had stuttered.
+    if (balance && score !== 'balanced') parts.push('balanced')
+    parts.push(score)
     return {
       uri,
       rows: [data.rowExtent[0], data.rowExtent[1]],
