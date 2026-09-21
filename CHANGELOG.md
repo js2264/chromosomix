@@ -150,6 +150,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sentence, and the arithmetic is already on the verdict line under the box. The console's empty
   panel, the share dialog's opening sentence (which had no verb) and the Connect dialog's privacy
   note are each shorter by a clause that was arguing rather than saying.
+
 - **The General column is four cards, and one of them no longer changes shape with the file.** Binning
   QC was a bare heading — argued once as "plain, like Reads and Validation", both of which have since
   moved to the status bar — and the stored metadata was an uppercase iconed heading when a file held
