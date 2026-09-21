@@ -26,6 +26,7 @@
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
+import { resolutionLabel } from '../../units'
 
 const NEEDS_STRUCTURE = 'Load a structure — a g3d or bed3d — for this to read the model from.'
 
@@ -307,12 +308,20 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   }
 }
 
-/** The bead's width: the resolution the reader has selected, which is the file's bin size. */
+/**
+ * The bead's width: the resolution the reader has selected, which is the file's
+ * bin size — so it is spelled by the one formatter for a bin size.
+ *
+ * It was a private copy of that rule, near enough to `resolutionLabel` to look
+ * right and separate enough to drift: this line read "400 beads at 1 kb" under
+ * a form title that read "1.0 kb bins", and only one of the two could be
+ * corrected while there were two writers. The guard stays, because a context
+ * with no map has no bin size and "the file's bin size" is the honest thing to
+ * call it.
+ */
 function binWords(binsize: number): string {
   if (!Number.isFinite(binsize) || binsize <= 0) return 'the file’s bin size'
-  if (binsize >= 1e6) return `${+(binsize / 1e6).toFixed(2)} Mb`
-  if (binsize >= 1e3) return `${+(binsize / 1e3).toFixed(1)} kb`
-  return `${binsize} bp`
+  return resolutionLabel(binsize)
 }
 
 export const RECONSTRUCT_TASK: AnalysisTask = {

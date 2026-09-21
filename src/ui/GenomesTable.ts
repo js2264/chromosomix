@@ -202,6 +202,13 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
         value: (row) => (column[row] === '' ? undefined : column[row]),
       }
     }
+    // One decimal count for the whole column, measured once.
+    //
+    // `null` where the column holds values too small for three places to say
+    // anything about them, and then each cell keeps `fmt.num`'s significant
+    // digits: a per-column count would print a set of 1e-5 scores as a column
+    // of `0.000`.
+    const digits = columnDigits(column)
     return {
       key: name,
       label: name,
@@ -209,7 +216,12 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
       align: 'right',
       width: 'minmax(5.5rem, 0.7fr)',
       value: (row) => column[row],
-      format: (value) => (typeof value === 'number' ? fmt.num(value) : ''),
+      format: (value) =>
+        typeof value !== 'number'
+          ? ''
+          : digits === null
+            ? fmt.num(value)
+            : fmt.fixed(value, digits),
     }
   })
 
@@ -227,4 +239,37 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
   })
 
   return columns
+}
+
+/**
+ * How many decimal places a numeric column should print, or `null` for none.
+ *
+ * The **most** any value in it actually carries, capped at three, because that
+ * is the count at which no row loses a digit and none gains a zero it did not
+ * earn: a column of `0.99`, `1`, `0.98` prints two places throughout and a
+ * column of integers prints none. Measured over the whole column rather than
+ * sampled — a MAG table is thousands of rows, this runs once per open, and the
+ * one value with three places is exactly the one a sample would miss.
+ *
+ * `null` where anything in the column is below what three places can show, so
+ * a set of tiny scores keeps `fmt.num`'s significant digits instead of being
+ * flattened to `0.000`.
+ */
+function columnDigits(column: ArrayLike<number>): number | null {
+  let digits = 0
+  for (let row = 0; row < column.length; row++) {
+    const value = column[row]
+    if (value === undefined || !Number.isFinite(value)) continue
+    if (value !== 0 && Math.abs(value) < 1e-3) return null
+    // Asked of the *rounded* text rather than of the float: a bigWig's 0.98
+    // arrives as 0.9800000190734863, and its seventeen digits are the reader's
+    // business only insofar as three of them are. `toFixed` rather than
+    // `fmt.num`, because this counts characters and `fmt.num` is localised —
+    // on a machine whose numbers read `0,99` the point would not be found and
+    // every column would come out as integers.
+    const text = value.toFixed(3).replace(/0+$/, '')
+    const point = text.indexOf('.')
+    if (point >= 0) digits = Math.max(digits, text.length - point - 1)
+  }
+  return digits
 }

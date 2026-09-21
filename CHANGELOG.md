@@ -23,11 +23,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colour, shapes — and this release brings the shared machinery into line with it.
 
 - **Coordinates a reader sees are 1-based inclusive everywhere, and a locus box accepts what it
-  shows (§26.1).** `formatPosition`, `regionLabel` and `typedLocusToRegion` join `formatLocus` in
-  `genome/assembly.ts` as the only place a coordinate is formatted or read, and the round trip is a
-  test: pressing Enter on the value a box is already showing cannot move the view by a base. What is
-  typed now also takes the spellings other browsers write — an en dash, Ensembl's `..`, `kb` and `Mb`
-  — because a reader arrives by pasting.
+  shows (§26.1).** `formatPosition`, `regionLabel`, `windowLabel` and `typedLocusToRegion` join
+  `formatLocus` in `genome/assembly.ts` as the only place a coordinate is formatted or read, and the
+  round trip is a test: pressing Enter on the value a box is already showing cannot move the view by
+  a base. What is typed now also takes the spellings other browsers write — an en dash, Ensembl's
+  `..`, `kb` and `Mb` — because a reader arrives by pasting.
 
 - **One spelling of every quantity, reachable from a worker (§26.2).** `src/units.ts` holds it, and
   the four duplicate byte-and-duration formatters that had grown in the console, the pairs dialog,
@@ -59,6 +59,83 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **The dark theme reaches the landing page, the tables and the gates (§16.5).** A contact map is a
+  figure and stays light whatever the screen is, which is why the centre column pinned the light
+  palette — but *every* view is mounted in that column, so a reader who chose dark got the page they
+  open every session, the Genomes and Chromosomes tables they scroll, the whole-genome gate and the
+  error view as a white sheet inside a dark frame, with a dark About dialog floating over it. The pin
+  now follows the picture: a map, a browser stage or a deck's grid keeps it, and a drop zone and a
+  table of chromosome lengths do not.
+
+- **The theme button changes the page on the first press.** The cycle was `system → light → dark`,
+  so on a light machine — which is most of them — the first press selected *light*, repainted
+  nothing, and left a sun icon that read as a claim the page was already light. It now goes to the
+  opposite of what the machine is doing first, the same as the machine second, and back to following
+  it third; the one silent step is the last one, where the monitor icon coming back says what
+  happened. A screen reader hears the state, which it never did: the button's accessible name was the
+  constant "colour theme".
+
+- **The reader's word for a tab is *tab*, everywhere (§5.6).** The strip said *New session*, the
+  palette said *Close this session* over a hint that said "tab", and the Share dialog was headed
+  *Share this session* over a body that said "everything in this tab". Three words for the thing in
+  front of you, of which two are never shown anywhere else. *Workspace* survives as the every-tab
+  file, said as *Save every tab as a file*.
+
+- **The 1D genome browser has a breadcrumb (§5.5, §5.8).** `genome › Whole genome › IV ›
+  1,000,001-1,400,000`, in the slot the map's trail uses — so the row no longer appears and vanishes
+  as the map's eye is pressed, and "up" from a chromosome is one click in both views. On a map the
+  last crumb is now the window alone under the sequence's own crumb, instead of repeating the
+  sequence name in a row that already had it and above a heading and a box printing the same string.
+
+- **The brand no longer empties the tab you press it from.** *(meta)cooler* is the way home and reads
+  as one, and it called the picker over the open session: the file let go of, the annotation worker
+  stopped, a two-map deck and a comparison destroyed, with no confirmation and — for a dropped local
+  file — no way back (§11, §21.3). It opens the picker in a **new tab**; a tab that is already empty
+  goes straight there, since an empty tab is the picker.
+
+- **The status bar's numbers are the tab you are looking at.** Switching tabs never refreshed it, so
+  a new empty tab showed the previous file's `READ 24.2 MB` under a landing page. The two items that
+  are about a file — the byte counter and the validation check — are now **absent** while no file is
+  open, rather than a dash that never fills in and a button that silently does nothing; validation
+  says *never run* (§26.7) and the offer to scan every pixel is in the panel that opens on hover
+  instead of in a second tooltip behind it.
+
+- **One bin size, one spelling.** The crumb said `1 kb` while the map's title said `1.0 kb`, the File
+  card said `1,000 bp`, the whole-genome gate said "cells of about 3.0 kb" and a structure row said
+  `1 kb` two lines above `1.0 kb bins`. Every bin size now goes through `resolutionLabel`, and
+  `fmt.bp`'s decimal stays where it belongs — on a measured span. The two hand-rolled byte
+  formatters left in the metagenome download refusal and the dense-array refusal — one of them
+  counting in 1024s under an `MB` label — are `fmt.bytes` like everything else.
+
+- **A column of numbers has one decimal count.** The Genomes table printed `0.99`, `1`, `1.1`, `1.07`
+  down one column of quality scores, so the figures did not stand under one another and `1` read as a
+  different kind of value from `0.99`. Each numeric column is measured once and every cell in it
+  prints to the same width.
+
+- **A toggle command is titled by its noun in the palette, the shortcuts dialog and the 3D cell.** The
+  overlays were `Hide track text` beside `Show name column` — the verb recording whatever the app
+  happened to be doing when the dialog was opened, on a reference card that cannot be learned if its
+  wording changes between visits — the panels were `Fold or show the General panel`, and the
+  structure's were `Beads (on)`. One shape: the noun, with the state as a chip.
+
+- **A palette hint is one line, and it is not a footnote.** *Rename this tab* ran to five lines with
+  the file name in Markdown backticks that nothing renders, *Save this workspace* pointed at "the
+  link button beside it" — a header button that is beside nothing in that list — and six hints cited
+  section numbers of a document the app never links. The fold hints also explained the wrong refusal:
+  *Fold or show the Annotations panel* said "a metacool carries no annotations" on an empty landing
+  page, and said it again, undimmed, on a `.cool` whose Annotations column was on screen. Each hint
+  is now computed from the state it is about.
+
+- **The resolution row has no dead slider.** A one-rung `.cool` — the commonest file a lab opens —
+  drew a greyed slider beside its single `1 kb` stop, which is §8.5's absent-not-disabled rule broken
+  on the row every reader looks at. The row reads `resolution 1 kb +`, and the slider arrives with
+  the second rung. `F` is gated the same way: it folded a Files column that does not exist until a
+  folder is connected.
+
+- **Refinement is a palette command, and the palette now says so (§2).** The hint sent a reader to
+  "the first button on a map's picture row", where they found the turn and turned their map instead:
+  the button was pulled a release ago, because the preference is one setting for the whole window.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
@@ -67,6 +144,85 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
   share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
   read.
+
+### Fixed
+
+- **A heading in a right-aligned table column keeps its beginning.** `estimated completeness` read
+  `ed completeness` and `weighted r` read `hted r`: `text-overflow` cannot reach the text inside a
+  flex container, so the words were pushed out of the box from the left — and the heading is the only
+  place a MAG metric is named.
+
+- **A short table is as tall as its rows.** Sixteen chromosomes drew their bordered box to the bottom
+  of the window with two hundred pixels of nothing under the last row, which reads as rows that
+  failed to load.
+
+- **The transparency stepper's up-chevron is back on its own line.** In half a side column the
+  `∨ box ∧` row wrapped after the box and left the arrow orphaned underneath — on the Tracks card, in
+  every screenshot. The overlay marks no longer orphan one icon either: seven fit a line in the
+  Tracks card, and the Map card's eight go four across.
+
+- **The map's bar keeps its toolbar together.** The locus box, `go`, the four zoom steps and the
+  bookmark are one group, so they drop to the next line in order instead of the zoom steps breaking
+  away under the title — which gave one bar three shapes at three window widths, with §5.4's "four
+  buttons beside the box" beside nothing.
+
+- **A two-letter chromosome crumb is not elided.** In an embed's bar every crumb could shrink, so the
+  shortest gave way first and `IV` became `I…` — a different chromosome to a yeast biologist, spelled
+  with an ellipsis wider than the word it replaced. Only the file's own crumb yields now.
+
+- **A tab shows its file's name.** The only tab on an empty strip was cut at `Yeast_microC_G2M_1kb…`
+  while the crumb below printed the same name whole; the ellipsis was the bold weight of being active
+  crossing a 12 rem cap.
+
+- **A track's name keeps its word.** A feature row's star, eye, fold and cross left about seventy
+  pixels for the name in a 262 px card, so `ATAC peaks` read `ATAC p…` directly under the `ATAC`
+  signal track it has to be told apart from.
+
+- **A value that runs past the File card's edge shows a scrollbar.** `uri http://127.0.0.1:5` reads
+  as a value that stopped rather than one that continues; the card has always scrolled, and now it
+  says so. The `lengths` row is short enough to fit either way — `bigWig header`, `inferred (rounded
+  up)` — and the sentence explaining it is said once instead of four times on one screen (§5.8).
+
+- **The genome minimap no longer says "on the diagonal" in a session with no map.** A link to a file
+  that could not be opened left the map's view in the store while a browser over the remembered
+  genome was what got mounted, so the card highlighted the first kilobase of `IV` and described it in
+  contact-map words. Which mode it is now comes from the session rather than from the link.
+
+- **The loading screen keeps the file's name, and shows one meter.** `Opening Yeast_G2M.scool…`
+  became `downloading — 1.2 MB of 18.1 MB` and then `reading pixels — 1,204 of 14,769,558`: a
+  sentence with the file in it turning into a lowercase fragment halfway through a minute-long open,
+  in a window that may have two of them going. The phase is a line under the bar, and the spinner
+  goes when the bar arrives instead of turning beside it with both announcing themselves as progress.
+
+- **The right-click menu answers the keyboard.** Arrow keys walk its rows, Home and End reach the
+  ends, the first row takes focus when it opens and closing hands focus back. The breadcrumb's table
+  menu closes on Escape, which every other transient surface in the app already did.
+
+- **The three read-only status items open their panels from the keyboard.** They were plain `div`s,
+  so the `:focus-visible` rule written for them could never fire and the request-and-byte breakdown
+  a reader on a metered bucket watches was reachable by pointer only. A screen reader now gets the
+  rows, too.
+
+- **Tab reaching the clip values on a map's key is visible.** Focus and hover drew the same dotted
+  hairline in the palest grey the sheet has, over the heatmap; focus takes the accent underline the
+  box itself draws once it opens.
+
+- **The key stands down on a picture narrower than it is.** At three cells across, the lead of a deck
+  — the map every other cell is compared against — had a 14 rem legend over a 175 px plot.
+
+- **A structure key of sixteen sequences goes in two columns**, instead of a translucent list to be
+  scrolled to reach `XVI`. **The spinner beside a running task is a ring with a track**, not a ring
+  with a hole, which at any still frame drew a capital `C` in front of the sentence.
+
+- **The drawer's labels do not wrap.** `Minimum separation`, `Compaction window` and `Refinement
+  steps` each broke over two lines beside a one-line box, because the drawer was using the 15 rem
+  side column's label track in a panel three quarters of the window wide.
+
+- **The palette's door survives a half-width window.** Below 60 rem the search bar was hidden
+  outright, which left `⌘P` — and every command with no button of its own — with nothing on screen
+  to name it. It keeps its badge and loses its sentence.
+
+- **`3 problem(s)`** is `3 problems`, and a validation that is running says `running`.
 
 ## [0.13.0] - 2026-09-20
 

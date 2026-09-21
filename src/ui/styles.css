@@ -36,7 +36,7 @@
  */
 :root,
 :root[data-theme='light'],
-.content,
+.content:has(.heatmap-wrap, .browser-stage, .deck-grid),
 .analysis-figure,
 .figure-chart {
   --bg: #ffffff;
@@ -406,9 +406,21 @@ p {
 
 @media (max-width: 60rem) {
   .app-head {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
   }
+
+  /* The bar loses its sentence and keeps its badge, rather than going
+     altogether: it is the only thing on screen that names the palette, and
+     every command that has no button of its own is behind it. A window half a
+     screen wide — a viewer beside a paper — is a common shape, and a reader who
+     has never been told about ⌘P had nothing left to find it by. */
   .action-bar {
+    width: auto;
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+
+  .action-bar-text {
     display: none;
   }
 }
@@ -517,7 +529,11 @@ p {
      — which is a pseudo-element, and so paints *after* every real child — took
      the outer half of its red background off. */
   padding: 0 0.45rem;
-  max-width: 15rem;
+  /* The same 22rem `.crumb` allows the same file name, because the two surfaces
+     were disagreeing about how much of it is worth showing: the crumb printed
+     `Yeast_microC_G2M_1kb.cool` whole while the tab above it cut the `.cool`
+     off. A Hi-C name carries its condition and its resolution at the end. */
+  max-width: 22rem;
   min-width: 0;
   border-radius: 5px 5px 0 0;
   background: var(--tab-rest);
@@ -605,7 +621,7 @@ p {
   letter-spacing: 0.005em;
   cursor: pointer;
   min-width: 0;
-  max-width: 12rem;
+  max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -724,6 +740,16 @@ p {
   margin: 0;
   background: none;
   box-shadow: none;
+  /* A title, so it takes the room a title can: with one tab the rest of the
+     strip is empty, and the name was being cut at 12rem by the bold weight
+     `.is-active` gives it — the same name, unbolded beside a second tab, fitted.
+     Bounded all the same: a 200-character name would push the `+` off the
+     strip, which `.tabs`'s own `overflow-x` would then scroll away. */
+  max-width: 34rem;
+}
+
+.tabstrip.single .tab-label {
+  max-width: 32rem;
 }
 
 .tabstrip.single .tab::before,
@@ -1460,7 +1486,7 @@ p {
 }
 
 /*
- * The centre column, and the one part of the app the theme does not reach.
+ * The centre column, and the part of the app the theme reaches last.
  *
  * A contact map is a *figure*. Its colormaps are built for ink on white, the
  * labels and the plot frame are drawn in the same greys `ops/show.py` uses, and
@@ -1469,14 +1495,24 @@ p {
  * and the halo behind every label — which is `--bg` — turned black behind dark
  * grey text on a white plot.
  *
- * So the palette is re-declared, not patched: every variable, set to the light
- * value, on the element every part of the centre column inherits from. That
- * covers the canvases, the tables, the breadcrumbs inside a view, the region
- * box and the buttons in one stroke, and it means a control added here later is
- * light without anyone remembering to make it so. `readCanvasPalette` reads its
- * three colours off a node inside this box for the same reason.
+ * So where there is a picture the palette is re-declared, not patched: every
+ * variable, set to the light value, on the element the whole view inherits
+ * from. That covers the canvas, the breadcrumb inside the view, the locus box
+ * and the buttons around it in one stroke — the furniture that frames a figure
+ * belongs to the figure — and `readCanvasPalette` reads its three colours off a
+ * node inside this box for the same reason.
  *
- * Everything outside — header, the three panels, the status bar — stays dark.
+ * **And where there is no picture, the theme reaches it**, which it did not.
+ * The pin was on `.content` itself, and `App` mounts *every* view there: a
+ * reader who chose dark got the landing page they open every session, the
+ * Genomes and Chromosomes tables they scroll, the whole-genome gate and the
+ * error view as a white sheet inside a dark frame, with a dark About dialog
+ * floating over it. A drop zone, eight store tiles and a table of chromosome
+ * lengths are not figures that will be exported, and the argument for pinning
+ * was only ever about the ones that are. `:has()` rather than a class the shell
+ * would have to write and take off again — the same reason the picker's dotted
+ * ground uses it — and the three names are the three view roots that hold a
+ * drawn picture.
  */
 .content {
   flex: 1 1 auto;
@@ -1484,17 +1520,19 @@ p {
   min-height: 0;
   overflow: auto;
   padding: 1rem;
-
-  /* The palette itself is in the light list at the top of this sheet, which
-     names this selector: it was a fourteenth copy of those values and drifted
-     from them once already. */
-
-  /* Declared as well as inherited: a form control inside this box asks the UA
-     which scheme to render itself in, and the answer has to be this one or a
-     `<select>` in the view controls comes back dark on white. */
-  color-scheme: light;
   background: var(--bg);
   color: var(--text);
+}
+
+/* The palette itself is in the light list at the top of this sheet, which names
+   this same selector: it was a fourteenth copy of those values and drifted from
+   them once already.
+
+   `color-scheme` is declared as well as inherited: a form control inside this
+   box asks the UA which scheme to render itself in, and the answer has to be
+   this one or a `<select>` in the view controls comes back dark on white. */
+.content:has(.heatmap-wrap, .browser-stage, .deck-grid) {
+  color-scheme: light;
 }
 
 /* The three columns beside the map — General, Annotations, Aesthetics — which
@@ -1753,6 +1791,13 @@ p {
 .panel-column .meta,
 .panel-column .meta-empty {
   overflow-x: auto;
+  /* Visibly scrollable. The rule above is what lets a URI run to its full width
+     instead of being elided (see `.kv`), but a value that simply stops at the
+     card's edge — `uri http://127.0.0.1:5` — reads as a value that stopped, and
+     an overlay scrollbar shows itself only once the pointer is already
+     scrolling. A thin bar is the cue that there is more of it, as `.seq-list`
+     has. */
+  scrollbar-width: thin;
 }
 
 /* …and never *downwards*. Only one axis was asked for above, but a box with
@@ -1852,10 +1897,12 @@ p {
   text-overflow: ellipsis;
   min-width: 0;
   flex: 0 1 auto;
-}
-
-.status-right {
-  margin-left: auto;
+  /* The free space is *here*, so every instrument after it is right-aligned as
+     a group. It used to be a `margin-left: auto` on the first instrument, which
+     anchored the group to whichever item that happened to be — and the two
+     file-shaped ones now leave the bar altogether when no file is open, which
+     left memory and CPU standing against the readout in the middle. */
+  margin-right: auto;
 }
 
 .app-foot {
@@ -2130,6 +2177,12 @@ p {
   max-width: 22rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* **A name is never shortened to make room.** In an embed the whole row lives
+     in a `flex: 1 1 auto` slot, so every crumb was shrinkable and the *shortest*
+     one gave way first: `IV` became `I…`, which to a yeast biologist is a
+     different chromosome, spelled with an ellipsis wider than the word it
+     replaced. The row has `overflow-x: auto` and is allowed to use it. */
+  flex: 0 0 auto;
 }
 
 .crumb:hover {
@@ -2142,9 +2195,14 @@ p {
   cursor: default;
 }
 
+/* The one crumb that may yield, because it is the one whose middle can go
+   without changing what it names: a file's name is long, it is on the tab above
+   as well, and its tooltip carries it whole. */
 .crumb-file {
   color: var(--text-dim);
   font-family: var(--mono);
+  flex: 0 1 auto;
+  min-width: 5rem;
 }
 
 /* The root crumb: a link, plus an arrow that opens the table picker. Going up
@@ -2847,6 +2905,11 @@ p {
   margin-top: 0.5rem;
 }
 
+/* A ceiling, not a height: sixteen chromosomes drew their bordered box down to
+   the bottom of the window with two hundred pixels of nothing under the last
+   row, which reads as rows that failed to load. The floor stays, so a
+   one-sequence file is not a sliver, and the virtualiser measures
+   `clientHeight` at paint, so it works at either size. */
 .table {
   display: flex;
   flex-direction: column;
@@ -2854,7 +2917,7 @@ p {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-raised);
-  height: calc(100vh - 15rem - var(--tabstrip-h));
+  max-height: calc(100vh - 15rem - var(--tabstrip-h));
   min-height: 22rem;
 }
 
@@ -2926,6 +2989,20 @@ p {
   justify-content: flex-end;
 }
 
+/* **The words elide, not the cell.** `text-overflow` on a flex container does
+   nothing — the text inside one is an anonymous item, which the property cannot
+   reach — so a long heading in a right-aligned column had its *beginning*
+   pushed out of the box: "estimated completeness" read "ed completeness" and
+   "weighted r" read "hted r", which is not a column name a reader can act on,
+   and the heading is the only place a MAG metric is named. The label span is the
+   one child allowed to shrink; the sort arrow keeps its width, and the cell's
+   `title` already carries the name in full. */
+.th > span:not(.sort-arrow) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sort-arrow {
   display: inline-flex;
   align-items: center;
@@ -2972,7 +3049,9 @@ p {
 
 .tviewport {
   position: relative;
-  flex: 1 1 auto;
+  /* `0 1 auto`, so the port is as tall as its rows and the box above shrinks to
+     them; `1 1 auto` grew it to fill a height `.table` no longer has. */
+  flex: 0 1 auto;
   overflow: auto;
   outline: none;
 }
@@ -3747,10 +3826,27 @@ canvas.is-frozen {
   border-bottom: 1px dotted transparent;
 }
 
-.map-key-value:hover,
-.map-key-value:focus-visible {
+.map-key-value:hover {
   border-bottom-color: var(--text-faint);
+}
+
+/* Focus is not hover. Both drew the same dotted hairline in the palest grey the
+   sheet has, over the heatmap, with the ring suppressed — so a reader tabbing
+   from the canvas to the clip bounds could not tell that the caret had arrived,
+   and the two gestures were indistinguishable. The accent underline is the one
+   `.map-key-input` draws once the box opens, so focus and editing are one
+   continuous cue; a 2px ring would be the only ring on inline-editable text in
+   this app and would clip against the key's 4px padding. */
+.map-key-value:focus-visible {
+  border-bottom: 1px solid var(--accent);
   outline: none;
+}
+
+/* Away where the plot is narrower than the key itself — see
+   `MatrixPanel.placeKey`, which measures the picture because a media query
+   cannot see how many cells of a deck the reader has opened. */
+.map-key-slot.is-crowded {
+  display: none;
 }
 
 .map-key-input {
@@ -3941,6 +4037,23 @@ canvas.is-frozen {
   padding: 0.3rem 0.15rem;
 }
 
+/* …and no room to wrap, either. `∨ box ∧` is one control, and in half a 15rem
+   column the row broke after the box and left the up-chevron alone on a second
+   line under it — on the Tracks card, in every screenshot, which is where a
+   reader goes looking for "more transparent" and finds the arrow orphaned.
+   The box gives way instead of the buttons: it only ever shows two or three
+   digits, and `flex-basis: auto` on a number input asks for about twenty
+   characters' worth. */
+.field-pair .plot-icon-row {
+  flex-wrap: nowrap;
+}
+
+.field-pair .input-step {
+  min-width: 0;
+  width: 2.4rem;
+  flex: 1 1 2.4rem;
+}
+
 /* A checkbox is the one control that must not stretch: `width: 100%` on it
    draws a 7rem square in some browsers and a lonely 13px box pinned to the far
    right in the rest. It sits at the head of its column, level with its label. */
@@ -4067,6 +4180,31 @@ canvas.is-frozen {
 
 .plot-icon-row > .btn-icon {
   padding: 0.3rem;
+}
+
+/* **A row of marks in a panel card is tighter, so the seven fit one line.** The
+   Tracks card offers seven — six shared overlays and the name column — and at
+   0.3rem of padding the seventh wrapped and sat alone under the other six,
+   where a lone icon reads as a different kind of control from the row above it.
+   Scoped by what the row holds rather than by where it is: the steppers in these
+   same cards are `.plot-icon-row`s too, and their chevrons have their own
+   padding for their own reason. */
+.controls-card .plot-icon-row:has(> .btn-toggle) {
+  gap: 0.2rem;
+}
+
+.controls-card .plot-icon-row:has(> .btn-toggle) > .btn-icon {
+  padding: 0.25rem;
+}
+
+/* Eight cannot fit one line at any padding a 15px icon can keep — the Map card's
+   row is refit plus seven overlays — and a greedy wrap put seven on the first
+   line and one below. Four across, so both lines are deliberate: two rows of
+   four read as a block of marks, which is what they are. */
+.controls-card .plot-icon-row:has(> :nth-child(8)) {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  justify-content: start;
 }
 
 /* A gap that reads as a divider: two buttons that *do* something, then two that
@@ -4795,6 +4933,22 @@ canvas.is-frozen {
    with it, because they are the same control. */
 .title-bar > .search-box {
   margin-left: auto;
+}
+
+/* The map's bar has four more controls than a box, and they are one toolbar:
+   the locus box, `go`, the four zoom steps and the bookmark. Held together and
+   not allowed to wrap inside itself, so when the bar is too narrow to keep them
+   beside the title the whole toolbar drops to the next line still in order —
+   rather than the box staying up and the zoom steps breaking away underneath
+   the title, which is what a wrapping row of six items does and what gave this
+   one bar three shapes at three window widths. */
+.title-bar > .title-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  margin-left: auto;
+  min-width: 0;
 }
 
 .stepper {
@@ -7352,15 +7506,26 @@ canvas.is-frozen {
 }
 
 /* The same bar on the loading screen, which is a centred column rather than a
-   left-aligned panel — so it centres with the text above it and the spinner
-   above that, and the tabular figures keep the line from twitching as the
-   numbers climb. */
+   left-aligned panel — so it centres with the file's name above it and the
+   phase under it. The ring that was above them goes on the first report: two
+   meters for one wait is one meter too many. */
 .loading .progress-box {
   justify-content: center;
   margin: 0;
 }
 
 .loading .loading-text {
+  text-align: center;
+  min-height: 1.4em;
+}
+
+/* The phase and its count, under the bar rather than over the heading: the
+   heading names the file for as long as the open lasts. Tabular figures, so the
+   line does not twitch as the numbers climb. */
+.loading-note {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   text-align: center;
   min-height: 1.4em;
@@ -7499,7 +7664,7 @@ canvas.is-frozen {
   }
 
   .table {
-    height: calc(100vh - 12rem - var(--tabstrip-h));
+    max-height: calc(100vh - 12rem - var(--tabstrip-h));
   }
 }
 
@@ -7815,6 +7980,29 @@ canvas.is-frozen {
 .ann-flip {
   flex: 0 0 auto;
   padding: 0.2rem;
+}
+
+/* **The action column gives its padding back to the name.** A feature row
+   carries a star as well as the eye, the fold arrow and the cross, and those
+   four left about seventy pixels of a 262px card for the name — twelve short of
+   `ATAC peaks`, so it read `ATAC p…` directly under the `ATAC` signal track it
+   has to be told apart from. Tighter marks, and the name keeps the row's own
+   text size: a name set smaller than everything else on the row would read as a
+   different kind of thing. */
+.ann-head {
+  gap: 0.2rem;
+}
+
+.ann-row .ann-star,
+.ann-row .ann-eye,
+.ann-row .ann-flip,
+.ann-row .ann-more,
+.ann-row .btn-close {
+  padding: 0.15rem;
+}
+
+.ann-row .ann-name {
+  padding-inline: 0.1rem;
 }
 
 
@@ -9187,6 +9375,27 @@ span.deck-name {
   z-index: 2;
 }
 
+/* **Past eight rows the levels go in two columns.** Sixteen chromosomes is
+   sixteen rows, and capped at 55% of the cell that is a translucent list the
+   reader scrolls to reach XVI — which is the chromosome they are looking for as
+   often as any other, and the scroll hides part of the model while they do it.
+   Two columns is the same rows at half the height, which is what the
+   scroll-rather-than-grow argument above was protecting. `:has()` rather than a
+   class the painter writes, because how many sequences there are is a fact
+   about the file. */
+.structure-key:has(> .structure-key-level:nth-child(9)) {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  column-gap: 8px;
+  max-width: 75%;
+}
+
+/* The title, the ramp and its two ends are about the whole key, so they span
+   it; only the levels are a list. */
+.structure-key:has(> .structure-key-level:nth-child(9)) > :not(.structure-key-level) {
+  grid-column: 1 / -1;
+}
+
 .structure-key-title {
   color: var(--text-dim);
   white-space: nowrap;
@@ -9790,13 +9999,18 @@ span.deck-name {
 
 /* A determinate ring would need an angle per frame and a repaint of the column
    with it; this says "working" and costs one animation. */
+/* A track with an arc, as `.spinner` is drawn — not a ring with one side cut
+   out. At any still frame the hole made a letter: "C Contact probability P(s)",
+   a stray capital at the head of the sentence, which is what a screenshot shows
+   and what `prefers-reduced-motion` leaves on screen for three seconds at a
+   time. */
 .analysis-spinner {
   display: inline-block;
   width: 0.7em;
   height: 0.7em;
   margin-right: 0.3em;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
+  border: 2px solid var(--border);
+  border-top-color: currentColor;
   border-radius: 50%;
   animation: analysis-spin 0.8s linear infinite;
 }
@@ -10325,6 +10539,16 @@ span.deck-name {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
+}
+
+/* The drawer is three quarters of the window, so its labels are not squeezed
+   into the 15rem side column's track: at 6.5rem "minimum separation",
+   "compaction window" and "refinement steps" each broke into two lines beside a
+   one-line box, which reads as two fields. A fixed 9rem rather than
+   `max-content`, because every `.param-row` is its own grid and a per-row width
+   would leave the boxes ragged down the form; the side columns keep 6.5rem. */
+.param-group .field {
+  grid-template-columns: 9rem minmax(0, 1fr);
 }
 
 .param-row {

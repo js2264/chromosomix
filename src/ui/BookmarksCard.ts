@@ -37,6 +37,7 @@ import {
   type BookmarkStore,
 } from '../annotations/bookmarks'
 import { button, el, fmt } from './dom'
+import { resolutionLabel } from '../units'
 import { cardTitle, icon, iconButton } from './icons'
 
 export interface BookmarksCardProps {
@@ -310,14 +311,14 @@ export class BookmarksCard {
     const go = button('', () => this.props.go(mark), {
       class: 'btn bookmark-go',
       title: `Open ${mark.contig} zoomed to this place${
-        mark.binsize === undefined ? '' : `, at ${fmt.bp(mark.binsize)} bins`
+        mark.binsize === undefined ? '' : `, at ${resolutionLabel(mark.binsize)} bins`
       } — the rest of the chromosome stays behind it`,
     })
     go.replaceChildren(
       el('span', { class: 'bookmark-where' }, ...whereOf(mark)),
       ...(mark.binsize === undefined
         ? []
-        : [el('span', { class: 'bookmark-res', text: fmt.bp(mark.binsize) })]),
+        : [el('span', { class: 'bookmark-res', text: resolutionLabel(mark.binsize) })]),
       icon('arrow-right', { size: 14 }),
     )
     return el(

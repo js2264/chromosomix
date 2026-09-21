@@ -50,7 +50,7 @@ export class ClipRange {
     // because it is the same action: hand the range back to the data.
     this.autoButton = iconButton(
       'chevrons-up-down',
-      'Back to the §7.1 default: the 99th percentile of the values in view.',
+      'Back to the default: the 99th percentile of the values in view.',
       () => {
         this.auto = true
         this.paint()

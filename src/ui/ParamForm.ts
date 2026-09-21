@@ -50,6 +50,7 @@ import type {
 import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { button, el, fmt } from './dom'
+import { resolutionLabel } from '../units'
 import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
 import { iconButton } from './icons'
 
@@ -929,7 +930,7 @@ export class ParamForm {
     const showBins = (value: number): void => {
       if (caption === null) return
       const bins = binsFor(value, this.context.binsize)
-      caption.textContent = `${fmt.int(bins)} ${bins === 1 ? 'bin' : 'bins'} at ${fmt.bp(
+      caption.textContent = `${fmt.int(bins)} ${bins === 1 ? 'bin' : 'bins'} at ${resolutionLabel(
         this.context.binsize,
       )}`
     }

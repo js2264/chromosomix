@@ -23,6 +23,8 @@ const DECIMAL = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 })
  * against the counts under it was shown a pair that could not produce it.
  */
 const SIGNIFICANT = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 3 })
+/** One formatter per decimal count, built on demand — see {@link fmt.fixed}. */
+const FIXED = new Map<number, Intl.NumberFormat>()
 
 export const fmt = {
   /** `4573673` → `4,573,673`. */
@@ -42,6 +44,29 @@ export const fmt = {
     const size = Math.abs(value)
     if (size >= 1e-3) return DECIMAL.format(value)
     return size >= 1e-7 ? SIGNIFICANT.format(value) : value.toExponential(2)
+  },
+  /**
+   * A number with a *fixed* number of decimal places, grouped — `1.07`, `1.00`.
+   *
+   * For a table column, which is the one place {@link num}'s "as many places as
+   * this value needs" is the wrong answer: a completeness column came out
+   * `0.99`, `1`, `1.1`, `1.07`, so the digits did not stand under one another
+   * and `1` read as a different kind of value from `0.99` — in a column a
+   * reader ranks MAGs by, by eye, with `tabular-nums` asked for and then
+   * wasted. The caller measures the column once and every cell in it is
+   * printed to the same width.
+   */
+  fixed(value: number, digits: number): string {
+    if (!Number.isFinite(value)) return '—'
+    let format = FIXED.get(digits)
+    if (format === undefined) {
+      format = new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })
+      FIXED.set(digits, format)
+    }
+    return format.format(value)
   },
   /** `0.083` → `8.3%`. */
   pct(fraction: number, digits = 1): string {

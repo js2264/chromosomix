@@ -160,7 +160,7 @@ export class HicFile {
       throw new ViewerError(
         'unsupported',
         'This .hic carries no base-pair resolutions. Fragment-resolution matrices are ' +
-          'variable-bin and are excluded from this viewer for the reasons in SPECS §3.3.',
+          'variable-bin and are excluded from this viewer.',
         {},
       )
     }

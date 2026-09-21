@@ -446,37 +446,49 @@ export class RegionView {
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
-          this.search.el,
-          // Through the box rather than around it: Enter and this button mean the
-          // same thing, and a hit list the button could not see would make them
-          // disagree about what "go" is.
-          button('go', () => this.search.submit()),
-          // **The zoom steps, beside the box, because they write into the box.**
-          // The scroll wheel on the map is a zoom of the *picture* — the same
-          // block, drawn larger or smaller — and past the edge of what was read
-          // it stops. These are the other thing "zoom" means on a genome
-          // browser: a different *range*, re-read, with the region string
-          // updated to say so. They sit here rather than on the map because this
-          // is where the coordinate they change is written.
-          //
-          // **No back button.** It was `window.history.back()` under an arrow,
-          // which is the browser's own back with a second face — the key, the
-          // trackpad gesture and the chrome all already reach it, and a fourth
-          // way to press it cost a slot on the one line every other control here
-          // is about *this* view.
-          //
-          // **One group, so the four wrap together or not at all.** They are a
-          // scale — widest out to widest in, with the window you are on in the
-          // middle — and a bar narrow enough to break the row was breaking it
-          // *between* them, leaving `10×` alone at the end of one line and the
-          // other three on the next. That reads as two controls rather than one
-          // axis, and which three happened to fit said nothing about anything.
-          el('div', { class: 'zoom-steps' }, ...this.zooms),
-          // Beside `go`, because it is about the same thing `go` is: the box says
-          // where to be and this says *remember this*. A bookmark button in the
-          // sidebar would have been a card control, and the hand that has just
-          // arrived somewhere worth keeping is up here.
-          ...(props.boxControl === undefined ? [] : [props.boxControl]),
+          // **The toolbar is one group, so it moves as one line.** The bar
+          // wraps, and only the box was pushed right, so the four zoom steps
+          // and the bookmark broke away onto a line of their own *under the
+          // title* — beside nothing, two rows above the subtitle, and in a
+          // different arrangement at every width: three shapes of one bar at
+          // three window sizes. §5.4 says zoom is four buttons beside the box
+          // "because what they change is the coordinate the box holds", and
+          // that is only true while they are beside it.
+          el(
+            'div',
+            { class: 'title-tools' },
+            this.search.el,
+            // Through the box rather than around it: Enter and this button mean
+            // the same thing, and a hit list the button could not see would make
+            // them disagree about what "go" is.
+            button('go', () => this.search.submit()),
+            // **The zoom steps, beside the box, because they write into the box.**
+            // The scroll wheel on the map is a zoom of the *picture* — the same
+            // block, drawn larger or smaller — and past the edge of what was read
+            // it stops. These are the other thing "zoom" means on a genome
+            // browser: a different *range*, re-read, with the region string
+            // updated to say so. They sit here rather than on the map because this
+            // is where the coordinate they change is written.
+            //
+            // **No back button.** It was `window.history.back()` under an arrow,
+            // which is the browser's own back with a second face — the key, the
+            // trackpad gesture and the chrome all already reach it, and a fourth
+            // way to press it cost a slot on the one line every other control here
+            // is about *this* view.
+            //
+            // **One group, so the four wrap together or not at all.** They are a
+            // scale — widest out to widest in, with the window you are on in the
+            // middle — and a bar narrow enough to break the row was breaking it
+            // *between* them, leaving `10×` alone at the end of one line and the
+            // other three on the next. That reads as two controls rather than one
+            // axis, and which three happened to fit said nothing about anything.
+            el('div', { class: 'zoom-steps' }, ...this.zooms),
+            // Beside `go`, because it is about the same thing `go` is: the box
+            // says where to be and this says *remember this*. A bookmark button
+            // in the sidebar would have been a card control, and the hand that
+            // has just arrived somewhere worth keeping is up here.
+            ...(props.boxControl === undefined ? [] : [props.boxControl]),
+          ),
         ),
         this.matched,
         this.problem,

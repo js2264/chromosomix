@@ -53,7 +53,10 @@ describe('a profile short enough to draw whole', () => {
 
   it('labels both axes from the profile', () => {
     const curve = profileCurve(profile([1], 0, 10_000))
-    expect(curve.xLabel).toBe('bin (10.0 kb each)')
+    // `10 kb`, not `10.0 kb`: a bin size takes `resolutionLabel` (§26.2), so the
+    // axis of a figure and the crumb over the map it was computed from spell
+    // one number one way.
+    expect(curve.xLabel).toBe('bin (10 kb each)')
     expect(curve.yLabel).toBe('Total coverage (contacts)')
     // A bare count has no unit, and inventing one would be a label that lies.
     const bare = profileCurve({ ...profile([1]), unit: '' })

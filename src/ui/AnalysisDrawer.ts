@@ -361,7 +361,12 @@ function paramText(value: ParamValue | undefined): string {
 function runNote(state: JobState): Array<HTMLElement | string> {
   switch (state.status) {
     case 'running':
-      return [el('span', { class: 'analysis-spinner' }), state.note === '' ? 'working' : state.note]
+      // Decoration beside a sentence that already says what is happening, so
+      // it is hidden from the reader who is being read to.
+      return [
+        el('span', { class: 'analysis-spinner', attrs: { 'aria-hidden': 'true' } }),
+        state.note === '' ? 'working' : state.note,
+      ]
     case 'queued':
       return ['waiting for the job in front of it']
     case 'failed':
@@ -506,7 +511,7 @@ export class AnalysisDrawer {
       class: 'btn btn-quiet',
       title:
         'Take a new snapshot of the framing and run again. The result on screen is a record of ' +
-        'the view it was computed from, so it is left as it is until this finishes (§18.4).',
+        'the view it was computed from, so it is left as it is until this finishes.',
     })
     this.runButton = button('run', () => this.run(), { class: 'btn' })
     // Its label is written in {@link paintRun}, because on a deck it names the
@@ -537,7 +542,7 @@ export class AnalysisDrawer {
         class: 'btn btn-quiet',
         title:
           'The task, its version, every parameter, the framing, the file and the build — the ' +
-          'same lines every export carries at its head (§18.4).',
+          'same lines every export carries at its head.',
       }),
       // The other half of the same fact, for the reader whose next file is the
       // second of two hundred. Whether it can be pressed, and what it says when
@@ -1422,7 +1427,7 @@ export class AnalysisDrawer {
       class: 'btn btn-quiet',
       title:
         'The numbers as a table, with the provenance above them — what makes a figure ' +
-        'checkable by the person reading it (§18.7).',
+        'checkable by the person reading it.',
     })
   }
 

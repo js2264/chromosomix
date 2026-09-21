@@ -181,10 +181,15 @@ describe('the trail below the root', () => {
   it('walks genome → contig → region, with only the last one inert', () => {
     const built = build()
     built.crumb.render({ uri: 'f', view: 'region', genome: 'MAG_01', region: 'ctg7:100-900' })
-    expect(trail(built.crumb)).toEqual(['sample.metacool', 'Genomes', 'MAG_01', 'ctg7', 'ctg7:100-900'])
+    // The last crumb is the **window alone**, under the crumb that names the
+    // sequence: it used to repeat the contig, so the row ended
+    // `ctg7 › ctg7:100-900` above a heading and a box printing the same string
+    // a third and a fourth time. 1-based inclusive and grouped, like every
+    // other coordinate a reader reads (§26.1).
+    expect(trail(built.crumb)).toEqual(['sample.metacool', 'Genomes', 'MAG_01', 'ctg7', '101-900'])
     const current = all(built.crumb.el, '.crumb.current')
     expect(current).toHaveLength(1)
-    expect(current[0].textContent).toBe('ctg7:100-900')
+    expect(current[0].textContent).toBe('101-900')
     expect(current[0].tagName).toBe('SPAN')
 
     // The contig crumb strips the coordinates off, which is what going up means.

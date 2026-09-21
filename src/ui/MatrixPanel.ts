@@ -190,6 +190,7 @@ import {
   trackHeightField,
 } from './trackControls'
 import { TRACK_DRAG_TYPE, dragHasFiles, dragHasTrack, el, field, fmt, trimNumber } from './dom'
+import { resolutionLabel } from '../units'
 import { dragHasFileRow } from './fileDrag'
 import { filesFrom } from './chooseFiles'
 import { MapKey } from './MapKey'
@@ -778,9 +779,9 @@ export const MAP_CORRELATION_BINS = 1500
 
 const CORRELATE_HINT =
   'Replace the square by the Pearson correlation between its rows — the object a compartment ' +
-  'eigenvector is computed from (§18.8). Two bins correlate when they contact the rest of the ' +
+  'eigenvector is computed from. Two bins correlate when they contact the rest of the ' +
   'sequence in the same pattern, so the checkerboard this draws *is* the A/B compartments, and ' +
-  'it is the same matrix the Compartments task solves. Implies `O/E`, since a correlation of ' +
+  'it is the same matrix the Compartments task solves. Implies O/E, since a correlation of ' +
   'anything else is a correlation of the distance decay, and balanced counts, since a ' +
   'correlation of unbalanced O/E is a correlation of the coverage bias. One file, square blocks, and up to ' +
   `${MAP_CORRELATION_BINS.toLocaleString()} bins a side: it is the one cubic step in the viewer, ` +
@@ -1560,8 +1561,8 @@ export class MatrixPanel {
      */
     const valueFields: HTMLElement[] = []
     const controls: HTMLElement[] = [
-      field('transform', transformSelect, 'Value transform, matching `metacooler show --transform`.'),
-      field('colormap', colormapSelect, '`afmhot_r` is what `metacooler show` draws (§7.1).'),
+      field('transform', transformSelect, 'Value transform, matching metacooler show --transform.'),
+      field('colormap', colormapSelect, 'afmhot_r is what the metacooler show command draws.'),
       // Not `field()`: that wraps its control in a `<label>`, and a label around
       // four inputs and a button focuses whichever one it feels like.
       el(
@@ -1570,7 +1571,7 @@ export class MatrixPanel {
           class: 'field field-clip',
           title:
             'Where the colourmap starts and saturates, in transformed units. ' +
-            'Auto is the §7.1 default: 0 to the 99th percentile of the values in view.',
+            'Auto is the default: 0 to the 99th percentile of the values in view.',
         },
         el('span', { class: 'field-label', text: 'clip' }),
         this.clip.el,
@@ -3117,6 +3118,14 @@ export class MatrixPanel {
     const size = this.heatmap.cssSize
     this.keySlot.style.top = `${Math.round(plot.y + KEY_INSET)}px`
     this.keySlot.style.right = `${Math.round(size.width - plot.x - plot.width + KEY_INSET)}px`
+    // **And away where it would cover the picture rather than annotate it.**
+    // The key is capped at 14 rem, and at three cells across a deck the lead —
+    // which is the one every other cell is compared against — has three side
+    // lanes and about 175 px of plot left, so the box sat over the top half of
+    // the data it was explaining. The same argument the phone breakpoint above
+    // makes, measured against the picture instead of the window, because a
+    // media query cannot see how many cells the reader has opened.
+    this.keySlot.classList.toggle('is-crowded', plot.width > 0 && plot.width < KEY_MIN_PLOT)
     this.placeGrips()
   }
 
@@ -3591,7 +3600,7 @@ export class MatrixPanel {
 
     const parts: string[] = []
     if (context?.file !== undefined && context.file !== '') parts.push(context.file)
-    if (this.options.binsize > 0) parts.push(`${fmt.bp(this.options.binsize)} bins`)
+    if (this.options.binsize > 0) parts.push(`${resolutionLabel(this.options.binsize)} bins`)
     if (this.level === 'contig') parts.push('contig level')
     if (this.options.balance === true) parts.push('balanced')
     // What the cells are, in the caption, because an exported figure leaves the
@@ -3659,7 +3668,7 @@ export class MatrixPanel {
     // picture rather than about the numbers, so it is said as one, and only
     // where there is any.
     if (this.options.binsize > 0) {
-      parts.push(`${fmt.bp(this.options.binsize)} bins`)
+      parts.push(`${resolutionLabel(this.options.binsize)} bins`)
       if (binsPerCell > 1) parts.push(`${fmt.int(binsPerCell)} per drawn cell`)
     }
     if (this.level === 'contig') parts.push('contig level')
@@ -8603,6 +8612,17 @@ const NARROW_QUERY = '(max-width: 34rem)'
 const KEY_INSET = 6
 
 /**
+ * The narrowest picture the key may stand on, in CSS pixels.
+ *
+ * The key's own `max-width` — 14 rem, about 224 px — plus its inset: below
+ * that the box is wider than the plot it is a key to, which is a legend with
+ * the data behind it rather than beside it. Stated here rather than measured,
+ * because the answer must not depend on how much text this particular key
+ * happens to hold.
+ */
+const KEY_MIN_PLOT = 240
+
+/**
  * Watch a media query, calling back with its state now and on every change.
  * Returns the teardown.
  */
@@ -8886,7 +8906,7 @@ export function resolutionNote(
   // sequences share it — the cell spans that many base pairs of sequence, in
   // more than one piece. Which sequences those are is the readout's to say, and
   // the list beside the map's; it is not a second resolution.
-  return `effective resolution: ${fmt.bp(binsize * (result.binsPerCell ?? 1))}`
+  return `effective resolution: ${resolutionLabel(binsize * (result.binsPerCell ?? 1))}`
 }
 
 /**

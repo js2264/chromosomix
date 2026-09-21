@@ -356,14 +356,20 @@ function genomeCard(
           el('div', { class: 'v', text: value, title: value }),
         ]),
       ),
+      // The way out, and only that. The sentence before it — "this file
+      // carries no sequence lengths, so each one ends at its last feature
+      // rounded up" — is what the `lengths` row above already says, and the
+      // row, this hint and the browser's own summary line said it three times
+      // on one screen, over a `total` already qualified "(at least)". §5.8 asks
+      // for inferred lengths to be *labelled* wherever the genome is described;
+      // the label is the row, and what a reader cannot work out for themselves
+      // is how to replace them.
       ...(exact
         ? []
         : [
             el('p', {
               class: 'hint',
-              text:
-                'This file carries no sequence lengths, so each one ends at its last feature ' +
-                'rounded up. Drop a chrom.sizes or a bigWig to replace them with the real ones.',
+              text: 'Drop a chrom.sizes or a bigWig to replace them with the real ones.',
             }),
           ]),
     ),
@@ -433,17 +439,28 @@ function rangeOfRegion(region: string): { contig: string; start: number; end: nu
   return { contig: region.slice(0, at), start: Number(first), end: Number(last) }
 }
 
-/** How each kind of source is described in the Genome card. */
+/**
+ * How each kind of source is described in the Genome card.
+ *
+ * **Short enough to fit the card's value column**, which is what these had
+ * stopped being: "inferred from the features" and "declared by the VCF's
+ * ##contig lines" ran past the card's edge and the reader saw `inferred from
+ * the feat` — a phrase cut mid-word, which reads as a typo rather than as
+ * something scrolled out of view. The card does not elide a value (see `.kv` in
+ * the stylesheet: an identity you cannot read whole is not an identity), so the
+ * answer is prose that fits: the *file kind* that answered, and for the
+ * inferred case the one word that qualifies it.
+ */
 const ORIGINS: Record<Assembly['origin'], string> = {
-  sizes: 'declared by a chrom.sizes',
-  bigwig: 'from the bigWig header',
-  bigbed: 'from the bigBed header',
-  fasta: 'the sequences themselves',
-  features: 'inferred from the features',
-  cooler: 'from the cooler’s /chroms',
-  bam: 'from the BAM’s @SQ header',
-  vcf: 'declared by the VCF’s ##contig lines',
-  twobit: 'from the .2bit index',
+  sizes: 'chrom.sizes',
+  bigwig: 'bigWig header',
+  bigbed: 'bigBed header',
+  fasta: 'the sequences',
+  features: 'inferred (rounded up)',
+  cooler: 'the cooler’s /chroms',
+  bam: 'the BAM’s @SQ header',
+  vcf: 'the VCF’s ##contig lines',
+  twobit: 'the .2bit index',
 }
 
 /** The second file of a comparison, and what the gate had to read to accept it. */
@@ -1250,12 +1267,19 @@ export class Session {
     // a zoom — have no counterpart on a map. Listing a map's actions beside a
     // browser (greyed out, every one of them) would be a palette that mostly
     // says no.
+    // One word for the list `[` and `]` walk, and it is the word §26.4 gives a
+    // stretch of DNA in prose: a **sequence**. The two branches used to name it
+    // differently — "Previous sequence" here, "Previous genome or contig" on a
+    // map — so pressing `v` rewrote half the palette, and on a plain cooler
+    // "genome or contig" named neither of the things the key steps through. A
+    // genome view is the one place the step really is a genome, and says so.
+    const stepNoun = state?.view === 'genome' ? 'genome' : 'sequence'
     if (this.assembly !== null) {
       return [
         {
           id: 'browser-whole',
           group: 'Go',
-          title: 'The whole genome',
+          title: 'Whole genome',
           hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
           run: () => this.store.patch({ locus: undefined }),
@@ -1267,7 +1291,7 @@ export class Session {
         {
           id: 'go-prev',
           group: 'Go',
-          title: 'Previous sequence',
+          title: `Previous ${stepNoun}`,
           hint: this.stepTarget(-1) ?? undefined,
           keys: KEYS.previous,
           enabled: this.stepTarget(-1) !== null,
@@ -1276,7 +1300,7 @@ export class Session {
         {
           id: 'go-next',
           group: 'Go',
-          title: 'Next sequence',
+          title: `Next ${stepNoun}`,
           hint: this.stepTarget(1) ?? undefined,
           keys: KEYS.next,
           enabled: this.stepTarget(1) !== null,
@@ -1335,7 +1359,11 @@ export class Session {
         {
           id: 'browser-search',
           group: 'Go',
-          title: 'Find a gene, or go to a locus',
+          // *Find*, as on a map, because it is the same key over the same one
+          // box; what the box takes here is the hint's business and differs by
+          // view, which is why the hint is written per view and the title is
+          // not.
+          title: 'Find',
           // One command, because there is one box. It used to be two — `/` to
           // find and `l` to go — over the same field, and `l` was also the
           // labels overlay: in a browser session the overlay could not be
@@ -1390,10 +1418,11 @@ export class Session {
         id: 'add-map',
         group: 'File',
         title: 'Add a map beside this one',
-        hint:
-          'Another file, in a panel of its own, navigating with this one (§16). Both maps show ' +
-          'the same region at their own bin size — side by side is a weaker claim than the ' +
-          'lower-left triangle, so it takes no matching grid.',
+        // One line, and no section number: a reader who could follow "(§16)"
+        // would be reading SPECS, and this app never links it. What the deck's
+        // side-by-side claim is weaker *than* is argued in §16 and in
+        // `panels/PanelDeck.ts`, which is where an argument belongs.
+        hint: 'Another file, in a panel of its own, moving with this one.',
         enabled:
           file !== null && parseMaps(state?.maps).length + 1 < MAX_PANELS && this.deckIsPossible,
         run: () => this.addMap(),
@@ -1496,7 +1525,13 @@ export class Session {
       {
         id: 'go-contigs',
         group: 'Go',
-        title: 'Contigs table',
+        // The file's own word for its own table, which is the one surface §26.4
+        // keeps the file-kind noun for: the crumb over a cooler says
+        // *Chromosomes* and its tooltip *Back to Chromosomes (C)*, so a
+        // shortcuts dialog printing "C  Contigs table" named a table that
+        // screen does not have. The command above it already switches its title
+        // per file kind for the same reason.
+        title: isMetacool ? 'Contigs table' : 'Chromosomes table',
         keys: KEYS.contigs,
         enabled: file !== null,
         run: () => {
@@ -1526,7 +1561,7 @@ export class Session {
       {
         id: 'go-prev',
         group: 'Go',
-        title: 'Previous genome or contig',
+        title: `Previous ${stepNoun}`,
         hint: this.stepTarget(-1) ?? undefined,
         keys: KEYS.previous,
         enabled: this.stepTarget(-1) !== null,
@@ -1535,7 +1570,7 @@ export class Session {
       {
         id: 'go-next',
         group: 'Go',
-        title: 'Next genome or contig',
+        title: `Next ${stepNoun}`,
         hint: this.stepTarget(1) ?? undefined,
         keys: KEYS.next,
         enabled: this.stepTarget(1) !== null,
@@ -2695,6 +2730,10 @@ export class Session {
       this.tearDown()
       this.assembly = assembly
       this.assemblySource = source
+      // The trail for a genome, built here because `tearDown` has just dropped
+      // the file's (§5.8): a browser is a view like any other and says where in
+      // the assembly it is.
+      this.breadcrumb = this.browserBreadcrumb(assembly)
       this.setUpBrowserAnnotations(assembly)
       // The file that named the genome is also its first track — unless it was a
       // `chrom.sizes`, which declares an assembly and draws nothing.
@@ -3636,9 +3675,8 @@ export class Session {
    * Replaces *only* those: the URI, the name, the session memory and every
    * loaded track are what they were, because the genome did not change, only
    * what is known about it. The origin comes from the file that answered so the
-   * Genome card names it truthfully — "from the bigWig header" is a different
-   * claim from "declared by a chrom.sizes", and both are different from the
-   * guess they replace.
+   * Genome card names it truthfully — "bigWig header" is a different claim from
+   * "chrom.sizes", and both are different from the guess they replace.
    */
   private takeLengths(previous: Assembly, contigs: Contig[], origin: AssemblyOrigin): void {
     this.assembly = assemblyOf({
@@ -3654,6 +3692,28 @@ export class Session {
     // *of*, and its axis is built once from it.
     this.mounted = state
     this.mountBrowser(state)
+  }
+
+  /**
+   * The trail for a genome with no file behind it (§5.8).
+   *
+   * A browser reached by dropping a bigWig has no contact map, so there is no
+   * `open()` to have built a breadcrumb: this is the one, and it is the same
+   * component the map uses so the row does not change shape when the eye is
+   * pressed. `rootKind` and `rootChoices` are the props a table needs and this
+   * trail has no table — `Breadcrumb.pushBrowser` never reads them — so they
+   * are the narrowest values that type-check rather than a second shape of
+   * props for one caller.
+   */
+  private browserBreadcrumb(assembly: Assembly): Breadcrumb {
+    return new Breadcrumb({
+      rootKind: 'contigs',
+      rootChoices: [],
+      fileLabel: assembly.name,
+      entries: [],
+      onNavigate: (state) => this.navigate(state),
+      onOpenFile: () => this.host.openFileDialog(this),
+    })
   }
 
   /** Whether the map behind this browser can be brought back. */
@@ -3988,6 +4048,15 @@ export class Session {
    * ranges are what an on-diagonal block is, and `MinimapCard` collapses them
    * back into the single highlight a 1D window draws — so the same place looks
    * the same in both modes, which is what the card is for.
+   *
+   * **Which mode it is comes from this session, not from `state.view`.** The two
+   * can disagree: a link naming `view=region` on a file that could not be
+   * opened leaves the map's view in the store while a browser over the
+   * remembered genome is what got mounted, and the card then drew a 1 kb block
+   * "on the diagonal" — contact-map words, on a screen with no contact map, a
+   * kilobase into a sequence the browser was not showing. `this.file === null`
+   * is the honest test for "there is no map here", and it is the one the card's
+   * own question — *where am I* — has to be answered from.
    */
   private syncMinimap(state: ViewState | null): void {
     const card = this.minimap
@@ -3997,7 +4066,7 @@ export class Session {
       card.update(null)
       return
     }
-    if (state.view === 'browser') {
+    if (state.view === 'browser' || this.file === null) {
       const here = state.locus === undefined ? null : parseLocus(state.locus, assembly)
       // `'whole'` is the whole genome, which is the same "nowhere in particular"
       // an absent locus is — and highlighting everything says nothing.
@@ -4054,6 +4123,9 @@ export class Session {
     this.reader?.terminate()
     this.reader = null
     this.assembly = assembly
+    // The file's trail went with the file; the genome's takes its place, so the
+    // row does not disappear when the map does.
+    this.breadcrumb = this.browserBreadcrumb(assembly)
     // The cooler's own, because that is where these lengths came from: a task
     // run after the map is closed is still a measurement of that file, and its
     // record should say so rather than naming a genome with no file behind it.
@@ -6231,7 +6303,8 @@ export class Session {
     // re-open the assembly's source file on every navigation inside it.
     if (state.view === 'browser') {
       if (this.assembly?.uri === state.uri) {
-        this.breadcrumbHost.replaceChildren()
+        this.breadcrumb?.render(state)
+        this.breadcrumbHost.replaceChildren(this.breadcrumb?.el ?? el('div'))
         this.mounted = state
         if (this.browser === null) this.mountBrowser(state)
         else this.browser.applyLocus(state.locus)
@@ -8188,7 +8261,9 @@ export function loading(message: string): HTMLElement {
  * one, and no way out.
  *
  * So the spinner stays until the worker says otherwise, and the first progress
- * report replaces it with a bar, a line of prose and a way to stop. The bar is
+ * report replaces it with a bar, a line of prose under the file's name, and a
+ * way to stop. The heading is not the line that changes: it names the file, and
+ * a reader with two tabs opening needs it to go on doing so. The bar is
  * per *phase* rather than across the whole open: downloading is measured in
  * bytes and parsing in pixels, and one bar sliding between two denominators
  * would look like it had gone backwards. Two labelled sweeps is what a reader
@@ -8197,11 +8272,23 @@ export function loading(message: string): HTMLElement {
 export class LoadingView {
   readonly el: HTMLElement
   private readonly text: HTMLElement
+  /**
+   * The phase and its count, under the bar rather than over the heading.
+   *
+   * Because the heading stays: `report()` used to overwrite the only line on
+   * screen, so "Opening Yeast_G2M.scool…" became "downloading — 1.2 MB of
+   * 18.1 MB" and then "reading pixels — 1,204 of 14,769,558" — a sentence with
+   * the file's name in it turning into a lowercase fragment halfway through a
+   * minute-long open, in a window that may have two of them going.
+   */
+  private readonly note: HTMLElement
   private readonly bar: HTMLProgressElement
   private readonly box: HTMLElement
+  private readonly ring: HTMLElement
 
   constructor(message: string, onCancel?: () => void) {
     this.text = el('p', { class: 'loading-text', text: `${message}…` })
+    this.note = el('p', { class: 'loading-note hidden' })
     this.bar = el('progress', { class: 'progress' }) as HTMLProgressElement
     this.bar.max = 1
     this.bar.value = 0
@@ -8215,13 +8302,8 @@ export class LoadingView {
       this.bar,
       ...(stop === null ? [] : [stop]),
     )
-    this.el = el(
-      'div',
-      { class: 'loading' },
-      el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } }),
-      this.text,
-      this.box,
-    )
+    this.ring = el('div', { class: 'spinner', attrs: { role: 'progressbar', 'aria-label': message } })
+    this.el = el('div', { class: 'loading' }, this.ring, this.text, this.box, this.note)
   }
 
   /**
@@ -8230,19 +8312,26 @@ export class LoadingView {
    * A `total` of zero is *indeterminate* rather than *finished* — a host that
    * states no `Content-Length` gives one — so the bar loses its value and the
    * browser draws it as the barber's pole it has for exactly this.
+   *
+   * The ring goes on the first report, which is what this class's own header
+   * promises: two meters for one wait is a spinning ring above a filling bar,
+   * both carrying `role="progressbar"`, so a screen reader announced two jobs
+   * and a sighted reader wondered which one was theirs.
    */
   report(done: number, total: number, note?: string): void {
+    this.ring.classList.add('hidden')
     this.box.classList.remove('hidden')
+    this.note.classList.remove('hidden')
     const phase = note ?? 'reading'
     if (total > 0) {
       this.bar.value = Math.min(1, done / total)
-      this.text.textContent = `${phase} — ${describe(done, total, note)}`
+      this.note.textContent = `${phase} — ${describe(done, total, note)}`
     } else {
       this.bar.removeAttribute('value')
       // Nothing counted *and* nothing to count it against is a phase that has
       // only a name — the cell listing is one, and `0 B` beside it would read
       // as a stalled download rather than as a wait with no meter on it.
-      this.text.textContent = done > 0 ? `${phase} — ${fmt.bytes(done)}` : `${phase}…`
+      this.note.textContent = done > 0 ? `${phase} — ${fmt.bytes(done)}` : `${phase}…`
     }
   }
 }

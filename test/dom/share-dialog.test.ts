@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The **Share this session** dialog.
+ * The **Share this tab** dialog.
  *
  * `share-link.test.ts` covers the codec and the fragment key. What it cannot see
  * is the dialog, and the dialog is where the reader actually meets the feature:
@@ -228,16 +228,22 @@ describe('as the shell opens it', () => {
     const root = document.createElement('div')
     document.body.appendChild(root)
     const app = new App(root)
-    // A tab with something in it, so the button offers the dialog rather than
-    // the "nothing open to share" refusal.
-    app['current']?.store.adopt({ uri: 'https://data.example/f.mcool', view: 'genomes' })
+    // A tab with something in it, so the button *offers* the dialog: with
+    // nothing open there is nothing to put in a link and the button is
+    // unavailable rather than answering with a refusal (§8.5). `adopt` tells
+    // nobody by design — a restored tab is named, not opened — so the shell is
+    // told the way a session tells it, which is what clicking the tab does.
+    const session = app['current']
+    session?.store.adopt({ uri: 'https://data.example/f.mcool', view: 'genomes' })
+    if (session !== undefined) app['sessionChanged'](session)
 
     const share = document.querySelector<HTMLButtonElement>(
-      'button[aria-label="Share this session as a link"]',
+      'button[aria-label="Share this tab as a link"]',
     )
     expect(share, 'the header has no share button').not.toBeNull()
+    expect(share?.disabled).toBe(false)
     share?.click()
-    expect(document.querySelector('.modal-title')?.textContent).toBe('Share this session')
+    expect(document.querySelector('.modal-title')?.textContent).toBe('Share this tab')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(document.querySelector('.modal-backdrop')).toBeNull()

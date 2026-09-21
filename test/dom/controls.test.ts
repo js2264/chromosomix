@@ -228,13 +228,16 @@ describe('the theme toggle', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
-  it('cycles system → light → dark → system', () => {
+  // Ordered against the machine, which reports light here, so the first press
+  // is the one that repaints (`ui/ThemeToggle.next` argues why the silent step
+  // is last rather than first).
+  it('cycles system → dark → light → system on a light machine', () => {
     const toggle = new ThemeToggle()
     document.body.appendChild(toggle.el)
     toggle.el.click()
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    toggle.el.click()
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    toggle.el.click()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     toggle.el.click()
     // Back to system, and the attribute is *removed* rather than set to a third
     // value the stylesheet has no palette for.
@@ -244,7 +247,7 @@ describe('the theme toggle', () => {
   it('keeps an explicit choice and forgets the implicit one', () => {
     const toggle = new ThemeToggle()
     toggle.el.click()
-    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBe('light')
+    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBe('dark')
     toggle.el.click()
     toggle.el.click()
     expect(window.localStorage.getItem('metacooler-viewer:theme')).toBeNull()
@@ -262,11 +265,14 @@ describe('the theme toggle', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
-  it('says what a press will do next', () => {
+  it('says what a press will do next, and says it to a screen reader too', () => {
     const toggle = new ThemeToggle()
     expect(toggle.el.title).toContain('Theme: system')
-    expect(toggle.el.title).toContain('light')
-    expect(toggle.el.getAttribute('aria-label')).toBe('colour theme')
+    // The *opposite* of what this machine reports, so the press changes the
+    // page; the accessible name is the same sentence, which the constant
+    // "colour theme" it used to carry never was.
+    expect(toggle.el.title).toContain('dark')
+    expect(toggle.el.getAttribute('aria-label')).toBe(toggle.el.title)
   })
 })
 

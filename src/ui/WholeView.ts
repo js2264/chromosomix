@@ -39,6 +39,7 @@ import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
 import { ViewerError } from '../errors'
 import { button, el, fmt } from './dom'
+import { resolutionLabel } from '../units'
 import type { ScaleState } from './GenomeView'
 import {
   MatrixPanel,
@@ -623,7 +624,7 @@ export class WholeView {
         'p',
         {},
         el('strong', {
-          text: `Whole genome at ${fmt.bp(this.props.binsize)} reads every stored pixel of the file`,
+          text: `Whole genome at ${resolutionLabel(this.props.binsize)} reads every stored pixel of the file`,
         }),
         `${counted} and sums them into ${this.resolutionPhrase()}. Once per file; the picture ` +
           'is kept while it is open.' +
@@ -639,7 +640,7 @@ export class WholeView {
         el(
           'p',
           {},
-          el('strong', { text: `Opening the file at ${fmt.bp(rung.binsize)} draws the same picture` }),
+          el('strong', { text: `Opening the file at ${resolutionLabel(rung.binsize)} draws the same picture` }),
           ` from far fewer pixels — the cells are ${this.resolutionPhrase().replace(/^cells of /, '')} ` +
             'either way, and every region after it opens quicker too.',
         ),
@@ -653,7 +654,7 @@ export class WholeView {
         ...(rung === null
           ? []
           : [
-              button(`open at ${fmt.bp(rung.binsize)} instead`, () => this.props.onOpenRung?.(rung.name), {
+              button(`open at ${resolutionLabel(rung.binsize)} instead`, () => this.props.onOpenRung?.(rung.name), {
                 class: 'btn btn-primary',
               }),
             ]),
@@ -705,7 +706,7 @@ export class WholeView {
     if (this.plan.contigsPerCell > 1) {
       return `cells of ${fmt.int(this.plan.contigsPerCell)} ${this.props.noun}s`
     }
-    return `cells of about ${fmt.bp(this.props.binsize * this.plan.binsPerCell)}`
+    return `cells of about ${resolutionLabel(this.props.binsize * this.plan.binsPerCell)}`
   }
 
   /**

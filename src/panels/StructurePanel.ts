@@ -685,7 +685,12 @@ export class StructurePanel implements DeckCell {
   commands(): Command[] {
     const style = this.style()
     const has = this.structure !== null
-    const on = (flag: boolean): string => (flag ? 'on' : 'off')
+    // The state as a chip the palette and the shortcuts dialog draw, not as a
+    // parenthesis in the title: "Beads (on)" is a third convention for one kind
+    // of thing — beside the overlays' nouns and the panels' — and typing
+    // "beads" gave a row that looked unlike every other switch in the list
+    // (§26.4).
+    const on = (flag: boolean): 'on' | 'off' => (flag ? 'on' : 'off')
     // **A key only while the model is enlarged.** These are single letters, and
     // the app's own are too: `f` folds the Files panel, `a` the Annotations
     // panel. A structure cell sits *beside* a map, and its commands come first
@@ -698,14 +703,14 @@ export class StructurePanel implements DeckCell {
     return [
       { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key('f'), enabled: has, run: () => this.frameLit() },
       { id: 'structure-all', group: 'Structure', title: 'Show the whole model', ...key('a'), enabled: has, run: () => this.frameAll() },
-      { id: 'structure-beads', group: 'Structure', title: `Beads (${on(style.beads)})`, ...key('1'), enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
-      { id: 'structure-sticks', group: 'Structure', title: `Sticks (${on(style.sticks)})`, ...key('2'), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
-      { id: 'structure-tube', group: 'Structure', title: `Tube (${on(style.tube)})`, ...key('3'), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
-      { id: 'structure-labels', group: 'Structure', title: `Sequence names (${on(style.labels)})`, ...key('l'), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
-      { id: 'structure-select', group: 'Structure', title: `Mark a bead (${on(this.mode === 'mark')})`, hint: 'Each click marks that bead’s locus', ...key('e'), enabled: has, run: () => this.setMode('mark') },
-      { id: 'structure-loop', group: 'Structure', title: `Mark a loop (${on(this.mode === 'loop')})`, hint: 'Click two beads for a loop between their loci', ...key('o'), enabled: has, run: () => this.setMode('loop') },
-      { id: 'structure-measure', group: 'Structure', title: `Measure (${on(this.mode === 'measure')})`, hint: 'Drag from one bead to another for the distance between them', ...key('m'), enabled: has, run: () => this.setMode('measure') },
-      { id: 'structure-turn', group: 'Structure', title: `Turntable (${on(this.turning)})`, hint: 'The model turns slowly by itself', ...key('r'), enabled: has, run: () => this.toggleTurning() },
+      { id: 'structure-beads', group: 'Structure', title: 'Beads', state: on(style.beads), ...key('1'), enabled: has, run: () => this.restyle({ beads: !this.style().beads }) },
+      { id: 'structure-sticks', group: 'Structure', title: 'Sticks', state: on(style.sticks), ...key('2'), enabled: has, run: () => this.restyle({ sticks: !this.style().sticks }) },
+      { id: 'structure-tube', group: 'Structure', title: 'Tube', state: on(style.tube), ...key('3'), enabled: has, run: () => this.restyle({ tube: !this.style().tube }) },
+      { id: 'structure-labels', group: 'Structure', title: 'Sequence names', state: on(style.labels), ...key('l'), enabled: has, run: () => this.restyle({ labels: !this.style().labels }) },
+      { id: 'structure-select', group: 'Structure', title: 'Mark a bead', state: on(this.mode === 'mark'), hint: 'Each click marks that bead’s locus', ...key('e'), enabled: has, run: () => this.setMode('mark') },
+      { id: 'structure-loop', group: 'Structure', title: 'Mark a loop', state: on(this.mode === 'loop'), hint: 'Click two beads for a loop between their loci', ...key('o'), enabled: has, run: () => this.setMode('loop') },
+      { id: 'structure-measure', group: 'Structure', title: 'Measure', state: on(this.mode === 'measure'), hint: 'Drag from one bead to another for the distance between them', ...key('m'), enabled: has, run: () => this.setMode('measure') },
+      { id: 'structure-turn', group: 'Structure', title: 'Turntable', state: on(this.turning), hint: 'The model turns slowly by itself', ...key('r'), enabled: has, run: () => this.toggleTurning() },
     ]
   }
 

@@ -158,7 +158,11 @@ describe('a window mounted as an embed', () => {
       root.querySelectorAll('.head-actions [aria-label]'),
     ).map((node) => node.getAttribute('aria-label'))
     expect(actions.indexOf('console')).toBeGreaterThanOrEqual(0)
-    expect(actions[actions.indexOf('console') + 1]).toBe('colour theme')
+    // The theme button's accessible name is its state now — it was the constant
+    // "colour theme", which a screen reader read out identically whichever way
+    // the theme had just been set — so the row is identified by what the name
+    // starts with rather than by the whole of it.
+    expect(actions[actions.indexOf('console') + 1]).toMatch(/^Theme: /)
   })
 
   it('reads a hand-edited "no" as a plain window', () => {

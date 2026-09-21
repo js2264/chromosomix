@@ -372,7 +372,7 @@ export function compareRefusal(
   if (primary.hasGenomes || second.hasGenomes) {
     const which = primary.hasGenomes ? 'This file' : fileLabel(second.uri)
     return (
-      `${which} has a genome layer, and a metacool is not compared this way (§8.5). Its axis is ` +
+      `${which} has a genome layer, and a metacool is not compared this way. Its axis is ` +
       'contigs from thousands of independently assembled organisms, so two such files agree ' +
       'about a contig name by coincidence rather than by construction.'
     )

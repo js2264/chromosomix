@@ -80,17 +80,20 @@ describe('the bin size a framing reports', () => {
   it('is the file’s own, on a view drawn cell for bin', () => {
     const panel = panelAt(20_000)
     panel.setData(block(64), '16')
-    expect(parts(panel)).toContain('20.0 kb bins')
+    // `20 kb`, not `20.0 kb`: a bin size is a round number by construction and
+    // takes `resolutionLabel` (§26.2), so the crumb, this line and the map's
+    // key spell one number one way. The decimal stays on a measured span.
+    expect(parts(panel)).toContain('20 kb bins')
   })
 
   it('is still the file’s own when the view pools bins into cells', () => {
-    // The regression: `20,000 × 4` came out as `80.0 kb bins`, and every loop
+    // The regression: `20,000 × 4` came out as `80 kb bins`, and every loop
     // set called from this picture was stamped with it.
     const panel = panelAt(20_000)
     panel.setData(block(64, 4), '16')
     const written = parts(panel)
-    expect(written).toContain('20.0 kb bins')
-    expect(written).not.toContain('80.0 kb bins')
+    expect(written).toContain('20 kb bins')
+    expect(written).not.toContain('80 kb bins')
   })
 
   it('says the pooling separately, because it is a fact about the picture', () => {

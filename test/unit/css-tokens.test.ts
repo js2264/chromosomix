@@ -64,8 +64,16 @@ const SET_FROM_SCRIPT = [
   '--turn-width',
 ] as const
 
-/** The light palette's selector, which four elements share. */
-const LIGHT = ":root,\n:root[data-theme='light'],\n.content,\n.analysis-figure,\n.figure-chart"
+/**
+ * The light palette's selector, which four elements share.
+ *
+ * `.content` is in it only *while it holds a picture*: the pin is what keeps a
+ * contact map light whatever the theme, and it used to cover every view mounted
+ * in the centre column — the landing page, the tables, the gate — which left a
+ * dark-mode reader a white sheet inside a dark frame.
+ */
+const LIGHT =
+  ":root,\n:root[data-theme='light'],\n.content:has(.heatmap-wrap, .browser-stage, .deck-grid),\n.analysis-figure,\n.figure-chart"
 
 /** Every `--name` the sheet defines, anywhere in it. */
 function defined(): Set<string> {

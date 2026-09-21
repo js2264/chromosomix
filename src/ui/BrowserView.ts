@@ -712,17 +712,17 @@ export class BrowserView {
           this.zoomNote,
           el('span', {
             class: 'hint',
-            // What the Genome card says, in one line: *rounded up*, not "at its
-            // last one". The lengths are the last feature on each sequence
-            // rounded up to three figures (`contigsOf`), so a reader told the
-            // sequence ends at its last feature would read the blank margin
-            // past it as real sequence with nothing in it — and would take the
-            // right-hand edge for a coordinate this file supports, which is the
-            // one thing an inferred length cannot be.
-            text: lengthsAreExact(props.assembly)
-              ? ''
-              : ' · lengths inferred from the features in this file, so each sequence ends at ' +
-                'its last feature rounded up rather than at its true end',
+            // **A label, not the explanation.** The words *rounded up* have to
+            // be here — the lengths are each sequence's last feature rounded up
+            // to three figures (`contigsOf`), and a reader who took the
+            // right-hand edge for a coordinate this file supports would be
+            // wrong in the one way an inferred length can be wrong — but the
+            // sentence that said so made this the longest line on the page, and
+            // said it for the third time on one screen: the Genome card's
+            // `lengths` row carries the same label and the card's hint carries
+            // the way out of it. §5.8 asks for a label wherever the genome is
+            // described, so this is the label.
+            text: lengthsAreExact(props.assembly) ? '' : ' · lengths inferred (rounded up)',
           }),
         ),
       ),

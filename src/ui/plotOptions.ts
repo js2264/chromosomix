@@ -154,11 +154,12 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   },
   gutter: {
     label: 'name column',
-    hint:
-      'Start the tracks after the widest track name, with the names right-aligned in the ' +
-      'column that leaves. Drag its edge to set a width of your own — a name too long for it ' +
-      'wraps, then is cut in the middle — and double-click the edge to hand it back to the ' +
-      'names. Off, a name is drawn over the data it belongs to.',
+    // One line, because this string is a palette hint as well as a tooltip:
+    // the paragraph that was here — how to drag the edge, what a long name
+    // does, what a double click hands back — filled four lines of the palette
+    // and pushed the commands under it off the list. The gestures are on the
+    // edge itself, where a hand that is already there finds them.
+    hint: 'Start the tracks after the widest name, right-aligned in the column that leaves.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   tooltip: {
@@ -168,7 +169,10 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
       'Off, the same reading stays in the status line under the window — where it covers none ' +
       'of the picture, which is what somebody framing a figure wants.',
   },
-  dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
+  dividers: {
+    label: 'dividers',
+    hint: 'Contig and genome boundaries, as the metacooler show command draws them.',
+  },
   breaks: {
     label: 'breaks',
     hint: 'The same boundaries as ticks outside the plot, where they cost no data.',

@@ -69,6 +69,7 @@ import {
 } from '../ui/MatrixPanel'
 import type { ScaleState } from '../ui/GenomeView'
 import { button, el, fmt } from '../ui/dom'
+import { resolutionLabel } from '../units'
 import {
   canvasToPng,
   copyPngToClipboard,
@@ -1000,7 +1001,7 @@ export class PanelDeck {
       refused.length === 0
         ? ''
         : `${refused.join(', ')} ${refused.length === 1 ? 'has' : 'have'} no ` +
-          `${fmt.bp(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
+          `${resolutionLabel(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
     )
   }
 
@@ -2363,7 +2364,7 @@ export class PanelDeck {
         `Draw every panel on ${starName}’s clip — the starred map — so the same colour is the ` +
         'same number of contacts across the deck. True only where the libraries are comparable, ' +
         'which is why it is a press rather than a setting: nudge any panel’s clip afterwards and ' +
-        'that panel is on its own values again (§7.1).',
+        'that panel is on its own values again.',
     })
 
     const resolutions = button('fix all resolutions', () => this.fixResolutions(), {
@@ -2402,7 +2403,7 @@ export class PanelDeck {
       columns.appendChild(el('option', { value: String(n), text: `${n} across` }))
     }
     columns.value = String(this.columnsNow())
-    columns.title = 'How many maps in a row. A `+` on an edge opens cells; this arranges them.'
+    columns.title = 'How many maps in a row. A + on an edge opens cells; this arranges them.'
     columns.addEventListener('change', () => this.setColumns(Number(columns.value)))
 
     const save = iconButton(

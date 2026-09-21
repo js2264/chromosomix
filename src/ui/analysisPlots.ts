@@ -40,6 +40,7 @@ import {
   isColormap,
 } from '../render/colormaps'
 import { el, fmt, trimNumber } from './dom'
+import { resolutionLabel } from '../units'
 import { scaleFont, subscribeTextScale } from './textScale'
 import { parseFont } from './vector'
 
@@ -1805,7 +1806,7 @@ export function profileCurve(output: ProfileOutput): CurveOutput {
         ...(banded ? { low, high } : {}),
       },
     ],
-    xLabel: `bin (${fmt.bp(output.binsize)} each)`,
+    xLabel: `bin (${resolutionLabel(output.binsize)} each)`,
     yLabel: output.unit === '' ? output.label : `${output.label} (${output.unit})`,
     xScale: 'linear',
     yScale: 'linear',

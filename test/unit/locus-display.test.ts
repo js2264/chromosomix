@@ -18,7 +18,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { formatLocus, formatPosition, regionLabel, typedLocusToRegion } from '../../src/genome/assembly'
+import {
+  formatLocus,
+  formatPosition,
+  regionLabel,
+  typedLocusToRegion,
+  windowLabel,
+} from '../../src/genome/assembly'
 
 describe('formatPosition', () => {
   it('adds the one and groups the digits, like the window beside it', () => {
@@ -45,6 +51,21 @@ describe('regionLabel', () => {
 
   it('shows a half-open end as open rather than inventing one', () => {
     expect(regionLabel('IV:1000000-')).toBe('IV:1,000,001-')
+  })
+})
+
+describe('windowLabel', () => {
+  it('is the display form without the name, for the crumb that sits under it', () => {
+    expect(windowLabel('IV:1000000-1400000')).toBe('1,000,001-1,400,000')
+  })
+
+  it('keeps the name where dropping it would leave nothing to read', () => {
+    // A bare sequence, and a window whose end the state leaves open: neither is
+    // a pair of coordinates, so the crumb says the whole thing rather than a
+    // fragment.
+    expect(windowLabel('chrII')).toBe('chrII')
+    expect(windowLabel('IV:1000000-')).toBe('IV:1,000,001-')
+    expect(windowLabel('IV:not-a-number')).toBe('IV:not-a-number')
   })
 })
 

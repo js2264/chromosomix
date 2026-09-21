@@ -20,6 +20,7 @@ import { UNBINNED_NAME } from '../constants'
 import type { StorageMode } from '../constants'
 import { MetaCoolerFormatError, truncateNames, ViewerError } from '../errors'
 import { pyRepr } from '../format'
+import { fmt } from '../units'
 import type { AttrValue, Hdf5Handle } from '../h5/api'
 import { NameIndex } from '../genome/naming'
 import { openHdf5 } from '../h5/Hdf5File'
@@ -1676,7 +1677,7 @@ export class MetaCooler {
         `Scanned ${total} pixels for range, upper-triangle, sort order and bin1_offset ` +
         `agreement${integral ? ", and reconciled attrs['sum']" : ' (float counts: sum not reconciled)'}. ` +
         `The /bins geometry checks of the Python validate() are not run — this reader never ` +
-        `reads /bins (spec §3.3).`,
+        `reads /bins.`,
     }
   }
 
@@ -1873,19 +1874,13 @@ function assertListingAffordable(handle: Hdf5Handle, source: ByteSource): void {
     'scool-listing-cost',
     `${path} is a single-cell container, and listing its cells is not a bounded read: the ` +
       `names live in HDF5 link records spread across the whole object. Reading them over the ` +
-      `network costs either one download of ${fmtMib(source.size)} or a few percent of that in ` +
+      `network costs either one download of ${fmt.bytes(source.size)} or a few percent of that in ` +
       `about a thousand separate requests. Choose which to pay, or open a local copy, where ` +
       `neither cost applies.`,
     { path, size: source.size },
   )
 }
 
-/** `326 MB`, for a sentence. */
-function fmtMib(bytes: number): string {
-  return bytes >= 1 << 30
-    ? `${(bytes / (1 << 30)).toFixed(1)} GB`
-    : `${Math.round(bytes / (1 << 20))} MB`
-}
 
 /** `\x89HDF\r\n\x1a\n`, the eight bytes every HDF5 file opens with. */
 const HDF5_SIGNATURE = [0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a]

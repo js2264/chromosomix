@@ -925,7 +925,10 @@ describe('one resolution across the deck', () => {
     // in the session reopening its file at another bin size.
     made.leadBinsize = 5000
     made.deck.apply(view(made))
-    expect(notesUnder(made.deck).join(' ')).toContain('no 5.0 kb level')
+    // A bin size is spelled by `resolutionLabel` — `5 kb`, not `5.0 kb` —
+    // because a resolution is a round number by construction (§26.2); the
+    // decimal belongs to a measured span.
+    expect(notesUnder(made.deck).join(' ')).toContain('no 5 kb level')
   })
 
   it('says nothing on the first view, where nothing has moved yet', () => {
@@ -950,7 +953,7 @@ describe('one resolution across the deck', () => {
     // Its own resolution, and a real one: `0 bp` is what this used to read for
     // a panel with no answer yet, which is a measurement in a sentence about
     // what a file has and is not one this panel had.
-    expect(note).toContain('staying at 1.0 kb')
+    expect(note).toContain('staying at 1 kb')
     expect(note).toContain('carries one resolution only')
   })
 
@@ -965,7 +968,7 @@ describe('one resolution across the deck', () => {
       // The star is on the first map, so nothing was asked of the session — it
       // is already where the deck is going.
       expect(made.askedBinsize).toEqual([])
-      expect(notesUnder(made.deck).join(' ')).toContain('no 2.0 kb level')
+      expect(notesUnder(made.deck).join(' ')).toContain('no 2 kb level')
     })
 
     it('moves the first map too, when the star is on a companion', () => {
@@ -991,7 +994,7 @@ describe('one resolution across the deck', () => {
       const warning = made.deck.el.querySelector('.deck-warning')
       expect(warning?.classList.contains('hidden')).toBe(false)
       expect(warning?.textContent).toContain('b.cool')
-      expect(warning?.textContent).toContain('4.0 kb')
+      expect(warning?.textContent).toContain('4 kb')
     })
 
     /**
@@ -1001,7 +1004,7 @@ describe('one resolution across the deck', () => {
      * root refuses with the list of rungs, and only then does one of them
      * open — and the button is live throughout. Pressed in that window the
      * panel used to answer out of an empty `entries`: "staying at 0 bp: this
-     * file has no 5.0 kb level, and carries one resolution only", under a
+     * file has no 5 kb level, and carries one resolution only", under a
      * three-rung file whose descent was already heading for 5 kb because
      * `preferBinsize` is that very number. Nothing on that path calls
      * `sayResolution(null)`, so the sentence stood over a panel sitting at the
