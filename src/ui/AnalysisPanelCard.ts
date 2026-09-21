@@ -373,16 +373,25 @@ export class AnalysisPanelCard {
   private paint(): void {
     const active = this.options.active()
     const context = this.options.context()
+
+    // **Availability first, for every row, and kept.** The group's line is a
+    // fact about the rows under it, so it cannot be painted until they have all
+    // answered — and this runs at ten hertz while a job reports progress, so
+    // asking each task twice would be asking sixteen predicates thirty-two
+    // times a second for one column.
+    const answers = this.rows.map((row) =>
+      context === null
+        ? { state: 'waiting' as const, needs: 'Open a file.' }
+        : row.task.availability(context),
+    )
     const waitingIn = new Map<TaskGroup, string[]>()
-    for (const row of this.rows) {
-      const available =
-        context === null ? { state: 'waiting' as const, needs: 'Open a file.' } : row.task.availability(context)
-      if (available.state === 'waiting') {
-        const held = waitingIn.get(row.group) ?? []
-        held.push(available.needs)
-        waitingIn.set(row.group, held)
-      }
-    }
+    this.rows.forEach((row, at) => {
+      const available = answers[at]
+      if (available.state !== 'waiting') return
+      const held = waitingIn.get(row.group) ?? []
+      held.push(available.needs)
+      waitingIn.set(row.group, held)
+    })
     const shared = new Map<TaskGroup, string>()
     for (const [group, needs] of waitingIn) shared.set(group, this.sharedNeeds(needs))
     for (const note of this.groupNotes) {
@@ -391,9 +400,8 @@ export class AnalysisPanelCard {
       note.needs.classList.toggle('hidden', text === '')
     }
 
-    for (const row of this.rows) {
-      const available =
-        context === null ? { state: 'waiting' as const, needs: 'Open a file.' } : row.task.availability(context)
+    for (const [at, row] of this.rows.entries()) {
+      const available = answers[at]
       const waiting = available.state === 'waiting'
       row.el.classList.toggle('is-waiting', waiting)
       // Off the tab order as well as off the pointer: a row nobody can act on
