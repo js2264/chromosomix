@@ -10416,12 +10416,14 @@ span.deck-name {
   grid-template-columns: 9rem minmax(0, 1fr);
 }
 
-/* A number box keeps its own width so that its unit — and its slider — stay on
-   its line. `.controls-card .input-num` is 100% of the cell, which is right in a
-   15rem card and wrong here: the box filled the whole control column and the
-   word "bins" dropped to the line below it, where a unit is not beside its
-   number and a reader types base pairs into a box that wanted bins. */
-.param-row .input-num {
+/* A number box keeps its own width so that its unit stays on its line.
+   `.controls-card .input-num` is 100% of the cell, which is right in a 15rem
+   card and wrong here: the box filled the whole control column and the word
+   "bins" dropped to the line below it, where a unit is not beside its number and
+   a reader types base pairs into a box that wanted bins. `input-step` is
+   excluded because it is the one that already keeps its own width — it shares
+   its row with a slider, which takes what it leaves. */
+.param-row .input-num:not(.input-step) {
   width: 7rem;
 }
 
