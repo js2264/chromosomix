@@ -1532,6 +1532,19 @@ p {
  * drawn picture.
  */
 .content {
+  /* `auto`, not `0`, and that is a decision about which surface wins. A basis of
+     zero would ask only for the room the columns leave — so a column would keep
+     its width until the window itself ran out — but on a 1366-wide laptop with
+     four columns open that leaves the map its floor and nothing more, 288
+     pixels instead of 446. `auto` lets the picture pull the columns down to
+     their own minimum widths first, which is the right order: the map is what
+     the file was opened for.
+
+     The cost is that a *wide* surface pulls on them too — the Genomes table is
+     eleven columns, so opening it narrows General from 288 to its floor of 240.
+     That is a width a reader did not ask for, and it is the price of the laptop
+     behaviour above; at 240 the column's own cards still read, which is what the
+     floor is for. */
   flex: 1 1 auto;
   /* **The picture's floor.** It was `0`, which made the centre the only thing in
      the row that could be squeezed to nothing: the columns are what a reader
@@ -4294,12 +4307,9 @@ canvas.is-frozen {
   padding: 0.3rem;
 }
 
-/* **A row of marks in a panel card is tighter, so the seven fit one line.** The
-   Tracks card offers seven — six shared overlays and the name column — and at
-   0.3rem of padding the seventh wrapped and sat alone under the other six,
-   where a lone icon reads as a different kind of control from the row above it.
-   Scoped by what the row holds rather than by where it is: the steppers in these
-   same cards are `.plot-icon-row`s too, and their chevrons have their own
+/* **A row of marks in a panel card is tighter**, which buys one more mark per
+   line. Scoped by what the row holds rather than by where it is: the steppers in
+   these same cards are `.plot-icon-row`s too, and their chevrons have their own
    padding for their own reason. */
 .controls-card .plot-icon-row:has(> .btn-toggle) {
   gap: 0.2rem;
@@ -4309,11 +4319,16 @@ canvas.is-frozen {
   padding: 0.25rem;
 }
 
-/* Eight cannot fit one line at any padding a 15px icon can keep — the Map card's
-   row is refit plus seven overlays — and a greedy wrap put seven on the first
-   line and one below. Four across, so both lines are deliberate: two rows of
-   four read as a block of marks, which is what they are. */
-.controls-card .plot-icon-row:has(> :nth-child(8)) {
+/* Seven or more cannot be relied on to fit one line, and a greedy wrap puts the
+   last one alone underneath, where a lone icon reads as a different kind of
+   control from the row above it. Four across, so both lines are deliberate: a
+   block of marks, which is what they are.
+
+   Seven, not eight: the Map card's overlays are seven and they *did* fit — until
+   the panel had enough in it to want a scrollbar, which takes the fifteen pixels
+   the seventh was living on. A shape that depends on whether the column happens
+   to be scrolling is not a shape. */
+.controls-card .plot-icon-row:has(> :nth-child(7)) {
   display: grid;
   grid-template-columns: repeat(4, max-content);
   justify-content: start;

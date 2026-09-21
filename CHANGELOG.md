@@ -550,6 +550,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Seven marks in a card's row are a block, not six and an orphan.** The Map card's overlays fit one
+  line until the panel had enough in it to want a scrollbar, which takes the fifteen pixels the
+  seventh was living on — and a lone icon under six reads as a different kind of control. Seven or
+  more now sit four across, which is what eight already did.
 - **The side columns give way before the picture does.** Four columns come to about 1,180 pixels at
   their own widths, and the centre could be squeezed to nothing: on a 1366-wide laptop with all four
   open the map was 140 pixels and the locus box 85, showing `IV:1,00` of the reader's own position.
