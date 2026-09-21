@@ -564,6 +564,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A figure's axes no longer print runs of zeros.** A P(s) ordinate climbed `0.001`, `0.0001`,
+  `0.00001`, `0.000001`, `0.0000001` and the log-log slope beside it reached eight zeros — at which
+  point a reader cannot tell one tick from the next without counting, which is the whole of what an
+  axis is for. The ordinate had no formatter at all. It has one now, and on a log axis every tick is
+  a decade and reads as one; an abscissa in base pairs takes the app's own span units, so a P(s)
+  reaching a megabase reads `1.00 Mb` rather than `1,000,000`.
+
 - **A run's clock is twenty-four hour, in every locale.** It read *computed in 776 ms at
   03:29:24 PM* — eight characters of which three were punctuation and a word, on the same line as a
   duration, and two runs an hour apart in the afternoon and the small hours sorted the same. The

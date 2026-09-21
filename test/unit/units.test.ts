@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { durationText, runClock } from '../../src/units'
+import { axisNumber, durationText, runClock } from '../../src/units'
 
 describe('durationText', () => {
   it('uses the largest unit that still says something', () => {
@@ -40,5 +40,57 @@ describe('runClock', () => {
 
   it('says so rather than guessing when the stamp is not a time', () => {
     expect(runClock('not a date')).toBe('—')
+  })
+})
+
+describe('axisNumber', () => {
+  // A P(s) ordinate climbed `0.001`, `0.0001`, `0.00001`, `0.000001`,
+  // `0.0000001`, and the log-log slope beside it reached eight zeros — at which
+  // point a reader cannot tell one tick from the next without counting.
+  it('turns a run of zeros into an exponent', () => {
+    expect(axisNumber(1e-7)).toBe('1e-7')
+    expect(axisNumber(2.5e-8)).toBe('2.5e-8')
+    expect(axisNumber(1e8)).toBe('1e8')
+  })
+
+  it('leaves the magnitudes a reader reads at a glance alone, grouped', () => {
+    expect(axisNumber(0.001)).toBe('0.001')
+    expect(axisNumber(0.25)).toBe('0.25')
+    expect(axisNumber(1)).toBe('1')
+    expect(axisNumber(1000)).toBe('1,000')
+    expect(axisNumber(0)).toBe('0')
+  })
+
+  // The upper bound is 1e7, not 1e6, so a log axis reaching a million does not
+  // print `4,000`, `10,000`, `100,000` and then `1e6` — one tick in a different
+  // notation from its neighbours.
+  it('keeps a whole log axis in one notation up to ten million', () => {
+    expect([4e3, 1e4, 1e5, 1e6].map((v) => axisNumber(v))).toEqual([
+      '4,000',
+      '10,000',
+      '100,000',
+      '1,000,000',
+    ])
+  })
+
+  // A log axis is decades, and decades are read as exponents: an ordinate that
+  // went `0.001`, `0.0001`, `1e-5`, `1e-6` changed notation halfway down itself.
+  it('reads a log axis in one notation, decade by decade', () => {
+    expect([1e-3, 1e-4, 1e-5, 1e-6, 1e-7].map((v) => axisNumber(v, 'log'))).toEqual([
+      '1e-3',
+      '1e-4',
+      '1e-5',
+      '1e-6',
+      '1e-7',
+    ])
+  })
+
+  it('leaves a log axis of ordinary numbers plain', () => {
+    expect([1, 10, 100, 1000].map((v) => axisNumber(v, 'log'))).toEqual(['1', '10', '100', '1,000'])
+  })
+
+  it('keeps no idle zeros, on either side of the threshold', () => {
+    expect(axisNumber(1.5)).toBe('1.5')
+    expect(axisNumber(1e-5)).toBe('1e-5')
   })
 })

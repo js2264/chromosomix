@@ -147,6 +147,50 @@ export function trimNumber(value: number, maxDecimals = Number.POSITIVE_INFINITY
 }
 
 /**
+ * A number on an **axis**, where the reader is comparing magnitudes.
+ *
+ * Past four decimal places a fixed-point tick stops being a number and becomes a
+ * run of zeros: a P(s) ordinate climbed `0.001`, `0.0001`, `0.00001`, `0.000001`,
+ * `0.0000001`, and the log-log slope beside it reached eight zeros — at which
+ * point a reader cannot tell one tick from the next without counting, which is
+ * the whole of what an axis is supposed to save them. The same argument
+ * `fmt.num` makes for a readout, at the threshold a tick needs.
+ *
+ * `1e-7`, not `1.00e-7`: on the 1-2-5 ladder every tick's mantissa is one or two
+ * digits, and the places a `toExponential` pads it with are places the ladder
+ * does not have.
+ */
+export function axisNumber(value: number, scale: 'linear' | 'log' = 'linear'): string {
+  if (!Number.isFinite(value)) return ''
+  if (value === 0) return '0'
+  const abs = Math.abs(value)
+  // **A log axis is decades, and decades are read as exponents.** Its ticks are
+  // powers of ten by construction, so the moment one of them needs an exponent
+  // they all want one: an ordinate reading `0.001`, `0.0001`, `1e-5`, `1e-6`
+  // changes notation halfway down itself, and the reader has to translate at the
+  // seam. Below one and past ten thousand, every tick on such an axis is an
+  // exponent; in between — a P(s) slope over `0` to `-21`, a count from `1` to
+  // `1000` — the plain number is shorter and just as exact.
+  const plain = scale === 'log' ? abs >= 1 && abs < 1e4 : abs >= 1e-4 && abs < 1e7
+  // Grouped, because that is how a reader reads a thousand — and on a linear
+  // axis the upper bound is 1e7 rather than 1e6, so an axis reaching a million
+  // does not print `4,000`, `10,000`, `100,000` and then `1e6`.
+  if (plain) return INTEGER_OR_DECIMAL(value)
+  const [mantissa, power] = value.toExponential(2).split('e')
+  return `${trimZeros(mantissa)}e${Number(power)}`
+}
+
+/** Grouped above a thousand, and with no idle places below one. */
+function INTEGER_OR_DECIMAL(value: number): string {
+  return Number.isInteger(value) ? INTEGER.format(value) : trimZeros(String(Number(value.toPrecision(6))))
+}
+
+/** `0.250` → `0.25`, `1.0` → `1`; a fixed-point number with no idle zeros. */
+function trimZeros(text: string): string {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
+}
+
+/**
  * `1 kb`, `50 kb`, `1 Mb` — a bin size, written the way a reader says it.
  *
  * Not `fmt.bp`, and the difference is the decimal: that formatter is for

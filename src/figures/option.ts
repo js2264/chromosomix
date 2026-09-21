@@ -20,6 +20,7 @@
  */
 
 import { fmt } from '../ui/dom'
+import { axisNumber } from '../units'
 import { boxSummary, density, histogram, sorted } from './stats'
 import {
   isCategorical,
@@ -109,10 +110,24 @@ function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number]
  * bin size to multiply by it becomes `1.22 Mb`, the same quantity written the
  * way the map's own ruler writes it.
  */
+/**
+ * How the abscissa is spelled, where the quantity on it has a unit.
+ *
+ * Two ways it can. A figure whose x is in **bins** carries the bin size and is
+ * multiplied up. A figure whose x is already in **base pairs** says so in its
+ * own axis name — `Genomic separation (bp)` — and takes `fmt.bp` directly: that
+ * axis used to fall through to the plain magnitude spelling, so a P(s) reaching
+ * a megabase printed `4000`, `10000`, `100000`, `1e6` where the app's own units
+ * read `4.0 kb`, `10.0 kb`, `100.0 kb`, `1.00 Mb` (§26.2).
+ *
+ * `undefined` for anything else, and the caller falls back to
+ * {@link axisNumber}.
+ */
 function xFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined {
   const binsize = spec.binsize
-  if (binsize === undefined) return undefined
-  return (value: number) => fmt.bp(value * binsize)
+  if (binsize !== undefined) return (value: number) => fmt.bp(value * binsize)
+  if (/\(bp\)/i.test(spec.xLabel ?? '')) return (value: number) => fmt.bp(value)
+  return undefined
 }
 
 function axisBase(theme: FigureTheme, style: FigureStyle, grid: boolean): ChartOption {
@@ -265,6 +280,10 @@ function xyOption(
   // which is the one case where the figure's own axis names are not the axes.
   const xName = style.x.label ?? (histo ? spec.yLabel : spec.xLabel)
   const yName = style.y.label ?? (histo ? 'count' : spec.yLabel)
+  // **The ordinate needs a formatter too.** It had none, so a log-scaled P(s)
+  // printed `0.0000001` and the slope beside it eight zeros — see
+  // `units.axisNumber`. The abscissa keeps its base-pair spelling where a bin
+  // size gives it one, and takes the magnitude spelling where it does not.
   const formatter = histo ? undefined : xFormatter(spec)
 
   return {
@@ -275,9 +294,11 @@ function xyOption(
       nameGap: style.fontSize * 2.4,
       scale: true,
       ...axisBase(theme, style, style.x.grid),
-      ...(formatter === undefined
-        ? {}
-        : { axisLabel: { ...(axisBase(theme, style, style.x.grid).axisLabel as object), formatter } }),
+      axisLabel: {
+        ...(axisBase(theme, style, style.x.grid).axisLabel as object),
+        formatter:
+          formatter ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
+      },
     },
     yAxis: {
       type: style.y.scale === 'log' ? 'log' : 'value',
@@ -290,6 +311,10 @@ function xyOption(
       // data", which is right for everything but the bars.
       scale: style.mark !== 'histogram' && style.mark !== 'bars',
       ...axisBase(theme, style, style.y.grid),
+      axisLabel: {
+        ...(axisBase(theme, style, style.y.grid).axisLabel as object),
+        formatter: (value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear'),
+      },
     },
     // Wheel zooms the abscissa and drags pan it, which is the gesture a curve
     // is read with; the ordinate takes the same wheel with shift held, so a
@@ -490,6 +515,10 @@ function distributionOption(
       scale: true,
       ...(style.y.domain === null ? {} : { min: style.y.domain[0], max: style.y.domain[1] }),
       ...axisBase(theme, style, style.y.grid),
+      axisLabel: {
+        ...(axisBase(theme, style, style.y.grid).axisLabel as object),
+        formatter: (value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear'),
+      },
     },
     series,
   }

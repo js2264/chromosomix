@@ -8061,6 +8061,14 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
   time the two disagree the difference is the finding. So the card draws one quiet line between
   them, headed *joined in with the file*.
 
+- **An axis is spelled by `axisNumber`, and a log axis is decades.** Past four decimal places a
+  fixed-point tick stops being a number and becomes a run of zeros — a P(s) ordinate climbed to
+  `0.0000001` and the slope beside it to eight zeros — so a tick that needs an exponent gets one. On
+  a **log** axis every tick is a power of ten, so the moment one needs an exponent they all take it:
+  an axis that reads `0.001`, `0.0001`, `1e-5`, `1e-6` changes notation halfway down itself. An
+  abscissa in base pairs takes `fmt.bp` instead, so a P(s) reaching a megabase reads `1.00 Mb`
+  rather than `1e6`.
+
 - **A table cell is not a summary.** The Chromosomes table's `length` column prints `1,531,933` while
   the Sequences card beside it prints `1.53 Mb`, and both are right: a table holds the values a
   reader reads off exactly and copies out, so it groups the digits and keeps them all, while a
