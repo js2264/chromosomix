@@ -33,7 +33,7 @@
  */
 
 import { WHOLE_VIEW_GATE_PIXELS, WHOLE_VIEW_GATE_BINS } from '../constants'
-import { IDENTITY_PLAN, POOLED_CELL_CAP, poolPlan, type PoolPlan } from '../metacooler/pooling'
+import { IDENTITY_PLAN, pooledCellCap, poolPlan, type PoolPlan } from '../metacooler/pooling'
 import type { MatrixResult } from '../worker/protocol'
 import type { Extent } from '../types'
 import { isCancellation, type Cancellable, type ReaderClient } from '../worker/client'
@@ -321,7 +321,7 @@ export class WholeView {
         ? poolPlan(
             props.selection?.bins ?? props.displayExtent[1] - props.displayExtent[0],
             props.selection?.contigs ?? props.nContigs,
-            POOLED_CELL_CAP,
+            pooledCellCap(),
           )
         : IDENTITY_PLAN
     // **The reader's declared resolution is a floor, never a ceiling** (§3.4).

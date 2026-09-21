@@ -15,6 +15,7 @@
 import { MAX_CATEGORICAL_TICKS } from '../constants'
 import type { ColorScale, DenseMatrix, Separator, Transform } from '../types'
 import { applyColormap, colormapIndex } from './colormaps'
+import { rasterMaxDim } from './rasterCap'  // the cap, and why it is where it is
 import {
   anchorRays,
   cellAt as squareOf,
@@ -50,7 +51,7 @@ export interface Raster {
    *
    * A whole yeast genome at 1 kb is 12,100 bins: rasterising it one pixel per
    * bin would be 585 MB of RGBA and a canvas of the same size again, for an
-   * image no screen can show. Above {@link RASTER_MAX_DIM} the raster is
+   * image no screen can show. Above {@link rasterMaxDim} the raster is
    * pooled instead, and the caller multiplies its draw transform by these.
    *
    * Two numbers, not one: a 600 × 8,141 genome pair — the shape every pair
@@ -75,20 +76,9 @@ export interface Raster {
   strideY: number
 }
 
-/**
- * The largest raster the renderer will build, per axis.
- *
- * Chosen well below every browser's canvas cap (Firefox stops at 32,767 px per
- * side, Chrome's *area* cap is 2^28 px) and above any display: 4096 px is more
- * than 4K across, so pooling above it costs no visible detail at fit zoom, and
- * a zoomed-in view of a pooled block re-rasterises nothing because pooling is
- * per matrix, not per view. It caps the two allocations that scale with the
- * *picture* rather than with the data: 67 MB of RGBA and 67 MB of canvas.
- */
-export const RASTER_MAX_DIM = 4096
 
 /** Matrix cells per raster pixel needed to fit one axis of `n` in the cap. */
-export function rasterStride(n: number, maxDim = RASTER_MAX_DIM): number {
+export function rasterStride(n: number, maxDim = rasterMaxDim()): number {
   return n <= maxDim ? 1 : Math.ceil(n / maxDim)
 }
 
@@ -191,7 +181,7 @@ export function poolDisplay(
   const balanced = scale.balanced === true
   const transform = scale.transform
 
-  const maxDim = options.maxDim ?? RASTER_MAX_DIM
+  const maxDim = options.maxDim ?? rasterMaxDim()
   const perAxis = { x: rasterStride(ncols, maxDim), y: rasterStride(nrows, maxDim) }
   // One stride for both axes where the caller says the block's two axes are the
   // same measure — which is a turned band, and only a turned band. See

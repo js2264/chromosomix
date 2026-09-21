@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import {
   apportion,
   overviewUnitCap,
-  OVERVIEW_HARD_CAP,
+  overviewHardCap,
   poolUnits,
   TriangleAccumulator,
 } from '@/worker/overview'
@@ -116,17 +116,17 @@ describe('overviewUnitCap', () => {
     const small = overviewUnitCap(1e8)
     const large = overviewUnitCap(2e8)
     expect(large).toBeGreaterThan(small)
-    expect(large).toBeLessThan(OVERVIEW_HARD_CAP)
+    expect(large).toBeLessThan(overviewHardCap())
   })
 
   it('never exceeds the hard cap, or falls below a drawable axis', () => {
-    expect(overviewUnitCap(1e12)).toBe(OVERVIEW_HARD_CAP)
+    expect(overviewUnitCap(1e12)).toBe(overviewHardCap())
     expect(overviewUnitCap(1)).toBeGreaterThanOrEqual(256)
     // The reference file's 4,395 genomes no longer each get a row: 4,096 is what
     // the renderer draws, so `poolUnits` pools the last few hundred into
     // neighbours *within their genomes* rather than letting the raster mix them
     // across boundaries.
-    expect(overviewUnitCap(4e9)).toBe(OVERVIEW_HARD_CAP)
+    expect(overviewUnitCap(4e9)).toBe(overviewHardCap())
   })
 })
 

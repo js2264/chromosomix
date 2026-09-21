@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { POOLED_CELL_CAP } from '@/metacooler/pooling'
+import { pooledCellCap } from '@/metacooler/pooling'
 import {
   BlockLadder,
   REFINE_DEFAULT,
@@ -163,9 +163,9 @@ describe('the coverage and padding arithmetic', () => {
 
   it('restates the reader’s grid choice, and never finer than it', () => {
     // A window that fits the cap is read at the file's own bins.
-    expect(gridFor([0, POOLED_CELL_CAP], [0, POOLED_CELL_CAP])).toBe(1)
+    expect(gridFor([0, pooledCellCap()], [0, pooledCellCap()])).toBe(1)
     // One bin past it needs two bins to a cell.
-    expect(gridFor([0, POOLED_CELL_CAP + 1], [0, POOLED_CELL_CAP + 1])).toBe(2)
+    expect(gridFor([0, pooledCellCap() + 1], [0, pooledCellCap() + 1])).toBe(2)
     // Human chr1 at 5 kb: 49,792 bins is thirteen to a cell.
     expect(gridFor([0, 49_792], [0, 49_792])).toBe(13)
     // The widest axis decides, because the reader shares one grid across both.
@@ -210,7 +210,7 @@ describe('choosing a rung of a laddered file', () => {
   it('names no rung once the window is small enough for the open map', () => {
     // Inside the cap, a cell is one bin and the finest level is the open one.
     expect(chooseRung(YEAST, 2_000, 1000)).toBeUndefined()
-    expect(chooseRung(YEAST, POOLED_CELL_CAP, 1000)).toBeUndefined()
+    expect(chooseRung(YEAST, pooledCellCap(), 1000)).toBeUndefined()
   })
 
   it('names nothing at all for a file with no ladder', () => {
@@ -230,7 +230,7 @@ describe('choosing a rung of a laddered file', () => {
     // that fetched the 100 bp level would be overruling the picker with the
     // reader's own file.
     const six = rungsOf(['100', '200', '500', '1000', '2000', '5000'])
-    for (const span of [POOLED_CELL_CAP, 1000, 100, 10, 1]) {
+    for (const span of [pooledCellCap(), 1000, 100, 10, 1]) {
       const at = chooseRung(six, span, 2000)
       expect(at, `span=${span}`).toBeUndefined()
     }

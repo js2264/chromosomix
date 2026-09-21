@@ -731,7 +731,27 @@ export type RequestKind = keyof ResultMap
 // Requests
 // ---------------------------------------------------------------------------
 
-export type WorkerRequest =
+/**
+ * The session's cell cap, stamped onto **every** request by the client.
+ *
+ * A worker cannot work this out for itself: the cap is read from the page's
+ * URL or its `localStorage` (`render/rasterCap.ts`) and a worker has neither,
+ * so its own module-load value is always the default. Carried on the request
+ * rather than sent as an init message because there is no moment at which a
+ * one-shot would be reliably earlier than the first read — a blob-URL worker in
+ * the standalone build is constructed and messaged in the same tick — and a
+ * field every request carries cannot arrive second.
+ *
+ * Optional, and absent means the default: a request built by hand in a test
+ * says nothing about caps, and should not have to.
+ */
+export interface SessionCap {
+  cellCap?: number
+}
+
+export type WorkerRequest = WorkerRequestBody & SessionCap
+
+type WorkerRequestBody =
   | { id: number; kind: 'open'; uri: string; source: SourceSpec; binning?: PairsBinning }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
@@ -891,7 +911,7 @@ export type WorkerRequest =
       /**
        * Ceiling on the dense block this read may build, as `matrix` takes one.
        *
-       * A selection is already capped at `POOLED_CELL_CAP²` cells whatever the
+       * A selection is already capped at `pooledCellCap()²` cells whatever the
        * file's size, so this is not what stops a runaway read — it is what lets a
        * *deck* divide that ceiling. Six panels each entitled to the whole cap is
        * six times the one block the guard was written for (§16.7), and the

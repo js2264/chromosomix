@@ -266,18 +266,20 @@ const COMPARE_OP_LABELS: Record<CompareOp, string> = {
 const TURN_ICONS = { off: 'triangle', on: 'square' } as const
 
 /**
- * Three bars, left-aligned, longest at the top: a resolution ladder, read from
- * the coarse end down.
+ * A pair of lenses: look closer, and the picture comes back sharper.
  *
- * The one mark in the set upstream does not supply; `scripts/build-icons.mjs`
- * says why, and why the nearest Lucide shape reads as a letter E at this size.
+ * It draws the **gesture** rather than the mechanism. The mark here used to be
+ * three left-aligned bars standing for a resolution ladder — accurate about
+ * what the setting does to the read, and wrong about what it offers the person
+ * pressing it, who is not choosing a rung. It also sat badly in the row: two
+ * shape toggles and a paragraph-align mark.
  *
  * One mark for both states, lit when on, like every other toggle in these rows.
  * The turn is the exception and earns it: triangle and square are two *pictures*
  * of the map, so the button shows which one you would get. There is no second
  * picture of a resolution.
  */
-const REFINE_ICON = 'bars-decreasing'
+const REFINE_ICON = 'binoculars'
 
 const REFINE_HINT =
   'Adaptive resolution. Off, the block is read once and zooming magnifies it — which is what ' +
@@ -1952,13 +1954,6 @@ export class MatrixPanel {
     )
     this.refineButton = refineButton
     this.paintRefine(refineEnabled())
-    // **Not offered, for now.** The switch is built, painted and subscribed
-    // exactly as before — the preference is global, it is still honoured by
-    // every panel, and the palette and a stored `on` still reach it — it simply
-    // is not in the row. Built rather than skipped so that putting it back is
-    // one line rather than an unpicking, and so the machinery below cannot rot
-    // while it is out of sight.
-    const OFFER_REFINE = false
     // A global preference with several panels on screen: a deck of five maps
     // that disagreed about whether the zoom reads would be five answers to one
     // question. Unsubscribed with the panel.
@@ -1968,7 +1963,7 @@ export class MatrixPanel {
       // tells them a different thing.
       this.schedule()
     })
-    if (OFFER_REFINE) picture.push(refineButton)
+    picture.push(refineButton)
 
     const turn = options.turn
     if (turn !== undefined && turn.onChange !== undefined) {

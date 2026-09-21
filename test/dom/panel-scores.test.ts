@@ -89,6 +89,26 @@ function fieldsIn(root: Element | null): string[] {
   return Array.from(root.querySelectorAll('.field-label')).map((node) => node.textContent ?? '')
 }
 
+/**
+ * The same, without the row of icon toggles that leads the card.
+ *
+ * The card and the corner menu do not hold the same things, and only one of the
+ * differences matters here. `picture` is a row of *switches* — refine, the turn,
+ * the baseline — that change what picture this is, and it belongs to the card
+ * alone: a companion's corner menu carries the five value fields and nothing
+ * else. So an order asserted across both containers is an order over the value
+ * fields, and reading `[0]` off the raw list compares a row of toggles against a
+ * `<select>` and fails on a difference nobody meant to assert.
+ *
+ * It used to be possible to ignore this, because the row only existed where a
+ * turn was offered and this harness offers none. Zoom-to-refine now puts a
+ * switch in it on every panel, so the row is always there and the distinction
+ * has to be made rather than relied on.
+ */
+function valueFieldsIn(root: Element | null): string[] {
+  return fieldsIn(root).filter((label) => label !== 'picture')
+}
+
 describe('a companion’s score picker', () => {
   it('is in the menu on the picture, where a panel with no sidebar keeps its controls', () => {
     const fit = harness()
@@ -115,8 +135,16 @@ describe('a companion’s score picker', () => {
     // clipped — the question the other three answer about. A corner menu that
     // put it last was the same five fields in a different order on a companion.
     const fit = harness()
-    expect(fieldsIn(fit.panel.el.querySelector('.map-settings'))[0]).toBe('score')
-    expect(fieldsIn(harness({ corner: false }).panel.controlsEl)[0]).toBe('score')
+    expect(valueFieldsIn(fit.panel.el.querySelector('.map-settings'))[0]).toBe('score')
+    expect(valueFieldsIn(harness({ corner: false }).panel.controlsEl)[0]).toBe('score')
+  })
+
+  it('sits behind the picture row in the card, which the corner menu does not carry', () => {
+    // The two containers agree on the five value fields and differ by this one
+    // row, so it is asserted rather than filtered out and forgotten.
+    const fit = harness({ corner: false })
+    expect(fieldsIn(fit.panel.controlsEl)[0]).toBe('picture')
+    expect(fieldsIn(harness().panel.el.querySelector('.map-settings'))).not.toContain('picture')
   })
 
   it('reports the choice, resolved to the entry rather than to its id', () => {

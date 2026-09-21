@@ -31,6 +31,7 @@
 import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { MetaCooler } from '../../metacooler/MetaCooler'
+import { setPooledCellCap } from '../../metacooler/pooling'
 import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
@@ -380,6 +381,9 @@ async function handle(request: AnalysisRequest): Promise<void> {
 }
 
 ctx.onmessage = (event: MessageEvent<AnalysisRequest>): void => {
+  // As in `worker/reader.worker.ts`: this thread has no page to read the
+  // session's cap from, and the blocks a task reads are pooled by it.
+  setPooledCellCap((event.data as { cellCap?: number }).cellCap)
   void handle(event.data)
 }
 

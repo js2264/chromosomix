@@ -46,7 +46,7 @@ import {
 import { Coords } from './coords'
 import {
   poolBins,
-  POOLED_CELL_CAP,
+  pooledCellCap,
   selectionPooling,
   type BinPooling,
   type PoolPlan,
@@ -1136,7 +1136,7 @@ export class MetaCooler {
       // Bounded at what the renderer draws, for the same reason the bin grid is:
       // an axis past it is pooled a second time on the way to the screen, flat
       // and blind to the sequences it is collapsing.
-      POOLED_CELL_CAP,
+      pooledCellCap(),
     )
     // Weights are read once per axis for the bins on screen, exactly as the
     // dense path does — the one bounded read of `/bins` in the reader (§6.4).
@@ -1207,10 +1207,10 @@ export class MetaCooler {
     // cell of one genome's sequences (`pooling.ts`). Empty for a plain cooler,
     // where there is no coarser structure and a chromosome is the only unit.
     const groups = this.contigGenomeIds
-    const rowPool = poolBins(this.coords, rows[0], rows[1], aim, POOLED_CELL_CAP, groups)
+    const rowPool = poolBins(this.coords, rows[0], rows[1], aim, pooledCellCap(), groups)
     const colPool = onDiagonal
       ? rowPool
-      : poolBins(this.coords, cols[0], cols[1], aim, POOLED_CELL_CAP, groups)
+      : poolBins(this.coords, cols[0], cols[1], aim, pooledCellCap(), groups)
     const acc = pixelAccumulator(
       rows,
       cols,
@@ -1302,7 +1302,7 @@ export class MetaCooler {
       this.nBins,
       units,
       aim,
-      options.cellCap === undefined ? POOLED_CELL_CAP : options.cellCap,
+      options.cellCap === undefined ? pooledCellCap() : options.cellCap,
       groups,
     )
     // On the diagonal by construction: one axis, used twice. `planRead` decides

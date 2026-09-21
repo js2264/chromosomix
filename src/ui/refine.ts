@@ -19,7 +19,7 @@
  * Two things make it much smaller here than a tile pyramid would be.
  *
  * **The reader already chooses the grid.** `fitPlan` (`worker/reader.worker.ts`)
- * binary-searches the finest grid whose cell count fits {@link POOLED_CELL_CAP}
+ * binary-searches the finest grid whose cell count fits {@link pooledCellCap}
  * for whatever bin range a request names, and `snapToGrid` anchors that grid to
  * the *sequence* rather than to the request. So a refine is the same `matrix`
  * request with narrower extents, and two blocks of the same region at the same
@@ -47,7 +47,7 @@
  * never turn into the whole-file scan §7.3 gates.
  */
 
-import { POOLED_CELL_CAP } from '../metacooler/pooling'
+import { pooledCellCap } from '../metacooler/pooling'
 import type { Extent } from '../types'
 import type { Cancellable } from '../worker/client'
 import type { MatrixResult } from '../worker/protocol'
@@ -654,7 +654,7 @@ export function clip(extent: Extent, bounds: Extent): Extent {
  */
 export function gridFor(rows: Extent, cols: Extent): number {
   const widest = Math.max(rows[1] - rows[0], cols[1] - cols[0])
-  return Math.max(1, Math.ceil(widest / POOLED_CELL_CAP))
+  return Math.max(1, Math.ceil(widest / pooledCellCap()))
 }
 
 function keyOf(rows: Extent, cols: Extent): string {
@@ -793,7 +793,7 @@ export function chooseRung(
   rungs: ReadonlyArray<{ name: string; binsize: number }>,
   spanBins: number,
   binsize: number,
-  cap = POOLED_CELL_CAP,
+  cap = pooledCellCap(),
 ): string | undefined {
   if (rungs.length === 0 || !(binsize > 0) || !(spanBins > 0)) return undefined
   // The floor, applied before anything is chosen rather than after: a rung

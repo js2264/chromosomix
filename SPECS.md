@@ -76,9 +76,10 @@ than beside it:
   it cannot become the full pixel scan §7.3 gates;
 - **it is a preference, and it is off.** The default is the behaviour that keeps this clause
   absolute: a block read once, and a zoom that magnifies it. Refinement is one press away on the
-  map's own controls — first of the three switches that change *what picture this is*, before the
-  turn and the baseline — because a zoom that reads is a zoom that can wait, and a wait nobody asked
-  for is a surprise rather than a feature.
+  map's own controls — a pair of binoculars, first of the three switches that change *what picture
+  this is*, before the turn and the baseline — because a zoom that reads is a zoom that can wait,
+  and a wait nobody asked for is a surprise rather than a feature. The mark draws the **gesture**
+  and not the mechanism: the reader pressing it is asking to look closer, not choosing a rung.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
@@ -1353,6 +1354,30 @@ the reduction to display size in the app, sequence-aware, which measured 40–66
 per frame on the main thread and therefore belongs in a worker. It is a known
 limitation of the drawing, not of the data: the numbers behind every pixel, the
 readout, the axes and the export are all taken from the reader's grid.
+
+**The cap is a default, and it can be moved for one session.** 4,096 is not a measurement of the
+machine the app is running on: it is the number three separate arguments meet at — every browser's
+canvas limits above it (Firefox stops at 32,767 px a side, Chrome's *area* cap is `2^28`), any
+display below it, and the two picture-sized allocations it bounds between them. Note which does
+what, because it is the question anyone moving it asks first: the canvas limits are the **ceiling**,
+the display is the **floor** — it says why the cap is not 1,024, not why it is not 16,384 — and the
+allocations are what choosing between them costs. A `?raster=` on the page's URL, or a
+`metacooler-viewer:raster-max-dim` in `localStorage` when it should outlive the address bar, moves
+it; the URL wins over the stored value and is not written back, so trying a number once does not
+make it stick. Anything that is not a positive integer is ignored, and what is accepted is clamped
+to 512–16,384 — the upper end being `2^28` exactly, the last value at which a raster is a canvas at
+all, and far past the last at which it is a good idea: the guard in §12 refuses the read that would
+feed it, in bytes and against this machine's own budget, which is a better sentence than a silent
+rounding here.
+
+**It is read once, at load, and is one number for the session** — on both sides of the worker wall,
+which is the whole of why it can be moved at all. The read grid and the draw grid are the same
+number by construction, so a cap that changed mid-session would change it under blocks already read
+and already on screen: a picture drawn at one cap, labelled and hovered and exported against
+another. A reload has no such seam. The worker cannot read a page's URL or its `localStorage`, so
+the client stamps the session's cap onto every request and the reader applies it before dispatch —
+which is also why there is no control for this in the interface. It is an escape hatch for somebody
+reading the code, not a setting.
 
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —

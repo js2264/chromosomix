@@ -414,6 +414,16 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M22 12h-2"}],
     ],
   },
+  'binoculars': {
+    shapes: [
+    ['path', {"d":"M10 10h4"}],
+    ['path', {"d":"M19 7V4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v3"}],
+    ['path', {"d":"M20 21a2 2 0 0 0 2-2v-3.851c0-1.39-2-2.962-2-4.829V8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2z"}],
+    ['path', {"d":"M 22 16 L 2 16"}],
+    ['path', {"d":"M4 21a2 2 0 0 1-2-2v-3.851c0-1.39 2-2.962 2-4.829V8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2z"}],
+    ['path', {"d":"M9 7V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3"}],
+    ],
+  },
   'triangle': {
     shapes: [
     ['path', {"d":"M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"}],
@@ -706,13 +716,6 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M3 15h18"}],
     ['path', {"d":"M9 3v18"}],
     ['path', {"d":"M15 3v18"}],
-    ],
-  },
-  'bars-decreasing': {
-    shapes: [
-    ['path', {"d":"M3 6h18"}],
-    ['path', {"d":"M3 12h11"}],
-    ['path', {"d":"M3 18h5"}],
     ],
   },
   'new-session': {

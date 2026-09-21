@@ -35,7 +35,7 @@ import {
   poolPlan,
   runStarts,
   selectionPooling,
-  POOLED_CELL_CAP,
+  pooledCellCap,
   type PoolPlan,
 } from '@/metacooler/pooling'
 import type { MetaCooler } from '@/metacooler/MetaCooler'
@@ -200,9 +200,9 @@ describe('poolBins', () => {
 
   it('groups whole sequences where one per cell will not fit', () => {
     // 5,000 one-bin contigs against the renderer's cap: two contigs a cell.
-    const pooled = poolBins(coords, 0, 5000, poolPlan(5000, 5000, POOLED_CELL_CAP))
+    const pooled = poolBins(coords, 0, 5000, poolPlan(5000, 5000, pooledCellCap()))
     expect(pooled.contigsPerCell).toBe(2)
-    expect(pooled.ids.length).toBeLessThanOrEqual(POOLED_CELL_CAP)
+    expect(pooled.ids.length).toBeLessThanOrEqual(pooledCellCap())
     // A cell is named by the first sequence in it, and the names stay in file
     // order, so the axis still reads as the file does.
     expect(pooled.ids[0]).toBe(0)
@@ -211,8 +211,8 @@ describe('poolBins', () => {
 
   it('never hands the renderer more cells than it draws', () => {
     for (const bins of [4097, 5119, 5120, 8191, 24_228]) {
-      const pooled = poolBins(coords, 0, bins, poolPlan(bins, bins, POOLED_CELL_CAP))
-      expect(pooled.ids.length, `${bins} bins`).toBeLessThanOrEqual(POOLED_CELL_CAP)
+      const pooled = poolBins(coords, 0, bins, poolPlan(bins, bins, pooledCellCap()))
+      expect(pooled.ids.length, `${bins} bins`).toBeLessThanOrEqual(pooledCellCap())
     }
   })
 })
@@ -261,7 +261,7 @@ async function comparePooled(mc: MetaCooler, plan: PoolPlan): Promise<void> {
   // the dense block is the oracle here.
   const dense = await mc.matrix({ rows: [0, n] })
   const pooled = await mc.pooledMatrix({ rows: [0, n] }, plan)
-  const grouping = poolBins(mc.coords, 0, n, plan, POOLED_CELL_CAP, mc.contigGenomeIds)
+  const grouping = poolBins(mc.coords, 0, n, plan, pooledCellCap(), mc.contigGenomeIds)
 
   expect(pooled.binsPerCell).toBe(plan.binsPerCell)
   // Whatever the grouping came to, and never a number of this test's own. Under
@@ -344,7 +344,7 @@ describe('a selection larger than the cap', () => {
       id,
       extent: [id, id + 1] as [number, number],
     }))
-    const plan = poolPlan(6000, 6000, POOLED_CELL_CAP)
+    const plan = poolPlan(6000, 6000, pooledCellCap())
     const pooling = selectionPooling(6000, units, plan)
     expect(pooling.contigsPerCell).toBe(2)
     expect(pooling.ids.length).toBe(3000)
@@ -426,7 +426,7 @@ describe('a selection past the cap', () => {
   it('fits the picture however many sequences are ticked', () => {
     const chosen = units(20_000)
     const pooling = selectionPooling(20_000, chosen, IDENTITY_PLAN)
-    expect(pooling.ids.length).toBeLessThanOrEqual(POOLED_CELL_CAP)
+    expect(pooling.ids.length).toBeLessThanOrEqual(pooledCellCap())
     expect(pooling.contigsPerCell).toBeGreaterThan(1)
     // Every ticked sequence is in the picture, and in the order it was given.
     expect(pooling.members.length).toBe(20_000)

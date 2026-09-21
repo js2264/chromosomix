@@ -8,6 +8,7 @@
  */
 
 import { registerThread } from '../perf/threads'
+import { pooledCellCap } from '../metacooler/pooling'
 import { withAccess } from '../s3/attach'
 import { spawnReaderWorker } from './spawn'
 import {
@@ -105,7 +106,12 @@ export class ReaderClient {
     // what keeps the dozen construction sites ignorant of credentials, and what
     // makes a key edited mid-session apply to the next request rather than to
     // the next reload.
-    const message = withAccess({ ...payload, id }) as WorkerRequest
+    // Beside the key, and for the same reason: the cap is a property of the
+    // *session*, not of any one read, and the twenty places that build a
+    // request have no business knowing it. The worker has no page to read it
+    // from, so this is the only way it learns the session runs at anything but
+    // the default (`render/rasterCap.ts`).
+    const message = withAccess({ ...payload, id, cellCap: pooledCellCap() }) as WorkerRequest
     return new Promise<ResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)

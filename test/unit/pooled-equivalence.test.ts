@@ -24,8 +24,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { MetaCooler } from '@/metacooler/MetaCooler'
-import { POOLED_CELL_CAP } from '@/metacooler/pooling'
-import { RASTER_MAX_DIM } from '@/render/heatmap'
+import { pooledCellCap } from '@/metacooler/pooling'
+import { rasterMaxDim } from '@/render/rasterCap'
 import type { ByteSource, Extent, SourceStats } from '@/types'
 import { writeHic, type HicRecord } from '../support/hicWriter'
 
@@ -235,7 +235,7 @@ describe('the pooling threshold', () => {
     // raster leaves the renderer to pool again, blind to the sequences it is
     // collapsing; pooling to anything coarser throws away resolution the screen
     // could have shown.
-    expect(POOLED_CELL_CAP).toBe(RASTER_MAX_DIM)
+    expect(pooledCellCap()).toBe(rasterMaxDim())
   })
 
   it('bounds a whole-file read to the cells a screen can hold', async () => {
@@ -244,8 +244,8 @@ describe('the pooling threshold', () => {
       { rows: [0, mc.nBins] },
       { binsPerCell: 1, contigsPerCell: 1 },
     )
-    expect(pooled.nrows).toBeLessThanOrEqual(POOLED_CELL_CAP)
-    expect(pooled.ncols).toBeLessThanOrEqual(POOLED_CELL_CAP)
+    expect(pooled.nrows).toBeLessThanOrEqual(pooledCellCap())
+    expect(pooled.ncols).toBeLessThanOrEqual(pooledCellCap())
   })
 
   it('never allocates the rectangle: a pooled read is bounded by the picture', async () => {
@@ -258,7 +258,7 @@ describe('the pooling threshold', () => {
       { binsPerCell: 4, contigsPerCell: 1 },
     )
     expect(pooled.values.length).toBe(pooled.nrows * pooled.ncols)
-    expect(pooled.values.length).toBeLessThanOrEqual(POOLED_CELL_CAP * POOLED_CELL_CAP)
+    expect(pooled.values.length).toBeLessThanOrEqual(pooledCellCap() * pooledCellCap())
     expect(pooled.binsPerCell).toBeGreaterThanOrEqual(4)
   })
 })

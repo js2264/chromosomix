@@ -84,6 +84,13 @@ const LUCIDE = [
   'align-end-horizontal',
   'chevrons-up-down',
   'flip-vertical',
+  // Zoom-to-refine, first in the Map card's picture row (§9.6). A pair of
+  // lenses for the one control that changes what zooming *does*: the others in
+  // that row restate the block you have, this one goes and fetches a finer one.
+  // It replaced a hand-drawn `bars-decreasing` — three rules for a resolution
+  // ladder, which described the mechanism rather than the gesture, and read as
+  // a paragraph-align mark beside two shape toggles.
+  'binoculars',
   // The turn, as two shapes for one button: a map on its diagonal is a triangle
   // standing on a genomic axis and a map that is not is a square, and the toggle
   // shows **the shape it will give you** rather than the shape you have — a
@@ -169,28 +176,20 @@ const BRANDS = ['github', 'googledrive', 'dropbox']
  * `icons.ts` says nothing is drawn by hand any more, and the reason it gives is
  * drift: a sketched icon ends up with different corner radii, a different
  * optical weight, a chevron at a slightly different angle from the set it is
- * imitating. None of that can happen to three straight horizontal rules. They
- * sit on Lucide's own 24-unit grid at its own baselines (`y = 6, 12, 18`, the
- * rows `align-left` uses), start at its own left margin, and inherit the same
- * stroke width and round caps from the renderer — so this is Lucide's geometry
- * with three lengths chosen, not an imitation of its style.
+ * imitating. None of that can happen to a frame copied from the set to the unit
+ * and a `plus` laid on it at half size, which is what the one entry below is.
  *
  * It is here rather than in `icons.ts` so that the generated file stays the
  * single place icons come from, and so the exception is visible next to the
  * rule it is an exception to.
  *
- * The nearest upstream shape is `chart-bar-decreasing`, and it was tried first:
- * it is these three bars plus an L-shaped axis, and at the 15 px these buttons
- * are drawn at the axis closes the left side and the whole mark reads as a
- * letter E.
+ * It used to hold a second, `bars-decreasing` — three rules standing for a
+ * resolution ladder, drawn because Lucide's nearest shape, `chart-bar-decreasing`,
+ * closes its left side with an axis and reads as a letter E at 15 px. Its one
+ * caller was the zoom-to-refine toggle, which now carries `binoculars`, so the
+ * shape is gone rather than left generated with nothing drawing it.
  */
 const HAND = {
-  /** A resolution ladder: coarse at the top, fine at the bottom, one origin. */
-  'bars-decreasing': [
-    ['path', { d: 'M3 6h18' }],
-    ['path', { d: 'M3 12h11' }],
-    ['path', { d: 'M3 18h5' }],
-  ],
   /**
    * Open in a new session: a window with a `+` where its top-right corner was.
    *

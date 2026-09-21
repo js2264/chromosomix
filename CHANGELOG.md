@@ -10,6 +10,49 @@ The deployed site at <https://js2264.github.io/metacooler.js/> is built from `ma
 it can be ahead of the newest entry here. Its exact build is in **About → version**, and in the
 `/Producer` field of any PDF it exports.
 
+## [Unreleased]
+
+### Added
+
+- **Zoom-to-refine has a switch, and it is a pair of binoculars (§2).** The ladder has been on disk
+  and working for some time, held back from the interface by a flag while everything downstream of
+  it settled. It is now the first control in the Map card's picture row, ahead of the turn and the
+  baseline, on the argument §2 already made for that position: it is the one of the three that
+  decides what the other two are *of*. **Still off by default** — §2's clause is absolute on the
+  default, and a zoom that reads is a zoom that can wait — so this is the control that turns it on
+  rather than a light that happens to be lit. The preference is global and every panel on screen
+  honours it, which is what stops a deck of five maps giving five answers to one question.
+
+  The mark draws the **gesture** rather than the mechanism. It replaced three left-aligned bars
+  standing for a resolution ladder: accurate about what the setting does to the read, and wrong
+  about what it offers the person pressing it, who is not choosing a rung. Those bars were the one
+  shape in the set drawn by hand rather than copied from Lucide, and with no caller left they are
+  gone from `scripts/build-icons.mjs` rather than left generated with nothing drawing them.
+
+- **`?raster=` moves the raster cap for one session (§7.2).** 4,096 is where three arguments meet —
+  browser canvas limits above, any display below, two picture-sized allocations between — and none
+  of them is a measurement of the machine the app is on, so "what would this look like at 8192" is a
+  fair question to be able to ask without a rebuild. A `?raster=` on the page URL answers it, or a
+  `metacooler-viewer:raster-max-dim` in `localStorage` for a preference that should outlive the
+  address bar; the URL wins and is not written back, so trying a number once does not make it stick.
+  Clamped to 512–16,384, the top being `2^28` exactly — Chrome's canvas area cap, the last value at
+  which a raster is a canvas at all. Anything that is not a positive integer is ignored.
+
+  **Read once, at load, and one number for the session on both sides of the worker wall.** That is
+  what makes it safe rather than what makes it limited: the read grid and the draw grid are the same
+  number by construction, so a cap that moved mid-session would move it under blocks already on
+  screen. A worker can read neither a page URL nor its `localStorage`, so the client stamps the cap
+  onto every request beside the bucket key and the reader applies it before dispatch — the same
+  arrangement, and for the same reason, as `withAccess`.
+
+### Changed
+
+- `POOLED_CELL_CAP` is now `pooledCellCap()`. The constant would have been a trap the moment the cap
+  could move: correct in the page, silently stale in the worker, and wrong in exactly the way the
+  module exists to prevent — two grids that disagree. `OVERVIEW_HARD_CAP` and the overview's render
+  ceiling follow it, the latter having been a hardcoded `4 * 4096 * 4096` that would have gone on
+  promising 268 MB while the budget it is subtracted from ran up to sixteen times short.
+
 ## [0.13.0] - 2026-09-20
 
 ### Added

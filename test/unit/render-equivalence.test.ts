@@ -11,7 +11,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { poolDisplay, RASTER_MAX_DIM } from '@/render/heatmap'
+import { poolDisplay } from '@/render/heatmap'
+import { rasterMaxDim } from '@/render/rasterCap'
 import { displayValue, percentileLinear, percentileOf, selectNth } from '@/render/scale'
 import type { ColorScale, DenseMatrix, Transform } from '@/types'
 
@@ -168,7 +169,7 @@ describe('pooling the raw maximum equals pooling the display maximum', () => {
 
   it('still pools nothing at exactly the cap, and pools at one cell past it', () => {
     const at = poolDisplay(
-      { nrows: RASTER_MAX_DIM, ncols: 4, values: new Float32Array(RASTER_MAX_DIM * 4), rowExtent: [0, RASTER_MAX_DIM], colExtent: [0, 4] },
+      { nrows: rasterMaxDim(), ncols: 4, values: new Float32Array(rasterMaxDim() * 4), rowExtent: [0, rasterMaxDim()], colExtent: [0, 4] },
       { vmin: Number.NaN, vmax: Number.NaN, transform: 'log1p', colormap: 'afmhot_r' },
     )
     expect(at.strideY).toBe(1)

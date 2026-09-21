@@ -15,7 +15,7 @@ import { ViewerError } from '../errors'
 import { getH5 } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
-import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
+import { pooledCellCap, setPooledCellCap, type BinPooling, type PoolPlan } from '../metacooler/pooling'
 import { ScoolStore } from '../metacooler/scool'
 import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
@@ -929,8 +929,8 @@ function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
   // for a caller that has to name the resolution before anything is read.
   for (const [lo, hi] of spans) {
     const contigs = mc.coords.contigOfBin(hi - 1) - mc.coords.contigOfBin(lo) + 1
-    if (contigs > POOLED_CELL_CAP) {
-      return { binsPerCell: 1, contigsPerCell: Math.ceil(contigs / POOLED_CELL_CAP) }
+    if (contigs > pooledCellCap()) {
+      return { binsPerCell: 1, contigsPerCell: Math.ceil(contigs / pooledCellCap()) }
     }
   }
   let low = 2
@@ -948,7 +948,7 @@ function fitPlan(mc: MetaCooler, rows: Extent, cols: Extent): PoolPlan | null {
 
 /** Whether an extent comes to at most a picture's worth of cells at `k`. */
 function fits(mc: MetaCooler, [lo, hi]: Extent, k: number): boolean {
-  return cellsIn(mc, [lo, hi], k) <= POOLED_CELL_CAP
+  return cellsIn(mc, [lo, hi], k) <= pooledCellCap()
 }
 
 /** Cells an extent needs, from the contig extents — no per-bin array. */
@@ -1581,6 +1581,11 @@ function followCells(id: number): () => void {
 }
 
 ctx.onmessage = (event: MessageEvent<WorkerRequest>): void => {
+  // Before `handle`, because `fitPlan` and every pooled read below it consult
+  // the cap and none of them takes it as an argument. Idempotent and constant
+  // in practice — the client stamps the same number on every request for the
+  // life of the session — so this is an assignment, not a reconfiguration.
+  setPooledCellCap(event.data.cellCap)
   void handle(event.data)
 }
 

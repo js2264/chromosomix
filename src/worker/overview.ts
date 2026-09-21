@@ -22,7 +22,7 @@
 /**
  * The most units either axis of the overview may have, whatever the budget.
  *
- * `RASTER_MAX_DIM`, because the renderer draws no more than that per axis and
+ * The renderer's own cap, because it draws no more than that per axis and
  * anything above it is pooled a second time on the way to the screen — flat,
  * four units to a pixel, with no idea where the genome boundaries are. That is
  * the straddling `poolUnits` is here to prevent, undone one step later: the
@@ -31,9 +31,11 @@
  * `Float64Array` is 2 GB — and memory was never the binding constraint on a
  * picture that is at most four thousand pixels wide.
  */
-import { RASTER_MAX_DIM } from '../render/heatmap'
+import { pooledCellCap } from '../metacooler/pooling'
 
-export const OVERVIEW_HARD_CAP = RASTER_MAX_DIM
+export function overviewHardCap(): number {
+  return pooledCellCap()
+}
 
 /**
  * Bytes one unit of the accumulator costs, per unit of the other axis.
@@ -48,10 +50,17 @@ const BYTES_PER_UNIT_PAIR = 8
 /**
  * What the *render* side costs, whatever the unit count.
  *
- * Bounded by `RASTER_MAX_DIM`: pooled values, RGBA, canvas backing store and
- * the transient auto-range buffer, at 4 B each over at most 4096².
+ * Bounded by the cap: pooled values, RGBA, canvas backing store and the
+ * transient auto-range buffer, at 4 B each over at most `cap²` — 268 MB at the
+ * default 4096, and the reason this is computed rather than written down is
+ * that it is 4 GB at the largest cap `render/rasterCap.ts` will accept. A
+ * constant here would have gone on promising 268 MB while the budget it is
+ * subtracted from ran sixteen times short.
  */
-const RENDER_CEILING_BYTES = 4 * 4096 * 4096
+function renderCeilingBytes(): number {
+  const cap = pooledCellCap()
+  return 4 * cap * cap
+}
 
 /**
  * The most units this machine will draw an overview of.
@@ -62,11 +71,11 @@ const RENDER_CEILING_BYTES = 4 * 4096 * 4096
  * was eight times too loose.
  */
 export function overviewUnitCap(budgetBytes: number): number {
-  const forAccumulator = Math.max(0, budgetBytes - RENDER_CEILING_BYTES)
+  const forAccumulator = Math.max(0, budgetBytes - renderCeilingBytes())
   const cap = Math.floor(Math.sqrt(forAccumulator / BYTES_PER_UNIT_PAIR))
   // Never fewer than a few hundred: a machine too small for that is too small
   // for the scan, and an axis of 12 units is not a picture of anything.
-  return Math.max(256, Math.min(OVERVIEW_HARD_CAP, cap))
+  return Math.max(256, Math.min(overviewHardCap(), cap))
 }
 
 /** One axis of the overview: which slot each displayed unit falls into. */

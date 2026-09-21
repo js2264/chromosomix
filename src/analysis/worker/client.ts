@@ -26,6 +26,7 @@
  */
 
 import { registerThread } from '../../perf/threads'
+import { pooledCellCap } from '../../metacooler/pooling'
 import { withAccess } from '../../s3/attach'
 import type { Cancellable } from '../../worker/client'
 import { reviveError } from '../../worker/protocol'
@@ -110,7 +111,16 @@ export class AnalysisClient {
     // the same way. Through `unknown` because only one member of the request
     // union carries a `source`, so the spread is not assignable to the union
     // without it; `payload.kind` is the discriminant and is already pinned.
-    const message = withAccess({ ...payload, id }) as unknown as AnalysisRequest
+    // And the session's cell cap beside it, for the reason `worker/client.ts`
+    // gives: a task that reads a whole-genome or bounding-box block is pooled
+    // by the same rule the map is (§7.2), so a worker left on the default would
+    // compute a pileup on a grid finer than the picture the reader is pointing
+    // at. One number for the session means this thread too.
+    const message = withAccess({
+      ...payload,
+      id,
+      cellCap: pooledCellCap(),
+    }) as unknown as AnalysisRequest
     return new Promise<AnalysisResultMap[K]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, onProgress })
       this.worker.postMessage(message)

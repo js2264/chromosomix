@@ -32,7 +32,7 @@
  * straddling the read had just gone to the trouble of avoiding.
  */
 
-import { RASTER_MAX_DIM } from '../render/heatmap'
+import { rasterMaxDim, setRasterMaxDim } from '../render/rasterCap'
 import type { Coords } from './coords'
 import type { AxisGrouping } from './aggregate'
 
@@ -42,11 +42,36 @@ import type { AxisGrouping } from './aggregate'
  * `RASTER_MAX_DIM` and not a number of its own, because the raster is the reason
  * this exists. Reading finer than the picture can show costs memory and time to
  * produce values that are pooled again a step later and never seen; reading
- * coarser would throw away detail the screen has room for. At this cap the block
- * is at most 4096² cells — 67 MB of `Float32Array` — however many bins the file
- * has.
+ * coarser would throw away detail the screen has room for. At the default cap
+ * the block is at most 4096² cells — 67 MB of `Float32Array` — however many
+ * bins the file has.
+ *
+ * **A function rather than a constant, and only because of the worker.** The
+ * cap is one number per session (`render/rasterCap.ts`), but the side that can
+ * read where it came from is the page: a worker has no page URL and no
+ * `localStorage`, so its module-load value is always the default. The client
+ * stamps the session's cap onto every request and the reader applies it with
+ * {@link setPooledCellCap} before dispatch, which is one assignment in one
+ * place instead of a cap parameter threaded through `MetaCooler`.
+ *
+ * Callers should keep reading it as the constant it used to be. It is fixed for
+ * the life of the session on both sides of the wall; what this shape buys is
+ * that the worker's copy is fixed to the *same* value as the page's, which is
+ * the invariant the whole module rests on — the grid the reader builds is the
+ * grid the renderer draws.
  */
-export const POOLED_CELL_CAP = RASTER_MAX_DIM
+export function pooledCellCap(): number {
+  return rasterMaxDim()
+}
+
+/**
+ * Tell this thread the session's cap. The reader worker's first act on a
+ * request, and the renderer's raster moves with it — they are one variable
+ * (`render/rasterCap.ts`), which is what makes them impossible to disagree.
+ */
+export function setPooledCellCap(value: number | undefined): void {
+  setRasterMaxDim(value)
+}
 
 /**
  * How a coarser axis is built out of a finer one.
@@ -97,7 +122,7 @@ export const IDENTITY_PLAN: PoolPlan = { binsPerCell: 1, contigsPerCell: 1 }
  * the parameter stays only because every caller passes it and dropping it from
  * four call sites would say less than this paragraph does.
  */
-export function poolPlan(nBins: number, _nContigs: number, cap = POOLED_CELL_CAP): PoolPlan {
+export function poolPlan(nBins: number, _nContigs: number, cap = pooledCellCap()): PoolPlan {
   const bins = Math.max(0, Math.trunc(nBins))
   if (cap <= 0 || bins <= cap) return IDENTITY_PLAN
   return { binsPerCell: Math.max(2, Math.ceil(bins / cap)), contigsPerCell: 1 }
@@ -358,7 +383,7 @@ export function poolBins(
   lo: number,
   hi: number,
   aim: PoolPlan = IDENTITY_PLAN,
-  cap = POOLED_CELL_CAP,
+  cap = pooledCellCap(),
   contigGenomeIds?: ArrayLike<number>,
 ): BinPooling {
   const count = Math.max(0, hi - lo)
@@ -435,7 +460,7 @@ export function selectionPooling(
   nBins: number,
   extents: ReadonlyArray<{ id: number; extent: readonly [number, number] }>,
   plan: PoolPlan,
-  cap = POOLED_CELL_CAP,
+  cap = pooledCellCap(),
   contigGroup?: ArrayLike<number>,
 ): BinPooling {
   const lengths = extents.map(({ extent }) => Math.max(0, extent[1] - extent[0]))
