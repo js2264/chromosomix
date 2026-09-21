@@ -4684,6 +4684,19 @@ lets a task like compartment phasing (§18.8) be a dropdown rather than a second
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
 
+**A locus parameter is in cooler's grammar** — 0-based half-open, ungrouped — because that is the one
+form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
+CLI button prints, and what a reader pastes from `metacooler show --range`. This is the one box in the
+app that is not in the display form of §26.1, and it is the exception because it also takes a
+comma-separated list, which the display form's thousands separators cannot survive. So it says which
+grammar it is in, in its own title, and never claims to be "the same thing the locus boxes take".
+
+**A locus picked off the map is converted on the way in.** `ui/mapPick.ts` writes the *paste* form —
+1-based inclusive, which §8.9 pins for the clipboard because that is what samtools and bedtools take —
+so the form shifts it by a base before it becomes a parameter. Without that, a drag framing bins
+230–1042 reached the runner naming bin 231 onwards: one bin past the stretch the reader had just
+pointed at, with nothing on screen saying so, and a 4C profile is read off its anchor.
+
 **The form is the cards' form.** A label is one to three lowercase words in the same column down the
 whole form, a select's options are lowercase, and one hint is one sentence beside the control it is
 about — §26.4's rules, and this is the surface that was breaking all three. A label and its control

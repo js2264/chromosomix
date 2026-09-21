@@ -51,6 +51,7 @@ import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/type
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { button, el, fmt } from './dom'
 import { resolutionLabel } from '../units'
+import { typedLocusToRegion } from '../genome/assembly'
 import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
 import { iconButton } from './icons'
 
@@ -1476,8 +1477,8 @@ export class ParamForm {
       attrs: { id, list: listId },
       placeholder: framingRegion(this.context),
       title:
-        'A contig, or a contig and a span — the same thing the locus boxes take. On a ' +
-        'metagenome a genome name is one too, and means the whole of it.',
+        'A contig, or a contig and a span, as metacooler show --range takes it. On a metagenome ' +
+        'a genome name is one too, and means the whole of it.',
     })
     const note = el('p', { class: 'hint param-map-note hidden' })
 
@@ -1544,7 +1545,17 @@ export class ParamForm {
           // correction the reader had just typed over it.
           if (at !== null && at !== seen) {
             seen = at
-            this.commit(spec.key, locusText(at))
+            // **Through `typedLocusToRegion`, so the pick lands on the bins that
+            // were dragged.** `mapPick.locusText` writes the *paste* form —
+            // 1-based inclusive, which is what §8.9 pins for the clipboard and
+            // what a reader wants in a terminal — and the runners read this
+            // parameter with cooler's grammar, 0-based half-open. So a picked
+            // anchor arrived a base past the stretch the reader had just framed
+            // on the map, and nothing on the screen said so. Converted here
+            // rather than in `locusText`, which the clipboard still wants
+            // unchanged, and rather than in the runners, whose reading of a
+            // *typed* value is a separate question (see the box's own title).
+            this.commit(spec.key, typedLocusToRegion(locusText(at)))
           }
           sync()
         }),

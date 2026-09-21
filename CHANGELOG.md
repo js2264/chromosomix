@@ -526,6 +526,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   chrIV" — which is the locus box's job. The field is *motif*; the reference it searches is
   *reference*.
 
+### Fixed
+
+- **An anchor picked off the map now names the bins that were dragged.** *pick on map* wrote the
+  locus in the form made for a clipboard — 1-based inclusive, which is what samtools and bedtools
+  take — and the analysis runners read that parameter with cooler's grammar, 0-based half-open. So a
+  drag that framed bins 230 to 1042 reached the runner naming bin 231 onwards: one bin along from the
+  stretch the reader had just pointed at, with nothing on screen to say so. A 4C profile is read off
+  its anchor, so the shift moved the peak. The box's own tooltip no longer claims to take "the same
+  thing the locus boxes take" either — it is the one box in the app in cooler's grammar rather than
+  the display form, because it also accepts a comma-separated list, and it now says so (§18.2).
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

@@ -163,11 +163,13 @@ export function resetPick(): void {
 /**
  * `chrIV:500001-510000` — the format every tool in this field takes.
  *
- * **No thousands separators and a plain hyphen**, which is the difference
- * between a string that pastes into samtools, bedtools, IGV and this app's own
- * locus boxes and one that only looks right. The app's *display* format uses an
- * en dash and grouped digits, and that one is for reading; this one is for
- * pasting, and the two must not be confused.
+ * **No thousands separators**, which is the difference between a string that
+ * pastes into samtools, bedtools, IGV and this app's own locus boxes and one
+ * that only looks right. The app's *display* format is the same locus with its
+ * digits grouped (§26.1) — the hyphen is the same in both, an en dash being
+ * this app's mark for a range of *values* rather than for a locus — and that
+ * one is for reading; this one is for pasting, and the two must not be
+ * confused.
  *
  * One-based inclusive, because that is what the format means: the interval here
  * is half-open and 0-based, as everything internal is, and the `+1` is the

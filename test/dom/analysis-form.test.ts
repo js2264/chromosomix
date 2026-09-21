@@ -31,9 +31,10 @@ import { TRACK_CORRELATION_TASK } from '@/analysis/tasks/trackcorr'
 import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
 import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
-import { defaultParams, type AnalysisContext, type AnalysisTask } from '@/analysis/types'
+import { defaultParams, type AnalysisContext, type AnalysisTask, type Params } from '@/analysis/types'
 import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { ParamForm } from '@/ui/ParamForm'
+import { pickLocus, resetPick } from '@/ui/mapPick'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -91,6 +92,20 @@ function form(task: AnalysisTask, ctx = context()): ParamForm {
     value: defaultParams(task.params),
     onChange: () => {},
   })
+}
+
+/** A form whose parameter writes are visible to the test. */
+function watchedForm(task: AnalysisTask, ctx = context()): { view: ParamForm; latest: () => Params } {
+  let params = defaultParams(task.params)
+  const view = new ParamForm({
+    specs: task.params,
+    context: ctx,
+    value: params,
+    onChange: (next) => {
+      params = next
+    },
+  })
+  return { view, latest: () => params }
 }
 
 /** Every control label the form put on screen. */
@@ -594,5 +609,38 @@ describe('a box that takes several sequences (§25.6)', () => {
     const view = form(RECONSTRUCT_TASK, framed([0, 230], [1043, 2574]))
     expect(view.value.region).toBe('I, IV')
     view.destroy()
+  })
+})
+
+
+describe('an anchor picked off the map', () => {
+  // THE DIALECT, and it is a wrong *answer* rather than a wrong label.
+  //
+  // `mapPick.locusText` writes the paste form — 1-based inclusive, which §8.9
+  // pins for the clipboard because that is what samtools and bedtools take — and
+  // the runners read this parameter with cooler's grammar, 0-based half-open. So
+  // a drag that framed bins 230–1042 arrived at the runner naming bin 231
+  // onwards, one bin past the stretch the reader had just pointed at, and
+  // nothing on the screen said so. A 4C profile is read off its anchor, so the
+  // shift moved the peak.
+  afterEach(() => {
+    resetPick()
+  })
+
+  it('names the bins that were dragged, in the grammar the runner reads', () => {
+    const { view, latest } = watchedForm(FOURC_TASK)
+    document.body.appendChild(view.el)
+    // Bins 230 to 1042 of a 1 kb file — chromosome II, whole.
+    pickLocus({ contig: 'II', start: 230_000, end: 1_043_000 })
+    // Not `II:230001-1043000`, which is the same stretch written for a terminal
+    // and one base along when read as cooler reads it.
+    expect(latest().anchor).toBe('II:230000-1043000')
+  })
+
+  it('leaves a whole sequence as its bare name, which has no coordinate to shift', () => {
+    const { view, latest } = watchedForm(FOURC_TASK)
+    document.body.appendChild(view.el)
+    pickLocus({ contig: 'IV', start: 1_043_000, end: 2_574_000, whole: true })
+    expect(latest().anchor).toBe('IV')
   })
 })
