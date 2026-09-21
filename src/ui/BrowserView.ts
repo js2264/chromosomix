@@ -3908,7 +3908,7 @@ export class BrowserView {
       rows.push(
         el('div', { class: 'cell-tip-row' }, el('span', {
           class: 'cell-tip-key',
-          text: `${name === '' ? 'read' : name}   ${pile.contig}:${fmt.int(pile.refStart[index] + 1)}–${fmt.int(pile.refEnd[index])} (${strand})`,
+          text: `${name === '' ? 'read' : name}   ${formatLocus({ contig: pile.contig, start: pile.refStart[index], end: pile.refEnd[index] })} (${strand})`,
         })),
       )
       rows.push(

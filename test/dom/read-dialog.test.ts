@@ -115,9 +115,12 @@ describe('what the card leads with', () => {
     expect(open({ start: 1000, end: 1100, name: '' }).title).toBe('Read')
   })
 
+  // A plain hyphen, through `formatLocus`: §26.1 gives a locus one spelling and
+  // keeps the en dash for a range of *values*, so a window wearing one read as a
+  // quantity.
   it('gives the position 1-based, as a reader would write it', () => {
     const { rows } = open({ start: 1000, end: 1100 })
-    expect(rows.get('position')).toBe('chrI:1,001–1,100')
+    expect(rows.get('position')).toBe('chrI:1,001-1,100')
   })
 
   it('calls the extent an aligned span, because a spliced read is not that long', () => {

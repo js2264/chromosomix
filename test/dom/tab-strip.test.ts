@@ -181,7 +181,7 @@ describe('naming a tab', () => {
 
   it('is not offered on a tab with nothing open', () => {
     const strip = mount()
-    strip.render([{ label: 'New session', nameable: false }])
+    strip.render([{ label: 'New tab', nameable: false }])
     doubleClick(strip.strip)
     expect(strip.box()).toBeNull()
     // Nor through the palette's door, which arrives holding an id.

@@ -29,6 +29,7 @@
  * row draws beside a map cannot disagree about where a bead is.
  */
 
+import { formatLocus } from '../genome/assembly'
 import type { AnnotationEntry, StructureStyle, TrackSampleSet } from '../annotations/types'
 import {
   STRUCTURE_COLOUR_HAPLOTYPE,
@@ -938,7 +939,7 @@ export class StructurePanel implements DeckCell {
     const structure = this.structure
     if (structure === null) return
     const at = lociOf(structure, bead)
-    setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   drag to a second bead, or click one, to measure to it`)
+    setReadout(`${formatLocus(at)}   drag to a second bead, or click one, to measure to it`)
   }
 
   /** The second end: the measurement is kept in the card and drawn on the model. */
@@ -963,7 +964,7 @@ export class StructurePanel implements DeckCell {
     this.schedule()
   }
 
-  /** `IV:1,000,001–1,005,000 → IV:1,200,001–1,205,000 · 3.21 apart · 200 kb along` */
+  /** `IV:1,000,001-1,005,000 → IV:1,200,001-1,205,000 · 3.21 apart · 200 kb along` */
   private measureLine([a, b]: readonly [number, number]): string {
     const structure = this.structure
     if (structure === null) return ''
@@ -972,7 +973,7 @@ export class StructurePanel implements DeckCell {
     const d = distanceBetween(structure, a, b)
     const along =
       la.contig === lb.contig ? `${fmt.bp(Math.abs((la.start + la.end) / 2 - (lb.start + lb.end) / 2))} along` : 'across sequences'
-    return `${la.contig}:${fmt.int(la.start + 1)}–${fmt.int(la.end)} → ${lb.contig}:${fmt.int(lb.start + 1)}–${fmt.int(lb.end)} · ${fmt.num(d)} apart · ${along}`
+    return `${formatLocus(la)} → ${formatLocus(lb)} · ${fmt.num(d)} apart · ${along}`
   }
 
   private toggleTurning(): void {
@@ -1029,7 +1030,7 @@ export class StructurePanel implements DeckCell {
       this.selectFirst = bead
       this.pinned = bead
       const at = lociOf(structure, bead)
-      setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   click a second bead for the loop, Esc to cancel`)
+      setReadout(`${formatLocus(at)}   click a second bead for the loop, Esc to cancel`)
       this.schedule()
       return
     }
@@ -1171,7 +1172,7 @@ export class StructurePanel implements DeckCell {
     const [name, pos] = this.tipEl.children as unknown as [HTMLElement, HTMLElement]
     name.textContent =
       structure !== null && structure.haplotypes.length > 1 ? `${at.contig} · ${at.haplotype}` : at.contig
-    pos.textContent = `${fmt.int(at.start + 1)}–${fmt.int(at.end)}`
+    pos.textContent = `${fmt.int(at.start + 1)}-${fmt.int(at.end)}`
     this.tipEl.classList.remove('hidden')
     // Measured after it is shown, so a card that just grew is placed at its
     // new size rather than at the one it had while it was empty.
@@ -1198,7 +1199,7 @@ export class StructurePanel implements DeckCell {
     }
     const first = lociOf(structure, this.hovered[0])
     parts.unshift(
-      `${first.contig}:${fmt.int(first.start + 1)}–${fmt.int(first.end)}` +
+      `${formatLocus(first)}` +
         (structure.haplotypes.length > 1 ? ` · ${this.hovered.map((b) => lociOf(structure, b).haplotype).join(', ')}` : ''),
     )
     this.readoutEl.textContent = parts.join('   ·   ')
@@ -1249,7 +1250,7 @@ export class StructurePanel implements DeckCell {
     const along = structure.along[bead]
     setHoverPlace({ loci: [{ contig: at.contig, bp: (at.start + at.end) / 2 }], source: this.source })
     setReadout(
-      `${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}` +
+      `${formatLocus(at)}` +
         (structure.haplotypes.length > 1 ? `   ${at.haplotype}` : '') +
         `   bead ${fmt.int(along + 1)} of ${fmt.int(chain?.beads.length ?? 0)}`,
     )
@@ -1396,7 +1397,7 @@ export class StructurePanel implements DeckCell {
       if (this.mode === 'mark') {
         this.markAt(bead)
         const at = lociOf(model, bead)
-        setReadout(`${at.contig}:${fmt.int(at.start + 1)}–${fmt.int(at.end)}   marked`)
+        setReadout(`${formatLocus(at)}   marked`)
         this.schedule()
         return
       }
@@ -2115,7 +2116,7 @@ export class StructurePanel implements DeckCell {
         el('span', {
           class: 'structure-label is-bookmark',
           text: mark.label,
-          title: `${mark.contig}:${fmt.int(mark.start + 1)}–${fmt.int(mark.end)}`,
+          title: `${formatLocus(mark)}`,
           style: { left: `${at.px}px`, top: `${at.py}px` },
         }),
       )

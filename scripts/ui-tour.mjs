@@ -99,7 +99,7 @@ await scene('landing', async ({ page, shot }) => {
   await shot('04b-palette-filtered')
   await page.keyboard.press('Escape')
   await sleep(400)
-  await page.click('button[title="Share this session as a link"]')
+  await page.click('button[title^="Share this tab as a link"]')
   await sleep(800)
   await shot('05-share-empty')
   await page.keyboard.press('Escape')
@@ -355,7 +355,7 @@ await scene('browser', async ({ page, shot, fold, opened }) => {
   if (await locus.count()) { await locus.click(); await locus.fill('YDR'); await sleep(800); await shot('53-browser-search') }
   await page.keyboard.press('Escape')
   // The share dialog with something to share.
-  await page.click('button[title="Share this session as a link"]')
+  await page.click('button[title^="Share this tab as a link"]')
   await sleep(1000)
   await shot('54-share')
   await page.keyboard.press('Escape')

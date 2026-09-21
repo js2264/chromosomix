@@ -990,7 +990,12 @@ export class Session {
     if (name !== null) return name
     const state = this.store.state
     if (state !== null) return fileLabel(state.uri)
-    return 'New session'
+    // The word the strip is made of (§26.4). Every control that reaches this tab
+    // says *tab* — the `+` beside it, the palette's *New tab*, *Close this tab*,
+    // *Rename this tab* — and the label on the only one there is said *session*,
+    // which is this codebase's own word for the object rather than the reader's
+    // for the thing on screen.
+    return 'New tab'
   }
 
   /**

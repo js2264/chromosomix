@@ -528,6 +528,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A locus is written with a hyphen everywhere, including the places the audit did not reach.**
+  The 3D panel's four readouts, a read's row on a lane, a feature card's span, its exons and its
+  coding stretch, and the read card's position each spelled the window by hand with an en dash — this
+  app's mark for a range of *values* — so a locus wore the punctuation of a quantity. All of them go
+  through `formatLocus` now, which is the one writer §26.1 names, and the hand-rolled `+1` beside each
+  of them is gone with them.
+
+- **The one tab you start with is called a tab.** Its label read *New session* under a `+` titled
+  *New tab*, in a strip whose every other control — close, rename, share, next, previous — had already
+  been brought to that word.
+
 - **The Files column's own door to a folder says what every other screen says.** It read *Open a
   local/remote folder* while the landing page's heading said *Connect a local or remote folder* and
   every sentence about the result said *connect* — and three of the sentences pointing a reader at

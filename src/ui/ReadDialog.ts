@@ -17,6 +17,7 @@
  * beside a heatmap, because there is no read drawn there.
  */
 
+import { formatLocus } from '../genome/assembly'
 import { CIGAR_OPS, FLAG } from '../annotations/bam/format'
 import type { ReadPile } from '../annotations/types'
 import { Modal } from './Modal'
@@ -143,7 +144,7 @@ export function openReadDialog(props: ReadDialogProps): Modal {
         // `samtools view | grep`. Here it is selectable and exactly as the file
         // wrote it. `FeatureDialog` repeats a gene's name for the same reason.
         ...(name === '' ? [] : [row('name', name)]),
-        row('position', `${pile.contig}:${fmt.int(start + 1)}–${fmt.int(end)}`),
+        row('position', formatLocus({ contig: pile.contig, start, end })),
         // The *aligned* span, and the label says so: a spliced read covers ten
         // kilobases and is a hundred bases long, and "length" alone would be the
         // card asserting the wrong one of those.
