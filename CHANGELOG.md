@@ -542,6 +542,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **The map's bar names its window twice, not three times.** The region view printed the locus as its
+  own heading, again in the summary line directly under it, and a third time in the box at the top
+  right — `IV:1,000,001-1,400,000` three times on one bar, all the same string. The summary's own
+  contribution is the *span*, which is the one thing the heading does not say, so that is what it
+  prints. It drops the locus only where the heading says exactly the same thing: a genome pair, a
+  `contig × contig` block and a multi-sequence frame each say something the heading cannot, and are
+  printed whole.
+
+- **A sequence track's length is spelled the way the Genome card spells it.** The row read
+  `16 sequences · 12,110,231 bp` while the card two columns to its left called the same number
+  `12.11 Mb` (§26.2).
+
 - **The File card folds, like every other card in every column.** It and its pair in compare mode
   were the only two headings in the app built by hand rather than by the shared one, so the General
   column had three cards of which two folded and one did not (§26.6).

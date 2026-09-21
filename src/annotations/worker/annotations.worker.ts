@@ -2027,7 +2027,11 @@ function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[])
     contigs: names,
     overlap: overlapReport(names, mapContigs, renaming),
     summary:
-      `${sequenceCount(names.length)} · ${fmt.int(store.total)} bp` +
+      // `fmt.bp`, not a full base count: this is a measured span (§26.2), and the
+      // Genome card two columns to the left prints the *same* number as
+      // `12.11 Mb` while this row printed `12,110,231 bp` — one quantity spelled
+      // two ways on one screen, which is the whole of what §26.2 is for.
+      `${sequenceCount(names.length)} · ${fmt.bp(store.total)}` +
       (isTwoBit(store)
         ? ' · read by range, two bits a base'
         : isIndexed(store)

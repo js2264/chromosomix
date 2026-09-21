@@ -565,6 +565,16 @@ export interface MatrixPanelOptions {
    * itself the moment there is nothing further out to go to.
    */
   onViewMoved?(): void
+  /**
+   * What the heading above this panel currently says the window is, if anything.
+   *
+   * Paired with {@link MatrixPanel.setWindowNamedAbove}: the summary line drops
+   * the locus only where this returns exactly the string the summary would have
+   * opened with, so the elision can never hide a window that was not already on
+   * screen. `undefined` for a panel with no heading of its own — a cell of a
+   * deck — where the summary is the only place the window is written.
+   */
+  headingLocus?(): string | null
 }
 
 /**
@@ -6894,7 +6904,10 @@ export class MatrixPanel {
       // what they are looking at now.
       const caveat = this.derived?.scope ?? null
       const phrase = this.viewPhrase()
-      this.viewNote.textContent = caveat === null ? phrase : `${phrase} · ${caveat}`
+      // The *phrase* is what the change detection below compares, and it is the
+      // whole window either way; what is shown may be the span alone.
+      const shown = this.viewNoteText(phrase)
+      this.viewNote.textContent = caveat === null ? shown : `${shown} · ${caveat}`
       // The same string decides both, because it *is* the window: a frame whose
       // phrase is what the last one said is a frame in which nothing anybody
       // outside this panel cares about has moved.
@@ -7873,6 +7886,43 @@ export class MatrixPanel {
       this.framedWindows(this.locusAxes.rows, this.heatmap.scaleY),
       this.framedWindows(this.locusAxes.cols, this.heatmap.scaleX),
     )
+  }
+
+  /**
+   * Say that the window is already named in a heading above this panel.
+   *
+   * The region view's bar printed the locus three times over: as its own `h2`,
+   * inside the box beside it, and again in the summary line between the two —
+   * `IV:1,000,001-1,400,000` at the top left, in the middle of the sentence
+   * under it, and in the box at the top right, all on one bar and all the same
+   * string. The summary's own contribution is the *span*, which is the one thing
+   * the heading does not say.
+   *
+   * Set from outside rather than inferred, because this panel does not know what
+   * is drawn above it: the same panel is a cell of a deck with no heading of its
+   * own, and there the locus is the only place the window is written down.
+   */
+  setWindowNamedAbove(named: boolean): void {
+    this.windowNamedAbove = named
+  }
+
+  /** See {@link setWindowNamedAbove}. */
+  private windowNamedAbove = false
+
+  /**
+   * The summary's own half of the window: the span, where a heading above has
+   * already named the place, and the whole phrase otherwise.
+   *
+   * Only where the two would be *identical*, which is the on-diagonal single
+   * window the heading can name. A genome pair, a `contig × contig` block and a
+   * multi-sequence frame each say something the heading does not, so they are
+   * printed whole.
+   */
+  private viewNoteText(phrase: string): string {
+    if (!this.windowNamedAbove) return phrase
+    const heading = this.options.headingLocus?.() ?? null
+    if (heading === null || heading === '') return phrase
+    return phrase.startsWith(`${heading} · `) ? phrase.slice(heading.length + 3) : phrase
   }
 
   /**

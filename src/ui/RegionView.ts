@@ -445,6 +445,10 @@ export class RegionView {
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onViewMoved: () => this.syncZoom(),
+      // This bar has an `h2` naming the window, and the summary line sits
+      // directly under it — so the summary prints the span alone where the two
+      // would say the same thing. See `MatrixPanel.setWindowNamedAbove`.
+      headingLocus: () => this.title.textContent,
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
@@ -470,6 +474,7 @@ export class RegionView {
     // a literal "Region" above a box that already says which one was a line
     // spent on the obvious.
     this.title = el('h2', { class: 'region-title', text: regionLabel(props.region) })
+    this.panel.setWindowNamedAbove(true)
 
     this.el = el(
       'section',
