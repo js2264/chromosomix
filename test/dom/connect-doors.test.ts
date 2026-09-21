@@ -11,11 +11,14 @@
  * is the one list; these tests pin that both doors read it.
  *
  * They also pin the one place the two are *meant* to differ, which is the
- * reason the list carries `works` at all. Google's OAuth registers an http(s)
- * origin, so the desktop build's `app://viewer` cannot sign in: §8.5 says a
- * control that cannot keep its promise is absent, so the landing page drops
- * that button — while the dialog keeps the tile, because a reader who went
- * looking for Drive is owed the sentence saying why it is not there.
+ * reason the list carries `works` at all. A sign-in needs two things this page
+ * does not choose: a build that can be registered — Google's OAuth registers an
+ * http(s) origin, so the desktop build's `app://viewer` cannot sign in — and a
+ * site built with the registration, the client id or the app key its maintainer
+ * provides (§24.7). §8.5 says a control that cannot keep its promise is absent,
+ * so either one missing drops the landing page's button — while the dialog keeps
+ * the tile, because a reader who went looking for Drive is owed the sentence
+ * saying why it is not there.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,12 +32,28 @@ vi.mock('@/auth/google', async () => {
   return { ...actual, get GOOGLE_SIGN_IN_AVAILABLE() { return googleSignIn } }
 })
 
+vi.mock('@/config/siteDefaults', () => ({
+  SITE_DEFAULTS: { googleClientId: null, googleApiKey: null, dropboxAppKey: null },
+}))
+
+import { SITE_DEFAULTS } from '@/config/siteDefaults'
+
+/** The site's registrations, mocked mutable: the test runner has no defines. */
+const site = SITE_DEFAULTS as {
+  googleClientId: string | null
+  googleApiKey: string | null
+  dropboxAppKey: string | null
+}
+
 /** What this build can do about Google, as the mock above answers it. */
 let googleSignIn = true
 
 beforeEach(() => {
   teardown = setUpDom()
   googleSignIn = true
+  // A published site: built with both registrations.
+  site.googleClientId = 'test.apps.googleusercontent.com'
+  site.dropboxAppKey = 'a1b2c3d4e5f6g7h'
   window.localStorage.clear()
   // A browser that can hold a directory, so the local place is worded the way
   // Chromium and the desktop build word it on both screens.
@@ -114,6 +133,20 @@ describe('the two doors to a place', () => {
     const landing = await landingPlaces()
     expect(landing.ids).toEqual(['local', 'bucket', 'dropbox'])
     // The dialog keeps it, and its pane is where the explanation lives.
+    const dialog = await dialogTiles()
+    expect(dialog.ids).toEqual(['local', 'bucket', 'drive', 'dropbox'])
+  })
+
+  // The same rule for the other half of what a sign-in needs. A site built
+  // without the client id or the app key used to offer both buttons on the
+  // first screen and answer them with a disabled button and the name of an
+  // environment variable — which is the broken promise §8.5 and §24.2 exist to
+  // prevent, and the reason `works` reads the registration too.
+  it('part company over a sign-in this *site* cannot make, for either provider', async () => {
+    site.googleClientId = null
+    site.dropboxAppKey = null
+    const landing = await landingPlaces()
+    expect(landing.ids).toEqual(['local', 'bucket'])
     const dialog = await dialogTiles()
     expect(dialog.ids).toEqual(['local', 'bucket', 'drive', 'dropbox'])
   })

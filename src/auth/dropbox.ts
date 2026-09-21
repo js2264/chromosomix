@@ -367,7 +367,7 @@ export async function finishSignIn(code: string): Promise<void> {
   if (held === null) {
     throw new Error(
       'This page has no record of starting that sign-in, so it cannot prove the code is its ' +
-        'own. That happens when the tab was reloaded in between. Press sign in with Dropbox ' +
+        'own. That happens when the tab was reloaded in between. Press sign in to Dropbox ' +
         'again and use the new code.',
     )
   }
@@ -405,7 +405,7 @@ export async function finishSignIn(code: string): Promise<void> {
     throw new Error(
       `Dropbox refused the code (${response.status}${detail === '' ? '' : `: ${detail}`}). An ` +
         'authorization code may be exchanged once and expires within minutes, so the usual ' +
-        'cause is a code that has already been used or has gone stale — press sign in with ' +
+        'cause is a code that has already been used or has gone stale — press sign in to ' +
         'Dropbox again and paste the new one.',
     )
   }

@@ -59,6 +59,98 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   was 4.19:1 under an 11.5 px caption, and `--border-strong` — the dashed drop target, a `kbd`'s edge,
   a tick on a scale — was 1.94:1 against a 3:1 bar.
 
+- **A folder is *connected*, on every screen that offers one.** The landing page said *Mount a local
+  or remote folder*, the dialog it opened was titled *Open a local/remote folder*, and every button
+  and every sentence about the result said *connect* — three verbs for one act, one of them jargon
+  found nowhere else in the app. The heading, the dialog's title and the Connect dialog's four panes
+  now use one word each: a file is opened, a folder is connected (§20, §24.2).
+
+- **A sign-in this site cannot make no longer offers a button on the first screen.** *sign in to
+  Dropbox…* stood on the landing page of sites built without a Dropbox app key, and answered the
+  press with a greyed button and the name of an environment variable; Drive had the same hole. The
+  landing row now reads the registration as well as the build, so it offers the sign-ins that can
+  happen — while the Connect dialog keeps every tile, because a reader who went looking for Drive is
+  owed the sentence saying why it is not there (§24.2).
+
+- **The panes of the Connect dialog are headed by the tile you pressed** — *This machine*, *A
+  bucket*, *Google Drive*, *Dropbox* — and their buttons say *sign in to*, in the words the landing
+  page used one press earlier. The bucket form's button says *connect this bucket* rather than
+  *save*, which promised a stored setting where what happens is the listing you came for.
+
+- **Where connected places are listed is named by its own name.** Three sentences in the Connect
+  dialog sent a reader to *About → what is stored*, which the About dialog has never had; the screen
+  they meant is *What this browser is remembering*, in the palette's Help group.
+
+- **The About dialog is titled *About this viewer*, and says what this viewer opens.** The title was
+  the brand, which the dialog's own style shouts in capitals — *(META)COOLER* — where the mark is
+  written *(meta)cooler* everywhere else; and its first sentence spoke only of contact maps, while
+  the contract says About is where a reader holding a bigWig and no map is told the application is
+  for them too. It now names the tracks, genomes and 3D models, with or without a map (§24.2).
+
+- **A store row's provenance is readable.** The chip carrying an accession and a DOI is clipped at
+  the card's width, and its tooltip said what the chip was — *Where the data came from* — rather
+  than what it held, so a reader who came to cite the dataset had nowhere to read the rest of it.
+
+- **The keyboard sheet fits its content.** The key groups flow into columns instead of each taking a
+  grid row, so App's two rows no longer sit beside File's seven with a hand's width of nothing under
+  them, and the dialog is wide enough for three columns — which is what kept the two gesture tables,
+  the part a reader new to a genome browser needs most, from starting exactly at the bottom edge.
+
+- **In the command palette, a key sits on its command's line and a description on its own.** The
+  badge was centred against the whole row, so `Ctrl+S` was level with the second line of its
+  paragraph and `F2` half way down a seven-line one; and a short description sat beside its title
+  while a long one dropped beneath, which gave one list two row shapes. Typing a word you can see on
+  screen now finds the command that carries it: *folder* ranks *Connect a local or remote folder*
+  first rather than *Fold or show the General panel*, and *fold* no longer matches *Copy this plot to
+  the clipboard* through the F of FILE.
+
+- **The console's *output* box is a *provenance* toggle.** Beside a column of commands, *output*
+  named the one thing it does not show — what the runs produced — and its meaning was a four-line
+  tooltip; it is now called what it prints, and drawn as a toggle rather than a ticked box (§23.3).
+  *copy*, *save* and *clear* are bordered buttons like everything else in a bar: three borderless
+  words beside a panel's title read as headings, and *clear* is the one of them that destroys
+  something.
+
+- **Both doors in the store row are dashed.** The dashed border is the row's one cue that a tile asks
+  for an address rather than opening a catalogue, and *Connect to a UCSC hub* — the door a reader is
+  most likely to arrive at holding a URL — did not have it.
+
+- **A shipped store that has not been generated says so, however the host answers.** A fork whose
+  Stores workflow has not run got the 404 wording from one host and, from a dev server or any host
+  that serves a page for a missing file, a red three-line diagnosis about JSON and sign-in walls
+  instead. A store file at an address you typed still names the address, because there it is the one
+  thing you can act on.
+
+- **A corner note no longer covers the status bar.** The note that says a link was copied was
+  anchored to the window's own bottom-right, which is where the memory figure a reader watches
+  during a large open lives. Its progress note opens on *starting…*, the one spelling of that state
+  (§26.7), where it wrote *Starting…* beside two views writing the other.
+
+- **The share dialog answers in the dialog.** It copied the link the moment it opened and said so in
+  a corner note nine hundred pixels away, in different words from the ones its own copy button
+  produces; both now write one sentence under the box.
+
+- **In dark mode the invited button in a dialog is legible.** *add*, *build the map*, *connect this
+  folder* and the store drawer's count pill set white text on the dark theme's pale accent, which is
+  2.59:1; they take the `--on-accent` token, at 7.1:1.
+
+- **Button labels are lowercase in the dialogs too** — *add*, *build the map*, *restore*, *dismiss*,
+  *forget everything*, *zoom to it*, *additional settings* — which is how every other button in the
+  application spells itself (§26.4).
+
+- **No Markdown reaches an error screen.** A dozen lines of advice carried backticks into the DOM,
+  so a screen explaining that a file is broken printed them and looked broken itself; the commands
+  are named bare, as the gate over a .scool already named them. The advice on an unexpected failure
+  points *up* at the message it is about rather than down at the buttons, and the line that sent a
+  reader to *the file info panel* names Binning QC in the General column, which is what the screen
+  calls it.
+
+- **Less prose in front of a one-number form.** The *add a resolution* dialog bracketed its box with
+  two paragraphs, one of them about `cooler zoomify --balance`; the caveat §3.4 requires is one
+  sentence, and the arithmetic is already on the verdict line under the box. The console's empty
+  panel, the share dialog's opening sentence (which had no verb) and the Connect dialog's privacy
+  note are each shorter by a clause that was arguing rather than saying.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
@@ -67,6 +159,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **"Not this time" is gone.** A refusal dialog now names its subject in the title — *Nothing to
   share*, *Nothing to save*, *Too many tabs* — and is answered before the paragraph under it has been
   read.
+
+- **The About dialog no longer ends with a sentence about a list it does not have.** A site that
+  publishes no build manifest drew *This deployment does not publish a list of past builds.* under a
+  picker that was not there; the row takes itself away instead. A pinned build keeps its note, where
+  the missing list is a reader stranded in an old commit and the button beside it is the way back.
+
+- **The filter box over the IGV genomes is absent until there is something to narrow.** It stood
+  above the red banner of a store that had failed to load, offering a box to type into with nothing
+  behind it.
+
+- **One sentence of advice on an unknown locus is gone.** *Genome and contig namespaces can collide;
+  when they do, the genome wins* describes the parser rather than the reader's situation, and a name
+  that collides never reaches that refusal.
 
 ## [0.13.0] - 2026-09-20
 

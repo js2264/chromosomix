@@ -257,7 +257,7 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
           type: 'button',
           title: 'Frame the view on this feature, with a little room either side',
         })
-        button.append(icon('zoom-in', { size: 14 }), el('span', { text: 'Zoom to it' }))
+        button.append(icon('zoom-in', { size: 14 }), el('span', { text: 'zoom to it' }))
         button.addEventListener('click', () => {
           close()
           go()

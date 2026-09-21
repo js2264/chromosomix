@@ -9,10 +9,15 @@
  * name is enough.
  *
  * The last two tiles are always the doors: a **track hub**, and a store file by
- * URL — the second a dashed square with a `+` — so a lab's own shelf and
- * somebody else's hub sit in the same row as the shipped ones and are reached
- * the same way. The hub comes first of the two because far more of the data in
- * the world is behind one.
+ * URL — so a lab's own catalogue and somebody else's hub sit in the same row as
+ * the shipped ones and are reached the same way. The hub comes first of the two
+ * because far more of the data in the world is behind one.
+ *
+ * **Both doors are dashed** (`.store-tile-add`), which is the one cue in the row
+ * that a tile asks for an address rather than opening a catalogue that is
+ * already there. Only the custom one was, and the hub door — wearing UCSC's own
+ * mark, as every remembered hub does — was a solid tile a reader could
+ * reasonably expect to browse.
  */
 
 import { el } from '../dom'
@@ -60,12 +65,15 @@ function tagline(front: StoreFront): string {
   }
 }
 
+/** The two tiles that take an address rather than opening a catalogue. */
+const DOORS = new Set(['custom', 'hub'])
+
 function tile(front: StoreFront, props: StoreTilesProps): HTMLElement {
   const on = props.current === front.id
   const node = el(
     'button',
     {
-      class: `store-tile${front.id === 'custom' ? ' store-tile-add' : ''}${on ? ' is-on' : ''}`,
+      class: `store-tile${DOORS.has(front.id) ? ' store-tile-add' : ''}${on ? ' is-on' : ''}`,
       type: 'button',
       title: front.blurb,
       attrs: { role: 'listitem', 'aria-pressed': String(on) },

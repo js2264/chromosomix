@@ -36,7 +36,7 @@
  * balancing happens to be on, because the resolution outlives the switch.
  */
 
-import { el } from './dom'
+import { button, el } from './dom'
 import { Modal } from './Modal'
 import { derivable, isDerived, type DerivedRung, type Rung } from '../metacooler/coarsen'
 import { resolutionLabel } from './Breadcrumb'
@@ -109,7 +109,7 @@ function dialogBody(
   }
 
   const verdict = el('p', { class: 'hint res-verdict' })
-  const add = el('button', { class: 'btn btn-primary', text: 'Add' }) as HTMLButtonElement
+  const add = button('add', () => submit(), { class: 'btn btn-primary' })
 
   /** What is in the box, in base pairs — the one number anything is decided on. */
   const asked = (): number => {
@@ -151,27 +151,31 @@ function dialogBody(
       submit()
     }
   })
-  add.addEventListener('click', submit)
   refresh()
 
   return el(
     'div',
     { class: 'modal-body res-body' },
+    // Two sentences over a box that takes one number: which bins the file has,
+    // and what it costs to ask for a multiple of them. The arithmetic used to
+    // be spelled out here as well, which is what the verdict line under the box
+    // says about the number actually typed.
     el('p', {
       class: 'hint',
       text:
-        `${props.fileLabel} carries ${describeRungs(props.rungs)}. Any whole number of one of ` +
-        'those added together is a resolution this map can be drawn at, computed as it is read — ' +
-        'nothing is written and nothing is downloaded.',
+        `${props.fileLabel} carries ${describeRungs(props.rungs)}. Any whole multiple of one of ` +
+        'those can be drawn, computed as it is read — nothing written, nothing downloaded.',
     }),
     el('div', { class: 'res-ask-row' }, box, units),
     verdict,
+    // The one caveat §3.4 requires, always printed — and in one sentence, which
+    // is what that section asks for. The paragraph it replaces argued the case
+    // as well as stating it, in front of a reader who wanted 5 kb.
     el('p', {
       class: 'hint',
       text:
-        'Counts add up exactly. Balanced values do not: cooler balances a coarsened matrix at ' +
-        'its own resolution, and this adds up values balanced at the finer one — the usual ' +
-        'estimate, and worth knowing about beside a file that was zoomified with --balance.',
+        'Counts add up exactly; balanced values are an estimate, since cooler zoomify --balance ' +
+        'rebalances each resolution on its own.',
     }),
     el('div', { class: 'modal-actions' }, add),
   )

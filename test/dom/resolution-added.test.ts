@@ -391,10 +391,14 @@ describe('asking for a resolution', () => {
     expect(added).toEqual([])
   })
 
+  // §3.4's one caveat, always printed — and now in the one sentence that
+  // section asks for, where it used to argue the case as well as state it in
+  // front of a reader who wanted 5 kb.
   it('says once that counts add up exactly and balanced values do not', () => {
     dialog()
     const body = document.querySelector('.res-body') as HTMLElement
     expect(body.textContent).toContain('Counts add up exactly')
-    expect(body.textContent).toContain('balanced at the finer one')
+    expect(body.textContent).toContain('balanced values are an estimate')
+    expect(body.textContent).toContain('cooler zoomify --balance')
   })
 })

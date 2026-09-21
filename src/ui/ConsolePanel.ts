@@ -36,7 +36,7 @@
  * did rather than what the button was called. The alternative, one row per press
  * with the maps folded into it, is a line nobody can paste.
  *
- * ## The output toggle
+ * ## The provenance toggle
  *
  * A command says what was asked for; the provenance block says everything about
  * the run that a command line cannot carry — the build, the task's version, the
@@ -47,6 +47,14 @@
  * paste, and the full record of one of them — are the same rows with more or
  * less shown. Copy and save honour it, so the toggle is also the choice between
  * a script and an archive.
+ *
+ * It is called **provenance**, which is what it shows and the word the Analysis
+ * drawer's *copy provenance* already uses for the same block. It read *output*,
+ * which beside a log of commands is the one thing it is not — a reader looks at
+ * a column of `metacooler-run` lines, sees a box marked *output*, and reasonably
+ * expects the numbers the runs produced. And it is a `btn-toggle` rather than a
+ * checkbox: a tick is for choosing rows in a list, a toggle is for a setting,
+ * and this is the only setting in the header (§26.3).
  */
 
 import { button, el, fmt } from './dom'
@@ -213,7 +221,7 @@ export class ConsolePanel {
 
   private readonly listEl = el('div', { class: 'console-list' })
   private readonly countEl = el('span', { class: 'console-count' })
-  private readonly outputBox: HTMLInputElement
+  private readonly outputBox: HTMLButtonElement
   private readonly emptyEl: HTMLElement
   private readonly unsubscribe: () => void
   private readonly options: ConsolePanelOptions
@@ -233,10 +241,18 @@ export class ConsolePanel {
     })
     this.toggle.addEventListener('click', () => this.setOpen(!this.opened))
 
-    this.outputBox = el('input', { type: 'checkbox', class: 'console-output-box' })
-    this.outputBox.checked = this.output
-    this.outputBox.addEventListener('change', () => {
-      this.output = this.outputBox.checked
+    this.outputBox = el('button', {
+      class: 'btn btn-toggle console-output-box',
+      type: 'button',
+      text: 'provenance',
+      title:
+        'Print each entry’s provenance above it, and take it with a copy or a save: the build, ' +
+        'the task, the framing and every parameter.',
+      attrs: { 'aria-pressed': String(this.output) },
+    })
+    this.outputBox.addEventListener('click', () => {
+      this.output = !this.output
+      this.outputBox.setAttribute('aria-pressed', String(this.output))
       writeOutput(this.output)
       // Every row's signature changed, so the reconcile below would rebuild them
       // one by one anyway; dropping them first says so in one line.
@@ -245,12 +261,17 @@ export class ConsolePanel {
       this.paint()
     })
 
+    // Two sentences: what will appear, and where it is kept. The paragraph
+    // here also explained that a run over a deck is a line per map, which is
+    // §23.1's argument about the log's shape rather than something a reader
+    // opening an empty panel needs; the retention and the privacy promise stay,
+    // because this is the only place in the interface that makes them (§11).
     this.emptyEl = el('p', {
       class: 'console-empty',
       text:
-        'Nothing yet. Every analysis run lands here as the command that repeats it — one line ' +
-        'per map, so a run over a deck is a line each — beside the files opened, the tracks ' +
-        'loaded and the files written. Kept for a week, in this browser, and never sent anywhere.',
+        'Nothing recorded yet. Files opened, tracks loaded, analyses run and files written land ' +
+        'here as the commands that repeat them — kept for a week, in this browser, and never ' +
+        'sent anywhere.',
     })
 
     this.el = el(
@@ -268,28 +289,20 @@ export class ConsolePanel {
         icon('terminal', { size: 14, class: 'console-head-mark' }),
         el('h2', { class: 'console-title', text: 'Console' }),
         this.countEl,
-        el(
-          'label',
-          {
-            class: 'console-output',
-            title:
-              'Print each entry’s provenance above it — the build, the task and its version, ' +
-              'the framing and every parameter, one per line. The same header every exported ' +
-              'file opens with, and what copying and saving take with them while it is on.',
-          },
-          this.outputBox,
-          el('span', { text: 'output' }),
-        ),
+        this.outputBox,
+        // Bordered, like every other control in a bar (§26.6). They were three
+        // borderless words, which read as headings beside the panel's own
+        // count — and *clear* is the one word here that destroys something.
         button('copy', () => this.copyAll(), {
-          class: 'btn btn-quiet',
+          class: 'btn',
           title: 'Every line, as a script: the commands bare and everything else commented.',
         }),
         button('save', () => this.save(), {
-          class: 'btn btn-quiet',
+          class: 'btn',
           title: 'The same text, as a file.',
         }),
         button('clear', () => this.clear(), {
-          class: 'btn btn-quiet',
+          class: 'btn',
           title: 'Forget every line. Anything still running keeps running.',
         }),
         iconButton('x', 'Close the console. Nothing stops recording.', () => this.setOpen(false), {
@@ -539,7 +552,7 @@ export class ConsolePanel {
         text: `${fmt.int(count)} line${count === 1 ? '' : 's'}`,
       }),
       button('copy this day', () => this.copyDay(day), {
-        class: 'btn btn-quiet console-day-copy',
+        class: 'btn console-day-copy',
         title: `Everything from ${day}, in the order it happened.`,
       }),
     )

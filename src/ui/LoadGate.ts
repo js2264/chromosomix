@@ -117,7 +117,7 @@ export function askLoadCost(error: ViewerError, label: string): Promise<ScoolRea
           el('p', {
             text:
               `${label} is a single-cell container. Its cells are listed from HDF5 link ` +
-              'records that the writer interleaved with the cells own data, so reading that ' +
+              'records that the writer interleaved with the cells’ own data, so reading that ' +
               'list means about a thousand small reads spread across the entire file — the ' +
               'one open in this viewer that is not a bounded read.',
           }),
@@ -183,9 +183,9 @@ function askHicProLoad(error: ViewerError): Promise<ScoolReading> {
           el('p', {
             class: 'hint',
             text:
-              'A finer resolution than this is better converted: `cooler load -f coo` turns ' +
-              'the same two files into a `.cool`, which opens here in a few requests however ' +
-              'large it is.',
+              'A finer resolution than this is better converted: cooler load -f coo turns the ' +
+              'same two files into a .cool, which opens here in a few requests however large ' +
+              'it is.',
           }),
         )
       },

@@ -105,7 +105,17 @@ export class GalleryView {
         'div',
         { class: 'gallery-card-chips' },
         assembly === '' ? null : el('span', { class: 'portal-chip', text: assembly }),
-        provenance === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: provenance, title: 'Where the data came from' }),
+        // The chip clips at 22rem, so an accession and a DOI together end in an
+        // ellipsis — and a reader who came to cite the dataset had nowhere to
+        // read the rest: the title said what the chip was rather than what it
+        // held. It now carries the whole string.
+        provenance === ''
+          ? null
+          : el('span', {
+              class: 'portal-chip portal-chip-dim',
+              text: provenance,
+              title: `Where the data came from: ${provenance}`,
+            }),
       ),
       entry.note === undefined ? null : el('p', { class: 'gallery-card-line', text: entry.note, title: detail }),
       files.length === 0

@@ -113,9 +113,15 @@ function latestButton(): HTMLButtonElement {
  *
  * Returned already mounted and *empty of choices*, because the manifest is a
  * network read and the dialog is not going to wait for one. It fills itself in
- * when the answer arrives, and when there is no answer it says the one true
- * thing it can — this deployment does not publish a list — rather than an
- * error, because on a dev server and in `vite preview` that is simply the case.
+ * when the answer arrives — and when there is no answer and nothing is pinned,
+ * it **takes itself away**: a site that publishes no manifest has no picker, so
+ * a line about a list of past builds is a sentence about a control that is not
+ * there, which is the one thing §8.5 says not to draw. Every reader opens this
+ * dialog, and none of them can act on it.
+ *
+ * A pinned build is the other case and keeps its sentence, because there the
+ * missing list is a reader stranded in an old commit: the note says which
+ * commit they are on and the button beside it is the way back.
  */
 export function versionPicker(): HTMLElement | null {
   if (TARGET !== 'web') return null
@@ -129,11 +135,12 @@ export function versionPicker(): HTMLElement | null {
       row.replaceChildren(...picker(versions))
       return
     }
-    // No list. On a dev server that is the truth and the end of it; on a pinned
-    // build it is a reader stranded in an old commit with nothing to click, so
-    // the way out is offered from what this build already knows about itself.
+    // No list. On a dev server that is the truth and the end of it — and the
+    // end of the row, since there is no picker for a sentence to be about; on a
+    // pinned build it is a reader stranded in an old commit with nothing to
+    // click, so the way out is offered from what this build knows about itself.
     if (PINNED_COMMIT === null && PINNED_PULL === null) {
-      note.textContent = 'This deployment does not publish a list of past builds.'
+      row.remove()
       return
     }
     note.textContent =

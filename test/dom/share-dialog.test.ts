@@ -160,7 +160,10 @@ describe('the modal itself', () => {
 })
 
 describe('when the clipboard works', () => {
-  it('copies the link the moment it exists, and says so', async () => {
+  // The answer is in the dialog's own note, not in a corner note over the
+  // status bar: this copy happens while the reader is looking at the dialog,
+  // and its refusal was always written there.
+  it('copies the link the moment it exists, and says so in the dialog', async () => {
     const written: string[] = []
     vi.stubGlobal('navigator', {
       clipboard: {
@@ -173,7 +176,8 @@ describe('when the clipboard works', () => {
     const { box } = await opened()
     await settle()
     expect(written).toEqual([box.textContent])
-    expect(toast() ?? '').toMatch(/copied/i)
+    expect(hints()).toMatch(/copied to the clipboard/i)
+    expect(toast()).toBeNull()
   })
 })
 

@@ -432,8 +432,8 @@ export function hubStoreFront(): StoreFront {
   return {
     id: 'hub',
     label: 'Connect to a UCSC hub',
-    blurb: 'Any UCSC track hub — paste its hub.txt and its genomes and tracks become a shelf.',
-    tagline: 'Paste a hub.txt; its tracks become a shelf.',
+    blurb: 'Any UCSC track hub — paste its hub.txt and its genomes and tracks become a store.',
+    tagline: 'Paste a hub.txt; its tracks become a store.',
     kind: 'hub',
     mark: { text: 'HUB', colour: COLOURS.ucsc, image: STORE_LOGOS.ucsc },
     builtin: false,
