@@ -84,6 +84,25 @@ const AUDIT = () => {
     }
   }
 
+  // 1c. An `<input>` whose **placeholder** does not fit.
+  //
+  //     An empty box reports `scrollWidth === clientWidth`, so the overflow
+  //     check above sees nothing while the placeholder is being cut — and a
+  //     placeholder is the only thing an empty box says. `columns I:340,00` in
+  //     the Manual card was the shape of it.
+  for (const n of document.querySelectorAll('input[placeholder]')) {
+    if (!vis(n)) continue
+    const text = n.getAttribute('placeholder') ?? ''
+    if (text === '') continue
+    const cs = getComputedStyle(n)
+    ruler.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+    const wanted = ruler.measureText(text).width
+    const room = n.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+    if (wanted > room + 1) {
+      out.clipped.push({ el: `${name(n)} (placeholder)`, text, need: Math.round(wanted), got: Math.round(room) })
+    }
+  }
+
   // 2. Siblings drawn on top of one another. Only text against text, and only
   //    where they are laid out in a row: a badge over a sentence is the defect.
   const rows = document.querySelectorAll('.shortcut-row, .palette-row, .field, .ann-row, .seq-row, .kv, .status-bar')

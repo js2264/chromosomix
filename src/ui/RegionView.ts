@@ -379,11 +379,15 @@ export class RegionView {
       // picture by a base — which is the failure a genomics reader is quickest
       // to see and slowest to forgive.
       value: regionLabel(props.region),
-      // The noun this view was handed rather than the sequence in front of the
-      // reader: a coordinate suffix on a *genome* name is an error here (§5.4),
-      // and the name this view is of may be a genome's.
+      // **The sequence this view is of, where that is what it is of.** A
+      // coordinate suffix on a *genome* name is an error here (§5.4) and the
+      // name this view is handed may be a genome's — so the example is taken
+      // from a region that already *has* coordinates, and only where there are
+      // none does it fall back to the noun. It used to be the noun always, which
+      // offered `chromosome:1,000-20,000`: a category where every other box in
+      // the app names a sequence.
       placeholder: locusPlaceholder({
-        first: props.noun,
+        first: props.region.includes(':') ? props.region.split(':')[0] : props.noun,
         accepts: { sequence: true, genome: true, gene: store !== undefined },
       }),
       title:

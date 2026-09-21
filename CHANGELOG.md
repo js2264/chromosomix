@@ -550,6 +550,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A locus box's placeholder is cut to the box, clause by clause, rather than clipped mid-word.**
+  `I:1,000-20,000, a sequence, a genome, or a gene` wants 458 pixels and the browser's bar at 1366 is
+  336 of them, so the box showed `I:1,000-20,000, a sequence, a ge` — an input clips a placeholder
+  with no ellipsis and reports no overflow, so nothing on screen said a list had been cut, and what
+  was cut was the clause a reader had not already guessed. `fitPlaceholder` measures the sentence and
+  drops whole clauses off the end until it fits, keeping the example, and puts the offer in full in
+  the box's tooltip. Re-measured when the box changes size, so widening a panel gives the rest of the
+  sentence back.
+- **A box no longer holds up `__unbinned__` as the thing to type.** It is the first row of a
+  metacool's contig table and §7.4 refuses to draw it at any resolution, so a metagenome's overview
+  offered `__unbinned__:1,000-20,000`: the one name in the file that cannot be opened. Caught in
+  `locusPlaceholder`, because every caller reaches for the first contig.
+- **A map's own locus box takes its example from the sequence it is showing.** It was handed the
+  view's noun, so a chromosome view offered `chromosome:1,000-20,000` — a category where every other
+  box in the app names a sequence. The noun remains the fallback for a view whose name carries no
+  coordinates, such as a whole genome's.
+- **The sequence bar's tooltip names the asterisk its placeholder offers.** The prose explained a
+  sequence name, coordinates and a gene name, and stopped short of the fourth thing the box takes.
+
 - **A locus is written with a hyphen everywhere, including the places the audit did not reach.**
   The 3D panel's four readouts, a read's row on a lane, a feature card's span, its exons and its
   coding stretch, and the read card's position each spelled the window by hand with an en dash — this

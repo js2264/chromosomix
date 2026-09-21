@@ -16,6 +16,7 @@
  */
 
 import { button, el } from './dom'
+import { UNBINNED_NAME } from '../constants'
 import { formatLocus } from '../genome/assembly'
 import { KEYS, keyLabel } from './commands'
 import { findFeatures, hitLabel, hitLocus } from '../annotations/search'
@@ -72,7 +73,9 @@ export class SearchBox {
       class: `input search-input${options.inputClass === undefined ? '' : ` ${options.inputClass}`}`,
       type: 'text',
       placeholder: options.placeholder,
-      ...(options.title === undefined ? {} : { title: options.title }),
+      // The caller's own tooltip where it wrote one; otherwise the full offer,
+      // which {@link fitPlaceholder} may have shortened in the box itself.
+      title: options.title ?? options.placeholder,
       ...(options.value === undefined ? {} : { value: options.value }),
     })
     this.input.addEventListener('keydown', (event) => {
@@ -87,6 +90,7 @@ export class SearchBox {
     // `mousedown` blurs the box — so closing on blur immediately would take the
     // list away before the click landed on anything.
     this.input.addEventListener('blur', () => window.setTimeout(() => this.close(), 150))
+    fitPlaceholder(this.input, options.placeholder)
     this.el = el(
       'div',
       { class: options.go === true ? 'search-box search-box-go' : 'search-box' },
@@ -234,6 +238,80 @@ export interface LocusAccepts {
   whole?: boolean
 }
 
+/** A ruler shared by every box, because a canvas context is not free to make. */
+let ruler: CanvasRenderingContext2D | null | undefined
+
+/**
+ * Fit an offer of the form `example, a thing, or another` to the box it is in,
+ * and keep it fitted.
+ *
+ * A locus box offers an example and then what else it takes —
+ * `I:1,000-20,000, a sequence, a genome, or a gene` — and the map's box is 168
+ * pixels wide, which holds the first fourteen characters of that. A truncated
+ * offer teaches nothing: `I:1,000-20,000, a sequ…` reads as a box that has run
+ * out of room rather than as a list of what may be typed into it — and an input
+ * clips its placeholder with no ellipsis at all, so there is not even a mark to
+ * say that something was cut. The clause that goes is the one the reader did not
+ * already know about.
+ *
+ * So the clauses come off the end, last first, until what is left fits — the
+ * example always survives, because it is the one part that shows the *grammar* —
+ * and the whole offer belongs in the box's `title`, which is readable at any
+ * width. Re-measured whenever the box changes size, so widening a panel gives
+ * the rest of the sentence back.
+ *
+ * Measured on a canvas rather than by overflow, because an empty input reports
+ * none: `scrollWidth === clientWidth` however long its placeholder is, which is
+ * why these went unnoticed until they were measured.
+ */
+export function fitPlaceholder(input: HTMLInputElement, full: string): void {
+  const fit = (): void => {
+    if (!full.includes(', ')) return
+    const width = input.clientWidth
+    if (width === 0) return
+    ruler ??= document.createElement('canvas').getContext('2d')
+    if (ruler === null) return
+    const style = window.getComputedStyle(input)
+    ruler.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    // `|| 0` because a stylesheet that says nothing about padding leaves these
+    // empty, and `NaN` room would trim every clause off every box.
+    const pad = (value: string): number => Number.parseFloat(value) || 0
+    const room = width - pad(style.paddingLeft) - pad(style.paddingRight)
+    // `, or ` joins the last two clauses, so the conjunction only ever sits in
+    // the final part: dropping from the end cannot leave a dangling `or`.
+    const parts = full.split(', ')
+    for (let keep = parts.length; keep > 1; keep--) {
+      const text = parts.slice(0, keep).join(', ')
+      if (ruler.measureText(text).width <= room) {
+        input.placeholder = text
+        return
+      }
+    }
+    // The example, even where the box is too narrow for it: it is the one part
+    // that shows the grammar, and there is nothing shorter worth showing.
+    input.placeholder = parts[0]
+  }
+  input.placeholder = full
+  // The offer, whole, wherever the caller has not written its own sentence:
+  // trimming must never be the only copy of a clause.
+  if (input.title === '') input.title = full
+  fit()
+  // One observer per box. This is called again whenever what the box takes
+  // changes — a file with an annotation in it starts offering a gene name — and
+  // a second observer would re-measure the same input on every resize.
+  if (fitted.has(input)) {
+    fitted.set(input, fit)
+    return
+  }
+  fitted.set(input, fit)
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => fitted.get(input)?.()).observe(input)
+  }
+}
+
+/** The boxes already being watched, and the latest offer each one is fitting. */
+const fitted = new WeakMap<HTMLInputElement, () => void>()
+
 /**
  * What a locus box offers, in one sentence, built the same way everywhere.
  *
@@ -251,7 +329,13 @@ export interface LocusAccepts {
  * scaffold name is the whole box and says less than the word `contig` does.
  */
 export function locusPlaceholder(options: { first?: string; accepts?: LocusAccepts }): string {
-  const first = options.first !== undefined && options.first.length <= 12 ? options.first : 'contig'
+  // **Never `__unbinned__`.** It is the first row of a metacool's `/contigs`
+  // table and §7.4 refuses to draw it at any resolution, so a box offering
+  // `__unbinned__:1,000-20,000` was holding up as its example the one name in
+  // the file that cannot be opened. Caught here rather than at each call site,
+  // because every caller reaches for `contigs[0]`.
+  const offered = options.first === UNBINNED_NAME ? undefined : options.first
+  const first = offered !== undefined && offered.length <= 12 ? offered : 'contig'
   const accepts = options.accepts ?? {}
   const parts = [`${first}:1,000-20,000`]
   if (accepts.sequence === true) parts.push('a sequence')

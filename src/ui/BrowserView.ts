@@ -198,7 +198,7 @@ import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import { KEYS, withKey } from './commands'
 import { exportRow } from './exportRow'
-import { locusPlaceholder, searchKey } from './SearchBox'
+import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
 // The map's own zoom steps and the button that draws one. §26.6: one bar shape
 // for every locus bar, so the browser's four buttons *are* the region bar's.
 import { ZOOM_STEPS, zoomButton } from './RegionView'
@@ -1274,14 +1274,22 @@ export class BrowserView {
    * keep (§8.5).
    */
   private syncPlaceholder(): void {
-    this.locusInput.placeholder = locusPlaceholder({
-      first: this.props.assembly.contigs[0]?.name,
-      accepts: {
-        sequence: true,
-        gene: this.props.store.entries.some((entry) => entry.payload?.kind === 'features'),
-        whole: true,
-      },
-    })
+    // Through {@link fitPlaceholder}, because this bar is the narrowest place
+    // the offer is made: at 1366 the box is 336 pixels and the sentence wants
+    // 458, so the reader saw `I:1,000-20,000, a sequence, a ge` and could not
+    // learn from it that `*` opens the whole genome. The fitter puts the whole
+    // sentence in the box's tooltip, which has room for it at any width.
+    fitPlaceholder(
+      this.locusInput,
+      locusPlaceholder({
+        first: this.props.assembly.contigs[0]?.name,
+        accepts: {
+          sequence: true,
+          gene: this.props.store.entries.some((entry) => entry.payload?.kind === 'features'),
+          whole: true,
+        },
+      }),
+    )
   }
 
   private goTo(text: string): void {

@@ -8128,7 +8128,13 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 ### 26.6 One shape per job
 
 - **A locus box** is built by `SearchBox` and its placeholder by `locusPlaceholder`, whose example is
-  taken from the assembly in front of the reader rather than from a genome they may not have open.
+  taken from the assembly in front of the reader rather than from a genome they may not have open —
+  never `__unbinned__`, which §7.4 refuses to draw at any resolution.
+- **A placeholder that lists what a box takes is cut to the box, clause by clause**, by
+  `fitPlaceholder`: the clauses come off the end until what is left fits, the example always
+  survives, and the offer in full is the box's tooltip. An input clips its placeholder with no
+  ellipsis and reports no overflow, so `I:1,000-20,000, a sequence, a ge` in a 336-pixel bar looked
+  like a bug and hid the clause a reader had not already guessed.
 - **A navigation bar** is `[title] [‹ ›] [box] [go] [⊖10× ⊖3× ⊕3× ⊕10×] [bookmark]`, and the zoom
   steps come from `RegionView`'s own pair so the map's bar and the browser's are the same control
   over two pictures of one genome.

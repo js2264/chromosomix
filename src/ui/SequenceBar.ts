@@ -163,7 +163,8 @@ export class SequenceBar {
       title:
         'Where do you want to be. A sequence name opens the whole of it; coordinates open a ' +
         'window inside it, 1-based and inclusive as IGV and samtools write it; a gene name is ' +
-        'looked up in the annotation the star picks. Or drag across the bar below.',
+        'looked up in the annotation the star picks; an asterisk on its own opens the whole ' +
+        'genome. Or drag across the bar below.',
       inputClass: 'input-region',
       onSubmit: (text) => this.submit(text),
       // `display`, because this box's value is what a reader reads and Enter
