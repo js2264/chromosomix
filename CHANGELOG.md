@@ -12,6 +12,76 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ## [Unreleased]
 
+### Added
+
+- **A second way to build a model, and it is now the default: pastis-NB (§25.6).** *Model from the
+  map* gains a **method** control offering the two positions the literature actually takes on what a
+  contact count *is*. **ShRec3D**, which is what the task did before and still does when picked,
+  reads a count as a *measurement of a distance*, `c^(−1/α)`, fills in the pairs the map never
+  counted so the matrix is complete, and places the beads by classical scaling and weighted SMACOF.
+  **pastis-NB** (Varoquaux, Ay, Noble & Vert 2014; Varoquaux, Noble & Vert 2023) reads a count as a
+  *count* — negative binomial, with a mean of `β·d^(−α)` — and returns the model that makes the
+  counts most probable.
+
+  **Two things follow, and they are why it is the default.** A **zero becomes evidence** rather than
+  a problem: `0^(−1/α)` is infinite, so ShRec3D has to either drop such a pair or invent a distance
+  for it, and the invention is the one step of that pipeline that is a guess. Under a likelihood a
+  zero is a reading — *probably far*, and past a point indifferent to how far, which is exactly what
+  a pair a shallow experiment missed should say — so **nothing is filled in at all**. On a simulated
+  map that is three-quarters zeros, the classical start orders the pairs at ρ = 0.22 and the
+  likelihood brings the same beads to **ρ = 0.92**. And a **count's precision is in the likelihood
+  itself**, so a pair seen ten thousand times holds its beads ten thousand times as firmly with
+  nothing weighted by hand — which is why **weight pairs by** is hidden under this method rather
+  than being asked twice.
+
+  **It reads the raw counts, and the balancing goes into the mean.** Not a preference — a necessity,
+  and the one thing about this that is easy to get quietly wrong. A balanced value is a count times
+  two weights, and *overdispersion is a statement about a count*: `variance > mean` compares a
+  squared quantity with a linear one, so scaling the data scales the two sides differently and a
+  balanced map is **never** found overdispersed, whatever it actually is. Handed balanced values the
+  negative binomial would silently collapse back into a Poisson, on nearly every real file. So the
+  counts stay raw and the weights go where pastis puts them — into the mean, `μ = β·bᵢ·bⱼ·d^(−α)`
+  with `bᵢ = 1/wᵢ`. The coverage is still corrected; it is corrected in the mean rather than in the
+  data, and the run says so in a note and in the table. A bin the balancer rejected is left out, as
+  the balanced view of the same map leaves it out. The reported Spearman ρ is taken against
+  `raw/(bᵢbⱼ)` — which *is* the balanced value — so it stays the number *Model versus map* would
+  give and does not score the model on coverage it was right to remove.
+
+  **The dispersion is fitted from your map, per genomic separation**, by the method of moments over
+  log-spaced separation bins — pastis-NB's one claim over pastis-PM2 being that overdispersion is
+  not one number for a map but grows as the counts thin out with distance. The whole of the negative
+  binomial over the Poisson turns out to be a single factor: the pull on a pair is the Poisson's own
+  `μ − c`, **shrunk by `r/(r + μ)`**. Where a map shows no overdispersion the run says so in as many
+  words — *none: these counts are Poisson, so this is pastis-PM2* — rather than implying a parameter
+  it did not measure. On a helix whose far counts were corrupted, the fitted dispersion holds the
+  near diagonal about **twice as well** as a flat Poisson does.
+
+  **The fit table now names the method** and reports what that method has to report: for pastis-NB,
+  the mean's law, how many zeros were used as evidence, the dispersion near the diagonal and far
+  from it, the MDS start, the likelihood steps and evaluations, why the optimiser stopped, the final
+  `−log L` and the fitted `β`. Both methods still end with Spearman's ρ against the counts.
+
+  **The cost, said before you press Run.** The estimate prices the method you picked: a likelihood
+  evaluation is about 2.3 SMACOF passes' worth, and a step is a line search of just over one
+  evaluation, so pastis-NB is roughly half again the wall clock of ShRec3D for the same step count.
+  Memory is unchanged — **two `n × n` matrices either way**, because the likelihood adds vectors and
+  not squares: L-BFGS at depth eight keeps twenty vectors of `3n + 1` doubles, six megabytes beside
+  a twelve-thousand-bead gigabyte, where a full quasi-Newton method's Hessian at that size would be
+  thirty terabytes. The whole addition is **9.7 kB minified, 3.5 kB gzipped**, in the chunk the
+  analysis panel already loads.
+
+  **Mechanics.** `structure/negbinom.ts` is the model — dispersion, objective, gradient, fit — and
+  `structure/lbfgs.ts` is a limited-memory BFGS with a strong-Wolfe line search (Nocedal & Wright
+  3.5/3.6), the optimiser pastis itself reaches for through SciPy. Both are pure over arrays, and
+  both are generators: the likelihood yields between **evaluations** rather than between steps,
+  because a line search is several passes over the pairs and each is as long as a SMACOF step, so
+  the bar moves and a cancel always has somewhere to land. pastis-NB is started from the MDS model
+  ShRec3D would have given — sixty SMACOF steps, fixed, since it has only to land in the right
+  basin — which is pastis' own initialisation, so the new method stands on the old one rather than
+  replacing it. `α` stays the reader's control under both, and is not fitted, so a model made here
+  and a model made by either published tool mean the same thing by it. What is refused is named in
+  §25.8: no restarts, no alternation between dispersion and structure, no physical unit.
+
 ### Changed
 
 - **The interface has one grammar, and SPECS.md §26 states it.** A deep audit of every reader-facing

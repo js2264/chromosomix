@@ -447,6 +447,29 @@ never a lane. A model can also be *made* from the map (§25.6). A **model** is o
 haplotype in genomic order; a **bead** is one row of the file, whose **width** is the spacing the
 file was modelled at, inferred from its starts and independent of the map's bin size.
 
+### method *(of a model made from the map)*
+
+Which published reading of a contact count *Model from the map* uses (§25.6), and they are two
+methods rather than two settings of one. **pastis-NB** (the default) treats a count as a *count*,
+negative-binomially distributed with a mean of `β·d^(−α)`, and returns the coordinates that make the
+counts most probable; a pair counted **zero** times is evidence that its beads are far apart, so
+nothing is filled in, and a count's precision is carried by the likelihood rather than by a weight.
+It is solved on the **raw** counts, with the file's balancing weights folded into the mean as
+`bᵢ = 1/wᵢ`, because a balanced value is not a count and overdispersion is a statement about one.
+**ShRec3D** treats a count as a *measurement of a distance*, `c^(−1/α)`, fills in the pairs the map
+never counted so the matrix is complete, and places the beads by classical scaling and weighted
+SMACOF. pastis-NB is started *from* the ShRec3D model, so the second is not a replacement for the
+first.
+
+### dispersion *(r)*
+
+How much more variable a map's counts are than a Poisson's would be, as the `r` of a negative
+binomial whose variance is `μ + μ²/r` (§25.6). Large `r` is no overdispersion at all — a Poisson,
+and a run that finds it says so rather than implying a parameter it did not measure. pastis-NB fits
+`r` **per genomic separation** rather than once for the map, because Hi-C counts scatter further
+from their mean the further apart the two loci are; the effect on the model is that a pair's pull is
+the Poisson's own, shrunk by `r/(r + μ)`.
+
 ### card
 
 Which list a track is listed in (`AnnotationCard`): `linear` (drawn beside the map), `overlay`

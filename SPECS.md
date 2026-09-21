@@ -7997,32 +7997,82 @@ synthetic track is a track" (§18.5) makes lanes, colourings of the model itself
 every track task. Both are `structure/versusMap.ts`, pure over arrays, held still by tests.
 
 **Model from the map** needs no structure: it makes one. It is the reversal of §25.8's refusal, and
-the §18.9 bar is met the way it was met for chromosight — by porting a published method rather
-than inventing one. The pipeline is **ShRec3D** (Lesne et al. 2014) with the refinement every MDS
-toolkit ends with: a contact count `c` is read as a distance `d = c^(−1/α)` — the law *Model versus
-map* assumes the other way round, `α` exposed and 3 by default; the pairs the map never counted
-(a zero, a `NaN`) are filled so the matrix is complete; classical MDS (Torgerson: double-centred
-squared distances, three leading eigenvectors by subspace iteration) gives a start; **SMACOF** (de
-Leeuw's majorisation, taken one bead at a time as Gansner, Koren and North's localised stress
-majorisation) moves the beads until the model's distances match the map's over the pairs the map
-counted, **each pair weighted by how often the map counted it** — a filled pair weighs nothing
-— stopping at the step count asked for or once a step improves the weighted stress by less than a
-millionth. The weighting is the point of refining at all: the count sets a pair's target, but with
-every pair weighing the same the stress is the far, weak, noisy pairs' and the near diagonal, where
-the map is most certain, is fitted worst. **Weight pairs by** offers the count (a pair seen a
-thousand times is a thousand times as sure as one seen once, which is what a Poisson count's
-precision says; the default), its square root (a weak pair is still heard on a deep map), or
-nothing (every counted pair one vote: the plain SMACOF of every toolkit, kept so a reader can see
-what the weighting changes). Three departures from ShRec3D are deliberate and named here: its
-shortest-path filling is cubic in the bead count and would not finish in a tab, so the filling is
-the mean observed distance at the same separation on the same sequence, walking outward to the
+the §18.9 bar is met the way it was met for chromosight — by porting a published method rather than
+inventing one. **Method** offers the two positions the literature takes on what a contact count
+*is*, because they are not two settings of one algorithm and they give different models of the same
+map: **pastis-NB**, where a count is a count drawn from a distribution, and **ShRec3D**, where a
+count measures a distance. pastis-NB is the default. One control is shared and is never hidden —
+**Exponent α**, 3 by default, the same number *Model versus map* assumes and the one α is *not*
+fitted by either method, so that a model made here and a model made by either published tool mean
+the same thing by it.
+
+**pastis-NB** (Varoquaux, Ay, Noble & Vert 2014 for the Poisson models; Varoquaux, Noble & Vert
+2023 for the overdispersed one) reads a pair of beads `d` apart as having been counted
+`c ~ NegativeBinomial(mean β·bᵢ·bⱼ·d^(−α), dispersion r)` times, and the model is the one that makes
+the counts most probable. Two things follow, and they are why it is the default. **A zero is
+evidence** — weak evidence, that the beads are far apart — rather than a distance of `0^(−1/α)`
+that has to be dropped or invented, so **nothing is filled in**; on a map that is three-quarters
+zeros this is the difference between a model and a guess. And **a count's precision is in the
+likelihood**, so a pair seen ten thousand times holds its beads ten thousand times as firmly with
+nothing weighted by hand.
+
+**It is solved on the raw counts**, whatever the view is balanced with, and the balancing weights go
+where pastis puts them — into the mean, as `bᵢ = 1/wᵢ`. This is not a preference: a balanced value is
+a count times two weights, and **overdispersion is a statement about a count**. `variance > mean`
+compares a squared quantity with a linear one, so scaling the data scales the two sides differently
+and a balanced map is never found overdispersed whatever it actually is; handed balanced values the
+negative binomial would silently become a Poisson. The coverage is still corrected — in the mean
+rather than in the data — and the run says so, in a note and in the table. A bin the balancer
+**rejected** (a `NaN` weight) is left out of the model, because the balanced view of the same map
+does not draw it either and reading raw counts would otherwise put it back; it is counted in the
+same note as a gap. A pooled cell's bias is the mean of its bins'. A file with no `/bins/weight` has
+no bias to fold and the mean is `β·d^(−α)`. One consequence for the reader: a **balanced view cannot
+be borrowed** by this method, so a run on one reads its blocks from the file, and the estimate says
+so. The dispersion is **fitted from the counts, per genomic separation**, by
+the method of moments (`r = m²/(v − m)`) over log-spaced separation bins — which is pastis-NB's one
+claim over pastis-PM2, that overdispersion is not one number for a map but grows as the counts thin
+out with distance; a bin with too few pairs to believe takes the nearest that had them, and a
+separation whose counts are not overdispersed at all takes `r = 10⁶`, which is a Poisson to six
+figures and is reported as *none*. The whole of the negative binomial over the Poisson is one
+factor: the force on a pair is the Poisson's own `μ − c`, **shrunk by `r/(r + μ)`**. What is
+optimised is three coordinates per bead and `log β`, by **L-BFGS** with a strong-Wolfe line search
+— the optimiser pastis reaches for through SciPy — started from the MDS model ShRec3D would have
+given, which is pastis' own initialisation and is why this method stands on the other rather than
+replacing it. `β` is a variable rather than a constant because the scale of the model and the scale
+of the mean are one degree of freedom, and the normalisation below fixes it. Three departures from
+the paper are deliberate and named here: the dispersion is a **moment estimate per separation bin**
+rather than their parametric fit of dispersion against the mean, and it is taken **once** rather
+than alternated with the structure; there are **no restarts**, so the answer is one deterministic
+model rather than the best of several local optima; and `α` is the reader's control rather than a
+fitted parameter. The **MDS start is sixty SMACOF steps**, fixed, because it has only to land in
+the right basin — **Refinement steps** under this method is the likelihood's budget.
+
+**ShRec3D** (Lesne et al. 2014) is the same pipeline with the refinement every MDS toolkit ends
+with: a contact count `c` is read as a distance `d = c^(−1/α)` — the law *Model versus map* assumes
+the other way round; the pairs the map never counted (a zero, a `NaN`) are filled so the matrix is
+complete; classical MDS (Torgerson: double-centred squared distances, three leading eigenvectors by
+subspace iteration) gives a start; **SMACOF** (de Leeuw's majorisation, taken one bead at a time as
+Gansner, Koren and North's localised stress majorisation) moves the beads until the model's
+distances match the map's over the pairs the map counted, **each pair weighted by how often the map
+counted it** — a filled pair weighs nothing — stopping at the step count asked for or once a step
+improves the weighted stress by less than a millionth. The weighting is the point of refining at
+all: the count sets a pair's target, but with every pair weighing the same the stress is the far,
+weak, noisy pairs' and the near diagonal, where the map is most certain, is fitted worst. **Weight
+pairs by** — shown only under this method, since a likelihood *is* its own weighting — offers the
+count (a pair seen a thousand times is a thousand times as sure as one seen once, which is what a
+Poisson count's precision says; the default), its square root (a weak pair is still heard on a deep
+map), or nothing (every counted pair one vote: the plain SMACOF of every toolkit, kept so a reader
+can see what the weighting changes). Three departures from ShRec3D are deliberate and named here:
+its shortest-path filling is cubic in the bead count and would not finish in a tab, so the filling
+is the mean observed distance at the same separation on the same sequence, walking outward to the
 nearest separation with an observation, and the mean observed trans distance across two; ShRec3D
 stops at the classical solution, which honours the filled pairs as much as the counted ones; and it
 has no refinement to weight. The bead-at-a-time form is what makes the weighting affordable: the
 full weighted Guttman transform is a linear solve in the weight Laplacian, and the localised one
-costs a pass over the pairs like the unweighted one does, and never raises the stress. The model
-is centred and scaled to a unit root-mean-square radius: a map carries no physical unit and
-`c^(−1/α)` is in none (§25.8).
+costs a pass over the pairs like the unweighted one does, and never raises the stress.
+
+Either way the model is centred and scaled to a unit root-mean-square radius: a map carries no
+physical unit, and neither `c^(−1/α)` nor a `β` fitted against it is in one (§25.8).
 
 **What it is solved over** is what the **Sequences** box names, seeded from what the map shows
 (a locus, or every sequence on screen): where the view's block **as drawn** covers it — the loaded
@@ -8046,18 +8096,30 @@ what the estimate does about it is *say so* — the bead count and its bin width
 hundred refinement steps and the gigabytes of matrices — for the reader to confirm before pressing
 run. A number chosen in the source could only be a guess about somebody else's machine. What is
 still refused is the allocation that cannot succeed: the matrices are asked for inside a `try` and a
-browser that will not give them leaves a note naming the size, rather than a tab that dies. The run
-holds **two** dense `n × n` matrices of singles and no more — the pairs' weights, and the counts
+browser that will not give them leaves a note naming the size, rather than a tab that dies. **Either
+method holds two** dense `n × n` matrices of singles and no more — under ShRec3D the pairs' weights,
+under pastis-NB the counts with a zero still distinct from a gap, and in both cases the counts
 turned into the distances they imply over the buffer they already occupy, compacted onto the kept
-beads in place and then filled over themselves — so twelve thousand beads is about a gigabyte.
+beads in place and then filled over themselves — so twelve thousand beads is about a gigabyte. The
+likelihood adds **vectors and not squares**: L-BFGS at depth eight keeps twenty vectors of `3n + 1`
+doubles, six megabytes beside that gigabyte, where the Hessian a full quasi-Newton method would
+write down is thirty terabytes. What it does cost is time — a likelihood evaluation is about 2.3
+passes' worth of a SMACOF step, and a step is a line search of just over one evaluation — and the
+estimate prices the method the reader picked rather than an average of the two.
 **Every phase reports progress and breathes between units of work**: each rectangle read, each of
-the eighty sweeps of the classical start, each refinement step, so the bar moves and a cancel always
-has somewhere to land. The run's other output
-is a table: where the contacts came from, the bead count and width, the pairs counted, the law,
-the weighting, the steps taken, the final weighted stress and Spearman's ρ between `1/d` in the
-model and the contacts —
-the same number *Model versus map* would give the row, so a reader can see how well the model
-honours the map before believing it.
+the eighty sweeps of the classical start, each SMACOF step, and under pastis-NB each *evaluation*
+of the likelihood rather than each step, since a line search is several of them and each is as long
+as a SMACOF step. The run's other output is a table, and it says which method ran: where the
+contacts came from, the bead count and width, the pairs counted, and then either the law, the
+weighting, the steps and the final weighted stress, or — under pastis-NB — the mean's law, how many
+zeros were used as evidence, the fitted overdispersion near the diagonal and far from it (or
+*none*, where the counts turned out Poisson and the run is a pastis-PM2), the MDS start, the
+likelihood steps and evaluations, why the optimiser stopped, the final `−log L` and the fitted `β`.
+Both end with Spearman's ρ between `1/d` in the model and the contacts — **against `raw/(bᵢbⱼ)`
+where a bias was divided out**, which is exactly the balanced value, since balancing is `raw·wᵢwⱼ`;
+ranking against the raw counts would score the model on coverage it was right to have removed. So it
+is the same number *Model versus map* would give the row on a balanced map, and a reader can see how
+well the model honours the map before believing it.
 
 **Its result is a row**, not a picture: a `structure` row on the Structures card, of kind
 `structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
@@ -8066,11 +8128,19 @@ or `3D model · 16 sequences`, summarised as a loaded one is, carrying the task 
 provenance. It replaces the last run's row, is the model the cell draws the moment it lands, is
 what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
-Synthetic-card export road. The golden is the one a reconstruction can honestly have
+Synthetic-card export road. The golden is the one a reconstruction can honestly have. For ShRec3D
 (`structure-reconstruct.test.ts`): a helix whose contacts were made from it by the law comes back
 as itself up to a rigid motion, a chain with most far pairs uncounted comes back with ρ above 0.9,
 and a helix whose weak far pairs were corrupted keeps its near pairs when weighted by the count
-and loses them when every pair weighs the same.
+and loses them when every pair weighs the same. For pastis-NB (`structure-negbinom.test.ts`, with
+the optimiser held separately in `structure-lbfgs.test.ts` against Rosenbrock and a badly
+conditioned quadratic): the gradient agrees with a central difference at every coordinate and at
+`log β`; the objective is the Poisson's as `r → ∞`, and is stationary exactly where the mean equals
+the count, for every `r`; a counted zero moves the likelihood and an unobservable pair does not; the
+pull on a pair is the Poisson's shrunk by exactly `r/(r + μ)`; a helix whose counts were **drawn**
+Poisson at the law's own mean, three-quarters of them zeros, comes back with ρ above 0.9 from a
+classical start that was below 0.4; and a helix whose far counts were corrupted holds its near
+diagonal about twice as well under the fitted dispersion as under a flat Poisson one.
 
 ### 25.7 Export
 
@@ -8089,9 +8159,13 @@ called intervals. It is the file §25.2 reads, so it reads straight back here an
 
 ### 25.8 Refused, and not yet built
 
-- ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), a
-  port of ShRec3D with SMACOF refinement. What stays refused is a **physical unit** for it: the
-  model is in its own units at unit radius, and a nanometre would be invented.
+- ~~**Inference** — computing a structure from the map.~~ Built as *Model from the map* (§25.6), as
+  a port of pastis-NB and one of ShRec3D with SMACOF refinement, chosen by **Method**. What stays
+  refused is a **physical unit** for it: the model is in its own units at unit radius, and a
+  nanometre would be invented. Also refused, and named in §25.6: **restarts**, so one deterministic
+  model rather than the best of several local optima; **fitting α**, which is the reader's control
+  and is what makes a model here comparable with one from either published tool; and pastis-NB's
+  **alternation** between the dispersion and the structure, where the dispersion is estimated once.
 - **Ensembles, frames, point clouds** (FOF-CT, `.cndb`, several models of one map): a row holds
   one model. The scene's shape does not close the door.
 - **A map beside a browser lead**: a companion needs a lead to follow, and a browser is not one

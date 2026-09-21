@@ -720,10 +720,14 @@ nothing in phases 1–2 changes for it.
 
 Computing a structure from the map in the browser was refused for phases 1–2 under §18.9's rule: a
 second caller needs a second upstream, ported from a published method with its own goldens, never a
-variation that seemed reasonable. It is now built as **Model from the map** (SPECS §25.6): ShRec3D's
-pipeline (contacts to distances by `c^(−1/α)`, a filled matrix, classical MDS) with SMACOF
-refinement over the counted pairs, in `src/structure/reconstruct.ts`, pure over arrays; the golden
-is a known model whose contacts were made by the law and are asked for it back. It is solved over
+variation that seemed reasonable. It is now built as **Model from the map** (SPECS §25.6), with a
+**Method** control offering both published positions. ShRec3D's pipeline (contacts to distances by
+`c^(−1/α)`, a filled matrix, classical MDS) with SMACOF refinement over the counted pairs lives in
+`src/structure/reconstruct.ts`; **pastis-NB** — a negative binomial likelihood over the counts
+themselves, its dispersion fitted per genomic separation, maximised by L-BFGS from the MDS model as
+a start — lives in `src/structure/negbinom.ts` and `src/structure/lbfgs.ts` and is the default. All
+three are pure over arrays; the golden is a known model whose contacts were made by the law and are
+asked for it back. It is solved over
 the view's block as drawn — cis and trans together, pooled cells honoured — and lands as a
 structure row on the Structures card, which the cell draws and a bed3d carries away.
 
@@ -741,8 +745,17 @@ NB-distributed with a mean that falls off as a power of the distance, and the st
 that maximises that likelihood. The likelihood view is the better statistics — it says, correctly,
 that a zero is weak evidence rather than an infinite distance, and it needs no filling step at all —
 and it is also the one that needs a real optimiser, a dispersion parameter fitted per dataset, and
-several restarts to avoid local optima. This solver takes the first position, and pays for it in the
-two places below.
+several restarts to avoid local optima.
+
+**Both are built, and the second is the default.** The first two prices were paid:
+`structure/lbfgs.ts` is the optimiser (L-BFGS with a strong-Wolfe line search, which is what pastis
+reaches for through SciPy) and `dispersionBySeparation` fits the dispersion per genomic separation
+by the method of moments over log-spaced bins, which is pastis-NB's own claim — that overdispersion
+is not one number for a map but grows as the counts thin out. The third is **not** paid: there are
+no restarts, so the answer is one deterministic model rather than the best of several local optima,
+and the MDS model is the start rather than noise, which is pastis' own procedure and is what makes a
+single start defensible. The paragraphs below describe the ShRec3D path, which is still what
+**Method → ShRec3D** runs and still what pastis-NB is initialised from.
 
 **What is done about the pairs the map never counted.** This is where ShRec3D's cost lives: it
 completes the distance matrix by a **shortest-path closure** (Floyd–Warshall), which is cubic in
@@ -764,15 +777,23 @@ beads where it says, a pair it saw once barely moves them, a pair it never saw w
 That weighting is the substantive difference from a plain "ShRec3D + SMACOF" and the reason the
 near diagonal, where a Hi-C map is surest, is fitted first. pastis' MDS mode is unweighted SMACOF
 on the distances; its NB mode gets the same effect through the likelihood, where a high count is
-automatically a tighter constraint. So the weighting is this solver's way of buying the one property
-of the likelihood view that matters most, without the optimiser the likelihood view needs.
+automatically a tighter constraint. So the weighting was this solver's way of buying the one
+property of the likelihood view that matters most, without the optimiser the likelihood view needs —
+and now that the optimiser is here, the likelihood buys it outright, which is why **Weight pairs
+by** is shown only under ShRec3D. The identity that makes the two comparable: the negative
+binomial's pull on a pair is the Poisson's own `μ − c` shrunk by `r/(r + μ)`, so the likelihood is a
+*per-pair* weighting fitted from the data, where **Weight pairs by** is one rule applied to every
+pair alike.
 
 **What is given up, and said plainly.** One consensus structure, not an ensemble; no restarts, so
-one deterministic answer rather than a distribution over local optima; no per-dataset dispersion
-fitted; no explicit constraints (Chrom3D's lamina, Hi-C-Spector's or 3DMax's priors). The two
-numbers the run reports — the final weighted stress and Spearman's ρ between `1/d` in the model and
-the counts — are there because a single consensus model with no ensemble around it should at least
-say how well it did.
+one deterministic answer rather than a distribution over local optima; no explicit constraints
+(Chrom3D's lamina, Hi-C-Spector's or 3DMax's priors); and `α` is the reader's control rather than a
+fitted parameter, which pastis' PM2 would estimate jointly. Under pastis-NB the dispersion **is**
+fitted per dataset and per separation, but once rather than alternated with the structure, and by
+moments rather than by pastis' parametric fit of dispersion against the mean. The numbers the run
+reports — the weighted stress or the final `−log L` and the fitted dispersion, and Spearman's ρ
+between `1/d` in the model and the counts either way — are there because a single consensus model
+with no ensemble around it should at least say how well it did.
 
 **Why classical MDS at all, when the refinement is what the model is held to.** As an
 initialisation. SMACOF is a majorisation and finds a local optimum; started from noise it finds a
@@ -791,6 +812,8 @@ folds into the multiplication — which is what keeps a ten-thousand-bead model 
 ```
 src/annotations/g3d.ts                 sniffG3d, parseG3d (barchart.ts's shape); the width inference; the 3dg name rule
 src/annotations/g3dBinary.ts           phase 2: magic, header, index, blocks by range request under ByteSource (src/hic/'s shape)
+src/structure/negbinom.ts              pastis-NB: dispersion by separation, the NB objective and gradient, the fit
+src/structure/lbfgs.ts                 L-BFGS with a strong-Wolfe line search, a generator, pure over arrays
 src/structure/scene.ts                 Structure, Chain, normalise, beadsAt/beadsIn/lociOf, haplotypes
 src/structure/camera.ts                the camera object, orbit/dolly/pan/fit as arithmetic
 src/structure/colour.ts                the colour-by resolvers over the annotation store
@@ -802,6 +825,8 @@ src/ui/hoverLocus.ts                   the pointer's place, readout.ts's shape
 test/unit/g3d-parse.test.ts            the sniff against BED5/6/9, bedGraph, the peak flavours, 3dg; the width from unsorted rows with gaps; a .gz
 test/unit/g3d-binary-oracle.test.ts    phase 2: every bead of a g3dtools-written fixture equal between this reader and g3djs; skipped by name without fixtures
 test/budgets/structure.test.ts         phase 2: the open and one-model request counts of §2.6 against a CountingRangeSource
+test/unit/structure-negbinom.test.ts    the gradient against a central difference, the Poisson limit, the r/(r+μ) shrinkage, a helix back from drawn counts
+test/unit/structure-lbfgs.test.ts      Rosenbrock and a badly conditioned quadratic, the yields, the stops, a domain it must not step into
 test/unit/structure-scene.test.ts      bridge arithmetic at a width the bin does not divide, two haplotypes, gaps, circular contigs, above-bin, a rung change
 test/unit/structure-camera.test.ts     matrices and fits, goldens computed independently
 test/unit/structure-painter.test.ts    drawingOf: discs and segments in depth order, no gradients, the lit ones last
