@@ -15,12 +15,12 @@ import { READY, waitingFor } from '../types'
 import { isIntervalSet } from '../../annotations/types'
 
 const PARAMS: readonly ParamSpec[] = [
-  { kind: 'featureSet', key: 'a', label: 'First set' },
-  { kind: 'featureSet', key: 'b', label: 'Second set' },
+  { kind: 'featureSet', key: 'a', label: 'first set' },
+  { kind: 'featureSet', key: 'b', label: 'second set' },
   {
     kind: 'number',
     key: 'minFraction',
-    label: 'Least of a feature covered',
+    label: 'least of a feature covered',
     hint: 'A feature counts as hit when this fraction of it is inside the other set.',
     default: 0.000001,
     min: 0,
@@ -31,7 +31,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'shuffle',
-    label: 'Test against shuffled placements',
+    label: 'shuffled null',
     hint:
       'Relocates one set at random within the sequences it already occupies, keeping its count ' +
       'and its lengths, and reports the observed overlap against that null.',
@@ -40,18 +40,18 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'shuffleWhich',
-    label: 'Set that moves',
+    label: 'set that moves',
     when: (params) => params.shuffle === true,
     default: 'a',
     options: [
-      { value: 'a', label: 'The first', hint: '“Are the first set’s features on the second’s?”' },
-      { value: 'b', label: 'The second' },
+      { value: 'a', label: 'the first', hint: '“Are the first set’s features on the second’s?”' },
+      { value: 'b', label: 'the second' },
     ],
   },
   {
     kind: 'number',
     key: 'iterations',
-    label: 'Shuffles',
+    label: 'shuffles',
     when: (params) => params.shuffle === true,
     hint: 'The smallest p a run can report is one over this, plus one.',
     default: 1000,
@@ -62,7 +62,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'seed',
     key: 'seed',
-    label: 'Seed',
+    label: 'seed',
     when: (params) => params.shuffle === true,
     hint: 'The same seed gives the same null twice.',
     default: 1,

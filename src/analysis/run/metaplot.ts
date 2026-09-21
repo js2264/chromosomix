@@ -256,7 +256,7 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
       firstRows ??= { rows: one.rows, count: one.count, name: series[series.length - 1].name }
     }
   }
-  job.progress(total, total, 'Done')
+  job.progress(total, total, 'done')
 
   if (layout === null || series.length === 0) {
     job.note('No feature produced a usable window. Check that the track and the set share an assembly.')

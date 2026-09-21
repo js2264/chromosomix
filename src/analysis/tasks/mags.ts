@@ -32,7 +32,7 @@ import { BALANCE_PARAM } from './shared'
  * "can what the reader does next make it run".
  */
 function metagenomeOnly(context: AnalysisContext): TaskAvailability {
-  if (!context.hasMap) return waitingFor('Open a metagenome — a `.metacool` with a genome layer.')
+  if (!context.hasMap) return waitingFor('Open a metagenome (.metacool with a genome layer).')
   return context.hasGenomes && (context.genomes?.length ?? 0) > 1 ? READY : { state: 'absent' }
 }
 
@@ -41,7 +41,7 @@ function scanCost(note: string): CostEstimate {
     class: 'scan',
     requests: null,
     bytes: null,
-    note: `${note} Progress is reported as it goes and it can be cancelled at any point.`,
+    note,
   }
 }
 
@@ -59,7 +59,7 @@ export const MAG_QC_TASK: AnalysisTask = {
     {
       kind: 'toggle',
       key: 'network',
-      label: 'Also build the inter-MAG matrix',
+      label: 'inter-MAG matrix',
       hint: 'Costs nGenomes² doubles held while it runs; needed by the network task.',
       default: true,
     },
@@ -89,14 +89,14 @@ export const MAG_NETWORK_TASK: AnalysisTask = {
     {
       kind: 'choice',
       key: 'normalise',
-      label: 'Edge weight',
+      label: 'edge weight',
       default: 'coverage',
       options: [
-        { value: 'raw', label: 'Raw contacts' },
-        { value: 'bins', label: 'Per bin pair', hint: 'Divided by the two MAGs’ bin counts.' },
+        { value: 'raw', label: 'raw contacts' },
+        { value: 'bins', label: 'per bin pair', hint: 'Divided by the two MAGs’ bin counts.' },
         {
           value: 'coverage',
-          label: 'Per coverage',
+          label: 'per coverage',
           hint: 'Divided by the product of the two MAGs’ own totals — the usual normalisation.',
         },
       ],
@@ -104,14 +104,14 @@ export const MAG_NETWORK_TASK: AnalysisTask = {
     {
       kind: 'number',
       key: 'minWeight',
-      label: 'Least edge worth listing',
+      label: 'least edge worth listing',
       default: 0,
       min: 0,
     },
     {
       kind: 'number',
       key: 'maxEdges',
-      label: 'Edges to list',
+      label: 'edges to list',
       default: 500,
       min: 10,
       integer: true,
@@ -139,7 +139,7 @@ export const MAG_PURITY_TASK: AnalysisTask = {
     {
       kind: 'number',
       key: 'minContacts',
-      label: 'Least contact before judging a contig',
+      label: 'least contact before judging a contig',
       hint: 'A contig with almost no contact has no evidence either way.',
       default: 10,
       min: 0,
@@ -147,7 +147,7 @@ export const MAG_PURITY_TASK: AnalysisTask = {
     {
       kind: 'number',
       key: 'flagAbove',
-      label: 'Flag above this outside fraction',
+      label: 'flag above this outside fraction',
       hint: 'A contig sending more than this share of its contact elsewhere is called out.',
       default: 0.5,
       min: 0,
@@ -177,7 +177,7 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
     {
       kind: 'number',
       key: 'minContigs',
-      label: 'Least contigs before judging a MAG',
+      label: 'least contigs before judging a MAG',
       hint: 'A two-contig MAG splits into two trivially and says nothing.',
       default: 4,
       min: 2,
@@ -186,7 +186,7 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
     {
       kind: 'number',
       key: 'flagBelow',
-      label: 'Flag below this cross-block ratio',
+      label: 'flag below this cross-block ratio',
       hint: 'How much of a MAG’s contact crosses the split, against what stays inside a block.',
       default: 0.1,
       min: 0,
@@ -204,7 +204,7 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
       bytes: null,
       note:
         `One contig-level square per MAG, ${genomes.toLocaleString()} of them, each a bounded ` +
-        'read. Cancellable at any point.',
+        'read.',
     }
   },
 }

@@ -87,7 +87,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'diagonals',
-    label: 'Diagonals',
+    label: 'diagonals',
     hint:
       'How many diagonals the bin’s line crosses, counting the main one. 3 is the main diagonal ' +
       'and the one either side — five cells, two bins each way — the reading bacterial maps are ' +
@@ -99,14 +99,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    label: 'sequence',
     sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     hint:
       '0 counts every cell, including the bin’s contact with itself — which at three diagonals is ' +
       'most of the score, is where self-ligation lands, and on a balanced map is the one place the ' +
@@ -119,7 +118,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of the line',
+    label: 'minimum coverage of the line',
     hint: 'Below this fraction of usable cells the bin gets no score at all.',
     default: 0.5,
     min: 0,
@@ -196,8 +195,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${long.length.toLocaleString()} sequences are long enough for this score, read as ` +
-      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals. ` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals.`,
   }
 }
 

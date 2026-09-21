@@ -55,13 +55,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
+    label: 'sequences',
     hint: 'Empty is every sequence the maps share. Each is scored on its own as well as pooled.',
   },
   {
     kind: 'number',
     key: 'maxDistance',
-    label: 'Furthest separation compared',
+    label: 'furthest separation compared',
     unit: 'bp',
     hint:
       'Past this the strata hold a handful of cells each and contribute almost nothing — the ' +
@@ -73,7 +73,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'smooth',
-    label: 'Smoothing half-width',
+    label: 'smoothing half-width',
     unit: 'bins',
     hint:
       'The 2D mean filter HiCRep applies before correlating. 0 is no smoothing, which measures ' +
@@ -134,8 +134,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     note:
       `${maps.toLocaleString()} maps, each read along the diagonal of every chosen sequence out ` +
       `to ${strata.toLocaleString()} strata — a band, not a square, so the cost is the sequence ` +
-      'rather than its square. The other maps are opened for the run and closed after it. ' +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      'rather than its square. The other maps are opened for the run and closed after it.',
   }
 }
 

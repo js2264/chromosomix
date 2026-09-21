@@ -30,11 +30,11 @@ export const runOverlap: TrackTaskRunner = async (job) => {
     return []
   }
 
-  job.progress(0, 1, 'Comparing')
+  job.progress(0, 1, 'comparing')
   const result = compareSets(a, b, {
     minFraction: Math.max(0, Math.min(1, numParam(job.params, 'minFraction', 0.000001))),
   })
-  job.progress(1, 1, 'Done')
+  job.progress(1, 1, 'done')
 
   if (!Number.isFinite(result.jaccard)) {
     job.note('Neither set covers any bases, so there is nothing to compare.')
@@ -47,7 +47,7 @@ export const runOverlap: TrackTaskRunner = async (job) => {
     columns: [
       { key: 'measure', label: 'Measure', kind: 'text' },
       { key: 'value', label: 'Value', kind: 'number', digits: 4 },
-      { key: 'note', label: '', kind: 'text' },
+      { key: 'note', label: 'Note', kind: 'text' },
     ],
     rows: [
       { measure: 'Jaccard (bases)', value: result.jaccard, note: 'Symmetric; 1 is identical.' },
@@ -77,14 +77,14 @@ export const runOverlap: TrackTaskRunner = async (job) => {
   // the first would answer whichever of them the reader happened to load first.
   const movesFirst = strParam(job.params, 'shuffleWhich', 'a') !== 'b'
   const iterations = Math.max(20, Math.trunc(numParam(job.params, 'iterations', 1000)))
-  job.progress(0, iterations, 'Shuffling')
+  job.progress(0, iterations, 'shuffling')
   const test = shuffleNull(movesFirst ? a : b, movesFirst ? b : a, {
     minFraction: Math.max(0, Math.min(1, numParam(job.params, 'minFraction', 0.000001))),
     iterations,
     seed: numParam(job.params, 'seed', 1),
     lengthOf: (contig) => job.lengthOf(contig),
     cancelled: () => job.cancelled(),
-    onProgress: (done, total) => job.progress(done, total, 'Shuffling'),
+    onProgress: (done, total) => job.progress(done, total, 'shuffling'),
   })
   job.throwIfCancelled()
 

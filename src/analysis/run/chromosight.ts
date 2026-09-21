@@ -253,7 +253,7 @@ export const runChromosight: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(total, total, 'Done')
+  job.progress(total, total, 'done')
   job.throwIfCancelled()
 
   if (calls.length === 0) {

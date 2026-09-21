@@ -74,7 +74,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'window',
-    label: 'Window',
+    label: 'window',
     hint: 'The diamond is this many bins wide on each side of the bin it scores.',
     default: 10,
     min: 1,
@@ -84,7 +84,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'scales',
-    label: 'Scales',
+    label: 'scales',
     hint: 'One track per scale, each twice the width of the last.',
     default: 1,
     min: 1,
@@ -95,14 +95,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    label: 'sequence',
     sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * cooltools' `ignore_diags`, and the same rule the compartment chain applies:
      * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the
@@ -127,7 +126,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of the diamond',
+    label: 'minimum coverage of the diamond',
     hint: 'Below this fraction of usable cells the bin gets no score at all.',
     default: 0.5,
     min: 0,
@@ -140,7 +139,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'call',
-    label: 'Call boundaries from the minima',
+    label: 'call boundaries',
     hint: 'Adds a BED of boundary calls, drawn on the map.',
     default: true,
     section: 'Boundaries',
@@ -148,7 +147,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'prominence',
-    label: 'Minimum prominence',
+    label: 'minimum prominence',
     hint: 'How far the track must climb on both sides of a minimum, in log2 units.',
     default: 0.2,
     min: 0,
@@ -161,7 +160,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'spacing',
-    label: 'Minimum spacing',
+    label: 'minimum spacing',
     // In bins, like the window above it. One form asking for one distance in
     // bins and another in base pairs is a form a reader has to read twice, and
     // both of these are distances along the same track.
@@ -192,7 +191,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'domains',
-    label: 'Also the domains between them',
+    label: 'domains between them',
     hint: 'A second overlay: the span from each call to the next, as a BED.',
     default: true,
     when: (params) => params.call === true,
@@ -275,8 +274,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
-      `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals. ` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals.`,
   }
 }
 

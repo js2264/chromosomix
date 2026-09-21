@@ -347,7 +347,8 @@ describe('a figure block', () => {
   it('puts the controls a reader reaches for constantly inline', () => {
     const figure = block()
     document.body.appendChild(figure.el)
-    expect(strip(figure)).toEqual(['log x', 'log y', 'Fit'])
+    // Lowercase button labels (§26.4).
+    expect(strip(figure)).toEqual(['log x', 'log y', 'fit'])
     // …and the mark, which is the one that decides what the picture *is*.
     const marks = figure.el.querySelector<HTMLSelectElement>('.figure-strip select')
     expect(marks?.value).toBe('line')

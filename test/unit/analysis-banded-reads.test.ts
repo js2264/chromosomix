@@ -378,7 +378,10 @@ describe('the scan gate', () => {
       thresholds: 'custom',
       maxDist: 2_000_000,
     })
-    expect(estimate.refusal).toMatch(/Furthest from the diagonal/)
+    // Named by the label the control actually carries, which is lowercase now
+    // (§26.4) — and quoted rather than asterisked, since Markdown in a string
+    // that reaches the DOM reaches it as asterisks.
+    expect(estimate.refusal).toMatch(/“furthest from the diagonal”/)
     expect(estimate.refusal).toMatch(/coarser resolution/)
   })
 

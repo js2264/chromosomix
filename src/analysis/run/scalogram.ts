@@ -191,7 +191,7 @@ export const runScalogram: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   if (circularUnits > 0) {
     job.note(

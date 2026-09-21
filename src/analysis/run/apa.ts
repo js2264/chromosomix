@@ -365,7 +365,7 @@ export const runApa: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(plans.length, plans.length, 'Done')
+  job.progress(plans.length, plans.length, 'done')
   job.throwIfCancelled()
 
   const outputs: TaskOutput[] = []

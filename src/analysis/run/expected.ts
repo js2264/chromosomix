@@ -321,7 +321,7 @@ async function scanUnits(
   }
 
   const weight = validBins(mc, balance)
-  job.progress(0, 1, 'Counting the pairs each separation could hold')
+  job.progress(0, 1, 'counting the pairs each separation could hold')
   job.throwIfCancelled()
   const counts = countPairs(units, mc.storageMode === 'square', weight)
   const sums = units.map((unit) => new Float64Array(unit.maxOffset + 1))
@@ -347,7 +347,7 @@ async function scanUnits(
         sums[unitOfSpan[span]][offset] += value
       }
     },
-    onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+    onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
   })
 
   return units.map((unit, u) => curveOf(unit.maxOffset, sums[u], counts[u]))

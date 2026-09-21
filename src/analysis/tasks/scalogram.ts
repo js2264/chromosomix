@@ -95,23 +95,23 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'quantiles',
-    label: 'Quantiles',
+    label: 'quantiles',
     default: 'standard',
     hint: 'One band per quantile, nested in a single lane.',
     options: [
       {
         value: 'standard',
-        label: 'Five (10, 25, 50, 75, 90 %)',
+        label: 'five (10, 25, 50, 75, 90 %)',
         hint: 'Cournac et al.’s bands, and what HiContacts draws.',
       },
-      { value: 'quartiles', label: 'Three (25, 50, 75 %)', hint: 'The quartiles alone.' },
-      { value: 'deciles', label: 'Nine (every 10 %)', hint: 'A finer picture; nine lanes of ink.' },
+      { value: 'quartiles', label: 'three (25, 50, 75 %)', hint: 'The quartiles alone.' },
+      { value: 'deciles', label: 'nine (every 10 %)', hint: 'A finer picture; nine lanes of ink.' },
     ],
   },
   {
     kind: 'number',
     key: 'reach',
-    label: 'Look out to',
+    label: 'look out to',
     hint:
       '0 is the whole sequence, which is the only unbounded answer. A cut makes every quantile ' +
       'a quantile of what is within it, and the lane says so.',
@@ -123,14 +123,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    label: 'sequence',
     sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * `1` rather than the diamond's `2` and the index's `0`, and
      * `analysis/scalogram.ts` argues it: the bin's contact with itself is the
@@ -147,7 +146,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of the distribution',
+    label: 'minimum coverage of the distribution',
     hint: 'Below this fraction of usable separations the bin gets no bands at all.',
     default: 0.5,
     min: 0,
@@ -215,8 +214,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     note:
       `${context.contigs.length.toLocaleString()} sequences, read along their diagonals in ` +
       `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'}` +
-      (unbounded ? ' — with no cut, each is read out to its own length.' : '.') +
-      ' Progress is reported per sequence and it can be cancelled at any point.',
+      (unbounded ? ' — with no cut, each is read out to its own length.' : '.'),
   }
 }
 

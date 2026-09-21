@@ -95,7 +95,7 @@ export function figureSettings(props: FigureSettingsProps): FigureSettings {
         el(
           'div',
           { class: 'figure-actions' },
-          button('Reset', () => props.onReset(), {
+          button('reset', () => props.onReset(), {
             class: 'btn btn-quiet',
             title: 'Back to the figure the task returned, and forget what was set here',
           }),
@@ -142,12 +142,48 @@ function choice<T extends string>(
   return select
 }
 
+/**
+ * A boolean, as the same `on`/`off` button the parameter form and the lane
+ * settings use.
+ *
+ * It was a `<input type=checkbox>`, and that made **three** shapes for one
+ * question inside one drawer: the form's bordered word button, this tick box,
+ * and the strip's lit `log x`. A reader had to learn which of three meant a
+ * switch. Two survive, and each has a job §26.6 can state: a *named parameter*
+ * is a label and a control, like every other row of a settings column; a
+ * *compact set of named things* — the axis scales, the table's columns, the
+ * overlay marks — is a row of buttons each carrying its own name and lighting
+ * when it is on ({@link markToggle}). A tick box was neither, and it was eleven
+ * pixels of signal in a column of words.
+ */
 function toggle(label: string, on: boolean, onPick: (next: boolean) => void, hint: string): HTMLElement {
-  const box = el('input', { class: 'check', type: 'checkbox' }) as HTMLInputElement
-  box.checked = on
-  box.addEventListener('change', () => onPick(box.checked))
-  return el('label', { class: 'field ann-field figure-check', title: hint }, box, el('span', { text: label }))
+  const labelId = `figure-toggle-${(toggles += 1)}`
+  const node = button(on ? 'on' : 'off', () => onPick(!on), {
+    class: 'btn btn-toggle',
+    title: hint,
+  })
+  node.setAttribute('aria-pressed', String(on))
+  // `aria-labelledby` and not an `aria-label`: the button's visible text is
+  // `on`, and the word beside it is its name — a `<label for>` cannot name a
+  // button, so the row is a div and the word carries the id.
+  node.setAttribute('aria-labelledby', labelId)
+  return el(
+    'div',
+    { class: 'field ann-field figure-check' },
+    el('span', { class: 'field-label', text: label, id: labelId, title: hint }),
+    node,
+  )
 }
+
+/** One of a compact set, as a button carrying its own name (see {@link toggle}). */
+function markToggle(label: string, on: boolean, onPick: (next: boolean) => void, hint: string): HTMLElement {
+  const node = button(label, () => onPick(!on), { class: 'btn btn-toggle', title: hint })
+  node.setAttribute('aria-pressed', String(on))
+  return node
+}
+
+/** Ids for the words that name the buttons above; one form, one counter. */
+let toggles = 0
 
 /**
  * A number box that means "leave it alone" when it is empty.
@@ -283,7 +319,7 @@ function axesCard(spec: XyFigureSpec, style: FigureStyle, set: Apply): HTMLEleme
     el(
       'div',
       { class: 'figure-actions' },
-      button('Fit', () => set({ x: { ...style.x, domain: null }, y: { ...style.y, domain: null } }), {
+      button('fit', () => set({ x: { ...style.x, domain: null }, y: { ...style.y, domain: null } }), {
         class: 'btn btn-quiet',
         title: 'Both axes back to the whole of the data',
       }),
@@ -348,11 +384,14 @@ function seriesCard(
     el(
       'div',
       { class: 'figure-actions' },
-      button('Show all', () => set({ hidden: [] }), {
+      button('show all', () => set({ hidden: [] }), {
         class: 'btn btn-quiet',
         title: 'Every series back on the picture',
       }),
-      button('Colours', () => set({ colours: {} }), {
+      // *reset colours*, not *Colours*: a noun on a button says what the
+      // button is about rather than what pressing it does, and this one throws
+      // away every swatch the reader has set.
+      button('reset colours', () => set({ colours: {} }), {
         class: 'btn btn-quiet',
         title: 'Back to the task’s own colours and the palette',
       }),
@@ -426,7 +465,7 @@ function rowsCard(spec: TableFigureSpec, style: FigureStyle, set: Apply): HTMLEl
       { class: 'figure-columns' },
       ...spec.columns.map((column) => {
         const on = shown.includes(column.key)
-        return toggle(
+        return markToggle(
           column.label,
           on,
           (next) =>

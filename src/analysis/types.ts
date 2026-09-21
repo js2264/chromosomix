@@ -66,7 +66,16 @@ interface ParamBase {
   /** Stable. Used in `Params`, in storage and in provenance; never a label. */
   key: string
   label: string
-  /** One line under the control. */
+  /**
+   * One sentence, drawn to the right of the control on its own row.
+   *
+   * Beside rather than under, which is what `.param-row`'s two columns have
+   * always done and what this line used to describe wrongly. The consequence is
+   * a length: a sentence of about ninety characters is one line at the drawer's
+   * width, and a paragraph here pushes the Run button off the screen. What needs
+   * more than a sentence belongs in the option's own `hint`, which the form puts
+   * in its tooltip, or nowhere.
+   */
   hint?: string
   /**
    * Whether this control is shown at all, given the rest of the form.
@@ -310,7 +319,7 @@ export interface RegionParam extends ParamBase {
    */
   required?: boolean
   /**
-   * Offer a **Pick on map** button beside the box.
+   * Offer a *pick on map* button beside the box.
    *
    * Shift-drag on the map names a stretch of one axis; ordinarily that zooms,
    * and while the button is lit it fills this box instead — once, and then the
@@ -909,8 +918,21 @@ export function waitingFor(needs: string): TaskAvailability {
   return { state: 'waiting', needs }
 }
 
-/** What every task that reads the matrix says when there is no map open. */
-export const NEEDS_MAP = 'Open a contact map — this one reads the matrix itself.'
+/**
+ * What every task that reads the matrix says when there is no map open.
+ *
+ * Four words, and the second clause it used to carry — *this one reads the
+ * matrix itself* — is gone. Ten of the sixteen tasks return this string, so on a
+ * 1D-browser session the column printed one sentence ten times over and the one
+ * gate that differed (APA's loop set) was lost in it. The trailing clause was
+ * also an explanation rather than an instruction: what the task reads is the
+ * blurb's job, and a reader who has no map does not need to be told why.
+ *
+ * The repetition itself is answered one level up, in the column: a group whose
+ * every waiting row carries the same sentence prints it once under the heading
+ * (§18.1, `AnalysisPanelCard`).
+ */
+export const NEEDS_MAP = 'Open a contact map.'
 
 /** Everything one run produced, and what it cost in wall clock. */
 export interface TaskResult {
@@ -946,7 +968,23 @@ export interface CostEstimate {
   /** Range requests, or `null` where the file is local and there are none. */
   requests: number | null
   bytes: number | null
-  /** One line beside **Run**, already worded for a human. */
+  /**
+   * One line beside **Run**, already worded for a human: **a price and nothing
+   * else.**
+   *
+   * Every scan's note used to end *progress is reported as it goes and it can be
+   * cancelled at any point* — eighteen copies of a promise the progress bar and
+   * the cancel button beside it make by existing. It also filled the line a
+   * reader checks before spending compute with reassurance instead of a figure,
+   * which is the one thing they came to that line for. So the sentence says what
+   * will be read — *one pass over the whole pixel table*, *154 strips along their
+   * diagonals*, *up to 40 MB at a time* — and the class is said in those words
+   * rather than in a colour (§26.5): a price is `--text-dim` whatever it costs,
+   * and `--danger` belongs to {@link CostEstimate.refusal} alone.
+   *
+   * No trailing full stop is needed: {@link costText} joins the requests and the
+   * bytes onto the end with a middle dot and strips one if it finds it.
+   */
   note: string
   /**
    * A refusal, where the parameters ask for something that cannot be done.

@@ -103,7 +103,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'pattern',
-    label: 'Pattern',
+    label: 'pattern',
     default: 'loops',
     hint: 'Every threshold below follows the template: they were tuned together.',
     options: CHROMOSIGHT_PRESETS.map((preset) => ({
@@ -115,23 +115,23 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
+    label: 'sequences',
     hint: 'Every one, unless you say otherwise. Each is scanned on its own.',
   },
   {
     kind: 'choice',
     key: 'thresholds',
-    label: 'Thresholds',
+    label: 'thresholds',
     default: 'preset',
     options: [
       {
         value: 'preset',
-        label: 'From the pattern',
-        hint: 'chromosight’s own numbers for the template above — what `chromosight detect` uses.',
+        label: 'from the pattern',
+        hint: 'chromosight’s own numbers for the template above — what chromosight detect uses.',
       },
       {
         value: 'custom',
-        label: 'Set them myself',
+        label: 'set them myself',
         hint: 'The boxes start at the loops preset; check them against the pattern you picked.',
       },
     ],
@@ -140,7 +140,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'pearson',
-    label: 'Score threshold',
+    label: 'score threshold',
     hint: 'The correlation a pixel must reach to be a candidate. Lower finds more, and more of it is noise.',
     default: 0.3,
     min: 0,
@@ -153,7 +153,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minDist',
-    label: 'Nearest to the diagonal',
+    label: 'nearest to the diagonal',
     default: 20_000,
     min: 0,
     unit: 'bp',
@@ -163,7 +163,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxDist',
-    label: 'Furthest from the diagonal',
+    label: 'furthest from the diagonal',
     hint: 'The scan band. Widening it costs time in proportion; zero means the pattern is on the diagonal.',
     default: 2_000_000,
     min: 0,
@@ -174,7 +174,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minSeparation',
-    label: 'Nearest two calls may be',
+    label: 'nearest two calls may be',
     hint: 'Closer than this on both axes and only the higher-scoring one is kept.',
     default: 5_000,
     min: 0,
@@ -185,7 +185,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'iterations',
-    label: 'Refinement passes',
+    label: 'refinement passes',
     hint: 'Each pass re-scans with the pileup of what the last one found as its template.',
     default: 1,
     min: 1,
@@ -196,7 +196,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxPercUndetected',
-    label: 'Most undetectable pixels a window may hold',
+    label: 'most undetectable pixels a window may hold',
     default: 50,
     min: 0,
     max: 100,
@@ -208,7 +208,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxPercZero',
-    label: 'Most empty pixels a window may hold',
+    label: 'most empty pixels a window may hold',
     default: 10,
     min: 0,
     max: 100,
@@ -220,7 +220,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'nMads',
-    label: 'Detectability cut',
+    label: 'detectability cut',
     hint: 'Median absolute deviations below the median coverage. Only used where the file carries no weights.',
     default: 5,
     min: 1,
@@ -232,7 +232,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxQvalue',
-    label: 'Report down to a q-value of',
+    label: 'report down to a q-value of',
     hint: 'Benjamini-Hochberg over every call. 1 keeps them all and still reports the number.',
     default: 1,
     min: 0,
@@ -296,8 +296,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal:
         skipped > 0
           ? 'Every chosen sequence would need a band bigger than a scan can hold. The band is ' +
-            'the scan distance times the sequence, so there are two ways in: bring *Furthest ' +
-            'from the diagonal* down, or open the file at a coarser resolution.'
+            'the scan distance times the sequence, so there are two ways in: bring “furthest ' +
+            'from the diagonal” down, or open the file at a coarser resolution.'
           : 'Tick at least one sequence.',
     }
   }
@@ -327,8 +327,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       `${size}×${size} template correlated across ${band.toLocaleString()} diagonals of every ` +
       `bin: about ${formatOperations(operations)} multiply-accumulates` +
       `${passes > 1 ? ` over ${passes} passes` : ''}. ` +
-      `${skipped > 0 ? `${skipped.toLocaleString()} sequence${skipped === 1 ? '' : 's'} past the size limit will be skipped. ` : ''}` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${skipped > 0 ? `${skipped.toLocaleString()} sequence${skipped === 1 ? '' : 's'} past the size limit will be skipped.` : ''}`,
   }
 }
 

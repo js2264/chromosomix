@@ -211,7 +211,7 @@ async function compare(
       }
     }
   }
-  job.progress(chosen.length, chosen.length, 'Done')
+  job.progress(chosen.length, chosen.length, 'done')
   job.throwIfCancelled()
 
   const values = new Float32Array(n * n)

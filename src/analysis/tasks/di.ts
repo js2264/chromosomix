@@ -81,7 +81,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'window',
-    label: 'Window',
+    label: 'window',
     hint:
       'Contacts are summed this many bins upstream and this many downstream of every bin. ' +
       '50 is Dixon et al.’s 2 Mb at the 40 kb they worked at.',
@@ -93,14 +93,13 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    label: 'sequence',
     sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * `0`, where the diamond's is `2`, and `analysis/di.ts` argues the
      * difference: the index differences two sums that both contain the
@@ -116,7 +115,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of each side',
+    label: 'minimum coverage of each side',
     hint: 'Below this fraction of usable cells — on either side — the bin gets no score.',
     default: 0.5,
     min: 0,
@@ -138,7 +137,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'call',
-    label: 'Call borders from the sign flips',
+    label: 'call borders',
     hint: 'Adds a BED of domain borders, drawn on the map.',
     default: true,
     section: 'Borders',
@@ -146,7 +145,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'prominence',
-    label: 'Minimum prominence',
+    label: 'minimum prominence',
     /**
      * In bins of ordinary directional bias, which is the unit
      * `integratedDirection` standardises the curve into and is not the index's
@@ -172,7 +171,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'spacing',
-    label: 'Minimum spacing',
+    label: 'minimum spacing',
     hint: 'Two calls closer than this many bins keep only the stronger.',
     default: 0,
     min: 0,
@@ -184,7 +183,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'domains',
-    label: 'Also the domains between them',
+    label: 'domains between them',
     hint: 'A second overlay: the span from each border to the next, as a BED.',
     default: true,
     when: (params) => params.call === true,
@@ -259,8 +258,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
-      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals. ` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals.`,
   }
 }
 

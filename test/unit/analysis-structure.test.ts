@@ -130,7 +130,11 @@ describe('spatial tracks', () => {
     // Distance to the first bead grows one unit a bin.
     expect(profiles[2]?.values[0]).toBeCloseTo(0)
     expect(profiles[2]?.values[7]).toBeCloseTo(7)
-    expect(profiles[2]?.label).toMatch(/Distance to I:1-10,000/)
+    // The lane's name says what the point is and writes the locus the way a
+    // reader does (§26.1): the anchor is the centroid of every bead the window
+    // covers, so a bare "Distance to I:1-10,000" named a 10 kb stretch as
+    // though the distance were to a point.
+    expect(profiles[2]?.label).toMatch(/Distance to the centre of I:1-10,000/)
   })
 
   it('leaves the distance track out, and says so, for a locus the model has no bead at', async () => {
@@ -266,7 +270,10 @@ describe('model from the map', () => {
     const model = outputs.find((o): o is IntervalsOutput => o.kind === 'intervals')
     if (model === undefined || model.payload.kind !== 'features') throw new Error('no model')
     expect(model.payload.data.length).toBe(5)
-    expect(model.label).toBe('3D model · I:0-50000')
+    // The display form of what was typed, since this name is read — on the
+    // Structures card, in the deck and in a TSV's filename — and sat a line
+    // above a framing that was grouped (§26.1).
+    expect(model.label).toBe('3D model · I:1-50,000')
   })
 
   it('leaves a bead with no counted pair out, and says so', async () => {

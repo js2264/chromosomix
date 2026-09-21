@@ -440,7 +440,7 @@ export async function cisMarginal(job: JobContext): Promise<Float64Array> {
     for (let bin = from; bin < to; bin++) contigOf[bin] = cid
   }
   const sums = new Float64Array(mc.nBins)
-  job.progress(0, 1, 'Counting coverage')
+  job.progress(0, 1, 'counting coverage')
   await mc.scanPixels({
     onChunk: (chunk) => {
       job.throwIfCancelled()
@@ -454,7 +454,7 @@ export async function cisMarginal(job: JobContext): Promise<Float64Array> {
         if (bin2 !== bin1) sums[bin2] += 1
       }
     },
-    onProgress: (at, of) => job.progress(at, of, 'Counting coverage'),
+    onProgress: (at, of) => job.progress(at, of, 'counting coverage'),
   })
   return sums
 }

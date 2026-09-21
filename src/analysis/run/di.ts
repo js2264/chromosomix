@@ -188,7 +188,7 @@ export const runDi: TaskRunner = async (job) => {
     // that is not a domain edge.
     if (call) calls.push({ unit, borders: directionBorders(local, { prominence, spacing }) })
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   if (circularUnits > 0) {
     job.note(

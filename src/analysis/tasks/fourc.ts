@@ -120,17 +120,14 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'anchor',
-    label: 'Anchor',
+    label: 'anchor',
     pickable: true,
-    hint:
-      'The locus the profile is a reading from. A whole sequence is allowed, and on a metagenome ' +
-      'a whole genome — then the profile is over the whole MAG rather than one of its contigs. ' +
-      'Type it, or press “Pick on map” and drag along either axis.',
+    hint: 'The locus the profile reads from: a span, a sequence, or on a metagenome a whole genome.',
   },
   {
     kind: 'choice',
     key: 'normalise',
-    label: 'Normalisation',
+    label: 'normalisation',
     default: 'none',
     needsNoGenomes: true,
     settled: 'none',
@@ -179,22 +176,22 @@ const PARAMS: readonly ParamSpec[] = [
     options: [
       {
         value: 'none',
-        label: 'None',
+        label: 'none',
         hint: 'Contacts as they were counted.',
       },
       {
         value: 'coverage',
-        label: 'By coverage',
+        label: 'by coverage',
         hint: 'Each bin divided by how much it is seen at all, so a dead bin is not a dip.',
       },
       {
         value: 'ps',
-        label: 'By P(s)',
+        label: 'by P(s)',
         hint: 'Observed over expected at that separation, from this sequence’s own decay.',
       },
       {
         value: 'ps+coverage',
-        label: 'By P(s) and coverage',
+        label: 'by P(s) and coverage',
         hint: 'Both divisions: the decay out of the shape, the depth out of each bin.',
       },
     ],
@@ -202,7 +199,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'cis',
-    label: 'Cis only',
+    label: 'cis only',
     needsNoGenomes: true,
     // What a metagenome's run *is*, so that is what its provenance says.
     settled: false,
@@ -269,13 +266,10 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       requests: null,
       bytes: null,
       note: wholeFile
-        ? 'Walks the whole pixel table: the contacts that leave this sequence are reached ' +
-          'by the anchor, and the coverage to divide by is a total over every bin, which only ' +
-          'the full pass has. Progress is reported as it goes and it can be cancelled at any ' +
-          'point.'
-        : 'Walks the pixel table as far as the anchor, which is about half the file, to reach ' +
-          `the contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}. Progress ` +
-          'is reported as it goes and it can be cancelled at any point.',
+        ? 'One pass over the whole pixel table: the anchor reaches the contacts that leave this ' +
+          'sequence, and the coverage to divide by is a total over every bin.'
+        : 'One pass over the pixel table as far as the anchor — about half the file — to reach ' +
+          `the contacts that leave this ${context.hasGenomes ? 'genome' : 'sequence'}.`,
     }
   }
 

@@ -10022,7 +10022,10 @@ span.deck-name {
   color: var(--text-faint);
 }
 
-.analysis-group + .analysis-row {
+/* Both, because a group's shared waiting line sits between the heading and the
+   first row and is a sibling of them whether or not it is shown. */
+.analysis-group + .analysis-row,
+.analysis-group-needs + .analysis-row {
   margin-top: 0;
 }
 
@@ -10456,10 +10459,20 @@ span.deck-name {
 /* A checkbox and its name read as one thing, left-aligned — not a checkbox in
    the label column with its word a field's width away in the other. Two
    classes, because `.field` is a grid and one class would lose to it. */
+/* A boolean in the figure's settings column: the word, then the `on` button at
+   the end of the row. The word takes the room rather than the 3.6 rem an
+   `ann-field` label is given, because these are whole phrases — "fill under",
+   "descending", "x grid" — and not the three-letter labels that width was
+   measured for. */
 .field.figure-check {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.figure-check > .field-label {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* A range is two boxes and the word between them, on one row. */
@@ -10528,12 +10541,23 @@ span.deck-name {
 }
 
 /* A column head that sorts looks like one: a pointer and an accent on hover,
-   which is the promise every other sortable table in this app makes. */
+   which is the promise every other sortable table in this app makes.
+
+   Aligned with its own column, which `<th>` does not do by itself: the browser
+   default is `text-align: center`, so every head sat over the middle of a column
+   of left-aligned text and the table looked misaligned in the one place it had
+   been typeset carefully. Numbers are right-aligned in both, through the `num`
+   class `tableFigure` already puts on the head and the cell alike. */
 .figure-th {
   cursor: pointer;
   font-weight: 600;
   color: var(--text-dim);
   user-select: none;
+  text-align: left;
+}
+
+.figure-th.num {
+  text-align: right;
 }
 
 .figure-th:hover,
@@ -10553,12 +10577,33 @@ span.deck-name {
 }
 
 /* A locus box with the file's sequences behind it, and — where the task offers
-   it — the button that takes one off the map. The `<datalist>` is not rendered,
-   so the wrapper exists only to keep the group together as one child of the
-   label grid; `contents` dissolves it so the box and the button are laid out by
-   the field itself rather than in a cell of their own. */
+   it — the button that takes one off the map.
+
+   **A flex row, not `display: contents`.** It was `contents`, on the argument
+   that the wrapper exists only to hold the group together and the field's own
+   grid should lay the pair out. The field's grid has exactly two tracks — a word
+   and a control — so dissolving the wrapper made the box the control and the
+   button a third child, which wrapped onto a second grid row and landed in the
+   *label* column, flush under "distance to" and reading as a form action of its
+   own. §18.1 promises the button next to the box, and the argument it gives —
+   that reading coordinates off a picture in order to type them back in beside it
+   is one gesture — depends on the two being one row. The `<datalist>` between
+   them renders nothing and costs no space. */
 .param-locus {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* The box takes whatever the button leaves. It used to carry an inline `width:
+   100%` — a grid track cannot shrink an element below the width it asks for, so
+   the locus box's own 24rem had to be overridden somehow — and in a flex row
+   `auto` plus `min-width: 0` is that, without pushing the button out. */
+.param-locus > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
 }
 
 /* Never squeezed to an ellipsis by the box beside it: it is a two-word
@@ -10621,6 +10666,23 @@ span.deck-name {
   color: var(--text-faint);
 }
 
+/* The line a whole group is waiting on, printed once under its heading.
+
+   Ten of the sixteen tasks read the matrix, so a session with no map open drew
+   ten rows each carrying the identical "Open a contact map." — a column twice as
+   tall as its content in which the one gate that differed was the hardest line
+   to find. Drawn like `.analysis-row-needs`, because it is the same sentence in
+   a different place, and indented to the rows' own padding so it reads as
+   belonging to the list under it rather than to the heading over it. */
+.analysis-group-needs {
+  display: block;
+  margin: -0.15rem 0 0.45rem;
+  padding: 0 0.55rem;
+  font-size: var(--step--2);
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
 /* A per-bin result is a lane and is drawn on the map, not here (§18.5). This is
    the line that says where it went, so the drawer does not look as though it
    produced nothing. */
@@ -10633,20 +10695,25 @@ span.deck-name {
   border-radius: var(--radius);
 }
 
+/* One output's name, on the row with its export buttons. `--text` and not the
+   box's own dim grey: the sentence above is small print about where things went
+   and these are the things — a lane's name is content, and it is what the reader
+   will look for on the Synthetic tracks card. */
+.analysis-elsewhere-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
 /* --- the parameter form -------------------------------------------------- */
 
 .param-form {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-}
-
-.param-section {
-  margin: 0.35rem 0 0;
-  font-size: var(--step--1);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
 }
 
 /* The drawer is three quarters of the window, so its labels are not squeezed
@@ -10672,45 +10739,39 @@ span.deck-name {
 
 .param-row > .param-field {
   max-width: 24rem;
+  /* Wider than the cards' 6.5rem, because a task's questions are longer than a
+     lane's: "minimum separation" and "log bins per step" broke into two lines in
+     the narrower track, and a label that wraps reads as two labels. One fixed
+     width for every row rather than `max-content` per row, so that every control
+     down the form starts at the same x — which is the alignment a reader scans
+     the form by. */
+  grid-template-columns: 9rem minmax(0, 1fr);
+}
+
+/* A number box keeps its own width so that its unit stays on its line.
+   `.controls-card .input-num` is 100% of the cell, which is right in a 15rem
+   card and wrong here: the box filled the whole control column and the word
+   "bins" dropped to the line below it, where a unit is not beside its number and
+   a reader types base pairs into a box that wanted bins. `input-step` is
+   excluded because it is the one that already keeps its own width — it shares
+   its row with a slider, which takes what it leaves. */
+.param-row .input-num:not(.input-step) {
+  width: 7rem;
+}
+
+/* A hint belongs under the control it is about. Beside works for the rows whose
+   control is one box or one dropdown — that is the second column of `.param-row`
+   and where most hints are read — but a `field-block` puts its label on one line
+   and its group on the next, so a hint in the second column aligned with the
+   *label* and the group dropped below it. The reader read label and hint as a
+   sentence and had nothing to connect the detached control to. */
+.param-row > .param-field.field-block ~ .hint {
+  grid-column: 1 / -1;
 }
 
 .param-row > .param-field > .select {
   width: auto;
   min-width: 9rem;
-}
-
-.param-label {
-  font-size: var(--step--1);
-  color: var(--text-dim);
-}
-
-.param-control {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.param-hint,
-.param-resolved {
-  grid-column: 2;
-  font-size: var(--step--2);
-  color: var(--text-faint);
-  line-height: 1.35;
-}
-
-.param-number {
-  width: 6rem;
-}
-
-.param-checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  max-height: 9rem;
-  overflow: auto;
-  width: 100%;
 }
 
 /* --- the synthetic tracks card ------------------------------------------- */
