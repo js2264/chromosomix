@@ -8053,6 +8053,12 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
 - **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local, six
   characters.
 - A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.
+- **A table cell is not a summary.** The Chromosomes table's `length` column prints `1,531,933` while
+  the Sequences card beside it prints `1.53 Mb`, and both are right: a table holds the values a
+  reader reads off exactly and copies out, so it groups the digits and keeps them all, while a
+  summary line is a measurement and takes the unit. The rule is the surface, not the number — so a
+  column of lengths is never rounded to `fmt.bp`, and a phrase about a span is never spelled out in
+  full base pairs.
 
 ### 26.3 What a toggle looks like
 
