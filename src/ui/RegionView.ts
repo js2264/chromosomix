@@ -6,9 +6,20 @@
  *
  * 1. a **genome name** expands to the whole-genome extent, and a coordinate
  *    suffix on a genome name is an *error*, not something quietly ignored;
- * 2. otherwise a **contig**, optionally with coordinates (0-based, half-open —
- *    cooler's convention, verified against `parse_region`);
+ * 2. otherwise a **contig**, optionally with coordinates — the region string
+ *    handed over is cooler's, 0-based and half-open, verified against
+ *    `parse_region`;
  * 3. neither → an error listing the available genomes and contigs.
+ *
+ * **What is on screen is the display form, though** (§26.1): the heading, the
+ * locus box and the zoom steps' tooltips print `regionLabel` — 1-based
+ * inclusive, digits grouped, as IGV, UCSC and samtools print a locus — and what
+ * is typed is read back through `typedLocusToRegion` before it becomes that
+ * region string. Both lines used to print the region string itself, so the
+ * heading and the summary immediately under it named one window at two starts a
+ * base apart, and copying a coordinate out of one and into the box moved the
+ * picture by a base. The conversion sits at the box rather than on the reader:
+ * pressing Enter on the value the box is already showing must change nothing.
  *
  * Genome and contig namespaces can collide and genome wins, as in Python, so
  * the view states which kind the search matched rather than leaving the user to
@@ -24,6 +35,7 @@
 import type { ParsedRange } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import { parseRegion } from '../annotations/bookmarks'
+import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el } from './dom'
@@ -42,7 +54,7 @@ import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { SearchBox, featureSuggestions } from './SearchBox'
+import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -358,20 +370,50 @@ export class RegionView {
     const store = props.annotations?.store
     this.search = new SearchBox({
       inputClass: 'input-region',
-      value: props.region,
-      placeholder:
-        store === undefined
-          ? 'contig, contig:start-end, or a genome name'
-          : 'contig, contig:start-end, a genome, or a gene',
+      // **The form a reader reads** (§26.1), not the one the state carries: the
+      // box shows `IV:1,000,001-1,400,000` where the hash and the worker say
+      // `IV:1000000-1400000`, and what is typed is read back the same way. The
+      // heading over this box and the summary under it each wrote one of the two
+      // grammars, so one screen named one window at two starts a base apart and
+      // a coordinate copied out of the summary and into the box moved the
+      // picture by a base — which is the failure a genomics reader is quickest
+      // to see and slowest to forgive.
+      value: regionLabel(props.region),
+      // The noun this view was handed rather than the sequence in front of the
+      // reader: a coordinate suffix on a *genome* name is an error here (§5.4),
+      // and the name this view is of may be a genome's.
+      placeholder: locusPlaceholder({
+        first: props.noun,
+        accepts: { sequence: true, genome: true, gene: store !== undefined },
+      }),
       title:
-        'What this view is of. Type a contig or a range and press Enter' +
-        (store === undefined ? '.' : ', or a gene name from the starred model.'),
-      onSubmit: (text) => props.onChangeRegion(text),
+        store === undefined
+          ? 'What this view is of. Type a name or a locus — the first base is 1, as the ' +
+            'summary reads — and press Enter.'
+          : 'What this view is of. Type a name, a locus (the first base is 1, as the summary ' +
+            'reads) or a gene from the starred model, and press Enter.',
+      // The box draws its own `go`, as the browser's does: one shape for one
+      // job (§26.6), and Enter and the button are one road through `submit`
+      // rather than two that can come to disagree about what the box holds.
+      go: true,
+      onSubmit: (text) => props.onChangeRegion(typedLocusToRegion(text)),
       // Only where there is something to search. A map with no gene model
       // loaded would grow a list that never has anything in it.
+      //
+      // A hit carries the feature's own bounds in the *state's* grammar
+      // (`featureSuggestions`, whose base is pinned by a test), and the box
+      // shows what the box accepts — so a hit is put in it as the locus a
+      // reader reads, and picking a gene lands on the gene rather than a base
+      // before it.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text) }),
+        : {
+            suggest: (text: string) =>
+              featureSuggestions(store, text).map((hit) => ({
+                ...hit,
+                value: regionLabel(hit.value),
+              })),
+          }),
     })
     // Ordinary bordered buttons, like `go` beside them: these move the view, and
     // a control that moves the view reading as quietly as a label is a control
@@ -427,7 +469,7 @@ export class RegionView {
     // The heading *is* the region, as the genome view's heading is the genome;
     // a literal "Region" above a box that already says which one was a line
     // spent on the obvious.
-    this.title = el('h2', { class: 'region-title', text: props.region })
+    this.title = el('h2', { class: 'region-title', text: regionLabel(props.region) })
 
     this.el = el(
       'section',
@@ -446,11 +488,10 @@ export class RegionView {
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
+          // `go` rides inside the box (`SearchBox`'s own option), because Enter
+          // and the button mean the same thing and a hit list the button could
+          // not see would make them disagree about what "go" is.
           this.search.el,
-          // Through the box rather than around it: Enter and this button mean the
-          // same thing, and a hit list the button could not see would make them
-          // disagree about what "go" is.
-          button('go', () => this.search.submit()),
           // **The zoom steps, beside the box, because they write into the box.**
           // The scroll wheel on the map is a zoom of the *picture* — the same
           // block, drawn larger or smaller — and past the edge of what was read
@@ -554,7 +595,8 @@ export class RegionView {
           ? step.out
             ? 'The whole sequence is on screen — there is nothing further out to go to'
             : 'This window is already at the file’s own bin size'
-          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ${target}`
+          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ` +
+            regionLabel(target)
     })
   }
 
@@ -832,7 +874,7 @@ export class RegionView {
           client.request<'matrix'>(ask),
         )
         if (this.disposed) return
-        this.title.textContent = this.props.region
+        this.title.textContent = regionLabel(this.props.region)
         this.describeMatch(parsed, result)
         // The reader may have planned a coarser grid than the file's bins — a
         // whole chromosome at 10 kb is more cells than any picture holds — and
@@ -868,7 +910,8 @@ export class RegionView {
         client.request<'matrix'>(pair),
       )
       if (this.disposed) return
-      this.title.textContent = `${this.props.region} × ${this.props.region2}`
+      this.title.textContent =
+        `${regionLabel(this.props.region)} × ${regionLabel(this.props.region2)}`
       this.describePair(result)
       // The reader may have planned a coarser grid than the file's bins — a
       // whole chromosome at 10 kb is more cells than any picture holds — and

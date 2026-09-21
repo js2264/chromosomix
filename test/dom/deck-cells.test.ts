@@ -233,11 +233,19 @@ describe('a structure cell in the deck', () => {
     const button = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
     expect(button).not.toBeNull()
     expect(button?.disabled).toBe(false)
+    // It leads with the verb, like every other button in the row: `3D structure`
+    // beside `add` read as a kind of thing the URL box takes.
+    expect(button?.textContent).toBe('add a 3D structure')
+    expect(button?.title).toContain('Open a cell')
     deck.add({ kind: 'structure' })
     deck.add({ kind: 'structure' })
     expect(structureCells(deck)).toHaveLength(1)
     expect(published).toEqual(['3d'])
-    expect(deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')?.disabled).toBe(true)
+    const greyed = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
+    expect(greyed?.disabled).toBe(true)
+    // …and says why, rather than keeping the sentence promising to open a cell
+    // it can no longer open (§18.1).
+    expect(greyed?.title).toBe('The deck already holds its one structure cell.')
   })
 
   it('takes the first empty cell, as a map would', () => {

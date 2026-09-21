@@ -25,7 +25,7 @@ import type { AnnotationContext } from '@/ui/MatrixPanel'
 import type { MatrixPanel } from '@/ui/MatrixPanel'
 import type { MapId } from '@/annotations/placement'
 import type { ViewState } from '@/types'
-import { all, setUpDom, type DomTeardown } from '../support/dom'
+import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 /** A worker that is created, listened to, and never answers. */
 class DeadWorker {
@@ -281,18 +281,40 @@ function barButton(deck: PanelDeck, kind: string): HTMLButtonElement {
   return node
 }
 
+/**
+ * The first map's chain, which lives in the lead cell's own heading.
+ *
+ * It was in the bar, and there it was one glyph at two heights: a chain takes
+ * *one* cell off the deck's navigation, so the lead's belongs where every
+ * companion's is (§16.5).
+ */
+function leadChain(deck: PanelDeck): HTMLButtonElement {
+  const node = deck.el.querySelector<HTMLButtonElement>('.deck-grid .is-lead .deck-lock')
+  if (node === null) throw new Error('no chain on the lead’s heading')
+  return node
+}
+
 // ---------------------------------------------------------------------------
 
 describe('the deck’s bar', () => {
   it('holds the controls that are about the deck rather than about one map', () => {
     const { deck } = make()
-    for (const kind of ['lock', 'columns', 'share', 'resolutions', 'save', 'copy', 'close']) {
+    for (const kind of ['columns', 'share', 'resolutions', 'save', 'copy', 'close']) {
       expect(barButton(deck, kind)).not.toBeNull()
     }
+    // …and the chain is not one of them: it takes one cell off the navigation,
+    // which is a per-cell act, so the lead's sits in the lead's own heading
+    // beside its star and the bar has none.
+    expect(deck.el.querySelector('.deck-bar .deck-lock')).toBeNull()
+    expect(leadChain(deck)).not.toBeNull()
   })
 
   /**
    * The two presses that put a deck on one footing.
+   *
+   * Named *match all scales* and *match all resolutions*, because `fix` reads as
+   * repair to a reader arriving from Juicebox or HiGlass and nothing here is
+   * broken — `match` is the verb §5.7 already uses for the same one-off act.
    *
    * They were switches, and a switch here made a promise it could not keep:
    * `one scale`, left on, meant every later nudge of any panel's clip either had
@@ -300,13 +322,24 @@ describe('the deck’s bar', () => {
    * press says a thing that stays true — *these are all on that one's numbers
    * now* — and the very next nudge is honestly the reader's own again.
    */
-  describe('the two presses that fix a deck together', () => {
-    it('are bordered, like the chain beside them and not like a link', () => {
+  describe('the two presses that put a deck on one footing', () => {
+    it('are bordered, like everything else in the bar and not like a link', () => {
       const { deck } = make()
       for (const kind of ['share', 'resolutions']) {
         const node = barButton(deck, kind)
         expect(node.classList.contains('btn')).toBe(true)
         expect(node.classList.contains('btn-quiet')).toBe(false)
+      }
+    })
+
+    it('are named for the act, not for a repair', () => {
+      const { deck } = make()
+      expect(barButton(deck, 'share').textContent).toBe('match all scales')
+      expect(barButton(deck, 'resolutions').textContent).toBe('match all resolutions')
+      // One sentence each, and no spec citation: the reasoning is the module
+      // header's and the contract's, not the cursor's (§26.4).
+      for (const kind of ['share', 'resolutions']) {
+        expect(barButton(deck, kind).title).not.toContain('§')
       }
     })
 
@@ -329,8 +362,15 @@ describe('the deck’s bar', () => {
       expect(bar[0]).toContain('deck-add-toggle')
       expect(bar[1]).toContain('deck-share')
       expect(bar[2]).toContain('deck-resolutions')
-      expect(bar[3]).toContain('deck-lock')
+      // The chain used to sit here, fourth; it is the lead cell's own control now.
+      expect(bar[3]).toContain('deck-columns')
       expect(bar[bar.length - 1]).toContain('deck-close')
+      // The one that ends the deck is a bordered word rather than a bare mark,
+      // so it is not the twin of the × on the cell a finger's width below it.
+      const close = barButton(deck, 'close')
+      expect(close.textContent).toBe('close deck')
+      expect(close.classList.contains('btn')).toBe(true)
+      expect(close.classList.contains('btn-close')).toBe(false)
     })
 
     it('name the starred map in what they promise to do', () => {
@@ -503,8 +543,22 @@ describe('adding a map by URL', () => {
   it('is opened by a button in the bar, not by the command palette alone', () => {
     const { deck } = make()
     expect(addRow(deck).classList.contains('hidden')).toBe(true)
+    // Named for what the row opens — a *cell* — because it also holds the 3D
+    // structure and a stack of tracks, and the tracks cell has no other road on
+    // screen (§16.11). It promised a map.
+    expect(barButton(deck, 'add-toggle').textContent).toBe('add a cell…')
     barButton(deck, 'add-toggle').click()
     expect(addRow(deck).classList.contains('hidden')).toBe(false)
+    // The way out of the row is not drawn like a mode that is on (§26.3).
+    const cancel = barButton(deck, 'add-toggle')
+    expect(cancel.textContent).toBe('cancel')
+    expect(cancel.classList.contains('is-on')).toBe(false)
+    expect(textsOf(addRow(deck), '.btn')).toEqual([
+      'choose a file…',
+      'add',
+      'add a 3D structure',
+      'add a tracks cell',
+    ])
   })
 
   it('is put away again by the same button', () => {
@@ -710,10 +764,10 @@ describe('the lock’s window', () => {
     const { deck } = make()
     const lead = leadPanel({ window: [100, 200] })
     deck.setLead(lead.panel)
-    const chain = barButton(deck, 'lock')
+    const chain = leadChain(deck)
     chain.click() // off the lead
     const before = lead.state.shown.length
-    barButton(deck, 'lock').click() // and back on it
+    leadChain(deck).click() // and back on it
     expect(lead.state.shown.length).toBeGreaterThan(before)
     expect(lead.state.shown[lead.state.shown.length - 1]).toEqual([100, 200])
   })
@@ -722,7 +776,7 @@ describe('the lock’s window', () => {
     const { deck } = make()
     const lead = leadPanel({ window: [100, 200] })
     deck.setLead(lead.panel)
-    barButton(deck, 'lock').click()
+    leadChain(deck).click()
     expect(lead.state.shown).toEqual([])
   })
 })
@@ -1125,9 +1179,15 @@ describe('putting the deck down', () => {
  * tomorrow. That is what the assertions below are actually about.
  */
 describe('how each companion was drawn', () => {
-  /** The chain on a companion's heading, which is the one control with no bytes behind it. */
+  /**
+   * The chain on a companion's heading, which is the one control with no bytes
+   * behind it.
+   *
+   * `:not(.is-lead)`, because cell 0 now carries a chain of its own: the lead's,
+   * which is a preference rather than a remembered look (§16.5).
+   */
   function chain(deck: PanelDeck, index = 0): HTMLButtonElement {
-    return all<HTMLButtonElement>(deck.el, '.deck-grid .deck-lock')[index]
+    return all<HTMLButtonElement>(deck.el, '.deck-grid .deck-panel:not(.is-lead) .deck-lock')[index]
   }
 
   function remembered(): Array<Record<string, unknown>> {

@@ -9109,8 +9109,8 @@ span.deck-name {
   color: var(--text-dim);
 }
 
-/* The lead's heading carries a name and nothing else — the first map is always
-   the lead, so there is nothing on it to press. */
+/* The lead's heading carries its name, its star and its chain — everything a
+   companion's does but the grip, because the first map is always the lead. */
 .deck-head-lead {
   color: var(--text-dim);
 }
@@ -9160,9 +9160,12 @@ span.deck-name {
   font-style: italic;
 }
 
-.deck-panel.is-unlocked .deck-lock {
-  color: var(--text-faint);
-}
+/* Nothing here dims a chain that is off. `--text-faint` on a cell moving on its
+   own — which this sheet said twice, once for a map's cell and once for the
+   tracks cell — is how it draws a control a reader *cannot* press, and the one
+   lit rule already says which way each chain is flipped, from the `aria-pressed`
+   the button carries (§26.3). `.is-unlocked` stays on the cell as its state in
+   the DOM; the three chains are then one control in three headings. */
 
 .deck-body {
   min-width: 0;
@@ -9613,10 +9616,6 @@ span.deck-name {
 .deck-tracks .browser-bar .browser-search {
   flex-basis: 8rem;
   min-width: 6rem;
-}
-
-.deck-tracks.is-unlocked .deck-lock {
-  color: var(--text-faint);
 }
 
 /* The add row beside a browser lead (§25 stage D): the roads that open a
