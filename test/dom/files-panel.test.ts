@@ -127,7 +127,10 @@ describe('with nothing connected', () => {
     const { el } = card()
     expect(el.textContent).toContain('Nothing connected')
     const connect = all<HTMLButtonElement>(el, '.files-actions .btn')[0]
-    expect(connect.textContent).toBe('Open a local/remote folder')
+    // One verb for the act, and lowercase like every other button label (§26.4):
+    // the landing page said *Mount*, this button said *Open* and every sentence
+    // about the result said *connect*.
+    expect(connect.textContent).toBe('connect a local or remote folder')
   })
 })
 

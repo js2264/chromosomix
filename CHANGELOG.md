@@ -528,6 +528,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The Files column's own door to a folder says what every other screen says.** It read *Open a
+  local/remote folder* while the landing page's heading said *Connect a local or remote folder* and
+  every sentence about the result said *connect* — and three of the sentences pointing a reader at
+  it named it with Markdown asterisks, which reach the DOM as asterisks.
+
 - **An anchor picked off the map now names the bins that were dragged.** *pick on map* wrote the
   locus in the form made for a clipboard — 1-based inclusive, which is what samtools and bedtools
   take — and the analysis runners read that parameter with cooler's grammar, 0-based half-open. So a

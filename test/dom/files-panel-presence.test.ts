@@ -3,7 +3,7 @@
  * When the Files column exists at all (SPECS §16.5, §24.2).
  *
  * It used to be available from the first paint and never withdrawn, and the
- * reason was a good one: its own *Open a local/remote folder* was the only door
+ * reason was a good one: its own *connect a local or remote folder* was the only door
  * to a folder, and a door nobody can see is not a door. The landing page now
  * offers the four places itself, so what is left on the first screen is an
  * empty column beside a row of buttons that say the same thing — and §8.5's

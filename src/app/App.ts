@@ -477,7 +477,7 @@ export class App implements SessionHost {
           // door most readers arrive through — then the Files column, the
           // reader's own places. Nothing else: the two buttons that stood
           // here, a plug that connected a place and a `+` that added a file,
-          // were the Files column's own *Open a local/remote folder* and the
+          // were the Files column's own *connect a local or remote folder* and the
           // file crumb's *Open a file* said a second time, one row up, and a
           // header with three doors to a file reads as three different
           // things. Dropping is still the gesture the app is opened with and
@@ -1378,7 +1378,7 @@ export class App implements SessionHost {
    * Whether the Files column has anything to be, which is now a question.
    *
    * It used to be available from the first paint and never withdrawn, and the
-   * reason was a good one: its own *Open a local/remote folder* was the only
+   * reason was a good one: its own *connect a local or remote folder* was the only
    * door to a folder, and a door nobody can see is not a door. The landing
    * page now offers the four places itself (§24.2), so that argument has moved
    * out of this column — and what is left on the first screen without it is an
@@ -1388,7 +1388,7 @@ export class App implements SessionHost {
    *
    * So the column exists **exactly when this window has a place connected**,
    * on every screen and not only the first. The doors are elsewhere and stay
-   * elsewhere: the landing page, which a new tab is, and *Open a local/remote
+   * elsewhere: the landing page, which a new tab is, and *connect a local or remote
    * folder* in the command palette.
    *
    * Connecting one *reveals* it as well ({@link folderConnected}), so the
