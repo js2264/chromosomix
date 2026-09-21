@@ -116,8 +116,12 @@ export function exportRow(options: ExportRowOptions): ExportRow {
     { class: options.class === undefined ? 'export-row' : `export-row ${options.class}` },
     ...(dpiSelect === null ? [] : [dpiSelect]),
     formatSelect,
-    save,
-    ...(copy === null ? [] : [copy]),
+    // The two marks in one box, so a wrap cannot come *between* them. In a
+    // 200-pixel column there was room for the download after the format select
+    // and not for the clipboard, so the row broke into three lines with one
+    // button alone on the last — which reads as an afterthought rather than as
+    // the other half of a pair. They are the same figure going to two places.
+    el('div', { class: 'export-acts' }, save, ...(copy === null ? [] : [copy])),
   )
   const note = el('span', { class: 'clip-note export-note' })
   return {

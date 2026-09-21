@@ -99,11 +99,13 @@ await scene('landing', async ({ page, shot }) => {
   await shot('04b-palette-filtered')
   await page.keyboard.press('Escape')
   await sleep(400)
-  await page.click('button[title^="Share this tab as a link"]')
-  await sleep(800)
-  await shot('05-share-empty')
-  await page.keyboard.press('Escape')
-  await sleep(400)
+  // On an empty tab the link button is *disabled*, with the way out in its
+  // title — so there is no refusal dialog to shoot here any more, and what is
+  // worth seeing is the header in that state. The share dialog itself is shot
+  // from the browser scene, where a file is open.
+  const share = page.locator('button[title^="Share this tab as a link"]').first()
+  console.log('share disabled on an empty tab:', await share.isDisabled())
+  await shot('05-header-nothing-to-share', { clip: { x: 1500, y: 0, width: 420, height: 52 } })
   // The Connect dialog on each of its panes, from the landing page's buttons.
   const providers = await page.$$('.picker-provider')
   console.log('providers:', providers.length)

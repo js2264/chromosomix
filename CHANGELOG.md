@@ -542,6 +542,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A number box no longer clips the number it holds.** `opacity` was drawn `10C` at full: two fixed
+  halves of a 200-pixel column left each of that pair a hundred pixels for a label, two chevrons, a
+  box and a unit, and the box is what gave way. The pair sits side by side where there is room for
+  both and stacks where there is not, and the box never shrinks below the three digits a full opacity
+  or a 999-pixel track height needs. The save and the clipboard in an export row travel together for
+  the same reason — one of them had been landing alone on a third line.
+
 - **`text size` and `opacity` wear their per-cent sign the same way.** They are deliberately one
   question asked twice, and one printed `135%` between its chevrons while the other printed a bare
   `100` with a `%` after them — two shapes for one pair.

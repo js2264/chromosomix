@@ -4049,9 +4049,19 @@ canvas.is-frozen {
    `auto`: the two are read as a pair, and a pair whose halves are different
    widths because one label is a longer word reads as one field with something
    stuck on the end of it. */
+/* Side by side where there is room for both, stacked where there is not.
+
+   Two fixed halves of a 200-pixel column leave each of these a hundred pixels
+   for a label, two chevrons, a box and a unit — and the box is what gives, so a
+   full opacity was drawn `10C`: a value clipped mid-digit in the box a reader is
+   about to nudge. `auto-fit` keeps the pair on one line in every column wide
+   enough to hold it (the panel in the map's own header, a wide window) and lets
+   it become two rows where it is not, which is the same trade `.export-row`
+   makes a few hundred lines up. The two still read as one question either way,
+   because they stay adjacent and nothing comes between them. */
 .field-pair {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   gap: 0.3rem 0.5rem;
   align-items: start;
 }
@@ -4062,7 +4072,10 @@ canvas.is-frozen {
    too many. */
 .input-step {
   flex: 1 1 auto;
-  min-width: 2.5rem;
+  /* Three digits and the padding they sit in. `100` is a legal opacity and
+     `999` a legal track height, and a box that clips either is reporting a
+     different number from the one it holds. */
+  min-width: 2.9rem;
   text-align: center;
   padding-inline: 0.2rem;
   appearance: textfield;
@@ -4196,6 +4209,13 @@ canvas.is-frozen {
   width: auto;
 }
 
+/* The save and the clipboard travel together — see `ui/exportRow.ts`. */
+.export-row > .export-acts {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+}
+
 /* In the panel header there is no column to divide, so the row is just a row. */
 .panel-head .export-row {
   display: flex;
@@ -4231,7 +4251,7 @@ canvas.is-frozen {
   min-width: 0;
 }
 
-.export-row-flex > .btn {
+.export-row-flex > .export-acts {
   flex: 0 0 auto;
 }
 
