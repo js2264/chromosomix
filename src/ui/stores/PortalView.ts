@@ -90,6 +90,8 @@ export class PortalView {
   private readonly tray: SelectionTray
   private readonly main = el('div', { class: 'portal-main' })
   private readonly statusEl = el('div', { class: 'portal-status hidden' })
+  /** The search, the count, *clear filters* and the mode pair — see {@link showStatus}. */
+  private readonly toolbar: HTMLElement
 
   private file: StoreFile | null = null
 
@@ -189,17 +191,18 @@ export class PortalView {
       title: 'Untick every facet and empty the search.',
     })
 
+    this.toolbar = el(
+      'div',
+      { class: 'portal-toolbar' },
+      this.search,
+      this.countEl,
+      clearAll,
+      el('div', { class: 'portal-modes' }, this.listButton, this.matrixButton),
+    )
     this.el = el(
       'div',
       { class: 'portal' },
-      el(
-        'div',
-        { class: 'portal-toolbar' },
-        this.search,
-        this.countEl,
-        clearAll,
-        el('div', { class: 'portal-modes' }, this.listButton, this.matrixButton),
-      ),
+      this.toolbar,
       el('div', { class: 'portal-body' }, this.rail.el, el('div', { class: 'portal-content' }, this.statusEl, this.main)),
       this.tray.el,
     )
@@ -407,6 +410,14 @@ export class PortalView {
     this.statusEl.textContent = status.kind === 'none' ? '' : status.text
     this.main.classList.toggle('hidden', status.kind !== 'none')
     this.countEl.textContent = ''
+    // **The toolbar goes with the list.** A search box, a *clear filters* and a
+    // list/matrix pair drawn above a red *nothing has been published for this
+    // yet* are four controls over an empty room: there is nothing to search, no
+    // facet to clear and no arrangement to choose. §8.5's rule — a control the
+    // file cannot be asked about is not shown — and the banner is the one thing
+    // on the pane a reader can act on.
+    this.toolbar.classList.toggle('hidden', status.kind === 'error')
+    this.rail.el.classList.toggle('hidden', status.kind === 'error')
   }
 
   private paintRail(): void {
@@ -606,7 +617,10 @@ export function storeFailure(
   const notJson = result.reason === 'refused' && result.refusal.reason === 'not-json'
   if (ref.builtin && (result.reason === 'missing' || notJson)) {
     return (
-      `${ref.label} is not generated yet; the Stores workflow publishes it. ` +
+      // `Nothing has been published for …`, not `${ref.label} is …`: a store's
+      // name is a noun phrase of either number, and half of them are plural —
+      // this read *IGV genome sessions is not generated yet*.
+      `Nothing has been published for ${ref.label} yet; the Stores workflow generates it. ` +
       'Run it once (Actions → Stores → Run workflow) and this fills in.'
     )
   }

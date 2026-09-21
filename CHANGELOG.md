@@ -542,6 +542,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A store that has not been published yet says so in the singular and the plural.** The message
+  interpolated the store's name in front of *is not generated yet*, and half the built-in names are
+  noun phrases of the wrong number — so IGV's read *IGV genome sessions is not generated yet*.
+
+- **A store that could not be read no longer draws a toolbar over the empty room.** A search box, a
+  *clear filters* and a list/matrix pair stood above the red banner, offering to search nothing,
+  clear nothing and arrange nothing (§8.5).
+
 - **Six hints that were two sentences are one.** A rule under a track and the reason it is there are
   one thought, not two; so are a bounded read and the gate on it, and a `⌘C` that yields to a text
   selection. §26.4 now also says which two lines are *not* that hint and are not held to it — a

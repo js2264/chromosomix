@@ -181,7 +181,9 @@ describe('IGV’s genomes', () => {
     const view = new GenomesView({ front: front as NonNullable<typeof front>, host: host([]) })
     document.body.appendChild(view.el)
     await vi.waitFor(() =>
-      expect(view.el.querySelector('.portal-status')?.textContent).toContain('not generated yet'),
+      expect(view.el.querySelector('.portal-status')?.textContent).toContain(
+        'Nothing has been published for',
+      ),
     )
   })
 })

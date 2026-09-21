@@ -191,7 +191,7 @@ describe('a store that did not answer with a store', () => {
       { ok: false, reason: 'refused', refusal: { reason: 'not-json' }, message: '' },
       { id: 'encode', label: 'ENCODE', url: 'https://host/stores/encode.json', builtin: true },
     )
-    expect(text).toContain('ENCODE is not generated yet')
+    expect(text).toContain('Nothing has been published for ENCODE yet')
     expect(text).toContain('Actions → Stores → Run workflow')
     expect(text).not.toContain('workspace')
     expect(text).not.toContain('dev server')
