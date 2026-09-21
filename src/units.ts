@@ -188,14 +188,26 @@ export function durationText(ms: number): string {
 /**
  * When a run finished, as a clock on the wall — `20:49:46`.
  *
- * The ISO string a result carries is for the provenance a reader copies out;
- * on screen it is twenty-four characters of which the reader wants six. Local
- * time, because the question is "was that before lunch", and in the reader's
- * own locale's hours, which is the one thing about a clock nobody should have
- * to translate.
+ * The ISO string a result carries is for the provenance a reader copies out; on
+ * screen it is twenty-four characters of which the reader wants six. Local time,
+ * because the question is "was that before lunch".
+ *
+ * **Twenty-four hour, in every locale.** The reader's own locale decided this at
+ * first, which on `en-US` is a twelve-hour clock: a run finished *at 03:29:24 PM*
+ * beside one *computed in 776 ms*, where the eight characters that say the hour
+ * carry three of punctuation and a word, and two runs an hour apart in the
+ * afternoon and the small hours sort the same. A duration and a clock time sit
+ * on one line here and the line is read as a measurement; `hourCycle` is the one
+ * thing about a clock that is not a matter of locale but of what the number is
+ * for. The separators stay the locale's.
  */
 export function runClock(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
 }

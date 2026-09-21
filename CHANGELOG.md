@@ -564,6 +564,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   get them. It costs the row a line in that column and reads as a stack rather than as a row that
   broke.
 
+- **A run's clock is twenty-four hour, in every locale.** It read *computed in 776 ms at
+  03:29:24 PM* — eight characters of which three were punctuation and a word, on the same line as a
+  duration, and two runs an hour apart in the afternoon and the small hours sorted the same. The
+  separators stay the reader's locale's; the hour cycle does not, because that is a fact about what
+  the number is for (§26.2).
+
 - **A copy button you could not see could still be clicked.** The console's per-row copy sits at
   `opacity: 0` until its row is hovered, but `opacity` hides a button without disarming it — so the
   last twenty pixels of every resting row were a live target, and a reader dragging to select a line
