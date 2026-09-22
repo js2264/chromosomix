@@ -357,21 +357,31 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Control',
   },
   // **The shift is asked for in two units, and which one is offered follows the
-  // mode.** A fixed window is a couple of dozen bins wide, so *how far away*
-  // is a length in base pairs and 100 kb is a long way. A scaled window is as
-  // wide as whatever it is piling up — a megabase-long TAD with its flanks is
-  // two megabases of window — and a control 100 kb from it is ninety per cent
-  // the same cells as the thing it is supposed to be the denominator of. The
-  // ratio that comes out is 1 everywhere, the domain washes out of the picture,
-  // and nothing on screen says why. So the scaled mode asks in **multiples of
-  // the window**, where 1 is the first shift that cannot overlap at all.
+  // mode.** A fixed window is a couple of dozen bins wide, so *how far away* is
+  // a number of bins and the window's own half-width is the scale to think in. A
+  // scaled window is as wide as whatever it is piling up — a megabase-long TAD
+  // with its flanks is two megabases of window — so a shift in bins there would
+  // mean something different for every domain in the set, and it asks in
+  // **multiples of the window** instead, where 1 is the first shift that cannot
+  // overlap at all.
+  //
+  // In bins rather than base pairs, and the fixed mode is the case that makes
+  // the rule: the default window is 21 bins each side, 43 across, and the
+  // nearest control has to clear it or it is ninety per cent the same cells as
+  // the thing it is supposed to be the denominator of. `100 kb` cleared it on a
+  // 1 kb map and was ten bins — inside the window — on a 10 kb one, so the same
+  // typed number was a sound control at one resolution and a copy of the signal
+  // at the next, with nothing on screen saying which. 50 bins clears the default
+  // window at every resolution there is.
   {
     kind: 'number',
     key: 'minShift',
     label: 'smallest shift',
-    default: 100_000,
+    hint: 'A control nearer than the window’s own width overlaps the anchors it stands in for.',
+    default: 50,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: (params) => params.norm === 'matched' && !isScaled(params),
     section: 'Control',
   },
@@ -379,9 +389,10 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxShift',
     label: 'largest shift',
-    default: 1_000_000,
+    default: 500,
     min: 1,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: (params) => params.norm === 'matched' && !isScaled(params),
     section: 'Control',
   },
@@ -418,13 +429,20 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
+  // **The range two features may be apart is a range of bin offsets**, which is
+  // what the pileup itself is a picture of: a pair's separation is `col − row`,
+  // the split-by-separation bands are bin offsets, and the near-diagonal a pair
+  // is dropped for sitting on is one or two bins wide whatever the resolution.
+  // In base pairs the floor was 20 kb, which is twenty bins of a 1 kb map — most
+  // of the short-range contacts a peak set is run for — and none at all of a
+  // 50 kb one.
   {
     kind: 'number',
     key: 'minSep',
     label: 'nearest two features may be',
-    unit: 'bp',
+    unit: 'bins',
     hint: 'Below this a pair is mostly the diagonal it sits on rather than a contact between two places.',
-    default: 20_000,
+    default: 2,
     min: 0,
     integer: true,
     when: (params) => params.anchors === 'allpairs',
@@ -434,8 +452,8 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxSep',
     label: 'furthest two features may be',
-    unit: 'bp',
-    default: 2_000_000,
+    unit: 'bins',
+    default: 200,
     min: 1,
     integer: true,
     when: (params) => params.anchors === 'allpairs',

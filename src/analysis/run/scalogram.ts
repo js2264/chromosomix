@@ -34,7 +34,7 @@ import {
   type JobContext,
   type TaskRunner,
 } from '../job'
-import { quantilesOf, reachBinsFor, reachBpOf } from '../tasks/scalogram'
+import { quantilesOf, reachBinsFor, reachBinsOf } from '../tasks/scalogram'
 import type { ProfileOutput, TaskOutput } from '../types'
 import {
   bandFor,
@@ -112,7 +112,18 @@ export const runScalogram: TaskRunner = async (job) => {
   const minValid = Math.max(0, Math.min(1, numParam(job.params, 'minValid', 0.5)))
   const ignoreDiags = Math.max(0, Math.round(numParam(job.params, 'ignoreDiags', 1)))
   const quantiles = quantilesOf(job.params)
-  const reachBp = reachBpOf(job.params)
+  const reach = reachBinsOf(job.params)
+  // What the cut came to on *this* file. The form asks in bins so the number is
+  // the depth of the band the run reads (see `tasks/scalogram.ts`), and the cost
+  // of that is the separation a reader would otherwise have to work out from the
+  // resolution — which is the axis the bands are drawn against.
+  if (reach > 0) {
+    job.note(
+      `A ${reach.toLocaleString()}-bin cut reaches ${formatBp(reach * job.mc.binsize)} at this ` +
+        `file’s ${job.mc.binsize.toLocaleString()} bp resolution, so every band is a quantile of ` +
+        'what is within that.',
+    )
+  }
 
   const ticked = tickedSequences(job.params, 'sequences')
   if (ticked !== null && ticked.length === 0) {
@@ -154,7 +165,7 @@ export const runScalogram: TaskRunner = async (job) => {
   for (let u = 0; u < units.length; u++) {
     const unit = units[u]
     const bins = unit.span.to - unit.span.from
-    const depth = reachBinsFor(job.params, job.mc.binsize, bins, unit.circular)
+    const depth = reachBinsFor(job.params, bins, unit.circular)
     await job.breathe()
     job.progress(u, units.length, unit.name)
     if (unit.circular) circularUnits++
@@ -202,11 +213,11 @@ export const runScalogram: TaskRunner = async (job) => {
   }
 
   const colours = ribbonColours(quantiles.length)
-  const cut = reachBp === 0 ? '' : ` · within ${formatBp(reachBp)}`
+  const cut = reach === 0 ? '' : ` · within ${formatBp(reach * job.mc.binsize)}`
   const outputs: TaskOutput[] = quantiles.map((quantile, index) => {
     const profile: ProfileOutput = {
       kind: 'profile',
-      id: `scalogram-q${Math.round(quantile * 100)}${reachBp === 0 ? '' : `-${reachBp}`}`,
+      id: `scalogram-q${Math.round(quantile * 100)}${reach === 0 ? '' : `-${reach}b`}`,
       // The cut is on **every** band, not on the group, because a lane can be
       // dragged out of its group and has to go on saying what it is.
       label: `Scalogram ${Math.round(quantile * 100)} %${cut}`,

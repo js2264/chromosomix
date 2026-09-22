@@ -34,7 +34,16 @@ import { TRACK_CORRELATION_TASK } from '@/analysis/tasks/trackcorr'
 import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
 import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
-import { defaultParams, type AnalysisContext, type AnalysisTask, type Params } from '@/analysis/types'
+import { METAPLOT_TASK } from '@/analysis/tasks/metaplot'
+import { FRIP_TASK } from '@/analysis/tasks/frip'
+import { TASKS } from '@/analysis/registry'
+import {
+  defaultParams,
+  type AnalysisContext,
+  type AnalysisTask,
+  type NumberParam,
+  type Params,
+} from '@/analysis/types'
 import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { ParamForm } from '@/ui/ParamForm'
 import { pickLocus, resetPick } from '@/ui/mapPick'
@@ -242,20 +251,83 @@ describe('P(s)', () => {
   })
 })
 
+/**
+ * **Every matrix setting is a number of bins, or of diagonals, and never a
+ * length of genome (§18.2).**
+ *
+ * The rule used to be the other way round: a length was asked for in base pairs
+ * and the form printed *n bins at 1 kb* under the box, translating what the
+ * reader typed into what the task would do. Two things were wrong with that. The
+ * quantity a matrix parameter names — a scan band, a shift, a stratum, a
+ * separation between two anchors — *is* a count of the grid's own cells, so the
+ * translation was the reader doing arithmetic the run then undid; and the same
+ * typed number meant a different thing on every rung of an `.mcool`. So the
+ * boxes ask in bins, the caption is gone with the boxes it was for, and what a
+ * run came to in base pairs is said once by the runner, on the file open.
+ *
+ * The exception is the one thing bins are not a unit of: a **1D track**. A
+ * metaplot's flank, a FRiP's sampling step and a track correlation's window are
+ * base pairs and stay base pairs, and none of the three carries a bin count.
+ */
 describe('the units a form asks in', () => {
+  /** Every number parameter of every task, with the task that owns it. */
+  const numbers = (): Array<{ task: string; key: string; unit: string | undefined }> =>
+    TASKS.flatMap((task) =>
+      task.params
+        .filter((param): param is NumberParam => param.kind === 'number')
+        .map((param) => ({ task: task.id, key: param.key, unit: param.unit })),
+    )
+
+  it('asks no box for a matrix distance in base pairs', () => {
+    // `cellqc` is the one task whose base-pair numbers are not a grid at all:
+    // its three band edges are Nagano et al.'s published separations, are what
+    // the phasing plot's own axes print, and are never turned into bins by
+    // anything — the histogram measures a separation in base pairs and compares
+    // it there. The three 1D tasks are the stated exception.
+    const onTracks = new Set(['metaplot', 'frip', 'trackcorr', 'cellqc'])
+    const inBp = numbers().filter((param) => param.unit === 'bp' && !onTracks.has(param.task))
+    expect(inBp).toEqual([])
+  })
+
+  it('asks every distance it converted in bins, and says so beside the box', () => {
+    const wanted: Record<string, string[]> = {
+      scalogram: ['reach'],
+      apa: ['window', 'minShift', 'maxShift', 'minSep', 'maxSep'],
+      chromosight: ['minDist', 'maxDist', 'minSeparation'],
+      hicrep: ['maxDistance', 'smooth'],
+      insulation: ['window', 'spacing'],
+      di: ['window', 'spacing'],
+      expected: ['minSeparation'],
+    }
+    for (const [task, keys] of Object.entries(wanted)) {
+      const found = numbers().filter((param) => param.task === task && param.unit === 'bins')
+      expect(found.map((param) => param.key).sort(), task).toEqual([...keys].sort())
+    }
+  })
+
   /**
-   * A caption reading "10 bins at 1.0 kb" under a box is a promise about what
-   * the task will do, and it is only a promise the *matrix* tasks can keep.
-   * Track correlation reads bigWigs and can run with no map open at all, so its
-   * bin size has nothing to be measured against — it printed the file's
-   * resolution beside a number that has nothing to do with it.
+   * A 1D quantity keeps its unit and gains no mention of bins — in its label, in
+   * its unit or in its hint. Track correlation is the case the rule was written
+   * from: it correlates bigWigs and can run with no contact map open at all, so
+   * its window had nothing to be a count of, and the control was called *bin
+   * size* and printed `1 bin at 10.0 kb` beside a box reading 10,000.
    */
-  it('prints no bin count beside track correlation’s bin size', () => {
-    const view = form(TRACK_CORRELATION_TASK)
-    expect(asks(view, 'bin at')).toBe(false)
-    expect(asks(view, 'bins at')).toBe(false)
-    expect(view.value.binsize).toBe(100)
-    view.destroy()
+  it('says nothing about bins on a control that reads a track', () => {
+    for (const task of [TRACK_CORRELATION_TASK, METAPLOT_TASK, FRIP_TASK]) {
+      const view = form(task)
+      expect(asks(view, 'bin'), task.id).toBe(false)
+      view.destroy()
+    }
+    expect(form(TRACK_CORRELATION_TASK).value.binsize).toBe(100)
+  })
+
+  it('prints no bin count under any box, on any task', () => {
+    for (const task of TASKS) {
+      const view = form(task)
+      expect(asks(view, 'bin at'), task.id).toBe(false)
+      expect(asks(view, 'bins at'), task.id).toBe(false)
+      view.destroy()
+    }
   })
 
   it('asks insulation for a diamond in bins', () => {

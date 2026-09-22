@@ -53,6 +53,8 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'resolution',
     label: 'read features at',
+    // Base pairs, and no bin count beneath it: a FRiP reads tracks, and a
+    // track's sampling step is not a count of a contact map's bins (§18.2).
     unit: 'bp',
     hint: `0 is auto: about ${FEATURE_SAMPLES} samples across a feature of the set’s median width.`,
     default: 0,

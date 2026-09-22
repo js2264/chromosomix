@@ -22,6 +22,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   0-based. §26 is now the contract for what the surfaces share — coordinates, units, toggles, words,
   colour, shapes — and this release brings the shared machinery into line with it.
 
+- **Every matrix setting is a number of bins, or of diagonals — never kb or Mb (§18.2).** A scan
+  band, a shift, a stratum, a near-diagonal trim and the separation between two anchors are all
+  counts of the file's own cells: the runner's first act on a length in base pairs was to divide it by
+  the bin size, so the reader was doing arithmetic the run then undid, and the same typed number meant
+  different things on two rungs of one `.mcool`. The scalogram's *look out to*, the APA's two control
+  shifts and its separation range, pattern detection's three scan distances and reproducibility's
+  furthest separation now ask in bins, with their defaults translated: a 100 kb control shift, which
+  cleared a 43-bin pileup window at 1 kb and sat *inside* it at 10 kb, is 50 bins and clears it at
+  every resolution. **The `n bins at 1 kb` caption under those boxes is gone** with the boxes it was
+  for, and what a run came to in base pairs is said once by the run itself, about the file open. Two
+  things did not move: a **1D track's** flank, sampling step or window is a length of genome and is
+  still asked in base pairs — track correlation's is no longer called a *bin size* either — and a
+  plot's own axes, including the `.scool` phasing plot's published band edges, stay in kb and Mb.
+
 - **One shape for *which sequences to run on*, and it is the tick boxes (§18.2).** Nine analysis
   tasks asked that question and they asked it two ways: four with a column of tick boxes, five —
   P(s), the scalogram, insulation, the directionality index and the HiC score — with a dropdown whose

@@ -55,11 +55,15 @@ const PARAMS: readonly ParamSpec[] = [
       { value: 'end', label: 'end' },
     ],
   },
+  // **Base pairs, and no bin count under either of them.** A metaplot reads
+  // tracks; a track has no bins of the map's (§18.2), and the flank a reader
+  // wants round a TSS is 2 kb whatever resolution some contact map beside it
+  // happens to be open at.
   {
     kind: 'number',
     key: 'flank',
     label: 'flank',
-    hint: 'Read this far either side.',
+    hint: 'Read this far either side of the anchor.',
     default: 2000,
     min: 0,
     unit: 'bp',
@@ -68,7 +72,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'step',
     label: 'resolution',
-    hint: 'Base pairs per column of the plot.',
+    hint: 'One column of the plot per this many base pairs.',
     default: 50,
     min: 1,
     unit: 'bp',

@@ -4777,9 +4777,28 @@ the tooltips and the commands, and the copy that goes stale is the one that does
 **A hard-coded analysis parameter is a bug.** The window of a diamond insulation, the flank of a
 metaplot, the number of controls in a distance-matched pileup, the quantile count of a saddle: each of
 these is the thing a reader changes to answer their actual question, and a task that fixes one is a
-task somebody has to leave the app to redo. Where a parameter is a length it is offered in **base
-pairs** and the resolved bin count is shown beneath it, because bins are a property of the file and
-base pairs are a property of the question.
+task somebody has to leave the app to redo.
+
+**Every setting about the matrix is a number of bins, or a number of diagonals, and never a length of
+genome.** It was the other way round — a length was asked for in base pairs, with the resolved bin
+count printed beneath the box — and that rule had it backwards in both directions. A scan band, a
+diamond, a shift, a stratum, a near-diagonal trim, the separation between two anchors: every one of
+them *is* a count of the grid's own cells, which is why the runner's first act on a base-pair answer
+was to divide it by the bin size and round. So the reader was doing arithmetic the run then undid, and
+the same typed number meant one thing on one rung of an `.mcool` and another on the next — 100 kb was
+a control clear of a 43-bin window at 1 kb and a control inside it at 10 kb, with nothing on screen
+saying which. Where the quantity is a count of diagonals rather than of bins it says `diagonals`,
+which is the HiC score's parameter and the near-diagonal trims. **The bin count under the box is gone
+with the boxes it was for**, and what a run came to in base pairs is said once, by the runner, about
+the file actually open: *a 50-bin window is 2 Mb at this file's 40 kb resolution*.
+
+Two things are not that, and neither is an exception waiting to be tidied away. **A 1D track has no
+bins of the matrix's**: a metaplot's flank, a FRiP's sampling step and a track correlation's window are
+lengths of genome, they are the same length at every resolution, and they are asked in base pairs with
+no mention of bins in a label, a unit or a hint — a correlation over bigWigs can run with no contact
+map open at all. And **a plot's own axes stay in base pairs** (§26.2), so a pileup's `±21 kb`, a P(s)'s
+abscissa and the `.scool` phasing plot's published band edges are unaffected: those three numbers are
+a citation and an axis label, and in bins they would be a different number on every file.
 
 Four parameter kinds refer to what is already loaded rather than to a number, and all four **default to
 the starred entry** where the concept exists — the same star the 1D browser's feature search is keyed
@@ -5205,11 +5224,14 @@ a factor of two when the balancer drops a single distant cell, and its median do
 **interpolated** between the two separations the cumulative crosses the threshold between, because
 rounding to the bin would quantise five smooth bands onto multiples of the bin size and step all five
 in the same places.
-Its reach is what it costs, and the default is **the whole sequence** because that is the only
-unbounded answer: cut at 1 Mb on a 250 Mb chromosome and the ninetieth centile is the ninetieth centile
-*of what is within 1 Mb*, a different number wearing the same name. The estimate prices the uncut run
-as the square it is and says so; a reader who sets a cut gets the cut in the lane's own label, on every
-band, so the picture cannot be mistaken for the unbounded one.
+Its reach is what it costs, it is a number of **bins** — it is the depth of the band the run reads,
+and asked in base pairs it was divided by the bin size before it meant anything — and the default is
+**0, the whole sequence**, because that is the only unbounded answer: cut at a thousand bins on a
+250,000-bin chromosome and the ninetieth centile is the ninetieth centile *of what is within a
+thousand bins*, a different number wearing the same name. The estimate prices the uncut run as the
+square it is and says so; a reader who sets a cut is told what it came to in base pairs on this file
+and gets the cut in the lane's own label, on every band, so the picture cannot be mistaken for the
+unbounded one.
 
 *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
@@ -5234,7 +5256,10 @@ than about the contacts. Per cell, from its own pixels: total contacts, cis frac
 of its contacts in each of four separation bands — Nagano et al. (2017)'s, whose *near* against
 *mitotic* scatter is the cell cycle drawn as a horseshoe. The edges are typed in base pairs with that
 paper's mouse-sized defaults, because a yeast chromosome is inside the near band and the run says so
-rather than drawing a column of points on the axis. It costs exactly what a pseudo-bulk of the same
+rather than drawing a column of points on the axis. **Base pairs and not bins**, which is the one
+matrix task where that is so: the three edges are a citation, they are what the scatter's own axes and
+the table's own column heads print, and nothing in the run ever counts bins with them — the histogram
+measures a contact's separation in base pairs and compares it there. It costs exactly what a pseudo-bulk of the same
 cells costs — the same reads in the same order, with one accumulator per cell instead of one shared —
 and its numbers land back in the **Cells table** as sortable columns, because the gesture they are
 for is the one that table already has: sort, tick a run of rows, sum them. It does not assign a
@@ -5409,6 +5434,11 @@ neighbour suppression and a Benjamini-Hochberg q-value on every call. **The patt
 and not five tasks**: they are one computation with different templates, and every threshold under
 the picker follows the picker because chromosight tuned each of them per template — a form that
 baked one preset's `pearson` into a box would report borders at twice the threshold upstream uses.
+A reader who takes the thresholds over types the three distances — the scan band, the floor away
+from the diagonal and the gap between two calls — as **counts of bins**, since each is a count of the
+grid's own cells and upstream divides its own base-pair config by the bin size before using it. The
+presets stay in base pairs, because they are generated from the installed package and must not be
+edited, and they are converted in exactly one place.
 It emits four things and the split is the point: a **loop set** (a bedpe, or a BED for the patterns
 that live on the diagonal) that lands on the map as an overlay the moment the run finishes; the
 **pileup** of every window it called, drawn on chromosight's own fixed 0–2 seismic scale so it can
@@ -5445,7 +5475,10 @@ near 0.9 for two *unrelated* maps of the same assembly, because almost all of th
 one gradient every Hi-C map has; and without the smoothing the coefficient measures depth as much as
 structure, which is why two shallow replicates would score worse than two deep ones of different
 conditions. It reads a **band** rather than a square, so a mammalian chromosome is a few dozen
-bounded reads.
+bounded reads. How far it compares is a **number of strata**, capped at and defaulting to 500: a
+stratum is a diagonal offset — which is the whole reason two maps on different grids cannot be
+compared at all — so the 5 Mb this used to be asked in was divided by the bin size in two places, and
+reached the cap on every file at 10 kb or finer.
 
 **The other maps are the deck's**, in the order they are on screen and under the reader's own names
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
@@ -5565,8 +5598,8 @@ domain to the right of where it belongs, and produced a figure with the body aga
 the whole flank on the far side. The body's two ends are pinned to their **own grid lines** for every
 domain whatever its length, rather than the whole window being stretched evenly — otherwise a 20 kb
 domain's boundary lands on one column and a 200 kb domain's on another and averaging them softens
-both. The distance-matched control is shifted by a **multiple of the window** rather than a length in
-base pairs, because a control 100 kb from a megabase-wide window is mostly the window and the ratio
+both. The distance-matched control is shifted by a **multiple of the window** rather than by a count
+of bins, because a control fifty bins from a thousand-bin window is mostly the window and the ratio
 comes out at 1 everywhere. And the statistic under it is the **domain's own corner against the same
 block across its boundary** rather than P2LL, whose lower-left quadrant here is the domain's two
 neighbours and reads well above 1 on a set with no boundaries in it.
@@ -8066,6 +8099,9 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
 - **A bin size** takes `resolutionLabel`: `1 kb`, `12.5 kb`, `1 Mb` — trimmed, because a resolution
   is a round number by construction. **A measured span** takes `fmt.bp` and keeps its decimal:
   `400.0 kb` says it was measured to the hundred bases.
+- **A setting about the matrix is not a span at all**: it is a count of bins, or of diagonals, and is
+  printed as a count with `bins` or `diagonals` beside it (§18.2). An axis, a caption and a figure's
+  own numbers stay spans — so the same run reads `50 bins` on its form and `2 Mb` on its lane.
 - **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local, six
   characters.
 - A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.

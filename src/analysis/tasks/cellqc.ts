@@ -31,6 +31,21 @@
  * result. So the edges are typed in base pairs, the defaults are the paper's,
  * and the run says when the assembly cannot reach the band it was asked about.
  *
+ * ## Why these three stayed in base pairs when the matrix settings moved to bins
+ *
+ * §18.2 asks every matrix parameter in **bins**, because a reader setting one is
+ * choosing a number of the file's own cells and the runner was dividing base
+ * pairs by the bin size to get there. Neither half of that is true here. These
+ * three are never converted to bins by anything: the histogram measures a
+ * contact's separation as `|bin2 − bin1| × binsize` and compares it in base
+ * pairs, so the arithmetic runs the *other* way; and the numbers are not a
+ * reader's choice of grid but a **citation** — a reader types what Nagano et al.
+ * printed, and in bins the same band would be a different number on every
+ * `.scool` and unrecognisable on all of them. They are also what the phasing
+ * plot's own axes and the table's own column heads say, and a plot's axes stay
+ * in base pairs (§26.2). So: base pairs, deliberately, and the one exception in
+ * the group.
+ *
  * ## What it does not do
  *
  * It does not **cluster** the cells and it does not assign a phase label. The
