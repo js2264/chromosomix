@@ -16,12 +16,11 @@
  * honest way to get it and leaves two provenance lines rather than one.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import { diagonalTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -61,20 +60,11 @@ export function windowLadder(params: Params): number[] {
   return out
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
-}
-
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'window',
-    label: 'Window',
+    label: 'window',
     hint: 'The diamond is this many bins wide on each side of the bin it scores.',
     default: 10,
     min: 1,
@@ -84,7 +74,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'scales',
-    label: 'Scales',
+    label: 'scales',
     hint: 'One track per scale, each twice the width of the last.',
     default: 1,
     min: 1,
@@ -93,16 +83,14 @@ const PARAMS: readonly ParamSpec[] = [
     slider: true,
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'Sequence',
-    sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * cooltools' `ignore_diags`, and the same rule the compartment chain applies:
      * `0` counts every cell, `1` drops the main diagonal, `2` drops it and the
@@ -127,7 +115,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of the diamond',
+    label: 'minimum coverage of the diamond',
     hint: 'Below this fraction of usable cells the bin gets no score at all.',
     default: 0.5,
     min: 0,
@@ -140,7 +128,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'call',
-    label: 'Call boundaries from the minima',
+    label: 'call boundaries',
     hint: 'Adds a BED of boundary calls, drawn on the map.',
     default: true,
     section: 'Boundaries',
@@ -148,7 +136,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'prominence',
-    label: 'Minimum prominence',
+    label: 'minimum prominence',
     hint: 'How far the track must climb on both sides of a minimum, in log2 units.',
     default: 0.2,
     min: 0,
@@ -161,7 +149,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'spacing',
-    label: 'Minimum spacing',
+    label: 'minimum spacing',
     // In bins, like the window above it. One form asking for one distance in
     // bins and another in base pairs is a form a reader has to read twice, and
     // both of these are distances along the same track.
@@ -192,7 +180,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'domains',
-    label: 'Also the domains between them',
+    label: 'domains between them',
     hint: 'A second overlay: the span from each call to the next, as a BED.',
     default: true,
     when: (params) => params.call === true,
@@ -204,28 +192,41 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
   const windows = windowLadder(params)
   const widest = windows[windows.length - 1]
-  const contig = regionContig(context, regionOf(params))
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
 
   // A window wider than the sequence it is scoring has no bin at which the whole
   // diamond fits, so every bin comes back NaN — an empty track, produced at full
-  // cost. Better to say so than to draw nothing and let the reader wonder.
-  if (contig !== undefined && contig.bins <= widest * 2) {
+  // cost. Better to say so than to draw nothing and let the reader wonder. One
+  // ticked sequence is named; several are counted.
+  const long = chosen.filter((entry) => entry.bins > widest * 2)
+  if (long.length === 0) {
+    const one = chosen.length === 1 ? chosen[0] : null
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `${contig.name} is ${contig.bins.toLocaleString()} bins and the widest diamond is ` +
-        `${widest.toLocaleString()} on each side, so no bin on it has a whole window either ` +
-        'side. Use a narrower window, fewer scales, or a longer sequence.',
+        one !== null
+          ? `${one.name} is ${one.bins.toLocaleString()} bins and the widest diamond is ` +
+            `${widest.toLocaleString()} on each side, so no bin on it has a whole window ` +
+            'either side. Use a narrower window, fewer scales, or a longer sequence.'
+          : `No ticked sequence is longer than twice a ${widest.toLocaleString()}-bin diamond, ` +
+            'so no bin on any of them has a whole window either side. Use a narrower window, ' +
+            'fewer scales, or tick a longer sequence.',
     }
   }
 
-  const extent: [number, number] =
-    contig === undefined
-      ? [0, context.nBins]
-      : [contig.startBin, contig.startBin + contig.bins]
+  const extent = extentOf(long)
 
   const framing = context.framing
   if (
@@ -250,7 +251,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // reads: one square over a chromosome was four requests and the truth is four
   // per tile, which on mouse chr1 is off by two orders of magnitude.
   const each = balance ? 5 : 4
-  if (contig !== undefined) {
+  if (long.length === 1) {
+    const contig = long[0]
     const tiles = diagonalTiles(contig.bins, widest)
     const requests = tiles * each
     return {
@@ -264,10 +266,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  // Every sequence, tile by tile. Bounded per contig and unbounded in the count
-  // of them, which on a metagenome is the expensive shape — so it is priced as a
-  // scan and gated like one, with the count named.
-  const long = context.contigs.filter((entry) => entry.bins > widest * 2)
+  // Every ticked sequence, tile by tile. Bounded per contig and unbounded in the
+  // count of them, which on a metagenome is the expensive shape — so it is
+  // priced as a scan and gated like one, with the count named.
   const tiles = long.reduce((sum, entry) => sum + diagonalTiles(entry.bins, widest), 0)
   return {
     class: 'scan',
@@ -275,8 +276,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
-      `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals. ` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'square' : 'squares'} along their diagonals.`,
   }
 }
 

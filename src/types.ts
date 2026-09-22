@@ -505,12 +505,18 @@ export interface ViewState {
    * Whether the map is turned 45° — position along the bottom, distance from the
    * diagonal up the side (`render/rotate.ts`).
    *
-   * **Absent means turned**, and only an explicit `false` is a square map. That
-   * asymmetry is the default expressed in a key that has to keep round-tripping:
-   * a band along a genomic axis is what a contact map is *for* on a block that
-   * has a diagonal, and the square is the thing a reader asks for. Written down
-   * only when they do, so the hash of an ordinary view stays short and a link
-   * with no `flip` in it opens the way this viewer opens.
+   * **Absent means square**, and only an explicit `true` is a turned map.
+   *
+   * It was the other way round, and the argument for it was that a band along a
+   * genomic axis is what a contact map is *for* on a block that has a diagonal.
+   * The trouble is where that default lands: `isTurnable` is true for exactly one
+   * kind of block — one sequence against itself — so *every* map it applied to
+   * was a single chromosome, and opening one from the Chromosomes table made the
+   * picture change shape as you arrived. A reader who clicks a chromosome is
+   * asking to see that chromosome, not to have it rotated; the turn is a reading
+   * they ask for, and now it is written down when they do. The hash of an
+   * ordinary view still says nothing about it, and a link with no `flip` in it
+   * still opens the way this viewer opens — the way has changed.
    *
    * Part of what is being looked at rather than how it is shaded, so §11's rule
    * applies and a link carries it. Ignored by any view whose block has no

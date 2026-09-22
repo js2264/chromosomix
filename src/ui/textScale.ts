@@ -195,8 +195,8 @@ function round(px: number): number {
  * it is right. The ends grey out, so the range is visible without being tried.
  *
  * Built by a factory and mounted twice, exactly as `trackHeightField` and
- * `transparencyField` are: one preference about one thing, offered in the two
- * places a reader is standing when they want it.
+ * `everyTrackOpacityField` are: one preference about one thing, offered in the
+ * two places a reader is standing when they want it.
  */
 export function textScaleField(): HTMLElement {
   const readout = el('span', { class: 'clip-note text-scale-note' })
@@ -214,7 +214,7 @@ export function textScaleField(): HTMLElement {
   )
   const sync = (): void => {
     const scale = getTextScale()
-    readout.textContent = `${Math.round(scale * 100)}%`
+    readout.textContent = String(Math.round(scale * 100))
     smaller.disabled = scale <= TEXT_SCALE_STEPS[0]
     larger.disabled = scale >= TEXT_SCALE_STEPS[TEXT_SCALE_STEPS.length - 1]
   }
@@ -223,7 +223,19 @@ export function textScaleField(): HTMLElement {
     'div',
     { class: 'field field-block' },
     el('span', { class: 'field-label', text: 'text size' }),
-    el('div', { class: 'plot-icon-row' }, smaller, readout, larger),
+    // The unit after the control, not inside the readout — which is where
+    // `opacity` beside it puts its own, and the two are deliberately one
+    // question asked twice (`ui/trackControls.ts` → `fieldPair`). `135%` between
+    // the chevrons and a bare `100` with a `%` after them made the pair read as
+    // two kinds of control.
+    el(
+      'div',
+      { class: 'plot-icon-row' },
+      smaller,
+      readout,
+      larger,
+      el('span', { class: 'clip-note field-unit', text: '%' }),
+    ),
   )
   // The store outlives this control — a card is rebuilt on every navigation and
   // nothing hands the outgoing one a teardown — so the listener retires itself

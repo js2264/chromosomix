@@ -130,9 +130,12 @@ describe('the ticks', () => {
       selection.set(['I', 'II'])
       const chosen = el.querySelector('.seq-chosen')
       expect(chosen?.classList.contains('hidden')).toBe(false)
-      expect(chosen?.textContent).toContain('showing 2 of 4')
+      // `2 of 4 ticked`, not `showing 2 of 4`: under a list, *showing* is read
+      // as a count of the rows on screen, and beside a map framed on one window
+      // it contradicts the breadcrumb.
+      expect(chosen?.textContent).toContain('2 of 4 ticked')
 
-      buttonNamed(el, 'the whole genome')?.click()
+      buttonNamed(el, 'show the whole genome')?.click()
       expect(selection.isWhole).toBe(true)
     })
   })

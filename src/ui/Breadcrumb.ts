@@ -20,10 +20,15 @@
 
 import { KEYS, keyBadge, withKey } from './commands'
 import { icon } from './icons'
+import { windowLabel } from '../genome/assembly'
 import { cellsOf, selectionOf } from '../state/ViewState'
 import type { DerivedRung, Rung } from '../metacooler/coarsen'
 import type { ViewState } from '../types'
 import { el } from './dom'
+import { resolutionLabel } from '../units'
+
+/** Re-exported: the label moved to `src/units.ts`, and this is where callers found it. */
+export { resolutionLabel }
 
 /**
  * The four things the root crumb can be.
@@ -184,29 +189,6 @@ export function rootTable(
 }
 
 /**
- * `1 kb`, `50 kb`, `1 Mb` — a bin size, written the way a reader says it.
- *
- * Not `fmt.bp`, and the difference is the decimal: that formatter is for
- * measured lengths and always carries one, so a 1 kb rung came out `1.0 kb` and
- * a 1 Mb one `1.00 Mb`. A resolution is a round number by construction — it is
- * what `cooler zoomify` was given — so the places are trimmed and only the ones
- * that say something survive: `12.5 kb` keeps its half, `1 kb` does not gain a
- * zero. Falls back to base pairs below a kilobase, which is where a Micro-C
- * ladder starts.
- */
-export function resolutionLabel(bp: number): string {
-  if (!Number.isFinite(bp) || bp <= 0) return '—'
-  if (bp >= 1e6) return `${trim(bp / 1e6)} Mb`
-  if (bp >= 1e3) return `${trim(bp / 1e3)} kb`
-  return `${trim(bp)} bp`
-}
-
-/** Two places at most, and none where they would all be zeros. */
-function trim(value: number): string {
-  return String(Number(value.toFixed(2)))
-}
-
-/**
  * Where the resolution radios' `name` comes from.
  *
  * One group per rendered bar rather than one per application: `render` replaces
@@ -250,6 +232,9 @@ export class Breadcrumb {
       return
     }
     this.trail(state)
+    // No ladder in a browser: there is no matrix to read at a coarser grid, and
+    // often no cooler behind the tracks at all.
+    if (state.view === 'browser') return
     // **Last, after the place.** The resolution is not a step of the trail: it
     // does not contain the crumbs before it and clicking it does not go
     // anywhere — it is how finely the same place is drawn. It spent a release as
@@ -263,6 +248,17 @@ export class Breadcrumb {
   /** The trail proper: file → table → genome → contig → region. */
   private trail(state: ViewState): void {
     this.push(this.props.fileLabel, () => this.props.onOpenFile(), false, 'file')
+    // **The 1D browser has a trail too**, and it used to have none: the host was
+    // emptied in that branch, so the row that says which assembly and which
+    // chromosome a reader is on vanished the moment the map's eye was pressed
+    // and came back when it was pressed again. §5.5 gives every view a trail
+    // and §21.3 has an embed carry "the ordinary breadcrumb"; a UCSC or IGV
+    // reader looks for this row first, and "up" from a chromosome was not one
+    // click anywhere in this view.
+    if (state.view === 'browser') {
+      this.pushBrowser(state)
+      return
+    }
     this.pushEntryPicker()
     this.pushRootPicker(state)
     this.pushCells(state)
@@ -305,9 +301,52 @@ export class Breadcrumb {
       if (state.region2 !== undefined) {
         this.push(`${contig} × ${state.region2.split(':')[0]}`, undefined, true)
       } else if (hasCoordinates) {
-        this.push(state.region, undefined, true)
+        // The window alone, under the crumb that already names the sequence —
+        // as the `contig × contig2` branch one line above does. It used to push
+        // the whole region string, so the row ended "› IV › IV:1000000-1400000"
+        // with the view's own heading and its locus box printing the same
+        // string underneath: three copies of one place in three typefaces, and
+        // a reader scanning them for a difference that is not there.
+        this.push(windowLabel(state.region), undefined, true)
       }
     }
+  }
+
+  /**
+   * A browser's trail: `genome › Whole genome › IV › 1,000,001-1,400,000`.
+   *
+   * The root is the whole assembly rather than a table, because a genome opened
+   * as tracks has no table to go back up to — the chromosomes table is a
+   * cooler's view of its own `/chroms` (§5.8) — and "the whole genome" is both
+   * where a browser opens and the one place above the sequence in front of the
+   * reader. No picker on it for the same reason: there is no second table to
+   * pick, and a control with nothing to offer is absent rather than greyed
+   * (§8.5).
+   *
+   * The locus is already the display form (`ViewState.locus` is 1-based
+   * inclusive, written by `formatLocus`), so the sequence name is what is
+   * before the colon and the window is what is after it. Under the sequence's
+   * own crumb the window is printed alone: the map's last crumb repeated the
+   * contig it hangs under, which put the same string on screen three times
+   * running.
+   */
+  private pushBrowser(state: ViewState): void {
+    const locus = state.locus
+    const whole: ViewState = { uri: state.uri, view: 'browser' }
+    this.push(
+      ROOT_LABEL.whole,
+      locus === undefined ? undefined : () => this.props.onNavigate(whole),
+      locus === undefined,
+    )
+    if (locus === undefined) return
+    const colon = locus.lastIndexOf(':')
+    const contig = colon < 0 ? locus : locus.slice(0, colon)
+    this.push(
+      contig,
+      colon < 0 ? undefined : () => this.props.onNavigate({ ...whole, locus: contig }),
+      colon < 0,
+    )
+    if (colon >= 0) this.push(locus.slice(colon + 1), undefined, true)
   }
 
   /**
@@ -465,6 +504,54 @@ export class Breadcrumb {
   }
 
   /**
+   * Every rung as a dropdown, for a ladder too long to lay out as stops.
+   *
+   * The word `resolution` stays where it is and this sits beside it, so the row
+   * reads the way it reads at every other length — a label and its control —
+   * and the control *is* the list: a 4DN `.mcool` has eleven rungs and all
+   * eleven are in it, in the ladder's own order, each wearing the `*` and the
+   * tooltip its chip would have worn. What it replaces said less in the same
+   * space: a slider, which shows how many rungs there are and names none of
+   * them, and one chip naming the rung you are on.
+   *
+   * The × for a rung the reader added cannot live inside a `<select>`, so it
+   * follows the picker when the rung being read is one of theirs — the same
+   * button the chip carries, in the one place it can still be reached.
+   */
+  private ladderPicker(rungs: Array<Rung & { derived?: DerivedRung }>, at: number): HTMLElement {
+    const select = el('select', {
+      class: 'select res-pick',
+      attrs: { 'aria-label': 'resolution' },
+    }) as HTMLSelectElement
+    for (const [index, rung] of rungs.entries()) {
+      select.appendChild(
+        el('option', {
+          value: String(index),
+          text: resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*'),
+          attrs: { title: this.rungWhy(rung) },
+        }),
+      )
+    }
+    select.value = String(at)
+    select.addEventListener('change', () => {
+      const picked = rungs[Number(select.value)]
+      if (picked !== undefined) this.pick(picked)
+    })
+    const standing = rungs[at]
+    if (standing?.derived === undefined) return select
+    const label = resolutionLabel(standing.binsize) + '*'
+    return el('span', { class: 'res-pick-wrap' }, select, this.dropButton(standing.binsize, label))
+  }
+
+  /** What a rung is, in bins — the same sentence its chip and its option carry. */
+  private rungWhy(rung: Rung & { derived?: DerivedRung }): string {
+    return rung.derived === undefined
+      ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
+      : `${rung.binsize.toLocaleString('en-US')} bp per bin — not in this file: ` +
+          `${rung.derived.factor} of its ${rung.derived.from.binsize.toLocaleString('en-US')} bp bins, added up`
+  }
+
+  /**
    * The resolution, at the far end of the bar: a slider over a row of stops.
    *
    * It was a `<select>` of raw bin counts — `1000`, `5000`, `50000` — sitting
@@ -509,32 +596,41 @@ export class Breadcrumb {
     // **Past a handful of rungs the stops stop being stops.** Eleven chips is
     // six hundred pixels of breadcrumb, which pushes the place the reader is
     // looking at off the left of a laptop screen — and a `.mcool` published by
-    // 4DN has eleven. Above the cap the slider carries the walk on its own and
-    // one chip says where it has got to, which is the same two facts in a fifth
-    // of the width; the slider is keyboard-operable in its own right, so what is
-    // lost is the aim-and-click, which is what there was no room for anyway.
+    // 4DN has eleven. Above the cap the row collapses to a dropdown beside the
+    // word (see {@link ladderPicker}), which is the one shape that still *shows*
+    // every rung: what stood here before was the slider plus a single chip, and
+    // between them they said where the walk had got to without ever saying what
+    // else there was to walk to.
     const listed = rungs.length <= MAX_STOPS
     const stops = el('div', {
       class: 'res-stops',
       attrs: listed ? { role: 'radiogroup', 'aria-label': 'resolution' } : {},
     })
-    const slider = el('input', {
-      class: 'res-slider',
-      type: 'range',
-      title: `Drag to a coarser or finer resolution — ${rungs
-        .map((rung) => resolutionLabel(rung.binsize))
-        .join(', ')}`,
-      attrs: {
-        min: '0',
-        max: String(Math.max(1, rungs.length - 1)),
-        step: '1',
-        'aria-label': 'resolution',
-      },
-    }) as HTMLInputElement
-    slider.value = String(at)
-    // A one-rung ladder has nothing to slide along; the `+` beside it is the
-    // only control there is, and a dead slider next to it would be furniture.
-    if (rungs.length < 2) slider.disabled = true
+    // **A one-rung ladder is drawn without a slider.** There is nothing to slide
+    // along, and the comment that used to stand here said so and then disabled
+    // the control anyway — which is furniture by its own account, and against
+    // the rule §8.5 and §18.1 both state: a control that cannot keep its
+    // promise is absent, not greyed. A plain `.cool` is the commonest file a
+    // lab opens, so the dead slider was on the row every reader looks at, and a
+    // greyed track beside a single chip invites a drag that does nothing. It
+    // comes back with the second rung, which is what the `+` beside it makes.
+    const slider =
+      rungs.length < 2 || !listed
+        ? null
+        : (el('input', {
+            class: 'res-slider',
+            type: 'range',
+            title: `Drag to a coarser or finer resolution — ${rungs
+              .map((rung) => resolutionLabel(rung.binsize))
+              .join(', ')}`,
+            attrs: {
+              min: '0',
+              max: String(rungs.length - 1),
+              step: '1',
+              'aria-label': 'resolution',
+            },
+          }) as HTMLInputElement)
+    if (slider !== null) slider.value = String(at)
 
     for (const [index, rung] of rungs.entries()) {
       // **The `*` is part of the label, not a decoration beside it.** A reader
@@ -542,30 +638,8 @@ export class Breadcrumb {
       // not contain, and the one place that fact is certain to be read is the
       // number itself.
       const label = resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
-      const why =
-        rung.derived === undefined
-          ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
-          : `${rung.binsize.toLocaleString('en-US')} bp per bin — not in this file: ` +
-            `${rung.derived.factor} of its ${rung.derived.from.binsize.toLocaleString('en-US')} bp bins, added up`
-      if (!listed) {
-        if (index !== at) continue
-        // The one chip a thinned ladder draws still carries its × when it is
-        // the reader's own: a nine-rung `.mcool` is exactly the file somebody
-        // adds a resolution to, and a stop with no way back off it would be a
-        // declaration that could only be undone by clearing storage.
-        stops.appendChild(
-          el(
-            'span',
-            {
-              class: `res-stop current${rung.derived === undefined ? '' : ' res-added'}`,
-              title: why,
-            },
-            el('span', { text: label }),
-            ...(rung.derived === undefined ? [] : [this.dropButton(rung.binsize, label)]),
-          ),
-        )
-        continue
-      }
+      const why = this.rungWhy(rung)
+      if (!listed) continue
       const radio = el('input', {
         class: 'res-radio',
         type: 'radio',
@@ -594,7 +668,7 @@ export class Breadcrumb {
     // On `change`, not `input`: dragging across a five-rung ladder would
     // otherwise re-open the file at every rung it passed over, which is four
     // reads nobody asked for and a picture that flickers through them.
-    slider.addEventListener('change', () => {
+    slider?.addEventListener('change', () => {
       const picked = rungs[Number(slider.value)]
       if (picked !== undefined && rungs.indexOf(picked) !== at) this.pick(picked)
     })
@@ -610,8 +684,8 @@ export class Breadcrumb {
             'not change.',
         },
         el('span', { class: 'res-label', text: 'resolution' }),
-        slider,
-        stops,
+        ...(slider === null ? [] : [slider]),
+        ...(listed ? [stops] : [this.ladderPicker(rungs, at)]),
         ...(onAdd === undefined
           ? []
           : [
@@ -624,7 +698,7 @@ export class Breadcrumb {
                     'aria-label': 'Add a resolution',
                     title:
                       'Look at this map at a resolution the file does not store — any whole ' +
-                      'number of its own bins added up (§3.4).',
+                      'number of its own bins added up.',
                   },
                   on: { click: () => onAdd() },
                 },
@@ -704,18 +778,35 @@ export class Breadcrumb {
       }
       menu.appendChild(item)
     }
+    arrow.setAttribute('aria-expanded', 'false')
     arrow.addEventListener('click', (event) => {
       event.stopPropagation()
       const opening = menu.classList.contains('hidden')
       menu.classList.toggle('hidden', !opening)
+      arrow.setAttribute('aria-expanded', String(opening))
       if (opening) {
         // Placed against the viewport from the arrow's own rect: the crumb row
         // scrolls horizontally, and a scroller clips what hangs out of it.
         const rect = arrow.getBoundingClientRect()
         menu.style.top = `${rect.bottom + 4}px`
         menu.style.left = `${rect.left}px`
-        // One outside click closes it; `once` means no listener outlives the menu.
-        window.addEventListener('click', () => menu.classList.add('hidden'), { once: true })
+        // An outside click closes it, **and so does Escape**, which was the one
+        // way out this menu did not have: every other transient surface in the
+        // app takes it (the drawers, the console, the right-click menu, a
+        // modal), so a floating list over the map was the only thing a reader
+        // could not back out of by the key they press to back out of anything.
+        // Each listener removes the other, so neither outlives the menu.
+        const close = (): void => {
+          menu.classList.add('hidden')
+          arrow.setAttribute('aria-expanded', 'false')
+          window.removeEventListener('click', close)
+          window.removeEventListener('keydown', onKey, true)
+        }
+        const onKey = (event: KeyboardEvent): void => {
+          if (event.key === 'Escape') close()
+        }
+        window.addEventListener('click', close, { once: true })
+        window.addEventListener('keydown', onKey, true)
       }
     })
     this.el.appendChild(el('span', { class: 'crumb-group' }, label, arrow, menu))

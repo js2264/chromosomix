@@ -137,6 +137,7 @@ metacooler-run tasks
 ## cistrans
 ##     Cis and trans per sequence
 ##       --sequences  Sequences
+##       --bars (default "cis")  Bars per sequence
 ##       --normalise (default "enrichment")  Off-diagonal value
 ##       --minContacts (default 10)  Least contact worth listing
 ##       --maxEdges (default 500)  Pairs to list
@@ -154,7 +155,7 @@ metacooler-run tasks
 ## expected
 ##     Contact probability P(s)
 ##       --scope (default "contig")  Scope
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --quantity (default "density")  Quantity
 ##       --factor (default 1.1)  Log bins per step
 ##       --minSeparation (default 0)  Minimum separation
@@ -167,7 +168,7 @@ metacooler-run tasks
 ##     Scalogram
 ##       --quantiles (default "standard")  Quantiles
 ##       --reach (default 0)  Look out to
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 1)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the distribution
 ##       --balance (default false)  Use balancing weights
@@ -183,7 +184,7 @@ metacooler-run tasks
 ##     Diamond insulation
 ##       --window (default 10)  Window
 ##       --scales (default 1)  Scales
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 2)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the diamond
 ##       --balance (default false)  Use balancing weights
@@ -195,7 +196,7 @@ metacooler-run tasks
 ## di
 ##     Directionality index
 ##       --window (default 50)  Window
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of each side
 ##       --balance (default false)  Use balancing weights
@@ -207,7 +208,7 @@ metacooler-run tasks
 ## hicscore
 ##     HiC score
 ##       --diagonals (default 3)  Diagonals
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the line
 ##       --balance (default false)  Use balancing weights
@@ -231,9 +232,9 @@ metacooler-run tasks
 ##       --sequences  Sequences
 ##       --thresholds (default "preset")  Thresholds
 ##       --pearson (default 0.3)  Score threshold
-##       --minDist (default 20000)  Nearest to the diagonal
-##       --maxDist (default 2000000)  Furthest from the diagonal
-##       --minSeparation (default 5000)  Nearest two calls may be
+##       --minDist (default 10)  Nearest to the diagonal
+##       --maxDist (default 1000)  Furthest from the diagonal
+##       --minSeparation (default 3)  Nearest two calls may be
 ##       --iterations (default 1)  Refinement passes
 ##       --maxPercUndetected (default 50)  Most undetectable pixels a window may hold
 ##       --maxPercZero (default 10)  Most empty pixels a window may hold
@@ -245,7 +246,7 @@ metacooler-run tasks
 ##     Reproducibility (HiCRep)
 ##       --against <file>  The other maps to compare with; repeat per map
 ##       --sequences  Sequences
-##       --maxDistance (default 5000000)  Furthest separation compared
+##       --maxDistance (default 500)  Furthest separation compared
 ##       --smooth (default 1)  Smoothing half-width
 ##       --balance (default false)  Use balancing weights
 ## 
@@ -289,13 +290,13 @@ metacooler-run tasks
 ##       --norm (default "matched")  Normalisation
 ##       --csPattern (default "loops")  Template
 ##       --controls (default 5)  Controls per pair
-##       --minShift (default 100000)  Smallest shift
-##       --maxShift (default 1000000)  Largest shift
+##       --minShift (default 50)  Smallest shift
+##       --maxShift (default 500)  Largest shift
 ##       --minShiftScale (default 1)  Smallest shift
 ##       --maxShiftScale (default 3)  Largest shift
 ##       --seed (default 1)  Seed
-##       --minSep (default 20000)  Nearest two features may be
-##       --maxSep (default 2000000)  Furthest two features may be
+##       --minSep (default 2)  Nearest two features may be
+##       --maxSep (default 200)  Furthest two features may be
 ##       --byDistance (default 0)  Split by separation into
 ##       --rankBy  Rank by
 ##       --subset (default "all")  Then
@@ -307,7 +308,7 @@ metacooler-run tasks
 ##     Track correlation
 ##       --tracks  Tracks
 ##       --over (default "bins")  Compare over
-##       --binsize (default 100)  Bin size
+##       --binsize (default 100)  Window
 ##       --features  Features
 ##       --method (default "spearman")  Method
 ## 
@@ -355,7 +356,7 @@ metacooler-run tasks
 Every task writes its results where `--out` points:
 
 ```bash
-metacooler-run insulation *.mcool --window chrII --out results/
+metacooler-run insulation *.mcool --sequences II --out results/
 metacooler-run chromosight sample.cool --pattern borders --balance --out results/
 metacooler-run apa sample.cool --pairs loops.bedpe --norm chromosight --balance
 
@@ -383,7 +384,7 @@ metacooler-run trackcorr sample.cool --tracks ATAC.bw --tracks MNase.bw --over f
 metacooler-run metaplot --tracks ATAC.bw --features peaks.narrowPeak --out results/
 
 # Reproducibility compares the file with every map --against names.
-metacooler-run hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 2000000
+metacooler-run hicrep rep1.mcool::resolutions/5000 --against rep2.mcool::resolutions/5000 --maxDistance 400
 
 # Compartments phased by GC content read the reference under --sequence.
 metacooler-run compartments sample.cool --sequence ref.fa.gz --phaseSequence ref.fa.gz

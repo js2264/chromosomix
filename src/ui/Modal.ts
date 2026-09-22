@@ -29,6 +29,16 @@ export interface ModalProps {
   title: string
   /** Extra class on the panel, for width and layout. */
   variant?: string
+  /**
+   * The title is a **name out of a file**, so the heading leaves its case alone.
+   *
+   * `.modal-title` uppercases, which is right for the category a dialog is —
+   * *SHARE THIS TAB*, *ADD A RESOLUTION* — and wrong for a thing the file named:
+   * the enlarged 3D cell was headed `YEAST_STRUCTURE` over a card, a tab and a
+   * Structures row all calling it `Yeast_structure`, and in genomics a name whose
+   * case has been changed is a different name.
+   */
+  titleIsName?: boolean
   /** Built once, when the modal opens. */
   body(close: () => void): HTMLElement
   /** Called however the modal was dismissed, so the opener can forget it. */
@@ -64,7 +74,10 @@ export class Modal {
       el(
         'header',
         { class: 'modal-head' },
-        el('h2', { class: 'modal-title', text: props.title }),
+        el('h2', {
+          class: `modal-title${props.titleIsName === true ? ' is-name' : ''}`,
+          text: props.title,
+        }),
         iconButton('x', 'Close (Esc)', close, { class: 'btn-close', size: 16 }),
       ),
       body,

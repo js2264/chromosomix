@@ -75,7 +75,8 @@ describe('with nothing connected', () => {
   it('says so, and names the Files column’s button rather than listing nothing', () => {
     const { body } = dialog()
     expect(body.textContent).toContain('Nothing is connected yet')
-    expect(body.textContent).toContain('Open a local/remote folder')
+    // One verb for the act, and the name the button now wears (§26.4).
+    expect(body.textContent).toContain('connect a local or remote folder')
     expect(all(body, '.pick-place')).toHaveLength(0)
   })
 })

@@ -75,10 +75,11 @@ than beside it:
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
 - **it is a preference, and it is off.** The default is the behaviour that keeps this clause
-  absolute: a block read once, and a zoom that magnifies it. Refinement is one press away on the
-  map's own controls — first of the three switches that change *what picture this is*, before the
-  turn and the baseline — because a zoom that reads is a zoom that can wait, and a wait nobody asked
-  for is a surprise rather than a feature.
+  absolute: a block read once, and a zoom that magnifies it. Refinement is a palette command — *Refine
+  on zoom* — rather than a switch on a map's picture row, which holds the turn and the baseline: the
+  preference is one setting for the whole window, and a control on one map of a deck would claim it
+  was that map's. A zoom that reads is a zoom that can wait, and a wait nobody asked for is a surprise
+  rather than a feature.
 
 Two things break the assumption and are handled as exceptions, not as the general case:
 `__unbinned__` (§7.4) and non-metagenomic cooler files (§9).
@@ -229,6 +230,22 @@ contain. It sorts where its number says — 3 kb before 5 kb — since a ladder 
 resolutions' order is a lie about which of two pictures is coarser, and it carries a `×`, which the
 file's own rungs do not: they are not the reader's to remove, and that asymmetry is the second thing
 the `*` is saying.
+
+**Otherwise it is drawn exactly as a stored rung is**, and the `×` takes no room until it is wanted.
+A derived rung used to carry a dashed border whether or not it was the one being read, so a row of
+four added rungs was four outlined chips beside one stored rung with no outline at all — the thing
+the file *does* contain being the quiet one — and each of them reserved fourteen pixels for a `×`
+that only appeared under the pointer, which made the row look padded for no reason a reader could
+see. So: no border when it is not current, a **dotted** border where a stored rung's is solid, and a
+`×` at zero width that the hovered rung grows to hold, pushing the rungs after it along. It keeps its
+width rather than being undisplayed, because a button that is not displayed cannot be tabbed to and
+this one is the only way back off a rung.
+
+**Past nine rungs the row is a dropdown** beside the word, listing every rung in the ladder's own
+order. It was a slider and one chip: between them they said how many rungs there were and which one
+was being read, and named the rest only to a reader who hovered the slider's own tooltip — so the
+control that was there to save room was also the one that hid the ladder. A `<select>` cannot hold a
+button, so where the rung being read is the reader's own the `×` follows the picker.
 
 **One caveat, always printed.** Counts coarsen *exactly*: a contact is in one fine bin and therefore
 in one coarse bin, so the sum is the count. Balanced values do not. `cooler zoomify --balance` sums
@@ -700,7 +717,15 @@ Opening a file lands here, not on a heatmap. Columns:
 - non-zero pixel count (§4), sortable, marked as a proxy
 
 Sortable and filterable on all columns; free-text search over genome names. Clicking a row opens the
-genome view. Selecting two rows opens the genome-pair view.
+genome view. Ticking any number of rows and pressing *show selected →* opens them as one map — each
+on the diagonal, every pair's block off it (§5.3, §7.3). One ticked row is named on the button and
+two are named as a pair, because a name says what is about to open where a count does not.
+
+The four columns the format guarantees are labelled in the application's own words — `name`,
+`length`, `contigs`, `bins` — with the file's identifier in the header's tooltip. Only those four:
+a discovered column is the creator's to name and is rendered under the name they gave it, including
+where that duplicates a core column, since a viewer that folded one away would be deciding a column
+is redundant and would be wrong the first time the two disagreed.
 
 Rationale: it costs two small reads, it is the operation a metagenomics user actually performs, and
 a 400×400 heatmap of scalars is less informative than a sortable MAG table with quality metrics.
@@ -732,12 +757,26 @@ Within a genome, a `contig` or `contig:start-end` selection. Range parsing mirro
 
 1. label is a **genome name** → whole-genome extent; a coordinate suffix on a genome name is an
    **error**, not silently ignored
-2. otherwise a **contig**, optionally `contig:start-end` (**0-based, half-open** — cooler semantics,
-   verified against `cooler.util.parse_region`, not the docstrings)
+2. otherwise a **contig**, optionally `contig:start-end` — the region *string* is cooler's
+   (**0-based, half-open**, verified against `cooler.util.parse_region`, not the docstrings), and it
+   is what the state, the hash and `metacooler show --range` carry
 3. neither → error listing available genomes and contigs, truncated to ~20 of each
 
 Genome and contig namespaces can collide; genome wins, as in Python. The UI labels which kind a
 search matched.
+
+**What a reader reads and types is the display form** (§26.1). The heading, the locus box's value
+and the zoom steps' tooltips print `formatLocus` of that region string — `IV:1,000,001-1,400,000`,
+1-based inclusive with grouped digits, which is what IGV, UCSC, samtools and every paper print — and
+the box reads what was typed back through `typedLocusToRegion`, accepting every spelling the
+tokenizer takes plus an en dash and Ensembl's `..`. All three used to print the region string
+itself, so the heading and the block summary immediately under it named one window at two starts a
+base apart, and a coordinate copied out of one and into the other moved the picture by a base. The
+conversion sits at the box rather than on the reader: pressing Enter on the value the box is already
+showing must change nothing, which is the round trip §26.1 states as a law. The box's example is
+`locusPlaceholder`'s, like every other locus box (§26.6), written from this view's own noun —
+`contig:1,000-20,000` — because a coordinate suffix on a genome name is an error here and the name
+this view is of may be a genome's.
 
 **Zoom is four buttons beside the box**, because what they change is the coordinate the box holds.
 The scroll wheel on the map is a zoom of the *picture* — the same block, drawn larger or smaller —
@@ -750,6 +789,14 @@ or one press past the locus — and they are ordinary bordered buttons like ever
 bar, since a control that is styled differently from its neighbours is a control a reader wonders
 about.
 
+**Every locus bar zooms in these same four steps**, and from the same pair — the region bar's, the
+1D browser's and a deck's tracks cell's (§26.6). The browser's carried two unlabelled magnifiers at
+1.8× instead, which is a factor nobody can predict or undo, so a reader who had learnt that one
+press is 3× on the map got something else on the tracks beside it; and the `−` / `+` keys drive the
+3× pair rather than a factor of their own. In a tracks cell the bar is the box and the four steps
+alone: no `go`, since Enter submits and the lead's bar above the grid carries the button, and no `/`
+badge, since one key cannot open two boxes and the lead's is the one it opens.
+
 Every press moves the window about its own **centre**, which leaves what you were looking at in the
 middle of what comes back. Against an end of the sequence the window slides in rather than asking
 for a negative coordinate; once a press outward would cover the whole sequence it *is* the whole
@@ -759,6 +806,12 @@ circle (§8.15) it wraps past the origin rather than clamping, because a clamp w
 sideways to fit inside a boundary the molecule has not got. Each button greys itself the moment
 there is nothing in its direction to go to, and they navigate through the ordinary road, so three
 presses and three presses of the back button are the same journey in reverse (§5.5).
+
+The `‹ ›` pair **beside the title** is not that back arrow: it steps to the previous and next
+sequence — the `[` and `]` keys as buttons (§5.5) — named by the neighbour it would open in its
+tooltip, and greyed at either end, so a reader at the last sequence is told so rather than left
+pressing a dead control. Two chevrons beside a title are the universal history pair, so the contract
+has to say which of the two these are.
 
 **And there is no back arrow in the bar, and no map/tracks cycle button.** Both were controls with
 a shorter road already beside them: going back is the browser's own back, which the bar's
@@ -786,6 +839,16 @@ from the modal's own right edge.
 up. Clicking an off-diagonal cell in any aggregated view opens the corresponding pair. Full view
 state serialises to the URL hash.
 
+**Every view has a trail, the 1D browser included**, where it reads `genome → Whole genome → IV →
+1,000,001-1,400,000`: a genome opened as tracks has no chromosomes table to go up to, so its root is
+the whole assembly, which is both where a browser opens and the one place above the sequence in
+front of the reader. Without it the row appeared and vanished as the map's eye was pressed, and the
+assembly a reader was looking at was named only on a tab and in a foldable column.
+
+**The last crumb is the window alone**, under the crumb that names the sequence: the heading and the
+locus box below it print the same place, and a row ending `› IV › IV:1,000,001-1,400,000` above two
+more copies of that string is three readings of one fact in three typefaces.
+
 **And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
 whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
 bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
@@ -804,6 +867,11 @@ anywhere, so it sits at the **far end of the bar, past the coordinates**, where 
 picture belong. It spent a release as the second crumb, between the file name and the table, which
 read as *this file, then this resolution, then these chromosomes* and put a control readers change
 constantly at the one end of the row they scroll past on the way to the box they type in.
+
+**A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
+`resolution  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an exception
+to it: a control that cannot keep its promise is absent rather than greyed, and a plain `.cool` is
+the commonest file a lab opens. The slider arrives with the second rung, which is what the `+` makes.
 
 It is a **slider over a row of labelled stops** rather than a dropdown, and the stops say `1 kb`,
 `50 kb`, `1 Mb` rather than `1000`, `50000`, `1000000`. A ladder is an *ordered* thing with a fixed
@@ -836,8 +904,19 @@ and make the back button walk a history interleaving three files. The rest of th
 and its view state come back, its worker does not, and clicking it is what reads the file. A tab that
 named a local file comes back to the picker with §11's explanation.
 
+**The reader's word is *tab*.** Every string on screen says tab — *New tab*, *Rename this tab*,
+*Close this tab*, *Share this tab* — because a tab is what is on screen and *session* is a word the
+strip never shows: "Close this session" read as something larger than closing the thing being looked
+at. *Session* stays as the implementation's word, in this document and in the code. The every-tab
+file keeps its own name, said as *Save every tab as a file*, because it genuinely is a different
+thing. No key closes one: ⌘W is the browser's chord for closing the window, and a binding that is
+right about what it does and wrong about what it closes costs a workspace.
+
 Three things are per *window* rather than per session, because they are preferences about this window
-rather than facts about a file: the theme, and the fold and width of each column.
+rather than facts about a file: the theme, and the fold and width of each column. The theme's cycle
+is ordered against the machine's own scheme — from *system* to the opposite of what the OS is doing,
+then to the same as it, then back to following it — so that the first press changes the picture; a
+fixed order spends it on the choice that repaints nothing and reads as a control that does not work.
 
 Two tabs on one file share nothing. The per-session memory is keyed on the session id as well as the
 URI, so a second view of the same map starts with no tracks, no filters and no marks.
@@ -860,6 +939,11 @@ Three refusals, each because the merged picture would otherwise be a lie rather 
 - **a different bin size** — one grid cannot be two resolutions;
 - **a chromosome list differing in count, order, name or length** — every coordinate in the picture
   is an index into one such list.
+
+**The card asks for it only once there is a first map.** The zone is labelled *load a map into the
+lower triangle* — not *a second map*, which is what §16's companion cell is called — and it is
+absent until a map is open, because a triangle of nothing is a promise with nothing to keep it
+(§8.5). A session with no map has one drop zone on that card, asking for a contact map.
 
 Either file can be closed. Closing the second returns to one map; closing the first promotes the
 second, so the map that remains is an ordinary one. `uri2` is part of the view state, so a comparison
@@ -897,7 +981,11 @@ rather than an axis of matrix bins. §8.4's rule is unchanged and is what makes 
 
 Lengths come from whatever named them, in descending order of trust: a `chrom.sizes` declares them, a
 BBI header carries them, and a feature file yields only the furthest coordinate it mentions — which
-is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described.
+is a lower bound, is rounded up, and is labelled as inferred wherever the genome is described. A
+**label**, and once per surface: the Genome card's `lengths` row reads `inferred (rounded up)`, the
+browser's summary line ends ` · lengths inferred (rounded up)`, and the way out of it — drop a
+`chrom.sizes` or a bigWig — is said once, in the card, where the row it corrects is. It was said
+four times on one screen, in sentences, of which the longest was the longest line on the page.
 
 The two shapes of session convert into each other. Dropping a `.cool` on the tracks makes the tab its
 map, tracks and all; closing the map from the File card falls back to a browser on the cooler's own
@@ -941,7 +1029,18 @@ ticks. Two decimals of a megabase is ten kilobases, so a window narrower than th
 measured in megabases wrote the same number under every tick — an axis of `4.60 Mb`, four times over,
 under a picture zoomed in to answer exactly the question it was there for. The unit is chosen so that
 two decimals can tell one tick from the next, and it steps down when they cannot rather than growing
-a third: `4.6 Mb`, then `4605 kb`, then `4601520 bp`. Nobody reads a fourth decimal off an axis.
+a third: `4.6 Mb`, then `4,605 kb`, then `4601520 bp`. Nobody reads a fourth decimal off an axis. On
+one axis every tick keeps the step's decimals and a four-digit kilobase is grouped like every other
+number on screen (§26.1): trimmed per tick, a row read `1.05 Mb 1.1 Mb 1.15 Mb 1.2 Mb`, which is two
+precisions alternating along a single ruler.
+
+**How many ticks it draws comes from how wide it is.** Ten was a constant chosen for the browser at
+full width, and the same ruler is drawn in a deck cell a third as wide, where ten labels ran into
+each other — `1250 kb1255 kb1260 kb` — and a coordinate axis whose numbers touch is the one part of a
+browser a reader cannot read around. The gap a label needs is the heatmap's own, so the two rulers of
+one genome thin out by one rule. And where the surface around the strip already captions it — the
+Chromosomes table's bar says `16 sequences · 12.11 Mb` over it — the ruler draws its boundary marks
+and no caption of its own: two captions for one strip say the strip is two things.
 
 **The plot is the whole column, not the stack.** The canvas reaches the foot of the column rather
 than the foot of the last lane, so pointing anywhere under the tracks names a coordinate, draws the
@@ -1010,7 +1109,15 @@ opens a text box is worse than either alone.
 The **General column lists the sequences** under the Genome card: every contig, its length, a bar of
 its length against the longest, and a click that shows the whole of it. A filter appears above a
 dozen of them and the list is capped, because a `chrom.sizes` is as likely to be forty thousand
-scaffolds as sixteen chromosomes.
+scaffolds as sixteen chromosomes. Under the list, what the ticks have done — `4 of 16 ticked` — and a
+button that undoes it, *show the whole genome*. The count is said of the ticks and not of the list,
+because a reader looking at nine rows of sixteen reads *showing 4 of 16* as a claim about the rows.
+
+Under the Sequences card, the **Genome minimap**: the same sequences drawn end to end with the
+current view marked on them, and one line under it saying what a click and a drag do. It says the
+gesture and nothing else — the card above it already carries the sequence count and the assembly's
+length — and it writes the window in the display form (§26.1), so the strip and the locus bar name
+the same place with the same digits.
 
 ### 5.9 One genome, many nomenclatures
 
@@ -1229,7 +1336,10 @@ counts. All O(1).
 
 The full Python `validate()` reads whole `bins` columns, the whole `genome_id` column, both offset
 arrays and three pixel windows. Acceptable on local disk, unacceptable over HTTP. Offered as an
-explicit debug action only.
+explicit debug action only: the status bar says **never run** until it is pressed, and the offer —
+what a press will scan, and what it costs over a network — is in the panel the item opens rather
+than in a second tooltip behind it. The item is absent altogether while no file is open, since there
+is nothing to check and a check button that silently does nothing is what §8.5 forbids.
 
 ### 6.4 Balancing
 
@@ -1281,6 +1391,16 @@ diverges from what a reader reproduces locally.
 
 Both bounds are overridable, as one clip range: two typed numbers and one control back to auto. The
 URL carries `vmin` and `vmax` independently, in transformed units, and their absence means auto.
+
+**Both unit systems on that row are named**, because both are on screen at once: the boxes are in
+transformed units, so the row is labelled `clip (log10)` from the transform in force, and the line
+under them prints the same pair in the units the colourbar is labelled in, followed by the word for
+them — `auto · 0.000066 – 0.089 balanced`. Unnamed, the two read as a contradiction, and a reader
+who typed the caption's own number into a `log10` box clipped the map a thousandfold too high. The
+line is **absent until a block has been scaled**: `auto · 1 – 10` beside a view that has drawn
+nothing is a caption for a picture that is not there. On screen the ramp picker is called
+**colours**, which is what a lane's own row calls the same kind of choice; `colormap` is the word for
+it here and on the command line, where it is a parameter rather than a label.
 
 **What the app *opens* with is its own choice**, as the overlay defaults are (§7.2). Parity is a
 property of the machinery — the same colormap table, the same indexing, the same percentile rule —
@@ -1354,6 +1474,12 @@ per frame on the main thread and therefore belongs in a worker. It is a known
 limitation of the drawing, not of the data: the numbers behind every pixel, the
 readout, the axes and the export are all taken from the reader's grid.
 
+**Keyboard pan and zoom are supported**, so the picture takes focus — and says so: the focus ring is
+drawn on the canvas's own edge pixels (`outline-offset: -2px`) rather than around it, since a ring
+outside the figure reads as part of the figure while a reader tabbing into a map still has to be able
+to see which of two pictures the next arrow press will move. It is not in an exported figure, which
+is re-rendered rather than grabbed.
+
 **Two of the overlay preferences are about the tracks rather than the matrix**, and are shared by
 both places the tracks are drawn: `text` takes every word off them — names, ranges, feature names —
 and `fills` takes the shading out from under their lines, which is the envelope and an area track's
@@ -1368,6 +1494,10 @@ enlarged, and the framing — pan and zoom included — is what is on screen. Th
 one lossless image, written by the app; its page size in points is derived from the CSS size, so the
 DPI is a fact about the paper rather than a name.
 
+The map's format option is therefore labelled **PDF (image)** and the browser's **PDF (vector)**: a
+biologist who saved a map as `PDF` for a figure and opened it in Illustrator expecting paths had been
+told which they were getting by one card and nothing at all by the other.
+
 **The 1D browser's PDF is vector**, and that is the one place the two exports differ. A contact map is
 a raster honestly — twelve thousand bins are pixels and writing them as a million rectangles would be
 a larger, slower file of the same picture — but nothing in a genome browser is: every mark there is a
@@ -1377,14 +1507,20 @@ handing the *same renderers* a context that emits PDF operators instead of pixel
 second drawing of the view to keep in step; text is Helvetica, one of the fourteen fonts every reader
 has, so nothing is embedded. A vector page has no resolution, so the DPI control is *absent* while
 one is chosen rather than greyed out — which is also what puts the format's full name and the button
-on one line.
+on one line. The clipboard button in the same row takes a PNG whatever the format beside it says, so
+while the select is away **its tooltip names the resolution it will use**: a slide-maker was pasting
+a raster rasterised at a number they could no longer see or change.
 
 ### 7.3 Genome × genome overview — gated, not default
 
 Available, but never automatic, because it costs a full pixel scan (§4):
 
 - **Local files:** explicit user action, progress indicator, cancellable.
-- **Remote files:** refused above a byte threshold, since a full scan means downloading the file.
+- **Remote files:** **warned above a byte threshold, with the download offered** — the scan streams
+  in bounded windows, so only the bytes are large, and the reader knows their connection where this
+  page does not. A caution with a way through takes `--warn` and not the colour of a refusal
+  (§26.5): red over a button that proceeds is a reader told no by the picture and yes by the words.
+  A full scan means downloading the file.
   Offered when a sidecar edge list is advertised in the catalog. **`metacooler network --level genome`
   is the right producer** — it emits a `node1 / node2 / value` TSV (optionally with `--header`) to a
   file or stdout, which for a few hundred MAGs is a few KB of text: no HDF5, no range requests, one
@@ -1418,7 +1554,13 @@ the cheapest thing to land on.
 mandatory rather than optional: the rule is not "warn when it looks expensive" but that a pass over
 every pixel never starts on its own, and a threshold would make it hold on large files and lapse on
 small ones. So the bin level is gated whatever the file declares `nnz` to be, behind the same
-sentence and the same button as the scans. It is also labelled and divided by **genome** rather than
+sentence, the same two figures and the same button as the scans: `compute whole genome` over one
+sentence naming the stored pixels it will read, the cells it will sum them into, and the bytes it
+will read or download. Both figures on every gate, because the pixels are what a local read costs
+and the bytes are what a remote one costs, and a gate cannot know which of the two a reader is
+paying. One gate said `compute overview` — a word that appeared nowhere else on screen, under a
+toolbar button reading *whole genome* — and priced itself in bytes alone while its sibling priced
+itself in pixels alone. It is also labelled and divided by **genome** rather than
 by contig — the axis is the whole metagenome at every level, 2,082 contig hairlines over 48 blocks
 are a grey wash, and an axis label that names a genome opens that genome. A *selection* follows the
 same rule one level down, because it is the same rule: its axis names **what was ticked**. Tick
@@ -1470,11 +1612,18 @@ pixels. Nothing may be renumbered or compacted to make it disappear — `genome_
 and display time only. Silently reindexing to hide it would corrupt every downstream lookup.
 
 **One retained number — confirmed.** The fraction of contigs and bins that are unassigned is shown
-once, as a read-only statistic in the file info panel. It is a direct diagnostic of binning quality, a
-metagenomics reader will look for it, and a reviewer will expect it. It is a number, not a view: it
-opens nothing, selects nothing, and is not a row in any table. Label it as a QC statistic
-("unassigned: 1,204 contigs / 8.3% of bins"), not as a genome. This is the sole exception to the rule
-above and does not weaken it — no code path reaches `__unbinned__` through this statistic.
+once, as a read-only statistic in the **Binning QC card** of the General column. It is a direct
+diagnostic of binning quality, a metagenomics reader will look for it, and a reviewer will expect it.
+It is a number, not a view: it opens nothing, selects nothing, and is not a row in any table. Label it
+as a QC statistic — "unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)", each quantity whole, since
+a count of contigs beside a percentage of bins leaves a reader to assemble either one from two
+sentences — and not as a genome, with one clause under it saying it is never drawn. This is the sole
+exception to the rule above and does not weaken it — no code path reaches `__unbinned__` through this
+statistic.
+
+It is also the only place it is **counted**. The File card's `genomes` row leaves it out, because the
+genomes table a hand's width below that card does: two numbers for one fact on one screen is what
+sends a reader hunting for a forty-ninth organism in a list of forty-eight.
 
 ---
 
@@ -1730,13 +1879,14 @@ empty — on a file that cannot carry them. A fourth, **Bookmarks** (§8.10), si
 in this list because nothing in it is an annotation: it holds places rather than things drawn at
 them.
 
-**Linear annotations.** Three drop areas, and everything they hold is drawn *beside* the map, never
-on it: **one GTF** (at most one, because a second gene model over the first is a smear rather than a
-comparison), **tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number,
-resolved as lines or areas), and **bed-like files** (any
-number, resolved as genomic segments). Each is placed on any of the map's four edges — above, below,
-or down either side — or on several at once; each carries its own limits, style, colour and value
-scaling; and any set of tracks may share one autoscale group.
+**Linear annotations** — headed **Tracks** on screen, which is also what its rows, its tooltips and
+every other surface call them; *annotation* survives as the column's name and in the two card names
+below. Three drop areas, and everything they hold is drawn *beside* the map, never on it: **one GTF**
+(at most one, because a second gene model over the first is a smear rather than a comparison),
+**tracks** (bigWig, bedGraph, wig and — for its coverage — BAM (§8.13), any number, resolved as lines
+or areas), and **bed-like files** (any number, resolved as genomic segments). Each is placed on any
+of the map's four edges — above, below, or down either side — or on several at once; each carries its
+own limits, style, colour and value scaling; and any set of tracks may share one autoscale group.
 
 A fourth kind of lane belongs to no card at all: the **virtual 4C profile** (§8.9). It is a reading
 of the matrix rather than a file loaded against it, so it has no row to be listed in, nothing to
@@ -1757,13 +1907,22 @@ because the column descends from what came out of a file to what a reader put th
 **Manual annotations.** Marks the reader draws themselves: any number of lines (vertical, horizontal
 or both), arrowheads (on- or off-diagonal) and rectangles (on- or off-diagonal, at any ratio), each
 entered as coordinates or picked by clicking the map. This is the card that makes a figure, and
-nothing in it comes from a file.
+nothing in it comes from a file. They leave through the app's one export row (§26.6) with no
+resolution and no clipboard, since a BED is not a picture, and its two options are named for the
+marks they write in the card's own words — *lines (BED)* and *arrowheads & rectangles (BEDPE)*, not
+*loops & boxes*, which named neither the sub-heads above them nor anything else on screen.
 
 The three are three sentences — *this coordinate*, *this cell*, *this block of contacts* — and the
 third is two intervals rather than one interval and a shape, because the boxes people draw are not
 one shape: a domain is a square on the diagonal, a corner peak is a small square off it, and a locus
 against a whole arm is neither. An on-diagonal rectangle is drawn as the same triangle a BED domain
 is on a turned map, since that is what it is.
+
+**One word for the mark: an arrowhead.** It is what this card's own section is called and what the
+glyph is — a mark stood off a cell along its 45° axis — and it can be put at any off-diagonal point
+rather than only at a loop. So the map's right-click menu offers *Arrowhead*, with *a loop at r × c*
+as its hint, where it used to offer *Loop* and send a reader looking for their mark under a heading
+called Arrowheads; the structure card's chord source is *your marks* for the same reason (§25.5).
 
 **Each kind asks the map for the gesture that suits it.** A line and an arrowhead each name a place,
 and the gesture for a place is a click. A rectangle names an extent, and the gesture for an extent is
@@ -1803,7 +1962,7 @@ browser does — read out of the file rather than computed here.
 
 **Contig-naming contract.** bigWig is keyed on chromosome names, which here are **contig** names from
 `/contigs`, not genome names. On load, intersect the bigWig's chrom list with `chromnames` and report
-the overlap explicitly ("16 of 16 contigs matched"). Silent zero-overlap is the most likely support
+the overlap explicitly ("16 of 16 sequences matched"). Silent zero-overlap is the most likely support
 question and must be impossible.
 
 **On a file with a genome layer the report is about genomes** (§8.5). The same arithmetic that is
@@ -2010,7 +2169,50 @@ it measured: the chip before each name, one box per end of the range, the spot f
 button, the row the handle sits on. A block that only *draws* can never be pointed at, and that is
 precisely how the same two numbers came to be editable in the browser and inert beside the map. The
 two surfaces differ only in the constants they pass — a lane beside a map can be sixteen pixels tall
-and its text nine; a lane in the browser is ninety and its name is what identifies the row.
+and its text nine; a lane in the browser is ninety and its name is what identifies the row. The
+**name** carries the weight in both, because it is what identifies the row and the feature names
+under it are the contents: at one size and one weight, `genes` read as the first item in a row of
+gene names.
+
+**Written over the data, the block sits on a plate.** In the browser it has a column of its own; the
+margin beside a map belongs to the heatmap's own labels and a bottom canvas cannot grow backwards to
+make one, so there the block is drawn over the lane and a halo around each glyph was the whole of the
+protection. On a sixteen-pixel peak lane the label *is* the lane: `ATAC peaks` came out with orange
+bars through every letter and `230 features in view` lay across a density block. A plate in the halo
+colour at 0.85 keeps the argued placement and makes the words readable — the lane under it stays
+visible as a shape, because the first eighty pixels of a peak set are data a reader may be counting.
+A name longer than its lane is **cut in the middle** there as it is in a column, since a clipped name
+is a different name: a track called `Distance to IV:1000000` was drawn as `Distance to IV:100000`,
+which is a wrong coordinate stated as a fact. And a lane whose signal lives where a stacked range
+line would land — the sequence lane, a fraction on a fixed `0 – 1` axis — keeps its range beside the
+name on one line rather than under it.
+
+**Where the pointer is, is written one way on both surfaces and in the browser's status line**: the
+base, 1-based and grouped, while one pixel is worth less than a kilobase, and a unit form above that.
+A lane tooltip that said `IV:1.18 Mb` over 1 kb bins was ten bins coarser than the picture beside it
+and in a different grammar from the matrix readout a pixel above.
+
+**A group's name is said where there is room for it.** The bar that marks a run of lanes sharing one
+axis is drawn in the plot's own margin, six pixels, which cannot hold nine-pixel type — so beside a
+map the bar is unnamed and the lane's tooltip names the group instead. An unexplained coloured rule
+in the first member's colour reads as a mark rather than as a group, and the Groups card should not
+be the only place to find out why three lanes are joined by a line.
+
+**The sequence lane's axis starts at `[0, 1]` and moves like any other track's.** It was pinned, and
+the pin was only half kept: the lane recorded its limit boxes as click targets, the editor stored
+whatever was typed in them and the settings card offered `limits … auto`, while the lane alone
+withheld the autoscale mark that is the way back. Yeast GC sits between 0.35 and 0.45, so narrowing
+the axis is the natural move and the reader was then stuck. `[0, 1]` survives as the default, which
+is what keeps two views of one genome matching until somebody deliberately changes one.
+
+**A value axis is a fact about the data in the window, not about the lane's width.** Autoscale
+resolves over the values the file states inside the window, quantised by the file's own summary
+level, and a lane narrower than a thousand pixels is sampled as though it were that wide. Taken from
+the drawn pixels instead, the same ATAC track over the same 400 kb read `0 – 111` on a 680-pixel
+lane, `0 – 86.9` on a 560-pixel one and `0 – 36.9` in a deck cell — so the right-hand stack of one
+map disagreed with the bottom one and two cells of one deck disagreed with each other about the same
+file, which is the one conclusion a picture of one file must not invite (§16.2). The ceiling can then
+sit a little above the highest mean drawn, which is the trade every other browser makes.
 
 The rest follows the same shape. **Groups** are a fact about the tracks rather than about a view
 (`annotations/groups.ts`), so one `GroupSettings` per open file is handed to both surfaces, one
@@ -2020,6 +2222,12 @@ stored by one and ignored by the other. The **controls over the canvas** (`ui/La
 `ui/LaneLimitEditor.ts`) are parameterised by a host element, because that is the only thing that
 differs: in the browser the layer and the canvas share an origin, and beside the map the layer is
 positioned against the grid and offset per frame.
+
+**A lane's limits are the colour clip's control** (§7.1, `ui/ClipRange.ts`'s idiom): two number
+boxes, the `⇅` mark every autoscale in the app wears — unavailable while there is nothing to go back
+to — and a line under them reading *auto · min – max* or *clipped · min – max*. It was a lit `auto`
+word, which made one column carry two drawings of *let the data set the range*: lit when on here,
+greyed when on beside the map. A reader who learned either learned nothing about the other.
 
 Two constraints are permanent and are why this is a shared module rather than a shared file. Every
 mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarter turn is
@@ -2117,7 +2325,7 @@ of that appearing beside the map without being asked for, redrawing itself on ev
 version of the same claim in the same session — and the two would disagree at every level but the
 finest.
 
-What is kept is one sentence: *the reader can point at a locus.* The 4C task's **Pick on map** button
+What is kept is one sentence: *the reader can point at a locus.* The 4C task's *pick on map* button
 arms `ui/mapPick.ts`; the next drag on a map names a locus for that form and the button goes out. It
 is a mode on a picture, so it disarms after **one** pick and it disarms on Escape, and both rules are
 in the module rather than in the map — the map's whole job is to ask `isArmed` before it decides what
@@ -2180,7 +2388,9 @@ and one drawn only inside the track would say the band stops where the track doe
 **Every one of these gestures copies what it framed.** Shift-drag writes `chrIV:500001-510000` — no
 thousands separators, a plain hyphen, 1-based inclusive, which is the difference between a string
 that pastes into samtools, bedtools, IGV and this app's own locus boxes and one that only looks
-right. The app's *display* format uses an en dash and grouped digits, and that one is for reading.
+right. The *display* format is the same string with the digits grouped — `chrIV:500,001-510,000`,
+still a plain hyphen (§26.1) — and the en dash is for a range of **values** (`0 – 111`), so a reader
+can tell the two apart at a glance rather than meeting one window written three ways.
 Option-drag, which selects a box, writes both axes in the order this app always names them —
 `chrI:1-10000|chrII:40001-50000`, rows then columns, each half exactly what that stretch would
 produce on its own, separated by a character no coordinate grammar uses. In the browser a drag
@@ -2648,8 +2858,19 @@ a stretch of variants seven bases apart at whole-contig zoom drew as several
 hundred three-pixel marks that merged into one solid bar in whichever ink was
 laid down last, reading as a single three-kilobase variant. Collapsing says the
 true thing: there are many here. For every other feature lane the floor is zero
-and the rule is the `span / 2` it has always been — a peak one pixel wide *is*
-one pixel of genome.
+and the width one feature needs is the `2` it has always been — a peak one pixel
+wide *is* one pixel of genome.
+
+**The count it is measured against is the fullest row the lane will use**, which
+for a stranded set is a band per strand rather than the whole window in one row.
+Measured over the window, a gene set that this lane spreads across two bands was
+declared unpackable at half the features it can actually draw apart: the same 230
+yeast genes over the same 400 kb came out as named boxes on a 680-pixel lane and
+as a solid grey density block on a 455-pixel one, so opening a side panel made
+the gene track look as though the annotation had been lost. Not the rows the lane
+has *room* for, either — the packing reaches for a second row only where two
+features overlap, so four rows do nothing for four hundred records sitting two to
+a pixel, which is the case the rule exists for.
 
 **A VCF can say what genome it is on, exactly.** Its
 `##contig=<ID=…,length=…>` block is a `chrom.sizes` written inside the file:
@@ -2966,9 +3187,21 @@ the rows it was **allotted** rather than the rows it used, because a band that p
 two rows still has to sit where the allotment put it.
 
 None of this reaches the collapsed picture. Past the point where there are more features than the
-lane can draw apart, the lane is a count profile (§8.14's rule, unchanged) drawn in the lane's own
+lane can draw apart, the lane is a count profile (§8.14's rule) drawn in the lane's own
 colour: a density is a number, not a category, and colouring it by the first feature in each pixel
 would be a claim about the other four hundred.
+
+**A name is bounded, and it stays inside the lane.** A name below its feature may overhang it — a
+gene four pixels wide has a name worth ten times that, and that zoom is what the placement exists
+for — but by four times its feature's width or eighty pixels, whichever is more, and past that the
+name is cut in the middle. Unbounded, a forty-six-character peak name (its caller's run id plus a
+counter) was written under a three-pixel peak across a dozen unlabelled neighbours, so one peak in
+twenty carried a name and every name read as the label for the group it lay across. And the text is
+nudged inside the lane's own ends rather than left to the clip, because **a browser must never print
+a gene name that is not in the file**: `MSW1` was drawn as `SW1`, `HEH2` as `HE` and `MUS81` as
+`US81`, every one of them a plausible yeast symbol that a reader would search for or cite. Inside a
+feature the name is dropped where the window has cut the box, since a name centred in half a box is
+centred on a place the feature does not have.
 
 **Where the settings live.** `AnnotationStyle.features` — `{ colourBy, arrows }` — a nested optional
 record in the shape `reads` is one and for the same reasons: the fields mean nothing to a value
@@ -3361,7 +3594,12 @@ hierarchy that HiGlass has no concept of.
 
 ## 10. Refusals and errors
 
-Every refusal names the file's actual state and the concrete fix.
+Every refusal names the file's actual state and the concrete fix — **and its title names the
+subject**: *Nothing to share*, *Too many tabs*, *That workspace could not be read*. A dialog headed
+the same way for every refusal makes a reader read the paragraph to find out what was declined, and
+read it again later to remember which of them they had seen. Where a refusal can be avoided
+altogether it is: a control that has nothing to act on is unavailable, with the reason in its
+tooltip, rather than live and answering with a dialog (§8.5).
 
 | Condition | Message |
 |---|---|
@@ -3682,7 +3920,7 @@ session with companions costs the session it would have been, plus the companion
 | Pan and zoom | yes (§16.3) | opt out |
 | Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
 | Transform and colormap | seeded from the lead | yes |
-| `vmin` / `vmax` | opt in | yes |
+| `vmin` / `vmax` | one press (§16.5) | yes |
 
 The rule is: **what is being looked at** is shared, **how it is drawn** is not.
 
@@ -3743,8 +3981,11 @@ The clip is still the panel's own from then on. `vmax` is a number of contacts, 
 different depths do not have the same one — one clip across a deck draws the shallower file as an
 empty rectangle. This is §5.7's argument reached from the other side: there, one grid forces one
 scale and the second file is rescaled onto it with **match depth**; here, two grids allow two scales,
-and the reader opts *in* to sharing with **one scale**, off by default because it is the stronger
-claim.
+and a reader who knows the libraries are comparable presses **match all scales**, which copies the
+starred map's clip onto every panel once (§16.5). A press rather than a setting, because a setting
+could not keep its promise: left on, every later nudge of any panel's clip either had to be undone
+or left the deck claiming a shared scale it no longer had. After the press each clip is honestly its
+panel's own again, which is the stronger claim made only where it is true.
 
 ### 16.3 The navigation lock
 
@@ -3826,7 +4067,7 @@ The panels are a CSS grid of equal columns, as many across as the reader asked f
 edge (§16.9) or with the picker in the deck's bar. Equal always: a comparison whose halves are
 different sizes is one the eye has to correct for.
 
-**The session's heading leaves the first cell.** The view's title, its locus box, its back link and
+**The session's heading leaves the first cell.** The view's title, its locus box, its zoom steps and
 its block summary answer *what am I looking at*, which is one question however many pictures are on
 screen — so in a deck they are hoisted above the grid and cell 0 holds the map and its file name,
 exactly as every other cell does. Left inside, they made the first cell a head taller than the
@@ -3852,17 +4093,34 @@ was three presses, each shuffling everything in between. The lead has a name lik
 and **no grip** — it is the session's own view re-parented into cell 0, and which file a session is
 of is not a thing that should change by dragging.
 
-The deck's bar holds only what is shared: the master chain, one scale for all, how many across, and
-the whole deck as one figure — saved, or copied to the clipboard, which is what `⌘C` reaches while a
-deck is on. Adding a map is the `+` on an edge and rearranging is the grip, so neither is a button
-here — a bar that repeats what the pictures already offer is a second place to look for the same
-thing.
+**Every cell's chain sits in its own heading, the lead's included.** Taking a cell off the shared
+navigation (§16.3) is a statement about that cell, so the control for it belongs on it, beside the
+star. The lead's used to be in the bar, which put one glyph at two heights meaning the same
+per-cell thing — and the one in the bar, among controls that act on every cell, read as a lock over
+the whole deck rather than as the first map's own. It is drawn like every other toggle in the
+application: lit while the cell is following, plain while it is not, and dimmed never (§26.3).
+
+The deck's bar holds what is shared, in the order the work is done: **add a cell…**, which opens the
+row that takes a file, a published URL, the session's 3D structure or a stack of tracks (§16.11);
+**match all scales** and **match all resolutions**, two presses that each copy the starred map's
+clip or bin size onto every panel once; how many across; and the whole deck as one figure — saved,
+or copied to the clipboard, which is what `⌘C` reaches while a deck is on.
+
+Rearranging is the grip and is not a button here. **Adding is**, and that is the one thing the bar
+repeats: a `+` on an edge draws an *empty* cell for something to be dropped on, and a published
+cooler has nothing to drop — the URL box is the only road it can take (§11) — while the tracks cell
+has no other road on screen at all. The toggle is named for what the row opens, a *cell*, rather
+than for the map that is only one of the four things in it.
 
 It is **read from the left**, in one run, with exactly one control across the gap at the far right:
-the × that closes the deck. Everything else in the bar adjusts a deck that is staying, and a
-destructive control in among them is one a hand reaches by accident; a window's close has been at
-that end for thirty years. What it closes is every companion **and every track that was only there
-for them** — a bigWig dropped on a companion's edge is an import into the session's one track list,
+**close deck**, a bordered word like every other control in the bar (§5.4). Everything else in the
+bar adjusts a deck that is staying, and a destructive control in among them is one a hand reaches by
+accident; a window's close has been at that end for thirty years. It was the same bare × a cell's
+own close is, on the argument that the two would read as one gesture at two scales — and what they
+read as is two identical marks a finger's width apart, one taking a cell and the other taking every
+companion and the tracks loaded for them, which is the accidental reach this placement exists to
+prevent. What it closes is every companion **and every track that was only there for them** — a
+bigWig dropped on a companion's edge is an import into the session's one track list,
 so closing the maps it was drawn on would otherwise leave it loaded, invisible, and holding a row
 that says it is drawn nowhere. A track that is also on the first map is being read against a
 picture that is staying, so it keeps its lane there and loses only the companions'. The first map is
@@ -3870,12 +4128,23 @@ untouched throughout: closing the deck leaves exactly what closing the last comp
 would.
 
 A companion's scale controls ride **on its picture**: a button in the bottom-left corner of the map,
-opening a menu upward over it, holding the five fields that say what the numbers are and how they
-are drawn — the score, the baseline, the transform, the ramp and the clip. Not the overlay marks,
+**above the band the ruler's labels sit in** — the same twenty pixels the renderer keeps for that
+corner, because at the very bottom the button covered the first coordinate on the axis, which is the
+one number a reader uses to check that two pictures are of the same window — opening a menu upward
+over it, holding the five fields that say what the numbers are and how they are drawn — the score,
+the baseline, the transform, the ramp and the clip. Not the overlay marks,
 which act on a picture the reader is already pointing at and are slower to reach through a menu than
 through the row they came from; and not an export, which the deck's bar now offers for all of them
 at once. A fold *under* each panel — what this replaces — pushed every other panel of the deck down
 by the height of whatever was open in it.
+
+**A card that cannot act is absent** (§8.5). The Map, Tracks and Export cards arrive with the block
+and not before: behind the whole-genome gate — a heading, what the read would cost, and the button
+that starts it — the column used to show the whole Map card over an empty canvas, clip and all, and a
+reader who nudged the clip there and saw nothing happen concluded the card was broken. The **overlays**
+row holds only the marks that light: the refit, which is an action, stands with the turn and the
+recentre in the *picture* row, where it used to be the one unlit mark in a row of seven lit ones —
+read as an overlay that was off, and turned on by a press that threw the reader's pan away.
 
 The deck's controls ride **above the grid**, and each panel's scale controls ride **inside that panel**.
 They are deliberately not a fourth card in the three side columns. Those columns are the *session's*
@@ -3885,8 +4154,14 @@ useful for, so a deck control living there would be missing precisely where it i
 placement is also the plainest statement of §16.2's split: shared controls above the grid, per-panel
 controls on the picture they control.
 
-The grid is inside `.content`, which pins the light palette for its whole subtree, so the maps do not
-change colour in the dark theme and no rule had to be written to keep them from it.
+The grid is inside `.content`, which pins the light palette **while it holds a picture** — a deck's
+grid, a map's heatmap or a browser's stage — so the maps do not change colour in the dark theme and
+no rule had to be written to keep them from it. The furniture framing a picture is pinned with it,
+since a locus box in dark chrome beside a light map belongs to neither. The pin used to be on
+`.content` itself, and every view mounts there: a reader who chose dark got the landing page, the
+Genomes and Chromosomes tables, the whole-genome gate and the error view as a white sheet inside a
+dark frame. A drop zone and a table of chromosome lengths are not figures that will be exported, and
+the argument for pinning was only ever about the ones that are.
 
 ### 16.6 Links
 
@@ -3915,9 +4190,9 @@ workers on the way past a table. Same file **by path**, so changing the resoluti
 and opening a different file does not. The carrying is the session's and not the store's — the
 address bar is obeyed exactly as written, or a pasted link would show a deck nobody sent.
 
-Nothing else is in the hash. The lock, the drawn column count and "one scale" live in the
-per-file session memory (§8.6) beside the table filters, on the same grounds: the hash has never
-carried a pan or a zoom, so there is nothing there for a lock to be consistent with, and how many
+Nothing else is in the hash. The lock and the drawn column count live in the per-file session
+memory (§8.6) beside the table filters, on the same grounds: the hash has never carried a pan or a
+zoom, so there is nothing there for a lock to be consistent with, and how many
 columns the grid has is furniture in the sense the width of a side panel is. Which cells are empty is
 *not* furniture and is in the hash, because it is part of the list of maps rather than part of how
 they are arranged — a deck of three with a gap in the middle is a different deck from a deck of
@@ -3967,7 +4242,8 @@ A `+` down the right-hand edge of the map, and another along the bottom. Pressin
 the first of it and every other cell standing empty as a drop target. The empty cells are filled in
 any order, from a drop, a file chooser or a URL, or never.
 
-This is the feature's only entry point that a reader can *find*. Before it, the first companion was
+This is the first entry point a reader can *find*, and until there is a deck it is the only one —
+once there is, its bar offers *add a cell…* beside it (§16.5). Before either, the first companion was
 reachable only through the command palette, so nothing on screen said several maps side by side was
 a thing this viewer did — and the one gesture a reader would try, dropping a second cooler on the
 map, means *load a track* (§8.3).
@@ -3986,11 +4262,12 @@ that has already been placed. A ragged last row, which is what closing a map out
 leaves, is squared up by the next press for the same reason: the holes are drop targets and the
 rectangle is the shape that was drawn.
 
-The column count a `+` sets is remembered per file beside the layout presets (§8.6) and **overrides
-them**. The two answer different questions — a preset arranges however many maps are here, a drawn
-count says what shape the deck is — and a deck that reflowed into a row the moment a map was closed
-would not be an arrangement at all. Exactly one of the two is in force, so a lit preset never
-disagrees with the grid.
+The column count a `+` sets is remembered per file (§8.6), and the bar's **N across** picker is the
+other way to set it. The two write the same number, so the grid and the picker cannot disagree.
+There are no layout presets to override any more: a row of lit presets arranged however many maps
+happened to be open, which is not a shape a reader states, and a deck that reflowed into a row the
+moment a map was closed was not an arrangement at all. The picker is the honest replacement, and it
+is also the only way a deck that arrived in a link can be reshaped — a `+` only ever grows one.
 
 **An empty cell is a real cell.** It takes a slot in `maps`, travels through a link as `~`, counts
 towards the six-panel ceiling, and can be moved and closed like any other. It does **not** count
@@ -4061,6 +4338,12 @@ destroyed. Everything the deck says to a *map* by name — a lock member, a lane
 a colour scale, the star — it goes on saying to the maps only. A cell holds no file, so it takes no
 share of the read budget (§16.7) and is not an empty card either; the bar counts it as neither.
 
+Both are opened from the deck's add row — *add a 3D structure*, which is greyed with its reason in
+its own tooltip once the deck has one (§18.1), and *add a tracks cell*. Each leads with a verb, like
+the rest of that row: labelled `3D structure` and `tracks`, as they were, two nouns at the end of a
+row opened by a button saying *add* read as kinds of thing the URL box takes rather than as two more
+cells to open.
+
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
 maps and the `~` of a vacancy are. A deck holds one structure cell — a second `3d` is dropped on
 the way in — and as many tracks cells as the reader opens, named apart in the location control.
@@ -4085,6 +4368,14 @@ A cell `(b1, b2)` goes to `x = (b1 + b2) / 2` and `y = (b2 - b1) / 2`, both in b
 the same bases per pixel. A **true rotation**: nothing is stretched, a domain's two edges meet at a
 right angle over its midpoint, and a base pair measured up the side is the same length as one
 measured along the bottom.
+
+**The window reported is the same window either way.** The rotated lattice counts in half bins, so
+the right half of the last bin has no column to be measured to and the summary line under a turned
+map read `400 × 400 bins · 1.0 kb · IV:1,000,001-1,399,500 · 399.5 kb` — an arithmetic a reader
+checks and does not get. Every window this view reports — the line under the picture, the framing an
+analysis runs on, a bookmark, what the 1D browser opens at — is snapped to the file's own bin edges,
+which changes nothing on a square map and restores the missing half bin on a band. The turn is a
+presentation (§17.2), and a presentation that moved the window would not be one.
 
 The consequence to hold on to is that **height is half of separation**. A contact between two bins
 100 kb apart sits 50 kb above the axis. The y axis is therefore *labelled* in separation, which is
@@ -4114,12 +4405,21 @@ from the diagonal is the whole of the y axis, so a block without one has no pict
 rather than hidden** where this is false, so a reader looking at a whole metagenome can see that the
 control exists and find out what it wants of them.
 
-**And wherever it is offered it is on**, which is `flip` being absent meaning turned and only an
-explicit `false` meaning square (§11). A block with a diagonal is a band along a genomic axis with
-tracks under it — that is what a contact map is *for* at this scale, and it is what every published
-figure of one looks like; the square is the special view, wanted for looking at the far corners and
-for reading a two-file comparison as one asymmetric square. The hash of an ordinary view stays short because only
-the reader's "no" is written down, and a link with no `flip` in it opens the way this viewer opens.
+**And wherever it is offered it is off until it is asked for**, which is `flip` being absent meaning
+square and only an explicit `true` meaning turned (§11).
+
+It was the other way round, on the argument that a block with a diagonal is a band along a genomic
+axis with tracks under it — that being what a contact map is *for* at this scale, and what every
+published figure of one looks like. The argument is sound about the *figure* and wrong about the
+*arrival*, and the reason is the paragraph above: the conditions that make a block turnable admit one
+sequence against itself and nothing else, so every map the default reached was a single chromosome —
+and a reader who clicks a chromosome in the table is asking to see that chromosome, not to have it
+rotated on the way in. The picture changing shape as you arrive is a worse first frame than a square,
+however good the band is once you have chosen it.
+
+So the turn is a reading, like `O/E` and the smoothing beside it: one press, and then it is written
+down. The hash of an ordinary view stays short because only the reader's "yes" is in it, and a link
+with no `flip` in it opens the way this viewer opens.
 
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
 metagenome a reader passed through switch the turn off for every map after it, which is a preference
@@ -4427,8 +4727,16 @@ The second half is a correction to what this section first said, and the case th
 a map with no loops loaded. That task applies perfectly well to the file; it is one drag-and-drop from
 running. Hiding it does not spare the reader a broken promise — it teaches them the application does
 not do aggregate peak analysis. So a task in that state is listed, dimmed, and carries a line saying
-what to load: *Load a loop set (BEDPE) to pile up off the diagonal, or a feature set (BED, GTF) to pile
-up on it.* A greyed row with an instruction on it is not an unkept promise; it is the menu.
+what to load: *Load a loop set (BEDPE), or a feature set (BED, GTF).* A greyed row with an instruction
+on it is not an unkept promise; it is the menu.
+
+The line takes one shape — *`<Verb>` a `<thing>` (`<formats>`).* — and **a group whose every waiting
+row is waiting on the same thing carries it once**, under the heading rather than on each row. Ten of
+the sixteen tasks read the matrix, so a 1D browser session drew ten rows under ON THE MAP each
+carrying the identical *Open a contact map.*: a column twice as tall as its content, in which the one
+gate that differed was the hardest line in it to find. Rows whose sentences differ keep their own, and
+every greyed row carries its own reason in its tooltip whether or not the sentence is printed under
+it.
 
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
@@ -4441,9 +4749,11 @@ provenance names the assembly rather than a block.
 
 **A locus a reader can point at is picked on the map, not typed.** Reading
 coordinates off a picture in order to type them back in beside it is asking
-twice. So `RegionParam.pickable` puts a **Pick on map** button next to the locus
-box; pressing it arms `ui/mapPick.ts`, the next Shift-drag on the map fills the
-box instead of zooming, and the button goes out (§8.9). An *arm* rather than a
+twice. So `RegionParam.pickable` puts a *pick on map* button next to the locus
+box — **next to**, in the same row and the same cell of the label grid, because
+the argument above depends on the two being one control; pressing it arms
+`ui/mapPick.ts`, the next Shift-drag on the map fills the box instead of zooming,
+and the button goes out (§8.9). An *arm* rather than a
 mode the form leaves on: a reader who wanted one anchor should not find their
 next three attempts to zoom quietly redefining it.
 
@@ -4456,8 +4766,11 @@ point for a typed correction rather than a replacement for one. The button is
 offered only where there is a map to point at, since the panel exists without
 one.
 
-**The Analysis drawer** is the workspace: parameters, a **Run** button with the price beside it,
-progress, results, exports. It is anchored to the right of the body, full height, resizable by its left
+**The Analysis drawer** is the workspace: parameters, a **Run** button with **cancel** beside it and
+the price after the pair, progress, results, exports. The row's controls are ordinary bordered buttons
+like everything else in a bar (§5.4), and so are the exports under the results: the control that stops
+a forty-second scan and the ones that get the numbers out of the application are the two a reader most
+needs to find, and drawn borderless they read as captions. It is anchored to the right of the body, full height, resizable by its left
 edge with its width remembered, and it overlays the content and the two right columns rather than
 squeezing them — at three quarters of the window there is nothing left to squeeze.
 
@@ -4489,9 +4802,28 @@ the tooltips and the commands, and the copy that goes stale is the one that does
 **A hard-coded analysis parameter is a bug.** The window of a diamond insulation, the flank of a
 metaplot, the number of controls in a distance-matched pileup, the quantile count of a saddle: each of
 these is the thing a reader changes to answer their actual question, and a task that fixes one is a
-task somebody has to leave the app to redo. Where a parameter is a length it is offered in **base
-pairs** and the resolved bin count is shown beneath it, because bins are a property of the file and
-base pairs are a property of the question.
+task somebody has to leave the app to redo.
+
+**Every setting about the matrix is a number of bins, or a number of diagonals, and never a length of
+genome.** It was the other way round — a length was asked for in base pairs, with the resolved bin
+count printed beneath the box — and that rule had it backwards in both directions. A scan band, a
+diamond, a shift, a stratum, a near-diagonal trim, the separation between two anchors: every one of
+them *is* a count of the grid's own cells, which is why the runner's first act on a base-pair answer
+was to divide it by the bin size and round. So the reader was doing arithmetic the run then undid, and
+the same typed number meant one thing on one rung of an `.mcool` and another on the next — 100 kb was
+a control clear of a 43-bin window at 1 kb and a control inside it at 10 kb, with nothing on screen
+saying which. Where the quantity is a count of diagonals rather than of bins it says `diagonals`,
+which is the HiC score's parameter and the near-diagonal trims. **The bin count under the box is gone
+with the boxes it was for**, and what a run came to in base pairs is said once, by the runner, about
+the file actually open: *a 50-bin window is 2 Mb at this file's 40 kb resolution*.
+
+Two things are not that, and neither is an exception waiting to be tidied away. **A 1D track has no
+bins of the matrix's**: a metaplot's flank, a FRiP's sampling step and a track correlation's window are
+lengths of genome, they are the same length at every resolution, and they are asked in base pairs with
+no mention of bins in a label, a unit or a hint — a correlation over bigWigs can run with no contact
+map open at all. And **a plot's own axes stay in base pairs** (§26.2), so a pileup's `±21 kb`, a P(s)'s
+abscissa and the `.scool` phasing plot's published band edges are unaffected: those three numbers are
+a citation and an axis label, and in bins they would be a different number on every file.
 
 Four parameter kinds refer to what is already loaded rather than to a number, and all four **default to
 the starred entry** where the concept exists — the same star the 1D browser's feature search is keyed
@@ -4500,6 +4832,42 @@ lets a task like compartment phasing (§18.8) be a dropdown rather than a second
 
 Parameters are remembered per file and per task, and travel in an exported session, so that reproducing
 a figure is opening the session and pressing Run.
+
+**A locus parameter is in cooler's grammar** — 0-based half-open, ungrouped — because that is the one
+form a run's *record* can be in: it is what the runners parse, what the session file carries, what the
+CLI button prints, and what a reader pastes from `metacooler show --range`. This is the one box in the
+app that is not in the display form of §26.1, and it is the exception because it also takes a
+comma-separated list, which the display form's thousands separators cannot survive. So it says which
+grammar it is in, in its own title, and never claims to be "the same thing the locus boxes take".
+
+**A locus picked off the map is converted on the way in.** `ui/mapPick.ts` writes the *paste* form —
+1-based inclusive, which §8.9 pins for the clipboard because that is what samtools and bedtools take —
+so the form shifts it by a base before it becomes a parameter. Without that, a drag framing bins
+230–1042 reached the runner naming bin 231 onwards: one bin past the stretch the reader had just
+pointed at, with nothing on screen saying so, and a 4C profile is read off its anchor.
+
+**Which sequences to run on is one question and it has one shape: a column of tick boxes.** There
+were two — a column of tick boxes on four tasks, and on five others a dropdown whose first option
+read *every sequence* — and a reader met both in the same column, asked the same thing, a row apart.
+The tick boxes are the superset: *all of them* and *one of them* are two of the answers a list of
+tick boxes gives and *these three* is a third that a dropdown cannot express at all. So every task
+whose question is *which sequences* takes the list, the answer is the names written out, and three
+answers are three answers — **unanswered is every sequence** (the form ticks them all, and a stored
+session or a `metacooler-run` line with no `--sequences` means the whole file), **a subset is that
+subset**, and **nothing ticked is nothing to read**, which the estimate refuses rather than widening
+back into a genome-wide run. A ticked sequence this file has not got is named and left out, never
+silently dropped (§5.9). What stays a **locus** is what a list of names cannot answer: the 4C anchor,
+the structure tasks' *distance to*, the reconstruction's own box, each of which takes a window or a
+point on the map, and narrowing any of them to a whole sequence would remove the task's point.
+
+**The form is the cards' form.** A label is one to three lowercase words in the same column down the
+whole form, a select's options are lowercase, and one hint is one sentence beside the control it is
+about — §26.4's rules, and this is the surface that was breaking all three. A label and its control
+share a row: a single on/off button is not a group, and the full-width shape is for a group that is
+genuinely one — a checklist, a number with a slider beside it, four marks in a row — whose hint then
+goes *under* the group rather than beside the word above it. A hint never repeats what the control's
+own label, options or state already say: a column of tick boxes that opens with every box ticked does
+not need a line saying that every sequence is read unless you say otherwise.
 
 **A control the file cannot be asked about is not shown.** The descriptor still lists it and states the
 rule — an option that needs a `/genomes` table, a switch that is only a question where there is no such
@@ -4552,6 +4920,15 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, and whether balancing
 is on.
+
+**The framing line is one string in one grammar.** The window it names is the display form (§26.1),
+written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
+subtitle agree character for character, where the head once said `IV:1,000,000-1,400,000` and the
+picture under it `IV:1,000,001-…`, a one-base disagreement that reads as two windows. The reading is
+named **once**: the balance flag and the score picker's label are both the word `balanced` on the
+commonest file, and pushing both wrote `1 kb bins · balanced · balanced` into every provenance line
+and every TSV header, which reads as two normalisations having been applied. Where the two differ,
+both are said — `balanced · correlation` says what neither half says alone.
 
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
@@ -4671,6 +5048,16 @@ insulation on an unloaded contig is one diagonal band; an APA window is one smal
 explicit action, a progress bar, a cancel, and a pre-flight figure in requests and bytes. Two tasks are
 in this class, and both are honest about being so.
 
+**The estimate is a price and nothing else, and its class is said in words rather than in a colour.**
+*One pass over the whole pixel table*, *154 strips along their diagonals*, *up to 40 MB at a time* —
+followed by the requests and the bytes. It is `--text-dim` whatever it costs, because a cost is a fact
+about what is being offered rather than a warning about the answer (§26.5), and `--danger` beside
+**Run** means the one thing it means everywhere: this will not happen. Nor does the line promise
+progress or a cancel. It used to end *progress is reported as it goes and it can be cancelled at any
+point* on every scan — eighteen copies of a promise the bar and the button beside it make by
+existing — which spent the one line a reader checks before spending compute on reassurance instead of
+a figure.
+
 Three specific gates, each stated because each is a place the naive implementation is wrong:
 
 1. **Whole-genome 4C is not a bounded read, and the read planner says so.** With rows set to the anchor
@@ -4721,6 +5108,16 @@ which line is which, in the same palette a curve would draw them in, so a track 
 same track drawn as a curve two blocks down the drawer are recognisably one quantity. The figure's
 requested height counts the bands, or the top one would be clipped away — which is the one part of a
 figure a reader cannot reconstruct from the rest. The only task that sets them is the APA (§18.8).
+
+**A curve's abscissa may be a list rather than a quantity.** One value per sequence, per sample,
+per MAG — which is a bar chart, and the mark that draws it is §18.13's. The x values stay numbers and
+the output carries a name for each of them, so the axis names the thing standing at each tick and the
+figure keeps the wheel, the marquee and the two typed bounds a category axis would have cost it —
+which a four-hundred-contig metagenome needs far more than a sixteen-chromosome yeast does. A tick
+that falls between two members names nothing, because there is nothing between the fourth sequence
+and the fifth. The TSV writes the names in its first column: a column of `0, 1, 2` beside a column of
+fractions asks the reader to count bars on the picture to find out which row is which, which is the
+same argument the matrix export makes for putting its ticks down the left edge.
 
 **A curve is interactive, and an interactive figure is a plain figure of a derived output.** Turning
 on a log axis produces a `CurveOutput` with `xScale: 'log'`; hiding a series produces one with fewer
@@ -4802,6 +5199,19 @@ number in a figure checkable by the person reading the figure. Where an output h
 alternatives — the BED is the file a tool reads, and the TSV is the same rows with the provenance above
 them, which is a header a BED consumer would choke on and a reader needs.
 
+**Where an output went is one sentence for the run, and the outputs are a row each.** The sentence says
+where — *3 tracks added to the Synthetic tracks card in the Annotations panel.* — and each row under it
+is a name and its export buttons. Not the sentence per output: spatial tracks makes three lanes, and
+three lanes drawn as three dashed boxes each repeating the same thirty words, each with a lone TSV
+under it, made a run of three exports read as a run of three paragraphs. The sentence also does not say
+what a lane *is*, or which tools read a bed3d: the reader can see the lane on the map, and the format's
+button carries its own tooltip.
+
+**The result line is `computed in 2.0 s at 20:49:46`.** A clock on the wall, in the reader's own hours,
+and never the ISO instant — which is what *copy provenance* beside it puts on the clipboard and what
+every export carries at its head, and which read in a sentence as machine output that had leaked. The
+exact stamp is that line's tooltip, so it is one hover from the words and identical to the copy.
+
 ### 18.8 The catalogue
 
 Twenty-two tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
@@ -4849,11 +5259,14 @@ a factor of two when the balancer drops a single distant cell, and its median do
 **interpolated** between the two separations the cumulative crosses the threshold between, because
 rounding to the bin would quantise five smooth bands onto multiples of the bin size and step all five
 in the same places.
-Its reach is what it costs, and the default is **the whole sequence** because that is the only
-unbounded answer: cut at 1 Mb on a 250 Mb chromosome and the ninetieth centile is the ninetieth centile
-*of what is within 1 Mb*, a different number wearing the same name. The estimate prices the uncut run
-as the square it is and says so; a reader who sets a cut gets the cut in the lane's own label, on every
-band, so the picture cannot be mistaken for the unbounded one.
+Its reach is what it costs, it is a number of **bins** — it is the depth of the band the run reads,
+and asked in base pairs it was divided by the bin size before it meant anything — and the default is
+**0, the whole sequence**, because that is the only unbounded answer: cut at a thousand bins on a
+250,000-bin chromosome and the ninetieth centile is the ninetieth centile *of what is within a
+thousand bins*, a different number wearing the same name. The estimate prices the uncut run as the
+square it is and says so; a reader who sets a cut is told what it came to in base pairs on this file
+and gets the cut in the lane's own label, on every band, so the picture cannot be mistaken for the
+unbounded one.
 
 *Coverage and marginals* — total, cis, trans
 and the cis/trans ratio — as synthetic tracks, which is how a reader sees that a domain is a coverage
@@ -4871,6 +5284,17 @@ summary of the file, and a call would need false-discovery control and a golden 
 `hic_breakfinder`'s own output, which is §18.9's bar and which nothing here attempts. The diagonal
 is left out of the square rather than drawn, being one to three orders of magnitude above every
 other cell and therefore the whole colour scale.
+**And the per-sequence reading is a picture as well as a table**, because it is what the task is
+opened for and it was the one output with nothing to look at: one bar per sequence, in the file's own
+order, of the cis fraction, of the trans fraction, or of both stacked — which, the two summing to
+one, is a full bar split at the cis fraction. A setting says which. **Fractions rather than
+counts**, since a bar of a sequence's raw contacts is a picture of how long the sequence is and says
+nothing else; the ordinate is a share and is written in per cent while the numbers behind it stay
+fractions (§26.2); and a sequence with no contact at all is a gap rather than a bar of height zero,
+which is the rule its row in the table already keeps. There is no ceiling on the number of bars as
+there is on the square: a square becomes a grey band because its cells shrink in both directions at
+once, while four thousand bars are a silhouette of the same shape, read the same way, and one
+control away from the line that silhouette already is.
 *Per-cell contact QC* is offered on an `.scool` and nowhere else, and it is there because the whole
 of that container's interaction is a decision nothing was helping anybody make: the Cells table ranks
 by `nnz` and `sum`, which is what the *writer* recorded and a statement about the sequencing rather
@@ -4878,7 +5302,10 @@ than about the contacts. Per cell, from its own pixels: total contacts, cis frac
 of its contacts in each of four separation bands — Nagano et al. (2017)'s, whose *near* against
 *mitotic* scatter is the cell cycle drawn as a horseshoe. The edges are typed in base pairs with that
 paper's mouse-sized defaults, because a yeast chromosome is inside the near band and the run says so
-rather than drawing a column of points on the axis. It costs exactly what a pseudo-bulk of the same
+rather than drawing a column of points on the axis. **Base pairs and not bins**, which is the one
+matrix task where that is so: the three edges are a citation, they are what the scatter's own axes and
+the table's own column heads print, and nothing in the run ever counts bins with them — the histogram
+measures a contact's separation in base pairs and compares it there. It costs exactly what a pseudo-bulk of the same
 cells costs — the same reads in the same order, with one accumulator per cell instead of one shared —
 and its numbers land back in the **Cells table** as sortable columns, because the gesture they are
 for is the one that table already has: sort, tick a run of rows, sum them. It does not assign a
@@ -5053,6 +5480,11 @@ neighbour suppression and a Benjamini-Hochberg q-value on every call. **The patt
 and not five tasks**: they are one computation with different templates, and every threshold under
 the picker follows the picker because chromosight tuned each of them per template — a form that
 baked one preset's `pearson` into a box would report borders at twice the threshold upstream uses.
+A reader who takes the thresholds over types the three distances — the scan band, the floor away
+from the diagonal and the gap between two calls — as **counts of bins**, since each is a count of the
+grid's own cells and upstream divides its own base-pair config by the bin size before using it. The
+presets stay in base pairs, because they are generated from the installed package and must not be
+edited, and they are converted in exactly one place.
 It emits four things and the split is the point: a **loop set** (a bedpe, or a BED for the patterns
 that live on the diagonal) that lands on the map as an overlay the moment the run finishes; the
 **pileup** of every window it called, drawn on chromosight's own fixed 0–2 seismic scale so it can
@@ -5089,7 +5521,10 @@ near 0.9 for two *unrelated* maps of the same assembly, because almost all of th
 one gradient every Hi-C map has; and without the smoothing the coefficient measures depth as much as
 structure, which is why two shallow replicates would score worse than two deep ones of different
 conditions. It reads a **band** rather than a square, so a mammalian chromosome is a few dozen
-bounded reads.
+bounded reads. How far it compares is a **number of strata**, capped at and defaulting to 500: a
+stratum is a diagonal offset — which is the whole reason two maps on different grids cannot be
+compared at all — so the 5 Mb this used to be asked in was divided by the bin size in two places, and
+reached the cap on every file at 10 kb or finer.
 
 **The other maps are the deck's**, in the order they are on screen and under the reader's own names
 (§16) — there is no second file picker, because a coefficient against a file that is not on screen
@@ -5122,10 +5557,16 @@ other sense, so the runners are unchanged and an exported TSV still says what th
 with. The same reading removes the near-diagonal trim's ambiguity (**bins, not base pairs**: the
 near-diagonal is a fact about the grid, and a number typed in base pairs meant three bins at one
 resolution and one at the next), takes P(s)'s *sequences to draw* away entirely (a run that leaves out
-sequences by default answers a question about a subset the reader did not choose), and leaves a
-**whole-sequence picker empty** rather than seeded from the map's framing, since empty is an answer
-there — *every sequence* — and seeding silently narrowed three tasks to whichever chromosome happened
-to be on screen.
+sequences by default answers a question about a subset the reader did not choose), and settles *which
+sequences* on **one shape, the tick boxes** (§18.2) — where a dropdown offering *every sequence* or
+one of them could not say *these three*, and where the seeding it used to get from the map's framing
+silently narrowed three tasks to whichever chromosome happened to be on screen. Five tasks moved onto
+it — P(s), the scalogram, insulation, the directionality index and the HiC score — and each reads
+every ticked sequence on its own, which is one lane or one curve apiece. The **estimate** refuses a
+run with nothing ticked, and refuses one whose ticked sequences are all too short for the window
+rather than reading them and reporting a column of gaps; **unanswered** is every sequence, which is
+what a job that never met a form means — a stored session, or a `metacooler-run` line with no
+`--sequences`.
 
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number
@@ -5207,8 +5648,8 @@ domain to the right of where it belongs, and produced a figure with the body aga
 the whole flank on the far side. The body's two ends are pinned to their **own grid lines** for every
 domain whatever its length, rather than the whole window being stretched evenly — otherwise a 20 kb
 domain's boundary lands on one column and a 200 kb domain's on another and averaging them softens
-both. The distance-matched control is shifted by a **multiple of the window** rather than a length in
-base pairs, because a control 100 kb from a megabase-wide window is mostly the window and the ratio
+both. The distance-matched control is shifted by a **multiple of the window** rather than by a count
+of bins, because a control fifty bins from a thousand-bin window is mostly the window and the ratio
 comes out at 1 everywhere. And the statistic under it is the **domain's own corner against the same
 block across its boundary** rather than P2LL, whose lower-left quadrant here is the domain's two
 neighbours and reads well above 1 on a set with no boundaries in it.
@@ -5726,7 +6167,10 @@ bundler can leave the rest out.
 
 **Controls are in two places, and the split is the point.** A **slim strip** sits over every figure
 with the two or three controls that are reached for constantly — the mark, the two log axes, the
-legend, *Fit*; a colormap for a matrix; a filter box for a table. Everything else is one button
+legend, *fit*; a colormap for a matrix; a filter box for a table. They are bordered buttons in both
+states, because §26.3's *lit means on, plain means off* has no third state where a toggle stops
+looking like a control, and so are the figure's exports in the strip above it: `TSV`, `PNG` and `PDF`
+in a bar beside a bordered icon read as buttons or as captions of the title, and they are buttons. Everything else is one button
 away, in the **same dialog the 3D model opens in**: the figure at the size of the window, every
 control in a resizable column beside it, the grip and the hide toggle behaving as they do there.
 That shell is `ui/StageDialog.ts` and the two are callers of it rather than two implementations of
@@ -5750,6 +6194,18 @@ holds. The gesture is taken in the capture phase, because the chart pans on a dr
 sliding under the box being drawn on it is the one thing this must not do; ECharts' own brush is not
 used, since it arrives with a toolbox of buttons over the picture and zooms both axes always.
 
+**A boolean is one of two shapes, and a tick box is neither.** A *named parameter* — smooth, fill
+under, the grid, the tooltip — is a label and an `on`/`off` button on one row, which is what every
+settings column in this app already draws. A *compact set of named things* — the two axis scales, a
+table's columns — is a row of buttons each carrying its own name and lighting when it is on, which is
+what the overlay marks already draw. Both are `btn-toggle` with `aria-pressed`, so one stylesheet rule
+lights them (§26.3), and the figure's settings had a third idiom that was neither.
+
+**A column head is aligned with its column**, left for text and right for numbers. A `<th>` centres
+itself by default, which put every head over the middle of a column of left-aligned cells; and a head
+is a button that sorts, so it has a name — a blank one is a control whose tooltip reads *Sort by* and
+whose column the reader has to infer from its rows.
+
 **New marks.** Line, area, step, points and bars over a pair of axes; histogram, box and violin as
 summaries of the ordinate. The last three are rules with parameters rather than plots of the data,
 so the rules are in `figures/stats.ts` where they can be read: Freedman–Diaconis for a bin width
@@ -5758,6 +6214,15 @@ a Gaussian kernel density at Silverman's bandwidth for the violin — every viol
 by the same peak, because two violins each normalised to their own width say the two samples are
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
 one against another as a scatter.
+
+**Bars stack where the series are parts of one whole.** A sequence's cis and trans fractions sum to
+one, and the reading is one bar split in two rather than two bars side by side whose sum the reader
+performs. The task says which series share a stack; **only bars** honour it, because the same
+declaration on a pair of lines would draw an upper line that is the sum of two quantities under an
+axis claiming it is one of them — so a stacked bar chart restyled to lines is two lines again. The
+all-maps overlay keeps the stacks **per map** (`analysis/combine.ts`), since four libraries in one
+stack would be a single bar four libraries tall with each one's fraction standing on the sum of the
+ones before it.
 
 **A table is a view, not a printing.** Filter, sort and choose columns, which for four thousand MAGs
 is the difference between a record and a tool. The filter is a substring over each cell's *text*,
@@ -5811,7 +6276,7 @@ written, and each is absolute rather than a degradation:
 
 **The interface is honest about (3) rather than failing at it.** `IS_STANDALONE` removes the remote
 URL box, the store tiles and the version picker, leaves the landing page's folder row with the one
-place this build can reach — under *Mount a folder*, since a heading naming two kinds over a row
+place this build can reach — under *Connect a folder*, since a heading naming two kinds over a row
 holding one is the same false promise in smaller type — and says in one sentence that this copy
 opens local files only and where to go for the rest. A build that offered a URL field
 which could never succeed would be a worse artefact than one that does not offer it.
@@ -5875,8 +6340,15 @@ which is the only tile that needs them, in the order a reader meets them — the
 public Drive link fails without it; the account, because a private one fails afterwards with a key
 in place; the folder, because it needs the account. Since then the key and the client id have
 become the site's (§24.7), and each of the two panes that sign a reader in is **one title, a
-`?` and a button** (`ui/connectHead.ts`): *Connect to your Google Drive* or *Connect to your
-Dropbox* on the left of a line, a `?` at its far right, and one large sign-in button under it.
+`?` and a button** (`ui/connectHead.ts`): *Google Drive* or *Dropbox* on the left of a line, a `?`
+at its far right, and one large sign-in button under it. **Every pane is headed by its own tile's
+name** — *This machine*, *A bucket*, *Google Drive*, *Dropbox* — because a tab that renames its
+subject on being pressed reads as a further step rather than as the thing pressed; two of the four
+were imperatives, and *Connect to your Dropbox* under a tile saying *Dropbox* was the dialog asking
+twice. What a pane is *for* is the dialog's title. The sign-in button says **sign in to Google** /
+**sign in to Dropbox**, in the words the door said one press earlier (§24.2), and the bucket pane's
+says **connect this bucket** rather than *save*: it does save the bucket, but what the reader
+pressed a door for is the listing, and that is what happens (§20.3).
 Everything the pane has to say about the service — what the grant is, where the token lives,
 what is kept — is behind the `?`, shown on hover, on focus, or pinned by a click for a screen
 with no hover; what is on the pane itself is what a reader acts on: the button, the reason it is
@@ -5885,10 +6357,17 @@ error. On the Drive pane the folder box — a name, a link or id, *connect this 
 screen until the sign-in has happened, and appears under the button the moment it has, on the
 same pane, under the same title; there is no second heading. A build that cannot offer a provider
 does not draw its tile (§8.5): the standalone build offers this machine alone, and the desktop
-build's Drive pane keeps its title and its `?` and says under them why there is no button. The
-The Files column's *Open a local/remote folder* opens the dialog, and so do three of the four
-buttons in the landing page's *Mount a local or remote folder* row — those carry the pane to open
-on, since a reader who pressed *sign in to Dropbox* has already chosen and must not be asked again.
+build's Drive pane keeps its title and its `?` and says under them why there is no button.
+
+**One verb names this door wherever it is.** The dialog is *Connect a folder*; the landing page's
+heading, the Files column's button and the command palette all say *connect a local or remote
+folder*. There were three — the landing page said *Mount*, jargon used nowhere else in the app, the
+dialog it opened was titled *Open a local/remote folder*, and every button and every sentence about
+the result said *connect* — so a reader pressed under one word, landed on a second and was
+reassured in a third. A file is opened; a folder is connected (§26.4). The Files column's button
+opens the dialog, and so do three of the four buttons in the landing page's row — those carry the
+pane to open on, since a reader who pressed *sign in to Dropbox* has already chosen and must not be
+asked again.
 The fourth, *choose a folder…*, opens **the directory picker itself**: it is one gesture, the
 browser draws it, and a dialog in front of it would be asking the reader to press the same words
 twice (§24.2). Both screens call `connectDirectory` (`browse/connected.ts`) and therefore cannot
@@ -5947,6 +6426,14 @@ The rule inside a scope is **all three signing fields or none**; a row holding o
 rather than downgraded to an unsigned one, because falling back would turn a mistyped secret into a
 bucket that 403s on data the reader believes they have a key for.
 
+The form's one button is **connect this bucket**. It was *save*, from when the same form stood in a
+credentials dialog where saving was the whole of it; behind a door that said *connect a bucket…*,
+beside a Drive pane that says *connect this folder*, *save* promised a stored setting rather than
+the listing the reader came for — and the listing is what pressing it produces. There is no *test
+connection* button, because that listing **is** the test: the same signature and the same preflight
+as every later read, where a separate probe would be a second code path whose passing would mean
+nothing about the first.
+
 ### 20.4 The fifth column, and the one that is not about the open file
 
 §16.5 says the side columns are the session's furniture and each describes the one file the session
@@ -5958,12 +6445,13 @@ the reader it is for.
 
 **It is there while a place is connected, and not otherwise** (`App.refreshFilesPanel`), which is
 §8.5's rule as the other four columns already follow it. It used to be there unconditionally,
-because its own *Open a local/remote folder* was the only door to a folder and a column nobody can
-see is not a door. The landing page now offers the four places itself (§24.2), so what that rule
-was buying on the first screen is an empty column beside a row of buttons saying the same thing.
+because its own *connect a local or remote folder* was the only door to a folder and a column
+nobody can see is not a door. The landing page now offers the four places itself (§24.2), so what
+that rule was buying on the first screen is an empty column beside a row of buttons saying the same
+thing.
 Connecting one opens the column on it (`reveal`), because the answer to the gesture is in there;
 disconnecting the last one takes it away again. The doors are elsewhere and stay elsewhere: the
-landing page — which is what a new tab is — and *Open a local/remote folder* in the command
+landing page — which is what a new tab is — and *Connect a local or remote folder* in the command
 palette.
 
 `f` folds it. The single-letter space was down to `q` and `z`, and neither is a letter anyone
@@ -5995,7 +6483,7 @@ always meant.
 window is connected to — a directory on this machine included — and a row hands back the file with
 the credential the listing used; `ui/pickFromFolders.ts` is the same view in a dialog, which the
 column's own places open and which a drag out of it resolves through. With nothing connected it says
-so and names the column's *Open a local/remote folder* rather than offering an empty listing.
+so and names the column's *connect a local or remote folder* rather than offering an empty listing.
 
 **The cards that ask for a file keep no second door.** Each of them — Tracks, Contact maps,
 Structures, an empty cell of a deck — used to carry a box to paste a URL into, folded away behind
@@ -6147,11 +6635,15 @@ can offer. A same-origin frame is deliberately not caught: the pickers work ther
 Not a smaller header: the breadcrumb row with three things added, and what is on it is what a figure
 in somebody else's page owes its reader.
 
-**The mark and the name**, left. In a window the brand is the way home — back to the picker, which is
-one click away and catastrophic in a frame, since it would throw away the figure the page named with
-no back button to return by (§21.2). So it is a link *out*: this same view in the full application, in
-a new tab, with `embed` dropped from the query string and the fragment carried across untouched. Its
-address is rewritten on every navigation, so copying it copies where the reader actually is.
+**The mark and the name**, left. In a window the brand is the way home — the picker, **in a new tab**,
+so the tab in front keeps its file, its tracks and its deck: every page has taught a reader that the
+logo is safe to press, and a dropped local file cannot be re-opened without another gesture (§11),
+which is the same reason the file crumb stopped navigating to the picker. An empty tab *is* the
+picker, so a tab with nothing in it goes straight there rather than opening a second empty one. In a
+frame there is no new tab to open and nothing may be thrown away either (§21.2), so it is a link
+*out*: this same view in the full application, in a new tab, with `embed` dropped from the query
+string and the fragment carried across untouched. Its address is rewritten on every navigation, so
+copying it copies where the reader actually is.
 
 **The file and where they are in it**, next: the ordinary breadcrumb (§5.5), in the same slot the
 session fills in a window, with its own frame taken off so the row reads as one bar.
@@ -6349,12 +6841,16 @@ order it ran the first time, with the afternoon around it left in as the context
 commands were for. The **save** button writes exactly that as `.sh`, and — being a file leaving the
 app — records itself.
 
-The **output** toggle is the choice between a script and an archive. Off, a row is its command and
-the caveats that qualify it; on, each row is preceded by the full provenance block — the build, the
-task and its version, the framing in words, every parameter one per line — which is the header every
-exported file already opens with (§18.4). It is off by default, because eleven `#` lines per row is
-a log nobody scans, and it governs the clipboard as well as the screen: a reader who turned it off
-to paste clean commands must not find the provenance on their clipboard anyway.
+The **provenance** toggle is the choice between a script and an archive. Off, a row is its command
+and the caveats that qualify it; on, each row is preceded by the full provenance block — the build,
+the task and its version, the framing in words, every parameter one per line — which is the header
+every exported file already opens with (§18.4). It is off by default, because eleven `#` lines per
+row is a log nobody scans, and it governs the clipboard as well as the screen: a reader who turned
+it off to paste clean commands must not find the provenance on their clipboard anyway. It is named
+for what it shows, in the word the Analysis drawer's *copy provenance* already uses for the same
+block: it read *output*, which beside a column of commands names the one thing it is not — what the
+runs produced. And it is a toggle rather than a ticked box (§26.3), which leaves the header's
+controls one shape each: three word buttons, a toggle, and the cross.
 
 The caveats are **not** part of what the toggle hides. They are `cliCommandFor`'s notes about what a
 shell cannot be told — a remote file, a window across several sequences, a parameter naming a set
@@ -6517,13 +7013,18 @@ the URL box under it behind a rule reading *or a URL* (`ui/LoadBox.ts`), which t
 *Open a file* reuses in a dialog with the other verb behind it. There is no *choose files* button:
 a click on the target opens the same file dialog, and the same action drawn twice is a choice a
 reader has to make between two controls that do one thing. The target says both things it does —
-drop, or click — and carries inside it the sentence about what opens as what, which is the one
-place a reader holding a bigWig and no contact map is told this application is for them too. It is
-shallower than it was: a box deep enough to be the page said that dragging was the way in, and
-there are two sections under it that have to be seen. *Mount a local or remote folder* is a row of four buttons, side by side and
+drop, or click — and no more; what opens as what is stated once, in **About**, whose first sentence
+names the tracks, genomes and 3D models this viewer opens with or without a map, because a reader
+holding a bigWig and no contact map has to be told somewhere that this application is for them too.
+It is shallower than it was, and it carries no paragraph: a box deep enough to be the page said
+that dragging was the way in, and there are two sections under it that have to be seen.
+*Connect a local or remote folder* is a row of four buttons, side by side and
 of equal height, wrapping a long label to a second line rather than breaking the row — *choose a
 folder…*, which opens the directory picker itself, and *connect a bucket…*, *sign in to Google…*
-and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. *Connect to a data store* is a **grid** of tiles — the lab's
+and *sign in to Dropbox…*, which open the Connect dialog (§20) on that place's pane. Their
+**widths** are their labels' rather than equal, so that at the page's own width every label gets one
+line and the four read as the set they are; a narrower window or a wider font shrinks them together
+and wraps the longest first, which is the fallback and not the resting state. *Connect to a data store* is a **grid** of tiles — the lab's
 own figures, IGV's genomes, 4DN, ENCODE, DNA Zoo, Roadmap, every store the reader connected, and the
 two doors — each a mark, a name and one line (`ui/stores/tiles.ts`). It was one row that could not
 wrap, which was right while there were five and the set was the page's whole offer: a fifth tile on a
@@ -6547,10 +7048,14 @@ second copy of one. The ellipsis on every label covers both cases — something 
 here or in a dialog.
 
 Which places are offered, and what each button says, is decided once in `ui/connectFronts.ts` and
-read by both doors. Two things follow from that. A build that cannot make a Google sign-in work —
-the desktop one, whose `app://viewer` is not an origin Google's console will register — keeps its
-Drive **tile**, whose pane is the sentence saying why, and loses its **button**, because a row of
-things to press is not where a reader is sent to read an explanation (§8.5). And *this machine* is
+read by both doors. Two things follow from that. A sign-in that cannot work keeps its **tile**,
+whose pane is the sentence saying why, and loses its **button**, because a row of things to press is
+not where a reader is sent to read an explanation (§8.5) — and it cannot work for either of two
+reasons, which the row treats alike: a **build** that cannot be registered (the desktop one, whose
+`app://viewer` is not an origin Google's console will register) or a **site** built without the
+registration its maintainer provides (§24.7), where the pane's disabled button and the sentence
+beside it name the one thing a reader can do — ask them — and the landing page would be offering a
+bold sign-in answered by an environment variable's name. And *this machine* is
 worded identically on both screens: Chromium and the desktop build hold a directory as a grant that
 survives a reload, while Firefox and Safari hand over a snapshot of the file list that does not
 (§20), so the button reads *choose a folder…* on the first and *choose a folder (this visit)…* on
@@ -6558,9 +7063,9 @@ the second — wherever it is drawn, since both now run the same picker. *Choose
 the same marked button the panes use, so one gesture looks the same wherever it is met.
 
 **The Files column is no longer on the first screen, and that is what the row buys.** It used to be
-there from the first paint and never withdrawn, because its own *Open a local/remote folder* was
-the only door to a folder; it is now there exactly while a place is connected, like the four
-columns beside it (§16.5, §8.5). Mounting one opens it on the folder, which is the only thing a
+there from the first paint and never withdrawn, because its own *connect a local or remote folder*
+was the only door to a folder; it is now there exactly while a place is connected, like the four
+columns beside it (§16.5, §8.5). Connecting one opens it on the folder, which is the only thing a
 reader who has just connected one wants next.
 
 **The two doors are named for the errand, and carry the marks of what they open.** *Connect to a
@@ -6609,7 +7114,7 @@ column's, on the backslash key — punctuation, like the console's backtick, so 
 the letters the views are driven by, and at the other edge of the keyboard for the panel at the
 other edge of the window — and the command palette has *Open or close the stores*. The header holds
 nothing else on that side: the plug and the `+` that stood there were the Files column's own
-*Open a local/remote folder* and the file crumb's *Open a file* said a second time.
+*connect a local or remote folder* and the file crumb's *Open a file* said a second time.
 
 **A store row carries its name with it.** A 4DN file is called by its accession on the bucket —
 `4DNFI24F7GRY.mcool` — and by *Hi-C on HFF cells, protocol variations* on the shelf, and the second is
@@ -7248,16 +7753,20 @@ location control, and skipped by every stack; its picture is the cell.
 (§25.6) — is a row of one card under the Tracks card, and of no other: the Tracks card and the
 Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
-computed one, **show in the deck** — which puts the model in the structure cell, opening the cell
-where the deck has none, and reads *shown in the deck* on the row the cell is drawing — and
-**bed3d**, the model out (§25.7). The card's own load zone names the three formats. A computed
-row that came back from a reload is detached and offers **recompute**, which opens its recipe in
-the drawer, as the Synthetic card does (§18.5).
+computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
+head is what shows and hides: it puts the model in the structure cell, opening the cell where the deck
+has none, and takes the cell away again, with the row's accent bar saying which row the cell is
+drawing. There is no second control for that and no button labelled with what is already true
+(§26.3, §26.7) — a *shown in the deck* button beside the eye was two controls for one act, and a
+reader who pressed the lit one expecting it to un-show got nothing. The card's own load zone names
+the three formats and, like every other zone that asks for a file, says it takes a drop or a click.
+A computed row that came back from a reload is detached and offers **recompute**, which opens its
+recipe in the drawer, as the Synthetic card does (§18.5).
 
 ### 25.3 The deck of cells
 
 **The structure cell** draws **one** structure row — the one the reader chose from the Structures
-card or from the cell's own **model** picker, remembered per file, or the first of the list where
+card or from the cell's own **structure** picker, remembered per file, or the first of the list where
 none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
 same row**, is the one it draws; and **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
@@ -7282,13 +7791,22 @@ the ghost opacity** — 0.15 by default, a trace — and that slider is the one 
 everything else is drawn whole. *Outside the window* has three answers: *ghost* (the default),
 *hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
 how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
-says what a figure carries. On/off settings are icon toggles: drawn as, chords, fog, names, centre.
+says what a figure carries. On/off settings are icon toggles, **lit when on** (§26.3): drawn as, chords, pin contacts, fog,
+overlays. Every slider carries a **readout of the number it is at** beside it — a bead radius with
+its value nowhere on screen is a figure nobody can reproduce — and a slider whose setting does
+nothing is **greyed with its reason in its tooltip**: the ghost opacity while *outside the window*
+is *hide*. The card's rows are in one order, choices before the things that modify them: structure,
+compare with (and its RMSD note), drawn as, colour by, size by, bead radius, tube radius, haplotype,
+overlays, outside the window, ghost opacity, loops as chords, pin contacts, threshold, fog, fog
+depth, depth slab, measurements, camera, frame, export.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
 primitives, placed by the session whenever the deck has a structure cell and taken out when it has
 none, the column scrolling over all of them as one — and not a menu in the cell: a view's settings are in that column, and the model is a
-view. The cell keeps four corner buttons (select, measure, frame the window, enlarge); the dialog
+view. The cell keeps **five corner buttons** — mark a bead, mark a loop, measure (§25.4), frame the
+window, enlarge — the frame wearing the same mark the Map card's refit does and the enlarge its own,
+since two corner-bracket glyphs side by side were told apart only by hovering them; the dialog
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
 camera controls — and gives it back where it was. The card also carries **size by**
 (a track whose value at each bead sets its size, half to nearly twice the radius over the track's
@@ -7300,27 +7818,34 @@ the first of 10 kb, 20 kb, 50 kb, 100 kb… at least ten beads wide and no more 
 ticks over the whole model, so a genome at 5 kb is read at 500 kb — labelled `500 kb`, `1.5 Mb`,
 at most eighty labels, and no zero tick: a chain's start is where its name is),
 **camera presets** (front, top, side), a **turntable** that turns the model slowly by itself, and
-**frame** (the window, everything). The cell's actions are **commands** in the palette with keys —
-`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `e` mark a bead,
-`o` mark a loop, `m` measure, `r` turntable — **bound only while the model is enlarged**, and listed
-in the palette either way. They are single letters and so are the app's own (`f` folds the Files
-panel, `a` the Annotations panel); a cell sits *beside* a map and its commands come first in the
-palette's list, so binding them there took those letters from the panels for as long as a model was
-on screen. In the dialog the model is the whole window and there is nothing else a letter could
-mean. A phased file draws both homologues,
+**frame** (the window, everything) — all of them **bordered buttons** like every other action in the
+column (§26.6), since a quiet word beside a bordered toggle reads as a caption for it. The cell's actions are **commands** in the palette with keys —
+`f` frame the window, `a` everything, `1` `2` `3` beads, sticks, tube, `l` names, `r` turntable —
+**bound only while the model is enlarged**, and listed in the palette either way; the three modes
+have none at all (§25.4), which is three letters — `e`, `o`, `m` — handed back to the breaks toggle,
+the new tab and the Aesthetics panel that each already had one of them. They are single letters and
+so are the app's own (`f` folds the Files panel, `a` the Annotations panel); a cell sits *beside* a
+map and its commands come first in the palette's list, so binding them there took those letters from
+the panels for as long as a model was on screen. In the dialog the model is the whole window and
+there is nothing else a letter could mean. And a key is **printed on a control only where it is
+bound**, through `withKey` (§26.4): the corner's *frame* and the card's *frame* and *turntable* are
+retitled when the dialog opens and closes, because a card beside a deck reading `(f)` was offering a
+letter that folds a panel instead. A phased file draws both homologues,
 and the key's chips solo one. The picture takes the whole cell — a map's cell is its plot and its
 lanes together, and a model has no axis to line up — and a button in its corner **enlarges** it into
 a dialog with every setting in a sidebar beside it, **dragged wider or narrower by the grip between
-them** and remembered per file, as a panel column is; the cell's own canvas, key, labels and menu are
+them** and remembered per file, as a panel column is; the cell's own canvas, key and labels are
 moved into the dialog and back, so the camera, the colouring and the pin the reader left it with are
 what the cell shows afterwards; a button in the stage's bottom corner hides the sidebar and brings it
 back. A **badge in the top-left corner** says what the hand is about to do: *turn* (a drag orbits),
 *move* (Shift held: a drag pans the whole model), *centre* (the centre key held — ⌘ on a Mac, Ctrl
 elsewhere: a click on a bead makes it the centre of rotation), *fog* (Space held: the wheel brings
-the fog forward or pushes it back, which the menu's *fog* slider also sets, 0 to 1, 0.6 the depth the
-cell always had), or *select* (§25.4). A **tap** of the centre key alone shows or hides the **centre
+the fog forward or pushes it back, which the card's *fog depth* slider also sets, 0 to 1, 0.6 the depth the
+cell always had), or *mark*, *loop* or *measure* (§25.4). It is a **readout and not a control** —
+no border and no pill, the translucent backing the map's key has — because a bordered pill three
+pixels from five bordered buttons is a button a reader presses and nothing happens. A **tap** of the centre key alone shows or hides the **centre
 of rotation** — a ball at the camera's target with the three axes through it, drawn over the model —
-which the menu's *centre and axes* toggle also does; the keys act only while the pointer is over the
+which the card's *overlays* row also does; the keys act only while the pointer is over the
 cell, its canvas is focused or its dialog is open. It opens when a structure is dropped or named by URL while a map or
 the browser is on screen, from the bar's add row, from a g3d dropped on an empty card, or from a
 link's `3d`; a second structure replaces the picture rather than adding a cell.
@@ -7415,7 +7940,14 @@ the window are, and hidden with them under *outside the window: hide*), a **doub
 alone** (every other ghosted; a second double-click brings all back). Ghosting stacks with the
 window's: a ghosted sequence stays ghosted whatever the maps look at. The reader's own
 **arrowhead marks** are offered under *loops as chords* as *your marks*, beside the loaded loop
-sets, so a loop marked on the map or in loop mode is a chord on the model.
+sets, so a loop marked on the map or in loop mode is a chord on the model. The row is *label, toggle,
+set* on one line, and **the toggle is absent while the set is `none`**: lit with nothing chosen it
+was a *show the chords* that could not show one, and a reader pressing it could not tell which of
+the two controls was why the model stayed bare (§8.5).
+
+The homologue picker on a phased model is labelled **haplotype** and the row of name, ruler and
+centre marks **overlays** — the word the Map and Tracks cards use for the same kind of row. Both read
+*show* before, which is one name for two questions on one card.
 
 **Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
 contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
@@ -7542,10 +8074,13 @@ and loses them when every pair weighs the same.
 
 ### 25.7 Export
 
-Beads and sticks export as **paths** through `structure/painter.ts`, projected through the same
-camera the screen was; a tube is a lit surface no `arc` can be and exports as the raster the GPU
-drew, at 300 dpi; the deck's figure takes the cell's canvas like any other. Both say which on
-the button.
+The card's last row is **the export row** (§26.6) — `[resolution] [format] [⭳] [⧉]` with a line
+under it — so a model is saved the way a map and a browser are, and at the resolution the reader
+chose rather than at a fixed one. Beads and sticks export as **paths** through
+`structure/painter.ts`, projected through the same camera the screen was; a tube is a lit surface no
+`arc` can be and exports as the raster the GPU drew, **at the row's own resolution**; the deck's
+figure takes the cell's canvas like any other, at the deck's 300 dpi (§16.5). The clipboard takes a
+PNG, as it does for a map.
 
 **A model leaves as a bed3d** — `chrom start end x y z`, the haplotype column for a phased one, a
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
@@ -7564,3 +8099,219 @@ called intervals. It is the file §25.2 reads, so it reads straight back here an
 - **A resolution picker for a binary g3d**: the finest opens; the others are named under the row.
 - **Metadata columns as a colouring** and the Sequences card's ticks over the model: the key's
   chips and the haplotype solo cover the case a reader meets.
+
+## 26. The interface's own grammar
+
+Every section above governs one surface. This one governs what the surfaces have in common, and it
+exists because the audit that produced it found the same drift in twenty places at once: six locus
+boxes asking for the same thing in five phrasings, five ways of drawing a toggle that is on, three
+spellings of a byte count, two coordinate conventions in two views of one genome. None of those is a
+bug in the surface that has it. Each is a disagreement *between* surfaces, which is a thing no
+section about one surface can see and no reviewer of one file can catch.
+
+So the rules here are stated once and are binding on all of them. A new control that needs a look, a
+word, a unit or a coordinate takes the one below; a surface that wants a different one changes this
+section first.
+
+### 26.1 Coordinates: three forms, and which is for a reader
+
+A genome coordinate exists in exactly three forms in this application and they must never be
+confused:
+
+| Form | Grammar | Where it lives |
+|---|---|---|
+| **Machine** | cooler's: 0-based, half-open, ungrouped — `IV:1000000-1400000` | The session state, a `#`-hash link, `metacooler show --range`, every worker message, every file on disk |
+| **Display** | 1-based inclusive, en-US grouping, plain hyphen — `IV:1,000,001-1,400,000` | Every character a reader sees: locus boxes, breadcrumbs, readouts, table cells, figure captions, tooltips |
+| **Typed** | The display form, plus every spelling anyone writes it in | What a reader puts in a box |
+
+The machine form cannot change: it is what a shared link has to keep meaning and what the reference
+implementation takes. The display form cannot change either, because it is what IGV, UCSC, samtools,
+Ensembl and every paper print, and a viewer that showed a locus a base off from the one a reader's
+`bedtools` output names would be wrong in the way that is hardest to notice and worst to find.
+
+**The law is the round trip.** A locus box shows the display form and accepts the typed form, so
+pressing Enter on a value the box is already showing must not move the view by a base.
+`typedLocusToRegion(regionLabel(r)) === r` for every region with coordinates, and
+`test/unit/locus-display.test.ts` holds it. The helpers in `genome/assembly.ts` are the only
+place any of this is written: `formatLocus` for a window, `formatPosition` for a single base or bin
+start, `regionLabel` for a state string, `windowLabel` for the one crumb that hangs under the name it
+would otherwise repeat, `typedLocusToRegion` for what was typed. A view that formats a coordinate
+itself is a view that will drift.
+
+The typed form takes what other browsers write, because a reader arrives by pasting: commas, `kb`
+and `Mb`, an en dash, and Ensembl's `..`. A bare sequence name, a genome name, a gene name and `*`
+have no coordinates and pass through untouched — as does anything the tokenizer refuses, so that a
+refusal is about what the reader typed rather than about what a helper made of it.
+
+**Copying is not displaying.** What the clipboard takes is 1-based inclusive and **ungrouped**, so it
+pastes into a terminal, a spreadsheet or a BED-adjacent tool without separators to strip.
+
+### 26.2 Units: one spelling of each quantity
+
+`src/units.ts` holds the one formatter for every quantity the app prints, and it imports nothing —
+no DOM, no `ui/` — so the annotations worker and the g3d parser print what the cards print.
+
+- **Bytes are decimal**, in thousands: `18.1 MB`. Not because 1024s are wrong but because the
+  operating system, the browser's download dialog and the file's own listing all show the reader
+  1000s about the same file, and a viewer that called an 18.1 MB download `17.3 MB` was reporting a
+  second size for it.
+- **A bin size** takes `resolutionLabel`: `1 kb`, `12.5 kb`, `1 Mb` — trimmed, because a resolution
+  is a round number by construction. **A measured span** takes `fmt.bp` and keeps its decimal:
+  `400.0 kb` says it was measured to the hundred bases.
+- **A setting about the matrix is not a span at all**: it is a count of bins, or of diagonals, and is
+  printed as a count with `bins` or `diagonals` beside it (§18.2). An axis, a caption and a figure's
+  own numbers stay spans — so the same run reads `50 bins` on its form and `2 Mb` on its lane.
+- **A duration** takes `durationText`; **a finished-at time** takes `runClock`, local, six
+  characters.
+- A coordinate printed in full takes `fmt.pos`; a count takes `fmt.int`; a fraction takes `fmt.pct`.
+- **A record card says which columns are the format's and which the file's.** On a metagenome the two
+  sets overlap: `/genomes` guarantees `length`, `n_contigs` and `n_bins`, and a creator who joined a
+  MAG-QC table in brings `Length`, `Contigs` and sixteen more — so the card listed every number
+  twice with nothing to say why. Dropping the creator's copy would be wrong for the reason §5.1
+  gives for keeping it in the table: a column somebody added is a column they meant, and the first
+  time the two disagree the difference is the finding. So the card draws one quiet line between
+  them, headed *joined in with the file*.
+- **A table draws the same break in its header**, as a rule down the left of the first joined column
+  (`ColumnDef.joined`), and gives each joined header the tooltip *joined in with the file, not part of
+  the format*. Without it the header read `name length contigs bins Length GC-content …`: two columns
+  of identical numbers, told apart by one capital letter, and no way to know which one a click was
+  sorting by.
+
+- **An axis is spelled by `axisNumber`, and a log axis is decades.** Past four decimal places a
+  fixed-point tick stops being a number and becomes a run of zeros — a P(s) ordinate climbed to
+  `0.0000001` and the slope beside it to eight zeros — so a tick that needs an exponent gets one. On
+  a **log** axis every tick is a power of ten, so the moment one needs an exponent they all take it:
+  an axis that reads `0.001`, `0.0001`, `1e-5`, `1e-6` changes notation halfway down itself. An
+  abscissa in base pairs takes `fmt.bp` instead, so a P(s) reaching a megabase reads `1.00 Mb`
+  rather than `1e6`, and an axis of **fractions** takes `fmt.pct` and says so in its own name —
+  *Share of the sequence's contacts (%)* — so a cis fraction reads `93.3%` where the TSV under the
+  figure holds `0.933`. That is the rule below applied to the surface rather than to the number, and
+  the places are the tick's own: a whole per cent spends none of them.
+
+- **A table cell is not a summary.** The Chromosomes table's `length` column prints `1,531,933` while
+  the Sequences card beside it prints `1.53 Mb`, and both are right: a table holds the values a
+  reader reads off exactly and copies out, so it groups the digits and keeps them all, while a
+  summary line is a measurement and takes the unit. The rule is the surface, not the number — so a
+  column of lengths is never rounded to `fmt.bp`, and a phrase about a span is never spelled out in
+  full base pairs.
+
+### 26.3 What a toggle looks like
+
+**Lit means on. Plain means off. Nothing live is ever dimmed.**
+
+The last clause is the one that was being broken: `.btn:disabled` is drawn by dimming, so a toggle
+that dimmed itself when off was telling a reader who had learned "grey means you cannot" that a
+track's eye was off and should be pressed. A control that is off is drawn exactly like a control
+that has never been pressed, and the *lit* state is what carries the difference.
+
+The state is read from the ARIA attribute the control already needs — `aria-pressed` for a toggle,
+`aria-expanded` for a fold — so a toggle cannot be drawn without also being announced, and one rule
+in `ui/styles.css` draws all of them. `test/unit/toggle-look.test.ts` holds the selector list and
+refuses a second lit look. A toggle that has become unavailable is unavailable first: the lit rule
+stands down for `:disabled`.
+
+A **selection** is not a toggle. A chosen row, tile or folder carries a fill and a border and keeps
+its text colour, because its text is content — a file's name — rather than a label. A toggle's whole
+text is its label, so the label carries the state.
+
+The rule cuts both ways: **a control with nothing to act on is dimmed.** An empty console offered
+*copy*, *save* and *clear* at full strength — the first two would have written a file with nothing in
+it, the third forgotten nothing — and a table greys its own *clear filters* when there is no filter
+to clear. `disabled`, with the tooltip still saying what the control is for, so pointing at it
+answers *why not*.
+
+### 26.4 Words on controls
+
+- **Button labels are lowercase** — `go`, `save`, `connect a folder` — except format names and proper
+  nouns (`PDF`, `BEDPE`, `Google Drive`) and the zoom steps (`10×`). Field labels and select options
+  too; a sub-head is written lowercase in the source and uppercased by the stylesheet, so one
+  spelling survives a change of mind about the look.
+- **One word per thing, app-wide.** A session in front of a reader is a **tab**. A stretch of DNA is
+  a **sequence** in prose and a **chromosome** or **contig** only on the surfaces that report what a
+  file itself calls it. A 1D dataset is a **track**. The occupants of the deck are **cells**; the map
+  in one is a **map**. A file of beads is a **structure** and one set of its coordinates a **model**
+  (§25.1). A reader **connects a folder** and **signs in to** a provider.
+- **A hint is one sentence and never more.** No section numbers, no backticks, no Markdown, no
+  naming of the module that implements it: a reader who needs `§18.6` is reading the wrong document.
+  Where a group of controls shares a caveat, it is said once at the group rather than on each. Two
+  kinds of line are not that hint and are not held to it: **a toggle** may add what its *off* state
+  does, because that is a second fact and the control cannot show it (*"Track names, their value
+  ranges and feature names. Off leaves the lines alone."*); and **an empty state** teaches the
+  gesture that fills it, which is the only thing it is for. Nothing else gets a second sentence.
+- **A hint carries a fact the control cannot show, or it does not exist.** What a number does to the
+  result, what a unit means, what a mode refuses, what an empty answer means where that is not
+  obvious, a consequence — *"Drops the near-diagonal, where unligated fragments dominate."* Restating
+  the label, the options, the unit or the default is not a fact: a column of tick boxes that opens
+  with every box ticked does not need a line saying every sequence is read, and a locus box does not
+  need its own tooltip printed again underneath it. Both of those existed, on nine controls between
+  them, and the line a reader learns to skip is the line that makes them skip the next one.
+- **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
+  read by someone already pointing at the thing, which is exactly when "is there a faster way" is
+  asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.
+  A key whose glyph cannot be read at 11 px is printed as its name (`backtick`).
+
+### 26.5 Colour means one thing each
+
+`--danger` is a refusal and nothing else — never a price, never a caution, never emphasis. `--warn`
+is "look at this before you trust it". `--ok` is a thing that finished. A **price** is `--text-dim`,
+because a cost is a fact about what is being offered and not a warning about the answer. `--accent`
+is what a reader can act on, and text set *in* an accent fill takes `--on-accent`.
+
+### 26.6 One shape per job
+
+- **A locus box** is built by `SearchBox` and its placeholder by `locusPlaceholder`, whose example is
+  taken from the assembly in front of the reader rather than from a genome they may not have open —
+  never `__unbinned__`, which §7.4 refuses to draw at any resolution.
+- **A placeholder that lists what a box takes is cut to the box, clause by clause**, by
+  `fitPlaceholder`: the clauses come off the end until what is left fits, the example always
+  survives, and the offer in full is the box's tooltip. An input clips its placeholder with no
+  ellipsis and reports no overflow, so `I:1,000-20,000, a sequence, a ge` in a 336-pixel bar looked
+  like a bug and hid the clause a reader had not already guessed.
+- **A navigation bar** is `[title] [‹ ›] [box] [go] [⊖10× ⊖3× ⊕3× ⊕10×] [bookmark]`, and the zoom
+  steps come from `RegionView`'s own pair so the map's bar and the browser's are the same control
+  over two pictures of one genome.
+- **An export row** is `[resolution] [format] [⭳] [⧉]` with a line under it, built by
+  `ui/exportRow.ts`; a card with no resolution to offer omits it and one that writes a file rather
+  than a picture omits the clipboard. Data leaves by a bordered button named for its format.
+- **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
+- **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
+  of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough
+  for every option any of them offers. The line under the label is kept for a control that is not one
+  dropdown — a row of icon toggles, a pair of clip boxes — and for a select whose options are not
+  *words*: a **name out of a file** (`Yeast_structure`) or a **phrase** (`the same everywhere`),
+  neither of which fits 97 pixels and neither of which can be shortened, since one belongs to the
+  file and the other is the sentence the setting is. That is the 3D card, and it keeps the shape for
+  all four of its selects rather than for two — the rule that matters is that a card does not hold
+  both shapes. The Map card used to hold `score` above its select and `smooth`, `transform` and
+  `colours` beside theirs, which is two shapes for one kind of question; the fix was the label
+  column, not the row.
+- **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
+  other four do.
+- **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**
+  A head carrying something out of a file (the enlarged cell's structure, the `.pairs` file being
+  binned) keeps the file's own spelling through `titleIsName`: in genomics a name whose case has been
+  changed is a different name, and `YEAST_STRUCTURE` over a card, a tab and a Structures row all
+  reading `Yeast_structure` was four names for one file.
+- **The picture is never the thing that gives way.** The side columns may be squeezed to their own
+  minimum widths when the window cannot hold them all, and `.content` keeps a floor of 18rem: four
+  columns at their widths come to about 1,180 pixels, so on a 1366-wide laptop with all four open the
+  map used to be left 140 of them, with the reader's own locus cut to `IV:1,00`. A column has a
+  folded tab to come back from; a map that thin has nothing. Below about 1,170 pixels the outermost
+  column leans off the right edge, which is the one shape this trade cannot avoid.
+- **A column's minimum width is a promise its cards still work at it.** Aesthetics' was 200 pixels,
+  at which its two clip limits read `-4.1` and its selects cut `log10`; General's was 200, at which
+  the File card's values had forty pixels — so both went up to 240 rather than the cards being made
+  to fit a width nothing survives. Within a card the **keys** give way before the values: a long key
+  over two lines is two words, while a grouped count broken across two lines is misread.
+- **A list of regions is split by `splitRegionList`, never by `split(',')`.** Coordinates carry
+  thousands separators, so the box that takes several sequences has two meanings for one character:
+  a comma is part of a number when a digit is on its left and exactly three digits are on its right,
+  and separates otherwise. `I, II` and `1,2` are two regions each; `IV:1,000,001-1,400,000` is one.
+- **A floating surface takes `--shadow-2`** (or `--shadow-up` where it rises out of an edge), never a
+  literal `box-shadow`: an ink-black shadow is invisible on the dark theme, which is what the token
+  exists to answer.
+
+### 26.7 The words for a state
+
+A thing that can run says exactly one of: **never run**, **queued**, **running**, **done**,
+**failed**, **cancelled**, or **reading…** while it fetches. No surface invents a seventh.

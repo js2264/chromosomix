@@ -31,6 +31,21 @@
  * result. So the edges are typed in base pairs, the defaults are the paper's,
  * and the run says when the assembly cannot reach the band it was asked about.
  *
+ * ## Why these three stayed in base pairs when the matrix settings moved to bins
+ *
+ * §18.2 asks every matrix parameter in **bins**, because a reader setting one is
+ * choosing a number of the file's own cells and the runner was dividing base
+ * pairs by the bin size to get there. Neither half of that is true here. These
+ * three are never converted to bins by anything: the histogram measures a
+ * contact's separation as `|bin2 − bin1| × binsize` and compares it in base
+ * pairs, so the arithmetic runs the *other* way; and the numbers are not a
+ * reader's choice of grid but a **citation** — a reader types what Nagano et al.
+ * printed, and in bins the same band would be a different number on every
+ * `.scool` and unrecognisable on all of them. They are also what the phasing
+ * plot's own axes and the table's own column heads say, and a plot's axes stay
+ * in base pairs (§26.2). So: base pairs, deliberately, and the one exception in
+ * the group.
+ *
  * ## What it does not do
  *
  * It does not **cluster** the cells and it does not assign a phase label. The
@@ -55,21 +70,21 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'cells',
-    label: 'Cells',
+    label: 'cells',
     default: 'all',
     options: [
       {
         value: 'all',
-        label: 'Every cell in the file',
+        label: 'every cell in the file',
         hint: 'What the choice is made from, so this is the answer that helps make it.',
       },
-      { value: 'selected', label: 'The ticked ones only' },
+      { value: 'selected', label: 'the ticked ones only' },
     ],
   },
   {
     kind: 'number',
     key: 'nearFrom',
-    label: 'Near band, from',
+    label: 'near band, from',
     unit: 'bp',
     hint: 'Below this a contact is mostly self-ligation and unligated ends rather than structure.',
     default: NEAR_FROM,
@@ -80,7 +95,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'nearTo',
-    label: 'Near band, to',
+    label: 'near band, to',
     unit: 'bp',
     default: NEAR_TO,
     min: 1,
@@ -90,7 +105,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'mitoticTo',
-    label: 'Mitotic band, to',
+    label: 'mitotic band, to',
     unit: 'bp',
     hint: 'The near band’s upper edge is this band’s lower one; beyond it is the far band.',
     default: MITOTIC_TO,
@@ -119,8 +134,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `One pass over each of ${counted.toLocaleString()} cells’ own pixels — the same reads a ` +
-      'pseudo-bulk of them costs, and in the same order, with one accumulator per cell instead ' +
-      'of one shared. Progress is counted in cells and it can be cancelled at any point.',
+      'pseudo-bulk of them costs, with one accumulator per cell instead of one shared.',
   }
 }
 

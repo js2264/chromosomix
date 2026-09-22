@@ -108,7 +108,7 @@ export function restoreBanner(props: RestoreBannerProps): HTMLElement {
     el(
       'div',
       { class: 'restore-actions' },
-      button('Restore', () => props.onRestore(), {
+      button('restore', () => props.onRestore(), {
         class: 'btn btn-primary',
         title: 'Reopen those tabs, with their tracks, marks and filters.',
       }),
@@ -148,7 +148,9 @@ export function noticeBanner(message: string, onDismiss: () => void): HTMLElemen
     el(
       'div',
       { class: 'restore-actions' },
-      button('Dismiss', onDismiss, { class: 'btn btn-quiet', title: 'Hide this note.' }),
+      // Bordered like every other action: a quiet word is for a link inside
+      // running prose, not for the one control on a banner (§26.6).
+      button('dismiss', onDismiss, { class: 'btn', title: 'Hide this note.' }),
     ),
   )
   return row
@@ -166,7 +168,7 @@ export interface StoredDataProps {
  * The list is built by the caller rather than gathered here, because the stores
  * are spread across three layers and this module has no business knowing about
  * any of them. What it does own is the promise the dialog makes: if a thing is
- * held, it is named here, and **Forget everything** means everything — not the
+ * held, it is named here, and **forget everything** means everything — not the
  * new IndexedDB half while thirteen `localStorage` keys, one of them holding an
  * S3 secret in cleartext, quietly stay put.
  */
@@ -181,9 +183,9 @@ export function openStoredData(props: StoredDataProps): Modal {
         el('p', {
           class: 'hint',
           text:
-            'All of it is on this computer and none of it has been anywhere else. File contents ' +
-            'are never among it: what is kept is which files were open and how you had them set ' +
-            'up, never a copy of the data.',
+            'All of it is on this computer and none of it has been anywhere else — and file ' +
+            'contents are never among it: what is kept is which files were open and how you had ' +
+            'them set up, never a copy of the data.',
         }),
         props.items.length === 0
           ? el('p', { text: 'Nothing is being kept.' })
@@ -204,7 +206,7 @@ export function openStoredData(props: StoredDataProps): Modal {
           'div',
           { class: 'stored-actions' },
           button(
-            'Forget everything',
+            'forget everything',
             () => {
               props.onForgetAll()
               close()

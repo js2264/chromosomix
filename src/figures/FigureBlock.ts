@@ -213,7 +213,7 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
         pressed('list', style.legend !== 'none', 'legend', () =>
           apply({ legend: style.legend === 'none' ? 'right' : 'none' }),
         ),
-        button('Fit', () => apply({ x: { ...style.x, domain: null }, y: { ...style.y, domain: null } }), {
+        button('fit', () => apply({ x: { ...style.x, domain: null }, y: { ...style.y, domain: null } }), {
           class: 'btn btn-quiet',
           title: 'Both axes back to the whole of the data — the wheel zooms, this undoes it',
         }),
@@ -259,7 +259,7 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
         ? []
         : [
             button('PNG', () => props.onPng?.(drawable), {
-              class: 'btn btn-quiet',
+              class: 'btn',
               title: 'The figure as a raster, redrawn at 300 dpi',
             }),
           ]),
@@ -267,7 +267,7 @@ function blockOf(spec: FigureSpec, props: FigureBlockProps): FigureBlock {
         ? []
         : [
             button('PDF', () => props.onPdf?.(drawable), {
-              class: 'btn btn-quiet',
+              class: 'btn',
               title: 'The figure as a true vector page — restylable, recolourable, scalable',
             }),
           ]),
@@ -381,8 +381,13 @@ const MATRIX_MAPS = ['fall', 'viridis', 'magma', 'seismic', 'coolwarm', 'bwr']
 function axisToggle(which: 'x' | 'y', style: FigureStyle, apply: (patch: Partial<FigureStyle>) => void): HTMLElement {
   const axis = style[which]
   const on = axis.scale === 'log'
+  // **Bordered when off.** It was `btn-quiet`, which takes the border and the
+  // background away, so an unlit `log x` was plain grey text beside a `<select>`
+  // — a label as far as the eye is concerned, and the off state of a toggle is
+  // exactly when a reader needs to see that there is something to press. §26.3
+  // asks for lit and plain, not lit and gone.
   const node = button(`log ${which}`, () => apply({ [which]: { ...axis, scale: on ? 'linear' : 'log' } } as Partial<FigureStyle>), {
-    class: 'btn btn-quiet btn-toggle',
+    class: 'btn btn-toggle',
     title: on ? `A linear ${which} axis` : `A log ${which} axis — values at or below zero become gaps`,
   })
   node.setAttribute('aria-pressed', String(on))

@@ -7,7 +7,7 @@
  * (`ui/LoadBox.ts`): bytes the reader has, or the address of some. One file,
  * or five.
  *
- * **Mount a local or remote folder** is a row of buttons — a folder on this
+ * **Connect a local or remote folder** is a row of buttons — a folder on this
  * machine, a bucket, Google Drive, Dropbox — each opening the Connect dialog
  * on that place (`ui/ConnectCard.ts`), after which it is listed one level at a
  * time in the Files column (§20). A reader with a directory of maps does not
@@ -201,9 +201,10 @@ export class FilePicker {
    *
    * Which places are offered is `ui/connectFronts.ts`'s, and it is the one
    * thing this section decides for itself: a button is only drawn where
-   * pressing it reaches something that can act, which is §8.5 and is why the
-   * desktop build has no Google button here while the dialog still has the
-   * tile that explains.
+   * pressing it reaches something that can act, which is §8.5. That is why the
+   * desktop build has no Google button here, and why a site built without a
+   * provider's registration (§24.7) has neither sign-in button, while the
+   * dialog keeps every tile and its pane explains.
    */
   private placesSection(): HTMLElement | null {
     const onConnect = this.props.onConnect
@@ -213,10 +214,15 @@ export class FilePicker {
     return el(
       'section',
       { class: 'picker-section' },
+      // One verb for one act. *Mount* was this heading's word alone — jargon
+      // nowhere else in the app — while the dialog it opens said *open* and
+      // every button in the row and every sentence about the result said
+      // *connect*. A file is opened; a folder is connected (§26.4).
+      //
       // The standalone build reaches no remote place at all (§19), so it does
       // not offer a heading naming two kinds and a row holding one.
       pickerHeading(
-        IS_STANDALONE ? 'Mount a folder' : 'Mount a local or remote folder',
+        IS_STANDALONE ? 'Connect a folder' : 'Connect a local or remote folder',
         'folder-tree',
       ),
       el(

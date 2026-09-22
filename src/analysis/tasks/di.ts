@@ -40,12 +40,11 @@
  * border both agree on is worth more than either.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import { bandTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -68,39 +67,28 @@ export function windowBinsOf(params: Params): number {
   return Math.max(1, Math.round(value))
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
-}
-
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'window',
-    label: 'Window',
+    label: 'window',
     hint:
-      'Contacts are summed this many bins upstream and this many downstream of every bin. ' +
-      '50 is Dixon et al.’s 2 Mb at the 40 kb they worked at.',
+      'Contacts are summed this many bins each way of every bin, 50 being Dixon et al.’s 2 Mb ' +
+      'at the 40 kb they worked at.',
     default: DEFAULT_DI_WINDOW_BINS,
     min: 1,
     integer: true,
     unit: 'bins',
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'Sequence',
-    sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * `0`, where the diamond's is `2`, and `analysis/di.ts` argues the
      * difference: the index differences two sums that both contain the
@@ -116,7 +104,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minValid',
-    label: 'Minimum coverage of each side',
+    label: 'minimum coverage of each side',
     hint: 'Below this fraction of usable cells — on either side — the bin gets no score.',
     default: 0.5,
     min: 0,
@@ -138,7 +126,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'call',
-    label: 'Call borders from the sign flips',
+    label: 'call borders',
     hint: 'Adds a BED of domain borders, drawn on the map.',
     default: true,
     section: 'Borders',
@@ -146,7 +134,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'prominence',
-    label: 'Minimum prominence',
+    label: 'minimum prominence',
     /**
      * In bins of ordinary directional bias, which is the unit
      * `integratedDirection` standardises the curve into and is not the index's
@@ -172,7 +160,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'spacing',
-    label: 'Minimum spacing',
+    label: 'minimum spacing',
     hint: 'Two calls closer than this many bins keep only the stronger.',
     default: 0,
     min: 0,
@@ -184,7 +172,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'domains',
-    label: 'Also the domains between them',
+    label: 'domains between them',
     hint: 'A second overlay: the span from each border to the next, as a BED.',
     default: true,
     when: (params) => params.call === true,
@@ -195,25 +183,43 @@ const PARAMS: readonly ParamSpec[] = [
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
   const window = windowBinsOf(params)
-  const contig = regionContig(context, regionOf(params))
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
 
-  if (contig !== undefined && contig.bins <= window) {
+  // **Priced over the sequences that can carry the window, not over the ticks.**
+  // A bin needs a whole window each side, so a sequence no longer than the
+  // window contributes nothing at any cost — and the run says so rather than
+  // reading it. With one ticked that is a refusal naming it, which is the same
+  // sentence the single dropdown used to produce; with several it counts them,
+  // since a metagenome's short contigs are the ordinary case and not a mistake.
+  const long = chosen.filter((entry) => entry.bins > window)
+  if (long.length === 0) {
+    const one = chosen.length === 1 ? chosen[0] : null
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `${contig.name} is ${contig.bins.toLocaleString()} bins and the window is ` +
-        `${window.toLocaleString()}, so no bin on it has a whole window either side. Use a ` +
-        'narrower window, or a longer sequence.',
+        one !== null
+          ? `${one.name} is ${one.bins.toLocaleString()} bins and the window is ` +
+            `${window.toLocaleString()}, so no bin on it has a whole window either side. Use a ` +
+            'narrower window, or a longer sequence.'
+          : `No ticked sequence is longer than a ${window.toLocaleString()}-bin window, so no ` +
+            'bin on any of them has a whole window either side. Use a narrower window, or tick ' +
+            'a longer sequence.',
     }
   }
 
-  const extent: [number, number] =
-    contig === undefined
-      ? [0, context.nBins]
-      : [contig.startBin, contig.startBin + contig.bins]
+  const extent = extentOf(long)
 
   const framing = context.framing
   if (
@@ -237,7 +243,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // than `n²`. `bandFor` tiles it; the count below is that walk's, and it is the
   // same arithmetic `analysis/run/blocks.ts` does.
   const perTile = balance ? 5 : 4
-  if (contig !== undefined) {
+  if (long.length === 1) {
+    const contig = long[0]
     const tiles = bandTiles(contig.bins, window)
     const requests = tiles * perTile
     return {
@@ -251,7 +258,6 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  const long = context.contigs.filter((entry) => entry.bins > window)
   const tiles = long.reduce((sum, entry) => sum + bandTiles(entry.bins, window), 0)
   return {
     class: 'scan',
@@ -259,8 +265,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     bytes: null,
     note:
       `${long.length.toLocaleString()} sequences are long enough for this window, read as ` +
-      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals. ` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'} along their diagonals.`,
   }
 }
 

@@ -17,6 +17,13 @@
  * the ones the URL hash carries. A reader thinks in counts, so the caption under
  * the boxes prints the untransformed pair — and the colourbar, which is labelled
  * in counts throughout, remains the authority.
+ *
+ * Both of those numbers are on screen at once — `-4.182` in a box, `0.000066`
+ * in the caption — so both say what they are: the caller puts the transform in
+ * the field's label (`clip (log10)`) and hands the caption's own unit word in
+ * through {@link ClipRangeProps.unit}, which is the score the counts are in.
+ * Unnamed, the pair reads as a contradiction, and a reader who typed the
+ * caption's number into the box clipped the map a thousandfold too high.
  */
 
 import type { ValueRange } from '../render/scale'
@@ -28,6 +35,14 @@ export interface ClipRangeProps {
   onChange(clip: ValueRange | null): void
   /** Render a transformed value in the units a reader reads, for the caption. */
   format(value: number): string
+  /**
+   * What the caption's numbers are in — `balanced`, `counts`, `O/E`.
+   *
+   * A function rather than a string, because the score can change under a
+   * mounted control. Empty, or absent, prints no unit word: a card whose
+   * caption is in the same units as its boxes has nothing to disambiguate.
+   */
+  unit?(): string
 }
 
 export class ClipRange {
@@ -41,6 +56,8 @@ export class ClipRange {
   /** The bounds in force, always resolved — in auto they are what auto chose. */
   private value: ValueRange = { vmin: 0, vmax: 1 }
   private auto = true
+  /** Whether a block has been drawn yet, so the caption has something to state. */
+  private scaled = false
 
   constructor(private readonly props: ClipRangeProps) {
     this.lowInput = this.buildBox('low')
@@ -50,7 +67,7 @@ export class ClipRange {
     // because it is the same action: hand the range back to the data.
     this.autoButton = iconButton(
       'chevrons-up-down',
-      'Back to the §7.1 default: the 99th percentile of the values in view.',
+      'Back to auto: 0 to the 99th percentile of the values in view.',
       () => {
         this.auto = true
         this.paint()
@@ -86,9 +103,10 @@ export class ClipRange {
    * properties sixty times a second for output that is byte-identical.
    */
   setValues(value: ValueRange, auto: boolean): void {
-    if (auto === this.auto && value.vmin === this.value.vmin && value.vmax === this.value.vmax) {
+    if (this.scaled && auto === this.auto && value.vmin === this.value.vmin && value.vmax === this.value.vmax) {
       return
     }
+    this.scaled = true
     this.value = value
     this.auto = auto
     this.paint()
@@ -140,6 +158,10 @@ export class ClipRange {
       which === 'low' ? { vmin: typed, vmax: other } : { vmin: other, vmax: typed }
     this.value = next
     this.auto = false
+    // A typed bound is a range whoever typed it can be told about, whether or
+    // not a block has been drawn yet — which is the other half of the caption's
+    // silence below.
+    this.scaled = true
     this.paint()
     this.props.onChange(next)
   }
@@ -153,9 +175,17 @@ export class ClipRange {
 
     this.el.classList.toggle('clip-manual', !this.auto)
     this.autoButton.disabled = this.auto
-    this.note.textContent = this.auto
-      ? `auto · ${this.props.format(this.value.vmin)} – ${this.props.format(this.value.vmax)}`
-      : `clipped · ${this.props.format(this.value.vmin)} – ${this.props.format(this.value.vmax)}`
+    // Nothing until a block has been scaled. The control starts on `{0, 1}`,
+    // which is a placeholder rather than a range, and printing `auto · 1 – 10`
+    // beside a view that has drawn nothing yet — the whole-genome gate — is the
+    // card claiming to describe a picture that is not there (§8.5).
+    if (!this.scaled) {
+      this.note.textContent = ''
+      return
+    }
+    const unit = this.props.unit?.() ?? ''
+    const range = `${this.props.format(this.value.vmin)} – ${this.props.format(this.value.vmax)}`
+    this.note.textContent = `${this.auto ? 'auto' : 'clipped'} · ${range}${unit === '' ? '' : ` ${unit}`}`
   }
 
   private setBox(box: HTMLInputElement, value: number): void {

@@ -16,9 +16,12 @@
  * has the same question and the same answer sitting in the same store: a
  * whole-genome map of a mammal is three pixels per chromosome arm, so "go to
  * MYC" is a question that view has to answer without asking for a click on a
- * three-pixel target. What differs between the two surfaces is only the base a
- * coordinate is written in, which is why this returns *numbers*.
+ * three-pixel target. What differs between the two surfaces is the *window* each
+ * one opens, in its own base, which is why this returns numbers; what a reader
+ * *reads* in the list is one string on both, and {@link hitLocus} writes it.
  */
+
+import { formatLocus } from '../genome/assembly'
 
 import type { AnnotationStore } from './store'
 
@@ -53,6 +56,18 @@ export interface FeatureHit {
    */
   start: number
   end: number
+  /**
+   * The feature's **own** bounds, 0-based half-open — what the file says.
+   *
+   * Beside the padded window rather than derived from it, because the padding is
+   * a quarter of the feature's length and cannot be taken back out. This is what
+   * a hit is *labelled* with: the list used to print the window's start, so a
+   * search for a 600-base gene offered a coordinate a hundred and fifty bases
+   * before it began — a number a biologist reads as the gene's start and pastes
+   * into a primer tool or a paper.
+   */
+  featureStart: number
+  featureEnd: number
   /** The set it came from: the starred one's label. */
   source: string
 }
@@ -100,6 +115,8 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
       contig: set.contigs[set.contig[i]],
       start: Math.max(0, set.start[i] - pad),
       end: set.end[i] + pad,
+      featureStart: set.start[i],
+      featureEnd: set.end[i],
       source: source.label,
     })
   }
@@ -115,6 +132,19 @@ export function findFeatures(store: AnnotationStore, text: string, limit = MAX_H
  */
 export function hitLabel(hit: FeatureHit): string {
   return hit.id === '' ? hit.name : `${hit.name} (${hit.id})`
+}
+
+/**
+ * Where a hit is, as a reader reads it: `IV:453,045-453,650`.
+ *
+ * The feature's own span in the display form (§26.1), through the one writer of
+ * a window, so the map's list and the browser's print the same string — and so
+ * that what the list says and what the locus box says after the click are the
+ * same place. Each surface still *opens* its own window: that is `hit.start` and
+ * `hit.end`, padded, in the base that surface's plumbing takes.
+ */
+export function hitLocus(hit: FeatureHit): string {
+  return formatLocus({ contig: hit.contig, start: hit.featureStart, end: hit.featureEnd })
 }
 
 /**

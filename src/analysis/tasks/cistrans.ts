@@ -24,6 +24,19 @@
  * statistic with false-discovery control and a golden built from
  * `hic_breakfinder` or `EagleC`'s own output, which is the bar a second caller
  * has to clear and which nothing here attempts.
+ *
+ * ## Why the per-sequence fractions get a picture of their own
+ *
+ * For a while the square was the only picture here and the per-sequence reading
+ * — the number in the paper's first table, the reason anybody opens this task —
+ * was a column of three-decimal numbers under it. That is the wrong way round.
+ * A square answers *which pairs touch*, and a reader who wants *is any sequence
+ * behaving unlike the rest* had to read a list of `0.99`s looking for the one
+ * that was not, which on a four-thousand-contig metagenome is not a thing a
+ * person does. One bar per sequence is that comparison drawn instead of
+ * performed, and it is offered as **fractions** because a bar of raw contacts is
+ * a picture of how long each sequence is and says nothing else (`run/cistrans.ts`
+ * argues both at length).
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
@@ -44,31 +57,51 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
-    hint: 'Which to report. The pass reads the whole file either way.',
+    label: 'sequences',
+  },
+  {
+    kind: 'choice',
+    key: 'bars',
+    label: 'bars per sequence',
+    hint: 'Fractions of each sequence’s own contact, so a deep sequence and a shallow one compare.',
+    // The cis fraction, because it is the number the first table of every Hi-C
+    // paper quotes and the one a reader opens this task to see. The stacked
+    // pair is the same fact with a legend and a second colour around it — the
+    // two fractions sum to one, so the bar it adds is full on every sequence —
+    // so it is offered rather than opened on.
+    default: 'cis',
+    options: [
+      { value: 'cis', label: 'cis' },
+      { value: 'trans', label: 'trans' },
+      {
+        value: 'both',
+        label: 'both, stacked',
+        hint: 'The two sum to one, so every bar is full and the split is the cis fraction.',
+      },
+    ],
   },
   {
     kind: 'choice',
     key: 'normalise',
-    label: 'Off-diagonal value',
+    label: 'off-diagonal value',
     default: 'enrichment',
     options: [
       {
         value: 'enrichment',
-        label: 'Against indifference',
+        label: 'against indifference',
         hint:
           'Contacts over what the two sequences’ own trans coverage predicts. 1 is what any two ' +
           'sequences of that depth would give; a fusion is far above it.',
       },
-      { value: 'raw', label: 'Raw contacts' },
-      { value: 'bins', label: 'Per bin pair', hint: 'Divided by the two sequences’ bin counts.' },
+      { value: 'raw', label: 'raw contacts' },
+      { value: 'bins', label: 'per bin pair', hint: 'Divided by the two sequences’ bin counts.' },
     ],
   },
   {
     kind: 'number',
     key: 'minContacts',
-    label: 'Least contact worth listing',
-    hint: 'Raw contacts, before any normalisation. Keeps one stray read out of the top of the table.',
+    label: 'least contact worth listing',
+    hint: 'Raw contacts, before any normalisation, which keeps one stray read out of the table’s top.',
     default: 10,
     min: 0,
     integer: true,
@@ -76,7 +109,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxEdges',
-    label: 'Pairs to list',
+    label: 'pairs to list',
     default: 500,
     min: 10,
     integer: true,
@@ -84,7 +117,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'matrix',
-    label: 'Also draw the square',
+    label: 'draw the square',
     hint: `Skipped above ${MATRIX_SEQUENCE_LIMIT.toLocaleString()} sequences, where it is not a picture.`,
     default: true,
   },
@@ -114,9 +147,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: null,
     bytes: null,
     note:
-      'Walks the whole pixel table once, sorting every contact by the sequences of its two ends. ' +
-      'Like a marginal, it cannot be taken from one sequence’s square — a chromosome’s own block ' +
-      'knows nothing about the contacts leaving it. Progress is reported and it can be cancelled.',
+      'One pass over the whole pixel table: like a marginal, this cannot be taken from one ' +
+      'sequence’s square.',
   }
 }
 
@@ -129,6 +161,6 @@ export const CIS_TRANS_TASK: AnalysisTask = {
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
-  outputs: ['table', 'matrix'],
+  outputs: ['table', 'curve', 'matrix'],
   estimate,
 }

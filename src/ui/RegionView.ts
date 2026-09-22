@@ -6,9 +6,20 @@
  *
  * 1. a **genome name** expands to the whole-genome extent, and a coordinate
  *    suffix on a genome name is an *error*, not something quietly ignored;
- * 2. otherwise a **contig**, optionally with coordinates (0-based, half-open —
- *    cooler's convention, verified against `parse_region`);
+ * 2. otherwise a **contig**, optionally with coordinates — the region string
+ *    handed over is cooler's, 0-based and half-open, verified against
+ *    `parse_region`;
  * 3. neither → an error listing the available genomes and contigs.
+ *
+ * **What is on screen is the display form, though** (§26.1): the heading, the
+ * locus box and the zoom steps' tooltips print `regionLabel` — 1-based
+ * inclusive, digits grouped, as IGV, UCSC and samtools print a locus — and what
+ * is typed is read back through `typedLocusToRegion` before it becomes that
+ * region string. Both lines used to print the region string itself, so the
+ * heading and the summary immediately under it named one window at two starts a
+ * base apart, and copying a coordinate out of one and into the box moved the
+ * picture by a base. The conversion sits at the box rather than on the reader:
+ * pressing Enter on the value the box is already showing must change nothing.
  *
  * Genome and contig namespaces can collide and genome wins, as in Python, so
  * the view states which kind the search matched rather than leaving the user to
@@ -24,6 +35,7 @@
 import type { ParsedRange } from '../types'
 import type { MatrixResult } from '../worker/protocol'
 import { parseRegion } from '../annotations/bookmarks'
+import { regionLabel, typedLocusToRegion } from '../genome/assembly'
 import { ViewerError } from '../errors'
 import type { ReaderClient } from '../worker/client'
 import { button, el } from './dom'
@@ -42,7 +54,7 @@ import { icon } from './icons'
 import { presentationOf, secondBlock, type CompareRead } from './compare'
 import { attachRefine, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
-import { SearchBox, featureSuggestions } from './SearchBox'
+import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
 
 export interface RegionViewProps {
@@ -273,12 +285,17 @@ export function zoomedRegion(
 /**
  * One zoom step, as a button: the mark for the direction and the factor beside it.
  *
+ * Exported with {@link ZOOM_STEPS} so the 1D browser's bar draws the same four
+ * buttons from the same pair: the two bars are the same control over two
+ * pictures of one genome, and two sets of zoom buttons that did not match was
+ * the app telling a reader that zooming means something different on each.
+ *
  * `btn-keyed`'s shape without its key badge — a mark, a word, one baseline —
  * because four bare magnifiers in a row cannot be told apart and four words
  * without marks cannot be told from the controls either side of them. Bordered
  * like `go` next to it: these move the view.
  */
-function zoomButton(
+export function zoomButton(
   step: { factor: number; label: string; out: boolean },
   onClick: () => void,
 ): HTMLButtonElement {
@@ -353,20 +370,54 @@ export class RegionView {
     const store = props.annotations?.store
     this.search = new SearchBox({
       inputClass: 'input-region',
-      value: props.region,
-      placeholder:
-        store === undefined
-          ? 'contig, contig:start-end, or a genome name'
-          : 'contig, contig:start-end, a genome, or a gene',
+      // **The form a reader reads** (§26.1), not the one the state carries: the
+      // box shows `IV:1,000,001-1,400,000` where the hash and the worker say
+      // `IV:1000000-1400000`, and what is typed is read back the same way. The
+      // heading over this box and the summary under it each wrote one of the two
+      // grammars, so one screen named one window at two starts a base apart and
+      // a coordinate copied out of the summary and into the box moved the
+      // picture by a base — which is the failure a genomics reader is quickest
+      // to see and slowest to forgive.
+      value: regionLabel(props.region),
+      // **The sequence this view is of, where that is what it is of.** A
+      // coordinate suffix on a *genome* name is an error here (§5.4) and the
+      // name this view is handed may be a genome's — so the example is taken
+      // from a region that already *has* coordinates, and only where there are
+      // none does it fall back to the noun. It used to be the noun always, which
+      // offered `chromosome:1,000-20,000`: a category where every other box in
+      // the app names a sequence.
+      placeholder: locusPlaceholder({
+        first: props.region.includes(':') ? props.region.split(':')[0] : props.noun,
+        accepts: { sequence: true, genome: true, gene: store !== undefined },
+      }),
       title:
-        'What this view is of. Type a contig or a range and press Enter' +
-        (store === undefined ? '.' : ', or a gene name from the starred model.'),
-      onSubmit: (text) => props.onChangeRegion(text),
+        store === undefined
+          ? 'What this view is of. Type a name or a locus — the first base is 1, as the ' +
+            'summary reads — and press Enter.'
+          : 'What this view is of. Type a name, a locus (the first base is 1, as the summary ' +
+            'reads) or a gene from the starred model, and press Enter.',
+      // The box draws its own `go`, as the browser's does: one shape for one
+      // job (§26.6), and Enter and the button are one road through `submit`
+      // rather than two that can come to disagree about what the box holds.
+      go: true,
+      onSubmit: (text) => props.onChangeRegion(typedLocusToRegion(text)),
       // Only where there is something to search. A map with no gene model
       // loaded would grow a list that never has anything in it.
+      //
+      // A hit carries the feature's own bounds in the *state's* grammar
+      // (`featureSuggestions`, whose base is pinned by a test), and the box
+      // shows what the box accepts — so a hit is put in it as the locus a
+      // reader reads, and picking a gene lands on the gene rather than a base
+      // before it.
       ...(store === undefined
         ? {}
-        : { suggest: (text: string) => featureSuggestions(store, text) }),
+        : {
+            suggest: (text: string) =>
+              featureSuggestions(store, text).map((hit) => ({
+                ...hit,
+                value: regionLabel(hit.value),
+              })),
+          }),
     })
     // Ordinary bordered buttons, like `go` beside them: these move the view, and
     // a control that moves the view reading as quietly as a label is a control
@@ -398,6 +449,10 @@ export class RegionView {
       },
       onScaleChange: (scale) => props.onScaleChange(scale),
       onViewMoved: () => this.syncZoom(),
+      // This bar has an `h2` naming the window, and the summary line sits
+      // directly under it — so the summary prints the span alone where the two
+      // would say the same thing. See `MatrixPanel.setWindowNamedAbove`.
+      headingLocus: () => this.title.textContent,
       onCellClick: (_cell, groups) => {
         if (groups.row !== undefined && groups.row.label !== props.region) {
           props.onChangeRegion(groups.row.label)
@@ -422,7 +477,8 @@ export class RegionView {
     // The heading *is* the region, as the genome view's heading is the genome;
     // a literal "Region" above a box that already says which one was a line
     // spent on the obvious.
-    this.title = el('h2', { class: 'region-title', text: props.region })
+    this.title = el('h2', { class: 'region-title', text: regionLabel(props.region) })
+    this.panel.setWindowNamedAbove(true)
 
     this.el = el(
       'section',
@@ -441,37 +497,48 @@ export class RegionView {
           ...(props.neighbours === undefined || props.onStep === undefined
             ? []
             : [stepper({ neighbours: props.neighbours, onStep: props.onStep, noun: props.noun })]),
-          this.search.el,
-          // Through the box rather than around it: Enter and this button mean the
-          // same thing, and a hit list the button could not see would make them
-          // disagree about what "go" is.
-          button('go', () => this.search.submit()),
-          // **The zoom steps, beside the box, because they write into the box.**
-          // The scroll wheel on the map is a zoom of the *picture* — the same
-          // block, drawn larger or smaller — and past the edge of what was read
-          // it stops. These are the other thing "zoom" means on a genome
-          // browser: a different *range*, re-read, with the region string
-          // updated to say so. They sit here rather than on the map because this
-          // is where the coordinate they change is written.
-          //
-          // **No back button.** It was `window.history.back()` under an arrow,
-          // which is the browser's own back with a second face — the key, the
-          // trackpad gesture and the chrome all already reach it, and a fourth
-          // way to press it cost a slot on the one line every other control here
-          // is about *this* view.
-          //
-          // **One group, so the four wrap together or not at all.** They are a
-          // scale — widest out to widest in, with the window you are on in the
-          // middle — and a bar narrow enough to break the row was breaking it
-          // *between* them, leaving `10×` alone at the end of one line and the
-          // other three on the next. That reads as two controls rather than one
-          // axis, and which three happened to fit said nothing about anything.
-          el('div', { class: 'zoom-steps' }, ...this.zooms),
-          // Beside `go`, because it is about the same thing `go` is: the box says
-          // where to be and this says *remember this*. A bookmark button in the
-          // sidebar would have been a card control, and the hand that has just
-          // arrived somewhere worth keeping is up here.
-          ...(props.boxControl === undefined ? [] : [props.boxControl]),
+          // **The toolbar is one group, so it moves as one line.** The bar
+          // wraps, and only the box was pushed right, so the four zoom steps
+          // and the bookmark broke away onto a line of their own *under the
+          // title* — beside nothing, two rows above the subtitle, and in a
+          // different arrangement at every width: three shapes of one bar at
+          // three window sizes. §5.4 says zoom is four buttons beside the box
+          // "because what they change is the coordinate the box holds", and
+          // that is only true while they are beside it.
+          el(
+            'div',
+            { class: 'title-tools' },
+            // `go` rides inside the box (`SearchBox`'s own option), because
+            // Enter and the button mean the same thing and a hit list the
+            // button could not see would make them disagree about what "go" is.
+            this.search.el,
+            // **The zoom steps, beside the box, because they write into the box.**
+            // The scroll wheel on the map is a zoom of the *picture* — the same
+            // block, drawn larger or smaller — and past the edge of what was read
+            // it stops. These are the other thing "zoom" means on a genome
+            // browser: a different *range*, re-read, with the region string
+            // updated to say so. They sit here rather than on the map because this
+            // is where the coordinate they change is written.
+            //
+            // **No back button.** It was `window.history.back()` under an arrow,
+            // which is the browser's own back with a second face — the key, the
+            // trackpad gesture and the chrome all already reach it, and a fourth
+            // way to press it cost a slot on the one line every other control here
+            // is about *this* view.
+            //
+            // **One group, so the four wrap together or not at all.** They are a
+            // scale — widest out to widest in, with the window you are on in the
+            // middle — and a bar narrow enough to break the row was breaking it
+            // *between* them, leaving `10×` alone at the end of one line and the
+            // other three on the next. That reads as two controls rather than one
+            // axis, and which three happened to fit said nothing about anything.
+            el('div', { class: 'zoom-steps' }, ...this.zooms),
+            // Beside `go`, because it is about the same thing `go` is: the box
+            // says where to be and this says *remember this*. A bookmark button
+            // in the sidebar would have been a card control, and the hand that
+            // has just arrived somewhere worth keeping is up here.
+            ...(props.boxControl === undefined ? [] : [props.boxControl]),
+          ),
         ),
         this.matched,
         this.problem,
@@ -549,7 +616,8 @@ export class RegionView {
           ? step.out
             ? 'The whole sequence is on screen — there is nothing further out to go to'
             : 'This window is already at the file’s own bin size'
-          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ${target}`
+          : `${step.out ? 'Widen' : 'Narrow'} the range ${step.label} about what is on screen: ` +
+            regionLabel(target)
     })
   }
 
@@ -827,7 +895,7 @@ export class RegionView {
           client.request<'matrix'>(ask),
         )
         if (this.disposed) return
-        this.title.textContent = this.props.region
+        this.title.textContent = regionLabel(this.props.region)
         this.describeMatch(parsed, result)
         // The reader may have planned a coarser grid than the file's bins — a
         // whole chromosome at 10 kb is more cells than any picture holds — and
@@ -863,7 +931,8 @@ export class RegionView {
         client.request<'matrix'>(pair),
       )
       if (this.disposed) return
-      this.title.textContent = `${this.props.region} × ${this.props.region2}`
+      this.title.textContent =
+        `${regionLabel(this.props.region)} × ${regionLabel(this.props.region2)}`
       this.describePair(result)
       // The reader may have planned a coarser grid than the file's bins — a
       // whole chromosome at 10 kb is more cells than any picture holds — and

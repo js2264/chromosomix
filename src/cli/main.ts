@@ -262,10 +262,10 @@ function paramsFor(task: AnalysisTask, args: Args): Params {
  * lists deliberately: it sets the framing, and where a task also has a `balance`
  * parameter it sets that too, because a reader typing it once means both.
  *
- * `--window` rather than `--region`: `expected` and `fourc` both take a
- * parameter called `region`, meaning *which sequence*, and the framing's window
- * is a different question. One name for two things is how a batch script comes
- * out subtly wrong.
+ * `--window` rather than `--region`: the reconstruction and the model
+ * comparison both take a parameter called `region`, meaning *which sequences*,
+ * and the framing's window is a different question. One name for two things is
+ * how a batch script comes out subtly wrong.
  */
 const RESERVED = new Set([
   'out',

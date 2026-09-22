@@ -99,11 +99,52 @@ function custom(params: Params): boolean {
   return params.thresholds === 'custom'
 }
 
+/**
+ * A preset's base-pair distance, in bins of the file in front of the reader.
+ *
+ * **The one bin-size division left in this task**, and it divides upstream's
+ * number rather than the reader's. `chromosightPresets.ts` is generated from the
+ * installed package and must not be edited, so the presets are in base pairs and
+ * always will be; the three boxes a reader can take over are in bins, because a
+ * scan band, a distance from the diagonal and a gap between two calls are all
+ * counts of the grid's own cells (§18.2).
+ *
+ * `0` stays `0`, because zero `maxDist` is not a short band — it is how upstream
+ * says *this pattern lives on the diagonal*, and a floor of one bin there would
+ * turn a border scan into a loop scan one diagonal wide. Everything else is at
+ * least one bin: a threshold rounded down to nothing is a threshold switched
+ * off, which is a worse answer than one that is a bin out.
+ */
+function presetBins(bp: number, binsize: number): number {
+  if (bp === 0) return 0
+  return Math.max(1, Math.round(bp / (binsize > 0 ? binsize : 1)))
+}
+
+/**
+ * A distance threshold in **bins**: the reader's number, or the preset's.
+ *
+ * {@link threshold}'s shape for the three settings whose unit changed, so the
+ * `auto` gate is the same gate — until the reader presses *set them myself*
+ * every one of them follows the template, and both states are in the provenance.
+ */
+export function distanceBins(
+  params: Params,
+  key: string,
+  presetBp: number,
+  binsize: number,
+): number {
+  if (!custom(params)) return presetBins(presetBp, binsize)
+  const value = params[key]
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : presetBins(presetBp, binsize)
+}
+
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'pattern',
-    label: 'Pattern',
+    label: 'pattern',
     default: 'loops',
     hint: 'Every threshold below follows the template: they were tuned together.',
     options: CHROMOSIGHT_PRESETS.map((preset) => ({
@@ -115,23 +156,22 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
-    hint: 'Every one, unless you say otherwise. Each is scanned on its own.',
+    label: 'sequences',
   },
   {
     kind: 'choice',
     key: 'thresholds',
-    label: 'Thresholds',
+    label: 'thresholds',
     default: 'preset',
     options: [
       {
         value: 'preset',
-        label: 'From the pattern',
-        hint: 'chromosight’s own numbers for the template above — what `chromosight detect` uses.',
+        label: 'from the pattern',
+        hint: 'chromosight’s own numbers for the template above — what chromosight detect uses.',
       },
       {
         value: 'custom',
-        label: 'Set them myself',
+        label: 'set them myself',
         hint: 'The boxes start at the loops preset; check them against the pattern you picked.',
       },
     ],
@@ -140,8 +180,8 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'pearson',
-    label: 'Score threshold',
-    hint: 'The correlation a pixel must reach to be a candidate. Lower finds more, and more of it is noise.',
+    label: 'score threshold',
+    hint: 'The correlation a pixel must reach to be a candidate; lower finds more, and more of it is noise.',
     default: 0.3,
     min: 0,
     max: 1,
@@ -150,42 +190,52 @@ const PARAMS: readonly ParamSpec[] = [
     when: custom,
     section: 'Scan',
   },
+  // **The three distances are in bins**, and the defaults are the loops preset's
+  // own numbers in bins of the 2 kb map its templates were drawn at — which is
+  // what the *set them myself* hint above promises the boxes start at. A scan
+  // band is a count of diagonals, a distance from the diagonal is a count of
+  // cells, and two calls are one smear or two calls by how many bins apart their
+  // pixels are; none of the three is a length of genome, and asked in base pairs
+  // every one of them was divided by the bin size before it meant anything.
   {
     kind: 'number',
     key: 'minDist',
-    label: 'Nearest to the diagonal',
-    default: 20_000,
+    label: 'nearest to the diagonal',
+    default: 10,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: custom,
     section: 'Scan',
   },
   {
     kind: 'number',
     key: 'maxDist',
-    label: 'Furthest from the diagonal',
-    hint: 'The scan band. Widening it costs time in proportion; zero means the pattern is on the diagonal.',
-    default: 2_000_000,
+    label: 'furthest from the diagonal',
+    hint: 'The scan band: widening it costs time in proportion, and zero puts the pattern on the diagonal.',
+    default: 1_000,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: custom,
     section: 'Scan',
   },
   {
     kind: 'number',
     key: 'minSeparation',
-    label: 'Nearest two calls may be',
+    label: 'nearest two calls may be',
     hint: 'Closer than this on both axes and only the higher-scoring one is kept.',
-    default: 5_000,
+    default: 3,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: custom,
     section: 'Scan',
   },
   {
     kind: 'number',
     key: 'iterations',
-    label: 'Refinement passes',
+    label: 'refinement passes',
     hint: 'Each pass re-scans with the pileup of what the last one found as its template.',
     default: 1,
     min: 1,
@@ -196,7 +246,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxPercUndetected',
-    label: 'Most undetectable pixels a window may hold',
+    label: 'most undetectable pixels a window may hold',
     default: 50,
     min: 0,
     max: 100,
@@ -208,7 +258,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxPercZero',
-    label: 'Most empty pixels a window may hold',
+    label: 'most empty pixels a window may hold',
     default: 10,
     min: 0,
     max: 100,
@@ -220,8 +270,8 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'nMads',
-    label: 'Detectability cut',
-    hint: 'Median absolute deviations below the median coverage. Only used where the file carries no weights.',
+    label: 'detectability cut',
+    hint: 'Median absolute deviations below the median coverage, and only read where the file has no weights.',
     default: 5,
     min: 1,
     max: 20,
@@ -232,8 +282,8 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'maxQvalue',
-    label: 'Report down to a q-value of',
-    hint: 'Benjamini-Hochberg over every call. 1 keeps them all and still reports the number.',
+    label: 'report down to a q-value of',
+    hint: 'Benjamini-Hochberg over every call; 1 keeps them all and still reports the number.',
     default: 1,
     min: 0,
     max: 1,
@@ -256,9 +306,10 @@ export function bandShapeOf(
   binsize: number,
 ): { maxDistBins: number; largestKernel: number } {
   const preset = presetFor(params)
-  const size = binsize > 0 ? binsize : 1
   return {
-    maxDistBins: Math.max(1, Math.floor(threshold(params, 'maxDist', preset.maxDist) / size) || 1),
+    // A band of at least one diagonal, including for the on-diagonal patterns
+    // whose `maxDist` is zero: the scan still reads the diagonal itself.
+    maxDistBins: Math.max(1, distanceBins(params, 'maxDist', preset.maxDist, binsize)),
     largestKernel: preset.sizes.reduce((most, kernel) => Math.max(most, kernel), 0),
   }
 }
@@ -296,15 +347,16 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal:
         skipped > 0
           ? 'Every chosen sequence would need a band bigger than a scan can hold. The band is ' +
-            'the scan distance times the sequence, so there are two ways in: bring *Furthest ' +
-            'from the diagonal* down, or open the file at a coarser resolution.'
+            'the scan distance times the sequence, so there are two ways in: bring “furthest ' +
+            'from the diagonal” down, or open the file at a coarser resolution.'
           : 'Tick at least one sequence.',
     }
   }
 
-  const binsize = context.binsize > 0 ? context.binsize : 1
-  const maxDist = threshold(params, 'maxDist', preset.maxDist)
-  const band = Math.max(1, Math.min(Math.floor(maxDist / binsize) || 1, bins))
+  const band = Math.max(
+    1,
+    Math.min(bandShapeOf(params, context.binsize).maxDistBins, bins),
+  )
   const size = preset.sizes[0]
   const iterations =
     typeof params.iterations === 'number' && Number.isFinite(params.iterations)
@@ -327,8 +379,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       `${size}×${size} template correlated across ${band.toLocaleString()} diagonals of every ` +
       `bin: about ${formatOperations(operations)} multiply-accumulates` +
       `${passes > 1 ? ` over ${passes} passes` : ''}. ` +
-      `${skipped > 0 ? `${skipped.toLocaleString()} sequence${skipped === 1 ? '' : 's'} past the size limit will be skipped. ` : ''}` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${skipped > 0 ? `${skipped.toLocaleString()} sequence${skipped === 1 ? '' : 's'} past the size limit will be skipped.` : ''}`,
   }
 }
 

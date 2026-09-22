@@ -14,6 +14,9 @@ import { describe, expect, it } from 'vitest'
 import { shuffleNull, compareSets } from '@/analysis/overlap'
 import { SequenceContactAccumulator, transExpectation } from '@/analysis/cistrans'
 import { emptyStrata, smoothTileInto, stratumAdjusted, type Strata } from '@/analysis/hicrep'
+// Aliased, because the kernel tests below build strata with a local helper of
+// the same name. This is the *parameter*: how many of them a run asks for.
+import { MAX_STRATA, strataOf as strataAsked } from '@/analysis/tasks/hicrep'
 import { orientationFigure } from '@/analysis/orientation'
 import type { FeatureSet } from '@/annotations/types'
 
@@ -367,6 +370,39 @@ describe('the HiCRep kernel', () => {
       expect(into[0][13]).toBe(1)
       expect(Number.isNaN(into[0][14])).toBe(true)
     })
+  })
+})
+
+/**
+ * **How far a run compares is a number of strata, and a stratum is a bin.**
+ *
+ * It was a separation in base pairs, divided by the bin size in two places — the
+ * estimate and the runner — which is two chances to price a run the button did
+ * not describe. And a stratum *is* a diagonal offset: it is why two maps on
+ * different grids cannot be compared at all, which the estimate refuses by name.
+ * So the parameter is the count, one expression reads it, and the cap is the
+ * default because the 5 Mb it replaces hit that cap on every file at 10 kb or
+ * finer.
+ */
+describe('how many strata a run asks for', () => {
+  it('is the number asked for, with no bin size anywhere in it', () => {
+    expect(strataAsked({ maxDistance: 120 })).toBe(120)
+    expect(strataAsked({ maxDistance: 1 })).toBe(1)
+  })
+
+  it('is capped, and the cap is what an unanswered run takes', () => {
+    expect(strataAsked({ maxDistance: 5_000 })).toBe(MAX_STRATA)
+    expect(strataAsked({})).toBe(MAX_STRATA)
+    // A stored session from before the change carries base pairs; it lands on
+    // the cap, which is the run its 5 Mb produced on every file finer than
+    // 10 kb anyway.
+    expect(strataAsked({ maxDistance: 5_000_000 })).toBe(MAX_STRATA)
+  })
+
+  it('never asks for none, however it is answered', () => {
+    expect(strataAsked({ maxDistance: 0 })).toBe(1)
+    expect(strataAsked({ maxDistance: -4 })).toBe(1)
+    expect(strataAsked({ maxDistance: 'many' })).toBe(MAX_STRATA)
   })
 })
 

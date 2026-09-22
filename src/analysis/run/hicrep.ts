@@ -25,7 +25,7 @@
 
 import { contigIdFor, listParam, numParam, boolParam, type JobContext, type TaskRunner } from '../job'
 import { emptyStrata, smoothTileInto, stratumAdjusted, type Strata } from '../hicrep'
-import { MAX_STRATA } from '../tasks/hicrep'
+import { strataOf } from '../tasks/hicrep'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
 import type { MetaCooler } from '../../metacooler/MetaCooler'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
@@ -59,10 +59,7 @@ export const runHicrep: TaskRunner = async (job) => {
   const balance = boolParam(job.params, 'balance', false)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const h = Math.max(0, Math.round(numParam(job.params, 'smooth', 1)))
-  const maxK = Math.max(
-    1,
-    Math.min(MAX_STRATA, job.toBins(numParam(job.params, 'maxDistance', 5_000_000))),
-  )
+  const maxK = strataOf(job.params)
 
   const maps: Compared[] = [{ label: 'This map', mc: job.mc, lead: true }]
   try {
@@ -211,7 +208,7 @@ async function compare(
       }
     }
   }
-  job.progress(chosen.length, chosen.length, 'Done')
+  job.progress(chosen.length, chosen.length, 'done')
   job.throwIfCancelled()
 
   const values = new Float32Array(n * n)

@@ -90,6 +90,8 @@ export class PortalView {
   private readonly tray: SelectionTray
   private readonly main = el('div', { class: 'portal-main' })
   private readonly statusEl = el('div', { class: 'portal-status hidden' })
+  /** The search, the count, *clear filters* and the mode pair — see {@link showStatus}. */
+  private readonly toolbar: HTMLElement
 
   private file: StoreFile | null = null
 
@@ -189,17 +191,18 @@ export class PortalView {
       title: 'Untick every facet and empty the search.',
     })
 
+    this.toolbar = el(
+      'div',
+      { class: 'portal-toolbar' },
+      this.search,
+      this.countEl,
+      clearAll,
+      el('div', { class: 'portal-modes' }, this.listButton, this.matrixButton),
+    )
     this.el = el(
       'div',
       { class: 'portal' },
-      el(
-        'div',
-        { class: 'portal-toolbar' },
-        this.search,
-        this.countEl,
-        clearAll,
-        el('div', { class: 'portal-modes' }, this.listButton, this.matrixButton),
-      ),
+      this.toolbar,
       el('div', { class: 'portal-body' }, this.rail.el, el('div', { class: 'portal-content' }, this.statusEl, this.main)),
       this.tray.el,
     )
@@ -407,6 +410,14 @@ export class PortalView {
     this.statusEl.textContent = status.kind === 'none' ? '' : status.text
     this.main.classList.toggle('hidden', status.kind !== 'none')
     this.countEl.textContent = ''
+    // **The toolbar goes with the list.** A search box, a *clear filters* and a
+    // list/matrix pair drawn above a red *nothing has been published for this
+    // yet* are four controls over an empty room: there is nothing to search, no
+    // facet to clear and no arrangement to choose. §8.5's rule — a control the
+    // file cannot be asked about is not shown — and the banner is the one thing
+    // on the pane a reader can act on.
+    this.toolbar.classList.toggle('hidden', status.kind === 'error')
+    this.rail.el.classList.toggle('hidden', status.kind === 'error')
   }
 
   private paintRail(): void {
@@ -586,32 +597,42 @@ function tickedBeyondShards(front: StoreFront, facets: FacetSelection): boolean 
 /**
  * What a store that could not be read says, in the reader's terms.
  *
- * A built-in that answers 404 is *not generated yet* — the shipped stores are
+ * A built-in that is not there is *not generated yet* — the shipped stores are
  * written by a workflow and a fresh fork has not run it — and saying "the host
  * answered 404" would send a reader to check a URL that is perfectly correct.
+ *
+ * **Not there arrives in two shapes and they are one state.** A 404 is the
+ * plain one; a page of HTML is the other, and it is what a dev server and every
+ * SPA-fallback host answer for a file they have not got. The second used to
+ * print the diagnosis — the raw URL, "did not answer with JSON", "a dev server
+ * with no generated stores" — which is a sentence for whoever runs the site and
+ * not for the biologist who pressed the IGV tile. So a built-in says the same
+ * thing either way, and a URL the reader typed keeps its URL, because on that
+ * one the address *is* what they can act on (§10).
  */
 export function storeFailure(
   result: Exclude<Awaited<ReturnType<typeof fetchStore>>, { ok: true }>,
   ref: StoreRef,
 ): string {
-  if (result.reason === 'missing' && ref.builtin) {
+  const notJson = result.reason === 'refused' && result.refusal.reason === 'not-json'
+  if (ref.builtin && (result.reason === 'missing' || notJson)) {
     return (
-      `${ref.label} is not generated yet; the Stores workflow publishes it. ` +
+      // `Nothing has been published for …`, not `${ref.label} is …`: a store's
+      // name is a noun phrase of either number, and half of them are plural —
+      // this read *IGV genome sessions is not generated yet*.
+      `Nothing has been published for ${ref.label} yet; the Stores workflow generates it. ` +
       'Run it once (Actions → Stores → Run workflow) and this fills in.'
     )
   }
   // `refusalMessage` is the *workspace* reader's wording, and for the one
   // refusal both formats share it names the wrong kind of file: a store served
-  // as HTML — which is what a dev server answers for a store it has not
-  // generated — read "is not a JSON file, so it is not a saved workspace",
-  // about a thing nobody was trying to open. The other refusals it gives are
-  // about the config format and cannot arise here.
+  // as HTML read "is not a JSON file, so it is not a saved workspace", about a
+  // thing nobody was trying to open. The other refusals it gives are about the
+  // config format and cannot arise here.
   if (result.reason === 'refused') {
     const where = ref.url ?? ref.label
-    return result.refusal.reason === 'not-json'
-      ? `${where} did not answer with JSON, so it is not a store. A host that serves a page ` +
-          'instead of the file — a dev server with no generated stores, or a sign-in wall — ' +
-          'answers exactly like this.'
+    return notJson
+      ? `${where} answered with a page, not a store file — a sign-in wall answers like this.`
       : refusalMessage(result.refusal, where)
   }
   return result.message

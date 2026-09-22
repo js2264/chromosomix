@@ -10,7 +10,7 @@
 import { structureFromBeads, type ModelBead } from '../../annotations/g3d'
 import type { FeatureSet, StructureModel } from '../../annotations/types'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
+import { parseRegionString, splitRegionList } from '../../metacooler/range'
 import { logBinCurve, logLogSlope } from '../expected'
 import {
   boolParam,
@@ -59,6 +59,7 @@ import {
 } from '../../structure/versusMap'
 import { blockCovers, spanOfContig, squareFor, usableBlock, type Span } from './blocks'
 import { formatBp } from './labels'
+import { regionLabel, typedLocusToRegion } from '../../genome/assembly'
 
 const NO_STRUCTURE = {
   unchosen: 'No structure was chosen. Load a g3d or bed3d and pick it under Structure.',
@@ -113,7 +114,7 @@ export const runStructureMap: TaskRunner = async (job) => {
   const alpha = numParam(job.params, 'alpha', 3)
   // The first of what the box names: the box is seeded with every sequence
   // on screen (§25.6), and the picture is of one.
-  const wanted = strParam(job.params, 'region', '').split(',')[0].split(':')[0].trim()
+  const wanted = (splitRegionList(strParam(job.params, 'region', ''))[0] ?? '').split(':')[0].trim()
   const pictured = sequences.find((sequence) => sequence.name === wanted) ?? sequences[0]
   const haplotypes = haplotypesOf(model)
   const binsize = job.mc.binsize
@@ -323,15 +324,40 @@ export const runSpatialTracks: TaskRunner = async (job) => {
     })
     if (centre !== null) outputs.push(profile('structure-radial', 'Radial position', radial, '#1f5fa9'))
     outputs.push(profile('structure-compaction', `Local compaction (±${Math.round(window)} beads)`, compaction, '#0f8a5f'))
-    if (anchor !== null) outputs.push(profile('structure-distance', `Distance to ${locusText}`, toLocus, '#c0392b'))
+    if (anchor !== null) {
+      // *The centre of*, because the anchor is a centroid: a 400 kb window named
+      // bare read as though the distance were to a point.
+      outputs.push(
+        profile('structure-distance', `Distance to the centre of ${locusName(locusText)}`, toLocus, '#c0392b'),
+      )
+    }
   }
   if (locusText !== '' && !outputs.some((output) => output.id.startsWith('structure-distance'))) {
-    job.note(`No bead of the model lies at ${locusText}, so the distance track was not made.`)
+    job.note(`No bead of the model lies at ${locusName(locusText)}, so the distance track was not made.`)
   }
   return outputs
 }
 
-/** The model's point at a typed locus: the mean of the beads its middle lands on. */
+/**
+ * A locus as a reader's own coordinates, for a name that will be read.
+ *
+ * The parameter holds what was typed or picked — 1-based inclusive, ungrouped,
+ * `IV:1000001-1400000` — and naming a structure row and three lanes with it put
+ * the one string on the Structures card that had no separators directly under a
+ * framing line that did: `3D model · IV:1000001-1400000` over
+ * `IV:1,000,000-1,400,000 · 1.0 kb bins`, two spellings of one window. Through
+ * the round trip §26.1 defines, so the display form comes out of the same two
+ * helpers every locus box uses; a bare sequence or genome name has no
+ * coordinates and comes back as itself.
+ */
+function locusName(typed: string): string {
+  return regionLabel(typedLocusToRegion(typed))
+}
+
+/**
+ * The model's point at a typed locus: the centroid of every bead the locus
+ * covers, which is what the tracks below call its centre.
+ */
 function anchorPoint(
   set: FeatureSet,
   model: StructureModel,
@@ -543,9 +569,7 @@ function tooBig(n: number): string {
 function regionSpans(job: JobContext, text: string): Span[] | null | { missing: string } {
   if (text === '') return null
   const out: Span[] = []
-  for (const part of text.split(',')) {
-    const trimmed = part.trim()
-    if (trimmed === '') continue
+  for (const trimmed of splitRegionList(text)) {
     const span = regionSpan(job, trimmed)
     if (span === undefined) return { missing: parseRegionString(trimmed)[0] }
     if (span !== null) out.push(span)
@@ -580,7 +604,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   if (spans !== null && !Array.isArray(spans)) {
     job.note(
       `This file has no sequence called ${spans.missing}, under that spelling or ` +
-        `any this viewer knows of (§5.9). It has ` +
+        `any this viewer knows of. It has ` +
         `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
     )
     return []
@@ -594,7 +618,7 @@ export const runReconstruct: TaskRunner = async (job) => {
   if (job.framing.normalise !== null) {
     job.note(
       `The view is drawn ${job.framing.normalise}-normalised and the model is solved on the counts ` +
-        'underneath: no read can ask for that normalisation (§18.4).',
+        'underneath: no read can ask for that normalisation.',
     )
   }
 
@@ -692,7 +716,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     smacofStep(kept, n, coords, weights, before)
     const after = stressOf(kept, n, coords, weights)
     stress = after
-    job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toExponential(2)}`)
+    job.progress(sweeps + steps + 1, total, `refining · step ${steps + 1} of ${iterations} · stress ${after.toPrecision(3)}`)
     if (before - after < 1e-6 * before) {
       steps++
       break
@@ -713,7 +737,7 @@ export const runReconstruct: TaskRunner = async (job) => {
       ? sequences.size === 1
         ? [...sequences][0]
         : `${sequences.size} sequences`
-      : regionText
+      : locusName(regionText)
   const fit = fitOf(kept, n, coords, weights)
 
   if (dropped > 0) {
@@ -735,7 +759,7 @@ export const runReconstruct: TaskRunner = async (job) => {
     id: 'reconstructed-fit',
     label: `Model from the map · ${subject}`,
     columns: [
-      { key: 'what', label: '', kind: 'text' },
+      { key: 'what', label: 'Quantity', kind: 'text' },
       { key: 'value', label: 'Value', kind: 'text' },
     ],
     rows: [
@@ -754,7 +778,11 @@ export const runReconstruct: TaskRunner = async (job) => {
               : 'nothing: every counted pair alike',
       },
       { what: 'Refinement steps', value: `${steps.toLocaleString()}` },
-      { what: 'Weighted stress', value: stress.toExponential(3) },
+      // Three significant digits rather than an exponent: `3.994e-2` beside
+      // `0.881` reads as a number on a different scale, and a stress is read as
+      // the fraction it is. `toPrecision` keeps the exponent only for the
+      // magnitudes where a fixed point would be all zeros.
+      { what: 'Weighted stress', value: stress.toPrecision(3) },
       { what: 'Spearman ρ (1/d vs contacts)', value: Number.isNaN(fit.rho) ? '—' : fit.rho.toFixed(3) },
     ],
   }

@@ -168,40 +168,44 @@ export class StructureCard {
       const origin = entry.source.kind === 'local' ? entry.source.name : entry.source.url
       row.appendChild(el('p', { class: 'ann-origin', text: origin, title: origin }))
     }
-    row.appendChild(this.actions(entry, shown))
+    row.appendChild(this.actions(entry))
     return row
   }
 
-  /** Show it, and take it away — the two things a model row is for. */
-  private actions(entry: AnnotationEntry, shown: boolean): HTMLElement {
+  /**
+   * What the row does that its head does not: run its recipe again, and write
+   * the model out.
+   *
+   * **No *show in the deck* button.** There was one here, beside the eye that
+   * does the same thing — two controls on one row for one act, which a reader
+   * tries both of — and while the cell was drawing the row it relabelled itself
+   * *shown in the deck* and went on calling `onShow`, so the obvious press
+   * (pressing the lit one to un-show) did nothing. A button says what pressing
+   * it does; where a thing is drawn is said by the eye and the row's accent
+   * (§26.3, §26.7), which is how every other card in this column says it.
+   *
+   * `export` before the format, so the button's name is the file it writes and
+   * the word in front is what pressing it is for — the same pair the Metadata
+   * annotations card draws (§26.6). `bed3d` alone was a format noun with no verb
+   * anywhere near it.
+   */
+  private actions(entry: AnnotationEntry): HTMLElement {
     const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
     const nodes: HTMLElement[] = []
-    if (this.options.onShow !== undefined) {
-      nodes.push(
-        disabledUnless(
-          ready,
-          button(shown ? 'shown in the deck' : 'show in the deck', () => this.options.onShow?.(entry), {
-            class: `btn btn-quiet structure-show${shown ? ' is-on' : ''}`,
-            title: shown
-              ? 'The deck’s structure cell is drawing this model'
-              : 'Draw this model in the deck’s structure cell, opening the cell if there is none',
-          }),
-        ),
-      )
-    }
     if (entry.status === 'detached' && entry.source.kind === 'computed' && this.options.onRecompute !== undefined) {
       nodes.push(
         button('recompute', () => this.options.onRecompute?.(entry), {
-          class: 'btn btn-quiet',
+          class: 'btn',
           title: 'The model’s places were not carried across the reload; the recipe was. Run it again.',
         }),
       )
     }
     nodes.push(
+      el('span', { class: 'field-label', text: 'export' }),
       disabledUnless(
         ready,
         button('bed3d', () => this.save(entry), {
-          class: 'btn btn-quiet structure-bed3d',
+          class: 'btn structure-bed3d',
           title: 'The model as a bed3d — chrom, start, end, x, y, z — which this app and g3dtools read back',
         }),
       ),
@@ -262,9 +266,9 @@ export class StructureCard {
   private visibility(entry: AnnotationEntry): HTMLElement {
     // **The eye is the deck's cell**, not the row's `visible` flag: a model is
     // drawn in one place and one place only, so "hide" can only mean take it
-    // out of there. On the way in it opens the cell, as *show in the deck*
-    // does; on the way out it closes it, and a deck left holding nothing goes
-    // with it.
+    // out of there. On the way in it opens the cell; on the way out it closes
+    // it, and a deck left holding nothing goes with it. It is the row's only
+    // show/hide — see {@link actions} for the button that used to duplicate it.
     const shown = this.options.shown?.() === entry.id
     const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
     const node = iconButton(
@@ -274,7 +278,7 @@ export class StructureCard {
         if (shown) this.options.onHide?.()
         else this.options.onShow?.(entry)
       },
-      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     node.setAttribute('aria-pressed', String(shown))
     node.disabled = !ready || this.options.onShow === undefined
@@ -335,9 +339,15 @@ function loadZone(loader: AnnotationLoader): HTMLElement[] {
     el('span', { class: 'ann-drop-label', text: 'Load a structure' }),
     el('span', {
       class: 'ann-drop-hint',
+      // The formats, then the same last sentence the Tracks and Contact maps
+      // zones say (§20.2). What it dropped is the rest: *drop one anywhere on
+      // this card* is a gesture nobody was about to make while looking at a
+      // rectangle drawn as the target, and *the deck's structure cell draws it*
+      // is what happens next, in the internal words for it, on the one zone of
+      // three that explained itself at that length.
       text:
-        'A g3d (WashU, text or binary), a .3dg (Dip-C) or a bed3d. Click to choose, or drop one ' +
-        'anywhere on this card; the deck’s structure cell draws it.',
+        'A g3d (WashU, text or binary), a .3dg (Dip-C) or a bed3d. Drop one here, or click to ' +
+        'choose.',
     }),
   )
   zone.addEventListener('click', () => void choose())

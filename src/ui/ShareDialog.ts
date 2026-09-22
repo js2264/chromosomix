@@ -17,16 +17,22 @@
  * And it is copied for them, the moment there is something to copy — opening
  * this dialog is already the whole of the intention, and the press of a button
  * afterwards was a step that existed only because nobody had removed it. The
- * clipboard is not silently taken, though: a note in the corner says it was
+ * clipboard is not silently taken, though: the note under the box says it was
  * written, because a clipboard that changed without a word is how somebody
  * pastes a link where they meant to paste the paragraph they had copied before.
+ *
+ * That note, and not a note in the corner. The corner is for work that finishes
+ * after the thing the reader was waiting for (`ui/toast.ts`), and this finishes
+ * while they are looking at the dialog it happened in — nine hundred pixels
+ * away, over the status bar, in different words from the ones the copy button
+ * produces, and gone in four seconds. Both outcomes of one action now land in
+ * one place, in one wording: the refusal already did.
  */
 
 import { Modal } from './Modal'
 import { button, el } from './dom'
 import { icon, iconButton } from './icons'
 import { copyTextToClipboard } from './export'
-import { messageToast } from './toast'
 import {
   SHORTENER,
   encodeShare,
@@ -83,7 +89,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
       tabindex: '0',
       role: 'textbox',
       'aria-readonly': 'true',
-      'aria-label': 'The link to this session',
+      'aria-label': 'The link to this tab',
     },
     text: 'preparing…',
   })
@@ -151,7 +157,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   const copy = async (): Promise<void> => {
     if (link === '') return
     if (await putOnClipboard()) {
-      say('Copied.')
+      say('Copied to the clipboard.')
       return
     }
     selectLink()
@@ -161,18 +167,18 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   /**
    * The copy nobody pressed a button for, on every link this dialog produces.
    *
-   * The corner note rather than the note in the dialog, because this is the one
-   * copy the reader did not ask for and the one they therefore have to be told
-   * about; and it must not overwrite what the dialog is already saying about
-   * where the link came from. A refusal falls back to exactly what the button
-   * falls back to — the text selected and the sentence explaining why — and
-   * shows no note at all, since a corner note claiming a copy that did not
-   * happen is worse than the silence it replaced.
+   * Said in the dialog's own note, where the reader's eye is and where the
+   * button's copy is answered. `alsoSay` rather than `say` because the note may
+   * already be carrying the sentence about where the link came from — after a
+   * shortening this runs a second time — and that one changed the link in the
+   * box, so it is the one that must not be dropped. A refusal falls back to
+   * exactly what the button falls back to: the text selected, and the sentence
+   * explaining why.
    */
   const copyOnArrival = async (): Promise<void> => {
     if (link === '') return
     if (await putOnClipboard()) {
-      messageToast('Link copied to the clipboard.')
+      alsoSay('Copied to the clipboard.')
       return
     }
     selectLink()
@@ -209,7 +215,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
   }
 
   const modal = new Modal({
-    title: 'Share this session',
+    title: 'Share this tab',
     // The wide panel, because the narrow one is narrower than this body wants to
     // be: the link and its button sit on one row, and in `min(34rem, 100%)` the
     // row wrapped the button under a box already too short to show a useful
@@ -223,9 +229,9 @@ export function openShareDialog(props: ShareDialogProps): Modal {
         el('p', {
           class: 'hint',
           text:
-            'Everything in this tab — the view, the tracks and their colours, the marks and the ' +
-            'bookmarks — encoded into the link itself. No server holds it, so it cannot expire ' +
-            'and nothing about it reaches the site serving this page.',
+            'The link carries everything in this tab — the view, the tracks and their colours, ' +
+            'the marks and the bookmarks. No server holds it, so it cannot expire, and nothing ' +
+            'about it reaches the site serving this page.',
         }),
         el(
           'div',
@@ -277,7 +283,7 @@ export function openShareDialog(props: ShareDialogProps): Modal {
         el('span', {
           class: 'hint',
           text:
-            'This session is over a local file, so it is not offered to a shortener: the ' +
+            'This tab is over a local file, so it is not offered to a shortener: the ' +
             'recipient gets the tracks and the marks and is asked for the file, and sending a ' +
             'filename to a third party would buy nothing.',
         }),

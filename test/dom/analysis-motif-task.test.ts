@@ -184,8 +184,11 @@ describe('the form it renders', () => {
 
   it('offers the loaded reference and the strand question beside it', () => {
     const text = form().el.textContent ?? ''
-    expect(text).toContain('Reference')
-    expect(text).toContain('Both strands')
+    // Lowercase field labels (§26.4). The pattern box beside these is now
+    // labelled *motif* rather than *Sequence*, which is what a sequence is
+    // called everywhere else in this app.
+    expect(text).toContain('reference')
+    expect(text).toContain('both strands')
   })
 
   /**

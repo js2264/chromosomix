@@ -351,10 +351,16 @@ export class AnnotationCard {
     for (const id of [...this.ticked]) {
       if (!entries.some((entry) => entry.id === id)) this.ticked.delete(id)
     }
+    // **The bar goes above the rows.** Under them it was the last thing in a
+    // column that already scrolled: with seven tracks loaded and two ticked at
+    // the top of the list, the bar appeared off the bottom of the screen, so
+    // ticking two boxes visibly did nothing and the ticks read as highlights.
+    // Sticky is not the answer either — `.panel-column .card` makes the card its
+    // own scroll box, so a bar pinned to its bottom pins exactly where it was.
     const batch = this.batchBar(entries)
     this.list.replaceChildren(
-      ...entries.map((entry, index) => this.row(entry, index, entries.length)),
       ...(batch === null ? [] : [batch]),
+      ...entries.map((entry, index) => this.row(entry, index, entries.length)),
     )
 
     // A keyboard reorder rebuilt the list out from under the grip that asked for
@@ -382,7 +388,7 @@ export class AnnotationCard {
 
     const more = iconButton(
       isOpen ? 'chevron-down' : 'chevron-right',
-      isOpen ? 'Hide this annotation’s settings' : 'Show this annotation’s settings',
+      isOpen ? 'Hide this track’s settings' : 'Show this track’s settings',
       () => {
         if (this.open.has(entry.id)) this.open.delete(entry.id)
         else this.open.add(entry.id)
@@ -410,7 +416,7 @@ export class AnnotationCard {
         ...(entry.payload?.kind === 'features' ? [this.star(entry)] : []),
         this.visibility(entry),
         more,
-        iconButton('x', 'Remove this annotation', () => this.props.store.remove(entry.id), {
+        iconButton('x', 'Remove this track', () => this.props.store.remove(entry.id), {
           class: 'btn-close',
           size: 14,
         }),
@@ -754,7 +760,7 @@ export class AnnotationCard {
         class: 'ann-grip',
         title:
           this.props.context === 'browser'
-            ? 'Drag, or press the arrow keys, to reorder this annotation'
+            ? 'Drag, or press the arrow keys, to reorder this track'
             : 'Drag to reorder — or onto the map’s bottom or right edge to draw it there. ' +
               'Arrow keys reorder.',
         attrs: {
@@ -1011,7 +1017,7 @@ export class AnnotationCard {
       entry.visible ? 'eye' : 'eye-off',
       entry.visible ? 'Hide, keeping the settings' : 'Show again',
       () => this.props.store.update(entry.id, { visible: !entry.visible }),
-      { class: `btn btn-icon ann-eye${entry.visible ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     node.setAttribute('aria-pressed', String(entry.visible))
     return node
@@ -1221,7 +1227,10 @@ export class AnnotationCard {
 
     const chooser = (): void => {
       const select = el('select', { class: 'select' })
-      select.appendChild(el('option', { value: '', text: 'none' }))
+      // `no group`, the batch bar's word for the same state: two names for one
+      // empty option, one card apart, is a reader wondering what the difference
+      // is between belonging to none and belonging to `none`.
+      select.appendChild(el('option', { value: '', text: 'no group' }))
       for (const name of this.groupNames()) {
         select.appendChild(el('option', { value: name, text: name }))
       }
@@ -1364,14 +1373,14 @@ export function overlapWarning(overlap: ContigOverlap | undefined): OverlapNote 
     return {
       tone: 'warn',
       text:
-        `No contig in this file matches the map (0 of ${fmt.int(overlap.total)}).${sample} ` +
+        `No sequence in this file matches the map (0 of ${fmt.int(overlap.total)}).${sample} ` +
         'The usual naming conventions were tried, so this is likely a file about another genome.',
     }
   }
   // **On a metagenome the unit of the answer is the MAG** (§8.5). A track over
   // a co-assembly routinely covers a few organisms out of fifty — coverage of
   // one MAG, an annotation of another — and the sequence counts state that as
-  // `412 of 20,566 contigs matched`, which is arithmetically true and reads
+  // `412 of 20,566 sequences matched`, which is arithmetically true and reads
   // exactly like the failure above it. So the sentence is about genomes, and it
   // is not a warning: partial coverage is the *expected* shape of a track here,
   // and the reader is told which organisms it landed on rather than which
@@ -1399,7 +1408,7 @@ export function overlapWarning(overlap: ContigOverlap | undefined): OverlapNote 
     return {
       tone: 'warn',
       text:
-        `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} contigs matched; ` +
+        `${fmt.int(overlap.matched)} of ${fmt.int(overlap.total)} sequences matched; ` +
         `nothing is drawn on ${overlap.missing.join(', ')}${overlap.missing.length < overlap.total - overlap.matched ? '…' : ''}.`,
     }
   }
@@ -1429,9 +1438,12 @@ export function overlapWarning(overlap: ContigOverlap | undefined): OverlapNote 
  * way to load a ninth was to scroll past the eight. Above the list it stays
  * where it was whatever the list does.
  *
- * The zone carries the dashes because being a target is all it is; the card
- * around it takes a dropped file as well, anywhere on it, which is why the hint
- * says so rather than leaving the reader to aim.
+ * The zone carries the dashes because being a target is all it is. The card
+ * around it takes a dropped file as well, anywhere on it — the hint does not say
+ * so, because a rectangle drawn as a target is where a hand aims and a sentence
+ * about the rest of the card is a sentence about a gesture nobody was about to
+ * make; what it says instead is the thing the other two zones in this column say
+ * and this one did not, which is that it can also be clicked.
  */
 function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLElement } {
   // Through `chooseFiles` so a track *chosen* is remembered as readily as one
@@ -1448,7 +1460,15 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
     el('span', { class: 'ann-drop-label', text: 'Load a track' }),
     el('span', {
       class: 'ann-drop-hint',
-      text: 'bigWig, bigBed, GTF, BED, BEDPE, VCF, FASTA or a BAM.',
+      // The whole list, and the same last sentence the other two zones in this
+      // column say (§20.2). It read `bigWig, bigBed, GTF, BED, BEDPE, VCF,
+      // FASTA or a BAM` — an article on one format of eight, and six formats
+      // short: a reader holding the bedGraph that MACS2 or deepTools wrote, or
+      // a 2bit, was told this viewer would not take it. BED's variants are not
+      // listed because content decides (§8.3), so a narrowPeak *is* a BED.
+      text:
+        'bigWig, bedGraph, wig, bigBed, BED, GTF, genePred, BEDPE, interact, VCF, BAM, FASTA ' +
+        'or 2bit. Drop one here, or click to choose.',
     }),
   )
   zone.addEventListener('click', () => void choose())
@@ -1473,17 +1493,18 @@ function loadZone(loader: AnnotationLoader): { nodes: HTMLElement[]; zone: HTMLE
 }
 
 /**
- * The highest transparency a track may be set to.
+ * The lowest opacity a track may be set to.
  *
- * Not a hundred. A track at a hundred is a track that is not drawn, indexed
- * under a control that says nothing about visibility — a reader who typed it
- * would be looking for a missing track in the wrong card. `hide` is beside every
- * row and says what it does.
+ * Not zero. A track at zero is a track that is not drawn, hidden under a control
+ * that says nothing about visibility — a reader who typed it would be looking
+ * for a missing track in the wrong card. `hide` is beside every row and says
+ * what it does. It is also the floor the per-row slider has kept all along
+ * (`laneSettings.opacityField`), which is the same argument reached twice.
  */
-const MAX_TRANSPARENCY = 90
+const MIN_OPACITY = 10
 
 /**
- * Transparency, for every track at once.
+ * Opacity, for every track at once.
  *
  * A property of the *picture* rather than of any one track: what it is for is
  * reading a gene model through the coverage drawn over it, or telling two
@@ -1491,34 +1512,48 @@ const MAX_TRANSPARENCY = 90
  * moving together. Set per track it would be a slider to visit six times, and
  * the sixth visit would be to undo the first.
  *
+ * **Opacity and not transparency**, which is what this said until it was put
+ * beside the per-row control that writes the same field: that one is labelled
+ * `opacity` and reads 10 to 100, this one read `transparency` from 0 to 90, and
+ * one field of one store named in opposite senses on two surfaces of one column
+ * meant a track set to 60 in its row read 40 here — a subtraction for the reader
+ * to do to check that the two agreed. A stepper rather than the row's slider
+ * because `trackControls.ts` argues the stepper for a card-level bulk value, and
+ * the number is now the same number either way.
+ *
  * Lives here, beside the per-track controls, because it writes the same field of
  * the same store; the two Tracks cards each mount one.
  */
-export function transparencyField(store: AnnotationStore): HTMLElement {
+export function everyTrackOpacityField(store: AnnotationStore): HTMLElement {
   return stepperField({
-    label: 'transparency',
+    label: 'opacity',
+    // Both halves of the pair are percentages and only one of them said so:
+    // `text size` prints `135%` between its chevrons while this printed a bare
+    // `0`, which reads as a different kind of control (§26.2).
+    unit: '%',
     title:
-      `Transparency of every track, as a percentage — 0 is opaque, ${MAX_TRANSPARENCY} is ` +
-      'nearly gone. Applies to all of them at once.',
-    // Five, because one per cent of transparency is not a visible change and a
+      `Opacity of every track, as a percentage — 100 is solid, ${MIN_OPACITY} is nearly gone. ` +
+      'Applies to all of them at once.',
+    // Five, because one per cent of opacity is not a visible change and a
     // reader pressing this is watching the picture, not counting.
     step: 5,
-    min: 0,
-    max: MAX_TRANSPARENCY,
+    min: MIN_OPACITY,
+    max: 100,
     // Read from the *store*, so the box shows what the tracks actually are: a
     // config loaded with faded tracks, or a single row's own opacity changed
     // from its settings, both land here.
-    // Zero rather than `null` for an empty store: `null` means "leave the box
-    // alone", which on a session with no tracks yet left it *blank* — a number
-    // field showing nothing, in a card whose other two boxes show numbers. There
-    // is a true answer here and it is zero: nothing is faded, because there is
-    // nothing to fade, and a track dropped in a moment later arrives opaque.
+    // A hundred rather than `null` for an empty store: `null` means "leave the
+    // box alone", which on a session with no tracks yet left it *blank* — a
+    // number field showing nothing, in a card whose other two boxes show
+    // numbers. There is a true answer here and it is solid: nothing is faded,
+    // because there is nothing to fade, and a track dropped in a moment later
+    // arrives opaque.
     read: () => {
       const first = store.entries[0]
-      return first === undefined ? 0 : Math.round((1 - first.style.opacity) * 100)
+      return first === undefined ? 100 : Math.round(first.style.opacity * 100)
     },
     apply: (percent) => {
-      const opacity = 1 - percent / 100
+      const opacity = percent / 100
       for (const entry of store.entries) store.restyle(entry.id, { opacity })
     },
     subscribe: (onChange) => store.subscribe(onChange),

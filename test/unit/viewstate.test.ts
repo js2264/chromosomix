@@ -439,14 +439,18 @@ describe('differsOnlyInPresentation', () => {
 })
 
 /**
- * The turn, whose key is a **refusal** rather than a setting.
+ * The turn, which is a reading a reader asks for.
  *
- * A block with a diagonal opens turned (§17.2), so the state that says nothing
- * says "turned" — and the only thing worth writing to a link is the reader
- * having asked for the square instead. Which puts two things on this key that
- * an ordinary boolean does not have to survive: `false` has to round-trip as
- * `false` rather than collapsing into the absence that means the opposite, and
- * "nothing said" has to stay nothing rather than being helpfully filled in.
+ * A map opens square (§17.2), so the state that says nothing says "square" — and
+ * the only thing worth writing to a link is the reader having asked for the
+ * band. It was the other way round for a release, on the argument that a block
+ * with a diagonal is what the turn is *for*; the argument held for the figure and
+ * not for the arrival, since the only blocks that can turn are single sequences
+ * and those are exactly what a reader has just clicked on.
+ *
+ * Both spellings still parse, because a link written under the old default is
+ * still a link: `flip=true` means turned, and `flip=false` means the square it
+ * has always meant, which is now also what saying nothing means.
  */
 describe('the turn in the hash', () => {
   it('says nothing at all for the ordinary case', () => {
@@ -455,24 +459,25 @@ describe('the turn in the hash', () => {
     expect(parseViewState(serialiseViewState(state))?.flip).toBeUndefined()
   })
 
-  it('carries a refusal, which is the whole reason the key exists', () => {
-    const state: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: false }
-    expect(serialiseViewState(state)).toContain('flip=false')
+  it('carries the turn, which is the whole reason the key exists', () => {
+    const state: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: true }
+    expect(serialiseViewState(state)).toContain('flip=true')
     expect(parseViewState(serialiseViewState(state))).toEqual(state)
   })
 
-  it('reads the older spelling of a turn that was asked for', () => {
-    // `flip=1` and `flip=true` are what the key meant when it was a setting
-    // rather than a refusal; a link written then still means turned now.
+  it('reads either spelling of either answer', () => {
     expect(parseViewState('uri=a.cool&flip=1')?.flip).toBe(true)
     expect(parseViewState('uri=a.cool&flip=true')?.flip).toBe(true)
+    // A refusal written under the old default still round-trips, and now says the
+    // same thing as saying nothing.
     expect(parseViewState('uri=a.cool&flip=0')?.flip).toBe(false)
+    expect(parseViewState('uri=a.cool&flip=false')?.flip).toBe(false)
   })
 
   it('is a presentation key, so moving it does not re-read the block', () => {
-    const square: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: false }
-    const turned: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
-    expect(differsOnlyInPresentation(square, turned)).toBe(true)
+    const turned: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000', flip: true }
+    const square: ViewState = { uri: 'a.cool', view: 'region', region: 'I:1-1000' }
+    expect(differsOnlyInPresentation(turned, square)).toBe(true)
   })
 })
 

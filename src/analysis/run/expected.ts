@@ -38,7 +38,6 @@
 
 import { ViewerError } from '../../errors'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
 import {
   ExpectedAccumulator,
   densityCurve,
@@ -48,17 +47,18 @@ import {
 } from '../expected'
 import {
   boolParam,
-  contigIdFor,
   numParam,
   readsAsCircular,
   strParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
 import {
-  displayableContigs,
+  missingSequencesNote,
   spanOfContig,
   squareOf,
+  tickedContigIds,
   usableBlock,
   validBins,
   type Span,
@@ -139,7 +139,11 @@ function makeUnit(name: string, spans: Span[], lap = 0): Unit {
  * asked for. The two must not disagree, since one of them prices what the other
  * runs.
  */
-function planUnits(job: JobContext, scope: string, region: string): Unit[] {
+function planUnits(
+  job: JobContext,
+  scope: string,
+  names: readonly string[] | null,
+): { units: Unit[]; missing: string[] } {
   const mc = job.mc
   /**
    * The lap of a contig the reader has declared circular, or `0`.
@@ -152,11 +156,11 @@ function planUnits(job: JobContext, scope: string, region: string): Unit[] {
 
   if (scope === 'file') {
     const spans: Span[] = []
-    for (const cid of displayableContigs(mc)) {
+    for (const cid of tickedContigIds(mc, null).ids) {
       const span = spanOfContig(mc, cid)
       if (span !== null) spans.push(span)
     }
-    return spans.length === 0 ? [] : [makeUnit('All sequences', spans)]
+    return { units: spans.length === 0 ? [] : [makeUnit('All sequences', spans)], missing: [] }
   }
 
   if (scope === 'genome') {
@@ -179,32 +183,22 @@ function planUnits(job: JobContext, scope: string, region: string): Unit[] {
       }
       if (spans.length > 0) out.push(makeUnit(mc.genomeNames[gid], spans))
     }
-    return out
+    return { units: out, missing: [] }
   }
 
-  if (region !== '') {
-    // The *sequence* the region names, and the whole of it. Sub-coordinates say
-    // which contig is meant, never how much of it is read: P(s) is a property of
-    // a sequence, and a curve taken from whichever window happened to be on
-    // screen but labelled `chrIV` is a different quantity wearing the same name.
-    // `analysis/tasks/ps.ts` prices exactly this extent, and the two agreeing is
-    // what stops a run being cheaper or dearer than the button said.
-    //
-    // Resolved through {@link contigIdFor} rather than by string, because the
-    // name is the reader's and a batch asks it of every panel of a deck (§18.2):
-    // a `.hic` writing `1` beside a `.cool` writing `chr1` met `unknown-label`
-    // and reported a failure about a file that has the sequence (§5.9).
-    const cid = contigIdFor(mc, parseRegionString(region)[0])
-    const span = cid < 0 ? null : spanOfContig(mc, cid)
-    return span === null ? [] : [makeUnit(mc.chromnames[cid], [span], lapOf(cid, span))]
-  }
-
+  // **One curve per ticked sequence, and the whole of each.** The tick boxes say
+  // which sequences, never how much of one: P(s) is a property of a sequence, and
+  // a curve taken from whichever window happened to be on screen but labelled
+  // `chrIV` is a different quantity wearing the same name. `analysis/tasks/ps.ts`
+  // prices exactly these extents, and the two agreeing is what stops a run being
+  // cheaper or dearer than the button said.
+  const { ids, missing } = tickedContigIds(mc, names)
   const out: Unit[] = []
-  for (const cid of displayableContigs(mc)) {
+  for (const cid of ids) {
     const span = spanOfContig(mc, cid)
     if (span !== null) out.push(makeUnit(mc.chromnames[cid], [span], lapOf(cid, span)))
   }
-  return out
+  return { units: out, missing }
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +315,7 @@ async function scanUnits(
   }
 
   const weight = validBins(mc, balance)
-  job.progress(0, 1, 'Counting the pairs each separation could hold')
+  job.progress(0, 1, 'counting the pairs each separation could hold')
   job.throwIfCancelled()
   const counts = countPairs(units, mc.storageMode === 'square', weight)
   const sums = units.map((unit) => new Float64Array(unit.maxOffset + 1))
@@ -347,7 +341,7 @@ async function scanUnits(
         sums[unitOfSpan[span]][offset] += value
       }
     },
-    onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+    onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
   })
 
   return units.map((unit, u) => curveOf(unit.maxOffset, sums[u], counts[u]))
@@ -449,7 +443,7 @@ const WINDOW: [number, number] = [4_000, 1_000_000]
 
 export const runExpected: TaskRunner = async (job) => {
   const scope = strParam(job.params, 'scope', 'contig')
-  const region = strParam(job.params, 'region', '').trim()
+  const ticked = tickedSequences(job.params, 'sequences')
   const factor = numParam(job.params, 'factor', 1.1)
   const minSeparation = numParam(job.params, 'minSeparation', 0)
   // Unrecognised falls back to the density, which is what the panel has drawn
@@ -460,9 +454,17 @@ export const runExpected: TaskRunner = async (job) => {
   const derivative = boolParam(job.params, 'derivative', true)
   const balance = boolParam(job.params, 'balance', false)
 
-  const planned = planUnits(job, scope, region)
+  if (scope === 'contig' && ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to measure.')
+    return []
+  }
+  const { units: planned, missing } = planUnits(job, scope, ticked)
+  const said = missingSequencesNote(job.mc, missing, planned.length)
+  if (said !== null) job.note(said)
   if (planned.length === 0) {
-    job.note('No sequence in this file has any bins in it, so there is nothing to measure.')
+    if (said === null) {
+      job.note('No sequence in this file has any bins in it, so there is nothing to measure.')
+    }
     return []
   }
 

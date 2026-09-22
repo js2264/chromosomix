@@ -95,8 +95,8 @@ export function icon(name: IconName, options: { size?: number; class?: string } 
  * opinion about where the control sits — the gesture is one gesture because it
  * is one implementation.
  *
- * A heading that is not a card's — the empty-metadata box uses one — keeps the
- * type and loses the control; see {@link foldCard}.
+ * A heading used outside a card keeps the type and loses the control; see
+ * {@link foldCard}.
  *
  * @param extra Classes the heading needs *as well* — `controls-title` for the
  * cards in the Aesthetics column, which are folded into the panel header in the
@@ -156,9 +156,9 @@ function foldChevron(text: string): HTMLButtonElement {
  * everything the card holds *except* the heading — a rule the stylesheet can
  * state once for every card in the application rather than each card hiding its
  * own parts. Which is also why this walks up exactly one level and checks what
- * it found: a heading used somewhere that is not a card — the empty-metadata
- * box is the one — has nothing to fold, and quietly doing nothing is better than
- * hiding half of a box that was never built to lose it.
+ * it found: a heading used somewhere that is not a card has nothing to fold, and
+ * quietly doing nothing is better than hiding half of a box that was never built
+ * to lose it.
  *
  * The choice is **not remembered**, following the Genome minimap this was
  * generalised from: the house mechanisms for a per-reader preference are modules
@@ -180,21 +180,63 @@ function foldCard(head: HTMLElement): void {
   if (chevron instanceof HTMLElement) chevron.title = folded ? 'Expand' : 'Collapse'
 }
 
+/**
+ * Give a heading built by hand the fold every `cardTitle` has.
+ *
+ * Two headings in the app cannot come from {@link cardTitle}: the File card's
+ * pair in compare mode wears a `◥` / `◣` glyph where the mark goes and a close
+ * button where the chevron goes, and neither is an icon from the set. They were
+ * therefore the only cards in any column that did not fold — three cards in the
+ * General column, two of which folded and one of which did not, which is the
+ * kind of disagreement §26.6 exists to settle. This appends the chevron and
+ * wires the same gesture, so a heading that is not built here still behaves
+ * like one.
+ *
+ * `stopPropagation` on whatever already sits at the end of the heading: a close
+ * button inside a strip that folds on click would fold the card on its way to
+ * closing the file.
+ */
+export function foldable(head: HTMLElement, name: string): HTMLElement {
+  for (const control of head.querySelectorAll('button')) {
+    control.addEventListener('click', (event) => event.stopPropagation())
+  }
+  head.appendChild(foldChevron(name))
+  head.addEventListener('click', () => foldCard(head))
+  return head
+}
+
 /** A button whose whole content is one icon. The title is the accessible name. */
 export function iconButton(
   name: IconName,
   title: string,
   onClick: () => void,
-  options: { class?: string; size?: number } = {},
+  options: { class?: string; size?: number; pressed?: boolean } = {},
 ): HTMLButtonElement {
   const node = document.createElement('button')
   node.type = 'button'
   node.className = options.class ?? 'btn btn-icon'
   node.title = title
   node.setAttribute('aria-label', title)
+  if (options.pressed !== undefined) node.setAttribute('aria-pressed', String(options.pressed))
   node.appendChild(icon(name, options.size === undefined ? {} : { size: options.size }))
   node.addEventListener('click', onClick)
   return node
+}
+
+/**
+ * Say which way a toggle is flipped, in the one way the whole app says it.
+ *
+ * `aria-pressed`, and the stylesheet lights the button from that alone — so a
+ * toggle declares its state once and is drawn, named to a screen reader, and
+ * testable from the same word. Five classes used to do this and each drew its
+ * own look: `.is-on` lit three of them, `.is-off` *dimmed* two others, and a
+ * dimmed live control is indistinguishable from a disabled one — a reader who
+ * had learned that grey means "you cannot" was being told, by the same grey,
+ * "this is off, press it". Lit means on here, plain means off, and nothing
+ * live is ever dimmed.
+ */
+export function setPressed(node: HTMLElement, pressed: boolean): void {
+  node.setAttribute('aria-pressed', String(pressed))
 }
 
 /**

@@ -201,8 +201,8 @@ describe('what genome a VCF is on', () => {
     expect(held.exact).toBe(true)
     // …and the field the *browser* actually reads. `lengthsAreExact` is written
     // over `origin` and looks at nothing else, so a VCF reporting `features`
-    // here would print "lengths inferred from the features in this file" under a
-    // genome whose lengths the file states outright — while `exact: true` sat
+    // here would print "lengths inferred (rounded up)" under a genome whose
+    // lengths the file states outright — while `exact: true` sat
     // beside it being correct and being ignored. That is the mistake the `bam`
     // origin exists to undo, and asserting only `exact` would let it back in.
     expect(held.origin).toBe('vcf')

@@ -233,11 +233,19 @@ describe('a structure cell in the deck', () => {
     const button = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
     expect(button).not.toBeNull()
     expect(button?.disabled).toBe(false)
+    // It leads with the verb, like every other button in the row: `3D structure`
+    // beside `add` read as a kind of thing the URL box takes.
+    expect(button?.textContent).toBe('add a 3D structure')
+    expect(button?.title).toContain('Open a cell')
     deck.add({ kind: 'structure' })
     deck.add({ kind: 'structure' })
     expect(structureCells(deck)).toHaveLength(1)
     expect(published).toEqual(['3d'])
-    expect(deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')?.disabled).toBe(true)
+    const greyed = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
+    expect(greyed?.disabled).toBe(true)
+    // …and says why, rather than keeping the sentence promising to open a cell
+    // it can no longer open (§18.1).
+    expect(greyed?.title).toBe('The deck already holds its one structure cell.')
   })
 
   it('takes the first empty cell, as a map would', () => {
@@ -296,12 +304,15 @@ describe('what the cell says', () => {
     const { deck } = make(empty)
     deck.add({ kind: 'structure' })
     const cell = structureCells(deck)[0]
-    expect(cell?.querySelector<HTMLInputElement>('.deck-name')?.value).toBe('structure')
+    // A span and not an `<input>`: this name is the row's, changed on the
+    // Structures card, and a box that framed itself on hover then refused every
+    // keystroke was inviting a rename it cannot do.
+    expect(cell?.querySelector('.deck-name')?.textContent).toBe('structure')
     expect(cell?.querySelector('.structure-note')?.textContent).toMatch(/No structure loaded/)
     // The row arrives.
     empty.entries.push(structureEntry())
     empty.notify()
-    expect(cell?.querySelector<HTMLInputElement>('.deck-name')?.value).toBe('model.g3d')
+    expect(cell?.querySelector('.deck-name')?.textContent).toBe('model.g3d')
   })
 
   it('reports a row that is still reading, or refused, in its own words', () => {
@@ -640,7 +651,7 @@ describe('which model the cell draws (§25.6)', () => {
     deck.showStructure('a2')
     expect(deck.shownStructure()).toBe('a2')
     const cell = structureCells(deck)[0]
-    expect(cell.querySelector<HTMLInputElement>('.deck-name')?.value ?? cell.textContent).toContain('second.g3d')
+    expect(cell.querySelector('.deck-name')?.textContent ?? cell.textContent).toContain('second.g3d')
   })
 
   it('opens the cell when there is none, and offers a picker only with two rows', () => {
@@ -650,7 +661,7 @@ describe('which model the cell draws (§25.6)', () => {
     deck.showStructure('a2')
     expect(deck.hasStructure()).toBe(true)
     expect(deck.shownStructure()).toBe('a2')
-    const picker = settingsRow(deck, 'model')
+    const picker = settingsRow(deck, 'structure')
     expect(picker).toBeDefined()
     const select = picker?.querySelector<HTMLSelectElement>('select')
     expect(select?.value).toBe('a2')
@@ -672,7 +683,7 @@ describe('which model the cell draws (§25.6)', () => {
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
     expect(without.deck.shownStructure()).toBe('a1')
-    expect(settingsRow(without.deck, 'model')).toBeUndefined()
+    expect(settingsRow(without.deck, 'structure')).toBeUndefined()
   })
 })
 
@@ -778,7 +789,12 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     deck.add({ kind: 'structure' })
     const options = Array.from(settingsRow(deck, 'loops as chords')?.querySelectorAll('option') ?? []).map((o) => o.value)
     expect(options).toContain('manual')
-    expect(settingsRow(deck, 'fog')?.querySelector('input')?.value).toBe('0.6')
+    // The toggle is the `fog` row; the depth is a row of its own, named, with
+    // the number it is at beside it — a slider wrapped under a toggle read as a
+    // setting with no name.
+    expect(settingsRow(deck, 'fog')?.querySelector('.structure-toggle')).not.toBeNull()
+    expect(settingsRow(deck, 'fog depth')?.querySelector('input')?.value).toBe('0.6')
+    expect(settingsRow(deck, 'fog depth')?.querySelector('.structure-value')?.textContent).toBe('0.6')
     expect(deck.structureSettings()?.querySelector('.structure-toggle[title*="centre and axes"]')).not.toBeNull()
     // Drawn as: three toggles that combine, the tube on by default.
     const drawn = Array.from(settingsRow(deck, 'drawn as')?.querySelectorAll<HTMLButtonElement>('.structure-toggle') ?? [])
@@ -814,10 +830,14 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     const bound = new Map(deck.cellCommands().map((c) => [c.id, c.keys]))
     expect(bound.get('structure-frame')).toBe('f')
     expect(bound.get('structure-all')).toBe('a')
-    expect(bound.get('structure-select')).toBe('e')
-    expect(bound.get('structure-loop')).toBe('o')
-    expect(bound.get('structure-measure')).toBe('m')
     expect(bound.get('structure-turn')).toBe('r')
+    // The three modes have none, enlarged or not (§25.4): a bare letter that
+    // arms a mode is a letter pressed by accident with the pointer over the
+    // model, and `e`, `o` and `m` each belonged to something else, so the
+    // shortcuts dialog printed two rows for one key.
+    for (const id of ['structure-select', 'structure-loop', 'structure-measure']) {
+      expect(bound.get(id)).toBeUndefined()
+    }
     // …and given back on the way out.
     document.querySelector<HTMLButtonElement>('.modal .modal-close, .modal button[title*="lose" i]')?.click()
   })

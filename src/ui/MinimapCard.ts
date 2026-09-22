@@ -44,12 +44,16 @@
  * ## The coordinate convention, which is the trap
  *
  * The 1D browser's `state.locus` is **1-based inclusive** (`formatLocus`); the
- * 2D `region`/`region2`/`focus` are **0-based half-open**. The repo keeps the
- * two deliberately different, and `SequenceBar`'s header says why. This card
- * therefore refuses to guess: {@link MinimapRange} is documented as **0-based
- * half-open**, always, in both modes, and the caller converts on the way in.
- * What it *emits* is `SequenceBar`'s own string — `contig:first-last`, 0-based,
- * no thousands separators — so it drops into the plumbing that already exists.
+ * 2D `region`/`region2`/`focus` are **0-based half-open**. This card does not
+ * choose between them, because §26.1 already has: {@link MinimapRange} is
+ * documented as **0-based half-open**, always, in both modes, and the caller
+ * converts on the way in — that is the machine form, and it is what this card
+ * *emits*, `contig:first-last` with no thousands separators, so it drops into
+ * the plumbing that already exists. What it *writes for a reader* is the display
+ * form, through `formatLocus` and nothing hand-rolled, so the readout under the
+ * strip and the locus box above it print the same window. Those were a base
+ * apart until §26.1 settled it, on one screen, with this card's own tooltip
+ * insisting they agreed.
  *
  * ## Geometry
  *
@@ -59,12 +63,12 @@
  * every pixel below goes through that axis and one {@link Scale}.
  */
 
-import { assemblyAxis, type Assembly } from '../genome/assembly'
+import { assemblyAxis, formatLocus, type Assembly } from '../genome/assembly'
 import { drawGuide, snap } from '../render/browser'
 import { CROSSHAIR_COLOR } from '../render/heatmap'
 import type { LocusAxis, LocusSegment } from '../render/locus'
 import { Scale } from '../render/scale'
-import { el, fmt } from './dom'
+import { el } from './dom'
 import { cardTitle } from './icons'
 import { readCanvasPalette } from './MatrixPanel'
 import { scaleFont, scaleLength, subscribeTextScale } from './textScale'
@@ -465,19 +469,16 @@ export class MinimapCard {
    * line of text already under it. So the line under it is the readout, and it
    * says the same three things the chips would.
    *
-   * 0-based, like everything else this card speaks and like the region it is
-   * about to emit — the numbers here are the numbers that will appear in the
-   * crumb (see the module header on the convention).
+   * **The note is the gesture, and nothing else.** It led with the assembly's
+   * sequence count and total length, which is what the card directly above this
+   * one says in its first two rows — the same two facts twice within six
+   * centimetres, pushing the one thing a reader could act on onto a third line.
+   * The picture under the words is the count and the total.
    */
   private paintText(): void {
-    const count = this.props.assembly.contigs.length
-    this.note.textContent =
-      `${fmt.int(count)} ${count === 1 ? 'sequence' : 'sequences'} · ` +
-      `${fmt.bp(this.props.assembly.total)} · click a band for a sequence, drag for a window`
+    this.note.textContent = 'click a band for a sequence, drag for a window'
     this.readout.textContent = this.describe()
-    this.readout.title =
-      'Positions are 0-based and half-open, as in cooler — the same numbers the ' +
-      'address bar and the breadcrumb use.'
+    this.readout.title = 'Positions are 1-based and inclusive, as in every genome browser.'
   }
 
   private describe(): string {
@@ -877,9 +878,19 @@ export class MinimapCard {
   }
 }
 
-/** `chrII:200–600`, in the 0-based half-open numbers this card speaks. */
+/**
+ * `chrII:201-600` — the window as a reader reads it (§26.1).
+ *
+ * Through `formatLocus`, which is the app's one writer of a window, so the
+ * readout prints the string the locus box above it prints. It used to write the
+ * 0-based half-open range this card thinks in, and the result was the same
+ * window shown twice on one screen with two different starts, a base apart,
+ * five centimetres from each other — with a tooltip claiming they were the same
+ * numbers. What the card *emits* is still the machine form (see `dragged`): the
+ * state and the hash carry cooler's grammar, and only this line is read.
+ */
 function span(range: MinimapRange): string {
-  return `${range.contig}:${fmt.int(range.start)}–${fmt.int(range.end)}`
+  return formatLocus(range)
 }
 
 /** Whether a block's two ranges are the same place — that is, on the diagonal. */

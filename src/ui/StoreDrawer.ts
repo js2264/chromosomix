@@ -203,7 +203,7 @@ export class StoreDrawer {
 
   constructor(private readonly options: StoreDrawerOptions) {
     this.toggle = el('button', {
-      class: 'btn btn-icon is-off',
+      class: 'btn btn-icon',
       type: 'button',
       attrs: { 'aria-label': 'stores' },
     })
@@ -501,7 +501,6 @@ export class StoreDrawer {
   }
 
   private paintToggle(): void {
-    this.toggle.classList.toggle('is-off', !this.isOpen)
     this.toggle.replaceChildren(icon('library'))
     this.toggle.title = withKey(
       `${this.isOpen ? 'Close' : 'Open'} the stores — the lab’s data, IGV’s genomes, 4DN, ENCODE and any store you connected`,

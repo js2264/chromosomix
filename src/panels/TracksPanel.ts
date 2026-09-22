@@ -60,6 +60,17 @@ export interface TracksPanelProps {
   onFollow(range: LocusRange): void
   /** The grip before the name was taken hold of, or let go. */
   onDragChange(dragging: boolean): void
+  /**
+   * How wide the lead's lanes are, so this cell's lanes read the same data.
+   *
+   * Forwarded straight to `BrowserViewProps.sampleWidth`, which explains what it
+   * buys: a summary level chosen from a cell's own 265 pixels is a different
+   * level from the one chosen from the lead's, and the same track over the same
+   * window then autoscales to two ceilings — a difference in the layout wearing
+   * the clothes of a difference in the data. `0` for a deck with no lead map, in
+   * which case there is nothing to agree with and the floor decides.
+   */
+  leadSampleWidth?(): number
 }
 
 /** The part of the props the session supplies; the deck adds the rest. */
@@ -197,6 +208,9 @@ export class TracksPanel implements DeckCell {
       map: this.props.id,
       hoverSource: this.source,
       onLocusChange: () => this.report(),
+      ...(this.props.leadSampleWidth === undefined
+        ? {}
+        : { sampleWidth: () => this.props.leadSampleWidth?.() ?? 0 }),
     })
     this.browser = view
     this.builtFrom = context
@@ -239,9 +253,12 @@ export class TracksPanel implements DeckCell {
   private syncChain(): void {
     this.el.classList.toggle('is-unlocked', !this.linked)
     this.chain.replaceChildren(icon(this.linked ? 'link' : 'unlink', { size: 14 }))
+    // The same second sentence a map's chain says and the lead's: one glyph,
+    // one pair of verbs (§25.3). The first is this cell's own, because it is the
+    // one surface the maps follow back.
     this.chain.title = this.linked
-      ? 'Following the maps, and they follow it. Press to unhook this cell.'
-      : 'Not following the maps. Press to hook this cell to them again.'
+      ? 'Following the maps, and they follow it. Click to move this cell on its own.'
+      : 'Moving on its own. Click to put it back in step with the maps.'
     this.chain.setAttribute('aria-pressed', String(this.linked))
   }
 

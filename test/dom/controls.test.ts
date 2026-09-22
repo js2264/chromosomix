@@ -162,10 +162,13 @@ describe('fmt', () => {
     expect(fmt.bp(4_600_000)).toBe('4.60 Mb')
   })
 
-  it('writes bytes in binary units', () => {
+  // Decimal, in thousands, because that is what the OS and every browser's
+  // download dialog show the same reader about the same file — see `src/units.ts`.
+  it('writes bytes in decimal units, as the operating system does', () => {
     expect(fmt.bytes(512)).toBe('512 B')
-    expect(fmt.bytes(2048)).toBe('2.0 kB')
-    expect(fmt.bytes(5 * 1024 * 1024)).toBe('5.0 MB')
+    expect(fmt.bytes(2000)).toBe('2.0 kB')
+    expect(fmt.bytes(5_000_000)).toBe('5.0 MB')
+    expect(fmt.bytes(18_100_000)).toBe('18.1 MB')
   })
 
   it('writes a fraction as a percentage', () => {
@@ -186,8 +189,8 @@ describe('the ‹ › pair', () => {
       noun: 'genome',
     })
     const [back, on] = all<HTMLButtonElement>(node, 'button')
-    expect(back.title).toBe('Previous genome: MAG_004')
-    expect(on.title).toBe('Next genome: MAG_006')
+    expect(back.title).toBe('Previous genome: MAG_004 ([)')
+    expect(on.title).toBe('Next genome: MAG_006 (])')
     expect(back.disabled).toBe(false)
     expect(on.disabled).toBe(false)
   })
@@ -225,13 +228,16 @@ describe('the theme toggle', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
-  it('cycles system → light → dark → system', () => {
+  // Ordered against the machine, which reports light here, so the first press
+  // is the one that repaints (`ui/ThemeToggle.next` argues why the silent step
+  // is last rather than first).
+  it('cycles system → dark → light → system on a light machine', () => {
     const toggle = new ThemeToggle()
     document.body.appendChild(toggle.el)
     toggle.el.click()
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    toggle.el.click()
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    toggle.el.click()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     toggle.el.click()
     // Back to system, and the attribute is *removed* rather than set to a third
     // value the stylesheet has no palette for.
@@ -241,7 +247,7 @@ describe('the theme toggle', () => {
   it('keeps an explicit choice and forgets the implicit one', () => {
     const toggle = new ThemeToggle()
     toggle.el.click()
-    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBe('light')
+    expect(window.localStorage.getItem('metacooler-viewer:theme')).toBe('dark')
     toggle.el.click()
     toggle.el.click()
     expect(window.localStorage.getItem('metacooler-viewer:theme')).toBeNull()
@@ -259,11 +265,14 @@ describe('the theme toggle', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
-  it('says what a press will do next', () => {
+  it('says what a press will do next, and says it to a screen reader too', () => {
     const toggle = new ThemeToggle()
     expect(toggle.el.title).toContain('Theme: system')
-    expect(toggle.el.title).toContain('light')
-    expect(toggle.el.getAttribute('aria-label')).toBe('colour theme')
+    // The *opposite* of what this machine reports, so the press changes the
+    // page; the accessible name is the same sentence, which the constant
+    // "colour theme" it used to carry never was.
+    expect(toggle.el.title).toContain('dark')
+    expect(toggle.el.getAttribute('aria-label')).toBe(toggle.el.title)
   })
 })
 
@@ -292,10 +301,15 @@ describe('the colour clip', () => {
     box.dispatchEvent(new Event('change'))
   }
 
-  it('opens in auto, with nothing to hand back', () => {
+  it('opens in auto, with nothing to hand back and nothing to say', () => {
     const { clip } = make()
     expect(clip.el.classList.contains('clip-manual')).toBe(false)
     expect(clip.el.querySelector<HTMLButtonElement>('.clip-auto')?.disabled).toBe(true)
+    // **No caption until a block has been scaled.** It used to print
+    // `auto · 0 – 1` from the placeholder the control starts on, which behind
+    // the whole-genome gate is a caption for a picture that is not there.
+    expect(textsOf(clip.el, '.clip-note')[0]).toBe('')
+    clip.setValues({ vmin: 0, vmax: 42 }, true)
     expect(textsOf(clip.el, '.clip-note')[0].startsWith('auto ·')).toBe(true)
   })
 
@@ -370,9 +384,11 @@ describe('the record card', () => {
 
   it('leads with the guaranteed columns and keeps the file’s own after them', () => {
     const fields = recordFields(PAYLOAD, 0)
+    // With the divider between the two sets — see `RecordField.divider`.
     expect(fields.map((row) => row.key)).toEqual([
       'length',
       'n_bins',
+      'joined in with the file',
       'completeness',
       'taxonomy',
     ])

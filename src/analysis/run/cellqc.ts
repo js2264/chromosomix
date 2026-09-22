@@ -101,7 +101,7 @@ async function measure(
     far: 0,
   }))
 
-  job.progress(0, names.length, 'Reading cells')
+  job.progress(0, names.length, 'reading cells')
   await mc.scanCells({
     onCell: (index, name) => job.progress(index, names.length, name),
     onChunk: (cell, chunk) => {
@@ -137,7 +137,7 @@ async function measure(
     },
     onProgress: () => job.throwIfCancelled(),
   })
-  job.progress(names.length, names.length, 'Done')
+  job.progress(names.length, names.length, 'done')
   job.throwIfCancelled()
 
   const tickedSet = new Set(ticked)

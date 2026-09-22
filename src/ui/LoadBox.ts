@@ -21,8 +21,9 @@
  * genome — and a file glyph above them, and between the three the landing page
  * did not fit on one screen. A reader who has to scroll to find out that there
  * are three ways in has been told there is one. The sentence is not lost: the
- * About dialog states it, and dropping a bigWig demonstrates it in less time
- * than reading about it takes.
+ * About dialog's first sentence names the tracks, genomes and models this
+ * viewer opens with or without a map (`ui/dialogs.ts`, §24.2), and dropping a
+ * bigWig demonstrates it in less time than reading about it takes.
  *
  * The privacy claim is on the landing page rather than here, because it is
  * about the application and not about this control; and the stores are not

@@ -198,6 +198,18 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M16 21h3a2 2 0 0 0 2-2v-3"}],
     ],
   },
+  'expand': {
+    shapes: [
+    ['path', {"d":"m15 15 6 6"}],
+    ['path', {"d":"m15 9 6-6"}],
+    ['path', {"d":"M21 16v5h-5"}],
+    ['path', {"d":"M21 8V3h-5"}],
+    ['path', {"d":"M3 16v5h5"}],
+    ['path', {"d":"m3 21 6-6"}],
+    ['path', {"d":"M3 8V3h5"}],
+    ['path', {"d":"M9 9 3 3"}],
+    ],
+  },
   'crosshair': {
     shapes: [
     ['circle', {"cx":"12","cy":"12","r":"10"}],
@@ -205,13 +217,6 @@ export const GENERATED_ICONS = {
     ['line', {"x1":"6","x2":"2","y1":"12","y2":"12"}],
     ['line', {"x1":"12","x2":"12","y1":"6","y2":"2"}],
     ['line', {"x1":"12","x2":"12","y1":"22","y2":"18"}],
-    ],
-  },
-  'move-diagonal-2': {
-    shapes: [
-    ['path', {"d":"M19 13v6h-6"}],
-    ['path', {"d":"M5 11V5h6"}],
-    ['path', {"d":"m5 5 14 14"}],
     ],
   },
   'git-compare': {
@@ -720,6 +725,11 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"}],
     ['path', {"d":"M18 2v8"}],
     ['path', {"d":"M14 6h8"}],
+    ],
+  },
+  'diagonal': {
+    shapes: [
+    ['path', {"d":"m5 5 14 14"}],
     ],
   },
   'github': {

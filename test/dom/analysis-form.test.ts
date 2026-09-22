@@ -26,14 +26,27 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { COMPARTMENTS_TASK } from '@/analysis/tasks/compartments'
 import { EXPECTED_TASK } from '@/analysis/tasks/ps'
 import { INSULATION_TASK } from '@/analysis/tasks/insulation'
+import { DI_TASK } from '@/analysis/tasks/di'
+import { HIC_SCORE_TASK } from '@/analysis/tasks/hicscore'
+import { SCALOGRAM_TASK } from '@/analysis/tasks/scalogram'
 import { FOURC_TASK } from '@/analysis/tasks/fourc'
 import { TRACK_CORRELATION_TASK } from '@/analysis/tasks/trackcorr'
 import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
 import { APA_TASK } from '@/analysis/tasks/apa'
 import { MAG_QC_TASK } from '@/analysis/tasks/mags'
-import { defaultParams, type AnalysisContext, type AnalysisTask } from '@/analysis/types'
+import { METAPLOT_TASK } from '@/analysis/tasks/metaplot'
+import { FRIP_TASK } from '@/analysis/tasks/frip'
+import { TASKS } from '@/analysis/registry'
+import {
+  defaultParams,
+  type AnalysisContext,
+  type AnalysisTask,
+  type NumberParam,
+  type Params,
+} from '@/analysis/types'
 import { RECONSTRUCT_TASK, STRUCTURE_MAP_TASK } from '@/analysis/tasks/structure'
 import { ParamForm } from '@/ui/ParamForm'
+import { pickLocus, resetPick } from '@/ui/mapPick'
 import { all, buttonNamed, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -91,6 +104,20 @@ function form(task: AnalysisTask, ctx = context()): ParamForm {
     value: defaultParams(task.params),
     onChange: () => {},
   })
+}
+
+/** A form whose parameter writes are visible to the test. */
+function watchedForm(task: AnalysisTask, ctx = context()): { view: ParamForm; latest: () => Params } {
+  let params = defaultParams(task.params)
+  const view = new ParamForm({
+    specs: task.params,
+    context: ctx,
+    value: params,
+    onChange: (next) => {
+      params = next
+    },
+  })
+  return { view, latest: () => params }
 }
 
 /** Every control label the form put on screen. */
@@ -158,27 +185,47 @@ describe('balancing', () => {
   })
 })
 
+/**
+ * **One shape for *which sequences to run on*, and it is the tick boxes.**
+ *
+ * These five asked it with a dropdown whose first option read *every sequence*,
+ * while four others asked it with a column of tick boxes, and a reader met both
+ * in one column. The expectations here changed with the shape: there is no
+ * `region` parameter on any of the five any more, the answer is a list of names
+ * rather than a string, and *every sequence* is every box ticked rather than an
+ * empty select. What has not changed is what the form must not do — seed the
+ * answer from the map's framing, which silently narrowed each of them to
+ * whichever chromosome was on screen.
+ */
 describe('a whole-sequence picker', () => {
   it('starts on every sequence, not on whatever the map is framed at', () => {
-    for (const task of [EXPECTED_TASK, INSULATION_TASK]) {
+    for (const task of [EXPECTED_TASK, INSULATION_TASK, DI_TASK, HIC_SCORE_TASK, SCALOGRAM_TASK]) {
       const view = form(task)
-      expect(view.value.region, task.id).toBe('')
+      expect(view.value.sequences, task.id).toEqual(['I', 'II', 'IV'])
       view.destroy()
     }
   })
 
-  it('offers “every sequence” as the choice it starts on', () => {
-    const view = form(INSULATION_TASK)
-    const options = all<HTMLOptionElement>(view.el, 'option').map((node) => node.textContent)
-    expect(options[0]).toBe('every sequence')
-    expect(options).toContain('I')
-    expect(options).toContain('IV')
-    view.destroy()
+  it('asks with tick boxes and not with a dropdown', () => {
+    for (const task of [EXPECTED_TASK, INSULATION_TASK, DI_TASK, HIC_SCORE_TASK, SCALOGRAM_TASK]) {
+      const spec = task.params.find((param) => param.key === 'sequences')
+      expect(spec?.kind, task.id).toBe('sequences')
+      expect(task.params.some((param) => param.kind === 'region'), task.id).toBe(false)
+      const view = form(task)
+      const boxes = all<HTMLInputElement>(view.el, '.param-sequences input[type="checkbox"]')
+      expect(boxes, task.id).toHaveLength(3)
+      expect(boxes.every((box) => box.checked), task.id).toBe(true)
+      expect(all<HTMLOptionElement>(view.el, 'option').map((node) => node.textContent)).not.toContain(
+        'every sequence',
+      )
+      view.destroy()
+    }
   })
 
-  // The opposite case, and the reason the rule is about `sequences` rather than
-  // about regions: an anchor is a place, and where the reader is looking is the
-  // best guess there is.
+  // The opposite case, and the reason the rule is about *which sequences* rather
+  // than about regions: an anchor is a place, and where the reader is looking is
+  // the best guess there is. A locus box is what `kind: 'region'` is now for and
+  // all it is for.
   it('does not apply to a locus box, which still starts where the map is', () => {
     const view = form(FOURC_TASK)
     expect(view.value.anchor).not.toBe('')
@@ -190,7 +237,8 @@ describe('P(s)', () => {
   it('starts per chromosome, over every sequence', () => {
     const view = form(EXPECTED_TASK)
     expect(view.value.scope).toBe('contig')
-    expect(view.value.region).toBe('')
+    // Every box ticked, which is what *over every sequence* is now spelled as.
+    expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
     view.destroy()
   })
 
@@ -203,26 +251,91 @@ describe('P(s)', () => {
   })
 })
 
+/**
+ * **Every matrix setting is a number of bins, or of diagonals, and never a
+ * length of genome (§18.2).**
+ *
+ * The rule used to be the other way round: a length was asked for in base pairs
+ * and the form printed *n bins at 1 kb* under the box, translating what the
+ * reader typed into what the task would do. Two things were wrong with that. The
+ * quantity a matrix parameter names — a scan band, a shift, a stratum, a
+ * separation between two anchors — *is* a count of the grid's own cells, so the
+ * translation was the reader doing arithmetic the run then undid; and the same
+ * typed number meant a different thing on every rung of an `.mcool`. So the
+ * boxes ask in bins, the caption is gone with the boxes it was for, and what a
+ * run came to in base pairs is said once by the runner, on the file open.
+ *
+ * The exception is the one thing bins are not a unit of: a **1D track**. A
+ * metaplot's flank, a FRiP's sampling step and a track correlation's window are
+ * base pairs and stay base pairs, and none of the three carries a bin count.
+ */
 describe('the units a form asks in', () => {
+  /** Every number parameter of every task, with the task that owns it. */
+  const numbers = (): Array<{ task: string; key: string; unit: string | undefined }> =>
+    TASKS.flatMap((task) =>
+      task.params
+        .filter((param): param is NumberParam => param.kind === 'number')
+        .map((param) => ({ task: task.id, key: param.key, unit: param.unit })),
+    )
+
+  it('asks no box for a matrix distance in base pairs', () => {
+    // `cellqc` is the one task whose base-pair numbers are not a grid at all:
+    // its three band edges are Nagano et al.'s published separations, are what
+    // the phasing plot's own axes print, and are never turned into bins by
+    // anything — the histogram measures a separation in base pairs and compares
+    // it there. The three 1D tasks are the stated exception.
+    const onTracks = new Set(['metaplot', 'frip', 'trackcorr', 'cellqc'])
+    const inBp = numbers().filter((param) => param.unit === 'bp' && !onTracks.has(param.task))
+    expect(inBp).toEqual([])
+  })
+
+  it('asks every distance it converted in bins, and says so beside the box', () => {
+    const wanted: Record<string, string[]> = {
+      scalogram: ['reach'],
+      apa: ['window', 'minShift', 'maxShift', 'minSep', 'maxSep'],
+      chromosight: ['minDist', 'maxDist', 'minSeparation'],
+      hicrep: ['maxDistance', 'smooth'],
+      insulation: ['window', 'spacing'],
+      di: ['window', 'spacing'],
+      expected: ['minSeparation'],
+    }
+    for (const [task, keys] of Object.entries(wanted)) {
+      const found = numbers().filter((param) => param.task === task && param.unit === 'bins')
+      expect(found.map((param) => param.key).sort(), task).toEqual([...keys].sort())
+    }
+  })
+
   /**
-   * A caption reading "10 bins at 1.0 kb" under a box is a promise about what
-   * the task will do, and it is only a promise the *matrix* tasks can keep.
-   * Track correlation reads bigWigs and can run with no map open at all, so its
-   * bin size has nothing to be measured against — it printed the file's
-   * resolution beside a number that has nothing to do with it.
+   * A 1D quantity keeps its unit and gains no mention of bins — in its label, in
+   * its unit or in its hint. Track correlation is the case the rule was written
+   * from: it correlates bigWigs and can run with no contact map open at all, so
+   * its window had nothing to be a count of, and the control was called *bin
+   * size* and printed `1 bin at 10.0 kb` beside a box reading 10,000.
    */
-  it('prints no bin count beside track correlation’s bin size', () => {
-    const view = form(TRACK_CORRELATION_TASK)
-    expect(asks(view, 'bin at')).toBe(false)
-    expect(asks(view, 'bins at')).toBe(false)
-    expect(view.value.binsize).toBe(100)
-    view.destroy()
+  it('says nothing about bins on a control that reads a track', () => {
+    for (const task of [TRACK_CORRELATION_TASK, METAPLOT_TASK, FRIP_TASK]) {
+      const view = form(task)
+      expect(asks(view, 'bin'), task.id).toBe(false)
+      view.destroy()
+    }
+    expect(form(TRACK_CORRELATION_TASK).value.binsize).toBe(100)
+  })
+
+  it('prints no bin count under any box, on any task', () => {
+    for (const task of TASKS) {
+      const view = form(task)
+      expect(asks(view, 'bin at'), task.id).toBe(false)
+      expect(asks(view, 'bins at'), task.id).toBe(false)
+      view.destroy()
+    }
   })
 
   it('asks insulation for a diamond in bins', () => {
     const view = form(INSULATION_TASK)
     expect(view.value.window).toBe(10)
-    expect(labels(view).join(' ')).toContain('Window')
+    // Lowercase, since field labels are (§26.4): every label in this form was
+    // Title-case while every label on the cards beside it was not.
+    expect(labels(view).join(' ')).toContain('window')
     view.destroy()
   })
 })
@@ -295,11 +408,11 @@ describe('ticking several sequences', () => {
 
   it('has a None that empties it and an All that fills it', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     expect(view.value.sequences).toEqual([])
     expect(asks(view, '0 of 3 ticked')).toBe(true)
 
-    buttonNamed(view.el, 'All')?.click()
+    buttonNamed(view.el, 'all')?.click()
     expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
     view.destroy()
   })
@@ -311,7 +424,7 @@ describe('ticking several sequences', () => {
    */
   it('leaves an emptied list empty when the context changes under it', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     view.setContext(context())
     expect(view.value.sequences).toEqual([])
     view.destroy()
@@ -330,7 +443,7 @@ describe('ticking several sequences', () => {
 
   it('refuses a run with nothing ticked, and says what to do', () => {
     const view = form(COMPARTMENTS_TASK)
-    buttonNamed(view.el, 'None')?.click()
+    buttonNamed(view.el, 'none')?.click()
     const refusal = COMPARTMENTS_TASK.estimate(context(), view.value).refusal ?? ''
     expect(refusal).toMatch(/tick at least one/i)
     view.destroy()
@@ -566,7 +679,19 @@ describe('a box that takes several sequences (§25.6)', () => {
 
   it('is seeded with the locus when the map is inside one sequence', () => {
     const view = form(RECONSTRUCT_TASK, framed([240, 300]))
-    expect(view.value.region).toBe('II:10001-70000')
+    // Grouped, as §26.1 has every coordinate on screen written — including in a
+    // box whose own grammar is comma-separated, because `splitRegionList` knows a
+    // thousands comma from a separator. Split plainly, this seed read as `II:10`,
+    // `001` and `70,000`, and the run came back *Expected HYPHEN token missing*.
+    expect(view.value.region).toBe('II:10,001-70,000')
+    view.destroy()
+  })
+
+  it('groups the digits for a box that takes one locus too', () => {
+    // The 4C anchor, a box away from the one above in the same column: the two
+    // read alike, which is the whole of §26.1.
+    const view = form(FOURC_TASK, framed([240, 300]))
+    expect(view.value.anchor).toBe('II:10,001-70,000')
     view.destroy()
   })
 
@@ -592,5 +717,38 @@ describe('a box that takes several sequences (§25.6)', () => {
     const view = form(RECONSTRUCT_TASK, framed([0, 230], [1043, 2574]))
     expect(view.value.region).toBe('I, IV')
     view.destroy()
+  })
+})
+
+
+describe('an anchor picked off the map', () => {
+  // THE DIALECT, and it is a wrong *answer* rather than a wrong label.
+  //
+  // `mapPick.locusText` writes the paste form — 1-based inclusive, which §8.9
+  // pins for the clipboard because that is what samtools and bedtools take — and
+  // the runners read this parameter with cooler's grammar, 0-based half-open. So
+  // a drag that framed bins 230–1042 arrived at the runner naming bin 231
+  // onwards, one bin past the stretch the reader had just pointed at, and
+  // nothing on the screen said so. A 4C profile is read off its anchor, so the
+  // shift moved the peak.
+  afterEach(() => {
+    resetPick()
+  })
+
+  it('names the bins that were dragged, in the grammar the runner reads', () => {
+    const { view, latest } = watchedForm(FOURC_TASK)
+    document.body.appendChild(view.el)
+    // Bins 230 to 1042 of a 1 kb file — chromosome II, whole.
+    pickLocus({ contig: 'II', start: 230_000, end: 1_043_000 })
+    // Not `II:230001-1043000`, which is the same stretch written for a terminal
+    // and one base along when read as cooler reads it.
+    expect(latest().anchor).toBe('II:230000-1043000')
+  })
+
+  it('leaves a whole sequence as its bare name, which has no coordinate to shift', () => {
+    const { view, latest } = watchedForm(FOURC_TASK)
+    document.body.appendChild(view.el)
+    pickLocus({ contig: 'IV', start: 1_043_000, end: 2_574_000, whole: true })
+    expect(latest().anchor).toBe('IV')
   })
 })

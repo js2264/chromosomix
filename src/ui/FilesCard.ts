@@ -141,7 +141,7 @@ export class FilesCard {
       el(
         'div',
         { class: 'files-actions' },
-        button('Open a local/remote folder', () => this.props.onConnect(), {
+        button('connect a local or remote folder', () => this.props.onConnect(), {
           class: 'btn btn-primary',
           title: 'A folder on this machine, a bucket, a Google Drive folder or a Dropbox, browsed here.',
         }),
@@ -241,7 +241,8 @@ export class FilesCard {
           class: 'hint',
           text:
             `${folder.label} is listed with an account this tab is not signed in to. Sign in ` +
-            `under *Open a local/remote folder* → ${account} and it lists again; nothing about the folder has changed.`,
+            `under “connect a local or remote folder” → ${account} and it lists again; nothing ` +
+            'about the folder has changed.',
         }),
         button('retry', () => void this.show(folder), { class: 'btn' }),
       )

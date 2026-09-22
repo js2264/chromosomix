@@ -27,7 +27,7 @@
 import { ViewerError } from '../../errors'
 import type { MetaCooler } from '../../metacooler/MetaCooler'
 import { DEFAULT_WEIGHT_COLUMN } from '../../metacooler/matrix'
-import type { JobContext } from '../job'
+import { contigIdsFor, type JobContext } from '../job'
 import type { BlockInput } from '../worker/protocol'
 import type { SeparationBand } from '../band'
 import { diagonalTiles, tileRows } from '../tiles'
@@ -440,7 +440,7 @@ export async function cisMarginal(job: JobContext): Promise<Float64Array> {
     for (let bin = from; bin < to; bin++) contigOf[bin] = cid
   }
   const sums = new Float64Array(mc.nBins)
-  job.progress(0, 1, 'Counting coverage')
+  job.progress(0, 1, 'counting coverage')
   await mc.scanPixels({
     onChunk: (chunk) => {
       job.throwIfCancelled()
@@ -454,7 +454,7 @@ export async function cisMarginal(job: JobContext): Promise<Float64Array> {
         if (bin2 !== bin1) sums[bin2] += 1
       }
     },
-    onProgress: (at, of) => job.progress(at, of, 'Counting coverage'),
+    onProgress: (at, of) => job.progress(at, of, 'counting coverage'),
   })
   return sums
 }
@@ -475,6 +475,64 @@ export function displayableContigs(mc: MetaCooler): number[] {
     out.push(cid)
   }
   return out
+}
+
+/**
+ * The contigs a run was ticked for, in the file's own order, and what was said.
+ *
+ * The read side of the one shape for *which sequences to run on* (§18.2). Five
+ * tasks used to take a region string naming one sequence, with the empty string
+ * meaning every one; they take a list of ticked names now, and this is the
+ * conversion the five would otherwise each hold a copy of.
+ *
+ * Three answers, and each needs its own sentence at the call site rather than a
+ * shared one, because they are three different situations: **every displayable
+ * contig** where nothing was answered, which is the genome-wide run; **the
+ * ticked ones this file has**, with the rest named in `missing` — a deck holds
+ * files of different assemblies on purpose and a batch asks every panel for one
+ * reader's list (§5.9), so a name that found nothing is a fact about the pair of
+ * files rather than an error; and **nothing at all**, where the reader pressed
+ * *None*.
+ *
+ * Resolved through {@link contigIdFor}, never `mc.contigId`, for §5.9's reason:
+ * the names were ticked against whichever map the Analysis column was pointed
+ * at, and the `.hic` beside the `.cool` writes `1` where it writes `chr1`.
+ * Ascending, so a caller walking them walks the file's own layout.
+ */
+export function tickedContigIds(
+  mc: MetaCooler,
+  names: readonly string[] | null,
+): { ids: number[]; missing: string[] } {
+  if (names === null) return { ids: displayableContigs(mc), missing: [] }
+  return contigIdsFor(mc, names)
+}
+
+/**
+ * What to say about ticked sequences this file has not got, or `null`.
+ *
+ * One sentence, in one place, because the alternative is five tasks phrasing the
+ * same fact five ways in the same drawer. `null` where every name landed, which
+ * is the ordinary case and wants no line at all.
+ */
+export function missingSequencesNote(
+  mc: MetaCooler,
+  missing: readonly string[],
+  found: number,
+): string | null {
+  if (missing.length === 0) return null
+  const shown = `${missing.slice(0, 6).join(', ')}${missing.length > 6 ? ', …' : ''}`
+  if (found > 0) {
+    return (
+      `${missing.length.toLocaleString()} ticked ` +
+      `${missing.length === 1 ? 'sequence is' : 'sequences are'} not in this file and ` +
+      `${missing.length === 1 ? 'is' : 'are'} left out: ${shown}.`
+    )
+  }
+  return (
+    `This file has no sequence called ${shown}, under that spelling or any this viewer knows ` +
+    `of. It has ${mc.chromnames.slice(0, 6).join(', ')}` +
+    `${mc.chromnames.length > 6 ? ', …' : ''}.`
+  )
 }
 
 /** One contig's bin span, or `null` where it has no bins. */

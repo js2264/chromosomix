@@ -43,11 +43,15 @@ import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
 
 /**
- * The largest separation worth stratifying to, as a share of the sequence.
+ * The largest number of strata worth correlating, and the default.
  *
  * A stratum near the end of a chromosome has a handful of cells in it and a
  * correlation that is mostly noise — which the CMH weight already discounts to
- * almost nothing, so the cap is about *cost* rather than about correctness.
+ * almost nothing, so this is about *cost* rather than about correctness. It is
+ * the default as well as the cap because the 5 Mb it replaces reached the cap on
+ * every file at 10 kb or finer, which is most of them: a reader who typed the
+ * old default got 500 strata, and now sees that that is what they are asking
+ * for.
  */
 export const MAX_STRATA = 500
 
@@ -55,29 +59,36 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
-    hint: 'Empty is every sequence the maps share. Each is scored on its own as well as pooled.',
+    label: 'sequences',
+    hint: 'Each is scored on its own as well as pooled.',
   },
   {
     kind: 'number',
     key: 'maxDistance',
-    label: 'Furthest separation compared',
-    unit: 'bp',
+    label: 'furthest separation compared',
+    // **Strata, which are bins**, where this was a length in base pairs divided
+    // by the bin size on the way in. A stratum *is* a diagonal offset — it is
+    // the reason two maps on different grids cannot be compared at all, which
+    // the estimate refuses by name — so the number that decides how many of them
+    // are correlated was never a distance. {@link MAX_STRATA} is both the cap
+    // and the default, because 5 Mb hit that cap on every file finer than 10 kb.
+    unit: 'bins',
     hint:
       'Past this the strata hold a handful of cells each and contribute almost nothing — the ' +
       'weighting already knows that, so this is about what the run costs.',
-    default: 5_000_000,
+    default: MAX_STRATA,
     min: 1,
+    max: MAX_STRATA,
     integer: true,
   },
   {
     kind: 'number',
     key: 'smooth',
-    label: 'Smoothing half-width',
+    label: 'smoothing half-width',
     unit: 'bins',
     hint:
-      'The 2D mean filter HiCRep applies before correlating. 0 is no smoothing, which measures ' +
-      'depth as much as structure on any sparse pair of maps.',
+      'The 2D mean filter HiCRep applies before correlating; 0 measures depth as much as ' +
+      'structure on any sparse pair of maps.',
     default: 1,
     min: 0,
     max: 20,
@@ -86,6 +97,19 @@ const PARAMS: readonly ParamSpec[] = [
   },
   BALANCE_PARAM,
 ]
+
+/**
+ * How many strata a run correlates: the reader's number, capped.
+ *
+ * One expression, read by the estimate and by the runner, because the two
+ * disagreeing is a run that costs what the button did not say. No bin size in
+ * it any more — the parameter is a count of strata (§18.2), so the arithmetic
+ * that turned 5 Mb into a stratum count is gone rather than moved.
+ */
+export function strataOf(params: Params): number {
+  const value = typeof params.maxDistance === 'number' ? params.maxDistance : MAX_STRATA
+  return Math.max(1, Math.min(MAX_STRATA, Math.round(value)))
+}
 
 /** Whether two maps can be compared stratum for stratum. */
 export function comparableGrid(a: number, b: number): boolean {
@@ -123,10 +147,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   const maps = 1 + peers - mismatched.length
-  const strata = Math.min(
-    MAX_STRATA,
-    Math.max(1, Math.round(Number(params.maxDistance ?? 5_000_000) / Math.max(1, context.binsize))),
-  )
+  const strata = strataOf(params)
   return {
     class: 'scan',
     requests: null,
@@ -134,8 +155,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     note:
       `${maps.toLocaleString()} maps, each read along the diagonal of every chosen sequence out ` +
       `to ${strata.toLocaleString()} strata — a band, not a square, so the cost is the sequence ` +
-      'rather than its square. The other maps are opened for the run and closed after it. ' +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      'rather than its square. The other maps are opened for the run and closed after it.',
   }
 }
 

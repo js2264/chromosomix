@@ -19,11 +19,10 @@
  * the analysis worker or anything under `analysis/run/`.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -54,28 +53,8 @@ function scopeOf(params: Params): 'contig' | 'genome' | 'file' {
   return value === 'genome' || value === 'file' ? value : 'contig'
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
 function balanceOf(params: Params): boolean {
   return params.balance === true
-}
-
-/**
- * The contig a region string names, or `undefined`.
- *
- * Splits on the first colon exactly as `metacooler/range.ts`'s
- * `parseRegionString` does, and unlike that function it **cannot throw**: an
- * estimate is recomputed on every keystroke in the region box, a half-typed
- * locus is the normal state of that box rather than an error, and a refusal
- * flashing under the **Run** button while somebody types `chr` is noise.
- * Resolving the coordinates is the runner's job, where throwing is the right
- * answer.
- */
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +65,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'scope',
-    label: 'Scope',
+    label: 'scope',
     default: 'contig',
     /**
      * Three on a metagenome, two on a cooler, and the words differ.
@@ -110,30 +89,30 @@ const PARAMS: readonly ParamSpec[] = [
     options: [
       {
         value: 'contig',
-        label: 'Contig',
-        coolLabel: 'Chromosome',
+        label: 'contig',
+        coolLabel: 'chromosome',
         hint: 'One curve per sequence.',
       },
       {
         value: 'genome',
-        label: 'Genome',
+        label: 'genome',
         needsGenomes: true,
         hint: 'One curve per MAG, over its own contigs.',
       },
       {
         value: 'file',
-        label: 'Whole file',
-        coolLabel: 'Whole genome',
+        label: 'whole file',
+        coolLabel: 'whole genome',
         hint: 'Every sequence pooled into one curve.',
       },
     ],
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'Sequence',
-    sequences: true,
-    hint: 'Leave empty for every sequence in the file.',
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
+    // No hint: a column of tick boxes that opens with every one ticked says
+    // what any sentence here would say.
     // Meaningless under the other two scopes, where the sequences are decided by
     // the genome table or by the file itself.
     when: (params) => scopeOf(params) === 'contig',
@@ -141,7 +120,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'quantity',
-    label: 'Quantity',
+    label: 'quantity',
     default: 'density',
     /**
      * Two things are called P(s) and the difference is one denominator.
@@ -167,20 +146,20 @@ const PARAMS: readonly ParamSpec[] = [
     options: [
       {
         value: 'density',
-        label: 'Probability density',
+        label: 'probability density',
         hint: "Share of all cis contacts, per base pair. HiContacts' norm_p.",
       },
       {
         value: 'expected',
-        label: 'Expected (cooltools)',
-        hint: 'Mean contact per pair of bins that far apart. What `cooltools expected-cis` reports.',
+        label: 'expected (cooltools)',
+        hint: 'Mean contact per pair of bins that far apart. What cooltools expected-cis reports.',
       },
     ],
   },
   {
     kind: 'number',
     key: 'factor',
-    label: 'Log bins per step',
+    label: 'log bins per step',
     hint: 'Each separation bin is this many times wider than the last.',
     default: 1.1,
     min: 1.01,
@@ -206,7 +185,7 @@ const PARAMS: readonly ParamSpec[] = [
      * Bins are also what the curve's own x axis is quantised to, so this is now
      * the same unit as the thing it is trimming.
      */
-    label: 'Minimum separation',
+    label: 'minimum separation',
     hint: 'Drops the near-diagonal, where unligated fragments dominate.',
     // Under the density it also floors the *total* every point is a share of,
     // since the curve is a share of the contacts it was built from, and its
@@ -222,31 +201,31 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'derivative',
-    label: 'Also plot the log-log slope',
+    label: 'log-log slope',
     hint: 'The shoulder and the plateau are visible there and not on the curve.',
     default: true,
   },
   {
     kind: 'toggle',
     key: 'stranded',
-    label: 'Also the four orientations',
-    hint:
-      'From the records rather than from the matrix: the separation at which ++, +−, −+ and −− ' +
-      'converge is the shortest one this library can be believed at.',
+    label: 'four orientations',
+    hint: 'Where ++, +−, −+ and −− converge is the shortest separation this library can be believed at.',
     default: false,
-    section: 'From the records',
+    // **The .pairs file, not "the records".** *Records* is the parser's word for
+    // the rows of a pairs file, and a heading reading FROM THE RECORDS named
+    // nothing the reader had seen on screen — the second control, which is the
+    // one that says `.pairs` out loud, only appears once the toggle is on. The
+    // heading now names the file, and the box under it names an address.
+    section: 'From the .pairs file',
   },
   {
     kind: 'text',
     key: 'pairsUri',
-    label: 'From this .pairs',
+    label: '.pairs URL',
     placeholder: 'https://… or s3://…',
-    hint:
-      'Leave empty to use the file this map was imported from, where it was. A URL is read for ' +
-      'its records only — nothing is binned and no map changes. A local file has no address to ' +
-      'name here: drop it on the app, which imports it and counts these curves in the same pass.',
+    hint: 'Empty reads the file this map was imported from; drop a local .pairs on the app instead.',
     when: (params) => params.stranded === true,
-    section: 'From the records',
+    section: 'From the .pairs file',
   },
   BALANCE_PARAM,
 ]
@@ -258,17 +237,16 @@ const PARAMS: readonly ParamSpec[] = [
 /**
  * The bin range a scope covers, for the *is the block enough* question.
  *
- * A region that narrows a contig still resolves to the whole contig here,
- * because that is what the runner measures: P(s) is a property of a sequence,
- * and a curve computed from whichever window happened to be on screen but
- * labelled `chrIV` is a different quantity wearing the same name. The region box
- * says which sequence, not how much of it.
+ * Whole sequences, always: P(s) is a property of a sequence, and a curve
+ * computed from whichever window happened to be on screen but labelled `chrIV`
+ * is a different quantity wearing the same name. The tick boxes say which
+ * sequences, never how much of one.
  */
 function scopeExtent(context: AnalysisContext, params: Params): [number, number] {
   const whole: [number, number] = [0, context.nBins]
   if (scopeOf(params) !== 'contig') return whole
-  const contig = regionContig(context, regionOf(params))
-  return contig === undefined ? whole : [contig.startBin, contig.startBin + contig.bins]
+  const chosen = tickedContigs(context, params, 'sequences')
+  return chosen.length === 0 ? whole : extentOf(chosen)
 }
 
 /**
@@ -282,6 +260,17 @@ function scopeExtent(context: AnalysisContext, params: Params): [number, number]
 function boundedRequests(balance: boolean): number {
   return balance ? 5 : 4
 }
+
+/**
+ * Ticked sequences read as their own squares, before a scan is the cheaper story.
+ *
+ * Four is where the two shapes cross in the only way that matters to a reader:
+ * a handful of bounded reads is a run they can start without a warning, and a
+ * list longer than that is on its way to being every sequence in the file —
+ * which the runner reads in one streaming pass whatever this says. The number
+ * decides which sentence is printed, never what is read.
+ */
+const SQUARES_WORTH_READING = 4
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const scope = scopeOf(params)
@@ -301,9 +290,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       requests: null,
       bytes: null,
       note:
-        `The matrix’s own curve as below, and then one pass over the records of ${named} for the ` +
-        'four orientations — which is the whole of that file, since a contact list has no index ' +
-        'to reach into. Progress is reported and it can be cancelled at any point.',
+        `The matrix’s own curve as below, and then one pass over the whole of ${named} for the ` +
+        'four orientations — a contact list has no index to reach into.',
     }
   }
 
@@ -317,12 +305,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       // what the drawer actually shows, and **Run** is disabled beside it.
       note: 'Nothing to read.',
       refusal: context.hasGenomes
-        ? 'Every genome in this file is unassigned, and __unbinned__ is not a genome (§7.4), ' +
+        ? 'Every genome in this file is unassigned, and __unbinned__ is not a genome, ' +
           'so there is nothing for a per-genome P(s) to be per. Use the contig or whole-file ' +
           'scope.'
         : 'This file is a plain cooler: it has no /genomes table, so there is nothing for a ' +
           'per-genome P(s) to be per. Use the contig scope, which is the same curve over the ' +
           'sequences this file does have, or the whole-file scope.',
+    }
+  }
+
+  // **Before the block is offered as free**, because nothing ticked is nothing to
+  // read even when the block is already on screen: a "no reads" price with no
+  // refusal beside it is a Run button that produces an empty figure.
+  if (scope === 'contig' && tickedContigs(context, params, 'sequences').length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
     }
   }
 
@@ -348,16 +349,23 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   if (scope === 'contig') {
-    const contig = regionContig(context, regionOf(params))
-    if (contig !== undefined) {
-      const requests = boundedRequests(balance)
+    const chosen = tickedContigs(context, params, 'sequences')
+    // **One square each, up to a handful.** A square per sequence is four
+    // requests per sequence, which is the cheap shape while the reader has
+    // ticked a few of them and is 154 k requests on a metagenome with every box
+    // ticked — so past a handful the streaming pass below is priced instead,
+    // which is the shape the runner takes there anyway.
+    if (chosen.length <= SQUARES_WORTH_READING) {
+      const requests = boundedRequests(balance) * chosen.length
+      const names = chosen.map((contig) => contig.name).join(', ')
+      const bins = chosen.reduce((sum, contig) => sum + contig.bins, 0)
       return {
         class: 'bounded',
         requests,
         bytes: null,
         note:
-          `About ${requests} range requests: one dense square over ${contig.name} ` +
-          `(${contig.bins.toLocaleString()} bins).`,
+          `About ${requests} range requests: one dense square over ${names} ` +
+          `(${bins.toLocaleString()} bins).`,
       }
     }
   }
@@ -372,8 +380,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: null,
     bytes: null,
     note:
-      'Walks the whole pixel table once, accumulating every cis contact by its separation. ' +
-      'Progress is reported as it goes and it can be cancelled at any point.',
+      'One pass over the whole pixel table, accumulating every cis contact by its separation.',
   }
 }
 

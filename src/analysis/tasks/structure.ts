@@ -26,8 +26,20 @@
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
 import { BALANCE_PARAM } from './shared'
+import { fmt, resolutionLabel } from '../../units'
+import { splitRegionList } from '../../metacooler/range'
 
-const NEEDS_STRUCTURE = 'Load a structure — a g3d or bed3d — for this to read the model from.'
+/**
+ * What both structure tasks say when no model is loaded.
+ *
+ * `<Verb> a <thing> (<formats>).` — the shape §18.1 asks every waiting row to
+ * take, and the reason this one changed twice over. It used to read *a g3d or
+ * bed3d — for this to read the model from*: two formats where the Structures
+ * card offers three, so a Dip-C reader holding a `.3dg` was told their file
+ * would not do, and a trailing clause that is not a sentence and explains what
+ * the blurb above it already says.
+ */
+const NEEDS_STRUCTURE = 'Load a structure (g3d, .3dg or bed3d).'
 
 function structureReady(context: AnalysisContext): boolean {
   return context.entries.some((entry) => entry.kind === 'structure' && entry.status === 'ready')
@@ -78,15 +90,17 @@ function refineWords(beads: number): string {
  * what the run used to need and is the one the in-place passes removed.
  */
 function matrixWords(beads: number): string {
-  const bytes = 2 * 4 * beads * beads
-  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB of matrices` : `${Math.round(bytes / 1e6)} MB of matrices`
+  // `fmt.bytes` and not a GB/MB branch of its own: §26.2 has one spelling of a
+  // byte count, in thousands, and a second one here would report a different
+  // size for the same allocation than the status bar does.
+  return `${fmt.bytes(2 * 4 * beads * beads)} of matrices`
 }
 
 /** The structure row, offered as the feature set it also is. */
 const STRUCTURE_PARAM: ParamSpec = {
   kind: 'featureSet',
   key: 'structure',
-  label: 'Structure',
+  label: 'structure',
   hint: 'The model to read: a row of the Structures card.',
 }
 
@@ -95,20 +109,19 @@ const VERSUS_PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequence',
+    // Plural, like *Model from the map*'s. The box takes several either way —
+    // `many: true` — and two tasks one row apart in the column that named one
+    // control in the singular and the other in the plural read as two different
+    // controls.
+    label: 'sequences',
     many: true,
-    hint:
-      'The sequence to draw the matrices for — the first named, because a distance matrix is a ' +
-      'picture of one sequence. Seeded from what the map shows; empty takes the first the model ' +
-      'and the map share. The table covers them all.',
+    hint: 'The matrices are drawn for the first named; the table covers them all.',
   },
   {
     kind: 'number',
     key: 'alpha',
-    label: 'Exponent α',
-    hint:
-      'Contacts fall as 1/dᵅ in the predicted map. The correlation is rank-based and does not ' +
-      'depend on it; only the picture does.',
+    label: 'exponent α',
+    hint: 'Contacts fall as 1/dᵅ in the predicted map; only the picture depends on it.',
     default: 3,
     min: 0.5,
     max: 6,
@@ -145,16 +158,16 @@ const SPATIAL_PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'locus',
-    label: 'Distance to',
+    label: 'distance to',
     pickable: true,
     hint:
-      'A locus to measure every bead’s distance from — the spatial virtual 4C. Type it, pick it ' +
-      'on the map, or leave it empty for the two other tracks alone.',
+      'A locus to measure every bead’s distance from — the spatial virtual 4C — and empty leaves ' +
+      'the other two tracks alone.',
   },
   {
     kind: 'number',
     key: 'window',
-    label: 'Compaction window',
+    label: 'compaction window',
     hint: 'How many beads either side a bead is compared with, for the local compaction track.',
     default: 5,
     min: 1,
@@ -189,22 +202,20 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
   {
     kind: 'region',
     key: 'region',
-    label: 'Sequences',
+    label: 'sequences',
     many: true,
-    hint:
-      'What to model, seeded from what the map shows: a locus, one sequence, or several ' +
-      'comma-separated (chrIV, chrV). Empty models the whole file — every sequence, cis and ' +
-      'trans together. One bin of the resolution you have selected is one bead, whatever the ' +
-      'map is drawn at: pick a coarser rung for a coarser model.',
+    // One line, and no example. It read *several comma-separated (chrIV, chrV)*
+    // on a file whose sequences are `I`…`XVI`, so a reader who copied the
+    // example got a refusal naming a sequence the file does not have; the box's
+    // own `<datalist>` offers the real names, which is a better example than any
+    // written here can be.
+    hint: 'A locus or comma-separated sequences, empty for the whole file, one bead per bin.',
   },
   {
     kind: 'number',
     key: 'alpha',
-    label: 'Exponent α',
-    hint:
-      'A contact count c is read as a distance c^(−1/α): the same law Model versus map assumes, ' +
-      'the other way round. 3 is the fractal-globule value most solvers start from; 1 flattens ' +
-      'the near diagonal, 6 stretches it.',
+    label: 'exponent α',
+    hint: 'Distance = c^(−1/α); 3 is the usual value, 1 flattens the near-diagonal, 6 stretches it.',
     default: 3,
     min: 0.5,
     max: 6,
@@ -212,25 +223,37 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
     key: 'weights',
-    label: 'Weight pairs by',
+    label: 'weight pairs by',
     default: 'contacts',
-    hint:
-      'How much each counted pair holds its beads at the distance its count implies. By the ' +
-      'count, a pair seen a thousand times is a thousand times as sure as one seen once; by its ' +
-      'square root, a weak pair is still heard on a deep map; equally, every counted pair is one ' +
-      'vote, which lets the far, weak pairs outvote the near diagonal.',
+    // The three cases are on the options, which is where `ParamForm` puts an
+    // option's own `hint` — in its `title` — rather than in a four-line
+    // paragraph beside the control. A hint says what the control wants; what
+    // each answer means is a property of the answer.
+    hint: 'How strongly a pair’s count holds its beads at the distance it implies.',
     options: [
-      { value: 'contacts', label: 'the contact count' },
-      { value: 'sqrt', label: 'its square root' },
-      { value: 'equal', label: 'nothing: every counted pair alike' },
+      {
+        value: 'contacts',
+        label: 'the contact count',
+        hint: 'A pair seen a thousand times is a thousand times as sure as one seen once.',
+      },
+      {
+        value: 'sqrt',
+        label: 'its square root',
+        hint: 'A weak pair is still heard on a deep map.',
+      },
+      {
+        value: 'equal',
+        label: 'nothing: every counted pair alike',
+        hint: 'One vote each, which lets the far, weak pairs outvote the near diagonal.',
+      },
     ],
   },
   {
     kind: 'number',
     key: 'iterations',
-    label: 'Refinement steps',
+    label: 'refinement steps',
     hint:
-      'How many SMACOF steps move the beads after the classical start. Stops earlier once a ' +
+      'How many SMACOF steps move the beads after the classical start, stopping earlier once a ' +
       'step improves the fit by less than a millionth.',
     default: 150,
     min: 0,
@@ -257,7 +280,7 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   // it, `IV:1,000,001-1,400,000` is the bins of that stretch. Pricing a locus
   // as its whole sequence is what this used to do, and it reported 1,532 beads
   // for a run that made 400.
-  const parts = region === '' ? [] : region.split(',').map((part) => part.trim()).filter((part) => part !== '')
+  const parts = splitRegionList(region)
   const named = parts.flatMap((part) => {
     const [name, range] = [part.split(':')[0].trim(), part.split(':')[1]]
     const contig = context.contigs.find((held) => held.name === name)
@@ -298,7 +321,7 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
       ? 'The block the view holds, at the resolution it is drawn at.'
       : `${beads.toLocaleString()} beads at ${binWords(context.binsize)}, ${pairs.toLocaleString()} pairs a step; ` +
         `${refineWords(beads)}, ${matrixWords(beads)}` +
-        (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file.` : '.')
+        (reads ? `; ${plural((blocks * (blocks + 1)) / 2, 'block')} read from the file` : '')
   return {
     class: reads ? 'scan' : 'bounded',
     requests: reads ? (blocks * (blocks + 1)) / 2 : context.blockLoaded ? 0 : 1,
@@ -307,12 +330,21 @@ function reconstructEstimate(context: AnalysisContext, params: Params): CostEsti
   }
 }
 
-/** The bead's width: the resolution the reader has selected, which is the file's bin size. */
+/**
+ * The bead's width: the resolution the reader has selected, which is the file's
+ * bin size — so it is spelled by the one formatter for a bin size (§26.2).
+ *
+ * It was a private copy of that rule, near enough to `resolutionLabel` to look
+ * right and separate enough to drift: it rounded to one decimal of a kilobase
+ * itself, which is the same answer for every rung anyone ships and a different
+ * one for a `12.5 kb` ladder — a price quoting a resolution the rung picker does
+ * not offer — and this line read "400 beads at 1 kb" under a form title reading
+ * "1.0 kb bins". Only one of the two could be corrected while there were two
+ * writers. The guard stays, because a context with no map has no bin size and
+ * "the file's bin size" is the honest thing to call it.
+ */
 function binWords(binsize: number): string {
-  if (!Number.isFinite(binsize) || binsize <= 0) return 'the file’s bin size'
-  if (binsize >= 1e6) return `${+(binsize / 1e6).toFixed(2)} Mb`
-  if (binsize >= 1e3) return `${+(binsize / 1e3).toFixed(1)} kb`
-  return `${binsize} bp`
+  return Number.isFinite(binsize) && binsize > 0 ? resolutionLabel(binsize) : 'the file’s bin size'
 }
 
 export const RECONSTRUCT_TASK: AnalysisTask = {

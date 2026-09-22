@@ -37,6 +37,7 @@ import {
   type BookmarkStore,
 } from '../annotations/bookmarks'
 import { button, el, fmt } from './dom'
+import { resolutionLabel } from '../units'
 import { cardTitle, icon, iconButton } from './icons'
 
 export interface BookmarksCardProps {
@@ -78,7 +79,11 @@ export class BookmarksCard {
   private readonly unsubscribe: () => void
 
   constructor(private readonly props: BookmarksCardProps) {
-    this.here = button('this view', () => this.saveFramed(), {
+    // `save this view`, a verb: the three rows above this one on the Manual card
+    // pair `add` with `pick on map` or `draw on map`, and after three of those a
+    // button reading `this view` alone reads as a caption for the box beside it
+    // rather than as the second way to fill it.
+    this.here = button('save this view', () => this.saveFramed(), {
       class: 'btn',
       title: 'Save the stretch of genome on screen, at the resolution it is open at',
     })
@@ -310,14 +315,14 @@ export class BookmarksCard {
     const go = button('', () => this.props.go(mark), {
       class: 'btn bookmark-go',
       title: `Open ${mark.contig} zoomed to this place${
-        mark.binsize === undefined ? '' : `, at ${fmt.bp(mark.binsize)} bins`
+        mark.binsize === undefined ? '' : `, at ${resolutionLabel(mark.binsize)} bins`
       } — the rest of the chromosome stays behind it`,
     })
     go.replaceChildren(
       el('span', { class: 'bookmark-where' }, ...whereOf(mark)),
       ...(mark.binsize === undefined
         ? []
-        : [el('span', { class: 'bookmark-res', text: fmt.bp(mark.binsize) })]),
+        : [el('span', { class: 'bookmark-res', text: resolutionLabel(mark.binsize) })]),
       icon('arrow-right', { size: 14 }),
     )
     return el(

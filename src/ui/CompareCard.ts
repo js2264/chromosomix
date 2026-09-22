@@ -144,13 +144,26 @@ export class CompareCard {
     const first = this.props.hasPrimary()
     this.slots[0].label.textContent = 'Load a contact map'
     this.slots[0].hint.textContent = 'A .cool or .mcool. Drop one here, or click to choose.'
-    this.slots[1].label.textContent = 'Load a second map'
+    // *Into the lower triangle*, rather than *a second map*: the deck's own
+    // second map is a cell beside this one (§16), and a reader told by HiCRep to
+    // open a second map had this card as the first thing in the column. The two
+    // are different pictures and now say so. The same last sentence as the zone
+    // above it, because they are the same gesture (§20.2).
+    this.slots[1].label.textContent = 'Load a map into the lower triangle'
     this.slots[1].hint.textContent =
-      'A cooler on the same chromosomes and bin size. It fills the lower-left triangle.'
+      'A cooler on the same chromosomes and bin size. Drop one here, or click to choose.'
 
     const top = first
       ? this.mapRow(1, this.props.primaryLabel(), paired)
       : this.slots[0].zone
+    // **No second slot until there is a first.** With no map open the card drew
+    // both rectangles, one under the other, calling the second one a *second
+    // map* that would fill *the lower-left triangle* — of nothing. A reader with
+    // one `.cool` in hand had two identical-looking targets to choose between
+    // and a triangle to wonder about, and either target opened the same file the
+    // same way. §8.5's rule is that a control the file cannot answer is absent,
+    // and this one cannot be answered until a map is on screen to be compared
+    // against.
     const bottom =
       this.state.kind === 'open'
         ? this.mapRow(2, this.props.secondLabel?.() ?? this.state.label, true)
@@ -158,8 +171,10 @@ export class CompareCard {
           ? this.pendingRow('loading', `Opening ${this.state.label}…`)
           : this.state.kind === 'error'
             ? this.pendingRow('error', this.state.message)
-            : this.slots[1].zone
-    this.body.replaceChildren(top, bottom)
+            : first
+              ? this.slots[1].zone
+              : null
+    this.body.replaceChildren(...(bottom === null ? [top] : [top, bottom]))
   }
 
   /**
@@ -186,7 +201,7 @@ export class CompareCard {
           ? 'Take the lower-left triangle out of the picture, keeping the file open'
           : 'Draw the second map again',
       () => this.props.onToggleShown(which),
-      { class: `btn btn-icon ann-eye${shown ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     eye.setAttribute('aria-pressed', String(shown))
     return el(
@@ -372,7 +387,7 @@ export function compareRefusal(
   if (primary.hasGenomes || second.hasGenomes) {
     const which = primary.hasGenomes ? 'This file' : fileLabel(second.uri)
     return (
-      `${which} has a genome layer, and a metacool is not compared this way (§8.5). Its axis is ` +
+      `${which} has a genome layer, and a metacool is not compared this way. Its axis is ` +
       'contigs from thousands of independently assembled organisms, so two such files agree ' +
       'about a contig name by coincidence rather than by construction.'
     )

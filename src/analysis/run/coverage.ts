@@ -63,7 +63,7 @@ export const runCoverage: TaskRunner = async (job) => {
     block.colExtent[1] === mc.nBins
 
   if (wholeFileBlock && block !== undefined) {
-    job.progress(0, 1, 'Summing the block on screen')
+    job.progress(0, 1, 'summing the block on screen')
     accumulator.addBlock(block)
   } else {
     if (job.framing.value !== '' && job.framing.value !== DEFAULT_COUNT_COLUMN) {
@@ -72,7 +72,7 @@ export const runCoverage: TaskRunner = async (job) => {
           `${DEFAULT_COUNT_COLUMN}. These marginals are of the counts.`,
       )
     }
-    job.progress(0, 1, 'Reading pixels')
+    job.progress(0, 1, 'reading pixels')
     await mc.scanPixels({
       onChunk: (chunk) => {
         job.throwIfCancelled()
@@ -87,7 +87,7 @@ export const runCoverage: TaskRunner = async (job) => {
           accumulator.add(bin1, bin2, weights === null ? raw : raw * weights[bin1] * weights[bin2])
         }
       },
-      onProgress: (done, total) => job.progress(done, total, 'Reading pixels'),
+      onProgress: (done, total) => job.progress(done, total, 'reading pixels'),
     })
   }
   job.throwIfCancelled()

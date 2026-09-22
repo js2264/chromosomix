@@ -80,19 +80,20 @@ export const TRACK_OPTIONS: readonly PlotOptionKey[] = [
   'tooltip',
 ]
 /**
- * The crosshair is in **both** lists, and that is the point rather than an
- * oversight.
+ * The crosshair and the hover card are in **both** lists, because each is
+ * genuinely about both pictures.
  *
- * It is the one preference that is genuinely about both pictures: the guide
- * lines are drawn through the cell under the pointer on the matrix *and* through
- * the position under it in every lane, because they are one pointer over one
- * picture. Offering it only under `tracks` put it in the card about the lanes,
- * where a reader looking at the matrix could not find the control for the lines
- * drawn across the matrix — and moving it to `matrix` would have done the same
- * thing to the reader in the 1D browser, which has no matrix card at all.
+ * The guide lines are drawn through the cell under the pointer on the matrix
+ * *and* through the position under it in every lane, because they are one
+ * pointer over one picture; the card is the same instrument. Offering them only
+ * under `tracks` put them in the card about the lanes, where a reader looking
+ * at the matrix could not find the control for the lines drawn across the
+ * matrix — and putting them only under `matrix` would do the same to the reader
+ * in the 1D browser, which has no Map card at all.
  *
- * Two buttons, one key, one store: pressing either moves both, because both read
- * their lit state from {@link subscribePlotOptions} rather than holding it.
+ * Being in both lists is not being offered twice, and that is what
+ * {@link TRACK_ONLY_OPTIONS} is for: a column with a Map card offers them there
+ * and the Tracks card below it leaves them out.
  */
 export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'dividers',
@@ -103,6 +104,21 @@ export const MATRIX_OPTIONS: readonly PlotOptionKey[] = [
   'crosshair',
   'tooltip',
 ]
+
+/**
+ * What a Tracks card offers when a **Map card is above it**.
+ *
+ * Beside a map the two shared preferences appeared in both rows of one column,
+ * ten lines apart and lit together — which reads as two settings, so a reader
+ * turned one off, saw the other go dark, and was left wondering what else was
+ * coupled. §5.8's rule about a second way to do a thing applies with force when
+ * both ways are on screen at once: each control is offered once per column, in
+ * the card about the picture it is mostly about. The 1D browser has no Map
+ * card, so its Tracks card still offers {@link TRACK_OPTIONS} whole.
+ */
+export const TRACK_ONLY_OPTIONS: readonly PlotOptionKey[] = TRACK_OPTIONS.filter(
+  (key) => !MATRIX_OPTIONS.includes(key),
+)
 
 /**
  * The mark each option is drawn as, shared by both Tracks cards.
@@ -137,7 +153,7 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   baseline: {
     label: 'track floor',
     hint:
-      'A rule along the bottom edge of every track lane. What tells four stacked ' +
+      'A rule along the bottom edge of every track lane — what tells four stacked ' +
       'coverage tracks apart from one tall one.',
   },
   fills: {
@@ -149,16 +165,17 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
   outline: {
     label: 'track outline',
     hint:
-      'A dark rule along the top of every track, over its own colour. What makes four ' +
+      'A dark rule along the top of every track, over its own colour — what makes four ' +
       'stacked areas four legible shapes rather than four blocks of ink.',
   },
   gutter: {
     label: 'name column',
-    hint:
-      'Start the tracks after the widest track name, with the names right-aligned in the ' +
-      'column that leaves. Drag its edge to set a width of your own — a name too long for it ' +
-      'wraps, then is cut in the middle — and double-click the edge to hand it back to the ' +
-      'names. Off, a name is drawn over the data it belongs to.',
+    // One line, because this string is a palette hint as well as a tooltip:
+    // the paragraph that was here — how to drag the edge, what a long name
+    // does, what a double click hands back — filled four lines of the palette
+    // and pushed the commands under it off the list. The gestures are on the
+    // edge itself, where a hand that is already there finds them.
+    hint: 'Start the tracks after the widest name, right-aligned in the column that leaves.',
   },
   crosshair: { label: 'crosshair', hint: 'Guide lines through the cell under the pointer.' },
   tooltip: {
@@ -168,7 +185,10 @@ export const PLOT_OPTION_LABELS: Record<PlotOptionKey, { label: string; hint: st
       'Off, the same reading stays in the status line under the window — where it covers none ' +
       'of the picture, which is what somebody framing a figure wants.',
   },
-  dividers: { label: 'dividers', hint: 'Contig and genome boundaries, as `metacooler show` draws them.' },
+  dividers: {
+    label: 'dividers',
+    hint: 'Contig and genome boundaries, as the metacooler show command draws them.',
+  },
   breaks: {
     label: 'breaks',
     hint: 'The same boundaries as ticks outside the plot, where they cost no data.',

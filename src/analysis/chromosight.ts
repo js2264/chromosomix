@@ -1125,18 +1125,22 @@ export function removeNeighbours(
  * any pair of them changes every q-value in the output while changing nothing
  * that looks wrong.
  *
- * The distance floor is compared in **base pairs**, as upstream compares it, so
- * a resolution that does not divide it evenly rounds the same way there and here.
+ * **The distance floor is a number of bins**, where it was a length in base
+ * pairs multiplied back up by the bin size on every call. The two are the same
+ * test — a call is kept when its bin offset is at least `ceil(min_dist /
+ * binsize)` — and the bin form is the one the caller can state: upstream's
+ * config is in base pairs and `tasks/chromosight.ts` converts it once, while a
+ * reader who types this number types a count of diagonals (§18.2).
  */
 export function winnowCalls<T extends { bin1: number; bin2: number; score: number; pvalue: number }>(
   calls: readonly T[],
-  options: { separationBins: number; minDistBp: number; binsize: number },
+  options: { separationBins: number; minDistBins: number },
 ): { kept: T[]; qvalues: Float64Array } {
   const distinct = removeNeighbours(calls, options.separationBins)
   const kept = calls.filter(
     (call, index) =>
       distinct[index] &&
-      Math.abs(call.bin2 - call.bin1) * options.binsize >= options.minDistBp &&
+      Math.abs(call.bin2 - call.bin1) >= options.minDistBins &&
       Number.isFinite(call.pvalue),
   )
   return { kept, qvalues: fdrCorrection(kept.map((call) => call.pvalue)) }

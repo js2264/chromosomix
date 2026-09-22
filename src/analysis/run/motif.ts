@@ -182,9 +182,9 @@ export const runMotif: TrackTaskRunner = async (job) => {
     Math.max(1, Math.round(numParam(job.params, 'limit', MOTIF_SITE_LIMIT))),
   )
 
-  job.progress(0, 1, `Searching ${reader.contigs.length.toLocaleString()} sequences`)
+  job.progress(0, 1, `searching ${reader.contigs.length.toLocaleString()} sequences`)
   const result = scanMotif(reader, compiled, { bothStrands, limit })
-  job.progress(1, 1, 'Done')
+  job.progress(1, 1, 'done')
 
   const label = motifLabel(pattern, bothStrands)
   if (result.total === 0) {

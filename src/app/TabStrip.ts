@@ -108,7 +108,7 @@ export class TabStrip {
   constructor(private readonly props: TabStripProps) {
     this.add = button('', () => this.props.onNew(), {
       class: 'btn btn-icon tab-new',
-      title: withKey('New session — another file, with its own tracks and settings', KEYS.newSession),
+      title: withKey('New tab — another file, with its own tracks and settings', KEYS.newSession),
     })
     this.add.replaceChildren(icon('plus', { size: 15 }))
     this.el = el('div', { class: 'tabstrip' }, this.list, this.add)
@@ -129,7 +129,6 @@ export class TabStrip {
     // box around the only thing there is.
     this.el.classList.toggle('single', tabs.length === 1)
     this.add.disabled = !canAdd
-    this.add.classList.toggle('is-off', !canAdd)
     // A tab that has *gone* — closed while its name was being typed — takes its
     // rename with it, which is the only honest answer: there is nothing left to
     // name.
@@ -146,7 +145,7 @@ export class TabStrip {
       class: 'tab-label',
       type: 'button',
       text: tab.label,
-      title: tab.nameable ? `${tab.hint}\n\nDouble-click to rename this session.` : tab.hint,
+      title: tab.nameable ? `${tab.hint}\n\nDouble-click to rename this tab.` : tab.hint,
     })
     // Double-click, which is what every application with a nameable row uses and
     // what a reader will try first. It is *also* two selects, which is harmless:
@@ -184,12 +183,10 @@ export class TabStrip {
 
     const close = button('', () => this.props.onClose(index), {
       class: 'btn btn-icon tab-close',
-      title: withKey(
+      title:
         total === 1
-          ? 'Empty this session. The last tab is not closed — there would be nothing to drop a file on'
-          : 'Close this session, and put its worker down',
-        KEYS.closeSession,
-      ),
+          ? 'Empty this tab. The last one is not closed — there would be nothing to drop a file on'
+          : 'Close this tab, and put its worker down',
     })
     close.replaceChildren(icon('x', { size: 13 }))
 

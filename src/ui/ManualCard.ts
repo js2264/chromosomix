@@ -15,8 +15,6 @@
 
 import {
   MANUAL_PALETTE,
-  formatPoint,
-  formatSpan,
   mintMarkId,
   parsePoint,
   parseSpan,
@@ -27,8 +25,9 @@ import {
   type ManualStore,
 } from '../annotations/manual'
 import { formatMarks, marksFor, type MarkFormat } from '../annotations/export'
-import { button, el } from './dom'
+import { button, el, fmt } from './dom'
 import { downloadBlob, exportBaseName, fileStamp } from './export'
+import { exportRow, type ExportRow } from './exportRow'
 import { cardTitle, iconButton } from './icons'
 import type { PickHandlers } from './mapPick'
 
@@ -99,13 +98,23 @@ export class ManualCard {
    * to pick on, and *what* it is. See {@link pickButton}.
    */
   private readonly buttons: Array<(ready: boolean, surface: PickSurface) => void> = []
-  private readonly formatSelect = el('select', { class: 'select' })
-  private readonly saveButton: HTMLButtonElement
+  private readonly exporter: ExportRow
 
   constructor(private readonly props: ManualCardProps) {
-    this.saveButton = button('Save', () => this.save(), {
-      class: 'btn',
-      title: 'Write these marks to a file this app — and bedtools — reads back',
+    this.exporter = exportRow({
+      // No resolution and no clipboard: this row writes a BED or a BEDPE, and
+      // neither has dots per inch or a picture to paste (§26.6).
+      formats: [
+        { value: 'bed', label: 'lines (BED)' },
+        // **The card's own words.** It read `loops & boxes (BEDPE)`, under
+        // sub-heads saying Arrowheads and Rectangles: a reader who had drawn an
+        // arrowhead looked for arrowheads and did not find them, and `loops`
+        // names the loop *track* two cards up as well.
+        { value: 'bedpe', label: 'arrowheads & rectangles (BEDPE)' },
+      ],
+      formatTitle: 'Which marks to write. The kinds are different objects, with one file each.',
+      onFormat: () => this.paintSave(),
+      onSave: (format) => this.save(format as MarkFormat),
     })
     this.el = el(
       'section',
@@ -115,7 +124,7 @@ export class ManualCard {
       this.arrowForm(),
       this.rectForm(),
       this.list,
-      this.exportRow(),
+      this.exportBlock(),
     )
     this.unsubscribe = props.store.subscribe(() => this.render())
     this.render()
@@ -154,7 +163,7 @@ export class ManualCard {
       axis.appendChild(el('option', { value, text: label }))
     }
 
-    const at = el('input', { class: 'input', type: 'text', placeholder: 'I:120000' })
+    const at = el('input', { class: 'input', type: 'text', placeholder: 'I:120,000' })
     // The drawn axis is a parameter with a default rather than a read of the
     // select, because one way in does not get to choose it: a pick on a track
     // is always a crosshair (see below), and the select is about the two ways in
@@ -223,8 +232,8 @@ export class ManualCard {
   }
 
   private arrowForm(): HTMLElement {
-    const first = el('input', { class: 'input', type: 'text', placeholder: 'I:120000 (rows)' })
-    const second = el('input', { class: 'input', type: 'text', placeholder: 'I:340000 (columns)' })
+    const first = axisBox('rows', 'rows I:120,000')
+    const second = axisBox('columns', 'columns I:340,000')
     const add = (a: ManualPoint, b: ManualPoint): void => {
       this.props.store.add({
         id: mintMarkId(),
@@ -294,8 +303,8 @@ export class ManualCard {
    * thing there with coordinates on it.
    */
   private rectForm(): HTMLElement {
-    const first = el('input', { class: 'input', type: 'text', placeholder: 'I:120000-180000 (rows)' })
-    const second = el('input', { class: 'input', type: 'text', placeholder: 'I:340000-400000 (columns)' })
+    const first = axisBox('rows', 'rows I:120,000-180,000')
+    const second = axisBox('columns', 'columns I:340,000-400,000')
     const add = (a: ManualSpan, b: ManualSpan): void => {
       this.props.store.add({
         id: mintMarkId(),
@@ -346,7 +355,7 @@ export class ManualCard {
    *
    * One button with two labels rather than two controls: while the mode is on,
    * the only thing the reader can want from this button is to stop, so that is
-   * what it offers. `Done` and Escape are the same act by two roads, which is
+   * what it offers. `done` and Escape are the same act by two roads, which is
    * why both run {@link end}.
    *
    * The mode is *not* ended by placing a mark. Marking up a figure means placing
@@ -373,25 +382,25 @@ export class ManualCard {
     const hints: PickLabels =
       handlers.box === undefined
         ? {
-            map: 'Then click the plot, as often as you like. Escape or Done stops.',
+            map: 'Then click the plot, as often as you like. Escape or done stops.',
             track:
               'Then click the tracks, as often as you like. A track has one axis, so the ' +
-              'mark lands on the diagonal. Escape or Done stops.',
+              'mark lands on the diagonal. Escape or done stops.',
           }
         : {
             map:
               'Then drag a box on the plot, as many as you like — Shift keeps it on the ' +
-              'diagonal. Escape or Done stops.',
+              'diagonal. Escape or done stops.',
             track:
               'Then drag across the tracks, as many as you like. A track has one axis, so ' +
-              'the box is the square on the diagonal. Escape or Done stops.',
+              'the box is the square on the diagonal. Escape or done stops.',
           }
     let stop: (() => void) | null = null
 
     /**
      * What this button says, given what is on screen — and nothing while armed.
      *
-     * The armed button is a `Done` button: it has stopped naming the gesture and
+     * The armed button is a `done` button: it has stopped naming the gesture and
      * started offering the way out of it, so a navigation underneath must not
      * rename it back. Its own `rest` is what puts it into this pass again.
      */
@@ -420,7 +429,7 @@ export class ManualCard {
           return
         }
         node.classList.add('is-armed')
-        node.textContent = 'Done'
+        node.textContent = 'done'
         node.title = 'Stop placing marks. Escape does the same.'
         // Set before `start`, so a picker that ends the mode synchronously —
         // because there is no plot — still finds something to clear.
@@ -440,53 +449,59 @@ export class ManualCard {
   // -------------------------------------------------------------------------
 
   /**
-   * Saving the marks: a format, and a button — the export row from the
-   * Aesthetics panel, in the card whose contents it writes.
+   * Saving the marks: which kind, and the mark that writes them.
+   *
+   * `ui/exportRow.ts`, the one export row in the app, with the resolution and
+   * the clipboard left out — a BED is not a picture, so it has no dpi to choose
+   * and nothing to paste. It was this row's own select beside a bordered,
+   * capitalised `Save`: one control named like a dialog's primary button in a
+   * column of lowercase verbs, and a fourth idiom for an act three other cards
+   * already draw one way.
    *
    * The dropdown chooses *which marks*, not just which container, because the
    * kinds are different objects and there is one standard file for each: a line
-   * is a point on the genome, and a loop and a box are each a pair of places.
-   * Saying so in the option label is more honest than a single "export" that
-   * quietly writes half of what is on screen.
+   * is a point on the genome, and an arrowhead and a rectangle are each a pair
+   * of places. Saying so in the option label is more honest than a single
+   * "export" that quietly writes half of what is on screen.
+   *
+   * Under an `Export` sub-head, like the three forms above it and the Bookmarks
+   * card's `Import` below it: export and import are mirror acts, and drawing one
+   * as a section and the other as a field label made two neighbours disagree
+   * about what kind of thing each was.
    */
-  private exportRow(): HTMLElement {
-    for (const [value, text] of [
-      ['bed', 'lines (BED)'],
-      ['bedpe', 'loops & boxes (BEDPE)'],
-    ] as Array<[MarkFormat, string]>) {
-      this.formatSelect.appendChild(el('option', { value, text }))
-    }
-    this.formatSelect.addEventListener('change', () => this.paintSave())
+  private exportBlock(): HTMLElement {
     return el(
       'div',
-      { class: 'field field-block manual-export' },
-      el('span', { class: 'field-label', text: 'export' }),
-      el('div', { class: 'export-row' }, this.formatSelect, this.saveButton),
+      { class: 'manual-form manual-export' },
+      el('span', { class: 'manual-form-title', text: 'Export' }),
+      this.exporter.body,
     )
   }
 
   /** Nothing of this kind to write is a disabled button, not an empty file. */
   private paintSave(): void {
-    const format = this.formatSelect.value as MarkFormat
+    const format = this.exporter.format() as MarkFormat
     const count = marksFor(this.props.store.marks, format).length
-    this.saveButton.disabled = count === 0
-    this.saveButton.title =
+    const save = this.exporter.parts.save
+    save.disabled = count === 0
+    save.title =
       count === 0
-        ? `No ${format === 'bed' ? 'lines' : 'loops or boxes'} have been drawn yet`
-        : `Write ${count} to a file this app — and bedtools — reads back`
+        ? `No ${format === 'bed' ? 'lines' : 'arrowheads or rectangles'} have been drawn yet`
+        : `Write ${fmt.int(count)} to a file this app — and bedtools — reads back`
   }
 
-  private save(): void {
-    const format = this.formatSelect.value as MarkFormat
+  private save(format: MarkFormat): void {
     const now = new Date()
     const text = formatMarks(this.props.store.marks, format, {
       file: this.props.fileLabel,
       created: fileStamp(now),
     })
-    downloadBlob(
-      new Blob([text], { type: 'text/plain' }),
-      `${exportBaseName(this.props.fileLabel)}-marks-${fileStamp(now)}.${format}`,
-    )
+    const name = `${exportBaseName(this.props.fileLabel)}-marks-${fileStamp(now)}.${format}`
+    downloadBlob(new Blob([text], { type: 'text/plain' }), name)
+    // The line under the row, where the Export card says what just happened: a
+    // download that goes straight to a folder leaves nothing on screen saying
+    // it did, and *which* marks went is the question this row's select asks.
+    this.exporter.note.textContent = `${fmt.int(marksFor(this.props.store.marks, format).length)} · ${name}`
   }
 
   private render(): void {
@@ -529,21 +544,70 @@ export class ManualCard {
   }
 }
 
-/** A mark, written the way its own inputs would take it back. */
+/**
+ * One of the two boxes that name an axis, with the axis word in front.
+ *
+ * It used to be behind, in brackets — `I:340000 (columns)` — and in a 288-pixel
+ * column split in two the brackets were the part that got cut: the second box
+ * read `I:340000 (columns`, or in the rectangle form `I:340000-400000 (`, so the
+ * one thing telling a reader which box was rows and which was columns was the
+ * one thing they could not see. In front it survives the width, and the
+ * `aria-label` says it again for a reader who is not looking at the box at all.
+ */
+function axisBox(axis: 'rows' | 'columns', placeholder: string): HTMLInputElement {
+  const box = el('input', {
+    class: 'input',
+    type: 'text',
+    placeholder,
+    title: axis,
+    attrs: { 'aria-label': axis },
+  })
+  // **As wide as the example it offers, or on a line of its own.** The two boxes
+  // share a row that shrinks them to nothing rather than wrapping: in a 288-pixel
+  // column the rectangle form's pair had 115 pixels each and read
+  // `rows I:120,000-18` and `columns I:340,00` — a half-locus, which is worse
+  // than a cut word because `I:120,000-18` is itself a valid thing to type.
+  //
+  // `ch` is the advance of one digit in the face the box is set in, so the basis
+  // *is* the placeholder's width; `.manual-row` wraps, so a pair that cannot sit
+  // side by side takes a line each instead of splitting the difference. The
+  // arrowhead form's shorter pair still fits across.
+  box.style.flexBasis = `calc(${placeholder.length}ch + 1.2rem)`
+  return box
+}
+
+/**
+ * A mark, as the reader reads it — grouped digits, which is what every other
+ * coordinate on screen wears (§26.1).
+ *
+ * `formatPoint` and `formatSpan` write the ungrouped form their own boxes take
+ * back, and that is what a *copy* wants (§26.1's last rule) — but this row is
+ * read rather than pasted, and `I:120000` in a card whose placeholders say
+ * `rows I:120,000` was the fifth spelling of a locus on one screen. The boxes
+ * take the grouped form too, so nothing about the round trip is lost.
+ */
 function describe(mark: ManualMark): string {
   if (mark.kind === 'line') {
     const glyph = mark.axis === 'vertical' ? '│' : mark.axis === 'horizontal' ? '─' : '┼'
-    return `${glyph} ${formatPoint(mark.at)}`
+    return `${glyph} ${pointText(mark.at)}`
   }
   if (mark.kind === 'rect') {
-    const a = formatSpan(mark.a)
-    const b = formatSpan(mark.b)
+    const a = spanText(mark.a)
+    const b = spanText(mark.b)
     // One extent for a box on the diagonal, which is what its form takes back.
     return a === b ? `▭ ${a}` : `▭ ${a} × ${b}`
   }
-  const a = formatPoint(mark.a)
-  const b = formatPoint(mark.b)
+  const a = pointText(mark.a)
+  const b = pointText(mark.b)
   return a === b ? `◤ ${a}` : `◤ ${a} × ${b}`
+}
+
+function pointText(point: ManualPoint): string {
+  return `${point.contig}:${fmt.pos(point.bp)}`
+}
+
+function spanText(span: ManualSpan): string {
+  return `${span.contig}:${fmt.pos(span.from)}-${fmt.pos(span.to)}`
 }
 
 /** Re-exported so a caller needs one import to seed a colour. */

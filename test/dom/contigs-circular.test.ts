@@ -137,16 +137,20 @@ describe('the circular column', () => {
     expect(() => held.set('chr', true)).not.toThrow()
   })
 
-  it('offers a tick, not a text box, to filter by', () => {
+  // A named toggle, not a text box and not a second bare checkbox. The box it
+  // used to be was identical to the one in the selection gutter at the other end
+  // of the same row, which ticks every row showing — one glyph, two verbs, told
+  // apart only by hovering.
+  it('offers a named toggle, not a text box, to filter by', () => {
     const held = store()
     held.set('plasmid_A', true)
     const view = table(held)
-    const only = view.el.querySelectorAll<HTMLInputElement>('.tf-check .tf-check-box')
-    // One in the circular column; the selection gutter's own is absent here,
-    // this table having been built without `onOpenSelection`.
+    const only = view.el.querySelectorAll<HTMLButtonElement>('.tf-only')
     expect(only).toHaveLength(1)
-    only[0].checked = true
-    only[0].dispatchEvent(new Event('change'))
+    expect(only[0].textContent).toBe('ticked')
+    expect(view.el.querySelectorAll('.tfilter-row .tf-check-box')).toHaveLength(0)
+    only[0].click()
+    expect(only[0].getAttribute('aria-pressed')).toBe('true')
     const names = [...view.el.querySelectorAll('.tr')].map(
       (row) => row.querySelector('.td')?.textContent,
     )

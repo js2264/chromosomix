@@ -48,8 +48,8 @@ import {
   chosenInput,
   contigIdsFor,
   idParam,
-  listParam,
   numParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
@@ -57,7 +57,7 @@ import type { Params } from '../types'
 import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
-import { usableBlock, type Span } from './blocks'
+import { displayableContigs, usableBlock, type Span } from './blocks'
 
 /**
  * The fraction of a bin's row that must carry data for it to take part.
@@ -203,7 +203,7 @@ async function readSquare(
   for (let i = 0; i < spans.length; i++) {
     for (let j = i; j < spans.length; j++) {
       job.throwIfCancelled()
-      job.progress(done, reads, 'Reading')
+      job.progress(done, reads, 'reading')
       done++
       if (block !== null) {
         // The block is dense over its own extents, so the two runs index into it
@@ -383,7 +383,7 @@ async function runSquare(
       return
     }
     await job.breathe()
-    job.progress(options.step.at, options.step.of, `Correlating ${label}`)
+    job.progress(options.step.at, options.step.of, `correlating ${label}`)
   })
 
   // The correlation matrix is consumed in place by the deflation, so the saddle
@@ -460,7 +460,13 @@ async function runSquare(
 }
 
 export const runCompartments: TaskRunner = async (job) => {
-  const names = listParam(job.params, 'sequences')
+  // **Unanswered is every sequence, and `[]` is none of them** (§18.2). The two
+  // used to be one: `listParam` reads anything that is not an array as `[]`, so
+  // a job that never met a form — `metacooler-run compartments file.cool` — was
+  // told to tick a box in a drawer it has not got.
+  const ticked = tickedSequences(job.params, 'sequences')
+  const names =
+    ticked ?? displayableContigs(job.mc).map((cid) => job.mc.chromnames[cid])
   if (names.length === 0) {
     job.note('No sequence is ticked, so there is nothing to correlate.')
     return []
@@ -547,7 +553,7 @@ export const runCompartments: TaskRunner = async (job) => {
       job.note(`${message}, so it was skipped. Open the file at a coarser resolution to include it.`)
       continue
     }
-    job.progress(s, squares.length, `Compartments on ${label}`)
+    job.progress(s, squares.length, `compartments on ${label}`)
     const done = await runSquare(job, selection, {
       contacts,
       ignoreDiags,
@@ -594,7 +600,7 @@ export const runCompartments: TaskRunner = async (job) => {
     },
   )
 
-  job.progress(squares.length, squares.length, 'Done')
+  job.progress(squares.length, squares.length, 'done')
   return outputs
 }
 

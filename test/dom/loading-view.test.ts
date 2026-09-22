@@ -9,6 +9,12 @@
  * break — that the two phases of one open are counted in **their own units**,
  * that an unmeasurable phase says so rather than claiming to be finished, and
  * that there is a way to stop.
+ *
+ * The phase moved out of the heading and into a line of its own, deliberately:
+ * the heading names the file and has to go on naming it for a reader with two
+ * tabs opening, so `.loading-text` is asserted to keep it and `.loading-note`
+ * is where the phase and its count are now read from. The ring goes on the
+ * first report, which is what one meter per wait means.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -25,6 +31,10 @@ afterEach(() => teardown())
 
 const textOf = (view: LoadingView): string =>
   view.el.querySelector('.loading-text')?.textContent ?? ''
+const noteOf = (view: LoadingView): string =>
+  view.el.querySelector('.loading-note')?.textContent ?? ''
+const ringHidden = (view: LoadingView): boolean =>
+  view.el.querySelector('.spinner')?.classList.contains('hidden') ?? false
 const bar = (view: LoadingView): HTMLProgressElement =>
   view.el.querySelector('progress') as HTMLProgressElement
 
@@ -32,6 +42,7 @@ describe('before the worker has said anything', () => {
   it('is a spinner and the name of the file, with no bar to read', () => {
     const view = new LoadingView('Opening big.matrix')
     expect(textOf(view)).toBe('Opening big.matrix…')
+    expect(ringHidden(view)).toBe(false)
     // Present in the DOM, hidden until there is something to show: a bar that
     // appears at zero and sits there is indistinguishable from a stall.
     expect(view.el.querySelector('.progress-box')?.classList.contains('hidden')).toBe(true)
@@ -42,8 +53,12 @@ describe('once it is reporting', () => {
   it('counts a download in bytes', () => {
     const view = new LoadingView('Opening big.matrix')
     view.report(1_000_000, 4_000_000, 'downloading the matrix')
-    expect(textOf(view)).toContain('downloading the matrix')
-    expect(textOf(view)).toBe('downloading the matrix — 976.6 kB of 3.8 MB')
+    expect(noteOf(view)).toBe('downloading the matrix — 1.0 MB of 4.0 MB')
+    // The file is still named, which is the whole point of the second line.
+    expect(textOf(view)).toBe('Opening big.matrix…')
+    // One meter per wait: the ring is what a wait with no numbers has, and the
+    // bar is what replaces it.
+    expect(ringHidden(view)).toBe(true)
     expect(bar(view).value).toBeCloseTo(0.25, 5)
     expect(view.el.querySelector('.progress-box')?.classList.contains('hidden')).toBe(false)
   })
@@ -53,14 +68,14 @@ describe('once it is reporting', () => {
     // pixels sharing a denominator. It looks like the read went backwards.
     const view = new LoadingView('Opening big.matrix')
     view.report(5_000_000, 10_000_000, 'reading pixels')
-    expect(textOf(view)).toContain('5,000,000 of 10,000,000')
-    expect(textOf(view)).not.toMatch(/MB|kB/)
+    expect(noteOf(view)).toContain('5,000,000 of 10,000,000')
+    expect(noteOf(view)).not.toMatch(/MB|kB/)
   })
 
   it('counts cells when cells are what is being counted', () => {
     const view = new LoadingView('Opening cells.scool')
     view.report(120, 300, 'summing cells')
-    expect(textOf(view)).toContain('120 of 300')
+    expect(noteOf(view)).toContain('120 of 300')
   })
 
   it('says only the phase where there is nothing to count it against', () => {
@@ -69,7 +84,7 @@ describe('once it is reporting', () => {
     // would look like a download that had stalled at the starting line.
     const view = new LoadingView('Opening cells.scool')
     view.report(0, 0, 'listing cells')
-    expect(textOf(view)).toBe('listing cells…')
+    expect(noteOf(view)).toBe('listing cells…')
     expect(bar(view).hasAttribute('value')).toBe(false)
   })
 

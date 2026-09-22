@@ -39,20 +39,20 @@ export class SelectionTray {
     // is what pressing `+` on each row would do; *open together* is the tray's
     // own verb, a picture in a session of its own.
     const files = selected.filter((entry) => entry.kind !== 'workspace')
-    const add = button('add to this session', () => files.forEach((entry) => this.props.host.add(entry)), {
+    const add = button('add to this tab', () => files.forEach((entry) => this.props.host.add(entry)), {
       class: 'btn btn-quiet portal-tray-verb',
       title:
         files.length === selected.length
           ? 'Each file ticked joins the tab in front: a map beside the map, anything else as a track.'
-          : 'Each file ticked joins the tab in front. A session ticked is tabs of its own and stays out of this.',
+          : 'Each file ticked joins the tab in front; a workspace ticked opens as tabs of its own and stays out of this.',
     })
     add.prepend(icon('plus', { size: 14 }))
     const together = button('open together', () => this.props.host.openTogether(selected), {
       class: 'btn btn-primary portal-tray-verb',
       title:
         maps > 0
-          ? 'In a session of its own: the first map ticked opens as the tab; every other map joins it as a panel and everything else as a track.'
-          : 'In a session of its own: the first file ticked opens as a genome browser; every other one joins it as a track.',
+          ? 'In a tab of its own: the first map ticked opens as the tab; every other map joins it as a panel and everything else as a track.'
+          : 'In a tab of its own: the first file ticked opens as a genome browser; every other one joins it as a track.',
     })
     together.prepend(icon('new-session', { size: 14 }))
     this.el.replaceChildren(

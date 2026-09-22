@@ -1066,13 +1066,26 @@ export class AnalysisRunner {
     upstream: Record<string, TaskResult>,
     startedAt: number,
   ): Promise<TaskResult> {
-    // *expected (1/3)* while the chain runs, and the task's own title while it
-    // does not — a step counter on a job with one step is noise beside a
-    // progress bar that already says the same thing.
+    // **The step's name only where the step is news.**
+    //
+    // A chain runs several tasks in sequence and the honest answer to "why is
+    // this taking so long" is which of them is running, so a composite says
+    // *expected (1/3) — reading pixels*. A one-step job has no such question: the
+    // drawer's heading is the task's title in the largest text on the panel and
+    // the panel row's title is the same words, so `P(s) — reading pixels` spent
+    // two thirds of the line repeating what the reader is looking at and pushed
+    // the one new word to the end. Alone, the note is the whole line.
+    //
+    // The bare title is still the answer before a worker has reported anything,
+    // because a blank line under the run row reads as a job that has not
+    // started. Both consumers have their own fallback for an empty note —
+    // *working* in the drawer, the blurb in the panel row — so the title is
+    // handed over rather than either of them.
     const label = (note?: string): string => {
-      const where =
-        chain.length > 1 ? `${step.task.title} (${at + 1}/${chain.length})` : step.task.title
-      return note === undefined || note === '' ? where : `${where} — ${note}`
+      const said = note === undefined || note === '' ? '' : note
+      if (chain.length === 1) return said === '' ? step.task.title : said
+      const where = `${step.task.title} (${at + 1}/${chain.length})`
+      return said === '' ? where : `${where} — ${said}`
     }
     this.setState(job.task.id, {
       status: 'running',

@@ -263,14 +263,17 @@ describe('the button', () => {
   })
 
   it('copies a command that names the task, the file and the parameters', async () => {
-    const view = open(insulation, result('insulation', { window: 10, region: 'chrIV' }))
+    const view = open(insulation, result('insulation', { window: 10, sequences: ['chrIV'] }))
     view.button.click()
     await Promise.resolve()
     expect(copied).toHaveLength(1)
     const command = commandOf(copied[0])
     expect(command).toContain('metacooler-run insulation yeast.mcool::resolutions/1000')
     expect(command).toContain('--window 10')
-    expect(command).toContain('--region chrIV')
+    // `--sequences`, where this read `--region chrIV`: insulation asks which
+    // sequences to run on with the same tick boxes as compartments, and a list
+    // is written comma-separated for a shell.
+    expect(command).toContain('--sequences chrIV')
     expect(command).toContain('--balance')
     view.destroy()
   })

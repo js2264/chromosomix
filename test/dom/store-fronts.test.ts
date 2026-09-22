@@ -83,7 +83,7 @@ describe('the lab’s gallery', () => {
     expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C, G2/M')
     const open = head.querySelector('.gallery-card-open') as HTMLButtonElement
     expect(open.textContent).toBe('')
-    expect(open.title).toContain('new session')
+    expect(open.title).toContain('new tab')
     expect(textsOf(cards[0], '.gallery-card-chips .portal-chip')[0]).toBe('S288C (syn XIII-40)')
     expect(cards[0].querySelector('.gallery-card-line')?.textContent).toContain('One map, with the sequence')
     open.click()
@@ -167,7 +167,7 @@ describe('IGV’s genomes', () => {
     expect(all(cards[0], '.portal-row').length).toBe(2)
     // A genome with rows and no session says so rather than offering nothing.
     expect(cards[1].querySelector('.gallery-card-open')).toBeNull()
-    expect(cards[1].textContent).toContain('No session was published')
+    expect(cards[1].textContent).toContain('IGV published no session')
 
     const box = view.el.querySelector('.portal-search') as HTMLInputElement
     box.value = 'mouse'
@@ -181,7 +181,9 @@ describe('IGV’s genomes', () => {
     const view = new GenomesView({ front: front as NonNullable<typeof front>, host: host([]) })
     document.body.appendChild(view.el)
     await vi.waitFor(() =>
-      expect(view.el.querySelector('.portal-status')?.textContent).toContain('not generated yet'),
+      expect(view.el.querySelector('.portal-status')?.textContent).toContain(
+        'Nothing has been published for',
+      ),
     )
   })
 })

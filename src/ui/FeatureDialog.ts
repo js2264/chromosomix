@@ -18,6 +18,7 @@
  * would be the application disagreeing with itself.
  */
 
+import { formatLocus } from '../genome/assembly'
 import { DETAIL_SEP, type BarChartBars, type FeatureSet } from '../annotations/types'
 import { barColours } from '../render/barchart'
 import { Modal } from './Modal'
@@ -45,7 +46,7 @@ export interface FeatureDialogProps {
 /** `chrI:1,234–5,678`, in the 1-based inclusive form a reader writes. */
 function locusOf(set: FeatureSet, at: number): string {
   const contig = set.contigs[set.contig[at]]
-  return `${contig}:${fmt.int(set.start[at] + 1)}–${fmt.int(set.end[at])}`
+  return formatLocus({ contig, start: set.start[at], end: set.end[at] })
 }
 
 /** One `key: value` line. The value is selectable; that is half the point. */
@@ -132,7 +133,7 @@ function exonRows(set: FeatureSet, at: number): HTMLElement[] {
   const shown = Math.min(n, EXON_LIMIT)
   const parts: string[] = []
   for (let i = from; i < from + shown; i++) {
-    parts.push(`${fmt.int(set.exonStart[i] + 1)}–${fmt.int(set.exonEnd[i])}`)
+    parts.push(`${fmt.int(set.exonStart[i] + 1)}-${fmt.int(set.exonEnd[i])}`)
   }
   if (shown < n) parts.push(`… ${n - shown} more`)
   return [row('exons', String(n)), row('', parts.join(', '))]
@@ -242,7 +243,7 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
       const cdsFrom = set.cdsStart[at]
       const cdsTo = set.cdsEnd[at]
       if (cdsFrom >= 0 && cdsTo > cdsFrom) {
-        rows.push(row('coding', `${fmt.int(cdsFrom + 1)}–${fmt.int(cdsTo)}`))
+        rows.push(row('coding', `${fmt.int(cdsFrom + 1)}-${fmt.int(cdsTo)}`))
       }
       rows.push(...exonRows(set, at))
       // Last, and in the dimmer style: which file this came from is the question
@@ -257,7 +258,7 @@ export function openFeatureDialog(props: FeatureDialogProps): Modal {
           type: 'button',
           title: 'Frame the view on this feature, with a little room either side',
         })
-        button.append(icon('zoom-in', { size: 14 }), el('span', { text: 'Zoom to it' }))
+        button.append(icon('zoom-in', { size: 14 }), el('span', { text: 'zoom to it' }))
         button.addEventListener('click', () => {
           close()
           go()

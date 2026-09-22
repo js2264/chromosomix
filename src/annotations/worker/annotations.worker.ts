@@ -48,6 +48,7 @@ import { transfersFor } from '../../worker/protocol'
 import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { looksLikeChromSizes, parseChromSizes, type Contig } from '../../genome/assembly'
+import { fmt } from '../../units'
 import { overlapWith } from '../featureset'
 import {
   contigIndexOf,
@@ -840,10 +841,10 @@ async function runTask(
           bases: () => undefined,
           refusal: isTwoBit(store)
             ? 'This .2bit is read by range rather than held, so its sequences are not here to ' +
-              `search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole and can be ` +
+              `search. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held whole and can be ` +
               'searched (`twoBitToFa`).'
             : 'This FASTA is read by range from its index rather than held, so its sequences are ' +
-              `not here to search. A FASTA under ${count(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
+              `not here to search. A FASTA under ${fmt.int(FASTA_WHOLE_MAX / 1e6)} MB is held whole ` +
               'and can be searched.',
         }
       }
@@ -1623,7 +1624,7 @@ async function load(
       format,
       contigs: data.contigs,
       overlap: overlapReport(data.contigs, mapContigs, renaming),
-      summary: `${count(data.length)} pair${data.length === 1 ? '' : 's'}`,
+      summary: `${fmt.int(data.length)} pair${data.length === 1 ? '' : 's'}`,
       payload: { kind: 'pairs', data },
     }
   }
@@ -1657,8 +1658,8 @@ function loadVcf(text: string, mapContigs: NamedSequence[]): LoadResult {
     contigs: data.contigs,
     overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary:
-      `${count(data.length)} variant${data.length === 1 ? '' : 's'}` +
-      (samples === 0 ? '' : ` · ${count(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
+      `${fmt.int(data.length)} variant${data.length === 1 ? '' : 's'}` +
+      (samples === 0 ? '' : ` · ${fmt.int(samples)} sample${samples === 1 ? '' : 's'} not drawn`),
     payload: { kind: 'features', data },
   }
 }
@@ -1859,8 +1860,8 @@ function featureResult(
     overlap: overlapReport(data.contigs, mapContigs, renaming),
     summary:
       format === 'gtf'
-        ? `${count(data.length)} transcripts · ${count(exons)} exons`
-        : `${count(data.length)} feature${data.length === 1 ? '' : 's'}`,
+        ? `${fmt.int(data.length)} transcripts · ${fmt.int(exons)} exons`
+        : `${fmt.int(data.length)} feature${data.length === 1 ? '' : 's'}`,
     payload: { kind: 'features', data },
   }
 }
@@ -1998,9 +1999,9 @@ function keepFasta(source: WireSource, bytes: Uint8Array): SequenceStore {
 function tooLarge(size: number, source: WireSource): Error {
   const name = source.name.replace(/[#?].*$/, '') || 'genome.fa'
   return new Error(
-    `This FASTA is ${count(Math.round(size / 1e6))} MB and has no index. It would be read whole ` +
+    `This FASTA is ${fmt.int(Math.round(size / 1e6))} MB and has no index. It would be read whole ` +
       `and held whole — which is what makes panning free — so anything over ` +
-      `${count(FASTA_BYTE_CAP / 1e6)} MB is refused rather than allowed to take the tab with it. ` +
+      `${fmt.int(FASTA_BYTE_CAP / 1e6)} MB is refused rather than allowed to take the tab with it. ` +
       `Index it (\`samtools faidx ${name}\`) and ${
         source.kind === 'local'
           ? 'drop the .fai with it'
@@ -2026,7 +2027,11 @@ function loadFasta(entry: string, store: Sequences, mapContigs: NamedSequence[])
     contigs: names,
     overlap: overlapReport(names, mapContigs, renaming),
     summary:
-      `${count(names.length)} sequence${names.length === 1 ? '' : 's'} · ${count(store.total)} bp` +
+      // `fmt.bp`, not a full base count: this is a measured span (§26.2), and the
+      // Genome card two columns to the left prints the *same* number as
+      // `12.11 Mb` while this row printed `12,110,231 bp` — one quantity spelled
+      // two ways on one screen, which is the whole of what §26.2 is for.
+      `${sequenceCount(names.length)} · ${fmt.bp(store.total)}` +
       (isTwoBit(store)
         ? ' · read by range, two bits a base'
         : isIndexed(store)
@@ -2128,7 +2133,7 @@ async function gcSamples(
         basesPerPixel,
         regions: [],
         extent: null,
-        note: `GC under ${count(INDEXED_GC_WINDOW / 1e6)} Mb, letters at base resolution — zoom in`,
+        note: `GC under ${fmt.int(INDEXED_GC_WINDOW / 1e6)} Mb, letters at base resolution — zoom in`,
       }
     }
   }
@@ -2320,7 +2325,7 @@ async function loadBigBed(
 
 /** What a summary says once {@link BIGBED_FEATURE_CAP} has bitten. */
 function cutOff(summary: string): string {
-  return `${summary} · cut off at ${count(BIGBED_FEATURE_CAP)}`
+  return `${summary} · cut off at ${fmt.int(BIGBED_FEATURE_CAP)}`
 }
 
 async function loadBigWig(
@@ -2364,9 +2369,18 @@ async function loadBigWig(
     // file was built, not about what is in it: nothing the reader can act on,
     // and it pushed the one number they can — the value range — onto a second
     // line in a narrow panel.
+    //
+    // **Sequences**, the word the FASTA row above it, the Sequences card, the
+    // minimap and the Genome card all use. It said `contigs`, fixed, so a yeast
+    // cooler whose breadcrumb reads Chromosomes and whose File card counts
+    // chromosomes had every track row calling the same sixteen things contigs —
+    // three nouns for one list, in one column. The file-kind noun belongs to the
+    // surfaces that report what a file calls its own table, and a track row is
+    // not one of those. The **en dash** between the bounds is the app's mark for
+    // a range of values (§26.1 keeps the hyphen for a locus).
     summary:
-      `${count(contigs.length)} contigs` +
-      (usable ? ` · ${trim(total.scoreMin)} to ${trim(total.scoreMax)}` : ''),
+      sequenceCount(contigs.length) +
+      (usable ? ` · ${trim(total.scoreMin)}–${trim(total.scoreMax)}` : ''),
     ...(usable ? { fileExtent: { min: total.scoreMin, max: total.scoreMax } } : {}),
   }
 }
@@ -2408,8 +2422,8 @@ function loadSignal(
     contigs,
     overlap: overlapReport(contigs, mapContigs, renaming),
     summary:
-      `${count(track.length)} intervals · ${count(contigs.length)} contigs` +
-      (usable ? ` · ${trim(min)} to ${trim(max)}` : ''),
+      `${fmt.int(track.length)} intervals · ${sequenceCount(contigs.length)}` +
+      (usable ? ` · ${trim(min)}–${trim(max)}` : ''),
     ...(usable ? { fileExtent: { min, max } } : {}),
   }
 }
@@ -2760,7 +2774,7 @@ async function loadBam(
     format: 'bam',
     contigs,
     overlap: overlapReport(contigs, mapContigs, renaming),
-    summary: `${count(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${
+    summary: `${fmt.int(header.refs.length)} reference${header.refs.length === 1 ? '' : 's'} · ${
       index !== null ? index.format.toUpperCase() : `${searched} — reads located by search`
     }`,
   }
@@ -2782,8 +2796,8 @@ function unsortedMessage(name: string, header: BamHeader, err: UnsortedError): s
       ? 'its header says SO:coordinate, but'
       : 'its header has no @HD line to say so, and'
   return (
-    `${name} is not in coordinate order — ${claim} the reads at byte ${count(err.before.block)} are on ` +
-    `${placeLabel(err.before, header.refs)} while those at byte ${count(err.after.block)}, later in the ` +
+    `${name} is not in coordinate order — ${claim} the reads at byte ${fmt.int(err.before.block)} are on ` +
+    `${placeLabel(err.before, header.refs)} while those at byte ${fmt.int(err.after.block)}, later in the ` +
     `file, are on ${placeLabel(err.after, header.refs)}. Reads are drawn by region, which needs the file ` +
     `sorted and indexed: run \`samtools sort -o sorted.bam ${name}\` and \`samtools index sorted.bam\`. ` +
     'The alignment file a Hi-C pipeline writes is in read-pair order for its pairs step and is not made ' +
@@ -2948,7 +2962,7 @@ async function alignmentSamples(
       // sits in the name column's gutter: a sentence of advice there widens the
       // gutter for every lane in the stack. The number and the way out are what
       // a reader can act on; the bigWig-sidecar suggestion lives in §8.13.
-      note: `${formatBytes(forecast)} of reads — zoom in`,
+      note: `${fmt.bytes(forecast)} of reads — zoom in`,
     }
   }
 
@@ -3123,7 +3137,7 @@ async function readsFor(
   }
   const forecast = plans.reduce((sum, plan) => sum + forecastBytes(plan.spans), 0)
   if (forecast > READ_BYTE_CAP) {
-    return { ...empty, note: `${formatBytes(forecast)} of reads here — zoom in` }
+    return { ...empty, note: `${fmt.bytes(forecast)} of reads here — zoom in` }
   }
 
   const piles: ReadPile[] = []
@@ -3240,26 +3254,28 @@ function residuesFor(region: Region): { start: number; bases: Uint8Array } | und
   return undefined
 }
 
-/** `8.4 MB`, for a refusal that has to name a number a reader can act on. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1 << 30) return `${(bytes / (1 << 30)).toFixed(1)} GB`
-  if (bytes >= 1 << 20) return `${(bytes / (1 << 20)).toFixed(1)} MB`
-  return `${Math.max(1, Math.round(bytes / 1024))} kB`
-}
-
 // ---------------------------------------------------------------------------
 // Formatting, for the one-line summaries
 // ---------------------------------------------------------------------------
 
-function count(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+/** `16 sequences`, or `1 sequence` — the plural spelled, never `(s)`. */
+function sequenceCount(total: number): string {
+  return `${fmt.int(total)} sequence${total === 1 ? '' : 's'}`
 }
 
-/** A header statistic with enough digits to be useful and no more. */
+/**
+ * A header statistic with enough digits to be useful and no more.
+ *
+ * Grouped above a thousand, like every other number on the card. It was
+ * `toFixed(0)`, so a bigWig whose values reach 1599 wrote `0.16 to 1599` on a
+ * row two above one reading `12,110,231 bp` — the same card, one number
+ * grouped and the next not, which reads as a different kind of quantity.
+ */
 function trim(value: number): string {
   if (!Number.isFinite(value)) return '—'
   const magnitude = Math.abs(value)
-  if (magnitude >= 1000 || magnitude === 0) return value.toFixed(0)
+  if (magnitude === 0) return '0'
+  if (magnitude >= 1000) return fmt.int(Math.round(value))
   if (magnitude >= 1) return value.toFixed(2).replace(/\.?0+$/, '')
   return value.toPrecision(2)
 }

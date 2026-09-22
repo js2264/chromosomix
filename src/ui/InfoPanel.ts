@@ -6,12 +6,24 @@
  *
  * **The unassigned statistic (§7.4).** The fraction of contigs and bins that
  * binning failed to assign is shown once, as a read-only number, phrased as
- * `unassigned: 1,204 contigs / 8.3% of bins`. It is a direct diagnostic of
- * binning quality; a metagenomics reader will look for it and a reviewer will
- * expect it. It is a *number, not a view*: it opens nothing, selects nothing,
- * and is not a row in any table. It is the sole exception to `__unbinned__`
- * being invisible, and no code path reaches the reserved genome through it —
- * this panel receives four integers, not an index.
+ * `unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)`. Both quantities whole
+ * on one line, because the line used to pair a count of contigs with a
+ * *percentage* of bins and leave the other half of each to a paragraph under it:
+ * a reader wanting either number had to assemble it from two sentences in two
+ * units. It is a direct diagnostic of binning quality; a metagenomics reader
+ * will look for it and a reviewer will expect it. It is a *number, not a view*:
+ * it opens nothing, selects nothing, and is not a row in any table. It is the
+ * sole exception to `__unbinned__` being invisible, and no code path reaches the
+ * reserved genome through it — this panel receives four integers, not an index.
+ *
+ * **Every block here is a card** (§26.6). The QC statistic was a bare `h4` and
+ * the metadata was a bare heading when empty and a `<details>` when not, which
+ * made three heading shapes in one column and two of them for one block: a
+ * reader comparing two files watched that strip change its typography rather
+ * than fill and empty. They are cards now, with the same `cardTitle` and the
+ * same fold every other card in every column has, and the stored metadata opens
+ * folded because a hundred lines of JSON is not what a reader came to this
+ * column for.
  *
  * The §12 read counters and the §6.3 deep-validation control used to live here
  * too. They moved to the status bar: both are glanced at rather than read, and
@@ -54,7 +66,8 @@
 
 import type { OpenResult } from '../worker/protocol'
 import { el, fmt } from './dom'
-import { cardTitle, icon, iconButton } from './icons'
+import { resolutionLabel } from '../units'
+import { cardTitle, foldable, icon, iconButton } from './icons'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 export interface InfoPanelProps {
@@ -204,11 +217,14 @@ export class InfoPanel {
         el(
           'div',
           { class: 'card' },
-          el(
-            'h3',
-            { class: 'file-head card-head' },
-            icon('file', { size: 13 }),
-            el('span', { class: 'file-name', text: 'File' }),
+          foldable(
+            el(
+              'h3',
+              { class: 'file-head card-head' },
+              icon('file', { size: 13 }),
+              el('span', { class: 'file-name', text: 'File' }),
+            ),
+            'File',
           ),
           this.fileTable(this.props.info),
         ),
@@ -226,27 +242,30 @@ export class InfoPanel {
     return el(
       'div',
       { class: 'card card-file' },
-      el(
-        'h3',
-        { class: 'file-head card-head' },
-        el('span', {
-          class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
-          text: which === 1 ? '◥' : '◣',
-          title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
-        }),
-        el('span', { class: 'file-name', text: `File ${which}` }),
-        ...(close === undefined
-          ? []
-          : [
-              iconButton(
-                'x',
-                which === 1
-                  ? 'Close this file. The other takes its place and the map goes back to one.'
-                  : 'Close this file and go back to one map.',
-                () => close(which),
-                { class: 'btn btn-icon btn-close', size: 13 },
-              ),
-            ]),
+      foldable(
+        el(
+          'h3',
+          { class: 'file-head card-head' },
+          el('span', {
+            class: `compare-mark ${which === 1 ? 'compare-upper' : 'compare-lower'}`,
+            text: which === 1 ? '◥' : '◣',
+            title: which === 1 ? 'Upper-right triangle' : 'Lower-left triangle',
+          }),
+          el('span', { class: 'file-name', text: `File ${which}` }),
+          ...(close === undefined
+            ? []
+            : [
+                iconButton(
+                  'x',
+                  which === 1
+                    ? 'Close this file. The other takes its place and the map goes back to one.'
+                    : 'Close this file and go back to one map.',
+                  () => close(which),
+                  { class: 'btn btn-icon btn-close', size: 13 },
+                ),
+              ]),
+        ),
+        `File ${which}`,
       ),
       this.fileTable(info),
     )
@@ -257,7 +276,7 @@ export class InfoPanel {
       ['uri', info.uri],
       ['layout', info.layout.kind],
       ['source', info.sourceKind === 'local' ? `local file (${fmt.bytes(info.sourceBytes)})` : `remote (${fmt.bytes(info.sourceBytes)})`],
-      ['bin size', info.binsize === null ? '—' : `${fmt.int(info.binsize)} bp`],
+      ['bin size', info.binsize === null ? '—' : resolutionLabel(info.binsize)],
       ['bin type', String(info.info['bin-type'] ?? '—')],
       ['ordering', String(info.info['ordering'] ?? '—')],
       ['storage mode', String(info.info['storage-mode'] ?? '—')],
@@ -266,8 +285,17 @@ export class InfoPanel {
       // A cooler has no genome layer, and a row reading "genomes 0" invites the
       // question of where they went. It is the contigs — cooler's chroms — that
       // this file is made of.
+      //
+      // `__unbinned__` is not one of them (§7.4, §8.5). `nGenomes` counts it,
+      // because it occupies genome index 0 and every lookup downstream has to
+      // know that; the genomes *table* under this card does not list it, so
+      // printing the raw count put a 49th organism in a card sitting a hand's
+      // width above a table saying 48 rows. The QC line below is the one place
+      // it is counted.
       ...(info.hasGenomes
-        ? ([['genomes', fmt.int(info.nGenomes)]] as Array<[string, string]>)
+        ? ([
+            ['genomes', fmt.int(info.nGenomes - (info.unassigned === null ? 0 : 1))],
+          ] as Array<[string, string]>)
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],
@@ -316,8 +344,8 @@ export class InfoPanel {
     if (stats === null) {
       return el(
         'div',
-        { class: 'qc qc-clean' },
-        el('h4', { class: 'qc-head', text: 'Binning QC' }),
+        { class: 'card qc qc-clean' },
+        cardTitle('Binning QC', 'info'),
         el('p', { text: 'This file has no __unbinned__ genome: every contig was assigned to a bin.' }),
       )
     }
@@ -325,43 +353,82 @@ export class InfoPanel {
     const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
     return el(
       'div',
-      { class: 'qc' },
-      el('h4', { class: 'qc-head', text: 'Binning QC' }),
+      { class: 'card qc' },
+      cardTitle('Binning QC', 'info'),
+      // Each quantity whole: a count, and what share of its own total that is.
+      // The hint under it is one clause, because the two sentences it used to
+      // carry were a disclaimer — *cannot be displayed*, *a diagnostic only* —
+      // and a reader acts on neither; what they act on is the number.
       el('p', {
         class: 'qc-stat',
-        text: `unassigned: ${fmt.int(stats.contigs)} contigs / ${fmt.pct(binFraction)} of bins`,
+        text:
+          `unassigned: ${fmt.int(stats.contigs)} contigs (${fmt.pct(contigFraction)}) · ` +
+          `${fmt.int(stats.bins)} bins (${fmt.pct(binFraction)})`,
       }),
       el('p', {
         class: 'hint',
-        text:
-          `${fmt.pct(contigFraction)} of contigs and ${fmt.int(stats.bins)} of ${fmt.int(stats.totalBins)} bins ` +
-          'belong to __unbinned__. Unassigned contigs are not a genome and cannot be displayed; ' +
-          'this number is a diagnostic of binning quality only.',
+        text: '__unbinned__ is not a genome and is never drawn; a diagnostic of binning quality.',
       }),
     )
   }
 
+  /**
+   * What the file stored about itself, in the column's own shape.
+   *
+   * One card in both states, headed like every other card here, and *folded*
+   * when there is JSON in it. It was two shapes before — an uppercase iconed
+   * heading with a hint under it when the file stored nothing, a bare `▶
+   * Metadata` disclosure when it stored something — so the absence of metadata
+   * was announced more loudly than its presence, and a reader moving between a
+   * cooler and a metacool saw one strip of this column change its typography.
+   * Folded rather than open because this block is consulted once and then
+   * ignored (see the header): the fold is the card's own, so the chevron says
+   * which way it will go and one press opens it.
+   */
   private metadataBlock(): HTMLElement {
     const metadata = this.props.info.metadata
-    if (metadata === null || Object.keys(metadata).length === 0) {
-      return el(
-        'div',
-        { class: 'meta-empty' },
-        cardTitle('Metadata', 'info'),
-        el('p', { class: 'hint', text: 'No metadata was stored in this file.' }),
-      )
-    }
-    return el(
-      'details',
-      { class: 'meta' },
-      el('summary', { text: 'Metadata' }),
-      el('pre', { class: 'json', text: JSON.stringify(metadata, null, 2) }),
+    const stored = metadata !== null && Object.keys(metadata).length > 0
+    const head = cardTitle('Metadata', 'info')
+    const card = el(
+      'div',
+      { class: 'card' },
+      head,
+      stored
+        ? el('pre', { class: 'json', text: JSON.stringify(metadata, null, 2) })
+        : el('p', { class: 'hint', text: 'No metadata was stored in this file.' }),
     )
+    if (stored) startFolded(card, head)
+    return card
   }
+}
 
-
+/**
+ * A card that is built already folded.
+ *
+ * `cardTitle` builds its chevron open, which is right for a card a reader came
+ * to read; this is the one that is not. The class goes on the card and the
+ * chevron is told the same thing `foldCard` tells it on every later press, so
+ * the two never start out disagreeing — a chevron pointing down over a card with
+ * nothing under it is a card that looks broken until it is pressed twice.
+ */
+function startFolded(card: HTMLElement, head: HTMLElement): void {
+  card.classList.add('is-folded')
+  const chevron = head.querySelector('.card-fold')
+  if (!(chevron instanceof HTMLElement)) return
+  chevron.setAttribute('aria-expanded', 'false')
+  chevron.setAttribute('aria-label', 'Expand Metadata')
+  chevron.title = 'Expand'
 }
 
 function keyValue(key: string, value: string): HTMLElement[] {
-  return [el('div', { class: 'k', text: key }), el('div', { class: 'v', text: value, title: value })]
+  return [
+    el('div', { class: 'k', text: key }),
+    // A long value **wraps** rather than being cut: the panel is where a reader
+    // goes to read the identity of what is on screen whole, and the card's
+    // sideways scroll was the promise this made and never kept — a URL chopped
+    // at `http://127.0.0.1:5` with no ellipsis and no scrollbar drawn reads as a
+    // rendering fault rather than as a long path. The `title` stays for the
+    // reader who would rather hover than read three lines.
+    el('div', { class: 'v', text: value, title: value }),
+  ]
 }

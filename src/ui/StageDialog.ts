@@ -56,6 +56,8 @@ export function stageDialog(props: StageDialogProps): Modal {
 
   return new Modal({
     title: props.title,
+    // Always a name: a figure's own title or the structure row's label.
+    titleIsName: true,
     variant: `modal-stage${props.variant === undefined ? '' : ` ${props.variant}`}`,
     body: () => {
       const stage = el(

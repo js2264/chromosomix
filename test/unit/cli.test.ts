@@ -413,9 +413,12 @@ describe('the annotations venue', () => {
     const text = said()
     expect(text).toMatch(/^metaplot$/m)
     expect(text).toMatch(/^trackcorr$/m)
-    expect(text).toMatch(/--tracks {2}Tracks/)
+    // The descriptor's own label follows the flag, and those labels are
+    // lowercase now (§26.4): they are the words the form prints beside the
+    // control, and the form's were Title-case while every card's were not.
+    expect(text).toMatch(/--tracks {2}tracks/)
     expect(text).toMatch(/--heatmap/)
-    expect(text).toMatch(/--sequence {2}Reference/)
+    expect(text).toMatch(/--sequence {2}reference/)
     expect(text).toMatch(/--minFraction/)
     // And the one flag a task takes that is not a parameter of its own.
     expect(text).toMatch(/^hicrep$[^]*?--against <file>/m)

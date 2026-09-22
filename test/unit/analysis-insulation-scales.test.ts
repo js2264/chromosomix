@@ -98,7 +98,7 @@ function settings(scales: number): Params {
   return {
     window: 5,
     scales,
-    region: '',
+    sequences: null,
     ignoreDiags: 2,
     minValid: 0.5,
     balance: false,

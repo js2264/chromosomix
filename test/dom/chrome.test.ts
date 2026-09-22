@@ -194,8 +194,10 @@ describe('the stepper', () => {
   it('names the neighbour it would open', () => {
     const node = stepper({ neighbours: { prev: 'MAG_01', next: 'MAG_03' }, noun: 'genome', onStep: () => {} })
     const [prev, next] = all<HTMLButtonElement>(node, 'button')
-    expect(prev.title).toBe('Previous genome: MAG_01')
-    expect(next.title).toBe('Next genome: MAG_03')
+    // The key that does the same thing, because a tooltip is where a reader
+    // who is already pointing at the button discovers there is a faster way.
+    expect(prev.title).toBe('Previous genome: MAG_01 ([)')
+    expect(next.title).toBe('Next genome: MAG_03 (])')
     expect(prev.disabled).toBe(false)
   })
 
@@ -203,6 +205,7 @@ describe('the stepper', () => {
     const node = stepper({ neighbours: { prev: null, next: 'MAG_02' }, noun: 'contig', onStep: () => {} })
     const [prev, next] = all<HTMLButtonElement>(node, 'button')
     expect(prev.disabled).toBe(true)
+    // No key on the dead end: there is nothing for it to reach.
     expect(prev.title).toBe('No previous contig')
     expect(next.disabled).toBe(false)
   })
@@ -222,14 +225,18 @@ describe('the stepper', () => {
 })
 
 describe('the theme toggle', () => {
-  it('cycles system → light → dark → system', () => {
+  // The cycle is ordered against the machine's own scheme, and this environment
+  // reports a light one, so the first press is the one that *changes the page*.
+  // It used to be `system → light → dark`, which on a light OS spent the first
+  // press on a choice that repainted nothing — see `ui/ThemeToggle.next`.
+  it('cycles system → dark → light → system on a light machine', () => {
     const toggle = new ThemeToggle()
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
 
     toggle.el.click()
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    toggle.el.click()
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    toggle.el.click()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     toggle.el.click()
     // "System" is the *absence* of an override, so that one stylesheet answers
     // `prefers-color-scheme` rather than a third palette existing.
@@ -239,15 +246,18 @@ describe('the theme toggle', () => {
   it('says what it is and what the press would do', () => {
     const toggle = new ThemeToggle()
     expect(toggle.el.title).toContain('Theme: system')
-    expect(toggle.el.title).toContain('Click for light')
+    expect(toggle.el.title).toContain('Click for dark')
+    // The accessible *name*, not only the description: a screen reader
+    // announcing the constant "colour theme" three times never said the state.
+    expect(toggle.el.getAttribute('aria-label')).toBe(toggle.el.title)
     expect(toggle.el.querySelector('svg')).not.toBeNull()
   })
 
   it('is a preference, so it outlives the toggle that set it', () => {
     new ThemeToggle().el.click()
     applyTheme('system')
-    expect(initTheme()).toBe('light')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(initTheme()).toBe('dark')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
 
   it('reads an unknown stored value as system rather than writing it out', () => {

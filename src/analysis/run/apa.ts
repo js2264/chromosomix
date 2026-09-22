@@ -231,8 +231,11 @@ export const runApa: TaskRunner = async (job) => {
   const plans: Plan[] = []
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
   const controlsPer = norm === 'matched' ? Math.max(1, Math.round(numParam(job.params, 'controls', 5))) : 0
-  const minShift = job.toBins(numParam(job.params, 'minShift', 100_000))
-  const maxShift = Math.max(minShift, job.toBins(numParam(job.params, 'maxShift', 1_000_000)))
+  // Bins in, bins out: `shiftedControls` has always wanted a bin offset, and the
+  // form asks for one now, so the `toBins` that used to sit here is gone rather
+  // than moved (§18.2).
+  const minShift = Math.max(0, Math.round(numParam(job.params, 'minShift', 50)))
+  const maxShift = Math.max(minShift, Math.round(numParam(job.params, 'maxShift', 500)))
   const minShiftScale = Math.max(0, numParam(job.params, 'minShiftScale', 1))
   const maxShiftScale = Math.max(minShiftScale, numParam(job.params, 'maxShiftScale', 3))
 
@@ -242,14 +245,14 @@ export const runApa: TaskRunner = async (job) => {
       if (plan === null) continue
       plans.push({ ...plan, label: anchor.label, separation: anchor.pair.separation, control: false, group: g })
       if (controlsPer === 0) continue
-      // **The shift is a multiple of the window in the scaled mode and a length
-      // in base pairs in the fixed one**, and the difference is not a
-      // convenience. A domain pileup's window is as wide as the domain plus its
-      // flanks — often a megabase — so a control drawn 100 kb away is ninety per
-      // cent the same cells as the thing it is the denominator of, and the ratio
-      // it produces is 1 everywhere with the domain washed out of it. A fixed
-      // window is a couple of dozen bins and a shift in base pairs is exactly
-      // the right way to ask.
+      // **The shift is a multiple of the window in the scaled mode and a count
+      // of bins in the fixed one**, and the difference is not a convenience. A
+      // domain pileup's window is as wide as the domain plus its flanks — often
+      // a thousand bins — so a control drawn fifty bins away is ninety per cent
+      // the same cells as the thing it is the denominator of, and the ratio it
+      // produces is 1 everywhere with the domain washed out of it. A fixed
+      // window is a couple of dozen bins, and there a count of bins is exactly
+      // the right way to ask: it is the same window at every resolution.
       const width = scaledWindows ? Math.max(1, widthOf(plan.rect)) : 0
       const from = scaledWindows ? Math.round(width * minShiftScale) : minShift
       const to = scaledWindows ? Math.max(from, Math.round(width * maxShiftScale)) : maxShift
@@ -365,7 +368,7 @@ export const runApa: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(plans.length, plans.length, 'Done')
+  job.progress(plans.length, plans.length, 'done')
   job.throwIfCancelled()
 
   const outputs: TaskOutput[] = []
@@ -1099,7 +1102,17 @@ function overExpected(
  * the run ends at the first one past `maxSep`. That makes the cost proportional
  * to the number of pairs **produced** rather than to `n²` — which matters,
  * because the two differ by four orders of magnitude on a genome-wide peak set
- * with a 2 Mb reach.
+ * with a two-hundred-bin reach.
+ *
+ * **The range is in bins and the filter is on the pair's own bin offset**, which
+ * is the thing the pileup is a picture of: `pair.separation` is `col − row`, the
+ * separation bands are bin offsets, and the diagonal a pair is dropped for
+ * sitting on is one bin wide. The base-pair reading this replaces compared the
+ * distance between two feature centres, so two features 30 kb apart were inside
+ * a 20 kb floor on a 50 kb map and in the same bin — a pair on the diagonal,
+ * which the last guard in the loop had to catch separately. The offsets are
+ * monotone in the centres, so the `break` that makes the walk affordable still
+ * holds.
  *
  * Past {@link MAX_GENERATED_PAIRS} the pairs are **sampled rather than
  * truncated**, and the distinction is the one §18.8 draws about the cap this
@@ -1110,8 +1123,13 @@ function overExpected(
  * version of the same figure rather than a different one.
  */
 function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
-  const minSep = Math.max(0, numParam(job.params, 'minSep', 20_000))
-  const maxSep = Math.max(minSep + 1, numParam(job.params, 'maxSep', 2_000_000))
+  const minSep = Math.max(0, Math.round(numParam(job.params, 'minSep', 2)))
+  const maxSep = Math.max(minSep + 1, Math.round(numParam(job.params, 'maxSep', 200)))
+  job.note(
+    `Pairs ${minSep.toLocaleString()} to ${maxSep.toLocaleString()} bins apart, which is ` +
+      `${shortBp(minSep * job.mc.binsize)} to ${shortBp(maxSep * job.mc.binsize)} at this ` +
+      `file’s ${job.mc.binsize.toLocaleString()} bp resolution.`,
+  )
   const from = contextOf(set.contigs)
   const rng = makeRandom(Math.round(numParam(job.params, 'seed', 1)))
 
@@ -1171,15 +1189,15 @@ function generatedPairs(job: JobContext, set: FeatureSet): Anchor[] {
     for (let j = i + 1; j < placed.length; j++) {
       const b = placed[j]
       if (b.contig !== a.contig) break
-      const separation = b.centre - a.centre
-      if (separation > maxSep) break
-      if (separation < minSep) continue
       const row = Math.min(a.bin, b.bin)
       const col = Math.max(a.bin, b.bin)
-      // Two features far enough apart in base pairs can still land in one bin on
-      // a coarse map, and a pair on the diagonal is not an off-diagonal pileup —
-      // it is the diagonal, which is the largest thing in the matrix and would
-      // dominate every cell it contributed to.
+      const separation = col - row
+      if (separation > maxSep) break
+      if (separation < minSep) continue
+      // A pair in one bin is not an off-diagonal pileup — it is the diagonal,
+      // which is the largest thing in the matrix and would dominate every cell
+      // it contributed to. Only reachable at a floor of zero now that the floor
+      // is in bins; kept, because zero is a number a reader can type.
       if (row === col) continue
       offer({
         pair: { row, col, separation: col - row },

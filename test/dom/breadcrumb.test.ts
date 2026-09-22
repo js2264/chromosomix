@@ -181,10 +181,15 @@ describe('the trail below the root', () => {
   it('walks genome → contig → region, with only the last one inert', () => {
     const built = build()
     built.crumb.render({ uri: 'f', view: 'region', genome: 'MAG_01', region: 'ctg7:100-900' })
-    expect(trail(built.crumb)).toEqual(['sample.metacool', 'Genomes', 'MAG_01', 'ctg7', 'ctg7:100-900'])
+    // The last crumb is the **window alone**, under the crumb that names the
+    // sequence: it used to repeat the contig, so the row ended
+    // `ctg7 › ctg7:100-900` above a heading and a box printing the same string
+    // a third and a fourth time. 1-based inclusive and grouped, like every
+    // other coordinate a reader reads (§26.1).
+    expect(trail(built.crumb)).toEqual(['sample.metacool', 'Genomes', 'MAG_01', 'ctg7', '101-900'])
     const current = all(built.crumb.el, '.crumb.current')
     expect(current).toHaveLength(1)
-    expect(current[0].textContent).toBe('ctg7:100-900')
+    expect(current[0].textContent).toBe('101-900')
     expect(current[0].tagName).toBe('SPAN')
 
     // The contig crumb strips the coordinates off, which is what going up means.
@@ -399,28 +404,43 @@ describe('a ladder with more rungs than fit', () => {
     '100000', '250000', '500000', '1000000', '2500000',
   ]
 
-  it('shows the slider and the rung it is on, not eleven chips', () => {
+  /**
+   * **A dropdown, not a slider and one chip.**
+   *
+   * What stood here asserted the thinned row: the slider, whose tooltip listed
+   * every rung, and a single chip naming the one being read. Between them they
+   * said how many rungs there were and which one you were on, and named the rest
+   * only to a reader who hovered the track — so the control that was there to
+   * save room was also the one that hid the ladder. The dropdown is the whole
+   * list, in the ladder's own order, in about the same width.
+   */
+  it('collapses to a dropdown of every rung, not eleven chips', () => {
     const { crumb } = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
     crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
-    expect(crumb.el.querySelector('.res-slider')).not.toBeNull()
-    expect(textsOf(crumb.el, '.res-stop span')).toEqual(['25 kb'])
+    expect(crumb.el.querySelector('.res-slider')).toBeNull()
+    expect(all(crumb.el, '.res-stop')).toHaveLength(0)
+    const picker = crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    expect([...picker.options].map((option) => option.text)).toEqual([
+      '1 kb', '2 kb', '5 kb', '10 kb', '25 kb', '50 kb',
+      '100 kb', '250 kb', '500 kb', '1 Mb', '2.5 Mb',
+    ])
+    expect(picker.options[picker.selectedIndex]?.text).toBe('25 kb')
   })
 
-  it('still walks the whole ladder with the slider', () => {
+  it('walks the whole ladder from the dropdown', () => {
     const built = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
     built.crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
-    const slider = built.crumb.el.querySelector('.res-slider') as HTMLInputElement
-    expect(slider.max).toBe(String(MANY.length - 1))
-    slider.value = '0'
-    slider.dispatchEvent(new Event('change'))
+    const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    picker.value = '0'
+    picker.dispatchEvent(new Event('change'))
     expect(built.entries).toEqual(['1000'])
   })
 
-  it('names every rung in the slider’s own tooltip, since the chips are gone', () => {
+  it('says what each rung is in bins, on the rung itself', () => {
     const { crumb } = build({ entries: MANY, currentEntry: '25000', entryNoun: 'resolution' })
     crumb.render({ uri: 'f::resolutions/25000', view: 'contigs' })
-    const title = crumb.el.querySelector('.res-slider')?.getAttribute('title') ?? ''
-    expect(title).toContain('1 kb')
-    expect(title).toContain('2.5 Mb')
+    const picker = crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    expect(picker.options[0]?.title).toContain('1,000 bp per bin')
+    expect(picker.options[10]?.title).toContain('2,500,000 bp per bin')
   })
 })

@@ -363,10 +363,15 @@ suite('chromosight, against chromosight', () => {
         }
       }
 
+      // Upstream's config is in base pairs and the floor is now asked for in
+      // bins, so it is converted here the way `tasks/chromosight.ts` converts a
+      // preset — and `ceil` is the exact equivalent of the comparison this
+      // replaces, since a bin offset is an integer.
       const { kept, qvalues } = winnowCalls(found, {
         separationBins: pattern.separation_bins,
-        minDistBp: pattern.config.on_diagonal ? 0 : pattern.config.min_dist,
-        binsize: g.binsize,
+        minDistBins: pattern.config.on_diagonal
+          ? 0
+          : Math.ceil(pattern.config.min_dist / g.binsize),
       })
       for (let i = 0; i < kept.length; i++) kept[i].qvalue = qvalues[i]
 

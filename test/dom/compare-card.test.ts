@@ -138,3 +138,46 @@ describe('naming the two maps', () => {
     expect(ui.names()).toEqual(['rep1.mcool::1000', 'rep2.mcool::1000'])
   })
 })
+
+/**
+ * What the card asks for when there is nothing to compare against.
+ *
+ * §5.7's second file goes into the lower-left triangle **of an existing map**,
+ * so with no map open there is no triangle and nothing to match a bin size
+ * against. The card drew both rectangles anyway, the lower one promising that
+ * triangle, and both of them opened the same file the same way — two
+ * identical-looking targets and a reader wondering which their `.cool` belonged
+ * on (§8.5: a control the file cannot answer is not shown).
+ */
+describe('a session with no map', () => {
+  it('asks for a contact map, and for nothing to compare it with', () => {
+    const card = new CompareCard({
+      onOpen: () => undefined,
+      onToggleShown: () => undefined,
+      isShown: () => false,
+      onClose: () => undefined,
+      onSwap: () => undefined,
+      primaryLabel: () => 'rep1.mcool::1000',
+      hasPrimary: () => false,
+    })
+    document.body.append(card.el)
+    const zones = [...card.el.querySelectorAll<HTMLElement>('.ann-drop')]
+    expect(zones).toHaveLength(1)
+    expect(zones[0].querySelector('.ann-drop-label')?.textContent).toBe('Load a contact map')
+    expect(card.el.textContent).not.toContain('lower triangle')
+  })
+
+  it('offers the triangle once a map is open, named for where the file goes', () => {
+    const ui = mount()
+    ui.card.set({ kind: 'empty' })
+    const zones = [...ui.card.el.querySelectorAll<HTMLElement>('.ann-drop')]
+    expect(zones).toHaveLength(1)
+    expect(zones[0].querySelector('.ann-drop-label')?.textContent).toBe(
+      'Load a map into the lower triangle',
+    )
+    // The same last sentence every zone in the column says (§20.2).
+    expect(zones[0].querySelector('.ann-drop-hint')?.textContent).toContain(
+      'Drop one here, or click to choose.',
+    )
+  })
+})

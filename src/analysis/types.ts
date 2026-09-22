@@ -53,12 +53,17 @@ export type ParamValue = number | string | boolean | readonly string[] | null
 export type Params = Readonly<Record<string, ParamValue>>
 
 /**
- * A length the user types, and the unit they typed it in.
+ * The word beside a number box, which is the whole of what says what it is.
  *
- * Offered in base pairs by default, with the resolved bin count shown beneath
- * the box, because bins are a property of the file and base pairs are a property
- * of the question (§18.2). `''` is the unitless case — a count of components, a
- * number of quantiles — and `%` is drawn with its sign.
+ * **A setting about the matrix takes `bins`** — it is a count of the file's own
+ * cells, and asked in base pairs it was divided by the bin size before it meant
+ * anything, differently on every rung of an `.mcool` (§18.2). `bp` is left for
+ * the one quantity bins are not a unit of: a **1D track's** flank, sampling step
+ * or window, which is the same length of genome at every resolution and may be
+ * asked for in a session with no contact map at all.
+ *
+ * `''` is the unitless case — a count of components, a number of quantiles, a
+ * count of diagonals whose label says so — and `%` is drawn with its sign.
  */
 export type ParamUnit = '' | 'bp' | 'bins' | '%' | 'x'
 
@@ -66,7 +71,16 @@ interface ParamBase {
   /** Stable. Used in `Params`, in storage and in provenance; never a label. */
   key: string
   label: string
-  /** One line under the control. */
+  /**
+   * One sentence, drawn to the right of the control on its own row.
+   *
+   * Beside rather than under, which is what `.param-row`'s two columns have
+   * always done and what this line used to describe wrongly. The consequence is
+   * a length: a sentence of about ninety characters is one line at the drawer's
+   * width, and a paragraph here pushes the Run button off the screen. What needs
+   * more than a sentence belongs in the option's own `hint`, which the form puts
+   * in its tooltip, or nowhere.
+   */
   hint?: string
   /**
    * Whether this control is shown at all, given the rest of the form.
@@ -273,25 +287,26 @@ export interface TextParam extends ParamBase {
   placeholder?: string
 }
 
-/** A locus, in the syntax the views' own boxes take. Defaults to the framing. */
+/**
+ * A locus, in the syntax the views' own boxes take. Defaults to the framing.
+ *
+ * **A locus and nothing else.** This kind used to have a `sequences` flag that
+ * turned the box into a dropdown of the file's own sequence names, whose first
+ * option read *every sequence* — so five tasks asked *which sequences do I run
+ * on* with a select while four others asked it with a column of tick boxes, and
+ * a reader met both shapes in one column. The tick boxes won and they took the
+ * question with them ({@link SequencesParam}): a dropdown can answer *every* or
+ * *one* and cannot say *these three*, which a whole-genome run and a per-sequence
+ * run are both special cases of.
+ *
+ * What is left here is the question a list of names cannot answer: a **locus**.
+ * A 4C anchor is a window, a structure task's *distance to* is a point on the
+ * map, and the reconstruction takes a comma-separated list of them. Narrowing
+ * any of those three to a whole sequence would remove the task's point.
+ */
 export interface RegionParam extends ParamBase {
   kind: 'region'
   default?: string
-  /**
-   * This names a **whole sequence**, so offer the file's list rather than a box.
-   *
-   * Insulation, CID and compartments all take a sequence and use the whole of it
-   * — a score taken from whatever happened to be on screen but labelled `chrIV`
-   * is a different quantity wearing the same name — so a free-text box here
-   * accepted spans it would silently ignore, and asked a reader to type a
-   * chromosome name the app already knows. A `<select>` cannot be wrong.
-   *
-   * Left off where a *locus* is meant: a 4C anchor is a window, and narrowing it
-   * to a whole sequence would remove the task's whole point. Those keep the box,
-   * with the sequence names offered as a `<datalist>` so the common case is
-   * still a pick rather than a spelling test.
-   */
-  sequences?: boolean
   /**
    * The box takes **several sequences**, comma-separated, and is seeded from
    * what the map shows (§25.6): every sequence on screen when the view spans
@@ -302,15 +317,7 @@ export interface RegionParam extends ParamBase {
    */
   many?: boolean
   /**
-   * Empty is not an answer, so the list says *choose one* rather than *every*.
-   *
-   * Compartments is the case: a correlation matrix is a property of one
-   * chromosome, and there is no whole-file reading to fall back on. Insulation
-   * and CID leave this off, where empty legitimately means every sequence.
-   */
-  required?: boolean
-  /**
-   * Offer a **Pick on map** button beside the box.
+   * Offer a *pick on map* button beside the box.
    *
    * Shift-drag on the map names a stretch of one axis; ordinarily that zooms,
    * and while the button is lit it fills this box instead — once, and then the
@@ -330,14 +337,22 @@ export interface RegionParam extends ParamBase {
 }
 
 /**
- * **Several** whole sequences, ticked.
+ * **Which sequences to run on**, ticked.
  *
- * The plural of {@link RegionParam}'s `sequences` mode, and a different question
- * rather than a wider one. A task takes this where its answer is over a *set* of
- * sequences at once and not one reading per sequence: compartments is the case —
- * a correlation over four chromosomes' cis and trans blocks together is a
- * genome-wide eigenvector, which is not any of the four per-chromosome ones and
- * cannot be assembled from them.
+ * The one shape for that question, and it used to be two: this, and a
+ * {@link RegionParam} whose dropdown offered *every sequence* or one of them.
+ * Both asked the same thing and a reader met both in one column, so the tick
+ * boxes took it over — they are the superset, since *all of them* and *one of
+ * them* are two of the answers a list of tick boxes can give and *these three*
+ * is a third that a dropdown has no way to express.
+ *
+ * It is not only a wider picker: for some tasks the set is the *unit* of the
+ * answer rather than a filter on it. Compartments is the case — a correlation
+ * over four chromosomes' cis and trans blocks together is a genome-wide
+ * eigenvector, which is not any of the four per-chromosome ones and cannot be
+ * assembled from them — while insulation, the index, the HiC score, P(s) and the
+ * scalogram read each ticked sequence on its own and emit one lane or one curve
+ * apiece. The descriptor does not distinguish the two; the runner does.
  *
  * The value is the names, explicitly, and **never a sentinel**. `[]` means
  * nothing is ticked — a state the form can be in and the estimate refuses — and
@@ -348,8 +363,15 @@ export interface RegionParam extends ParamBase {
  * parameters read `[]` should not be indistinguishable from one that ran over
  * everything.
  *
- * Never answered at all is `null`, which the form resolves to every sequence the
- * file has — so a task with one of these starts genome-wide.
+ * Never answered at all is `null`, and it means **every sequence** — the form
+ * resolves it to every name on the way in, so a task with one of these starts
+ * genome-wide, and a job that never met a form keeps the `null` and is read the
+ * same way. That last half was the half that was missing: the runners took
+ * anything that was not an array as `[]`, so `metacooler-run compartments
+ * file.cool` refused itself for not having ticked a box in a drawer a shell has
+ * not got. `analysis/context.ts`'s `tickedContigs` and `analysis/job.ts`'s
+ * `tickedSequences` are the two readings of this value, one per side of the
+ * worker boundary, and both keep the three answers apart.
  */
 export interface SequencesParam extends ParamBase {
   kind: 'sequences'
@@ -646,8 +668,27 @@ export interface CurveSeries {
    * A cell-cycle scatter is not: its two axes are two fractions measured on the
    * same cell, the cells have no order along x, and a line through them would
    * draw a path nothing travelled.
+   *
+   * `bars` is that argument one step further. A series whose x is a **list** —
+   * one value per sequence, per sample, per MAG — has nothing between its
+   * samples at all, and the mark that says so is a bar standing on a baseline.
+   * It goes with {@link CurveOutput.xTicks}, which is what names the list.
    */
-  mark?: 'line' | 'points'
+  mark?: 'line' | 'points' | 'bars'
+  /**
+   * The stack this series shares, where the bars are parts of one whole.
+   *
+   * Two series naming the same stack are drawn one above the other, so a
+   * sequence's cis and trans fractions — which sum to one by construction — are
+   * one bar split in two rather than two bars a reader has to add up.
+   *
+   * **Only bars stack.** The same field on a pair of lines would draw an upper
+   * line that is the sum of two quantities under an axis claiming it is one of
+   * them, which is what a stacked line chart invites and what nothing here
+   * wants; `figures/option.ts` reads this for a bar and ignores it otherwise, so
+   * a reader who restyles the figure to a line gets two lines.
+   */
+  stack?: string
 }
 
 export interface CurveOutput {
@@ -677,6 +718,23 @@ export interface CurveOutput {
    */
   xDomain?: [number, number]
   yDomain?: [number, number]
+  /**
+   * What the points of the abscissa are called, where they are a list.
+   *
+   * One name per x, in the order the values are in — a sequence per bar on the
+   * cis/trans fractions, and `MatrixOutput.xTicks`'s job on an axis that has
+   * one series instead of a grid. Absent for every curve whose x is a
+   * *quantity*: a separation, a position, a rank.
+   *
+   * The x values stay numbers, and that is the decision rather than an
+   * accident. A category axis would have cost this abscissa its wheel, its
+   * marquee and the two windows a reader types (§18.7) — which a four-hundred
+   * contig metagenome needs far more than a sixteen-chromosome yeast does — so
+   * the names are a *spelling* of an ordinary numeric axis, the way a bin index
+   * is spelled in base pairs, and the figure goes on zooming and exporting the
+   * way every other figure does.
+   */
+  xTicks?: string[]
 }
 
 /**
@@ -909,8 +967,21 @@ export function waitingFor(needs: string): TaskAvailability {
   return { state: 'waiting', needs }
 }
 
-/** What every task that reads the matrix says when there is no map open. */
-export const NEEDS_MAP = 'Open a contact map — this one reads the matrix itself.'
+/**
+ * What every task that reads the matrix says when there is no map open.
+ *
+ * Four words, and the second clause it used to carry — *this one reads the
+ * matrix itself* — is gone. Ten of the sixteen tasks return this string, so on a
+ * 1D-browser session the column printed one sentence ten times over and the one
+ * gate that differed (APA's loop set) was lost in it. The trailing clause was
+ * also an explanation rather than an instruction: what the task reads is the
+ * blurb's job, and a reader who has no map does not need to be told why.
+ *
+ * The repetition itself is answered one level up, in the column: a group whose
+ * every waiting row carries the same sentence prints it once under the heading
+ * (§18.1, `AnalysisPanelCard`).
+ */
+export const NEEDS_MAP = 'Open a contact map.'
 
 /** Everything one run produced, and what it cost in wall clock. */
 export interface TaskResult {
@@ -946,7 +1017,23 @@ export interface CostEstimate {
   /** Range requests, or `null` where the file is local and there are none. */
   requests: number | null
   bytes: number | null
-  /** One line beside **Run**, already worded for a human. */
+  /**
+   * One line beside **Run**, already worded for a human: **a price and nothing
+   * else.**
+   *
+   * Every scan's note used to end *progress is reported as it goes and it can be
+   * cancelled at any point* — eighteen copies of a promise the progress bar and
+   * the cancel button beside it make by existing. It also filled the line a
+   * reader checks before spending compute with reassurance instead of a figure,
+   * which is the one thing they came to that line for. So the sentence says what
+   * will be read — *one pass over the whole pixel table*, *154 strips along their
+   * diagonals*, *up to 40 MB at a time* — and the class is said in those words
+   * rather than in a colour (§26.5): a price is `--text-dim` whatever it costs,
+   * and `--danger` belongs to {@link CostEstimate.refusal} alone.
+   *
+   * No trailing full stop is needed: {@link costText} joins the requests and the
+   * bytes onto the end with a middle dot and strips one if it finds it.
+   */
   note: string
   /**
    * A refusal, where the parameters ask for something that cannot be done.

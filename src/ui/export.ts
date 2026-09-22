@@ -26,14 +26,24 @@ export const CSS_DPI = 96
 export const EXPORT_DPI_CHOICES = [96, 150, 300, 600] as const
 
 /**
- * The two files this app writes, in the order they are offered.
+ * The two files a **map** writes, in the order they are offered.
  *
  * PDF leads because it is the default: a figure ends up in a manuscript, and a
  * one-page PDF carrying a lossless image is what a journal asks for. PNG is the
  * same picture for a slide or an email.
+ *
+ * `PDF (image)`, and the word earns its place: a contact map is a raster, so
+ * this PDF is a page carrying one — pretending otherwise would mean writing
+ * down a million rectangles. The 1D browser's own list says `PDF (vector)`
+ * because nothing it draws is a raster, and a reader who saved a map as `PDF`
+ * and opened it in Illustrator expecting paths had been told that by the other
+ * card and nothing at all by this one.
  */
-export const EXPORT_FORMATS = ['pdf', 'png'] as const
-export type ExportFormat = (typeof EXPORT_FORMATS)[number]
+export const EXPORT_FORMATS = [
+  { value: 'pdf', label: 'PDF (image)' },
+  { value: 'png', label: 'PNG' },
+] as const
+export type ExportFormat = (typeof EXPORT_FORMATS)[number]['value']
 
 /** Device pixels per CSS pixel for a target DPI. */
 export function scaleForDpi(dpi: number): number {

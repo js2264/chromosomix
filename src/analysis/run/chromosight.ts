@@ -44,7 +44,13 @@ import {
 } from '../chromosight'
 import { boolParam, numParam, type JobContext, type TaskRunner } from '../job'
 import { loopSpectrum } from '../loopSpectrum'
-import { MAX_SCAN_CELLS, presetFor, scanCellsFor, threshold } from '../tasks/chromosight'
+import {
+  MAX_SCAN_CELLS,
+  distanceBins,
+  presetFor,
+  scanCellsFor,
+  threshold,
+} from '../tasks/chromosight'
 import type { ChromosightPreset } from '../chromosightPresets'
 import type { CurveOutput, MatrixOutput, TableOutput, TaskOutput } from '../types'
 import {
@@ -56,7 +62,7 @@ import {
   validBins,
   type Span,
 } from './blocks'
-import { offsetTicks } from './labels'
+import { formatBp, offsetTicks } from './labels'
 
 /** How many rows of a correlation are computed between two chances to cancel. */
 const ROWS_PER_BREATH = 64
@@ -91,23 +97,36 @@ export const runChromosight: TaskRunner = async (job) => {
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
   const binsize = job.mc.binsize
 
-  const maxDistBp = threshold(job.params, 'maxDist', preset.maxDist)
-  const minDistBp = threshold(job.params, 'minDist', preset.minDist)
-  const separationBp = threshold(job.params, 'minSeparation', preset.minSeparation)
+  // **Bins, all three of them.** The form asks in bins and the presets are
+  // upstream's base pairs, so `distanceBins` is the one place either is divided
+  // by a bin size — and what it divides is the *preset's* number. Everything
+  // below is a count of the file's own cells, which is what the kernels have
+  // always wanted.
+  const maxDistBins = distanceBins(job.params, 'maxDist', preset.maxDist, binsize)
+  const minDistBins = distanceBins(job.params, 'minDist', preset.minDist, binsize)
+  const separationBins = distanceBins(job.params, 'minSeparation', preset.minSeparation, binsize)
   const settings: ScanSettings = {
-    // `max(max_dist // binsize, 1)`, and the floor of 1 is what makes a
+    // `max(max_dist // binsize, 1)` upstream, and the floor of 1 is what makes a
     // diagonal pattern — whose `max_dist` is zero — scan one diagonal rather
     // than none.
-    maxDist: Math.max(Math.floor(maxDistBp / binsize), 1),
+    maxDist: Math.max(maxDistBins, 1),
     pearson: threshold(job.params, 'pearson', preset.pearson),
     missingTol: threshold(job.params, 'maxPercUndetected', preset.maxPercUndetected) / 100,
     zeroTol: threshold(job.params, 'maxPercZero', preset.maxPercZero) / 100,
     // Upstream reads this off the *config*, not off the preset, so a reader who
     // sets the scan distance to zero gets a diagonal pattern — which is what
     // `--max-dist 0` does there too.
-    onDiagonal: maxDistBp === 0,
+    onDiagonal: maxDistBins === 0,
   }
-  const onDiagonal = maxDistBp === 0
+  const onDiagonal = maxDistBins === 0
+  // What the band came to in base pairs on the file actually open, since that is
+  // the number a reader carries between papers and the one the form no longer
+  // shows. Said once, like the diamond's window and the HiC score's reach.
+  job.note(
+    `A ${settings.maxDist.toLocaleString()}-diagonal scan band reaches ` +
+      `${formatBp(settings.maxDist * binsize)} from the diagonal at this file’s ` +
+      `${binsize.toLocaleString()} bp resolution.`,
+  )
   const iterations = Math.max(1, Math.round(numParam(job.params, 'iterations', 1)))
   const kernels = templatesOf(preset)
   const largestKernel = kernels.reduce((most, kernel) => Math.max(most, kernel.size), 0)
@@ -253,7 +272,7 @@ export const runChromosight: TaskRunner = async (job) => {
       }
     }
   }
-  job.progress(total, total, 'Done')
+  job.progress(total, total, 'done')
   job.throwIfCancelled()
 
   if (calls.length === 0) {
@@ -267,8 +286,8 @@ export const runChromosight: TaskRunner = async (job) => {
   }
 
   const kept = winnow(job, calls, {
-    separationBins: Math.max(1, Math.floor(separationBp / binsize)),
-    minDistBp: onDiagonal ? 0 : minDistBp,
+    separationBins: Math.max(1, separationBins),
+    minDistBins: onDiagonal ? 0 : minDistBins,
     maxQvalue: numParam(job.params, 'maxQvalue', 1),
   })
   if (kept.length === 0) {
@@ -359,12 +378,11 @@ function namesOf(names: readonly string[]): string {
 function winnow(
   job: JobContext,
   calls: Call[],
-  options: { separationBins: number; minDistBp: number; maxQvalue: number },
+  options: { separationBins: number; minDistBins: number; maxQvalue: number },
 ): Call[] {
   const { kept, qvalues } = winnowCalls(calls, {
     separationBins: options.separationBins,
-    minDistBp: options.minDistBp,
-    binsize: job.mc.binsize,
+    minDistBins: options.minDistBins,
   })
   for (let i = 0; i < kept.length; i++) kept[i].qvalue = qvalues[i]
   const suppressed = calls.length - kept.length

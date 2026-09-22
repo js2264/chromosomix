@@ -26,6 +26,8 @@
 
 import { laneIsHorizontal, laneRect, laneText, valueAcross, type LaneFrame } from './lane'
 import { formatLimit, normaliser } from './tracks'
+import { formatPosition } from '../genome/assembly'
+import { fmt } from '../units'
 
 /** A rectangle in canvas pixels: what a pointer is tested against. */
 export type LabelBox = [x: number, y: number, width: number, height: number]
@@ -79,6 +81,45 @@ export interface LaneLabelStyle {
 
 /** The ellipsis a cut name is joined with; `ui/vector.ts` can draw it into a PDF. */
 export const NAME_CUT = '…'
+
+/**
+ * Where the pointer is, at the precision the picture can actually resolve.
+ *
+ * One rule for both lane surfaces and for the 1D browser's own status line,
+ * because they are one surface (§8.8) and they were answering the same hover
+ * with two different instruments: the lane tooltip beside a map said
+ * `IV:1.18 Mb` over 1 kb bins while the matrix tooltip one pixel above said
+ * `IV:1,162,001`, and the browser said `IV:1.27 Mb` at 47 bases per pixel,
+ * where the string does not change across a fifth of the window. A readout that
+ * does not move as the pointer moves is not a readout.
+ *
+ * So: the **base**, 1-based and grouped through {@link formatPosition}, while a
+ * pixel is worth less than a kilobase — which is every zoom a reader reads a
+ * peak position at, and is where `fmt.bp`'s two decimals of a megabase name a
+ * ten-kilobase neighbourhood instead of a place. Above that the unit form is
+ * the honest one: at thirteen thousand bases to the pixel, six digits are five
+ * digits of noise.
+ *
+ * @param bpPerPixel How many bases one pixel of this picture covers. Positive;
+ * a non-finite value is read as "very wide", which is what an axis with no
+ * resolvable scale is.
+ */
+export function positionLabel(contig: string, bp: number, bpPerPixel: number): string {
+  return Number.isFinite(bpPerPixel) && bpPerPixel < EXACT_BP_PER_PIXEL
+    ? formatPosition(contig, Math.round(bp))
+    : `${contig}:${fmt.bp(bp)}`
+}
+
+/**
+ * The pixel width at which a readout stops naming the base.
+ *
+ * A kilobase, which is the coarsest bin anyone browses at and the point at
+ * which `fmt.bp` still gains a digit per zoom step. It was ten, chosen so the
+ * exact form appeared only at base resolution — and ten bases per pixel is a
+ * window of seven kilobases on a wide screen, so in practice the readout was
+ * never exact anywhere a reader works.
+ */
+const EXACT_BP_PER_PIXEL = 1000
 
 /** Where a name is allowed to break: the punctuation experiments are named with. */
 const BREAKS = /[ _.:/-]/
@@ -175,8 +216,14 @@ function breakInTwo(
  *
  * Grown from the two ends alternately so neither is favoured, and the head goes
  * first so an odd pixel lands at the beginning, which is where the eye starts.
+ *
+ * Exported for the feature names, which are written by `render/features.ts` and
+ * are the other run of text in this directory that outgrows its room: a MACS
+ * peak name is its caller's run id plus a counter, forty-six characters over a
+ * peak three pixels wide, and `LM331_…peak_1116` says the half of it a reader
+ * can act on. One implementation, because two would cut at different pixels.
  */
-function cutMiddle(measure: (text: string) => number, text: string, width: number): string {
+export function cutMiddle(measure: (text: string) => number, text: string, width: number): string {
   let head = 0
   let tail = 0
   for (;;) {
@@ -253,6 +300,21 @@ export interface LaneLabelSpec {
    */
   labelAt: 'near' | 'far'
   column: LaneLabelColumn | null
+  /**
+   * Keep the detail on the name's own line, however tall the lane is.
+   *
+   * For a lane whose *signal sits where the second line would go*, which over
+   * the data is one lane in particular: a GC track hovers around 0.4 of a fixed
+   * 0–1 axis, and on the 46-pixel default the range line lands at across 26
+   * while the trace is at 27. `0 – 1` was written straight along the line it
+   * measures, at every zoom. Beside the name the label is one band of the lane
+   * instead of two, and the plate below has one row to cover.
+   *
+   * Only where there is no column to write in: in the browser's gutter the
+   * range under the name is over nothing, and it is a text box a reader puts a
+   * caret in (§5.8).
+   */
+  detailBeside?: boolean
   style: LaneLabelStyle
   palette: { text: string; halo: string }
 }
@@ -316,18 +378,11 @@ export function progressDetail(pending: { done: number; total: number }): {
 } {
   const text =
     pending.total > 0
-      ? `fetching ${bytesLabel(pending.done)} of ${bytesLabel(pending.total)}`
+      ? `fetching ${fmt.bytes(pending.done)} of ${fmt.bytes(pending.total)}`
       : pending.done > 0
-        ? `fetching… ${bytesLabel(pending.done)}`
+        ? `fetching… ${fmt.bytes(pending.done)}`
         : 'fetching…'
   return { kind: 'progress', text, done: pending.done, total: pending.total }
-}
-
-function bytesLabel(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`
-  if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} kB`
-  return `${Math.round(bytes)} B`
 }
 
 export interface LaneLabelBoxes {
@@ -385,7 +440,6 @@ export function drawLaneLabel(
   // the first starts at a smaller `along`.
   const horizontal = laneIsHorizontal(frame.orientation)
   const dir = horizontal ? 1 : -1
-  const near = horizontal ? frame.alongFrom + style.inset : frame.alongTo - style.inset
   const want = (width: number): void => {
     if (width > out.wanted) out.wanted = width
   }
@@ -442,19 +496,50 @@ export function drawLaneLabel(
           column.end - column.start - swatchRoom(style),
           lines,
         )
+  /**
+   * The same cut, for a block written **over the data** with no column at all.
+   *
+   * It used to be no cut: `fitRun` answered with the raw text whenever there was
+   * no column, so a name longer than the lane was simply clipped by the lane's
+   * own clip — and a clipped name is a *different* name. Beside a small map cell
+   * the reader was shown `Distance to IV:100000` for a track called
+   * `Distance to IV:1000000`, a wrong coordinate stated as a fact, and
+   * `Local compaction (±5` for a window with no unit on it. Cut in the middle
+   * the end survives, which for these names is where the information is; the
+   * hit box and the card still carry the whole of it.
+   */
+  const overData = (text: string): string => {
+    const room = Math.abs(frame.alongTo - frame.alongFrom) - 2 * style.inset - swatchRoom(style)
+    if (!(room > 0)) return text
+    return ctx.measureText(text).width <= room
+      ? text
+      : cutMiddle((part) => ctx.measureText(part).width, text, room)
+  }
   const maxLines = column?.nameLines ?? 1
-  let plan = runs.map((run) => (maxLines > 1 ? fitRun(run, maxLines) : [null]))
+  const planFor = (lines: number): Array<Array<string | null>> =>
+    runs.map((run) =>
+      lines > 1 && column !== null
+        ? fitRun(run, lines)
+        : column === null && run.length === 1
+          ? [overData(run[0].text)]
+          : [null],
+    )
+  let plan = planFor(maxLines)
   const linesIn = (rows: Array<Array<string | null>>): number =>
     rows.reduce((total, row) => total + row.length, 0)
   if (frame.thickness < style.nameTop + linesIn(plan) * style.nameLine + 6) {
-    plan = runs.map((run) => (maxLines > 1 ? fitRun(run, 1) : [null]))
+    plan = planFor(1)
   }
 
   const rows = linesIn(plan)
   const block = (rows - 1) * style.nameLine
   // Under the names when the lane has room for a second line, beside them when
   // it has not: a clipped lane should lose the *layout* rather than the fact.
-  const stacked = frame.thickness >= style.nameTop + block + style.detailDrop + 6
+  // …and beside them whatever the room, where the caller says the second line
+  // would land on the signal — see {@link LaneLabelSpec.detailBeside}.
+  const stacked =
+    frame.thickness >= style.nameTop + block + style.detailDrop + 6 &&
+    !(column === null && spec.detailBeside === true)
   const label = block + (stacked ? style.detailDrop : 0)
   // In the column, centred on the lane — because there the label is beside its
   // track rather than on top of it, and a caption in a column of them belongs
@@ -475,6 +560,63 @@ export function drawLaneLabel(
         ? Math.max(6, frame.thickness - farGuard - (stacked ? style.detailDrop : 0) - block)
         : style.nameTop
   out.nameAcross = nameTop
+
+  // What the block is about to occupy along the lane, measured before anything
+  // is drawn. Two things want it: the plate underneath, and — on a vertical lane
+  // — the anchor, since a quarter turn anticlockwise reads *upward* from wherever
+  // it starts.
+  const lineAlong: number[] = []
+  for (const [index, run] of runs.entries()) {
+    for (const [part, text] of plan[index].entries()) {
+      const texts = text === null ? run.map((name) => name.text) : [text]
+      lineAlong.push(
+        texts.reduce((sum, item) => sum + ctx.measureText(item).width, 0) +
+          (part === 0 ? texts.length * swatchRoom(style) : 0) +
+          (texts.length - 1) * NAME_GAP,
+      )
+    }
+  }
+  const namesAlong = Math.max(0, ...lineAlong)
+  const detailRoom = detailAlong(ctx, spec.detail, style)
+  const blockAlong = stacked
+    ? Math.max(namesAlong, detailRoom)
+    : namesAlong + (detailRoom > 0 ? NAME_GAP + detailRoom : 0)
+
+  /**
+   * Where the block starts along the lane.
+   *
+   * On a horizontal lane, the near end, which is the axis's own start. On a
+   * vertical one the text turns anticlockwise and therefore advances towards
+   * smaller `along`, so anchoring at the far end put every name, range and grip
+   * of the right-hand stack at the *bottom* of the column while the stack under
+   * the map had its at the left — the same track named at opposite ends of one
+   * genome (§8.9). Anchored by the block's own measured length instead, its last
+   * glyph lands at the axis start and a reader looks for a lane's name in one
+   * place on all four edges. Clamped, so a block longer than the lane still
+   * begins inside it.
+   */
+  const near = horizontal
+    ? frame.alongFrom + style.inset
+    : Math.min(frame.alongTo - style.inset, frame.alongFrom + style.inset + blockAlong)
+
+  // **A plate under the block, where the block is written over the data.**
+  // Beside a map there is no column to write in — the margin there belongs to
+  // the heatmap's own labels — and the 3 px halo around each glyph was the whole
+  // of the protection. On a 16-pixel peak lane the label *is* the lane: `ATAC
+  // peaks` came out with orange bars running through every letter, and `230
+  // features in view` lay across a density block. A halo-coloured plate keeps
+  // the argued placement and makes the words readable, which is what HiGlass
+  // does; it is drawn through `laneRect` so it turns with the lane, and it stops
+  // at what was measured so the rest of the window is untouched.
+  if (column === null && blockAlong > 0) {
+    const from = nameTop - style.hitHeight / 2
+    const to = (stacked ? nameTop + block + style.detailDrop : nameTop + block) + style.hitHeight / 2
+    ctx.save()
+    ctx.globalAlpha = PLATE_ALPHA
+    ctx.fillStyle = palette.halo
+    ctx.fillRect(...laneRect(frame, near - dir * 2, near + dir * (blockAlong + 2), from, to))
+    ctx.restore()
+  }
 
   let lastEnd = near
   let line = 0
@@ -571,7 +713,23 @@ export function drawLaneLabel(
   const along = stacked ? (column === null ? near : column.start) : lastEnd + dir * NAME_GAP
 
   if (spec.detail.kind === 'text') {
-    const text = spec.detail.text
+    // Beside the name on a thin lane there is only what is left of the lane to
+    // write in, and nothing used to say so: `ATAC peaks 175 features in view`
+    // ran off the end of a small map cell as `ATAC peaks 175 fe`, which is a
+    // number followed by two letters and could be a count, a unit or a name.
+    // Cut in the middle instead, so what survives is a phrase; the count is on
+    // the tooltip and on the card either way.
+    const room = stacked
+      ? Number.POSITIVE_INFINITY
+      : dir > 0
+        ? frame.alongTo - style.inset - along
+        : along - (frame.alongFrom + style.inset)
+    const text =
+      spec.detail.text === '' || ctx.measureText(spec.detail.text).width <= room
+        ? spec.detail.text
+        : room >= DETAIL_MIN
+          ? cutMiddle((part) => ctx.measureText(part).width, spec.detail.text, room)
+          : ''
     if (text !== '') {
       const width = ctx.measureText(text).width
       const at = column !== null && stacked ? Math.max(column.start, column.end - width) : along
@@ -691,6 +849,37 @@ export function labelEndFor(frame: LaneFrame, limits: { min: number; max: number
 }
 
 /** The chip plus the air between it and the name it belongs to. */
+/**
+ * How far along the lane the detail line will run, in the range font.
+ *
+ * Measured here rather than where it is drawn because two callers need it before
+ * the drawing: the plate has to know how much to cover, and a vertical lane's
+ * anchor has to know how long the whole block is. Leaves `ctx.font` as it found
+ * it — the names are measured in a different one, on either side of this.
+ */
+function detailAlong(
+  ctx: CanvasRenderingContext2D,
+  detail: LaneLabelSpec['detail'],
+  style: LaneLabelStyle,
+): number {
+  if (detail === null) return 0
+  const font = ctx.font
+  ctx.font = style.rangeFont
+  let width = 0
+  if (detail.kind === 'text') {
+    width = detail.text === '' ? 0 : ctx.measureText(detail.text).width
+  } else if (detail.kind === 'progress') {
+    const text = detail.text === '' ? 0 : ctx.measureText(detail.text).width
+    width = text + (detail.text === '' ? 0 : NAME_GAP) + style.progressWidth
+  } else {
+    width =
+      ctx.measureText(`${formatLimit(detail.min)} ${DASH} ${formatLimit(detail.max)}`).width +
+      style.autoSlot
+  }
+  ctx.font = font
+  return width
+}
+
 function swatchRoom(style: LaneLabelStyle): number {
   return style.swatch === 0 ? 0 : style.swatch + 5
 }
@@ -698,8 +887,27 @@ function swatchRoom(style: LaneLabelStyle): number {
 /** Air between two names sharing a line. */
 const NAME_GAP = 12
 
+/**
+ * How solid the plate under a label written over the data is.
+ *
+ * Not opaque. The plate exists so the words can be read, not so the lane can be
+ * hidden: at 0.85 a peak under the label is still visible as a shape, which
+ * matters because the first eighty pixels of a peak set are data a reader may
+ * be counting. Opaque was tried and reads as a hole cut in the track.
+ */
+const PLATE_ALPHA = 0.85
+
 /** Air between the top of the range and the button that resets it. */
 const AUTO_GAP = 5
+
+/**
+ * The least room worth writing a cut detail into, in pixels.
+ *
+ * Under this the phrase is dropped rather than cut: `1…w` is not a fact, and a
+ * reader who sees two characters of small print at the end of a lane reads them
+ * as the end of the track's name.
+ */
+const DETAIL_MIN = 28
 
 /**
  * An en dash with a space either side, which is what a range reads as.

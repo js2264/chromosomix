@@ -18,7 +18,6 @@
 
 import { FeatureBuilder } from '../../annotations/featureset'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
 import {
   callBoundaries,
   diamondCells,
@@ -30,10 +29,9 @@ import {
 } from '../insulation'
 import {
   boolParam,
-  contigIdFor,
   numParam,
   readsAsCircular,
-  strParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
@@ -41,9 +39,10 @@ import { windowLadder } from '../tasks/insulation'
 import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
 import {
   bandFor,
-  displayableContigs,
   forEachDiagonalTile,
+  missingSequencesNote,
   spanOfContig,
+  tickedContigIds,
   usableBlock,
   type Span,
 } from './blocks'
@@ -67,37 +66,32 @@ interface Unit {
  * the mean over a whole sequence, so a score taken from whatever happened to be
  * on screen but labelled `chrIV` is a different quantity wearing the same name.
  */
-function planUnits(job: JobContext, region: string): Unit[] {
+function planUnits(job: JobContext, names: readonly string[] | null): {
+  units: Unit[]
+  missing: string[]
+} {
   const mc = job.mc
   const lengths = mc.chromsizes
-  const unitFor = (cid: number): Unit | null => {
+  // Through {@link tickedContigIds}, which resolves each name with
+  // {@link contigIdFor} rather than `mc.contigId`: the names are the *reader's*
+  // rather than this file's — they were ticked against whichever map the
+  // Analysis column is pointed at, and a batch (§18.2) then asks every panel of
+  // the deck for them — and the literal lookup threw `unknown-label` on the one
+  // panel that spells a sequence another way (§5.9).
+  const { ids, missing } = tickedContigIds(mc, names)
+  const units: Unit[] = []
+  for (const cid of ids) {
     const span = spanOfContig(mc, cid)
-    if (span === null) return null
+    if (span === null) continue
     const name = mc.chromnames[cid]
-    return {
+    units.push({
       name,
       span,
       length: lengths.get(name) ?? (span.to - span.from) * mc.binsize,
       circular: readsAsCircular(job, name),
-    }
+    })
   }
-
-  if (region !== '') {
-    // Through {@link contigIdFor}, because the name is the *reader's* rather
-    // than this file's: it was typed against whichever map the Analysis column
-    // is pointed at, and a batch (§18.2) then asks every panel of the deck for
-    // it. `mc.contigId` is literal and threw `unknown-label` on the one panel
-    // that spells the sequence another way (§5.9).
-    const cid = contigIdFor(mc, parseRegionString(region)[0])
-    const unit = cid < 0 ? null : unitFor(cid)
-    return unit === null ? [] : [unit]
-  }
-  const out: Unit[] = []
-  for (const cid of displayableContigs(mc)) {
-    const unit = unitFor(cid)
-    if (unit !== null) out.push(unit)
-  }
-  return out
+  return { units, missing }
 }
 
 /**
@@ -141,20 +135,19 @@ export const runInsulation: TaskRunner = async (job) => {
     )
   }
 
-  const region = strParam(job.params, 'region', '').trim()
-  const planned = planUnits(job, region)
-  // Two ways to end with nothing, and they need two sentences. A region that
-  // named a sequence this file has not got is a batch across a deck of two
-  // assemblies (§18.2), and answering it with the window advice sends the reader
-  // to change a number that was never the problem.
-  if (region !== '' && planned.length === 0) {
-    job.note(
-      `This file has no sequence called ${parseRegionString(region)[0]}, under that spelling or ` +
-        `any this viewer knows of (§5.9). It has ` +
-        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
-    )
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to score.')
     return []
   }
+  // Three ways to end with nothing and they need three sentences. A ticked
+  // sequence this file has not got is a batch across a deck of two assemblies
+  // (§18.2), and answering it with the window advice below sends the reader to
+  // change a number that was never the problem.
+  const { units: planned, missing } = planUnits(job, ticked)
+  const said = missingSequencesNote(job.mc, missing, planned.length)
+  if (said !== null) job.note(said)
+  if (planned.length === 0) return []
   const units = planned.filter(
     // A sequence with no bin whose whole diamond fits produces a column of NaN
     // at full cost. Dropped here and counted, rather than read and thrown away.
@@ -293,7 +286,7 @@ export const runInsulation: TaskRunner = async (job) => {
 
     finish(unit, size, sums)
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   const round = units.filter((unit) => unit.circular).length
   if (round > 0) {

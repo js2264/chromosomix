@@ -69,16 +69,24 @@ export interface PixelProfile {
   /**
    * What "autoscale to what is in view" resolves to.
    *
-   * The means' own range, because the means are what is drawn. This used to be
-   * a compromise with the *envelope's* maximum — the highest single base inside
-   * each pixel — since the envelope was drawn too and a scale that clipped it
-   * painted a peaky track as one solid block. The envelope is gone (see
-   * {@link TrackPaint.fills}), and with it the reason: scaling a line to
-   * anything above the line's own maximum flattens it onto its baseline for a
-   * band nobody can see any more.
+   * **The values the file states inside the window, not the means the pixels
+   * came out at** — and that is a correction. Taking the extent off the drawn
+   * pixels made the value axis a function of the lane's *pixel width*: the same
+   * ATAC track over the same 400 kb window read `0 – 111` on a 680 px lane,
+   * `0 – 86.9` on a 560 px one and `0 – 36.9` in a deck cell, so the right-hand
+   * stack of one map disagreed with the bottom one and two cells of one deck
+   * disagreed with each other about the same data (§8.8, §16.2). A reader
+   * comparing them concludes the data differ, which is the one conclusion a
+   * picture of one file must not invite.
    *
-   * `low`/`high` remain, and are still worth having — they are what the readout
-   * can say a pixel hid — they simply no longer decide the axis.
+   * So the range is quantised by the *file* — at a summary level a value already
+   * is a mean, over bins the file chose — and not by the window's width in
+   * pixels. It can sit a little above the highest mean drawn, which is the trade
+   * every other browser makes and is why this is the values and not the
+   * envelope: `low`/`high` are the highest and lowest single base a pixel hid,
+   * they are no longer drawn, and scaling a line to them flattens it onto its
+   * baseline for a band nobody can see. They remain because the readout can
+   * still say what a pixel hid.
    */
   extent: { min: number; max: number } | null
 }
@@ -129,6 +137,12 @@ export function profileOf(
 
   const sum = new Float64Array(slots)
   const weight = new Float64Array(slots)
+  // The value axis, gathered from the file's own numbers as they go past. Kept
+  // apart from the per-pixel reduction below because it must not depend on how
+  // many pixels there are — see {@link PixelProfile.extent}.
+  let seen = 0
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
   // Filled only if some region carries one, so a stack of bigWigs allocates
   // nothing and the `null` reaches the paint intact.
   let differing: Float64Array | null = null
@@ -165,6 +179,18 @@ export function profileOf(
         if (p0 < 0) p0 = 0
         if (p1 > slots) p1 = slots
 
+        // Here, where the interval is known to be on screen, and *before* it is
+        // spread over pixels: this is the file's own value inside the window, on
+        // the axis the lane is drawn on. A value the scale has no answer for —
+        // zero or below, under a logarithm — decides nothing, exactly as it
+        // draws nothing.
+        const scaled = onScale(value, scale)
+        if (Number.isFinite(scaled)) {
+          seen++
+          if (scaled < min) min = scaled
+          if (scaled > max) max = scaled
+        }
+
         const first = Math.floor(p0)
         const last = Math.min(slots - 1, Math.ceil(p1) - 1)
         const lo = hasBand ? (region.min as Float32Array)[i] : value
@@ -187,8 +213,6 @@ export function profileOf(
     }
   }
 
-  let min = Number.POSITIVE_INFINITY
-  let max = Number.NEGATIVE_INFINITY
   let drawn = 0
   for (let slot = 0; slot < slots; slot++) {
     if (weight[slot] <= 0) continue
@@ -207,22 +231,12 @@ export function profileOf(
     // A value the scale has no answer for — zero or below, under a logarithm —
     // is a gap, and a gap decides nothing about the axis and draws no ink.
     if (!Number.isFinite(value)) continue
-    // The means, and the means at *both* ends: `low[slot]` used to be folded
-    // into the floor with no `high[slot]` twin, so a single hidden sub-zero
-    // base inside a summary window decided the axis. An all-positive
-    // coverage track then resolved to `[-reach, reach]` instead of `[0, max]`
-    // and gave up half its lane, and a track that does cross zero was scaled to
-    // an envelope an order of magnitude wider than its own line. That is the
-    // same argument the field docstring gives for dropping the envelope's
-    // *maximum*; it holds below the line too. `low`/`high` stay populated —
-    // they are what the readout can say a pixel hid — they simply no longer
-    // decide the axis. A genuinely diverging track still gets its symmetric
-    // axis from `resolveLimits`, because its own means cross zero.
-    if (value < min) min = value
-    if (value > max) max = value
     drawn++
   }
-  if (drawn === 0) return empty
+  // Nothing drawn and nothing to scale are the same answer: a lane with no ink
+  // has no axis, and a range gathered off intervals that all fell outside the
+  // visible slots would be an axis for a picture that is not there.
+  if (drawn === 0 || seen === 0) return empty
 
   let variant: Float32Array | null = null
   if (differing !== null) {
@@ -852,6 +866,15 @@ function drawZeroLine(
  * Three significant figures is what fits in the corner of a 44-pixel lane and
  * what a reader takes from it; the exponent form is for the ratio tracks, whose
  * interesting values are between 0.01 and 100 and whose outliers are not.
+ *
+ * **Three significant figures, whole numbers past a hundred** — and the first
+ * half of that used to be the docstring rather than the code, which wrote two
+ * *decimal* places below a hundred and so put four figures on a lane (`0 – 86.86`)
+ * beside three on the one under it (`0 – 111`). Two decimals on a lane sixteen
+ * pixels tall are ink a reader cannot use, and a precision that jumps as the
+ * ceiling crosses a hundred reads as two different instruments. Past a hundred
+ * the figure is whole, because a ceiling of `1,599` is not a measurement to a
+ * tenth.
  */
 export function formatLimit(value: number): string {
   if (!Number.isFinite(value)) return '—'
@@ -859,8 +882,7 @@ export function formatLimit(value: number): string {
   const magnitude = Math.abs(value)
   if (magnitude >= 1e5 || magnitude < 1e-3) return value.toExponential(1)
   if (magnitude >= 100) return value.toFixed(0)
-  if (magnitude >= 1) return String(Number(value.toFixed(2)))
-  return String(Number(value.toPrecision(2)))
+  return String(Number(value.toPrecision(3)))
 }
 
 /**

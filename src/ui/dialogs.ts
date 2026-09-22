@@ -11,14 +11,34 @@
 import { Modal } from './Modal'
 import { versionPicker } from './VersionPicker'
 import { el } from './dom'
-import { keyLabel, type Command } from './commands'
+import { groupRank, isMac, keyLabel, stateChip, type Command } from './commands'
 import { buildLine } from '../version'
+
+/**
+ * The modifier a gesture actually wants, on the machine reading the dialog.
+ *
+ * Written `{opt}` / `{shift}` / `{ceil}` in the tables and resolved here.
+ * The tables used to print both spellings — `⌥ / Alt + drag` — which asks a
+ * reader to work out which half is theirs, in a dialog whose whole job is to
+ * tell them what to press; and the pair could not say that the ceiling gesture
+ * is genuinely a *different* key on the two platforms (⌘ on a Mac, Alt
+ * elsewhere, because a trackpad pinch arrives as Ctrl-wheel — see
+ * `ui/BrowserView.ts`), so it was printed `⌘ / Alt` beside the map's `⌥ / Alt`
+ * and the difference read as a typo.
+ */
+function gestureKeys(pattern: string): string {
+  const mac = isMac()
+  return pattern
+    .replace(/\{opt\}/g, mac ? '⌥' : 'Alt')
+    .replace(/\{shift\}/g, mac ? '⇧' : 'Shift')
+    .replace(/\{ceil\}/g, mac ? '⌘' : 'Alt')
+}
 
 /** `render/heatmap.ts` → `handleKeyDown` and `attach`. Keep in step with them. */
 const CANVAS_KEYS: Array<[string, string]> = [
   ['drag', 'Pan'],
-  ['⌥ / Alt + drag', 'Select a square and open it as a region'],
-  ['⇧ + ⌥ / Alt + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
+  ['{opt} + drag', 'Select a square and open it as a region'],
+  ['{shift} + {opt} + drag', 'The same, pinned to the diagonal from the nearest bin on it'],
   ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
   ['two fingers sideways', 'Back and forward, as anywhere else on the page'],
@@ -48,12 +68,12 @@ const CANVAS_KEYS: Array<[string, string]> = [
 const BROWSER_KEYS: Array<[string, string]> = [
   ['drag', 'Pan along the genome'],
   ['drag on the chromosome bar', 'Select a span, with both ends written out to the base'],
-  ['⌥ / Alt + drag', 'The same selection, over the tracks'],
+  ['{opt} + drag', 'The same selection, over the tracks'],
   ['drag a track’s lower edge', 'Make that track taller or shorter'],
   ['drag a track’s grip', 'Move it up or down the stack'],
   ['double click', 'The whole genome'],
   ['wheel', 'Zoom about the pointer'],
-  ['⌘ / Alt + wheel over a track', 'Raise or lower that track’s ceiling'],
+  ['{ceil} + wheel over a track', 'Raise or lower that track’s ceiling'],
   ['click a chromosome’s name', 'Go to that chromosome'],
   ['click a feature', 'Open its card — names, attributes, exons, and a zoom'],
   ['click a track’s range', 'Type a limit'],
@@ -72,10 +92,35 @@ function keyRow(keys: string, description: string): HTMLElement {
   )
 }
 
+/**
+ * A command's row: its key, its title, and its state where it has one.
+ *
+ * Greyed when the command cannot act, the way the palette greys it — the two
+ * lists are two printings of one registry, and one of them quietly claiming
+ * that `W` shows the whole genome while the other says the session has no
+ * genome to show it for is the kind of disagreement a reader resolves by
+ * pressing the key and distrusting the app.
+ */
+function commandRow(command: Command): HTMLElement {
+  const off = command.enabled === false
+  return el(
+    'div',
+    { class: off ? 'shortcut-row disabled' : 'shortcut-row' },
+    el('kbd', { class: 'kbd', text: keyLabel(command.keys ?? '') }),
+    el('span', { class: 'shortcut-text', text: command.title }),
+    ...stateChip(command),
+  )
+}
+
 export function openShortcuts(commands: Command[], onClose?: () => void): Modal {
   return new Modal({
     title: 'Keyboard shortcuts',
-    variant: 'modal-wide',
+    // Wider than the other wide dialogs, because this one's content is three
+    // columns of short rows: at 46rem the key block was two columns, the View
+    // group's twenty-one rows set the dialog's height on its own, and the two
+    // gesture tables — the part a reader new to a genome browser needs most —
+    // began exactly at the bottom edge with none of their rows showing.
+    variant: 'modal-shortcuts',
     ...(onClose === undefined ? {} : { onClose }),
     body: () => {
       const bound = commands.filter((command) => command.keys !== undefined)
@@ -85,25 +130,29 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
         list.push(command)
         groups.set(command.group, list)
       }
-      // Two blocks, not one flow. The keys are short rows and pack into as many
-      // columns as the dialog is wide; the two gesture tables are the long ones
-      // and are the pair a reader compares — "what does a drag do here, and what
-      // does it do there" — so they are placed side by side rather than left to
-      // fall wherever the group count happens to put them. They used to be
-      // wherever auto-placement dropped them, which meant adding or removing one
-      // command group somewhere else in the app silently reflowed this dialog.
+      // The palette's order (`commands.ts` → `GROUP_ORDER`), so the two lists of
+      // the one registry read the same way round.
+      const ordered = [...groups].sort(([a], [b]) => groupRank(a) - groupRank(b))
+      // Two blocks, not one flow. The keys are short rows and *flow* into as
+      // many columns as the dialog is wide (`.shortcut-grid` is a multi-column
+      // block, so a two-row group is followed by the next group rather than by
+      // a hole the height of the tallest group beside it); the two gesture
+      // tables are the long ones and are the pair a reader compares — "what
+      // does a drag do here, and what does it do there" — so they stay a grid
+      // of two side by side rather than falling wherever the group count
+      // happens to put them.
       return el(
         'div',
         { class: 'shortcut-body' },
         el(
           'div',
           { class: 'shortcut-grid' },
-          ...[...groups].map(([group, list]) =>
+          ...ordered.map(([group, list]) =>
             el(
               'section',
               { class: 'shortcut-group' },
               el('h3', { text: group }),
-              ...list.map((command) => keyRow(keyLabel(command.keys ?? ''), command.title)),
+              ...list.map((command) => commandRow(command)),
             ),
           ),
         ),
@@ -114,13 +163,13 @@ export function openShortcuts(commands: Command[], onClose?: () => void): Modal 
             'section',
             { class: 'shortcut-group' },
             el('h3', { text: 'On a contact map' }),
-            ...CANVAS_KEYS.map(([keys, text]) => keyRow(keys, text)),
+            ...CANVAS_KEYS.map(([keys, text]) => keyRow(gestureKeys(keys), text)),
           ),
           el(
             'section',
             { class: 'shortcut-group' },
             el('h3', { text: 'On the genome browser' }),
-            ...BROWSER_KEYS.map(([keys, text]) => keyRow(keys, text)),
+            ...BROWSER_KEYS.map(([keys, text]) => keyRow(gestureKeys(keys), text)),
           ),
         ),
       )
@@ -151,16 +200,25 @@ export function openAbout(
   onClose?: () => void,
 ): Modal {
   return new Modal({
-    title: '(meta)cooler',
+    // Titled for what it is, like every other dialog. It was the brand, which
+    // `.modal-title` uppercases — and the mark is written *(meta)cooler*
+    // everywhere else, so shouted in caps it read as a different word.
+    title: 'About this viewer',
     ...(onClose === undefined ? {} : { onClose }),
     body: () =>
       el(
         'div',
         { class: 'about-body' },
+        // The one place a reader holding a bigWig and no contact map is told
+        // this application is for them too (§24.2). It was inside the landing
+        // page's drop target, where it was a paragraph that cost the page its
+        // fold (`ui/LoadBox.ts`); said here it is a clause in the sentence that
+        // was already naming what opens.
         el('p', {
           text:
-            'A viewer for .metacool multi-genome Hi-C contact maps, and for the cooler files ' +
-            'they extend. It runs entirely in this page: there is no backend, no upload and no ' +
+            'A viewer for .metacool multi-genome Hi-C contact maps, for the cooler files they ' +
+            'extend, and for the tracks, genomes and 3D models beside them — with or without a ' +
+            'map. It runs entirely in this page: there is no backend, no upload and no ' +
             'preprocessing step.',
         }),
         // Same substitution as `FilePicker.ts`, and for the same reason: the

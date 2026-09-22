@@ -47,6 +47,7 @@ export function shortName(label: string): string {
 export class GenomesView {
   readonly el: HTMLElement
   private readonly filter: HTMLInputElement
+  private readonly toolbar: HTMLElement
   private readonly statusEl = el('div', { class: 'portal-status hidden' })
   private readonly cards = el('div', { class: 'genomes-cards' })
   private genomes: Genome[] = []
@@ -60,13 +61,13 @@ export class GenomesView {
       attrs: { 'aria-label': 'filter the genomes' },
     })
     this.filter.addEventListener('input', () => this.paint())
-    this.el = el(
-      'div',
-      { class: 'genomes' },
-      el('div', { class: 'portal-toolbar' }, this.filter),
-      this.statusEl,
-      this.cards,
-    )
+    // Hidden until there is something to narrow. It used to stand above the
+    // status line whatever the status said, so a store still being read — or one
+    // that failed — offered a box a reader could type into with nothing behind
+    // it (§8.5). The portal fronts of this same drawer hide their whole main
+    // while a status shows; this is that rule, for the one front that did not.
+    this.toolbar = el('div', { class: 'portal-toolbar hidden' }, this.filter)
+    this.el = el('div', { class: 'genomes' }, this.toolbar, this.statusEl, this.cards)
     void this.load()
   }
 
@@ -140,6 +141,7 @@ export class GenomesView {
     this.statusEl.textContent = text
     this.statusEl.classList.toggle('hidden', text === '')
     this.statusEl.classList.toggle('portal-status-error', bad)
+    this.toolbar.classList.toggle('hidden', this.genomes.length === 0)
   }
 
   private paint(): void {
@@ -181,7 +183,7 @@ export class GenomesView {
           ? null
           : iconButton(
               'new-session',
-              `Open ${genome.label} in a new session — the sequence and every track IGV ships for it, in the 1D browser.`,
+              `Open ${genome.label} in a new tab — the sequence and every track IGV ships for it, in the 1D browser.`,
               () => this.props.host.open(session),
               { class: 'btn btn-icon row-verb row-verb-new gallery-card-open', size: 16 },
             ),
@@ -192,7 +194,9 @@ export class GenomesView {
         el('span', { class: 'portal-chip', text: genome.assembly }),
         tracks === '' ? null : el('span', { class: 'portal-chip portal-chip-dim', text: `${tracks} ${tracks === '1' ? 'track' : 'tracks'}` }),
       ),
-      session === null ? el('p', { class: 'hint gallery-card-line', text: 'No session was published for this genome.' }) : null,
+      session === null
+        ? el('p', { class: 'hint gallery-card-line', text: 'IGV published no session for this genome.' })
+        : null,
       genome.files.length === 0
         ? null
         : el(

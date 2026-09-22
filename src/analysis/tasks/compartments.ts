@@ -32,6 +32,7 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { tickedContigs } from '../context'
 import { BALANCE_PARAM } from './shared'
 
 /**
@@ -66,23 +67,36 @@ function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
   return value === 'trans' || value === 'both' ? value : 'cis'
 }
 
-/** The ticked sequence names. `[]` is a state the reader can reach — see below. */
-function tickedNames(params: Params): string[] {
+/**
+ * The ticked sequence names, or `null` for a run that was never asked.
+ *
+ * `[]` and `null` are two answers and this used to collapse them into one:
+ * anything that was not an array read as *nothing ticked*, which is right for
+ * the form — it ticks every box on the way in, so `[]` there is a reader who
+ * pressed **none** — and wrong for everything that does not go through a form.
+ * `metacooler-run compartments file.cool` with no `--sequences` refused itself,
+ * naming a control the shell has not got, and the README's own example did it.
+ * Unanswered is every sequence (§18.2), which is the genome-wide call this task
+ * exists for.
+ */
+function tickedNames(params: Params): string[] | null {
   const value = params.sequences
-  return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : []
+  if (Array.isArray(value)) {
+    return value.filter((name): name is string => typeof name === 'string')
+  }
+  return typeof value === 'string' && value.trim() !== '' ? [value.trim()] : null
 }
 
 /** The ticked sequences, as rows of the contigs table. */
 function ticked(context: AnalysisContext, params: Params): ContextContig[] {
-  const names = new Set(tickedNames(params))
-  return context.contigs.filter((contig) => names.has(contig.name))
+  return tickedContigs(context, params, 'sequences')
 }
 
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequences',
     key: 'sequences',
-    label: 'Sequences',
+    label: 'sequences',
     /**
      * **Several**, and every one of them ticked to begin with.
      *
@@ -102,12 +116,14 @@ const PARAMS: readonly ParamSpec[] = [
      * beside the list, since the two states worth reaching quickly are all of
      * them and one of them.
      */
-    hint: 'One correlation over all of them, cis and trans. Ticking one gives that chromosome alone.',
+    hint:
+      'One correlation over all of them, cis and trans, where ticking one gives that chromosome ' +
+      'alone.',
   },
   {
     kind: 'choice',
     key: 'contacts',
-    label: 'Contacts',
+    label: 'contacts',
     /**
      * **Cis by default**, and the reason is what a default is for: the answer
      * most readers want, at a price most files can pay. A per-chromosome
@@ -139,17 +155,17 @@ const PARAMS: readonly ParamSpec[] = [
     options: [
       {
         value: 'cis',
-        label: 'Cis only',
+        label: 'cis only',
         hint: 'One correlation per sequence, over its own contacts. The cheapest, and per chromosome.',
       },
       {
         value: 'both',
-        label: 'Cis and trans',
+        label: 'cis and trans',
         hint: 'One correlation over everything ticked. Each half keeps its own expectation.',
       },
       {
         value: 'trans',
-        label: 'Trans only',
+        label: 'trans only',
         hint: 'Between sequences alone, so no distance decay enters the answer. Needs two or more.',
       },
     ],
@@ -157,7 +173,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'ignoreDiags',
-    label: 'Diagonals to ignore',
+    label: 'diagonals to ignore',
     /**
      * cooltools' `ignore_diags`, spelled the same way and meaning the same
      * thing: `0` keeps every cell, `1` drops the main diagonal, `2` drops it and
@@ -183,7 +199,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'components',
-    label: 'Components',
+    label: 'components',
     hint: 'E1 is the compartment track; E2 and E3 occasionally say something.',
     default: 1,
     min: 1,
@@ -194,7 +210,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'featureSet',
     key: 'phaseFeatures',
-    label: 'Phase by gene density',
+    label: 'phase by gene density',
     optional: true,
     noneLabel: 'Do not use a gene model',
     hint: 'Positive is made to mean the compartment these features are dense in.',
@@ -203,7 +219,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'sequence',
     key: 'phaseSequence',
-    label: 'Phase by GC content',
+    label: 'phase by GC content',
     optional: true,
     noneLabel: 'Do not use a sequence',
     hint: 'Used when no gene model is chosen.',
@@ -212,7 +228,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'minR',
-    label: 'Least convincing correlation',
+    label: 'least convincing correlation',
     hint: 'Below this the sign is left alone and the drawer says the phasing was ambiguous.',
     default: 0.1,
     min: 0,
@@ -224,7 +240,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'toggle',
     key: 'saddle',
-    label: 'Also draw the saddle',
+    label: 'draw the saddle',
     hint: 'The compartment claim in one square, with AA, BB and AB under it.',
     default: true,
     section: 'Saddle',
@@ -232,7 +248,7 @@ const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
     key: 'quantiles',
-    label: 'Quantile groups',
+    label: 'quantile groups',
     default: 50,
     min: 5,
     max: 100,
@@ -346,8 +362,7 @@ function estimateCis(
       `${usable.length.toLocaleString()} ${usable.length === 1 ? 'sequence' : 'sequences'}, one ` +
       `correlation each — up to ${(bytes / 1e6).toFixed(0)} MB held at once, over at most ` +
       `${widest.toLocaleString()} bins. ` +
-      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped. ` : ''}` +
-      'Progress is reported per sequence and it can be cancelled at any point.',
+      `${skipped > 0 ? `${skipped.toLocaleString()} too large to correlate and skipped.` : ''}`,
   }
 }
 
@@ -361,7 +376,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        tickedNames(params).length === 0
+        (tickedNames(params) ?? []).length === 0
           ? 'Tick at least one sequence. All of them is the genome-wide compartment call.'
           : 'None of the ticked sequences is in this file.',
     }
@@ -441,8 +456,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: reads * (balance ? 5 : 4),
     bytes,
     note:
-      `${tooFine}${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build it ` +
-      'from. Progress is reported as it goes and it can be cancelled at any point.',
+      `${tooFine}${note} ${reads.toLocaleString()} dense ${reads === 1 ? 'read' : 'reads'} to build ` +
+      'it from.',
   }
 }
 

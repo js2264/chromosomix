@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { FEATURE_MIN_PAD, findFeatures, paddedSpan } from '@/annotations/search'
+import { FEATURE_MIN_PAD, findFeatures, hitLocus, paddedSpan } from '@/annotations/search'
 import { AnnotationStore } from '@/annotations/store'
 import { FeatureBuilder } from '@/annotations/featureset'
 import { featureSuggestions } from '@/ui/SearchBox'
@@ -165,9 +165,26 @@ describe('a hit as a region a map can open', () => {
     expect(parseRegionString(suggestion.value)).toEqual(['chrI', 750, 2250])
   })
 
-  it('names the gene, where it is, and which file said so', () => {
+  /**
+   * **The label is the gene, not the window.** It printed `hit.start`, which is
+   * the padded window's start — `chrI:4,950` for a gene beginning at 5,001 —
+   * so the number a biologist reads as the gene's coordinate, and copies into a
+   * primer tool or a paper, was a quarter of the gene's length early and a base
+   * off the locus box the click then filled. It is the feature's own span, in
+   * the display form (§26.1), and the same string in both surfaces' lists.
+   */
+  it('names the gene, where the gene is, and which file said so', () => {
     const { store } = storeWith(genes())
-    expect(featureSuggestions(store, 'gal80')[0].label).toBe('GAL80 · chrI:4,950 · genes')
+    expect(featureSuggestions(store, 'gal80')[0].label).toBe('GAL80 · chrI:5,001-5,100 · genes')
+  })
+
+  it('carries the feature’s own bounds beside the padded window', () => {
+    const { store } = storeWith(genes())
+    const [gal80] = findFeatures(store, 'gal80')
+    expect([gal80.featureStart, gal80.featureEnd]).toEqual([5000, 5100])
+    expect(hitLocus(gal80)).toBe('chrI:5,001-5,100')
+    // …and the window it opens is still padded, which is a different question.
+    expect([gal80.start, gal80.end]).toEqual([4950, 5150])
   })
 
   it('prints the accession beside the symbol, where the file gave both', () => {
@@ -175,7 +192,7 @@ describe('a hit as a region a map can open', () => {
     build.add('chrI', 1000, 2000, { name: 'LipL1', id: 'PF3D7_1314600' })
     const { store } = storeWith(build.finish(), 'genes')
     expect(featureSuggestions(store, 'lipl')[0].label).toBe(
-      'LipL1 (PF3D7_1314600) · chrI:750 · genes',
+      'LipL1 (PF3D7_1314600) · chrI:1,001-2,000 · genes',
     )
   })
 })

@@ -50,7 +50,7 @@ export function balancedByDefault(context: AnalysisContext): boolean {
 export const BALANCE_PARAM: ToggleParam = {
   kind: 'toggle',
   key: 'balance',
-  label: 'Use balancing weights',
+  label: 'use balancing weights',
   default: false,
   derive: balancedByDefault,
 }

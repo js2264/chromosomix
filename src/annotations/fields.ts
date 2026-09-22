@@ -128,7 +128,7 @@ export function featureFields(
       key: FIELD_BASE,
       label: 'substituted base',
       kind: 'base',
-      hint: 'The base the record substitutes to, so the lane agrees in a column with the sequence and the pile (§8.14). A variant lane’s default.',
+      hint: 'The base the record substitutes to, so the lane agrees in a column with the sequence and the pile. A variant lane’s default.',
     })
   }
   out.push({

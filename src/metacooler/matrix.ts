@@ -13,6 +13,7 @@
  *    feature rather than erroring.
  */
 
+import { fmt } from '../units'
 import {
   DENSE_MATRIX_BIN_LIMIT,
   DEVICE_MEMORY_FALLBACK_GIB,
@@ -225,7 +226,7 @@ export function checkBrowserDenseSize(
     throw new ViewerError(
       'dense-too-large',
       `Refusing to load a ${nRows}×${nCols} block: its ${fmtCells(cells)} values are ` +
-        `${fmtBytes(cells * 4)} and a browser serves at most ${fmtBytes(MAX_DENSE_ARRAY_BYTES)} ` +
+        `${fmt.bytes(cells * 4)} and a browser serves at most ${fmt.bytes(MAX_DENSE_ARRAY_BYTES)} ` +
         'in a single array — a limit of the tab, not of this machine, so more memory and more ' +
         `patience will not lift it. The largest square block is about ${side}×${side} bins.` +
         (hint === '' ? '' : ` ${hint}`),
@@ -240,15 +241,11 @@ export function checkBrowserDenseSize(
   throw new ViewerError(
     'dense-too-large',
     `Refusing to load a ${nRows}×${nCols} block in a browser tab: ${fmtCells(cells)} cells ` +
-      `needs about ${fmtBytes(bytes)}, and this tab is budgeting ${fmtBytes(budget)}. ${hint}`,
+      `needs about ${fmt.bytes(bytes)}, and this tab is budgeting ${fmt.bytes(budget)}. ${hint}`,
     { nRows, nCols, cells, bytes, budget, where: 'browser' },
   )
 }
 
-/** `1.6e9` → `1.6 GB`; small enough numbers get MB. */
-function fmtBytes(bytes: number): string {
-  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`
-}
 
 /** `2.5e9` → `2.5 billion`, for a sentence rather than a table. */
 function fmtCells(cells: number): string {
@@ -659,7 +656,7 @@ function allocateDense(nRows: number, nCols: number, hint: string): Float32Array
     throw new ViewerError(
       'dense-too-large',
       `This machine could not allocate the ${nRows}×${nCols} block: ${fmtCells(cells)} cells ` +
-        `is ${fmtBytes(cells * 4)} in one array, and the request was refused. ${hint}`,
+        `is ${fmt.bytes(cells * 4)} in one array, and the request was refused. ${hint}`,
       { nRows, nCols, cells, bytes: cells * 4, where: 'allocation', cause: String(cause) },
     )
   }

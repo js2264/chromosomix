@@ -211,13 +211,19 @@ export class MetadataCard {
     if (kept) this.picker.value = held
     const shownLevel = level === null ? null : LEVEL_LABELS[level]
     this.picker.disabled = offered === 0
+    // **The level is said only when it refuses something.** With nothing out of
+    // reach the note read `a cell of this view is one bin` — a true sentence
+    // with no consequence, under an add row, on every bin-level view: the
+    // reader is told the rule that governs a refusal that is not happening and
+    // is left looking for what it wants of them. LEVEL_LABELS exists for the
+    // sentence that explains a refusal (§8.12), and that is where it stays.
     this.note.textContent =
       columns.length === 0
         ? ''
         : shownLevel === null
           ? 'open a map to draw one of these beside it'
           : refused === 0
-            ? `a cell of this view is ${shownLevel}`
+            ? ''
             : `a cell of this view is ${shownLevel}, so ${refused} finer ${
                 refused === 1 ? 'column is' : 'columns are'
               } out of reach here`
@@ -434,7 +440,7 @@ export class MetadataCard {
       entry.visible ? 'eye' : 'eye-off',
       entry.visible ? 'Hide, keeping the settings' : 'Show again',
       () => this.options.store.update(entry.id, { visible: !entry.visible }),
-      { class: `btn btn-icon ann-eye${entry.visible ? '' : ' is-off'}`, size: 14 },
+      { class: 'btn btn-icon ann-eye', size: 14 },
     )
     node.setAttribute('aria-pressed', String(entry.visible))
     return node
@@ -454,8 +460,11 @@ export class MetadataCard {
       'div',
       { class: 'ann-inline' },
       el('span', { class: 'field-label', text: 'export' }),
+      // Bordered, like every other action in the app: a quiet button beside
+      // bordered ones reads as a lesser kind of control, and writing the column
+      // out is not a lesser thing to do than anything else on this row (§26.6).
       button('TSV', () => this.options.onExport(entry), {
-        class: 'btn btn-quiet',
+        class: 'btn',
         title: 'The column as the file wrote it: one row per unit, named, under a ‘#’ header.',
       }),
     )

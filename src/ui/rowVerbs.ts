@@ -59,14 +59,14 @@ export function withNewMark(node: HTMLButtonElement): HTMLButtonElement {
 }
 
 function addTitle(verbs: RowVerbs): string {
-  if (verbs.tabEmpty) return `Open ${verbs.label} in this session, which is empty.`
+  if (verbs.tabEmpty) return `Open ${verbs.label} in this tab, which is empty.`
   return verbs.kind === 'map'
-    ? `Add ${verbs.label} to this session, beside the map in front as a panel of the deck.`
-    : `Add ${verbs.label} to this session, as a track.`
+    ? `Add ${verbs.label} to this tab, beside the map in front as a panel of the deck.`
+    : `Add ${verbs.label} to this tab, as a track.`
 }
 
 function newTitle(verbs: RowVerbs): string {
   if (verbs.kind === 'workspace') return `Open ${verbs.label} — a saved session — as its own tab.`
-  if (verbs.tabEmpty) return `Open ${verbs.label} in a new session — this one, since it is empty.`
-  return `Open ${verbs.label} in a new session. The one in front is left as it is.`
+  if (verbs.tabEmpty) return `Open ${verbs.label} in a new tab — this one, since it is empty.`
+  return `Open ${verbs.label} in a new tab — the one in front is left as it is.`
 }

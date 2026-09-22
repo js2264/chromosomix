@@ -40,6 +40,7 @@ import {
   isColormap,
 } from '../render/colormaps'
 import { el, fmt, trimNumber } from './dom'
+import { axisNumber, resolutionLabel } from '../units'
 import { scaleFont, subscribeTextScale } from './textScale'
 import { parseFont } from './vector'
 
@@ -280,13 +281,9 @@ function trimZeros(text: string): string {
   return text.includes('.') ? text.replace(/\.?0+$/, '') : text
 }
 
-/**
- * `1e6`, not `1.000e+6`. A tick label is a magnitude, and on the 1-2-5 ladder
- * the mantissa never needs more than two digits.
- */
+/** Through `units.axisNumber`, which is where an axis tick's magnitude is spelled. */
 function exponentLabel(value: number): string {
-  const [mantissa, power] = value.toExponential(2).split('e')
-  return `${trimZeros(mantissa)}e${Number(power)}`
+  return axisNumber(value)
 }
 
 /**
@@ -1805,7 +1802,7 @@ export function profileCurve(output: ProfileOutput): CurveOutput {
         ...(banded ? { low, high } : {}),
       },
     ],
-    xLabel: `bin (${fmt.bp(output.binsize)} each)`,
+    xLabel: `bin (${resolutionLabel(output.binsize)} each)`,
     yLabel: output.unit === '' ? output.label : `${output.label} (${output.unit})`,
     xScale: 'linear',
     yScale: 'linear',

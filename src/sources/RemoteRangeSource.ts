@@ -233,11 +233,10 @@ export class RemoteRangeSource implements ByteSource {
       }
       throw new ViewerError(
         'remote-compressed',
-        `${host} is serving ${url} with \`Content-Encoding: ${encoding}\`, so byte ranges ` +
-          'address the compressed stream rather than the file. The viewer cannot read it a ' +
-          'slice at a time. Serve it without transfer compression — object storage (S3, R2, ' +
-          'GCS) does that by default for application/octet-stream; GitHub Pages does not and ' +
-          'offers no way to turn it off.',
+        // The diagnosis only; see the sibling refusal above. The advice under it
+        // already names object storage and GitHub Pages, word for word.
+        `${host} is serving ${url} with “Content-Encoding: ${encoding}”, so byte ranges ` +
+          'address the compressed stream rather than the file.',
         { url, host, encoding, encodedLength: numberHeader(head, 'content-length') },
       )
     }
@@ -264,11 +263,14 @@ export class RemoteRangeSource implements ByteSource {
     if (probe.status !== 206) {
       throw new ViewerError(
         'remote-no-ranges',
-        `${host} does not serve HTTP range requests: a \`Range: bytes=0-0\` request for ` +
-          `${url} returned ${probe.status}, not 206 Partial Content. The viewer reads ` +
-          'remote files a slice at a time and cannot download a whole file to open it. ' +
-          'Host the file on storage that advertises `Accept-Ranges: bytes` (S3, R2 and ' +
-          'GCS all do); GEO and SRA download endpoints do not.',
+        // **The diagnosis, and only the diagnosis.** What to do about it is the
+        // advice `ui/ErrorView.ts` prints directly underneath, and this said the
+        // same two things first, in different words: the reader was told that the
+        // viewer reads in slices and where to host the file, twice, an inch
+        // apart. What the advice cannot know is which host, which URL and what
+        // came back instead of a 206, so that is what stays here.
+        `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
+          `${url} returned ${probe.status}, not 206 Partial Content.`,
         { url, host, status: probe.status },
       )
     }
@@ -278,8 +280,8 @@ export class RemoteRangeSource implements ByteSource {
       throw new ViewerError(
         'remote-cors',
         `${host} serves ranges for ${url} but does not expose its size to this page: ` +
-          'neither `Content-Length` nor `Content-Range` was readable. Add both to the ' +
-          "bucket's CORS `Access-Control-Expose-Headers`.",
+          'neither “Content-Length” nor “Content-Range” was readable. Add both to the ' +
+          'bucket’s CORS “Access-Control-Expose-Headers”.',
         { url, host },
       )
     }
@@ -528,10 +530,10 @@ export class RemoteRangeSource implements ByteSource {
       throw new ViewerError(
         'remote-compressed',
         `${hostOf(this.url)} answered a request for bytes ${from}-${to} of ${this.url} with ` +
-          `\`Content-Range: ${contentRange}\` — ${claimed.end - claimed.start + 1} octets — but ` +
+          `“Content-Range: ${contentRange}” — ${claimed.end - claimed.start + 1} octets — but ` +
           `the body is ${body.byteLength}. The response was re-encoded in transit (transfer ` +
           'compression), so ranges do not address the file. Serve it without ' +
-          '`Content-Encoding`, or download it and drop it here.',
+          '“Content-Encoding”, or download it and drop it here.',
         {
           url: this.url,
           from,
@@ -634,10 +636,10 @@ async function failCrossOrigin(
     throw new ViewerError(
       'remote-cors',
       `${host} is reachable but refused a cross-origin read of ${url} (${detail}). ` +
-        'That is what a missing `Access-Control-Allow-Origin` looks like from a browser: ' +
+        'That is what a missing “Access-Control-Allow-Origin” looks like from a browser: ' +
         'the failure has no status and no headers. Configure the bucket to allow GET and ' +
-        'HEAD and the `Range` request header, and to expose `Content-Length` and ' +
-        '`Content-Range`.',
+        'HEAD and the “Range” request header, and to expose “Content-Length” and ' +
+        '“Content-Range”.',
       { url, host, cause: detail, reachable: true },
     )
   }

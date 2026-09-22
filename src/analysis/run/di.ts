@@ -29,21 +29,26 @@
 
 import { FeatureBuilder } from '../../annotations/featureset'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
 import { directionBorders, directionalityIndex } from '../di'
 import { domainsBetween, type Boundary } from '../insulation'
 import {
   boolParam,
-  contigIdFor,
   numParam,
   readsAsCircular,
-  strParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
 import { windowBinsOf } from '../tasks/di'
 import type { IntervalsOutput, ProfileOutput, TaskOutput } from '../types'
-import { bandFor, displayableContigs, spanOfContig, usableBlock, type Span } from './blocks'
+import {
+  bandFor,
+  missingSequencesNote,
+  spanOfContig,
+  tickedContigIds,
+  usableBlock,
+  type Span,
+} from './blocks'
 import { formatBp } from './labels'
 
 /** One sequence this run will score. */
@@ -58,36 +63,32 @@ interface Unit {
 /**
  * The sequences to score.
  *
- * A region names a *sequence* and not a window of one, for the reason
- * `run/insulation.ts` gives: the index is a sum over a window that reaches
- * outside whatever happened to be on screen, so a score taken from a sub-window
- * and labelled `chrIV` is a different quantity wearing the same name.
+ * Whole sequences, never a window of one, for the reason `run/insulation.ts`
+ * gives: the index is a sum over a window that reaches outside whatever happened
+ * to be on screen, so a score taken from a sub-window and labelled `chrIV` is a
+ * different quantity wearing the same name. That is what the tick boxes say and
+ * a locus box could not.
  */
-function planUnits(job: JobContext, region: string): Unit[] {
+function planUnits(job: JobContext, names: readonly string[] | null): {
+  units: Unit[]
+  missing: string[]
+} {
   const mc = job.mc
   const lengths = mc.chromsizes
-  const unitFor = (cid: number): Unit | null => {
+  const { ids, missing } = tickedContigIds(mc, names)
+  const units: Unit[] = []
+  for (const cid of ids) {
     const span = spanOfContig(mc, cid)
-    if (span === null) return null
+    if (span === null) continue
     const name = mc.chromnames[cid]
-    return {
+    units.push({
       name,
       span,
       length: lengths.get(name) ?? (span.to - span.from) * mc.binsize,
       circular: readsAsCircular(job, name),
-    }
+    })
   }
-  if (region !== '') {
-    const cid = contigIdFor(mc, parseRegionString(region)[0])
-    const unit = cid < 0 ? null : unitFor(cid)
-    return unit === null ? [] : [unit]
-  }
-  const out: Unit[] = []
-  for (const cid of displayableContigs(mc)) {
-    const unit = unitFor(cid)
-    if (unit !== null) out.push(unit)
-  }
-  return out
+  return { units, missing }
 }
 
 export const runDi: TaskRunner = async (job) => {
@@ -119,16 +120,15 @@ export const runDi: TaskRunner = async (job) => {
     )
   }
 
-  const region = strParam(job.params, 'region', '').trim()
-  const planned = planUnits(job, region)
-  if (region !== '' && planned.length === 0) {
-    job.note(
-      `This file has no sequence called ${parseRegionString(region)[0]}, under that spelling or ` +
-        `any this viewer knows of (§5.9). It has ` +
-        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
-    )
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to score.')
     return []
   }
+  const { units: planned, missing } = planUnits(job, ticked)
+  const said = missingSequencesNote(job.mc, missing, planned.length)
+  if (said !== null) job.note(said)
+  if (planned.length === 0) return []
 
   // Twice the window, on a line and on a circle alike. A linear sequence needs a
   // whole window each side of at least one bin; a circular one needs the two
@@ -188,7 +188,7 @@ export const runDi: TaskRunner = async (job) => {
     // that is not a domain edge.
     if (call) calls.push({ unit, borders: directionBorders(local, { prominence, spacing }) })
   }
-  job.progress(units.length, units.length, 'Done')
+  job.progress(units.length, units.length, 'done')
 
   if (circularUnits > 0) {
     job.note(

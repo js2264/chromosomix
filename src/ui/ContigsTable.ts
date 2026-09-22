@@ -14,11 +14,11 @@
  */
 
 import type { AnnotationStore } from '../annotations/store'
-import type { Assembly } from '../genome/assembly'
+import { typedLocusToRegion, type Assembly } from '../genome/assembly'
 import { payloadColumnIsText, type ContigsResult } from '../worker/protocol'
 import { button, el, fmt } from './dom'
 import { KEYS, keyedButton, withKey } from './commands'
-import { SearchBox } from './SearchBox'
+import { SearchBox, locusPlaceholder } from './SearchBox'
 import { SequenceBar, type SequenceBarProps } from './SequenceBar'
 import { VirtualTable, type ColumnDef, type VirtualTableOptions } from './VirtualTable'
 
@@ -32,6 +32,23 @@ export interface ContigsTableOptions {
   hideColumns?: string[]
   title?: string
   hint?: string
+  /**
+   * What one row is called, on *this file*: a chromosome, or a contig.
+   *
+   * **The vocabulary follows the file** (§3.6, §9): a cooler's sequences are
+   * chromosomes and a metacool's are contigs, and the crumb and this table's own
+   * title have said so for as long as they have existed. The strings inside it
+   * had not — the filter box said `search contig names…` and the empty state
+   * `No contigs match these filters.` under a heading reading **Chromosomes**,
+   * over a summary line calling them sequences. Three nouns for sixteen yeast
+   * chromosomes on one screen reads as three different lists.
+   *
+   * Only where the surface is about the file's own table. `sequence` stays the
+   * neutral word everywhere a component is shared between file kinds — the bar's
+   * summary line, the Sequences card, the locus placeholders — because there the
+   * word has to be true of both.
+   */
+  noun?: string
   /** Restores the filters, search and sort a user left behind (`state/UiMemory`). */
   persistence?: VirtualTableOptions['persistence']
   onOpenContig(name: string): void
@@ -114,18 +131,28 @@ export class ContigsTable {
   constructor(options: ContigsTableOptions) {
     const payload = options.data.table
     const names = payload.data['name'] as string[]
+    const noun = options.noun ?? 'contig'
     const hidden = new Set(options.hideColumns ?? [])
     const ordered = [
       ...CORE_ORDER.filter((name) => payload.columns.includes(name)),
       ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
     ].filter((name) => !hidden.has(name))
 
+    // The first column the file's creator joined in, marked so the header shows
+    // where the format's own two end — the same break the record card draws.
+    const firstJoined = ordered.find((name) => !CORE_ORDER.includes(name))
     const columns: ColumnDef[] = ordered.map((name) => {
       const column = payload.data[name]
+      const joined = name === firstJoined ? { joined: true } : {}
+      const note = CORE_ORDER.includes(name)
+        ? {}
+        : { title: `${name} — joined in with the file, not part of the format` }
       if (payloadColumnIsText(column)) {
         return {
           key: name,
           label: name,
+          ...note,
+          ...joined,
           kind: 'string',
           width: name === 'name' ? 'minmax(12rem, 1.4fr)' : 'minmax(7rem, 1fr)',
           value: (row) => (column[row] === '' ? undefined : column[row]),
@@ -134,6 +161,8 @@ export class ContigsTable {
       return {
         key: name,
         label: name,
+        ...note,
+        ...joined,
         kind: 'number',
         align: 'right',
         width: 'minmax(6rem, 0.7fr)',
@@ -157,7 +186,7 @@ export class ContigsTable {
         kind: 'string',
         width: '5.5rem',
         title:
-          'Tick a sequence that joins its own ends — a plasmid, a mitochondrion, a bacterial ' +
+          `Tick a ${noun} that joins its own ends — a plasmid, a mitochondrion, a bacterial ` +
           'chromosome. The map then slides past its end and back on at its beginning, a window ' +
           'may be typed across the junction, and every cis analysis measures separation the short ' +
           'way round. Nothing in a .cool can say this, so it is the reader who does.',
@@ -205,12 +234,18 @@ export class ContigsTable {
       onSelect: (rows) => {
         show.disabled = rows.length === 0
         none.disabled = rows.length === 0
+        // One is named, for the reason the genomes table names one: a name says
+        // what is about to open and `show 1 selected →` is arithmetic.
         show.textContent =
-          rows.length > 0 ? `show ${fmt.int(rows.length)} selected →` : 'show selected →'
+          rows.length === 1
+            ? `show ${names[rows[0]]} →`
+            : rows.length > 1
+              ? `show ${fmt.int(rows.length)} selected →`
+              : 'show selected →'
       },
       searchKeys: ['name'],
-      searchPlaceholder: 'search contig names…',
-      emptyMessage: 'No contigs match these filters.',
+      searchPlaceholder: `filter ${noun} names…`,
+      emptyMessage: `No ${noun}s match these filters.`,
       ...(options.persistence === undefined ? {} : { persistence: options.persistence }),
       onOpen: (row) => options.onOpenContig(names[row]),
     })
@@ -255,13 +290,26 @@ export class ContigsTable {
         go === undefined
           ? null
           : new SearchBox({
-              placeholder: 'contig, or contig:start-end',
+              // One builder for every locus box (§26.6), with the example taken
+              // from this file's own first sequence rather than from a `chrIV`
+              // it may not contain.
+              placeholder: locusPlaceholder({
+                first: names[0],
+                accepts: { sequence: true },
+              }),
               title:
-                'Open a window inside a sequence without opening the whole of it first — ' +
-                'chrIV:1,200,000-1,210,000. Coordinates are 0-based and half-open, as in ' +
-                'cooler. The same box the / key opens.',
+                `Open a window inside one ${noun} without opening the whole of it first — ` +
+                `${names[0] ?? 'contig'}:1,200,001-1,210,000. Coordinates are 1-based and ` +
+                'inclusive, as IGV and samtools write them. The same box the / key opens.',
+              // The button every other locus box in the application has. Enter
+              // has always submitted; a reader who has learnt that `go` and
+              // Enter are the same thing on four surfaces found the fifth
+              // offering no way to press it with a mouse (§26.6).
+              go: true,
+              // 1-based inclusive in, the machine form out (§26.1) — see the
+              // genomes table's twin, which had the same two bases on it.
               onSubmit: (text) => {
-                if (text !== '') go(text)
+                if (text !== '') go(typedLocusToRegion(text))
               },
             })
     }
@@ -294,14 +342,15 @@ export class ContigsTable {
                 class: 'hint',
                 text:
                   options.hint ??
-                  // 0-based and half-open, because that is what the reader does:
-                  // cooler's `parse_region` applies no 1-based conversion despite
-                  // the UCSC-looking syntax, and `metacooler/range.ts` mirrors the
-                  // code rather than the docstrings. Saying "1-based" here put
-                  // every hand-typed start one base off the region the CLI would
-                  // load.
-                  'Click a contig to open it as a region. Add coordinates in the region box ' +
-                    'to narrow it further (contig:start-end, 0-based and half-open, as in cooler).',
+                  // **1-based and inclusive**, which is what every reader of
+                  // this box already types: what they paste comes from IGV, from
+                  // samtools or off this app's own map, and all three write a
+                  // locus that way (§26.1). The box converts to the half-open
+                  // interval the region reader and the CLI take, so the hint no
+                  // longer has to teach a reader which of two bases they are in
+                  // — it used to, and the two other boxes on the same screen
+                  // taught the other one.
+                  `Click a ${noun} to open it as a region, or name a window in the box.`,
               }),
               ...(this.locus === null ? [] : [this.locus.el]),
             ]),

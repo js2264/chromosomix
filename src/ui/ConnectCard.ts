@@ -27,21 +27,33 @@
  *
  * ## Which providers are offered
  *
- * `ui/connectFronts.ts` decides, because the landing page's row of *mount a
+ * `ui/connectFronts.ts` decides, because the landing page's row of *connect a
  * folder* buttons offers the same places and the answer must not be able to
  * differ between the two doors. The standalone build has an opaque origin, so
  * every remote read fails before a byte moves (§19): it offers this machine
- * and nothing else. The desktop build cannot register a Google sign-in against
- * `app://viewer`, so its Drive pane says why there is no sign-in — a tile the
- * landing page's buttons therefore leave out and this dialog keeps. Each
- * provider's section decides the rest for itself.
+ * and nothing else. A sign-in the build or the site cannot make — the desktop
+ * build, which cannot register `app://viewer` with Google, or a site built
+ * without the client id or the app key — keeps its **tile** here, whose pane
+ * says why there is no sign-in, and loses its **button** on the landing page,
+ * because a row of things to press is not where a reader is sent to read an
+ * explanation (§24.2). Each provider's section decides the rest for itself.
+ *
+ * ## Every pane is headed by its own tile's name
+ *
+ * *This machine*, *A bucket*, *Google Drive*, *Dropbox* — the label the tile
+ * above it carries and nothing else. Two of the four used to be imperatives —
+ * *Connect to your Dropbox* under a tile reading *Dropbox* — and a tab that
+ * renames its own subject on being pressed reads as a further step rather than
+ * as the thing pressed. What the pane is *for* is the dialog's title.
  *
  * ## The two panes that sign a reader in
  *
  * Google Drive and Dropbox are each a title, a `?` at the far right of the
  * same line, and one large sign-in button under it (`ui/connectHead.ts`):
  * what the grant is and where the token goes is behind the `?`, and the only
- * things on the pane itself are the ones a reader acts on.
+ * things on the pane itself are the ones a reader acts on. The button says
+ * *sign in to Google* / *sign in to Dropbox*, in the words the landing page's
+ * own button said one press earlier.
  */
 
 import { Modal } from './Modal'
@@ -79,7 +91,9 @@ export interface ConnectProps {
 
 export function openConnect(props: ConnectProps): Modal {
   return new Modal({
-    title: 'Open a local/remote folder',
+    // Named for what it does, in the word the landing page's heading, the
+    // panes' buttons and the Files column all use (§26.4).
+    title: 'Connect a folder',
     variant: 'modal-wide',
     ...(props.onClose === undefined ? {} : { onClose: props.onClose }),
     body: (close) => connectBody(props, close),
@@ -96,10 +110,10 @@ interface Provider extends ProviderFront {
  *
  * Which places exist is `ui/connectFronts.ts`'s, because the landing page's
  * row of buttons asks the same question (§24.2); what a place *is to do* is
- * here, because that is the dialog. `works` is not consulted: the Drive tile
- * stays on the desktop build, where its pane is the sentence saying why there
- * is no sign-in — see that module's header on why the two doors read the same
- * fact differently.
+ * here, because that is the dialog. `works` is not consulted: a tile whose
+ * sign-in this build or this site cannot make stays, because its pane is the
+ * sentence saying why — see that module's header on why the two doors read the
+ * same fact differently.
  */
 export function providers(): Provider[] {
   const panes: Record<ProviderId, (done: (id: string) => void) => HTMLElement> = {
@@ -177,7 +191,7 @@ function localSection(done: (id: string) => void): HTMLElement {
   return el(
     'div',
     { class: 'connect-section' },
-    connectHead('A folder on this machine', 'hard-drive', localHelp(granted)),
+    connectHead('This machine', 'hard-drive', localHelp(granted)),
     // The one large button the two sign-in panes have, because this pane is
     // the same shape as theirs: one thing to press, and everything worth
     // knowing before pressing it behind the `?`. The label is the front's, and
@@ -200,7 +214,7 @@ function localHelp(granted: boolean): string[] {
       'and no byte of it is sent anywhere.',
     granted
       ? 'The browser keeps permission to list the folder across reloads; take it back any time ' +
-        'under About → what is stored.'
+        'under What this browser is remembering (Ctrl+P → Help).'
       : 'This browser cannot keep that permission, so what you get is a snapshot of the file list ' +
         'for this visit only — it does not update and it does not survive a reload. Chrome, Edge ' +
         'and the desktop app keep the connection.',
@@ -258,7 +272,7 @@ function bucketHelp(): Array<string | HTMLElement> {
   ]
 }`,
     ),
-    'For private data, leave that policy off and put a key under Additional settings instead: an ' +
+    'For private data, leave that policy off and put a key under additional settings instead: an ' +
       'IAM user with those same two actions on this prefix and nothing else. The region is part ' +
       'of the signature, so a wrong one is a 403.',
     'A key is kept in this browser and signs requests from this page, so anything able to run ' +
@@ -284,7 +298,7 @@ function bucketHelp(): Array<string | HTMLElement> {
  * than offering a box only its maintainer could fill.
  */
 function drivePane(done: (id: string) => void): HTMLElement {
-  const head = connectHead('Connect to your Google Drive', 'googledrive', driveHelp())
+  const head = connectHead('Google Drive', 'googledrive', driveHelp())
 
   if (!GOOGLE_SIGN_IN_AVAILABLE) {
     return el(
@@ -317,7 +331,7 @@ function drivePane(done: (id: string) => void): HTMLElement {
       return
     }
     const signIn = signInButton(
-      state.expiresAt !== null ? 'sign in again' : 'sign in with Google',
+      state.expiresAt !== null ? 'sign in again' : 'sign in to Google',
       'googledrive',
       () => {
         error.textContent = ''
@@ -391,8 +405,8 @@ function driveHelp(): string[] {
       'page does not know which account it is.',
     'A folder is listed with that account, one level at a time, in the Files panel. Paste the ' +
       'address bar of a folder open in Drive — a shared drive works the same way — or its id; ' +
-      'an empty box is all of My Drive. Only the folder’s name and id are kept, under About → ' +
-      'what is stored.',
+      'an empty box is all of My Drive. Only the folder’s name and id are kept, under What this ' +
+      'browser is remembering (Ctrl+P → Help).',
   ]
 }
 
@@ -405,8 +419,17 @@ function clock(at: number): string {
  * The claim, restated where the grant is actually being made.
  *
  * The picker says it on the first screen and the About dialog says it in full;
- * this is the one moment a reader hands over something wider than a single file,
- * so it is worth the four lines.
+ * this is the one moment a reader hands over something wider than a single
+ * file, so it is worth saying again here.
+ *
+ * It is drawn once for the dialog rather than per pane, so its body has to be
+ * true of every pane it sits under. It used to name only *a folder* and *a
+ * bucket* — which, under a Dropbox sign-in, was a reassurance about two other
+ * panes, and a privacy line that does not fit the pane it is on reads as
+ * boilerplate. One clause covers all four: whatever is connected is read from
+ * where it stands, by this page, with nothing of ours in the middle. Which
+ * grant each sign-in actually makes, and where the token lives, is on that
+ * pane's own `?` (§24.7).
  */
 function privacyNote(): HTMLElement {
   return el(
@@ -419,8 +442,8 @@ function privacyNote(): HTMLElement {
       el('strong', { text: 'Nothing is sent anywhere.' }),
       el('span', {
         text:
-          ' A folder is read in place, a bucket by your browser directly; there is no server in ' +
-          'between. Every place you connect is listed under About → what is stored.',
+          ' There is no server of ours in between: whatever you connect is read by your browser ' +
+          'directly, and is listed under What this browser is remembering (Ctrl+P → Help).',
       }),
     ),
   )
