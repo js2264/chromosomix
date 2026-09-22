@@ -526,6 +526,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   chrIV" — which is the locus box's job. The field is *motif*; the reference it searches is
   *reference*.
 
+- **Cis and trans per sequence draws its fractions (§18.8).** The number the first table of every
+  Hi-C paper quotes was the one output of that task with nothing to look at: a column of
+  three-decimal numbers under a square of sequence pairs, so a reader asking *is any sequence
+  behaving unlike the rest* had to scan a list of `0.99`s for the one that was not — which on a
+  four-thousand-contig metagenome nobody does. There is now a bar per sequence, in the file's own
+  order, and a *bars per sequence* setting saying whether it stands for the cis fraction, the trans
+  fraction, or both stacked into the full bar the two make. Fractions and not counts, because a bar
+  of raw contacts is a picture of how long each sequence is; the ordinate reads in per cent (§26.2)
+  while the numbers stay fractions; a sequence with no contact at all is a gap rather than a zero;
+  and the export row beneath it is every other figure's, with the TSV naming each sequence in its
+  first column rather than printing the index its bar stands at.
+
 ### Removed
 
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a

@@ -217,6 +217,13 @@ function profileToTsv(output: ProfileOutput): string[] {
  * taken from the longest series so that no row lacks one — the series in a single
  * output share their grid by construction, and where a future task breaks that
  * assumption it wants two outputs rather than a second `x` column here.
+ *
+ * **Where the abscissa is a list, the `x` column holds its names** rather than
+ * the indices the figure plots them at (`CurveOutput.xTicks`). The whole claim
+ * of this file is that a reader can put a bar next to the number it was drawn
+ * from; a column of `0, 1, 2` beside two columns of fractions asks them to count
+ * bars on the picture to find out which sequence the third row is, which is the
+ * matrix writer's own argument for putting the ticks down the left edge.
  */
 function curveToTsv(output: CurveOutput): string[] {
   const lines = [
@@ -239,8 +246,16 @@ function curveToTsv(output: CurveOutput): string[] {
   }
   lines.push(row(header))
 
+  const names = output.xTicks
   for (let i = 0; i < rows; i++) {
-    const cells = [i < grid.length ? tsvNumber(grid[i]) : '']
+    // The name where the list has one and the number otherwise, rather than a
+    // blank: a list shorter than the series it names is a bug in the task, and
+    // the honest thing to write for a point it does not reach is where the
+    // figure put it.
+    const at = names?.[i]
+    const cells = [
+      at !== undefined ? cell(at) : i < grid.length ? tsvNumber(grid[i]) : '',
+    ]
     for (const series of output.series) {
       const present = i < series.y.length
       cells.push(present ? tsvNumber(series.y[i]) : '')

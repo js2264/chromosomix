@@ -137,6 +137,26 @@ describe('outputToTsv, curve', () => {
       ['4000', '', '', '', '0.02'],
     ])
   })
+
+  it('writes the names of an abscissa that is a list, not the indices', () => {
+    // The matrix writer's own argument, one axis down: a column of `0, 1, 2`
+    // beside a column of fractions asks the reader to count bars on the picture
+    // to find out which sequence the third row is about.
+    const named: CurveOutput = {
+      ...curve,
+      xLabel: 'Sequence',
+      xTicks: ['I', 'II', 'III'],
+      series: [
+        { name: 'cis', x: Float64Array.from([0, 1, 2]), y: Float64Array.from([1, 0.5, 0]) },
+      ],
+    }
+    expect(body(outputToTsv(named, PROVENANCE))).toEqual([
+      ['Sequence', 'cis'],
+      ['I', '1'],
+      ['II', '0.5'],
+      ['III', '0'],
+    ])
+  })
 })
 
 describe('outputToTsv, matrix', () => {

@@ -113,6 +113,20 @@ export function combineResults(
  * coloured its lines meant something by it — but the map's name goes in front
  * either way, because a legend reading `cis, cis, cis, cis` is a legend that
  * names nothing.
+ *
+ * **A stack is per map for the same reason the name is.** Two series that share
+ * a stack are one bar split in two (§18.13); four maps' worth sharing one would
+ * be a single bar four maps tall, with each library's cis fraction standing on
+ * the sum of the ones before it. Prefixing the stack with the map's label makes
+ * it four bars per sequence, each split where that library splits, which is the
+ * comparison the tab exists for.
+ *
+ * **A named abscissa survives only where every map names it the same way.** The
+ * names are positional — the fourth name belongs to the fourth bar — so taking
+ * the first map's list as the scales are taken would be safe for four libraries
+ * of one genome and a mislabelling for two different assemblies, which is a deck
+ * this app allows. Where the lists disagree the names go and the axis falls back
+ * to its numbers, which says nothing rather than something untrue.
  */
 function mergeCurves(
   id: string,
@@ -130,10 +144,15 @@ function mergeCurves(
         name: single ? entry.label : `${entry.label} · ${line.name}`,
         // Dropped deliberately: see above.
         ...(line.colour === undefined ? {} : { colour: line.colour }),
+        ...(line.stack === undefined ? {} : { stack: `${entry.label} · ${line.stack}` }),
       })
     }
   }
   const first = group[0].curve
+  const names = first.xTicks
+  const shared =
+    names !== undefined &&
+    group.every((entry) => entry.curve.xTicks?.join('\u0000') === names.join('\u0000'))
   return {
     kind: 'curve',
     id: `${id}__all`,
@@ -145,5 +164,6 @@ function mergeCurves(
     // task, so they agree, and taking the first is taking the only answer.
     xScale: first.xScale,
     yScale: first.yScale,
+    ...(shared ? { xTicks: [...names] } : {}),
   }
 }

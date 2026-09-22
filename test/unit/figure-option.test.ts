@@ -214,6 +214,44 @@ describe('optionOf', () => {
     expect(label.formatter(400)).toBe('2.00 Mb')
   })
 
+  it('names the members of an abscissa that is a list, and nothing between two', () => {
+    // A curve whose x is a list carries the names (`CurveOutput.xTicks`), and the
+    // axis stays a number line so that it keeps its wheel, its marquee and its
+    // two typed bounds.
+    const { option } = build(curve({ xTicks: ['I', 'II', 'III'] }))
+    const axis = option['xAxis'] as {
+      minInterval: number
+      axisLabel: { formatter: (value: number) => string; hideOverlap: boolean }
+    }
+    expect(axis.axisLabel.formatter(1)).toBe('II')
+    expect(axis.axisLabel.formatter(1.5)).toBe('')
+    expect(axis.axisLabel.formatter(7)).toBe('')
+    expect(axis.minInterval).toBe(1)
+    expect(axis.axisLabel.hideOverlap).toBe(true)
+  })
+
+  it('spells an ordinate named in per cent as one', () => {
+    const { option } = build(curve({ yLabel: 'Share of the contacts (%)' }))
+    const label = (option['yAxis'] as { axisLabel: { formatter: (v: number) => string } }).axisLabel
+    // §26.2's *a fraction takes `fmt.pct`*, on the surface that summarises it —
+    // and with no idle zeros, which is `axisNumber`'s own complaint one order of
+    // magnitude up.
+    expect(label.formatter(0.25)).toBe('25%')
+    expect(label.formatter(0.933)).toBe('93.3%')
+  })
+
+  it('stacks bars that share a stack, and never lines', () => {
+    const stacked = curve()
+    stacked.series[0].stack = 'contacts'
+    stacked.series[1].stack = 'contacts'
+    const bars = build(stacked, (style) => (style.mark = 'bars')).option
+    expect(seriesOf(bars).map((entry) => entry['stack'])).toEqual(['contacts', 'contacts'])
+    // Restyled to lines, the two are the two quantities again rather than one of
+    // them and their sum.
+    const lines = build(stacked, (style) => (style.mark = 'line')).option
+    expect(seriesOf(lines).every((entry) => entry['stack'] === undefined)).toBe(true)
+  })
+
   it('starts a bar’s axis at zero and fits a curve’s to the data', () => {
     const axis = (mark: FigureStyle['mark']): boolean =>
       (build(curve(), (style) => (style.mark = mark)).option['yAxis'] as Record<string, unknown>)[

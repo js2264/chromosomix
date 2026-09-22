@@ -276,6 +276,65 @@ describe('the combined figure', () => {
     ])
   })
 
+  it('gives each map its own stack, so a bar is one map tall', () => {
+    // Two maps sharing one stack would be a single bar two libraries tall, the
+    // second one's cis fraction standing on the first one's total.
+    const stacked: CurveOutput = {
+      ...curve('cistrans-fractions', 'Cis and trans', 'cis'),
+      xTicks: ['I', 'II'],
+      series: [
+        {
+          name: 'cis',
+          x: Float64Array.from([0, 1]),
+          y: Float64Array.from([0.9, 0.8]),
+          mark: 'bars',
+          stack: 'contacts',
+        },
+        {
+          name: 'trans',
+          x: Float64Array.from([0, 1]),
+          y: Float64Array.from([0.1, 0.2]),
+          mark: 'bars',
+          stack: 'contacts',
+        },
+      ],
+    }
+    const combined = combineResults(
+      [
+        { label: 'rep1', result: resultOf(TASK_ID, [stacked]) },
+        { label: 'rep2', result: resultOf(TASK_ID, [stacked]) },
+      ],
+      (output) => (output.kind === 'curve' ? output : null),
+    )
+    expect(combined.curves[0].series.map((series) => series.stack)).toEqual([
+      'rep1 · contacts',
+      'rep1 · contacts',
+      'rep2 · contacts',
+      'rep2 · contacts',
+    ])
+    // Two libraries of one genome name their sequences the same way, so the
+    // abscissa keeps its names.
+    expect(combined.curves[0].xTicks).toEqual(['I', 'II'])
+  })
+
+  it('drops the names of an abscissa the maps do not agree about', () => {
+    // The names are positional, so the first map's list over the second map's
+    // bars is a mislabelling rather than a default — and two assemblies in one
+    // deck is a deck this app allows.
+    const named = (names: string[]): CurveOutput => ({
+      ...curve('cistrans-fractions', 'Cis fraction', 'cis'),
+      xTicks: names,
+    })
+    const combined = combineResults(
+      [
+        { label: 'rep1', result: resultOf(TASK_ID, [named(['I', 'II'])]) },
+        { label: 'rep2', result: resultOf(TASK_ID, [named(['chr1', 'chr2'])]) },
+      ],
+      (output) => (output.kind === 'curve' ? output : null),
+    )
+    expect(combined.curves[0].xTicks).toBeUndefined()
+  })
+
   it('names what it could not fold rather than quietly dropping it', () => {
     const combined = combineResults(
       [

@@ -89,6 +89,8 @@ export interface FigureSeries {
   n?: number
   /** What the task thinks this is; overridden by the style. */
   mark?: MarkKind
+  /** The stack this series shares, where the bars are parts of one whole. */
+  stack?: string
 }
 
 export interface FigureStat {
@@ -121,6 +123,14 @@ export interface XyFigureSpec {
    * reader navigates by.
    */
   binsize?: number
+  /**
+   * What the points of the abscissa are called, where they are a list.
+   *
+   * The same quantity {@link binsize} is: a spelling for a numeric axis, so the
+   * axis keeps its wheel, its marquee and its typed window and the names are
+   * drawn at the ticks (`CurveOutput.xTicks`).
+   */
+  xTicks?: string[]
   stats?: FigureStat[]
 }
 
@@ -187,9 +197,13 @@ function plain(values: ArrayLike<number> | undefined): number[] | undefined {
 function xyOfCurve(output: CurveOutput): XyFigureSpec {
   const ids = keyed(output.series.map((series) => series.name))
   // The mark the *figure* opens on: a task that drew every series as points
-  // meant a scatter, and one that drew none of them meant lines.
-  const scatter =
-    output.series.length > 0 && output.series.every((series) => series.mark === 'points')
+  // meant a scatter, one that drew all of them as bars meant a bar chart, and
+  // one that drew none of them meant lines. Unanimity rather than the first
+  // series' opinion, because a figure-wide mark is what the reader's control
+  // sets and a mixed set has no single answer to open on.
+  const every = (mark: MarkKind): boolean =>
+    output.series.length > 0 && output.series.every((series) => series.mark === mark)
+  const opening: MarkKind = every('points') ? 'points' : every('bars') ? 'bars' : 'line'
   return {
     kind: 'xy',
     id: output.id,
@@ -200,7 +214,8 @@ function xyOfCurve(output: CurveOutput): XyFigureSpec {
     yScale: output.yScale,
     xDomain: output.xDomain === undefined ? undefined : [...output.xDomain],
     yDomain: output.yDomain === undefined ? undefined : [...output.yDomain],
-    mark: scatter ? 'points' : 'line',
+    mark: opening,
+    xTicks: output.xTicks === undefined ? undefined : [...output.xTicks],
     stats: undefined,
     series: output.series.map((series, index) => ({
       id: ids[index],
@@ -211,7 +226,13 @@ function xyOfCurve(output: CurveOutput): XyFigureSpec {
       high: plain(series.high),
       colour: series.colour,
       n: series.n,
+      // `points` and nothing else. A series' own mark *overrides* the reader's
+      // control (see {@link markOf}), which is what a scatter among curves
+      // needs and what a set of bars must not have: every series of a bar chart
+      // is a bar, so the opinion belongs to the figure — where the mark control
+      // can then take it away again.
       mark: series.mark === 'points' ? 'points' : undefined,
+      stack: series.stack,
     })),
   }
 }

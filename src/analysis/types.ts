@@ -655,8 +655,27 @@ export interface CurveSeries {
    * A cell-cycle scatter is not: its two axes are two fractions measured on the
    * same cell, the cells have no order along x, and a line through them would
    * draw a path nothing travelled.
+   *
+   * `bars` is that argument one step further. A series whose x is a **list** —
+   * one value per sequence, per sample, per MAG — has nothing between its
+   * samples at all, and the mark that says so is a bar standing on a baseline.
+   * It goes with {@link CurveOutput.xTicks}, which is what names the list.
    */
-  mark?: 'line' | 'points'
+  mark?: 'line' | 'points' | 'bars'
+  /**
+   * The stack this series shares, where the bars are parts of one whole.
+   *
+   * Two series naming the same stack are drawn one above the other, so a
+   * sequence's cis and trans fractions — which sum to one by construction — are
+   * one bar split in two rather than two bars a reader has to add up.
+   *
+   * **Only bars stack.** The same field on a pair of lines would draw an upper
+   * line that is the sum of two quantities under an axis claiming it is one of
+   * them, which is what a stacked line chart invites and what nothing here
+   * wants; `figures/option.ts` reads this for a bar and ignores it otherwise, so
+   * a reader who restyles the figure to a line gets two lines.
+   */
+  stack?: string
 }
 
 export interface CurveOutput {
@@ -686,6 +705,23 @@ export interface CurveOutput {
    */
   xDomain?: [number, number]
   yDomain?: [number, number]
+  /**
+   * What the points of the abscissa are called, where they are a list.
+   *
+   * One name per x, in the order the values are in — a sequence per bar on the
+   * cis/trans fractions, and `MatrixOutput.xTicks`'s job on an axis that has
+   * one series instead of a grid. Absent for every curve whose x is a
+   * *quantity*: a separation, a position, a rank.
+   *
+   * The x values stay numbers, and that is the decision rather than an
+   * accident. A category axis would have cost this abscissa its wheel, its
+   * marquee and the two windows a reader types (§18.7) — which a four-hundred
+   * contig metagenome needs far more than a sixteen-chromosome yeast does — so
+   * the names are a *spelling* of an ordinary numeric axis, the way a bin index
+   * is spelled in base pairs, and the figure goes on zooming and exporting the
+   * way every other figure does.
+   */
+  xTicks?: string[]
 }
 
 /**
