@@ -7832,8 +7832,10 @@ view is asked for, and neither refuses a model a cell already draws. What each c
 model it draws, the camera it draws from, its height, whether it turns with the others — is
 remembered under its **seat**, its place among the structure cells counting from the left; they all
 used to write to one slot, so a deck of two views came back from a reload as the same view twice.
-A model that arrives —
-dropped, computed, or **computed again onto the same row** — opens a cell beside whatever was there
+**Every model that arrives opens a cell of its own and is on screen from that moment** — dropped,
+named by a URL, or computed, and *every* one of them where several land together, where only the
+last of a batch used to get a picture and the others sat on the card as rows with nothing drawn,
+which is the one state a reader reads as *it did not work*. It opens beside whatever was there
 rather than taking it over. It used to be one cell per deck, which made two models something a
 reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
 model it was to be judged against — the commonest way to lose a picture in this application. The
@@ -7888,6 +7890,21 @@ radius, tube radius, haplotype, outside the window (with its ghost opacity), loo
 because the two are one question asked twice: what the model is drawn as, and what is drawn over it.
 *In the frame of* follows *compare with* because the two are one question asked twice as well — the
 same superposition, drawn or not (§25.5).
+
+**A star on each cell says which one the card is about.** The column holds **one** *3D structure*
+card — a second copy of eighteen controls is a column nobody can read, and §26.3 wants a control
+offered once per column — and a deck may hold several models, so the card follows a cell the reader
+names. It was whichever cell was built first, which a reader with two models discovers by dragging
+a slider and watching the *other* picture change, and which left the second model's settings
+unreachable. The same glyph and the same radio behaviour the maps' star has, because it is the same
+idea: one of several pictures singled out for something that can only be about one of them. It is
+its **own** star and not the maps' — a starred map is the file an analysis runs against, a starred
+cell is the picture this column's settings are for, and one deck can want both at once. A filled
+star is a **dead button**, as the maps' is: the way to move it is to press another. It appears only
+where there is a choice, so a deck of one model has none; it follows the cells when the starred one
+is closed, so the card is never about a picture that is gone; and a cell that opens does **not**
+take it, because a model arriving should not move a control out from under the reader who was
+using it.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
@@ -8142,7 +8159,13 @@ started — so two models of one map routinely come out in opposite hands and no
 bring one onto the other. This is how one is brought into the other's hand. The reflection is
 applied to the **built coordinates**, not to the camera, so picking a bead, measuring between two,
 the labels and the vector export all follow it; a mirror at the camera would flip the picture and
-leave the numbers under it describing a model nobody is looking at. Both at once is a half turn
+leave the numbers under it describing a model nobody is looking at. Which means the renderer has to
+**rebuild its geometry when a model moves**, and not only when its style changes: what is built is
+keyed on the counts and the drawing — how many beads, drawn as what, how wide — which is everything
+that could change back when nothing ever moved a bead. A reflection hands over the same counts and
+the same style at new coordinates, so the key matched, the buffers were left alone, and the fibre
+stayed exactly where it was while the chain **names**, drawn from the model every frame, flipped:
+the picture and its labels disagreed about which model was on screen. Both at once is a half turn
 rather than a reflection, which is the one combination that changes nothing about the fold; it is
 allowed because seeing a model the other way up is a reason on its own.
 
@@ -8345,7 +8368,14 @@ well the model honours the map before believing it.
 `structure`, payload a bed3d-shaped feature set with its `model`, id `analysis:reconstruct3d:
 reconstructed-model` (per map on a deck, as every computed row is), labelled `3D model · chrIV`
 or `3D model · 16 sequences`, summarised as a loaded one is, carrying the task and the framing as
-provenance. It replaces the last run's row, is the model the cell draws the moment it lands, is
+provenance. **It never replaces the last run's row.** Every other computed row does — running
+insulation again with a wider window means the reader wants the *new* boundaries — and a model is
+the one thing an analysis makes that is not stored anywhere else and is made **to be compared**:
+two methods, two exponents, or the same settings twice to see what the seed did. So a run takes the
+next free id in the series `…reconstructed-model`, `…#2`, `…#3`, numbered from what is on the card
+so closing the second of three gives that number back, and the label carries the same `(2)` because
+two rows under one name are two rows nobody can tell apart in the picker, in *compare with* or in
+*in the frame of*. It is the model the cell draws the moment it lands, is
 what *Model versus map* and *Spatial tracks* read, persists as a recipe and comes back
 `detached` with **recompute**, and leaves as a bed3d from the row, from the drawer and from the
 Synthetic-card export road. The golden is the one a reconstruction can honestly have. For ShRec3D

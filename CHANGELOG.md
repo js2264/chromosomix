@@ -14,6 +14,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A star on each structure cell (§25.3).** The Aesthetics column holds one *3D structure* card and
+  a deck may hold several models, so the card follows a cell the reader names. It was whichever cell
+  was built first — which a reader with two models discovers by dragging a slider and watching the
+  *other* picture change, and which left the second model's settings unreachable altogether. The
+  same glyph and the same radio behaviour the maps' star has, and its own star rather than theirs: a
+  starred map is the file an analysis runs against, a starred cell is the picture this column's
+  settings are for. It appears only where there is a choice to make, follows the cells when the
+  starred one is closed, and is not taken by a cell that opens — a model arriving should not move a
+  control out from under the reader using it.
+
 - **One model in as many cells as you like, each a view of its own (§25.3).** A structure row could
   be drawn in one cell and one only — the link dropped a second `3d`, and the eye and the drag both
   refused a model already on screen — on the reasoning that two cells of one row are one picture
@@ -834,6 +844,28 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   read.
 
 ### Fixed
+
+- **The mirror moves the model, not only its labels (§25.5).** A reflection was applied to the built
+  coordinates and the renderer never noticed: what it has built is keyed on the counts and the
+  drawing — how many beads, drawn as what, how wide — which was everything that could change back
+  when nothing ever moved a bead. A mirror hands over the same counts and the same style at new
+  coordinates, so the key matched, the buffers were left alone, and the fibre stayed exactly where
+  it was while the chain names, drawn from the model every frame, flipped. The geometry is now
+  rebuilt when the **model** changes as well as when its style does.
+
+- **A reconstruction no longer destroys the model before it (§25.6).** *Model from the map* landed on
+  the id of its task and removed the row that had it, which is right for boundaries or domains —
+  running insulation again with a wider window means the reader wants the *new* ones — and wrong for
+  a model: two models of one map are the comparison §25.3 is built for, and a model is not stored
+  anywhere else, so a second run left nothing to compare and no way back. **The same settings twice**
+  is exactly the run somebody makes to see what a solver's seed did. A run now takes the next free
+  id in the series and the label carries the same `(2)`, since two rows under one name are two rows
+  nobody can tell apart in the picker or in *compare with*.
+
+- **Every model that arrives opens a cell, not just the last one noticed (§25.3).** Two models can
+  land in one turn of the store — two files dropped together, a batch of runs — and only the last
+  got a picture; the others sat on the Structures card as rows with nothing drawn, which is the one
+  state a reader reads as *it did not work*.
 
 - **Every shared setting the model reads is reachable from the model (§26.3).** `legend`, `crosshair`
   and `tooltip` are preferences about every picture in the app, and the structure cell borrowed them

@@ -243,6 +243,11 @@ export interface PanelDeckProps {
    */
   onStarChange?(): void
   /**
+   * The **structure** star moved: the *3D structure* card in the Aesthetics
+   * column is now a different cell's, and only the session can put it there.
+   */
+  onStructureStarChange?(): void
+  /**
    * What to call the session's own map, for the heading over its cell.
    *
    * Every cell of a deck says which file it is, the first one included. Without
@@ -582,6 +587,15 @@ export class PanelDeck {
    * star has for the same reason (`ui/AnnotationCard.ts`).
    */
   private starred: MapId = LEAD_MAP
+  /**
+   * The structure cell the *3D structure* card is about (§25.3), by slot id.
+   *
+   * Its own star and not the maps': a starred map is *the file an analysis
+   * runs against* and a starred structure cell is *the picture this column's
+   * settings are for*. One deck can want both at once, and a reader who
+   * starred a model to tune it has said nothing about which map a task reads.
+   */
+  private starredStructure = ''
 
   /**
    * How each companion was last drawn, by file (`panels/deck.ts`'s `DeckLook`).
@@ -654,6 +668,8 @@ export class PanelDeck {
     // the lead rather than leaving the Analysis column pointed at nothing.
     const star = recall<string>(props.memoryKey(), 'deck:starred')
     if (typeof star === 'string' && star !== '') this.starred = star
+    const model = recall<string>(props.memoryKey(), STRUCTURE_STAR_SCOPE)
+    if (typeof model === 'string') this.starredStructure = model
     this.looks = this.recallLooks()
 
     this.structureButton = button('add a 3D structure', () => this.add({ kind: 'structure' }), {
@@ -1517,6 +1533,7 @@ export class PanelDeck {
           ? {}
           : { sharedElsewhere: () => shared.sharedElsewhere?.() ?? [] }),
         memoryKey: () => this.props.memoryKey(),
+        onStar: () => this.setStarredStructure(slot.id),
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),
         onDrop: (file) => shared?.onDrop(file),
@@ -2309,6 +2326,7 @@ export class PanelDeck {
     // and every task's result adopted onto a map with no panel to draw it.
     this.keepStarPresent()
     this.paintStars()
+    this.paintStructureStars()
     this.keepLanesOnLiveMaps()
     this.applyLayout()
   }
@@ -2886,13 +2904,61 @@ export class PanelDeck {
     }
   }
 
-  /** The structure cell's settings card, for the Aesthetics panel, or `null` where there is no cell. */
+  /**
+   * The **starred** structure cell's settings card, for the Aesthetics panel
+   * (§25.3), or `null` where there is no structure cell.
+   *
+   * The star and never the first cell in the list. A deck may hold several
+   * models and the column holds one card, so a reader with two of them was
+   * dragging sliders and watching the other picture change — and had no way
+   * at all to reach the second model's settings. The fallback is the first
+   * cell, for the deck that has never been asked: one model is not a choice.
+   */
   structureSettings(): HTMLElement | null {
-    for (const slot of this.slots) {
-      const settings = slot.cell?.settings?.()
-      if (settings !== undefined) return settings
+    const starred = this.slots.find((slot) => slot.id === this.starredStructure && slot.cell?.settings !== undefined)
+    const cell = starred ?? this.slots.find((slot) => slot.cell?.settings !== undefined)
+    return cell?.cell?.settings?.() ?? null
+  }
+
+  /**
+   * Point the *3D structure* card at this cell, and fill its star alone.
+   *
+   * A radio, like the maps' star, because the card is one card: two filled
+   * stars would be two cells claiming one column.
+   */
+  private setStarredStructure(id: string): void {
+    if (this.starredStructure === id) return
+    this.starredStructure = id
+    remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, id)
+    this.paintStructureStars()
+    // The card itself changes, so the column has to be rebuilt round it — the
+    // session owns where it goes (§25.3) and is the only thing that can move
+    // it.
+    this.props.onStructureStarChange?.()
+  }
+
+  /**
+   * Fill exactly one structure cell's star, and show them only where there is
+   * a choice to make.
+   *
+   * Called wherever the set of structure cells changes, for `paintStars`'
+   * reason: which cell is starred belongs to the deck and a cell has no way to
+   * ask. A star on a deck of one model is a radio with one option — a button
+   * that does nothing — so it appears with the second cell and goes with it.
+   */
+  private paintStructureStars(): void {
+    const cells = this.slots.filter((slot) => slot.ref.kind === 'structure' && slot.cell !== null)
+    // The star follows the cells: one closed while it held the star leaves the
+    // card pointing at a cell that is gone, which is a column of controls for
+    // a picture nobody can see.
+    if (!cells.some((slot) => slot.id === this.starredStructure)) {
+      this.starredStructure = cells[0]?.id ?? ''
+      remember(this.props.memoryKey(), STRUCTURE_STAR_SCOPE, this.starredStructure)
     }
-    return null
+    for (const slot of cells) {
+      slot.cell?.setStarred?.(slot.id === this.starredStructure)
+      slot.cell?.showStar?.(cells.length > 1)
+    }
   }
 
   /** The cells' commands, for the palette and its keys. */
@@ -3099,6 +3165,9 @@ export class PanelDeck {
 
 /** Where a deck's per-companion presentation lives in this session's memory. */
 const LOOKS_SCOPE = 'deck:looks'
+
+/** Where the starred structure cell is remembered (§25.3), by slot id. */
+const STRUCTURE_STAR_SCOPE = 'deck:starredStructure'
 
 /**
  * A panel's live scale as the thing another panel can be handed.

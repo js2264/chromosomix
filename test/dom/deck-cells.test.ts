@@ -486,6 +486,51 @@ describe('what the cell says', () => {
     expect(offered).toEqual(['structure-shared-legend'])
   })
 
+  it('stars one cell, and the settings card is that cell\u2019s (§25.3)', () => {
+    // A deck may hold several models and the column holds one card, so the
+    // card follows a cell the reader names. It used to be whichever cell was
+    // built first — which a reader with two models discovers by dragging a
+    // slider and watching the *other* picture change.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    const cells = () => structureCells(deck)
+    // One model, one card: a radio with one option is a button that does
+    // nothing, so there is no star to press.
+    expect(cells()[0].querySelector('.structure-star')?.classList.contains('hidden')).toBe(true)
+    deck.add({ kind: 'structure' })
+    const stars = () => cells().map((cell) => cell.querySelector<HTMLButtonElement>('.structure-star'))
+    expect(stars().every((star) => star?.classList.contains('hidden') === false)).toBe(true)
+    // Exactly one filled, and a filled star is a dead button.
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
+    expect(stars()[0]?.disabled).toBe(true)
+    const first = deck.structureSettings()
+    stars()[1]?.click()
+    expect(stars().map((star) => star?.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    const second = deck.structureSettings()
+    expect(second).not.toBe(first)
+    expect(cells()[1].contains(second as Node)).toBe(false)
+    // The card is the second cell's: it is the element that cell hands over.
+    expect(second).not.toBeNull()
+  })
+
+  it('moves the star off a cell that closes, so the card is never about a picture that is gone', () => {
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.add({ kind: 'structure' })
+    deck.add({ kind: 'structure' })
+    const cells = structureCells(deck)
+    cells[1].querySelector<HTMLButtonElement>('.structure-star')?.click()
+    const starred = deck.structureSettings()
+    cells[1].querySelector<HTMLButtonElement>('.btn-close')?.click()
+    expect(structureCells(deck)).toHaveLength(1)
+    const left = deck.structureSettings()
+    expect(left).not.toBeNull()
+    expect(left).not.toBe(starred)
+    // …and the one cell left offers no star, there being nothing to choose.
+    expect(
+      structureCells(deck)[0].querySelector('.structure-star')?.classList.contains('hidden'),
+    ).toBe(true)
+  })
+
   it('is resized by the bar under it, and given back to the row on a double-click', () => {
     // A model has no axis to line up with the map's, so it is the one cell
     // whose height is the reader's own business (§25.3).

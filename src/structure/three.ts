@@ -145,6 +145,8 @@ export class StructureRenderer {
   private height = 1
   private view: StructureView | null = null
   private palette: RenderPalette
+  /** The model the geometry was built from, so a model that **moves** rebuilds it. */
+  private builtStructure: Structure | null = null
   /** What the geometry was last built for, so a change elsewhere does not rebuild it. */
   private built: string | null = null
   /** Bead index per pick instance, since hidden beads are not instanced. */
@@ -219,9 +221,20 @@ export class StructureRenderer {
     const previous = this.view
     this.view = view
     const key = buildKey(view)
-    if (key !== this.built) {
+    // **The model itself, as well as the key.** {@link buildKey} is counts and
+    // style: how many beads, how they are drawn, how wide. It says nothing
+    // about *where* the beads are, because until the mirrors (§25.5) nothing
+    // ever moved them — a model was built once from its file and stood still.
+    // A reflection and a turn into another model's frame both hand this a new
+    // `Structure` with the same counts and the same style, so the key matched,
+    // the geometry was never rebuilt, and the fibre on screen stayed exactly
+    // where it was while the chain **names** — drawn by the panel from the
+    // structure on every frame — flipped. The picture and its labels
+    // disagreed about which model was on screen.
+    if (key !== this.built || this.builtStructure !== view.structure) {
       this.rebuild(view)
       this.built = key
+      this.builtStructure = view.structure
     } else if (previous === null || previous.colours !== view.colours || previous.lit !== view.lit) {
       this.recolour()
     }

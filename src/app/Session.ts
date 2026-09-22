@@ -3553,7 +3553,12 @@ export class Session {
       this.knownStructures = new Map(now.map((entry) => [entry.id, entry.payload]))
       return
     }
-    let fresh: string | null = null
+    // **Every** one that is new, not the last one noticed. Two models can
+    // arrive in one turn of the store — a reader dropping two files together,
+    // a batch of runs landing — and keeping only the last left the others as
+    // rows on the card with no picture, which is the one state a reader reads
+    // as *it did not work*.
+    const fresh: string[] = []
     for (const entry of now) {
       const known = seen.has(entry.id)
       const held = seen.get(entry.id)
@@ -3562,14 +3567,16 @@ export class Session {
       const replaced = known && entry.payload !== undefined && held !== undefined && held !== entry.payload
       seen.set(entry.id, entry.payload)
       if (known && !replaced) continue
-      fresh = entry.id
+      fresh.push(entry.id)
     }
-    // …and it gets a cell of its own: a model that has just arrived — a file
+    // …and each gets a cell of its own: a model that has just arrived — a file
     // dropped, a reconstruction landing — is the one the reader is waiting to
     // see, and it is drawn **beside** whatever was already there rather than
     // over it (§25.3). A run that wiped out the model it was to be compared
     // against was the commonest way to lose a picture in this app.
-    if (fresh !== null && this.deckIsPossible) this.ensureDeck().showStructure(fresh)
+    if (fresh.length === 0 || !this.deckIsPossible) return
+    const deck = this.ensureDeck()
+    for (const id of fresh) deck.showStructure(id)
   }
 
   /**
@@ -5541,6 +5548,12 @@ export class Session {
        */
       onStarChange: () => {
         this.analysis?.refresh()
+      },
+      // The *3D structure* card is the starred cell's (§25.3), so the star
+      // moving is the column's card changing under it — and the session is
+      // what puts a card in that column.
+      onStructureStarChange: () => {
+        this.refreshAesthetics()
       },
       // Through the memoised index rather than `contextOf` directly: this is
       // asked once per block read per panel, and recomputing it over a 154 k

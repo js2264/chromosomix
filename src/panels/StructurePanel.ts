@@ -202,6 +202,14 @@ export interface StructurePanelProps {
   onDropUrl(url: string): void
   /** The grip before the name was taken hold of, or let go. */
   onDragChange(dragging: boolean): void
+  /**
+   * The star pressed: make this the cell the settings card is about (§25.3).
+   *
+   * Absent for a cell with no deck around it, which has no sibling to be
+   * starred instead of — the star is a choice between cells, and one cell is
+   * not a choice.
+   */
+  onStar?(): void
 }
 
 /**
@@ -211,7 +219,7 @@ export interface StructurePanelProps {
  */
 export type StructureCellProps = Omit<
   StructurePanelProps,
-  'id' | 'memoryKey' | 'seat' | 'onClose' | 'onDragChange'
+  'id' | 'memoryKey' | 'seat' | 'onClose' | 'onDragChange' | 'onStar'
 >
 
 /** Where a cell's camera is remembered in the session's memory. */
@@ -340,6 +348,22 @@ export class StructurePanel implements DeckCell {
   readonly kind = 'structure' as const
   readonly el: HTMLElement
   private readonly nameEl: HTMLElement
+  /**
+   * The star (§25.3): which cell the *3D structure* card in the Aesthetics
+   * column is about.
+   *
+   * A deck may hold several models, and the column holds **one** card — a
+   * second copy of eighteen controls is a column nobody can read, and §26.3
+   * wants a control offered once per column anyway. So the card follows a
+   * cell the reader names, and this is how they name it. It used to be
+   * whichever cell happened to be built first, which a reader with two models
+   * discovers by dragging a slider and watching the *other* picture change.
+   *
+   * The same glyph and the same radio behaviour the maps' star has, because it
+   * is the same idea: one of several pictures, singled out for something that
+   * can only be about one of them.
+   */
+  private readonly starButton: HTMLButtonElement
   private readonly note = el('p', { class: 'deck-note structure-note' })
   private readonly wrap = el('div', { class: 'structure-wrap' })
   private readonly keyEl = el('div', { class: 'structure-key hidden' })
@@ -498,6 +522,15 @@ export class StructurePanel implements DeckCell {
       text: 'structure',
       title: 'The session’s 3D model — renamed on its row in the Structures card',
     })
+    this.starButton = iconButton('star', '', () => props.onStar?.(), {
+      class: 'btn btn-icon deck-star structure-star',
+      size: 14,
+    })
+    // Hidden where there is nothing to choose between: a deck with one model
+    // has one card and one cell, and a radio with one option is a button that
+    // does nothing. The deck shows it again when a second cell opens.
+    this.setStarred(false)
+    this.starButton.classList.toggle('hidden', props.onStar === undefined)
     this.measureButton = iconButton(
       'ruler',
       'Measure: drag from one bead to another for the distance between them, kept in the card',
@@ -605,6 +638,7 @@ export class StructurePanel implements DeckCell {
         { class: 'deck-head' },
         this.grip(),
         this.nameEl,
+        this.starButton,
         iconButton('x', 'Close the structure cell (the model stays loaded)', () => props.onClose(), {
           class: 'btn-close',
           size: 14,
@@ -1290,6 +1324,27 @@ export class StructurePanel implements DeckCell {
    */
   private replantAxes(): void {
     this.restyle({ axes: true, axesFrame: viewFrame(this.camera) })
+  }
+
+  /**
+   * Fill or empty this cell's star (§25.3).
+   *
+   * A filled star is a **dead button**, as the maps' is: the way to move it is
+   * to press another one, and a press that does nothing is a control a reader
+   * has to try in order to understand.
+   */
+  setStarred(on: boolean): void {
+    this.starButton.classList.toggle('is-on', on)
+    this.starButton.setAttribute('aria-pressed', String(on))
+    this.starButton.disabled = on
+    this.starButton.title = on
+      ? 'The 3D structure card in the Aesthetics column is about this cell'
+      : 'Point the 3D structure card at this cell instead'
+  }
+
+  /** Whether this cell offers a star at all — a deck of one model does not. */
+  showStar(on: boolean): void {
+    this.starButton.classList.toggle('hidden', !on)
   }
 
   /** This seat's memory scope (§25.3), for whatever this cell remembers. */
