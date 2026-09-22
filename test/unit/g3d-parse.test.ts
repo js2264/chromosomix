@@ -357,6 +357,41 @@ describe('parsing', () => {
 })
 
 describe('the structure style', () => {
+  it('opens with the centre shown and the ghost a trace (§25.3)', () => {
+    const style = defaultStructureStyle()
+    // The centre of rotation is where every drag turns about and where ⌘-click
+    // puts the next one; a reader who cannot see it is turning the model about
+    // a point they have to infer from the motion.
+    expect(style.axes).toBe(true)
+    // Identity: the arms lie along the model's own axes until they are
+    // replanted along a view.
+    expect(style.axesFrame).toEqual([0, 0, 0, 1])
+    expect(style.opacity).toBe(0.1)
+    expect(style.mirrorX).toBe(false)
+    expect(style.mirrorY).toBe(false)
+    expect(style.align).toBe('')
+  })
+
+  it('reads a session stored before the centre was on as having it on', () => {
+    // `!== false`, not `=== true`: the default arriving as its opposite for
+    // every reader who has been here before is the one way a default change
+    // reaches nobody.
+    expect(structureStyleOf({ labels: true }).axes).toBe(true)
+    expect(structureStyleOf({ axes: false }).axes).toBe(false)
+  })
+
+  it('normalises a stored axes frame and refuses one that is not a rotation', () => {
+    // A quaternion of the wrong length is a rotation matrix that scales, and
+    // what it would scale is the gizmo drawn over every model.
+    const read = structureStyleOf({ axesFrame: [0, 0, 0, 4] })
+    expect(read.axesFrame).toEqual([0, 0, 0, 1])
+    const turned = structureStyleOf({ axesFrame: [0, 2, 0, 2] })
+    expect(Math.hypot(...turned.axesFrame)).toBeCloseTo(1, 12)
+    expect(structureStyleOf({ axesFrame: [0, 0, 0, 0] }).axesFrame).toEqual([0, 0, 0, 1])
+    expect(structureStyleOf({ axesFrame: 'sideways' }).axesFrame).toEqual([0, 0, 0, 1])
+    expect(structureStyleOf({ axesFrame: [1, 2, 3] }).axesFrame).toEqual([0, 0, 0, 1])
+  })
+
   it('is present on a fresh structure row and on no other kind', () => {
     expect(defaultStyle('structure', '#000').structure).toEqual(defaultStructureStyle())
     expect(defaultStyle('segments', '#000').structure).toBeUndefined()

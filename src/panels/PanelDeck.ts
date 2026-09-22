@@ -1470,7 +1470,7 @@ export class PanelDeck {
         name: ref.uri,
         onOpen: (file) => this.fill(slot, { uri: file.name, source: { kind: 'local', file } }),
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
-        onStructure: (id) => this.showStructure(id),
+        onStructure: (id) => this.putStructure(slot, id),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -1494,12 +1494,23 @@ export class PanelDeck {
               contactsScale: () => shared?.contactsScale?.() ?? null,
             }),
         // What the *other* structure cells are drawing, so this one does not
-        // fall to a model already on screen.
+        // **fall** to a model already on screen. Only the fallback: a reader
+        // who picks the same model in two cells gets it in two cells (§25.3),
+        // and this is about which model a cell nobody has chosen for opens at.
         taken: () =>
           this.slots
             .filter((held) => held !== slot && held.ref.kind === 'structure')
             .map((held) => held.cell?.shownModel?.() ?? null)
             .filter((id): id is string => id !== null),
+        // Which structure cell this is, counting from the left — its **seat**.
+        // What a cell remembers (its model, its camera) is remembered under it,
+        // because the deck may now hold several and everything they remember
+        // used to collide in one slot: two cells restored from a link both
+        // recalled the one remembered model, so a deck of two views came back
+        // as the same view twice. The seat and not the slot's id, which is
+        // minted fresh on every build and would remember nothing across a
+        // reload; the seats are restored in the order the hash lists them.
+        seat: () => this.slots.filter((held) => held.ref.kind === 'structure').indexOf(slot),
         memoryKey: () => this.props.memoryKey(),
         onClose: () => this.remove(slot),
         onGoTo: (range) => shared?.onGoTo(range),
@@ -1536,7 +1547,7 @@ export class PanelDeck {
         // is the cell that opens — {@link add} would look for the *first* empty
         // one, which in a 2 × 2 with three gaps is not the one they aimed at.
         onOpenUrl: (url) => this.occupy(slot, { kind: 'remote', uri: url }),
-        onStructure: (id) => this.showStructure(id),
+        onStructure: (id) => this.putStructure(slot, id),
         onClose: () => this.remove(slot),
       })
       return slot
@@ -2084,15 +2095,16 @@ export class PanelDeck {
   }
 
   /** Put a file in a cell that had none, leaving every other cell alone. */
-  private occupy(slot: Slot, ref: PanelRef, source?: SourceSpec): void {
+  private occupy(slot: Slot, ref: PanelRef, source?: SourceSpec): Slot | null {
     const index = this.slots.indexOf(slot)
-    if (index < 0) return
+    if (index < 0) return null
     slot.vacancy?.destroy()
     const built = this.build(ref, source)
     this.slots[index] = built
     this.paintGrid()
     this.publish()
     if (this.state !== null) (built.panel ?? built.cell)?.apply(this.state)
+    return built
   }
 
   private addUrl(): void {
@@ -2831,6 +2843,26 @@ export class PanelDeck {
     this.add({ kind: 'structure' })
     const opened = this.slots.find((slot) => slot.ref.kind === 'structure' && !before.has(slot))
     opened?.cell?.showModel?.(id)
+  }
+
+  /**
+   * Turn **this** cell into a structure cell drawing `id`.
+   *
+   * Where a row of the Structures card is dragged onto an empty cell, which is
+   * the gesture that says *where* as well as *which* (§25.3). {@link
+   * showStructure} — the eye — answers only *which*, so it picks the cell; a
+   * drop has already picked it, and going through the eye's road would open a
+   * different one and leave the cell that was aimed at empty.
+   *
+   * A model another cell is already drawing is drawn here **too**: two cells of
+   * one model are two views of it, and the reader dropping the row on this cell
+   * has said so about as plainly as it can be said.
+   */
+  private putStructure(slot: Slot, id: string): void {
+    // The **built** cell and not the slot that was dropped on: `occupy`
+    // replaces the slot with the one it made, so the vacancy this was called
+    // for is no longer in the deck by the time the model is handed over.
+    this.occupy(slot, { kind: 'structure' })?.cell?.showModel?.(id)
   }
 
   /**

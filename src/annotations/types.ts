@@ -1204,8 +1204,26 @@ export interface StructureStyle {
   others: StructureOthers
   /** Chain names at each chain's midpoint. */
   labels: boolean
-  /** The little axes gizmo in a corner. */
+  /**
+   * The centre of rotation and the axes through it (§25.5).
+   *
+   * On by default: it is where every drag turns about and where ⌘-click puts
+   * the next one, and a reader who cannot see it is turning the model about a
+   * point they have to infer from the motion.
+   */
   axes: boolean
+  /**
+   * The axes' own orientation, as a unit quaternion `[x, y, z, w]`.
+   *
+   * Identity is the model's own frame, which is what the axes always drew.
+   * **Replant** writes the camera's frame here instead (§25.5), so the arms
+   * lie along the screen at the moment it was pressed and every turn after
+   * that is read against *that* view rather than against a frame the file
+   * happened to be written in. Kept with the model, not the cell, for the
+   * reason every other reading of the picture is: it is what the reader set
+   * the model up to be read against.
+   */
+  axesFrame: [number, number, number, number]
   /**
    * The one haplotype shown, or `''` for every one.
    *
@@ -1274,6 +1292,32 @@ export interface StructureStyle {
    * frame, and its distance from this model reported.
    */
   compare: string
+  /**
+   * Another structure row this model is turned **into the frame of** (§25.5),
+   * by id; `''` for none.
+   *
+   * {@link compare}'s other half, and the half a reader asking *is this the
+   * same fold* usually wants: the same superposition, applied to **this**
+   * model's own beads, with the other model **not drawn**. Two cells side by
+   * side, each aligned to the same row, are two models in one frame — which
+   * is what makes turning them together (§25.3) show the same face of each.
+   */
+  align: string
+  /**
+   * The model reflected through the plane across the screen (`mirrorX`) or up
+   * it (`mirrorY`) — §25.5.
+   *
+   * A reconstruction from contacts is determined **only up to reflection**: a
+   * model and its mirror image fit the same counts exactly as well, and which
+   * one a solver returns is an accident of where it started. So a model that
+   * will not superpose on another may be the same fold in the other hand, and
+   * this is how it is brought into that hand. Both at once is a half turn
+   * rather than a reflection, which is the one combination that changes
+   * nothing about the fold; it is allowed because the two are about what the
+   * reader sees, and seeing a model the other way up is a reason on its own.
+   */
+  mirrorX: boolean
+  mirrorY: boolean
 }
 
 export function defaultStructureStyle(): StructureStyle {
@@ -1284,10 +1328,11 @@ export function defaultStructureStyle(): StructureStyle {
     colourBy: STRUCTURE_COLOUR_SEQUENCE,
     beadRadius: 0.35,
     tubeRadius: 0.2,
-    opacity: 0.15,
+    opacity: 0.1,
     others: 'ghost',
     labels: true,
-    axes: false,
+    axes: true,
+    axesFrame: [0, 0, 0, 1],
     haplotype: '',
     loops: '',
     ghosted: [],
@@ -1300,6 +1345,9 @@ export function defaultStructureStyle(): StructureStyle {
     telomeres: false,
     colormap: '',
     compare: '',
+    align: '',
+    mirrorX: false,
+    mirrorY: false,
   }
 }
 
@@ -1355,7 +1403,12 @@ export function structureStyleOf(value: unknown): StructureStyle {
       ? (others as StructureOthers)
       : fallback.others,
     labels: row['labels'] !== false,
-    axes: row['axes'] === true,
+    // `!== false`, not `=== true`: the centre is on by default now, and a
+    // session stored before it was would otherwise open with it off — which
+    // is the default arriving as its opposite for every reader who has been
+    // here before.
+    axes: row['axes'] !== false,
+    axesFrame: quaternionOf(row['axesFrame'], fallback.axesFrame),
     haplotype: typeof haplotype === 'string' && haplotype.length <= 64 ? haplotype : '',
     loops: typeof row['loops'] === 'string' && (row['loops'] as string).length <= 200 ? (row['loops'] as string) : '',
     ghosted: Array.isArray(row['ghosted'])
@@ -1373,7 +1426,28 @@ export function structureStyleOf(value: unknown): StructureStyle {
         ? (row['colormap'] as string)
         : '',
     compare: typeof row['compare'] === 'string' && (row['compare'] as string).length <= 200 ? (row['compare'] as string) : '',
+    align: typeof row['align'] === 'string' && (row['align'] as string).length <= 200 ? (row['align'] as string) : '',
+    mirrorX: row['mirrorX'] === true,
+    mirrorY: row['mirrorY'] === true,
   }
+}
+
+/**
+ * A stored unit quaternion, or the fallback.
+ *
+ * Four finite numbers that are not all zero, normalised here rather than
+ * trusted: a quaternion of the wrong length is a rotation matrix that scales,
+ * and what it scales is the axes drawn over every model.
+ */
+function quaternionOf(
+  value: unknown,
+  fallback: [number, number, number, number],
+): [number, number, number, number] {
+  if (!Array.isArray(value) || value.length !== 4) return fallback
+  const parts = value.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
+  const length = Math.hypot(parts[0], parts[1], parts[2], parts[3])
+  if (!(length > 1e-6)) return fallback
+  return [parts[0] / length, parts[1] / length, parts[2] / length, parts[3] / length]
 }
 
 /** The reader's own sequence colours, kept only where both halves are strings. */

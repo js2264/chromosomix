@@ -72,7 +72,7 @@ import {
 import { rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
 import type { ColourSource } from '../structure/colour'
 import { COLORMAP_NAMES } from '../render/colormaps'
-import { alignTo, displacements, type Alignment } from '../structure/align'
+import { alignTo, displacements, placeStructure, type Alignment } from '../structure/align'
 import { settingsField } from '../ui/laneSettings'
 import { withKey, type Command } from '../ui/commands'
 import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
@@ -89,6 +89,7 @@ import {
   pan,
   project,
   unitsPerPixel,
+  viewFrame,
   type Camera,
 } from '../structure/camera'
 import { resolveColours, type BeadColours, type StructureKey } from '../structure/colour'
@@ -104,7 +105,7 @@ import {
   type Structure,
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
-import { button, el, fmt, trimNumber } from '../ui/dom'
+import { STRUCTURE_DRAG_TYPE, button, dragHasStructure, el, fmt, trimNumber } from '../ui/dom'
 import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import type { Modal } from '../ui/Modal'
@@ -119,6 +120,7 @@ import {
 } from '../ui/plotOptions'
 import { setReadout } from '../ui/readout'
 import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
+import { publishTurn, subscribeTurn } from '../ui/turnLink'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import { VectorPage } from '../ui/vector'
 import {
@@ -167,6 +169,18 @@ export interface StructurePanelProps {
    * where the link said two pictures.
    */
   taken?(): readonly string[]
+  /**
+   * Which structure cell this is, counting from the left — its **seat**.
+   *
+   * Everything this cell remembers is remembered under it (§25.3): the model
+   * it draws and the camera it draws from. Without it the deck's several
+   * structure cells wrote to one slot, so a deck of two views came back from a
+   * reload as the same view twice — and a reader who put one model in two
+   * cells to look at it two ways lost the second the moment they reloaded.
+   *
+   * Absent for a cell with no deck around it, which is seat 0.
+   */
+  seat?(): number
   memoryKey(): string
   /** The × on the heading. */
   onClose(): void
@@ -186,11 +200,26 @@ export interface StructurePanelProps {
  */
 export type StructureCellProps = Omit<
   StructurePanelProps,
-  'id' | 'memoryKey' | 'onClose' | 'onDragChange'
+  'id' | 'memoryKey' | 'seat' | 'onClose' | 'onDragChange'
 >
 
 /** Where a cell's camera is remembered in the session's memory. */
 const CAMERA_SCOPE = 'structure:camera'
+
+/**
+ * A memory scope for **this seat** (§25.3).
+ *
+ * Seat 0 keeps the bare scope, so a reader whose deck had the one structure
+ * cell there has always been opens it where they left it rather than at the
+ * defaults: the first seat *is* what every session before seats wrote.
+ */
+function seatScope(scope: string, seat: number): string {
+  return seat <= 0 ? scope : `${scope}:${seat}`
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, value))
+}
 /**
  * The settings this cell reads that are **not** the row's own (§26.3).
  *
@@ -209,6 +238,14 @@ const BORROWED_OPTIONS: readonly PlotOptionKey[] = ['legend', 'crosshair', 'tool
 
 /** Where the enlarged dialog's sidebar width is kept, so a reader sets it once. */
 const SIDE_SCOPE = 'structure:side'
+/** Where this seat's own height is kept (§25.3), for a cell the reader has resized. */
+const HEIGHT_SCOPE = 'structure:height'
+/** Where *turn together* is kept for this seat (§25.3). */
+const TURN_SCOPE = 'structure:turnWith'
+/** The shortest a resized cell may be, in pixels — below this the picture is not one. */
+const CELL_MIN_H = 120
+/** The tallest, so a drag cannot push the rest of the page off the screen. */
+const CELL_MAX_H = 2000
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
 const MODEL_SCOPE = 'structure:model'
 /** The `loops as chords` choice that draws the reader's own arrowhead marks (§25.5). */
@@ -321,7 +358,8 @@ export class StructurePanel implements DeckCell {
   /** Where the pointer last was on this cell's canvas, for placing the card. */
   private pointerAt: { x: number; y: number } | null = null
   /** The badge in the top-left corner: what a drag or a click does right now. */
-  private readonly modeEl = el('div', { class: 'structure-mode' })
+  /** The corner legend (§25.4): a row per control, the live one lit. */
+  private readonly modeEl = el('div', { class: 'structure-guide' })
   /** The modifiers held, while the pointer is over this cell or its dialog is open. */
   private readonly keys = { shift: false, centre: false, space: false }
   /** A press of the centre key that no click has used yet: released, it toggles the display. */
@@ -422,6 +460,10 @@ export class StructurePanel implements DeckCell {
   private structure: Structure | null = null
   /** The payload the scene was built from, so a rebuild waits for a new one. */
   private builtFrom: unknown = null
+  /** How the built model was placed (§25.5), so a change to the mirrors or the frame rebuilds it. */
+  private placedAs: string | null = null
+  /** Whether this cell turns with the others that are turning together (§25.3). */
+  private turnWith = false
   /** The row the scene was built from, so a change of row reframes the camera. */
   private builtRow: string | null = null
   private colours: BeadColours | null = null
@@ -442,7 +484,7 @@ export class StructurePanel implements DeckCell {
   private destroyed = false
 
   constructor(private readonly props: StructurePanelProps) {
-    this.camera = cameraOf(recall<unknown>(props.memoryKey(), CAMERA_SCOPE))
+    this.camera = cameraOf(recall<unknown>(props.memoryKey(), seatScope(CAMERA_SCOPE, props.seat?.() ?? 0)))
     // A span, not a read-only box. `.deck-name` frames itself on hover and
     // takes a caret on click, which is the rename control a map's name is
     // (§16.10) — and this name is the row's, changed on the Structures card.
@@ -490,9 +532,12 @@ export class StructurePanel implements DeckCell {
     this.wrap.append(
       this.labelsEl,
       this.keyEl,
-      this.modeEl,
+      // The legend and the readout under it, as one column in the corner
+      // rather than two things placed at two offsets (§25.4): the legend is
+      // five rows or six depending on whether a mode is armed, so a readout
+      // pinned below it by a number would sit on top of it half the time.
+      el('div', { class: 'structure-topleft' }, this.modeEl, this.readoutEl),
       this.tipEl,
-      this.readoutEl,
       el(
         'div',
         { class: 'structure-corner' },
@@ -528,7 +573,26 @@ export class StructurePanel implements DeckCell {
         this.schedule()
       }),
     )
-    this.body = el('div', { class: 'deck-body structure-body' }, this.wrap)
+    // The cells turning together (§25.3). A follower takes the two angles and
+    // nothing else: its own centre, zoom and projection are its own, which is
+    // what makes two synced cells two *views* rather than one view drawn twice.
+    this.turnWith = recall<unknown>(props.memoryKey(), this.seatScope(TURN_SCOPE)) === true
+    this.unsubscribes.push(
+      subscribeTurn((turn) => {
+        if (!this.turnWith || turn.source === this.source) return
+        if (turn.azimuth === this.camera.azimuth && turn.elevation === this.camera.elevation) return
+        this.camera = { ...this.camera, azimuth: turn.azimuth, elevation: turn.elevation }
+        // Remembered, not republished: the follower announcing the turn it was
+        // just given is how two synced cells chase each other round the sphere.
+        if (this.rememberTimer !== null) clearTimeout(this.rememberTimer)
+        this.rememberTimer = window.setTimeout(() => {
+          this.rememberTimer = null
+          remember(this.props.memoryKey(), this.seatScope(CAMERA_SCOPE), this.camera)
+        }, 300)
+        this.schedule()
+      }),
+    )
+    this.body = el('div', { class: 'deck-body structure-body' }, this.wrap, this.resizeGrip())
     this.el = el(
       'section',
       { class: 'deck-panel deck-structure' },
@@ -545,6 +609,11 @@ export class StructurePanel implements DeckCell {
       this.note,
       this.body,
     )
+    // The height this seat was left at, where the reader has set one.
+    const height = recall<unknown>(props.memoryKey(), this.seatScope(HEIGHT_SCOPE))
+    if (typeof height === 'number' && Number.isFinite(height)) {
+      this.setHeight(Math.round(clamp(height, CELL_MIN_H, CELL_MAX_H)))
+    }
     this.watchDrops()
     void this.loadRenderer()
     if (typeof ResizeObserver !== 'undefined') {
@@ -706,7 +775,7 @@ export class StructurePanel implements DeckCell {
    */
   showModel(id: string): void {
     this.chosen = id
-    remember(this.props.memoryKey(), MODEL_SCOPE, id)
+    remember(this.props.memoryKey(), this.seatScope(MODEL_SCOPE), id)
     this.sync()
   }
 
@@ -727,7 +796,7 @@ export class StructurePanel implements DeckCell {
     const store = this.props.store()
     const rows = (store?.entries ?? []).filter((held) => held.kind === 'structure')
     if (this.chosen === null) {
-      const remembered = recall<unknown>(this.props.memoryKey(), MODEL_SCOPE)
+      const remembered = recall<unknown>(this.props.memoryKey(), this.seatScope(MODEL_SCOPE))
       if (typeof remembered === 'string') {
         this.chosen = remembered
       }
@@ -751,7 +820,7 @@ export class StructurePanel implements DeckCell {
     const entry = emptied ? null : (chosenRow ?? free ?? rows[0] ?? null)
     if (emptied) {
       this.chosen = null
-      remember(this.props.memoryKey(), MODEL_SCOPE, null)
+      remember(this.props.memoryKey(), this.seatScope(MODEL_SCOPE), null)
     }
     this.entry = entry
     this.syncName()
@@ -770,13 +839,30 @@ export class StructurePanel implements DeckCell {
       this.structure = null
       this.builtFrom = null
     } else {
+      const style = structureOf(entry.style)
       // A colouring read off another row — a track's values, a feature set's
       // colours — is stale the moment the list changes under it.
       this.colours = null
       this.chords = null
-      if (this.builtFrom !== payload.data) {
+      // How the reader has **placed** this model (§25.5): reflected, turned
+      // into another model's frame, or neither. Part of what the scene is
+      // built from, not something done to it afterwards, because every road
+      // out of here reads the built coordinates — picking a bead, measuring
+      // between two, the labels, the vector export. A mirror applied at the
+      // camera would flip the picture and leave the numbers under it describing
+      // a model nobody is looking at.
+      const placement = this.placementOf(style)
+      const placed = `${style.mirrorX ? 'x' : ''}${style.mirrorY ? 'y' : ''}|${style.align}|${placement.onto?.set.length ?? 0}`
+      if (this.builtFrom !== payload.data || this.placedAs !== placed) {
         const switched = this.builtRow !== null && this.builtRow !== entry.id
-        this.structure = buildStructure(payload.data)
+        // A move into another model's frame carries the model's own units with
+        // it, so the camera that framed it where it was shows a corner of it
+        // where it has gone; a reflection leaves it the same size in the same
+        // place and is watched in place.
+        const moved = this.placedAs !== null && this.placedAs.split('|')[1] !== style.align
+        const raw = buildStructure(payload.data)
+        this.structure = raw === null ? null : placeStructure(raw, placement)
+        this.placedAs = placed
         this.builtFrom = payload.data
         this.builtRow = entry.id
         this.colours = null
@@ -791,7 +877,9 @@ export class StructurePanel implements DeckCell {
         // framed afresh: its beads are in their own units around their own
         // centre, and the camera that framed the last model shows a corner of
         // this one, or nothing.
-        if (switched || recall<unknown>(this.props.memoryKey(), CAMERA_SCOPE) === null) this.frameAll()
+        if (switched || moved || recall<unknown>(this.props.memoryKey(), this.seatScope(CAMERA_SCOPE)) === null) {
+          this.frameAll()
+        }
       }
       this.say(this.structure === null || this.structure.placed === 0 ? WAITING.empty : '')
       // The ghosted sequences are part of the style, so a change to the row
@@ -937,24 +1025,78 @@ export class StructurePanel implements DeckCell {
     this.paintMode()
   }
 
-  /** The badge: which of the seven things the hand is about to do. */
+  /**
+   * The legend in the top-left corner: what the hand can do, and what it is
+   * doing (§25.4).
+   *
+   * It was one chip naming the current gesture, which told a reader who
+   * already knew the keys which key they were holding and told everybody else
+   * nothing: that a drag turns the model, that Shift moves it, that ⌘ puts
+   * the centre somewhere and that Space and the wheel are the fog were four
+   * facts discoverable only by pressing things. So the chip became the list it
+   * was the last line of — one row per control, the key on the left and what
+   * it does on the right — and **the row that is live is lit**, which is the
+   * chip's whole job kept.
+   *
+   * A **readout and not a control**, as it always was: `pointer-events: none`,
+   * no borders, the translucent backing the map's key has. Pressing a row does
+   * nothing, because what it names is a key, and the reader's hand is already
+   * where it needs to be.
+   */
   private paintMode(): void {
-    const mode = this.mode === 'measure'
-      ? { icon: 'ruler', text: 'measure', title: 'Drag from one bead to another for the distance between them; Esc to cancel' }
+    const centreKey = CENTRE_KEY === 'Meta' ? '⌘' : 'Ctrl'
+    // The sticky modes first, where one is armed: it is a state the cell is
+    // *in* rather than a key being held, and while it runs a click does that
+    // and not what the rows below describe.
+    const armed = this.mode === 'measure'
+      ? { key: 'drag', text: 'measure', title: 'Drag from one bead to another for the distance between them; Esc to cancel' }
       : this.mode === 'mark'
-      ? { icon: 'map-pin', text: 'mark', title: 'Click a bead to mark its locus on every map and track' }
-      : this.mode === 'loop'
-      ? { icon: 'link-2', text: 'loop', title: 'Click two beads for a loop between their loci; Esc to cancel' }
+        ? { key: 'click', text: 'mark', title: 'Click a bead to mark its locus on every map and track' }
+        : this.mode === 'loop'
+          ? { key: 'click', text: 'loop', title: 'Click two beads for a loop between their loci; Esc to cancel' }
+          : null
+    const controls: Array<{ key: string; text: string; title: string }> = [
+      { key: 'drag', text: 'turn', title: 'Drag to turn the model — neither angle stops' },
+      { key: 'scroll', text: 'zoom', title: 'The wheel brings the model closer or takes it away' },
+      { key: '⇧', text: 'move', title: 'Hold Shift and drag to move the whole model' },
+      {
+        key: centreKey,
+        text: 'centre',
+        title:
+          `Hold ${centreKey} and click a bead to turn about it — the axes replant along this view. ` +
+          `Tap ${centreKey} alone to show or hide the centre.`,
+      },
+      { key: 'space', text: 'fog', title: 'Hold Space and scroll to bring the fog forward or push it back' },
+    ]
+    // Which row is live. A sticky mode wins over a held key, because that is
+    // what the click will do.
+    const live = armed !== null
+      ? armed.text
       : this.keys.centre
-        ? { icon: 'locate-fixed', text: 'centre', title: `Click a bead to turn about it; tap ${CENTRE_KEY === 'Meta' ? '⌘' : 'Ctrl'} alone to show or hide the centre` }
+        ? 'centre'
         : this.keys.shift
-          ? { icon: 'move', text: 'move', title: 'Drag to move the whole model' }
+          ? 'move'
           : this.keys.space
-            ? { icon: 'layers', text: 'fog', title: 'Scroll to bring the fog forward or push it back' }
-            : { icon: 'rotate-3d', text: 'turn', title: 'Drag to turn the model; Shift-drag moves it; scroll zooms' }
-    this.modeEl.replaceChildren(icon(mode.icon as Parameters<typeof icon>[0], { size: 13 }), el('span', { text: mode.text }))
-    this.modeEl.title = mode.title
-    this.modeEl.dataset['mode'] = mode.text
+            ? 'fog'
+            : 'turn'
+    const rows = armed === null ? controls : [armed, ...controls]
+    this.modeEl.replaceChildren(
+      ...rows.map((control) => {
+        const on = control.text === live
+        // The lit row carries `structure-mode`, which is the class the badge
+        // had and the name the stylesheet accents by: the chip did not go
+        // away, it moved into the list it now heads.
+        const node = el(
+          'div',
+          { class: `structure-guide-row${on ? ' structure-mode is-on' : ''}`, title: control.title },
+          el('kbd', { class: 'structure-guide-key', text: control.key }),
+          el('span', { class: 'structure-guide-what', text: control.text }),
+        )
+        if (on) node.dataset['mode'] = control.text
+        return node
+      }),
+    )
+    this.modeEl.dataset['mode'] = live
   }
 
   /** Turn a mode on, or off where it is the one already on. Half-made work is dropped either way. */
@@ -1097,6 +1239,126 @@ export class StructurePanel implements DeckCell {
     // a loop set already is.
     if (this.style().loops === '') this.restyle({ loops: MANUAL_CHORDS })
     this.schedule()
+  }
+
+  /**
+   * How this model is placed (§25.5): the mirrors, and the model it is turned
+   * into the frame of, built where there is one.
+   *
+   * The other model is built from its own row and thrown away — it is a frame
+   * to be read against, not a picture: `compare with` is the control that
+   * *draws* it, and the two are deliberately separate. A reader asking whether
+   * two folds are the same wants them in one frame; a reader asking where they
+   * differ wants both on screen. Asking one control to do both put a second
+   * model in the picture of everybody who only wanted the first.
+   */
+  private placementOf(style: StructureStyle): { mirrorX: boolean; mirrorY: boolean; onto: Structure | null } {
+    const mirrors = { mirrorX: style.mirrorX, mirrorY: style.mirrorY }
+    if (style.align === '' || style.align === this.entry?.id) return { ...mirrors, onto: null }
+    const entry = this.props.store()?.entries.find((row) => row.id === style.align)
+    const payload = entry?.payload
+    if (payload === undefined || payload.kind !== 'features' || payload.data.model === undefined) {
+      return { ...mirrors, onto: null }
+    }
+    return { ...mirrors, onto: buildStructure(payload.data) }
+  }
+
+  /** Turn with the other cells that are, or stop (§25.3). */
+  private setTurnWith(on: boolean): void {
+    this.turnWith = on
+    remember(this.props.memoryKey(), this.seatScope(TURN_SCOPE), on)
+    // Pressed *on*, this cell leads: the others come round to it, which is the
+    // only reading that does not depend on which cell is touched next.
+    if (on) publishTurn({ azimuth: this.camera.azimuth, elevation: this.camera.elevation, source: this.source })
+    this.paintSettings()
+  }
+
+  /**
+   * Lay the centre's axes along this view (§25.5).
+   *
+   * **Neither the model nor the centre moves.** What changes is the frame the
+   * arms are drawn in: x across the screen, y up it, z out of it, as they are
+   * at the moment this is pressed. Afterwards every turn is read against that
+   * view — which is the question a reader asks of a gizmo, *how far have I
+   * come from where I was looking* — rather than against the axes the file
+   * was written in, which mean nothing to anybody by the time a model has been
+   * turned twice.
+   */
+  private replantAxes(): void {
+    this.restyle({ axes: true, axesFrame: viewFrame(this.camera) })
+  }
+
+  /** This seat's memory scope (§25.3), for whatever this cell remembers. */
+  private seatScope(scope: string): string {
+    return seatScope(scope, this.props.seat?.() ?? 0)
+  }
+
+  /**
+   * The bar under the picture that sets this cell's height (§25.3).
+   *
+   * A structure cell used to be as tall as the row gave it and no taller,
+   * which is right in a row *beside* a map — the cells line up — and wrong in
+   * a column **under** one: a deck one across put the model in a 16 rem band
+   * under a map that could be shrunk to a thumbnail, and nothing the reader
+   * did to either of them gave the model any more room. A model has no axis to
+   * line up with the map's, so it is the one cell whose height is nobody's
+   * business but the reader's.
+   *
+   * The height is written as a property on the *cell*, not as a style on the
+   * picture, because the picture is lent to the enlarged dialog and back: an
+   * inline height would follow it in and hold the model to 300 pixels in the
+   * middle of a full-screen stage.
+   */
+  private resizeGrip(): HTMLElement {
+    const grip = el('div', {
+      class: 'structure-resize',
+      attrs: { role: 'separator', 'aria-orientation': 'horizontal', tabindex: '0' },
+      title: 'Drag to make this cell taller or shorter · double-click to fit the row again',
+    })
+    const setTo = (height: number | null): void => {
+      this.setHeight(height)
+      remember(this.props.memoryKey(), this.seatScope(HEIGHT_SCOPE), height)
+    }
+    grip.addEventListener('pointerdown', (event) => {
+      grip.setPointerCapture(event.pointerId)
+      grip.classList.add('is-dragging')
+      event.preventDefault()
+      const from = this.wrap.getBoundingClientRect()
+      const heightAt = (clientY: number): number =>
+        Math.round(clamp(clientY - from.top, CELL_MIN_H, CELL_MAX_H))
+      const move = (moved: PointerEvent): void => this.setHeight(heightAt(moved.clientY))
+      const up = (ended: PointerEvent): void => {
+        grip.removeEventListener('pointermove', move)
+        grip.removeEventListener('pointerup', up)
+        grip.classList.remove('is-dragging')
+        if (grip.hasPointerCapture(ended.pointerId)) grip.releasePointerCapture(ended.pointerId)
+        setTo(heightAt(ended.clientY))
+      }
+      grip.addEventListener('pointermove', move)
+      grip.addEventListener('pointerup', up)
+    })
+    // Back to the row's own height, which is the state there is no other way
+    // out of once a height has been set.
+    grip.addEventListener('dblclick', () => setTo(null))
+    grip.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowUp' ? -24 : event.key === 'ArrowDown' ? 24 : 0
+      if (step === 0) return
+      event.preventDefault()
+      setTo(Math.round(clamp(this.wrap.getBoundingClientRect().height + step, CELL_MIN_H, CELL_MAX_H)))
+    })
+    return grip
+  }
+
+  /** Hold the picture at `height` pixels, or give it back to the row. */
+  private setHeight(height: number | null): void {
+    if (height === null) {
+      this.el.classList.remove('has-height')
+      this.el.style.removeProperty('--structure-h')
+    } else {
+      this.el.classList.add('has-height')
+      this.el.style.setProperty('--structure-h', `${height}px`)
+    }
+    this.remeasure()
   }
 
   private say(message: string): void {
@@ -1437,6 +1699,12 @@ export class StructurePanel implements DeckCell {
         this.centreTap = false
         this.camera = { ...this.camera, target: [model.x[bead], model.y[bead], model.z[bead]] }
         this.rememberCamera()
+        // …and the axes are replanted along this view (§25.5). A centre put
+        // somewhere new is a reader saying *read the model from here*, and
+        // arms left pointing along the frame the file happened to be written
+        // in answer a question nobody asked. The one gesture sets both, which
+        // is why there is no second thing to remember to press.
+        this.replantAxes()
         this.schedule()
         return
       }
@@ -1555,15 +1823,33 @@ export class StructurePanel implements DeckCell {
 
   /** A dropped g3d replaces the model; a dragged map is the grid's business. */
   private watchDrops(): void {
+    // A **row of the Structures card**, dragged onto this cell: draw that model
+    // here (§25.3). The same gesture an empty cell takes, and it has to be
+    // taken by a full one too — the second view of a model is asked for by
+    // dragging its row onto the cell that is to hold it, and a cell that
+    // ignored the drop left the reader with the grip, the drop shadow and
+    // nothing happening. A cell already drawing it is not a reason to refuse:
+    // two cells of one model are two views of it.
+    const model = (event: DragEvent): string => event.dataTransfer?.getData(STRUCTURE_DRAG_TYPE) ?? ''
+
     this.wrap.addEventListener('dragover', (event) => {
       if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE)) return
       event.preventDefault()
+      if (dragHasStructure(event) && event.dataTransfer !== null) event.dataTransfer.dropEffect = 'copy'
       this.wrap.classList.add('is-over')
     })
     this.wrap.addEventListener('dragleave', () => this.wrap.classList.remove('is-over'))
     this.wrap.addEventListener('drop', (event) => {
       this.wrap.classList.remove('is-over')
       if (event.dataTransfer?.types.includes(DECK_DRAG_TYPE)) return
+      // Before the file road, which a drag from the card has no file for.
+      const row = model(event)
+      if (row !== '') {
+        event.preventDefault()
+        event.stopPropagation()
+        this.showModel(row)
+        return
+      }
       const file = event.dataTransfer?.files?.[0]
       // A row out of the Files panel: resolved to a file or a URL first, which
       // costs a fetch, so the branch below (a list already in hand) is not
@@ -1630,10 +1916,16 @@ export class StructurePanel implements DeckCell {
 
   /** Write the camera down, once the hand has settled. */
   private rememberCamera(): void {
+    // The cells turning with this one, before the write: a follower should be
+    // round to the same face while the drag is still going, not 300 ms after
+    // it stops.
+    if (this.turnWith) {
+      publishTurn({ azimuth: this.camera.azimuth, elevation: this.camera.elevation, source: this.source })
+    }
     if (this.rememberTimer !== null) clearTimeout(this.rememberTimer)
     this.rememberTimer = window.setTimeout(() => {
       this.rememberTimer = null
-      remember(this.props.memoryKey(), CAMERA_SCOPE, this.camera)
+      remember(this.props.memoryKey(), this.seatScope(CAMERA_SCOPE), this.camera)
     }, 300)
   }
 
@@ -2237,8 +2529,20 @@ export class StructurePanel implements DeckCell {
       })
       return node
     }
-    const toggleIcon = (name: Parameters<typeof icon>[0], title: string, on: boolean, onChange: (on: boolean) => void): HTMLElement => {
-      const node = iconButton(name, title, () => onChange(!on), { class: 'btn btn-icon btn-toggle structure-toggle', size: 15 })
+    const toggleIcon = (
+      name: Parameters<typeof icon>[0],
+      title: string,
+      on: boolean,
+      onChange: (on: boolean) => void,
+      // A class of its own where the control is one a test or a script has to
+      // find by name; the toggle's own classes are always there too.
+      options?: { class?: string },
+    ): HTMLElement => {
+      const extra = options?.class === undefined ? '' : ` ${options.class}`
+      const node = iconButton(name, title, () => onChange(!on), {
+        class: `btn btn-icon btn-toggle structure-toggle${extra}`,
+        size: 15,
+      })
       node.setAttribute('aria-pressed', String(on))
       return node
     }
@@ -2364,6 +2668,23 @@ export class StructurePanel implements DeckCell {
           el('p', { class: 'clip-note structure-note-line', text: fit === null ? 'the two models share fewer than four beads' : `${fmt.int(fit.matched)} beads matched · RMSD ${fmt.num(fit.rmsd)} model units` }),
         )
       }
+      // …and the same superposition read the other way: **this** model turned
+      // into that one's frame, and that one not drawn (§25.5). Beside
+      // `compare with` because they are the two halves of one question, and
+      // after it because the drawn answer is the one a reader reaches for
+      // first.
+      const into = [{ value: '', text: 'its own' }, ...others.map((held) => ({ value: held.id, text: held.label }))]
+      if (style.align !== '' && !into.some((choice) => choice.value === style.align)) {
+        into.push({ value: style.align, text: `${style.align} (no longer in the list)` })
+      }
+      rows.push(
+        pickField(
+          'in the frame of',
+          select(into, style.align, (value) => this.restyle({ align: value })),
+          'Turn this model into another model’s frame, over the beads the two share, without drawing the other. ' +
+            'Two cells each in one frame are two models that can be turned together and read against each other.',
+        ),
+      )
     }
 
     // Drawn as: any of the three together.
@@ -2591,6 +2912,21 @@ export class StructurePanel implements DeckCell {
             this.turning,
             () => this.toggleTurning(),
           ),
+          toggleIcon(
+            'link',
+            this.turnWith
+              ? 'Stop turning with the other cells'
+              : 'Turn with every other cell set to turn together — one drag turns them all, each keeping its own centre and zoom',
+            this.turnWith,
+            (on) => this.setTurnWith(on),
+            { class: 'btn btn-icon structure-turn-with' },
+          ),
+          button('replant the axes', () => this.replantAxes(), {
+            class: 'btn structure-replant',
+            title:
+              'Lay the centre’s axes along this view — x across, y up, z out of the page. ' +
+              'Neither the model nor the centre moves; only the frame they are read against.',
+          }),
         ),
       ),
     )
@@ -2606,6 +2942,21 @@ export class StructurePanel implements DeckCell {
             class: 'btn',
             title: this.keyed('Put the camera on the whole model', STRUCTURE_KEYS.all),
           }),
+          toggleIcon(
+            'flip-horizontal',
+            'Mirror the model across the screen. A model from contacts is fixed only up to ' +
+              'reflection, so this is how one is brought into the same hand as another.',
+            style.mirrorX,
+            (on) => this.restyle({ mirrorX: on }),
+            { class: 'btn btn-icon structure-mirror-x' },
+          ),
+          toggleIcon(
+            'flip-vertical',
+            'Mirror the model up the screen — the same reflection as the one beside it, seen the other way up.',
+            style.mirrorY,
+            (on) => this.restyle({ mirrorY: on }),
+            { class: 'btn btn-icon structure-mirror-y' },
+          ),
         ),
       ),
     )

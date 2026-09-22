@@ -164,6 +164,62 @@ export function basis(camera: Camera): {
   return { forward, right, up }
 }
 
+/**
+ * The camera's own frame as a unit quaternion `[x, y, z, w]`.
+ *
+ * The rotation that takes the scene's axes to the screen's: **x** to the
+ * right, **y** up the page, **z** out of it towards the reader. What
+ * *replant* writes into a model's `axesFrame` (§25.5), so the arms of the
+ * centre lie along the view at the moment it was pressed and every turn after
+ * that is read against that view.
+ *
+ * Built from {@link basis} by the trace method, which is the numerically
+ * sound way round: the largest of the four components is solved for first,
+ * so nothing is ever divided by a quantity near zero — and the one case that
+ * would be, a camera looking straight along an axis, is exactly the one a
+ * reader reaches for.
+ */
+export function viewFrame(camera: Camera): [number, number, number, number] {
+  const { forward, right, up } = basis(camera)
+  // Columns of the rotation: the screen's right, up and out-of-page in scene
+  // coordinates. `forward` points *into* the page, so the third column is its
+  // negation.
+  const m = [
+    [right[0], up[0], -forward[0]],
+    [right[1], up[1], -forward[1]],
+    [right[2], up[2], -forward[2]],
+  ]
+  const trace = m[0][0] + m[1][1] + m[2][2]
+  let q: [number, number, number, number]
+  if (trace > 0) {
+    const s = Math.sqrt(trace + 1) * 2
+    q = [(m[2][1] - m[1][2]) / s, (m[0][2] - m[2][0]) / s, (m[1][0] - m[0][1]) / s, s / 4]
+  } else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+    const s = Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]) * 2
+    q = [s / 4, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s, (m[2][1] - m[1][2]) / s]
+  } else if (m[1][1] > m[2][2]) {
+    const s = Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]) * 2
+    q = [(m[0][1] + m[1][0]) / s, s / 4, (m[1][2] + m[2][1]) / s, (m[0][2] - m[2][0]) / s]
+  } else {
+    const s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2
+    q = [(m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, s / 4, (m[1][0] - m[0][1]) / s]
+  }
+  const length = Math.hypot(q[0], q[1], q[2], q[3])
+  return length > 0 ? [q[0] / length, q[1] / length, q[2] / length, q[3] / length] : [0, 0, 0, 1]
+}
+
+/** Turn a unit quaternion into the three axes it points along, as scene vectors. */
+export function frameAxes(
+  q: readonly [number, number, number, number],
+): { x: [number, number, number]; y: [number, number, number]; z: [number, number, number] } {
+  const [x, y, z, w] = q
+  return {
+    x: [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)],
+    y: [2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w)],
+    z: [2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y)],
+  }
+}
+
 /** Half the height of the view at the target's depth, in scene units. */
 export function halfHeight(camera: Camera): number {
   return camera.distance * Math.tan((camera.fov / 2) * (Math.PI / 180))

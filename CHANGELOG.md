@@ -14,6 +14,58 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **One model in as many cells as you like, each a view of its own (§25.3).** A structure row could
+  be drawn in one cell and one only — the link dropped a second `3d`, and the eye and the drag both
+  refused a model already on screen — on the reasoning that two cells of one row are one picture
+  drawn twice. They are not: a cell has its **own camera, its own mirrors, its own planted axes and
+  its own height**, so two cells of one model are two views of it, which is the ordinary way anybody
+  looks at a fold. The eye still means *is this model on screen*; the **picker** and the row's
+  **grip dropped on the cell that is to hold it** are how a second view is asked for. What each cell
+  remembers is now remembered under its **seat** — its place among the structure cells — where every
+  cell used to write to one slot, so a deck of two views came back from a reload as the same view
+  twice.
+
+- **Turn together (§25.3).** A link on the *camera* row: every cell with it lit shares the camera's
+  two angles, so one drag turns them all. **Only the angles travel** — each cell keeps its own
+  centre, zoom and projection — which is what makes two synced cells two views rather than one view
+  drawn twice. Pressed on, a cell leads and the others come round to it.
+
+- **In the frame of (§25.5).** A select beside *compare with*, naming another model: this model is
+  turned into **that one's frame**, over the beads the two share and by the same superposition, and
+  **the other is not drawn**. The two are one question asked twice — *where do these differ* wants
+  both on screen, *is this the same fold* wants them in one frame — and one control doing both put a
+  second model in the picture of everybody who only wanted the first. Two cells each in the frame of
+  one row, turning together, are two models in one frame showing the same face of each.
+
+- **Mirrors on the frame row (§25.5).** A reconstruction from contacts is fixed **only up to
+  reflection**: a model and its mirror image explain the same counts equally well, so two models of
+  one map routinely come out in opposite hands and no rotation will ever bring one onto the other.
+  Two toggles reflect the model across the screen or up it. The reflection is applied to the **built
+  coordinates**, so picking, measuring, the labels and the vector export all follow it — a mirror at
+  the camera would flip the picture and leave the numbers under it describing a model nobody is
+  looking at — and it is applied **before** any fit, since mirroring is what makes the fit possible
+  and fitting first would reflect the answer instead of the question.
+
+- **Replant the axes (§25.5).** The centre's arms carry a frame the reader plants: *replant*, on the
+  *camera* row, lays them along **this view** — x across the screen, y up it, z out of it — so every
+  turn after that is read against the view they were planted in, which is the question anybody asks
+  of a gizmo. **Neither the model nor the centre moves**; only the frame they are read against.
+  ⌘-click replants as it re-centres, because a centre put somewhere new is a reader saying *read the
+  model from here*.
+
+- **A legend in the cell's corner (§25.4).** One row per control — the key on the left, what it does
+  on the right — with the live row lit: *drag* turn, *scroll* zoom, *⇧* move, *⌘* centre, *space*
+  fog, and a sticky mode at the top while it runs. It was one chip naming the current gesture, which
+  told a reader who already knew the keys which key they were holding and everybody else nothing:
+  that Shift moves the model, that ⌘ puts the centre somewhere and that Space and the wheel are the
+  fog were facts discoverable only by pressing things.
+
+- **The structure cell is resized by a bar under it (§25.3).** Dragged, nudged with the arrow keys,
+  double-clicked to give the height back to the row, and remembered per seat. A model has no axis to
+  line up with the map's, so it is the one cell whose height is nobody's business but the reader's:
+  a deck one across put the model in a 16 rem band under a map that could be shrunk to a thumbnail,
+  and nothing done to either of them gave the model any more room.
+
 - **The analysis tasks are four cards, cut by dimension (§18.8).** *2D tasks*, *3D tasks*, *1D tasks*
   and *Metagenome*, each with the frame, mark and fold every other card in every other column has,
   where there was one flat list under three headings. The cut is **by the dimension the question is
@@ -761,7 +813,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   when they do, the genome wins* describes the parser rather than the reader's situation, and a name
   that collides never reaches that refusal.
 
+### Changed
+
+- **The centre of rotation is shown by default, and it is a gizmo rather than a cross (§25.5).** A
+  ball at the camera's target with three arms out of it — one per axis, a **head** on the positive
+  end and a short stub on the negative, in the colours every 3D tool uses. It is where every drag
+  turns about and where ⌘-click puts the next one, so a reader who cannot see it is turning the
+  model about a point they have to infer from the motion; and six half-lines crossing in a dot said
+  neither which way an axis went nor which end was the centre. A session stored before this opens
+  with it on, which is what the stored-style reader had to be taught: `axes` was read as *on only if
+  the file says so*, and the default arriving as its opposite for every reader who has been here
+  before is the one way a default change reaches nobody.
+
+- **The ghost opacity starts at 0.1 rather than 0.15 (§25.3).** What is outside the window should be
+  a trace of where the rest of the genome went, not a second picture competing with the one being
+  read.
+
 ### Fixed
+
+- **A mark outside the window is ghosted like the bead it sits on (§25.5).** Telomeres, the reader's
+  own marked places and the genomic ruler's ticks were drawn at full strength whatever the model was
+  doing, so a window of one chromosome was read against a constellation of solid yellow telomeres
+  nowhere near it — the brightest thing in a picture of somewhere else. The vector export had it
+  right from the start, so the screen and the exported PDF disagreed about the same model.
+
+- **A structure row dropped on a cell is drawn in that cell.** The grip on a Structures row could be
+  dragged onto an empty cell, and the drop opened *a* structure cell — not the one it was dropped on
+  — or did nothing at all when the cell already held a model. A drop says **where** as well as
+  **which**, which is the whole reason the grip exists.
 
 - **A model with a bin the solver could not place is a structure again (§25.2).** A solver writes
   `nan` in all three coordinate columns for a bin it was given nothing to place — a repeat, a gap in

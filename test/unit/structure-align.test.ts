@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseG3d } from '@/annotations/g3d'
-import { alignTo, displacements, matchBeads, topEigenvector } from '@/structure/align'
+import { alignTo, displacements, matchBeads, placeStructure, topEigenvector } from '@/structure/align'
 import { buildStructure } from '@/structure/scene'
 
 function helixText(n: number, transform: (p: [number, number, number]) => [number, number, number], contig = 'chr1'): string {
@@ -96,5 +96,67 @@ describe('alignment', () => {
     const a = build(helixText(3, identity))
     const b = build(helixText(3, moved))
     expect(alignTo(a, b)).toBeNull()
+  })
+})
+
+describe('placing a model (§25.5)', () => {
+  /** The distance between two models bead for bead, after a fit. */
+  const apart = (a: ReturnType<typeof build>, b: ReturnType<typeof build>): number => {
+    const fit = alignTo(a, b)
+    return fit === null ? Number.POSITIVE_INFINITY : fit.rmsd
+  }
+
+  it('leaves a model that is not placed exactly as it was', () => {
+    const a = build(helixText(20, identity))
+    expect(placeStructure(a, { mirrorX: false, mirrorY: false, onto: null })).toBe(a)
+  })
+
+  it('mirrors through the screen and up it, and neither moves a bead along the fibre', () => {
+    const a = build(helixText(20, identity))
+    const x = placeStructure(a, { mirrorX: true, mirrorY: false, onto: null })
+    const y = placeStructure(a, { mirrorX: false, mirrorY: true, onto: null })
+    for (let i = 0; i < a.set.length; i++) {
+      expect(x.x[i]).toBeCloseTo(-a.x[i], 6)
+      expect(x.y[i]).toBeCloseTo(a.y[i], 6)
+      expect(y.x[i]).toBeCloseTo(a.x[i], 6)
+      expect(y.y[i]).toBeCloseTo(-a.y[i], 6)
+      // z is untouched by either, and so is where each bead is on the genome.
+      expect(x.z[i]).toBeCloseTo(a.z[i], 6)
+    }
+    expect(Array.from(x.set.start)).toEqual(Array.from(a.set.start))
+  })
+
+  it('turns a model into another\u2019s frame without drawing the other', () => {
+    // A helix and the same helix turned, scaled and shifted: two solvers'
+    // answers to one map, which is the case this is for.
+    const a = build(helixText(24, identity))
+    const b = build(helixText(24, moved))
+    // Already close after a fit — they are the same fold — but in their own
+    // coordinates they are not on top of each other at all.
+    const before = Math.hypot(a.x[0] - b.x[0], a.y[0] - b.y[0], a.z[0] - b.z[0])
+    const placed = placeStructure(b, { mirrorX: false, mirrorY: false, onto: a })
+    const after = Math.hypot(a.x[0] - placed.x[0], a.y[0] - placed.y[0], a.z[0] - placed.z[0])
+    expect(after).toBeLessThan(before)
+    expect(after).toBeCloseTo(0, 3)
+    // Every bead, not just the first: the placed model *is* the other's frame.
+    expect(apart(a, placed)).toBeCloseTo(0, 6)
+  })
+
+  it('needs the reflection first where the two models are in opposite hands', () => {
+    // A left-handed copy of the helix: no rotation will ever bring it onto the
+    // right-handed one, which is the whole reason the mirrors exist.
+    const a = build(helixText(24, identity))
+    const flipped = build(helixText(24, ([x, y, z]) => [-x, y, z]))
+    const turned = placeStructure(flipped, { mirrorX: false, mirrorY: false, onto: a })
+    expect(apart(a, turned)).toBeGreaterThan(0.2)
+    const mirrored = placeStructure(flipped, { mirrorX: true, mirrorY: false, onto: a })
+    expect(apart(a, mirrored)).toBeCloseTo(0, 6)
+  })
+
+  it('leaves the model alone where the two share too few beads to fit', () => {
+    const a = build(helixText(3, identity))
+    const b = build(helixText(3, moved))
+    const placed = placeStructure(b, { mirrorX: false, mirrorY: false, onto: a })
+    expect(Array.from(placed.x)).toEqual(Array.from(b.x))
   })
 })

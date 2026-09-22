@@ -59,6 +59,7 @@ const SET_FROM_SCRIPT = [
   '--map-size',
   '--seq-share',
   '--strength',
+  '--structure-h',
   '--text-scale',
   '--turn-height',
   '--turn-width',

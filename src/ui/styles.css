@@ -9891,11 +9891,10 @@ span.deck-name {
   border-radius: 50%;
 }
 
-/* Where the pointer is, in words: the locus, the chain, the bead. */
+/* Where the pointer is, in words: the locus, the chain, the bead. Placed by
+   the top-left column it sits in (`.structure-topleft`), under the legend. */
 .structure-readout {
-  position: absolute;
-  left: 6px;
-  top: 6px;
+  align-self: flex-start;
   padding: 2px 6px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -10028,6 +10027,56 @@ span.deck-name {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* A height the reader set, against a row that would otherwise give the model
+   16rem and nothing else (§25.3). Written as a property on the *cell* rather
+   than as a style on the picture, because the picture is lent to the enlarged
+   dialog and given back: an inline height would go with it and hold a
+   full-screen stage to 300 pixels. */
+.deck-structure.has-height > .structure-body > .structure-wrap {
+  flex: 0 0 auto;
+  height: var(--structure-h);
+  min-height: 0;
+}
+
+/* The bar under the picture that sets that height. Three pixels of nothing
+   until it is wanted, and the whole width so it is found without aiming: it
+   sits between the cell and whatever is under it, which is where a hand
+   reaches for an edge. */
+.structure-resize {
+  flex: 0 0 auto;
+  height: 7px;
+  margin-top: 1px;
+  border-radius: 999px;
+  cursor: ns-resize;
+  background: transparent;
+  position: relative;
+  touch-action: none;
+}
+
+.structure-resize::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2.5rem;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.12s ease;
+}
+
+.structure-resize:hover::after,
+.structure-resize:focus-visible::after,
+.structure-resize.is-dragging::after {
+  background: var(--accent);
+}
+
+.structure-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* A picture with its settings beside it (`ui/StageDialog.ts`): the model
@@ -11762,33 +11811,88 @@ span.deck-name {
    none`, because what it reports is what the hand is already doing. The
    translucent backing and the dim text are how the map's key states a fact over
    a picture, and this is the same kind of statement. */
-.structure-mode {
+/* The corner's column: the legend of what the hand can do, and under it the
+   readout of where it is. One column, so the readout follows the legend down
+   when a sticky mode adds a row to it. */
+.structure-topleft {
   position: absolute;
   left: 6px;
   top: 6px;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
-  padding: 2px 6px;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  max-width: 70%;
   pointer-events: none;
   z-index: 2;
 }
-/* The armed modes in the accent, because each of them is a *state the cell is
-   in* rather than a description of an ordinary drag: a click is about to mark,
-   loop, measure or move the centre. `select` is not one of them — the three
-   modes are `mark`, `loop` and `measure` ({@link StructureMode}). */
-.structure-mode[data-mode='centre'],
-.structure-mode[data-mode='mark'],
-.structure-mode[data-mode='loop'],
-.structure-mode[data-mode='measure'] {
-  color: var(--accent);
+
+/* The legend (§25.4): one row per control, the key on the left and what it
+   does on the right, the live one lit. Faint, because it is a caption on a
+   picture and not a menu — a reader who knows the keys should be able to look
+   past it, and one who does not should find it without hunting. */
+.structure-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.35;
 }
-.structure-wrap > .structure-readout {
-  top: 30px;
+
+/* A row is its key and its word. The key column is given a width rather than
+   sized to its contents, so `drag`, `scroll` and `⇧` leave the words under
+   one another — a ragged left edge on five short rows reads as five unrelated
+   labels. `display: contents` would have done the same with a grid and is not
+   used: a box with no box of its own carries no tooltip, and every row here
+   has one. */
+.structure-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.structure-guide-key {
+  flex: none;
+  min-width: 2.6rem;
+  text-align: center;
+  padding: 0 3px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-sunken) 70%, transparent);
+  color: var(--text-dim);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
+.structure-guide-what {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+/* The live row, which is what the old one-chip badge said on its own: the
+   control the hand is on right now. Full strength against the faint ones, and
+   in the accent for a mode the reader is *in* rather than one they are passing
+   through — a click is about to mark, loop, measure, or move the centre. */
+.structure-guide-row.is-on > .structure-guide-key,
+.structure-guide-row.is-on > .structure-guide-what {
+  opacity: 1;
+  color: var(--text);
+}
+
+.structure-guide-row.is-on > .structure-guide-key {
+  border-color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+.structure-mode[data-mode='centre'] > .structure-guide-what,
+.structure-mode[data-mode='mark'] > .structure-guide-what,
+.structure-mode[data-mode='loop'] > .structure-guide-what,
+.structure-mode[data-mode='measure'] > .structure-guide-what {
+  color: var(--accent);
+  font-weight: 600;
 }
 /* A sequence's row on the key: a picker for its colour, a button for its name. */
 .structure-key-seq {
