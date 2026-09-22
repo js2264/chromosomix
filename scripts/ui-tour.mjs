@@ -344,6 +344,31 @@ await scene('analysis', async ({ page, shot, fold, opened }) => {
   await shot('35-synthetic-tracks')
   // The APA row waiting on a loop set, the greyed rows, the drawer's runs.
   await shot('36-analysis-states', { clip: { x: 1600, y: 90, width: 320, height: 1010 } })
+  // Cis and trans: the one drawer whose figure is a bar chart, and the one
+  // setting that changes what a figure *is* rather than how it is drawn. Both
+  // answers are shot, because a stacked pair and a single row of bars are two
+  // pictures and the legend only appears on one of them.
+  await fold('Fold the Annotations panel')
+  await page.keyboard.press('Escape')
+  await sleep(700)
+  await page.locator('.analysis-row-title', { hasText: 'Cis and trans' }).first().click()
+  await sleep(1000)
+  await shot('37-drawer-cistrans-form')
+  await page.locator('.analysis-drawer button', { hasText: /^run$/i }).first().click()
+  await page.waitForFunction(() => /computed in/.test(document.querySelector('.analysis-drawer')?.textContent ?? ''), null, { timeout: 180000 }).catch(() => console.log('no cis/trans result'))
+  await sleep(4000)
+  await shot('38-drawer-cistrans-bars')
+  // …and the same run with both fractions stacked.
+  const bars = await page.$('.analysis-drawer select')
+  const which = await page.$$('.analysis-drawer select')
+  for (const select of which) {
+    const values = await select.evaluate((node) => [...node.options].map((option) => option.value))
+    if (values.includes('both')) { await select.selectOption('both'); break }
+  }
+  await sleep(600)
+  await page.locator('.analysis-drawer button', { hasText: /^run$/i }).first().click()
+  await sleep(6000)
+  await shot('39-drawer-cistrans-stacked')
 })
 
 // ---------------------------------------------------------------- deck
