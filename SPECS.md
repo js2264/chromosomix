@@ -8214,10 +8214,14 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
 - **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
   of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough
   for every option any of them offers. The line under the label is kept for a control that is not one
-  dropdown: a row of icon toggles, a pair of clip boxes, or a select whose options are **names out of
-  a file** (the 3D card's structure and compare-with, where the option is `Yeast_structure`). The Map
-  card used to hold `score` above its select and `smooth`, `transform` and `colours` beside theirs,
-  which is two shapes for one kind of question; the fix was the label column, not the row.
+  dropdown — a row of icon toggles, a pair of clip boxes — and for a select whose options are not
+  *words*: a **name out of a file** (`Yeast_structure`) or a **phrase** (`the same everywhere`),
+  neither of which fits 97 pixels and neither of which can be shortened, since one belongs to the
+  file and the other is the sentence the setting is. That is the 3D card, and it keeps the shape for
+  all four of its selects rather than for two — the rule that matters is that a card does not hold
+  both shapes. The Map card used to hold `score` above its select and `smooth`, `transform` and
+  `colours` beside theirs, which is two shapes for one kind of question; the fix was the label
+  column, not the row.
 - **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
   other four do.
 - **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**
