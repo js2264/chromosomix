@@ -379,10 +379,37 @@ await scene('deck', async ({ page, shot, fold, opened }) => {
   await sleep(4000)
   await shot('40-deck')
   // A companion's scale menu on its picture.
+  //
+  // Every press in this scene is optional and none of them is allowed to cost
+  // the shots after it: the buttons on a cell move with the cell's own layout,
+  // and when the maps became square by default (§17.2) this one ended up under
+  // the picture's corner, where a click waits thirty seconds for an element that
+  // will never be free. A missing affordance is worth a line in the error list;
+  // it is not worth four missing pictures.
+  const press = async (handle, what) => {
+    if (handle === null) { errors.push(`deck: no ${what} to press`); return false }
+    try {
+      await handle.click({ timeout: 4000 })
+      return true
+    } catch {
+      errors.push(`deck: ${what} could not be pressed`)
+      return false
+    }
+  }
   const scale = await page.$('.deck-panel:not(.is-lead) button[title*="scale" i], .deck-panel:not(.is-lead) button[title*="colour" i], .deck-panel:not(.is-lead) button[title*="clip" i]')
-  if (scale) { await scale.click(); await sleep(700); await shot('41-deck-companion-scale') ; await page.keyboard.press('Escape'); await sleep(300) }
+  if (await press(scale, 'the companion’s scale menu')) {
+    await sleep(700)
+    await shot('41-deck-companion-scale')
+    await page.keyboard.press('Escape')
+    await sleep(300)
+  }
   // The add row: the bar is repainted on every press, so the button is found again.
-  if (await page.$('.deck-add-toggle')) { await page.click('.deck-add-toggle'); await sleep(600); await shot('42-deck-add-menu'); await page.click('.deck-add-toggle'); await sleep(400) }
+  if (await press(await page.$('.deck-add-toggle'), 'the deck’s add row')) {
+    await sleep(600)
+    await shot('42-deck-add-menu')
+    await press(await page.$('.deck-add-toggle'), 'the deck’s add row again')
+    await sleep(400)
+  }
   await shot('43-deck-bar', { clip: { x: 280, y: 90, width: 1360, height: 160 } })
   // Asserted, for the reason the map's dark shot is — see `22-map-dark`.
   await page.keyboard.press('t')

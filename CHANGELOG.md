@@ -630,6 +630,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   question. The label column was the cause, not the row: at 6.5rem a dropdown had 67 pixels, which
   cut `adaptive` in `smooth` and left `correlation` no chance; at 4.6rem, the width of the longest
   label in those cards, every option fits beside its label.
+- **A companion cell's *Colour and values* button can be pressed.** The drag handle for the
+  picture's bottom edge runs straight over it and sat above it in the stacking order, so every click
+  on the button was a click on the grip — the one control on that cell that opens its whole colour
+  menu, unreachable by pointer. The grip gives up a 38-pixel bite at its left end and keeps the rest
+  of the edge: an edge can be dragged anywhere along it, a button only where it is.
 - **The `/` badge sits in the middle of the box it is in.** With no `top` an absolutely positioned
   child keeps its static position, which in that flex row is the top of the line, so the badge was
   four pixels high of centre and wedged three pixels from the border.

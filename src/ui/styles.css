@@ -4000,6 +4000,14 @@ canvas.is-frozen {
    was the one number hidden behind a control. Twenty pixels is the renderer's
    own corner band (`drawTicks`, which steps the last *row* label aside by the
    same figure), so the two agree about where the corner is. */
+/* **Above the edge's drag handle**, which runs along the bottom of the picture
+   and straight over this button. At `z-index: 3` against the grip's 5 the
+   companion cell's *Colour and values* button could not be pressed at all — the
+   grip took every click on it — and the tour found it by waiting thirty seconds
+   for an element that was never going to be free. The grip loses a 38-pixel bite
+   at its left end and keeps the rest of the edge, which is the trade the right
+   way round: an edge can be dragged anywhere along it, and a button can only be
+   pressed where it is. */
 .map-settings-corner {
   position: absolute;
   left: 0;
@@ -4008,7 +4016,7 @@ canvas.is-frozen {
   flex-direction: column-reverse;
   align-items: flex-start;
   gap: 4px;
-  z-index: 3;
+  z-index: 6;
 }
 
 .map-settings-toggle {
