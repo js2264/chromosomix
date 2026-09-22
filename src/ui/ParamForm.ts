@@ -965,8 +965,10 @@ export class ParamForm {
 
     // **The unit beside the box is the whole of what says what the number is**,
     // and it is written beside it rather than folded into the label because it
-    // belongs to the number: `%` is drawn with its sign, `bins` says a count of
-    // the file's own cells, `diagonals` says a count of them from the diagonal.
+    // belongs to the number: `%` is drawn with its sign, and `bins` says a count
+    // of the file's own cells. A count of *diagonals* says so in its label
+    // instead — *diagonals*, *diagonals to ignore* — because there the word is
+    // the question rather than a unit hung off a number.
     //
     // There used to be a caption under every `bp` box reading *n bins at 1 kb*,
     // translating what the reader typed into what the task would do. It is gone
