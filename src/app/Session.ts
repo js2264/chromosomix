@@ -5756,15 +5756,19 @@ export class Session {
    */
   private turnPresentation(state: ViewState, direction?: RotateDirection): TurnPresentation {
     return {
-      // Absent is *on*: a block with a diagonal opens as a band along a genomic
-      // axis, and the square is what a reader asks for rather than what they are
-      // given. Only an explicit `false` turns it back, which is what keeps the
-      // hash of an ordinary view short and a link with no `flip` in it opening
-      // the way this viewer opens.
-      on: state.flip !== false,
+      // Absent is *off*: a map opens square, and the turn is the reading a reader
+      // asks for. It used to be the other way round — see `ViewState.flip` for
+      // the argument and for why it was wrong, which comes down to *which* maps
+      // the default reached: `isTurnable` admits one sequence against itself and
+      // nothing else, so the maps it turned were exactly the single chromosomes
+      // a reader had just clicked on, and the picture changed shape as they
+      // arrived.
+      on: state.flip === true,
       ...(direction === undefined ? {} : { direction }),
       onChange: (on) => {
-        this.store.patch({ flip: on ? undefined : false })
+        // The turn is what gets written down; the square is the absence, which is
+        // what keeps an ordinary view's hash short.
+        this.store.patch({ flip: on ? true : undefined })
         this.rederive()
       },
       // Nothing to write back where the block has no diagonal. The control goes
@@ -7478,7 +7482,7 @@ export class Session {
     // believed, including having said it is gone. That is what lets the deck put
     // itself down (`onMapsChange(undefined)`) and the compare card close its
     // file, without either having to know this rule exists — and what lets a
-    // reader who asked for the square keep it, `flip: false` being a thing said.
+    // reader who asked for the turn keep it, `flip: true` being a thing said.
     const carry = <
       K extends
         | (typeof COMPANION_KEYS)[number]

@@ -405,7 +405,13 @@ p {
 
 .search-key {
   position: absolute;
-  right: 0.4rem;
+  right: 0.45rem;
+  /* **Centred on the box, not resting on the top of it.** With no `top` an
+     absolutely positioned child keeps its static position, which in this flex
+     row is the top of the line — so the badge sat four pixels above the middle
+     of a 30-pixel box and read as a mark that had come loose from it. */
+  top: 50%;
+  transform: translateY(-50%);
   /* The box takes the click: a badge that swallowed one would be a target that
      looks like a button and is not. */
   pointer-events: none;
@@ -1251,8 +1257,12 @@ p {
   flex: 0 0 auto;
 }
 
+/* Clear of the button, and the same distance inside the input's right edge as
+   in a box without one: the badge is positioned against the *box*, so this
+   offset is the button plus the gap plus that inset. At 2.9rem the inset came
+   out at three pixels and the badge looked wedged against the border. */
 .search-box-go > .search-key {
-  right: 2.9rem;
+  right: 3.15rem;
 }
 
 /* The box that drops its hits under itself. `relative` is the whole job: the
@@ -2416,6 +2426,21 @@ p {
   gap: 0.15rem;
 }
 
+/* The dropdown a ladder past nine rungs collapses to (`Breadcrumb.ladderPicker`).
+   Sized to its own content rather than to the column widths the panel cards use,
+   because it sits in a bar beside a word and not in a grid. */
+.res-pick {
+  width: auto;
+  padding: 0.1rem 0.35rem;
+  font-family: var(--mono);
+  font-size: var(--step--2);
+}
+
+.res-pick-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* A radio in the markup and a chip on screen: the arrow keys, the tab order and
    a screen reader all get a real radio group, and the eye gets the row of stops
    the slider runs along. */
@@ -2463,40 +2488,71 @@ p {
   border-radius: 3px;
 }
 
-/* A resolution the reader added (§3.4). Dashed, because that is what this
-   application already draws round a thing that is not in the file — a drop
-   zone, an empty deck cell — and because the `*` in the label is the claim and
-   this is only the echo of it. */
-.res-stop.res-added {
-  border-style: dashed;
-  border-color: var(--border);
-}
+/* **A resolution the reader added looks like one the file stores**, until it is
+   the one being read: then its border is dotted where a stored rung's is solid.
 
-.res-stop.res-added.current {
-  border-color: var(--border-strong);
+   It used to carry a dashed border whether or not it was current, which made a
+   row of eight added rungs eight outlined chips beside one stored rung that had
+   no outline at all — so the thing the file *does* contain was the quiet one.
+   The `*` in the label is what a reader quotes and the claim that matters; the
+   border only has to whisper, and it whispers in the one state where a border is
+   drawn anyway. */
+.res-stop.res-added.current,
+.res-stop.res-added:hover {
+  border-style: dotted;
 }
 
 /* The × on an added stop: room enough to hit, quiet enough that the number
    beside it stays the thing being read. Shown on hover and on keyboard focus
    only — four stops each wearing a permanent cross is a row of controls where
-   the reader is trying to read four numbers. */
-.res-drop {
-  margin-left: 0.2rem;
+   the reader is trying to read four numbers.
+
+   **And no room at all until then.** It was `opacity: 0`, which left fourteen
+   pixels of nothing inside every added chip: the row looked as though its
+   numbers had been padded on one side for no reason, and the reason only
+   appeared under the pointer. At zero width the chip is the size of its number,
+   and hovering one grows *that* chip and pushes the chips after it along, which
+   is the row saying where the × belongs. Width rather than `display: none`,
+   because a button that is not displayed cannot be tabbed to, and this one is
+   the only way back off a rung a reader added.
+
+   **Scoped by its parent, which is not decoration.** `.res-drop` alone is one
+   class, exactly as `.btn` is, and `.btn` comes later in this sheet — so the
+   `padding: 0` and `border: 0` this rule has always asked for were being
+   overruled by the plain button padding, which is why the × appeared inside a
+   bordered box of its own when it appeared at all. It lives in a stop or beside
+   the picker and nowhere else, so naming the parent costs nothing and settles
+   the order. */
+.res-stop > .res-drop,
+.res-pick-wrap > .res-drop {
+  width: 0;
+  /* A flex item's `min-width` is `auto`, which floors it at the width of the
+     mark inside it — so `width: 0` alone left the × its ten pixels. */
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   color: var(--text-faint);
   opacity: 0;
+  overflow: hidden;
   cursor: pointer;
   line-height: 0;
 }
 
-.res-stop:hover .res-drop,
-.res-drop:focus-visible {
+/* Beside the picker it is the only way off the rung being read, so it is always
+   there; in a row of stops it arrives with the pointer or the caret. */
+.res-stop:hover > .res-drop,
+.res-stop > .res-drop:focus-visible,
+.res-pick-wrap > .res-drop {
+  width: auto;
+  flex: 0 0 auto;
+  margin-left: 0.2rem;
   opacity: 1;
+  overflow: visible;
 }
 
-.res-drop:hover {
+.res-stop > .res-drop:hover,
+.res-pick-wrap > .res-drop:hover {
   color: var(--danger);
 }
 
@@ -4030,9 +4086,18 @@ canvas.is-frozen {
   min-width: 0;
 }
 
+/* **4.6rem, which is the longest label in these cards and not a round number.**
+   At 6.5rem the value column was 67 pixels: `smooth` already cut its own
+   `adaptive`, `colours` fitted `cividis ✓` with nothing to spare, and `score`
+   had to be a block field to show the word `correlation` at all — so one card
+   held a label above its dropdown and three labels beside theirs. The longest
+   inline label is `clip (log10)` at 70 pixels; 4.6rem holds it and leaves the
+   dropdowns 97, which every option in these cards fits. Fixed rather than
+   `max-content`, because each `.field` is its own grid and per-row widths would
+   start every dropdown at a different x — the alignment the column is read by. */
 .controls-card .field {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-columns: 4.6rem minmax(0, 1fr);
   align-items: center;
   gap: 0.4rem;
 }

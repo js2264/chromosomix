@@ -60,7 +60,6 @@ const LUCIDE = [
   // dialog.
   'expand',
   'crosshair',
-  'move-diagonal-2',
   'git-compare',
   'dna',
   'trash-2',
@@ -214,6 +213,22 @@ const HAND = {
     ['path', { d: 'M18 2v8' }],
     ['path', { d: 'M14 6h8' }],
   ],
+  /**
+   * The matrix's own diagonal: one stroke, corner to corner.
+   *
+   * The third exception, and the least of the three — it is Lucide's `slash` on
+   * the other diagonal, which is the one that matters here: a matrix is drawn
+   * with row zero at the top, so its main diagonal runs from the top-left
+   * corner down, and `slash` runs the other way. Same grid, same inset from the
+   * corners as `slash` keeps from the edges, same stroke and caps from the
+   * renderer.
+   *
+   * It replaces `move-diagonal-2`, which is this line with an arrowhead on each
+   * end. The arrowheads say *drag along here*, and the button does not drag
+   * anything: it puts the view back on the line. At 15 px the two heads were
+   * also most of the ink, so what the mark chiefly showed was arrows.
+   */
+  diagonal: [['path', { d: 'm5 5 14 14' }]],
 }
 
 /** Pull the drawable children out of an SVG, in document order. */

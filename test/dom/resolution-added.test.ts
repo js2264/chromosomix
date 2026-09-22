@@ -227,18 +227,20 @@ describe('a ladder too long to chip', () => {
   })
 
   it('still lets the reader take their own resolution back off', () => {
-    // Above the cap the picker draws one chip and leaves the walking to the
-    // slider. A nine-rung file is exactly the one somebody adds a resolution
-    // to, and a stop with no way back off it would be a declaration that could
-    // only be undone by clearing storage.
+    // Above the cap the row is a dropdown of every rung, and a `<select>` cannot
+    // hold a button — so the × follows the picker when the rung being read is
+    // the reader's own. A nine-rung file is exactly the one somebody adds a
+    // resolution to, and a rung with no way back off it would be a declaration
+    // that could only be undone by clearing storage.
     const built = build({
       ladder: () => ladderWith(MANY, [3_000]),
       coarsen: () => 3_000,
       entries: MANY.map((rung) => rung.name),
     })
     built.crumb.render(REGION)
-    expect(textsOf(built.crumb.el, '.res-stop span')).toEqual(['3 kb*'])
-    const off = built.crumb.el.querySelector('.res-drop') as HTMLButtonElement
+    const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    expect(picker.options[picker.selectedIndex]?.text).toBe('3 kb*')
+    const off = built.crumb.el.querySelector('.res-pick-wrap > .res-drop') as HTMLButtonElement
     expect(off).not.toBeNull()
     off.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     expect(built.dropped).toEqual([3_000])
@@ -251,8 +253,12 @@ describe('a ladder too long to chip', () => {
       currentEntry: '2000',
     })
     built.crumb.render(REGION)
-    expect(textsOf(built.crumb.el, '.res-stop span')).toEqual(['2 kb'])
+    const picker = built.crumb.el.querySelector('.res-pick') as HTMLSelectElement
+    expect(picker.options[picker.selectedIndex]?.text).toBe('2 kb')
+    // The rung it is standing on is the file's own, so nothing to take off —
+    // and the rung the reader added is still in the list, one option along.
     expect(built.crumb.el.querySelector('.res-drop')).toBeNull()
+    expect([...picker.options].map((option) => option.text)).toContain('3 kb*')
   })
 })
 

@@ -294,8 +294,16 @@ const TURN_HINT =
   'Available on one sequence against itself, which is the only block that has a diagonal ' +
   'to measure from.'
 
-/** A double arrow along the main diagonal: the line the view is put back on. */
-const DIAGONAL_ICON = 'move-diagonal-2'
+/**
+ * One stroke along the main diagonal: the line the view is put back on.
+ *
+ * It was `move-diagonal-2` — the same line with an arrowhead on each end — and
+ * the heads were saying the wrong thing twice. They read as *drag along here*,
+ * and this button drags nothing; and at the 15 px these marks are drawn at, two
+ * arrowheads are most of the ink, so the glyph chiefly showed arrows. The line
+ * on its own is the diagonal, which is the whole of what the press is about.
+ */
+const DIAGONAL_ICON = 'diagonal'
 
 const DIAGONAL_HINT =
   'Recentre on the diagonal. Slides the view onto the nearest on-diagonal window at the zoom ' +
@@ -325,23 +333,6 @@ type PlotEdge = 'top' | 'bottom' | 'left' | 'right'
 /** Whether an edge is dragged along x or along y. */
 function edgeAxis(edge: PlotEdge): 'x' | 'y' {
   return edge === 'left' || edge === 'right' ? 'x' : 'y'
-}
-
-/**
- * A labelled row whose control takes the whole width under its label.
- *
- * `field()`'s block form, for the one case §26.6 keeps it for: a select whose
- * options are longer than the value column a 6.5 rem label leaves. The rows of
- * icon toggles build the same shape inline, since their control is a group
- * rather than one node.
- */
-function fieldBlock(label: string, control: HTMLElement, hint?: string): HTMLElement {
-  return el(
-    'label',
-    { class: 'field field-block', title: hint ?? '' },
-    el('span', { class: 'field-label', text: label }),
-    control,
-  )
 }
 
 function plotGrip(edge: PlotEdge): HTMLElement {
@@ -1890,12 +1881,15 @@ export class MatrixPanel {
       // transform is the user's choice again (`render/scale.ts`), which is also
       // what makes an unknown extra column safe to offer: whatever it holds, the
       // reader can find a transform that shows it.
-      // A block field — the label above the select, the select the width of the
-      // card — because the options are the longest in this card: `correlation`,
-      // `expected`, `<column> (column)`. Beside a 6.5 rem label the select was
+      // **Beside its label, like the three selects under it.** It was a block
+      // field, and the reason was real — beside a 6.5 rem label the select was
       // about seven characters wide and the native arrow ate the last of them,
       // so the one word a reader checks before reading a map read `balancec`.
-      const scoreField = fieldBlock(
+      // The answer was the label column, not the shape of this one row: at
+      // 4.6 rem every option in this card fits beside its label, and a card
+      // that held one label above its dropdown and three beside theirs was
+      // four rows of two different shapes for one kind of question.
+      const scoreField = field(
         'score',
         select,
         // Two sentences. What this replaces was ninety words describing all

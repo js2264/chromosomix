@@ -219,13 +219,6 @@ export const GENERATED_ICONS = {
     ['line', {"x1":"12","x2":"12","y1":"22","y2":"18"}],
     ],
   },
-  'move-diagonal-2': {
-    shapes: [
-    ['path', {"d":"M19 13v6h-6"}],
-    ['path', {"d":"M5 11V5h6"}],
-    ['path', {"d":"m5 5 14 14"}],
-    ],
-  },
   'git-compare': {
     shapes: [
     ['circle', {"cx":"18","cy":"18","r":"3"}],
@@ -732,6 +725,11 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"}],
     ['path', {"d":"M18 2v8"}],
     ['path', {"d":"M14 6h8"}],
+    ],
+  },
+  'diagonal': {
+    shapes: [
+    ['path', {"d":"m5 5 14 14"}],
     ],
   },
   'github': {

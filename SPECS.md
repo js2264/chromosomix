@@ -231,6 +231,22 @@ resolutions' order is a lie about which of two pictures is coarser, and it carri
 file's own rungs do not: they are not the reader's to remove, and that asymmetry is the second thing
 the `*` is saying.
 
+**Otherwise it is drawn exactly as a stored rung is**, and the `×` takes no room until it is wanted.
+A derived rung used to carry a dashed border whether or not it was the one being read, so a row of
+four added rungs was four outlined chips beside one stored rung with no outline at all — the thing
+the file *does* contain being the quiet one — and each of them reserved fourteen pixels for a `×`
+that only appeared under the pointer, which made the row look padded for no reason a reader could
+see. So: no border when it is not current, a **dotted** border where a stored rung's is solid, and a
+`×` at zero width that the hovered rung grows to hold, pushing the rungs after it along. It keeps its
+width rather than being undisplayed, because a button that is not displayed cannot be tabbed to and
+this one is the only way back off a rung.
+
+**Past nine rungs the row is a dropdown** beside the word, listing every rung in the ladder's own
+order. It was a slider and one chip: between them they said how many rungs there were and which one
+was being read, and named the rest only to a reader who hovered the slider's own tooltip — so the
+control that was there to save room was also the one that hid the ladder. A `<select>` cannot hold a
+button, so where the rung being read is the reader's own the `×` follows the picker.
+
 **One caveat, always printed.** Counts coarsen *exactly*: a contact is in one fine bin and therefore
 in one coarse bin, so the sum is the count. Balanced values do not. `cooler zoomify --balance` sums
 the raw counts and then balances the coarse matrix at its own resolution, producing new weights;
@@ -4389,12 +4405,21 @@ from the diagonal is the whole of the y axis, so a block without one has no pict
 rather than hidden** where this is false, so a reader looking at a whole metagenome can see that the
 control exists and find out what it wants of them.
 
-**And wherever it is offered it is on**, which is `flip` being absent meaning turned and only an
-explicit `false` meaning square (§11). A block with a diagonal is a band along a genomic axis with
-tracks under it — that is what a contact map is *for* at this scale, and it is what every published
-figure of one looks like; the square is the special view, wanted for looking at the far corners and
-for reading a two-file comparison as one asymmetric square. The hash of an ordinary view stays short because only
-the reader's "no" is written down, and a link with no `flip` in it opens the way this viewer opens.
+**And wherever it is offered it is off until it is asked for**, which is `flip` being absent meaning
+square and only an explicit `true` meaning turned (§11).
+
+It was the other way round, on the argument that a block with a diagonal is a band along a genomic
+axis with tracks under it — that being what a contact map is *for* at this scale, and what every
+published figure of one looks like. The argument is sound about the *figure* and wrong about the
+*arrival*, and the reason is the paragraph above: the conditions that make a block turnable admit one
+sequence against itself and nothing else, so every map the default reached was a single chromosome —
+and a reader who clicks a chromosome in the table is asking to see that chromosome, not to have it
+rotated on the way in. The picture changing shape as you arrive is a worse first frame than a square,
+however good the band is once you have chosen it.
+
+So the turn is a reading, like `O/E` and the smoothing beside it: one press, and then it is written
+down. The hash of an ordinary view stays short because only the reader's "yes" is in it, and a link
+with no `flip` in it opens the way this viewer opens.
 
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
 metagenome a reader passed through switch the turn off for every map after it, which is a preference
@@ -8153,6 +8178,13 @@ is what a reader can act on, and text set *in* an accent fill takes `--on-accent
   `ui/exportRow.ts`; a card with no resolution to offer omits it and one that writes a file rather
   than a picture omits the clipboard. Data leaves by a bordered button named for its format.
 - **A stepper** is `‹ ›` with the neighbour's name in the tooltip and `[` / `]` beside it.
+- **A label and its dropdown share a line.** In a panel card the label column is 4.6rem — the width
+  of the longest label in those cards, `clip (log10)` — which leaves every dropdown 97 pixels, enough
+  for every option any of them offers. The line under the label is kept for a control that is not one
+  dropdown: a row of icon toggles, a pair of clip boxes, or a select whose options are **names out of
+  a file** (the 3D card's structure and compare-with, where the option is `Yeast_structure`). The Map
+  card used to hold `score` above its select and `smooth`, `transform` and `colours` beside theirs,
+  which is two shapes for one kind of question; the fix was the label column, not the row.
 - **Every block in the General column is a card** with a `cardTitle`, so the column folds the way the
   other four do.
 - **A dialog's heading is the category it is, uppercased by the stylesheet — unless it is a name.**

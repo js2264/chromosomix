@@ -504,6 +504,54 @@ export class Breadcrumb {
   }
 
   /**
+   * Every rung as a dropdown, for a ladder too long to lay out as stops.
+   *
+   * The word `resolution` stays where it is and this sits beside it, so the row
+   * reads the way it reads at every other length — a label and its control —
+   * and the control *is* the list: a 4DN `.mcool` has eleven rungs and all
+   * eleven are in it, in the ladder's own order, each wearing the `*` and the
+   * tooltip its chip would have worn. What it replaces said less in the same
+   * space: a slider, which shows how many rungs there are and names none of
+   * them, and one chip naming the rung you are on.
+   *
+   * The × for a rung the reader added cannot live inside a `<select>`, so it
+   * follows the picker when the rung being read is one of theirs — the same
+   * button the chip carries, in the one place it can still be reached.
+   */
+  private ladderPicker(rungs: Array<Rung & { derived?: DerivedRung }>, at: number): HTMLElement {
+    const select = el('select', {
+      class: 'select res-pick',
+      attrs: { 'aria-label': 'resolution' },
+    }) as HTMLSelectElement
+    for (const [index, rung] of rungs.entries()) {
+      select.appendChild(
+        el('option', {
+          value: String(index),
+          text: resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*'),
+          attrs: { title: this.rungWhy(rung) },
+        }),
+      )
+    }
+    select.value = String(at)
+    select.addEventListener('change', () => {
+      const picked = rungs[Number(select.value)]
+      if (picked !== undefined) this.pick(picked)
+    })
+    const standing = rungs[at]
+    if (standing?.derived === undefined) return select
+    const label = resolutionLabel(standing.binsize) + '*'
+    return el('span', { class: 'res-pick-wrap' }, select, this.dropButton(standing.binsize, label))
+  }
+
+  /** What a rung is, in bins — the same sentence its chip and its option carry. */
+  private rungWhy(rung: Rung & { derived?: DerivedRung }): string {
+    return rung.derived === undefined
+      ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
+      : `${rung.binsize.toLocaleString('en-US')} bp per bin — not in this file: ` +
+          `${rung.derived.factor} of its ${rung.derived.from.binsize.toLocaleString('en-US')} bp bins, added up`
+  }
+
+  /**
    * The resolution, at the far end of the bar: a slider over a row of stops.
    *
    * It was a `<select>` of raw bin counts — `1000`, `5000`, `50000` — sitting
@@ -548,10 +596,11 @@ export class Breadcrumb {
     // **Past a handful of rungs the stops stop being stops.** Eleven chips is
     // six hundred pixels of breadcrumb, which pushes the place the reader is
     // looking at off the left of a laptop screen — and a `.mcool` published by
-    // 4DN has eleven. Above the cap the slider carries the walk on its own and
-    // one chip says where it has got to, which is the same two facts in a fifth
-    // of the width; the slider is keyboard-operable in its own right, so what is
-    // lost is the aim-and-click, which is what there was no room for anyway.
+    // 4DN has eleven. Above the cap the row collapses to a dropdown beside the
+    // word (see {@link ladderPicker}), which is the one shape that still *shows*
+    // every rung: what stood here before was the slider plus a single chip, and
+    // between them they said where the walk had got to without ever saying what
+    // else there was to walk to.
     const listed = rungs.length <= MAX_STOPS
     const stops = el('div', {
       class: 'res-stops',
@@ -566,7 +615,7 @@ export class Breadcrumb {
     // greyed track beside a single chip invites a drag that does nothing. It
     // comes back with the second rung, which is what the `+` beside it makes.
     const slider =
-      rungs.length < 2
+      rungs.length < 2 || !listed
         ? null
         : (el('input', {
             class: 'res-slider',
@@ -589,30 +638,8 @@ export class Breadcrumb {
       // not contain, and the one place that fact is certain to be read is the
       // number itself.
       const label = resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
-      const why =
-        rung.derived === undefined
-          ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
-          : `${rung.binsize.toLocaleString('en-US')} bp per bin — not in this file: ` +
-            `${rung.derived.factor} of its ${rung.derived.from.binsize.toLocaleString('en-US')} bp bins, added up`
-      if (!listed) {
-        if (index !== at) continue
-        // The one chip a thinned ladder draws still carries its × when it is
-        // the reader's own: a nine-rung `.mcool` is exactly the file somebody
-        // adds a resolution to, and a stop with no way back off it would be a
-        // declaration that could only be undone by clearing storage.
-        stops.appendChild(
-          el(
-            'span',
-            {
-              class: `res-stop current${rung.derived === undefined ? '' : ' res-added'}`,
-              title: why,
-            },
-            el('span', { text: label }),
-            ...(rung.derived === undefined ? [] : [this.dropButton(rung.binsize, label)]),
-          ),
-        )
-        continue
-      }
+      const why = this.rungWhy(rung)
+      if (!listed) continue
       const radio = el('input', {
         class: 'res-radio',
         type: 'radio',
@@ -658,7 +685,7 @@ export class Breadcrumb {
         },
         el('span', { class: 'res-label', text: 'resolution' }),
         ...(slider === null ? [] : [slider]),
-        stops,
+        ...(listed ? [stops] : [this.ladderPicker(rungs, at)]),
         ...(onAdd === undefined
           ? []
           : [

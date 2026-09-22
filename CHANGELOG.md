@@ -550,6 +550,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A map opens square, and the turn is a reading you ask for (§17.2).** The default was the other
+  way round, on the argument that a band along a genomic axis is what a contact map is *for* — which
+  is true of the figure and wrong about the arrival. The only blocks that can turn are single
+  sequences, so every map the default reached was a chromosome a reader had just clicked on, and the
+  picture changed shape as they got there. `flip` absent now means square, `flip=true` means turned,
+  and both older spellings still parse.
+- **Past nine rungs the resolution row is a dropdown of every rung**, beside the word, in the
+  ladder's own order. It was a slider and one chip: between them they said how many rungs there were
+  and which one was being read, and named the rest only to a reader who hovered the slider — so the
+  control that saved the room was also the one that hid the ladder.
+- **A resolution the reader added is drawn like one the file stores.** It carried a dashed border
+  whether or not it was current, so four added rungs were four outlined chips beside one stored rung
+  with no outline at all, and each reserved fourteen pixels for a × that only appeared under the
+  pointer. Now: no border until it is the rung being read, a dotted one where a stored rung's is
+  solid, and a × at zero width that the hovered rung grows to hold, pushing the rungs after it along.
+  The × also lost the bordered button box it had been wearing — `.btn` comes later in the stylesheet
+  than the rule that had always asked for no border.
+- **A label and its dropdown share a line in the panel cards (§26.6).** The Map card held `score`
+  above its select and `smooth`, `transform` and `colours` beside theirs — two shapes for one kind of
+  question. The label column was the cause, not the row: at 6.5rem a dropdown had 67 pixels, which
+  cut `adaptive` in `smooth` and left `correlation` no chance; at 4.6rem, the width of the longest
+  label in those cards, every option fits beside its label.
+- **The `/` badge sits in the middle of the box it is in.** With no `top` an absolutely positioned
+  child keeps its static position, which in that flex row is the top of the line, so the badge was
+  four pixels high of centre and wedged three pixels from the border.
+- **Recentre-to-diagonal is one stroke along the diagonal.** It was `move-diagonal-2`, the same line
+  with an arrowhead on each end: the heads read as *drag along here*, which is not what the button
+  does, and at 15 px they were most of the ink.
 - **Seven marks in a card's row are a block, not six and an orphan.** The Map card's overlays fit one
   line until the panel had enough in it to want a scrollbar, which takes the fifteen pixels the
   seventh was living on — and a lone icon under six reads as a different kind of control. Seven or
