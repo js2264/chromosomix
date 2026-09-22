@@ -24,14 +24,12 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'track',
     key: 'tracks',
     label: 'tracks',
-    hint: 'bigWigs, and anything this panel has already computed.',
     multiple: true,
   },
   {
     kind: 'featureSet',
     key: 'features',
     label: 'features',
-    hint: 'The places to average over.',
   },
   {
     kind: 'choice',
@@ -55,11 +53,15 @@ const PARAMS: readonly ParamSpec[] = [
       { value: 'end', label: 'end' },
     ],
   },
+  // **Base pairs, and no bin count under either of them.** A metaplot reads
+  // tracks; a track has no bins of the map's (§18.2), and the flank a reader
+  // wants round a TSS is 2 kb whatever resolution some contact map beside it
+  // happens to be open at.
   {
     kind: 'number',
     key: 'flank',
     label: 'flank',
-    hint: 'Read this far either side.',
+    hint: 'Read this far either side of the anchor.',
     default: 2000,
     min: 0,
     unit: 'bp',
@@ -68,7 +70,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'step',
     label: 'resolution',
-    hint: 'Base pairs per column of the plot.',
+    hint: 'One column of the plot per this many base pairs.',
     default: 50,
     min: 1,
     unit: 'bp',
@@ -77,7 +79,6 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'body',
     label: 'body columns',
-    hint: 'Every feature body is resampled to this many columns.',
     default: 100,
     min: 10,
     integer: true,
@@ -97,7 +98,6 @@ const PARAMS: readonly ParamSpec[] = [
     from: 'features',
     optional: true,
     noneLabel: 'Do not rank',
-    hint: 'Sorts the features so they can be subset or split.',
     section: 'Ranking',
   },
   {
@@ -146,9 +146,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'zscore',
     label: 'z-score tracks first',
     hint:
-      'Centre and scale each track by its own mean and SD, across every window in ' +
-      'this run — so tracks in different units share one axis. Ranking groups are ' +
-      'standardised together, keeping their offsets.',
+      'Centre and scale each track by its own mean and SD over this run’s windows, so tracks in ' +
+      'different units share one axis.',
     default: false,
     section: 'Summary',
   },

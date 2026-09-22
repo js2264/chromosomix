@@ -129,7 +129,7 @@ function job(params: Params, reads: Read[] = []): JobContext {
 const SETTINGS: Params = {
   window: WINDOW,
   scales: 1,
-  region: '',
+  sequences: null,
   ignoreDiags: 2,
   minValid: 0.5,
   balance: false,
@@ -232,7 +232,10 @@ describe('what a tiled read is priced at', () => {
     // the pixel index and the pixels themselves.
     const estimate = INSULATION_TASK.estimate(context(BINSIZE, BINS * BINSIZE), SETTINGS)
     expect(estimate.requests).toBe(reads.length * 4)
-    expect(estimate.note).toMatch(/along their diagonals/)
+    // *Its* diagonal, singular: this fixture is a one-sequence file, and with
+    // every box ticked that is one sequence rather than a scan over many. The
+    // count is what the test is about and it is unchanged.
+    expect(estimate.note).toMatch(/along its diagonal/)
   })
 
   it('grows with the sequence, which is the whole point of having noticed', () => {

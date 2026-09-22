@@ -205,14 +205,17 @@ describe('what the axis says', () => {
 
 describe('pairs made from a feature set', () => {
   it('measures the separation between the points the windows are cut about', async () => {
-    // Two genes 4 Mb apart by their starts and 4 Mb ± 99 kb by their ends, with
-    // a range that only the start-to-start distance falls inside. Anchored on
+    // Two genes 4,000 bins apart by their starts and 4,150 by their centres,
+    // with a range that only the start-to-start offset falls inside. Anchored on
     // the centre the pair is outside the range and no window is read at all;
     // anchored on the start it is inside, and one pileup comes back.
     const pair: Gene[] = [
       { from: 1_000, to: 1_100, strand: 1 },
       { from: 5_000, to: 5_400, strand: 1 },
     ]
+    // The range is in **bins** where it was in base pairs: a pair's separation
+    // is the bin offset the pileup is a picture of. At this fixture's 1 kb these
+    // are the same two distances the base-pair numbers named.
     const near: Params = {
       anchors: 'allpairs',
       features: 'features',
@@ -220,14 +223,14 @@ describe('pairs made from a feature set', () => {
       window: 2,
       norm: 'none',
       balance: false,
-      minSep: 3_900_000,
-      maxSep: 4_050_000,
+      minSep: 3_900,
+      maxSep: 4_050,
       byDistance: 0,
       seed: 1,
     }
     const byStart = await runApa(job({ ...near, at: 'start' }, { genes: pair }))
     expect(byStart.some((out) => out.kind === 'matrix')).toBe(true)
-    // Centre to centre is 4,150,000 — past the top of the range.
+    // Centre to centre is 4,150 bins — past the top of the range.
     const byCentre = await runApa(job({ ...near, at: 'centre' }, { genes: pair }))
     expect(byCentre.some((out) => out.kind === 'matrix')).toBe(false)
   })

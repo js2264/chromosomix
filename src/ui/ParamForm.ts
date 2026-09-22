@@ -50,7 +50,6 @@ import type {
 import { ANNOTATION_KINDS, DETAIL_SEP, isIntervalSet } from '../annotations/types'
 import type { AnnotationEntry, AnnotationKind } from '../annotations/types'
 import { button, el, fmt } from './dom'
-import { resolutionLabel } from '../units'
 import { typedLocusToRegion } from '../genome/assembly'
 import { armPick, disarmPick, isArmed, lastPick, locusText, subscribePick } from './mapPick'
 import { iconButton } from './icons'
@@ -455,18 +454,6 @@ function stringOr(value: ParamValue | undefined, fallback: string): string {
 }
 
 /**
- * Bins for a span in base pairs, at this file's resolution.
- *
- * The same expression `JobContext.toBins` evaluates in the worker, and it has to
- * be: the caption under the box is a promise about what the task will actually
- * do, and a caption that rounds differently from the kernel is a caption that is
- * wrong by one bin on half the values anybody types.
- */
-function binsFor(bp: number, binsize: number): number {
-  return Math.max(1, Math.round(bp / binsize))
-}
-
-/**
  * The framing as a locus, in the syntax the views' own boxes take.
  *
  * A view showing more than one contig answers with the **name** of the contig it
@@ -730,17 +717,11 @@ export class ParamForm {
    * about the parameter, and a screen reader that read it as part of the field's
    * name would announce a paragraph every time the caret entered the box.
    */
-  private wrap(
-    spec: ParamSpec,
-    field: HTMLElement,
-    caption?: HTMLElement,
-    status?: HTMLElement,
-  ): HTMLElement {
+  private wrap(spec: ParamSpec, field: HTMLElement, status?: HTMLElement): HTMLElement {
     return el(
       'div',
       { class: 'param-row' },
       field,
-      caption,
       // Above the descriptor's hint, because it is about *now* — whether an
       // anchor has been picked yet — and the hint is about the parameter always.
       status,
@@ -863,14 +844,6 @@ export class ParamForm {
     for (const spec of this.specs) {
       if (spec.kind !== 'region') continue
       if (stringOr(this.params[spec.key], '') !== '') continue
-      // **A whole-sequence picker is left empty.** For those, empty is an answer
-      // — *every sequence* — and it is the one the list itself offers at the
-      // top; seeding it from the framing silently narrowed P(s), insulation and
-      // compartments to whichever chromosome the map happened to be showing,
-      // which is a run over a subset the reader never chose, reported as if they
-      // had. A spec that says empty is not an answer (`required`) still gets the
-      // framing, because there the alternative is a form that starts refused.
-      if (spec.sequences === true && spec.required !== true) continue
       const region = spec.default ?? framingRegion(this.context, spec.many === true)
       if (region !== '') this.params[spec.key] = region
     }
@@ -898,7 +871,7 @@ export class ParamForm {
       case 'sequences':
         return this.sequenceList(spec)
       case 'region':
-        return this.regionControl(spec)
+        return this.locusControl(spec)
       case 'text':
         return this.textControl(spec)
       case 'seed':
@@ -946,14 +919,6 @@ export class ParamForm {
       slider.setAttribute('aria-labelledby', `${id}-label`)
     }
 
-    // Base pairs are a property of the question and bins are a property of the
-    // file (§18.2), so the box takes the first and prints the second: a reader
-    // asking for a 100 kb window on a 10 kb file is asking for ten bins, and the
-    // difference between ten and eleven is the difference between a diamond that
-    // resolves a boundary and one that does not.
-    const caption =
-      spec.unit === 'bp' && this.context.binsize > 0 ? el('div', { class: 'hint' }) : null
-
     const clamp = (raw: number): number => {
       let value = spec.integer === true ? Math.round(raw) : raw
       if (spec.min !== undefined) value = Math.max(spec.min, value)
@@ -961,17 +926,9 @@ export class ParamForm {
       return value
     }
     const held = (): number => numberOr(this.params[spec.key], spec.default)
-    const showBins = (value: number): void => {
-      if (caption === null) return
-      const bins = binsFor(value, this.context.binsize)
-      caption.textContent = `${fmt.int(bins)} ${bins === 1 ? 'bin' : 'bins'} at ${resolutionLabel(
-        this.context.binsize,
-      )}`
-    }
     const show = (value: number): void => {
       box.value = String(value)
       if (slider !== null) slider.value = String(value)
-      showBins(value)
     }
     const commitBox = (): void => {
       // On the *string*, not on `Number(box.value)`: `Number('')` is 0 and 0 is
@@ -996,23 +953,9 @@ export class ParamForm {
     box.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') commitBox()
     })
-    // Typed digits reach the caption but not the parameter: the bin count is
-    // feedback about what is being typed, while a commit re-prices the run and
-    // must wait for the reader to have finished.
-    box.addEventListener('input', () => {
-      // Same string test, for the same reason one level down: an emptied box
-      // read as 0 repainted the caption as "0 bins", which is a statement about
-      // a run nobody has described yet. Leaving the last caption up is the
-      // honest answer while the box is empty.
-      const raw = box.value.trim()
-      const typed = raw === '' ? Number.NaN : Number(raw)
-      if (Number.isFinite(typed)) showBins(typed)
-    })
     if (slider !== null) {
       slider.addEventListener('input', () => {
-        const value = clamp(Number(slider.value))
-        box.value = String(value)
-        showBins(value)
+        box.value = String(clamp(Number(slider.value)))
       })
       // On `change` and not on `input`: a drag across a two-hundred-pixel track
       // is two hundred commits, which is two hundred cost estimates for one
@@ -1020,9 +963,20 @@ export class ParamForm {
       slider.addEventListener('change', () => this.commit(spec.key, clamp(Number(slider.value))))
     }
 
-    // The unit is written beside the box rather than folded into the label,
-    // because it belongs to the number: `%` is drawn with its sign, and `bins`
-    // beside a box is what says the reader is not typing base pairs this time.
+    // **The unit beside the box is the whole of what says what the number is**,
+    // and it is written beside it rather than folded into the label because it
+    // belongs to the number: `%` is drawn with its sign, and `bins` says a count
+    // of the file's own cells. A count of *diagonals* says so in its label
+    // instead — *diagonals*, *diagonals to ignore* — because there the word is
+    // the question rather than a unit hung off a number.
+    //
+    // There used to be a caption under every `bp` box reading *n bins at 1 kb*,
+    // translating what the reader typed into what the task would do. It is gone
+    // with the boxes it was for: a matrix parameter is asked in bins now
+    // (§18.2), so there is nothing left to translate, and on the boxes that do
+    // still take base pairs — a metaplot's flank, a FRiP's sampling step — it
+    // was measuring a 1D quantity against a matrix's resolution and reading
+    // `1 bin at 10.0 kb` beside a box saying `10,000`.
     const unit =
       spec.unit === undefined || spec.unit === ''
         ? null
@@ -1042,7 +996,7 @@ export class ParamForm {
       show(held())
     }
     sync()
-    return { spec, wrapper: this.wrap(spec, field, caption ?? undefined), shown: false, sync }
+    return { spec, wrapper: this.wrap(spec, field), shown: false, sync }
   }
 
   /**
@@ -1404,63 +1358,6 @@ export class ParamForm {
     }
   }
 
-  /** A locus, in the syntax the views' own boxes take. */
-  private regionControl(spec: RegionParam): Control {
-    return spec.sequences === true ? this.sequenceControl(spec) : this.locusControl(spec)
-  }
-
-  /**
-   * One of the file's own sequences, as a dropdown.
-   *
-   * Empty first where the parameter allows it, because *every sequence* is what
-   * insulation and CID do with an empty region and is the answer most readers
-   * want first. Where it does not — compartments, which is one chromosome at a
-   * time by construction — the list opens on nothing chosen and the estimate
-   * refuses the run until one is, which is a better first frame than silently
-   * picking contig zero of a four-thousand-contig metagenome.
-   */
-  private sequenceControl(spec: RegionParam): Control {
-    const id = `${this.id}-${spec.key}`
-    const select = el('select', { class: 'select', attrs: { id } })
-    const refill = (): void => {
-      select.replaceChildren()
-      select.appendChild(
-        el('option', {
-          value: '',
-          text: spec.required === true ? 'choose a sequence' : 'every sequence',
-        }),
-      )
-      for (const contig of this.context.contigs) {
-        select.appendChild(el('option', { value: contig.name, text: contig.name }))
-      }
-    }
-    select.addEventListener('change', () => this.commit(spec.key, select.value))
-    const sync = (): void => {
-      const held = stringOr(this.params[spec.key], '')
-      // A stored session can name a sequence this file does not have. Kept as a
-      // row of its own rather than snapping to empty, so the form shows what the
-      // stored run was and the reader can see why it will not run.
-      if (held !== '' && !this.context.contigs.some((contig) => contig.name === held)) {
-        select.appendChild(
-          el('option', { value: held, text: `${held} — not in this file`, attrs: { disabled: '' } }),
-        )
-      }
-      select.value = held
-    }
-    refill()
-    sync()
-    return {
-      spec,
-      wrapper: this.wrap(spec, this.labelled(spec, select, id)),
-      shown: false,
-      sync,
-      refill: () => {
-        refill()
-        sync()
-      },
-    }
-  }
-
   /**
    * A locus: a box, with the file's sequences offered beside it — and, where the
    * descriptor says so, a button that takes one off the map.
@@ -1588,7 +1485,6 @@ export class ParamForm {
           el('div', { class: 'param-locus' }, box, options, ...(arm === null ? [] : [arm])),
           id,
         ),
-        undefined,
         note,
       ),
       shown: false,

@@ -105,7 +105,7 @@ export const runTrackCorrelation: TrackTaskRunner = async (job) => {
   return outputs
 }
 
-/** The units to compare over: fixed bins across the assembly, or a feature set. */
+/** The units to compare over: fixed windows across the assembly, or a feature set. */
 async function unitsOf(job: Parameters<TrackTaskRunner>[0]): Promise<Region[]> {
   if (strParam(job.params, 'over', 'bins') === 'features') {
     // By the **parameter key**, `features` — see `chosenInput`.

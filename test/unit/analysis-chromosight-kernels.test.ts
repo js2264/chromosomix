@@ -395,12 +395,11 @@ describe('winnowCalls', () => {
       { bin1: 100, bin2: 400, score: 0.8, pvalue: 0.02 },
       { bin1: 101, bin2: 401, score: 0.5, pvalue: 0.03 },
     ]
-    const { kept, qvalues } = winnowCalls(calls, {
-      separationBins: 5,
-      minDistBp: 20_000,
-      binsize: 1000,
-    })
-    // The near-diagonal call goes for being 5 kb from it; the third is a
+    // The floor is a number of **bins** where it was a length in base pairs and
+    // a bin size: twenty bins is the 20 kb this asked for on the 1 kb map it
+    // asked for it on, and the same call is dropped.
+    const { kept, qvalues } = winnowCalls(calls, { separationBins: 5, minDistBins: 20 })
+    // The near-diagonal call goes for being five bins from it; the third is a
     // neighbour of the second.
     expect(kept.map((call) => call.bin1)).toEqual([100])
     // One surviving test, so BH leaves its p-value alone.

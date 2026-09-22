@@ -39,7 +39,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'toggle',
     key: 'total',
     label: 'total coverage',
-    hint: 'Every contact touching the bin. Flat on a correctly balanced file.',
+    hint: 'Every contact touching the bin, and flat on a correctly balanced file.',
     default: true,
   },
   {

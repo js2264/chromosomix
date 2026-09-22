@@ -48,8 +48,8 @@ import {
   chosenInput,
   contigIdsFor,
   idParam,
-  listParam,
   numParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
@@ -57,7 +57,7 @@ import type { Params } from '../types'
 import { leadingEigenpairs } from '../linalg'
 import { MAX_CORRELATION_BINS } from '../tasks/compartments'
 import type { MatrixOutput, ProfileOutput, TaskOutput } from '../types'
-import { usableBlock, type Span } from './blocks'
+import { displayableContigs, usableBlock, type Span } from './blocks'
 
 /**
  * The fraction of a bin's row that must carry data for it to take part.
@@ -460,7 +460,13 @@ async function runSquare(
 }
 
 export const runCompartments: TaskRunner = async (job) => {
-  const names = listParam(job.params, 'sequences')
+  // **Unanswered is every sequence, and `[]` is none of them** (§18.2). The two
+  // used to be one: `listParam` reads anything that is not an array as `[]`, so
+  // a job that never met a form — `metacooler-run compartments file.cool` — was
+  // told to tick a box in a drawer it has not got.
+  const ticked = tickedSequences(job.params, 'sequences')
+  const names =
+    ticked ?? displayableContigs(job.mc).map((cid) => job.mc.chromnames[cid])
   if (names.length === 0) {
     job.note('No sequence is ticked, so there is nothing to correlate.')
     return []

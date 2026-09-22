@@ -25,6 +25,7 @@ import type {
   AnalysisFraming,
   ContextContig,
   ContextGenome,
+  Params,
 } from './types'
 
 /** The parts of an open file this needs, named so nothing imports `Session`. */
@@ -187,6 +188,51 @@ function genomesOf(input: ContextInput, contigs: ContextContig[]): ContextGenome
     out.push({ name, extent: [span.from, span.to], contigs: span.contigs })
   }
   return out
+}
+
+/**
+ * The sequences a `kind: 'sequences'` parameter names, as rows of the table.
+ *
+ * **Never answered is every one of them**, which is the convention
+ * `SequencesParam` states and the one the runners already read with
+ * `Array.isArray`: the form ticks them all on the way in, so a value that is not
+ * an array is a job that never went through a form — a stored session, or a
+ * `metacooler-run` line with no `--sequences` — and what those mean is the whole
+ * file. An **empty array** is a different answer and not a narrower one: it is a
+ * reader who pressed *None*, and it prices as nothing to read.
+ *
+ * A ticked name this file has not got is dropped rather than counted, because a
+ * deck holds files of different assemblies on purpose and a batch asks every
+ * panel of it for one reader's list (§5.9). What is priced is what this file can
+ * answer.
+ */
+export function tickedContigs(
+  context: AnalysisContext,
+  params: Params,
+  key: string,
+): ContextContig[] {
+  const value = params[key]
+  if (!Array.isArray(value)) return [...context.contigs]
+  const names = new Set(value.filter((name): name is string => typeof name === 'string'))
+  return context.contigs.filter((contig) => names.has(contig.name))
+}
+
+/**
+ * The bin extent a set of sequences spans, for the *is the block enough* question.
+ *
+ * The outer bounds rather than a list of runs, which is what `framingCovers`
+ * takes and is the conservative reading of it: a framing that covers the span
+ * from the first ticked sequence to the last covers every one in between, and
+ * one that does not cannot be used for any of them.
+ */
+export function extentOf(contigs: readonly ContextContig[]): [number, number] {
+  let from = Number.POSITIVE_INFINITY
+  let to = 0
+  for (const contig of contigs) {
+    from = Math.min(from, contig.startBin)
+    to = Math.max(to, contig.startBin + contig.bins)
+  }
+  return Number.isFinite(from) ? [from, to] : [0, 0]
 }
 
 /** The contig of that name, or `undefined`. */

@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import { squareBand } from '@/analysis/band'
 import { scalogram } from '@/analysis/scalogram'
+import { reachBinsFor, reachBinsOf } from '@/analysis/tasks/scalogram'
 
 /** A symmetric square from a function of the separation alone. */
 function bySeparation(n: number, weight: (d: number) => number, circular = false): Float32Array {
@@ -124,5 +125,41 @@ describe('scalogram', () => {
     // number as the middle either, because there is genuinely nothing past the
     // end and a circle is the only thing that would say otherwise.
     expect(Number.isNaN(tracks[0].distance[n - 1])).toBe(false)
+  })
+})
+
+/**
+ * **The reach is a number of bins, and it is the band's depth directly.**
+ *
+ * It used to be a length in base pairs, divided by the bin size on the way in —
+ * so the same typed 500 kb asked for 500 diagonals on one rung of an `.mcool`
+ * and 50 on the next, and what a reader was choosing was the depth of the band
+ * either way. Nothing is divided now, which is the property worth pinning: the
+ * number the form holds is the number `bandFor` is given, up to the two ceilings
+ * a sequence puts on it.
+ */
+describe('the reach, in bins', () => {
+  it('is the band depth as typed, at any resolution', () => {
+    expect(reachBinsOf({ reach: 500 })).toBe(500)
+    expect(reachBinsFor({ reach: 500 }, 4_000)).toBe(500)
+    // The old reading of the same box: 500 divided by whatever the file's bin
+    // size happened to be. Nothing here depends on it any more.
+    expect(reachBinsFor({ reach: 500 }, 4_000)).toBe(reachBinsFor({ reach: 500 }, 40_000))
+  })
+
+  it('is the whole sequence at 0, which is the only unbounded answer', () => {
+    // `n − 1` on a line: the furthest two bins of a 300-bin sequence are 299
+    // apart.
+    expect(reachBinsFor({ reach: 0 }, 300)).toBe(299)
+    // Half the circle on a circular one, because past that the short way round
+    // is the other way and a band read wider holds every cell twice.
+    expect(reachBinsFor({ reach: 0 }, 300, true)).toBe(150)
+  })
+
+  it('never reaches past the sequence it is reading', () => {
+    expect(reachBinsFor({ reach: 5_000 }, 300)).toBe(299)
+    expect(reachBinsFor({ reach: 5_000 }, 300, true)).toBe(150)
+    // A reach of one bin is a band of one diagonal, not a floor of none.
+    expect(reachBinsFor({ reach: 1 }, 300)).toBe(1)
   })
 })

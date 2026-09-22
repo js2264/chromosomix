@@ -53,12 +53,17 @@ export type ParamValue = number | string | boolean | readonly string[] | null
 export type Params = Readonly<Record<string, ParamValue>>
 
 /**
- * A length the user types, and the unit they typed it in.
+ * The word beside a number box, which is the whole of what says what it is.
  *
- * Offered in base pairs by default, with the resolved bin count shown beneath
- * the box, because bins are a property of the file and base pairs are a property
- * of the question (§18.2). `''` is the unitless case — a count of components, a
- * number of quantiles — and `%` is drawn with its sign.
+ * **A setting about the matrix takes `bins`** — it is a count of the file's own
+ * cells, and asked in base pairs it was divided by the bin size before it meant
+ * anything, differently on every rung of an `.mcool` (§18.2). `bp` is left for
+ * the one quantity bins are not a unit of: a **1D track's** flank, sampling step
+ * or window, which is the same length of genome at every resolution and may be
+ * asked for in a session with no contact map at all.
+ *
+ * `''` is the unitless case — a count of components, a number of quantiles, a
+ * count of diagonals whose label says so — and `%` is drawn with its sign.
  */
 export type ParamUnit = '' | 'bp' | 'bins' | '%' | 'x'
 
@@ -282,25 +287,26 @@ export interface TextParam extends ParamBase {
   placeholder?: string
 }
 
-/** A locus, in the syntax the views' own boxes take. Defaults to the framing. */
+/**
+ * A locus, in the syntax the views' own boxes take. Defaults to the framing.
+ *
+ * **A locus and nothing else.** This kind used to have a `sequences` flag that
+ * turned the box into a dropdown of the file's own sequence names, whose first
+ * option read *every sequence* — so five tasks asked *which sequences do I run
+ * on* with a select while four others asked it with a column of tick boxes, and
+ * a reader met both shapes in one column. The tick boxes won and they took the
+ * question with them ({@link SequencesParam}): a dropdown can answer *every* or
+ * *one* and cannot say *these three*, which a whole-genome run and a per-sequence
+ * run are both special cases of.
+ *
+ * What is left here is the question a list of names cannot answer: a **locus**.
+ * A 4C anchor is a window, a structure task's *distance to* is a point on the
+ * map, and the reconstruction takes a comma-separated list of them. Narrowing
+ * any of those three to a whole sequence would remove the task's point.
+ */
 export interface RegionParam extends ParamBase {
   kind: 'region'
   default?: string
-  /**
-   * This names a **whole sequence**, so offer the file's list rather than a box.
-   *
-   * Insulation, CID and compartments all take a sequence and use the whole of it
-   * — a score taken from whatever happened to be on screen but labelled `chrIV`
-   * is a different quantity wearing the same name — so a free-text box here
-   * accepted spans it would silently ignore, and asked a reader to type a
-   * chromosome name the app already knows. A `<select>` cannot be wrong.
-   *
-   * Left off where a *locus* is meant: a 4C anchor is a window, and narrowing it
-   * to a whole sequence would remove the task's whole point. Those keep the box,
-   * with the sequence names offered as a `<datalist>` so the common case is
-   * still a pick rather than a spelling test.
-   */
-  sequences?: boolean
   /**
    * The box takes **several sequences**, comma-separated, and is seeded from
    * what the map shows (§25.6): every sequence on screen when the view spans
@@ -310,14 +316,6 @@ export interface RegionParam extends ParamBase {
    * reads one sequence leaves it off and gets the first on screen.
    */
   many?: boolean
-  /**
-   * Empty is not an answer, so the list says *choose one* rather than *every*.
-   *
-   * Compartments is the case: a correlation matrix is a property of one
-   * chromosome, and there is no whole-file reading to fall back on. Insulation
-   * and CID leave this off, where empty legitimately means every sequence.
-   */
-  required?: boolean
   /**
    * Offer a *pick on map* button beside the box.
    *
@@ -339,14 +337,22 @@ export interface RegionParam extends ParamBase {
 }
 
 /**
- * **Several** whole sequences, ticked.
+ * **Which sequences to run on**, ticked.
  *
- * The plural of {@link RegionParam}'s `sequences` mode, and a different question
- * rather than a wider one. A task takes this where its answer is over a *set* of
- * sequences at once and not one reading per sequence: compartments is the case —
- * a correlation over four chromosomes' cis and trans blocks together is a
- * genome-wide eigenvector, which is not any of the four per-chromosome ones and
- * cannot be assembled from them.
+ * The one shape for that question, and it used to be two: this, and a
+ * {@link RegionParam} whose dropdown offered *every sequence* or one of them.
+ * Both asked the same thing and a reader met both in one column, so the tick
+ * boxes took it over — they are the superset, since *all of them* and *one of
+ * them* are two of the answers a list of tick boxes can give and *these three*
+ * is a third that a dropdown has no way to express.
+ *
+ * It is not only a wider picker: for some tasks the set is the *unit* of the
+ * answer rather than a filter on it. Compartments is the case — a correlation
+ * over four chromosomes' cis and trans blocks together is a genome-wide
+ * eigenvector, which is not any of the four per-chromosome ones and cannot be
+ * assembled from them — while insulation, the index, the HiC score, P(s) and the
+ * scalogram read each ticked sequence on its own and emit one lane or one curve
+ * apiece. The descriptor does not distinguish the two; the runner does.
  *
  * The value is the names, explicitly, and **never a sentinel**. `[]` means
  * nothing is ticked — a state the form can be in and the estimate refuses — and
@@ -357,8 +363,15 @@ export interface RegionParam extends ParamBase {
  * parameters read `[]` should not be indistinguishable from one that ran over
  * everything.
  *
- * Never answered at all is `null`, which the form resolves to every sequence the
- * file has — so a task with one of these starts genome-wide.
+ * Never answered at all is `null`, and it means **every sequence** — the form
+ * resolves it to every name on the way in, so a task with one of these starts
+ * genome-wide, and a job that never met a form keeps the `null` and is read the
+ * same way. That last half was the half that was missing: the runners took
+ * anything that was not an array as `[]`, so `metacooler-run compartments
+ * file.cool` refused itself for not having ticked a box in a drawer a shell has
+ * not got. `analysis/context.ts`'s `tickedContigs` and `analysis/job.ts`'s
+ * `tickedSequences` are the two readings of this value, one per side of the
+ * worker boundary, and both keep the three answers apart.
  */
 export interface SequencesParam extends ParamBase {
   kind: 'sequences'

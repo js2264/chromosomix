@@ -161,8 +161,8 @@ const SPATIAL_PARAMS: readonly ParamSpec[] = [
     label: 'distance to',
     pickable: true,
     hint:
-      'A locus to measure every bead’s distance from — the spatial virtual 4C. Type it, pick it ' +
-      'on the map, or leave it empty for the two other tracks alone.',
+      'A locus to measure every bead’s distance from — the spatial virtual 4C — and empty leaves ' +
+      'the other two tracks alone.',
   },
   {
     kind: 'number',
@@ -209,7 +209,7 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     // example got a refusal naming a sequence the file does not have; the box's
     // own `<datalist>` offers the real names, which is a better example than any
     // written here can be.
-    hint: 'A locus or comma-separated sequences; empty is the whole file. One bin is one bead.',
+    hint: 'A locus or comma-separated sequences, empty for the whole file, one bead per bin.',
   },
   {
     kind: 'number',
@@ -253,7 +253,7 @@ const RECONSTRUCT_PARAMS: readonly ParamSpec[] = [
     key: 'iterations',
     label: 'refinement steps',
     hint:
-      'How many SMACOF steps move the beads after the classical start. Stops earlier once a ' +
+      'How many SMACOF steps move the beads after the classical start, stopping earlier once a ' +
       'step improves the fit by less than a millionth.',
     default: 150,
     min: 0,

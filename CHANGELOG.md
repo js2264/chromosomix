@@ -22,6 +22,52 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   0-based. §26 is now the contract for what the surfaces share — coordinates, units, toggles, words,
   colour, shapes — and this release brings the shared machinery into line with it.
 
+- **The help text under an analysis control says something, or it is gone (§26.4).** Every parameter
+  in the catalogue carried a hint and a good many of them restated the label, described a default the
+  control was already showing, or repeated the box's own tooltip a line lower down — *every one,
+  unless you say otherwise* under a column of tick boxes with every box ticked, *the places to average
+  over* under a control labelled **features**. Eight of those are deleted. A third of the rest had
+  grown a second or third sentence, which is a paragraph beside a control in a column whose **Run**
+  button it pushes down, and those are one sentence again; a toggle may still add what its *off* state
+  does, which is the one exception the rule has ever had. What is kept is what a reader cannot get
+  from the control: what a number does to the result, what a unit means, what an empty answer means,
+  what a mode refuses. A test now holds the one-sentence rule, which was written down and nothing
+  enforced.
+
+- **Every matrix setting is a number of bins, or of diagonals — never kb or Mb (§18.2).** A scan
+  band, a shift, a stratum, a near-diagonal trim and the separation between two anchors are all
+  counts of the file's own cells: the runner's first act on a length in base pairs was to divide it by
+  the bin size, so the reader was doing arithmetic the run then undid, and the same typed number meant
+  different things on two rungs of one `.mcool`. The scalogram's *look out to*, the APA's two control
+  shifts and its separation range, pattern detection's three scan distances and reproducibility's
+  furthest separation now ask in bins, with their defaults translated: a 100 kb control shift, which
+  cleared a 43-bin pileup window at 1 kb and sat *inside* it at 10 kb, is 50 bins and clears it at
+  every resolution. **The `n bins at 1 kb` caption under those boxes is gone** with the boxes it was
+  for, and what a run came to in base pairs is said once by the run itself, about the file open. Two
+  things did not move: a **1D track's** flank, sampling step or window is a length of genome and is
+  still asked in base pairs — track correlation's is no longer called a *bin size* either — and a
+  plot's own axes, including the `.scool` phasing plot's published band edges, stay in kb and Mb.
+
+- **One shape for *which sequences to run on*, and it is the tick boxes (§18.2).** Nine analysis
+  tasks asked that question and they asked it two ways: four with a column of tick boxes, five —
+  P(s), the scalogram, insulation, the directionality index and the HiC score — with a dropdown whose
+  first option read *every sequence*. A reader met both shapes in one column, a row apart, for one
+  question. The five moved onto the tick boxes, which is the answer the dropdown could not give:
+  **these three sequences**, where a select could only offer every one or exactly one. Every one of
+  them starts with every box ticked, so a genome-wide run is still what pressing **Run** does; one
+  ticked box is the run a named sequence used to give, bin for bin; and pressing **none** now says so
+  rather than quietly reading the whole file. On the command line the flag is `--sequences I,IV`
+  where it was `--region IV`, and a sequence a file has not got is named in the run's notes instead
+  of being dropped. What stays a locus box is what a list of names cannot answer: the 4C anchor, the
+  structure tasks' *distance to*, and the reconstruction's own box.
+
+- **An analysis run that was never asked which sequences reads every one of them.** Unanswered and
+  *none ticked* were one value, and on the command line only the first of them exists: `metacooler-run
+  compartments sample.cool` — the README's own example — refused itself with *tick at least one
+  sequence*, naming a control a shell has not got. Unanswered is now the whole file, which is the
+  genome-wide compartment call that task exists for, and an empty list is still a reader who pressed
+  **none** and is still refused.
+
 - **Coordinates a reader sees are 1-based inclusive everywhere, and a locus box accepts what it
   shows (§26.1).** `formatPosition`, `regionLabel`, `windowLabel` and `typedLocusToRegion` join
   `formatLocus` in `genome/assembly.ts` as the only place a coordinate is formatted or read, and the

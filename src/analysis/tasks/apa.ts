@@ -285,8 +285,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'grid',
     label: 'grid',
     hint:
-      'Every window resampled to this many cells a side. A multiple of four puts the feature’s ' +
-      'two ends exactly on axis ticks at the default flank.',
+      'Every window resampled to this many cells a side; a multiple of four puts the feature’s ' +
+      'two ends on axis ticks.',
     default: 51,
     min: 11,
     max: 201,
@@ -298,8 +298,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'flankFraction',
     label: 'flank',
     hint:
-      'As a fraction of the feature’s own length, each side. At 0.5 the feature is the middle ' +
-      'half of the picture; at 1 it is the middle third.',
+      'As a fraction of the feature’s own length each side: at 0.5 the feature is the middle ' +
+      'half of the picture, at 1 the middle third.',
     default: 0.5,
     min: 0,
     max: 2,
@@ -357,21 +357,31 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Control',
   },
   // **The shift is asked for in two units, and which one is offered follows the
-  // mode.** A fixed window is a couple of dozen bins wide, so *how far away*
-  // is a length in base pairs and 100 kb is a long way. A scaled window is as
-  // wide as whatever it is piling up — a megabase-long TAD with its flanks is
-  // two megabases of window — and a control 100 kb from it is ninety per cent
-  // the same cells as the thing it is supposed to be the denominator of. The
-  // ratio that comes out is 1 everywhere, the domain washes out of the picture,
-  // and nothing on screen says why. So the scaled mode asks in **multiples of
-  // the window**, where 1 is the first shift that cannot overlap at all.
+  // mode.** A fixed window is a couple of dozen bins wide, so *how far away* is
+  // a number of bins and the window's own half-width is the scale to think in. A
+  // scaled window is as wide as whatever it is piling up — a megabase-long TAD
+  // with its flanks is two megabases of window — so a shift in bins there would
+  // mean something different for every domain in the set, and it asks in
+  // **multiples of the window** instead, where 1 is the first shift that cannot
+  // overlap at all.
+  //
+  // In bins rather than base pairs, and the fixed mode is the case that makes
+  // the rule: the default window is 21 bins each side, 43 across, and the
+  // nearest control has to clear it or it is ninety per cent the same cells as
+  // the thing it is supposed to be the denominator of. `100 kb` cleared it on a
+  // 1 kb map and was ten bins — inside the window — on a 10 kb one, so the same
+  // typed number was a sound control at one resolution and a copy of the signal
+  // at the next, with nothing on screen saying which. 50 bins clears the default
+  // window at every resolution there is.
   {
     kind: 'number',
     key: 'minShift',
     label: 'smallest shift',
-    default: 100_000,
+    hint: 'A control nearer than the window’s own width overlaps the anchors it stands in for.',
+    default: 50,
     min: 0,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: (params) => params.norm === 'matched' && !isScaled(params),
     section: 'Control',
   },
@@ -379,9 +389,10 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxShift',
     label: 'largest shift',
-    default: 1_000_000,
+    default: 500,
     min: 1,
-    unit: 'bp',
+    integer: true,
+    unit: 'bins',
     when: (params) => params.norm === 'matched' && !isScaled(params),
     section: 'Control',
   },
@@ -389,7 +400,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'minShiftScale',
     label: 'smallest shift',
-    hint: 'As a multiple of the window’s own width. Below 1 a control overlaps the feature.',
+    hint: 'As a multiple of the window’s own width; below 1 a control overlaps the feature.',
     default: 1,
     min: 0,
     max: 20,
@@ -401,7 +412,6 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxShiftScale',
     label: 'largest shift',
-    hint: 'As a multiple of the window’s own width.',
     default: 3,
     min: 0.5,
     max: 50,
@@ -418,13 +428,20 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.norm === 'matched',
     section: 'Control',
   },
+  // **The range two features may be apart is a range of bin offsets**, which is
+  // what the pileup itself is a picture of: a pair's separation is `col − row`,
+  // the split-by-separation bands are bin offsets, and the near-diagonal a pair
+  // is dropped for sitting on is one or two bins wide whatever the resolution.
+  // In base pairs the floor was 20 kb, which is twenty bins of a 1 kb map — most
+  // of the short-range contacts a peak set is run for — and none at all of a
+  // 50 kb one.
   {
     kind: 'number',
     key: 'minSep',
     label: 'nearest two features may be',
-    unit: 'bp',
+    unit: 'bins',
     hint: 'Below this a pair is mostly the diagonal it sits on rather than a contact between two places.',
-    default: 20_000,
+    default: 2,
     min: 0,
     integer: true,
     when: (params) => params.anchors === 'allpairs',
@@ -434,8 +451,8 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxSep',
     label: 'furthest two features may be',
-    unit: 'bp',
-    default: 2_000_000,
+    unit: 'bins',
+    default: 200,
     min: 1,
     integer: true,
     when: (params) => params.anchors === 'allpairs',
@@ -446,8 +463,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'byDistance',
     label: 'split by separation into',
     hint:
-      'Log-spaced bins, each piled up on its own with its own control. 0 or 1 is one pileup over ' +
-      'the lot — which averages a 30 kb contact and a 2 Mb one into a picture of neither.',
+      'Log-spaced bands, each piled up on its own with its own control; one band averages a ' +
+      '30 kb contact and a 2 Mb one into a picture of neither.',
     default: 0,
     min: 0,
     max: MAX_DISTANCE_BINS,
@@ -512,9 +529,8 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'track aggregates',
     multiple: true,
     hint:
-      'bigWigs, and anything this panel has already computed. Each is averaged over the same ' +
-      'windows the pileup is taken from and drawn along its two edges — the aggregate signal ' +
-      'above and beside the aggregate map.',
+      'Each is averaged over the same windows the pileup is taken from and drawn along its two ' +
+      'edges — the aggregate signal above and beside the aggregate map.',
     // **The figure this task could not draw.** A pileup says *these places
     // touch*; the marginal profiles say *and this is what is bound where they
     // do*, which is the figure behind most of the literature APA is used in.

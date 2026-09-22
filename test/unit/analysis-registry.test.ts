@@ -23,6 +23,7 @@ import { buildAnalysisContext } from '@/analysis/context'
 import { TASK_GROUP_LABELS, TASKS, runnableTasks, taskById, tasksFor } from '@/analysis/registry'
 import { RUNNERS } from '@/analysis/run/index'
 import { TRACK_RUNNERS } from '@/analysis/run/tracks'
+import { defaultParams } from '@/analysis/types'
 import type { AnalysisContext, AnalysisTask } from '@/analysis/types'
 import { defaultStyle } from '@/annotations/types'
 import type { AnnotationEntry } from '@/annotations/types'
@@ -256,6 +257,87 @@ describe('every descriptor', () => {
     const anchor = task?.params.find((spec) => spec.key === 'anchor')
     expect(anchor?.kind).toBe('region')
     expect(anchor?.kind === 'region' && anchor.pickable).toBe(true)
+  })
+
+  /**
+   * **Nothing ticked is nothing to read, and the estimate says so.**
+   *
+   * The five tasks that moved from a sequence dropdown to the tick boxes gained
+   * a state the dropdown had no way to be in: a reader can press **none**. The
+   * one thing it must not become is a genome-wide run — an empty answer that
+   * quietly widens is the failure `SequencesParam` was written against — so it
+   * is priced as nothing and refused with the sentence chromosight's own tick
+   * boxes have always used. Unanswered stays the whole file, which is what the
+   * empty region string it replaces meant.
+   */
+  it('refuses a run with no sequence ticked, and prices an unanswered one', () => {
+    // The tasks whose *answer* is per ticked sequence: five that moved off the
+    // dropdown, and the two that were written this way. Cis/trans and
+    // reproducibility are left out on purpose and are not quietly different —
+    // there the list narrows what is *reported* out of a pass that reads the
+    // whole file either way, so an empty one is not a run over nothing.
+    const perSequence = ['expected', 'scalogram', 'insulation', 'di', 'hicscore', 'compartments']
+    for (const id of perSequence) {
+      const task = taskById(id)
+      expect(task, id).toBeDefined()
+      if (task === undefined) continue
+      expect(task.params.some((spec) => spec.kind === 'sequences'), id).toBe(true)
+      const none = task.estimate(context(), { ...defaultParams(task.params), sequences: [] })
+      expect(none.refusal, id).toBeDefined()
+      expect(none.requests, id).toBe(0)
+      const all = task.estimate(context(), { ...defaultParams(task.params), sequences: null })
+      expect(all.refusal, id).toBeUndefined()
+    }
+  })
+
+  /**
+   * **A hint is one sentence, and it is prose (§26.4).**
+   *
+   * The rule was written down and nothing held it, so a third of the catalogue's
+   * hints had grown a second sentence and a few had grown three — which is a
+   * paragraph beside a control, in a column whose Run button it pushes off the
+   * screen. Two kinds of line are exempt by the rule itself and only two: a
+   * **toggle** may add what its *off* state does, because the control cannot
+   * show it, and an **option**'s own hint is a tooltip rather than a row and is
+   * where anything longer belongs.
+   *
+   * The rest of the rule is about what a hint is *made of*: no section numbers,
+   * because a reader who needs §18.6 is reading the wrong document; no
+   * backticks, no Markdown, because nothing renders them — they reach the DOM as
+   * punctuation.
+   */
+  it('keeps every hint to one sentence, in prose', () => {
+    const sentences = (text: string): number => text.split(/[.!?] +(?=[A-Z0-9])/).length
+    each((task) => {
+      for (const spec of task.params) {
+        if (spec.hint === undefined) continue
+        const where = `${task.id}.${spec.key}`
+        expect(sentences(spec.hint), where).toBeLessThanOrEqual(spec.kind === 'toggle' ? 2 : 1)
+        expect(spec.hint, where).not.toMatch(/[`*_]|§/)
+        // A trailing full stop, because it is a sentence.
+        expect(spec.hint, where).toMatch(/[.!?]$/)
+      }
+    })
+  })
+
+  /**
+   * And a hint that says only what the control says is deleted rather than
+   * reworded. The two the audit named were a tick-box list's *every one, unless
+   * you say otherwise* — which is what an all-ticked column of boxes looks like
+   * — and a locus box's *the locus the profile reads from: a span, a sequence,
+   * or on a metagenome a whole genome*, which was the box's own tooltip repeated
+   * underneath it. Pinned by their keys, since the words are gone.
+   */
+  it('asks the tick boxes and the anchor box without a line under them', () => {
+    const hintOf = (id: string, key: string): string | undefined =>
+      TASKS.find((task) => task.id === id)?.params.find((spec) => spec.key === key)?.hint
+    expect(hintOf('chromosight', 'sequences')).toBeUndefined()
+    expect(hintOf('cistrans', 'sequences')).toBeUndefined()
+    expect(hintOf('fourc', 'anchor')).toBeUndefined()
+    // Compartments keeps one, and it is the reason the rule is about *facts*
+    // rather than about length: ticking several sequences there gives **one**
+    // eigenvector over all of them, which no arrangement of tick boxes says.
+    expect(hintOf('compartments', 'sequences')).toMatch(/One correlation over all of them/)
   })
 })
 

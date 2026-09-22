@@ -22,7 +22,12 @@ import { describe, expect, it } from 'vitest'
 
 import { bandFor, cisMarginal, forEachDiagonalTile } from '@/analysis/run/blocks'
 import { detectableFromCounts, detectableFromMarginal } from '@/analysis/chromosight'
-import { CHROMOSIGHT_TASK, MAX_SCAN_CELLS, scanCellsFor } from '@/analysis/tasks/chromosight'
+import {
+  CHROMOSIGHT_TASK,
+  MAX_SCAN_CELLS,
+  distanceBins,
+  scanCellsFor,
+} from '@/analysis/tasks/chromosight'
 import type { JobContext } from '@/analysis/job'
 import type { AnalysisContext, AnalysisFraming, Params } from '@/analysis/types'
 import type { BlockInput } from '@/analysis/worker/protocol'
@@ -350,6 +355,36 @@ describe('the scan gate', () => {
   // form leaves it at.
   const loops: Params = { pattern: 'loops', thresholds: 'preset' }
 
+  /**
+   * The scan band is a count of **diagonals**, and the one division by a bin
+   * size left is the one that translates upstream's own config.
+   *
+   * The presets are generated from the installed `chromosight` package and are
+   * in base pairs, so the *preset* path still divides — and must, or a 2 kb map
+   * and a 10 kb map would scan a different number of diagonals under the same
+   * template. The reader's own number does not: it is already the answer.
+   */
+  it('reads a preset’s base pairs as diagonals of this file, and a typed number as it stands', () => {
+    // The loops preset is 2 Mb, which is 2,000 diagonals at 1 kb and 400 at 5 kb
+    // — the same distance, a different count, which is the whole reason the
+    // conversion is here and not in the form.
+    expect(distanceBins(loops, 'maxDist', 2_000_000, 1000)).toBe(2_000)
+    expect(distanceBins(loops, 'maxDist', 2_000_000, 5000)).toBe(400)
+    // Zero is not a short band: it is how upstream says *this pattern is on the
+    // diagonal*, and a floor of one bin there would make a border scan a loop
+    // scan one diagonal wide.
+    expect(distanceBins(loops, 'maxDist', 0, 5000)).toBe(0)
+    // A threshold that rounded down to nothing would be a threshold switched
+    // off, which is worse than one a bin out.
+    expect(distanceBins(loops, 'minSeparation', 5_000, 50_000)).toBe(1)
+
+    // The reader's own number is a count of diagonals and is read as one, at
+    // every resolution.
+    const custom: Params = { ...loops, thresholds: 'custom', maxDist: 400 }
+    expect(distanceBins(custom, 'maxDist', 2_000_000, 1000)).toBe(400)
+    expect(distanceBins(custom, 'maxDist', 2_000_000, 5000)).toBe(400)
+  })
+
   it('counts the band and not the square', () => {
     // `(min(maxDist, n) + kernel + 1) × n` — the three arrays the scan holds are
     // each this many cells, and none of them is ever `n²`.
@@ -369,14 +404,16 @@ describe('the scan gate', () => {
   })
 
   it('still refuses a deep scan on a fine grid, and says which two things to change', () => {
-    // chr1 at 1 kb reaching 2 Mb is 394 million cells, which is three gigabytes
-    // of band. Both ways out are settings rather than hardware, so the refusal
-    // names them.
+    // chr1 at 1 kb reaching 2,000 bins is 394 million cells, which is three
+    // gigabytes of band. Both ways out are settings rather than hardware, so the
+    // refusal names them. The scan distance is typed in **bins** now, so what
+    // was `2_000_000` here is the same 2 Mb written as the 2,000 diagonals it
+    // always came to on this grid.
     const estimate = CHROMOSIGHT_TASK.estimate(mouse(1000), {
       ...loops,
       sequences: ['chr1'],
       thresholds: 'custom',
-      maxDist: 2_000_000,
+      maxDist: 2_000,
     })
     // Named by the label the control actually carries, which is lowercase now
     // (§26.4) — and quoted rather than asterisked, since Markdown in a string
@@ -390,7 +427,7 @@ describe('the scan gate', () => {
       ...loops,
       sequences: ['chr1'],
       thresholds: 'custom',
-      maxDist: 400_000,
+      maxDist: 400,
     })
     expect(estimate.refusal).toBeUndefined()
   })
