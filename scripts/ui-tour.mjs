@@ -357,7 +357,31 @@ await scene('analysis', async ({ page, shot, fold, opened }) => {
   await page.locator('.analysis-drawer button', { hasText: /^run$/i }).first().click()
   await page.waitForFunction(() => /computed in/.test(document.querySelector('.analysis-drawer')?.textContent ?? ''), null, { timeout: 180000 }).catch(() => console.log('no cis/trans result'))
   await sleep(4000)
-  await shot('38-drawer-cistrans-bars')
+  // **The figure's own box, not the page.** The per-sequence table is emitted
+  // first and fills the drawer, so a shot of the top of a finished run is a shot
+  // of the table; and a chart taller than what is left below the fold is a shot
+  // of its own heading. These two are here for the bars, so they are clipped to
+  // the bars.
+  const figureShot = async (name) => {
+    // The block that holds a *chart*, not the first output block: this task
+    // emits its per-sequence table first, and `.analysis-figure` is the class
+    // both of them wear.
+    const figure = await page.$('.analysis-drawer .analysis-figure:has(.figure-chart)')
+    if (figure === null) { errors.push(`${name}: no chart to shoot`); return }
+    await figure.scrollIntoViewIfNeeded()
+    await sleep(1200)
+    const box = await figure.boundingBox()
+    if (box === null) { errors.push(`${name}: the chart has no box`); return }
+    await shot(name, {
+      clip: {
+        x: box.x,
+        y: Math.max(0, box.y),
+        width: box.width,
+        height: Math.min(box.height, 1100 - Math.max(0, box.y)),
+      },
+    })
+  }
+  await figureShot('38-drawer-cistrans-bars')
   // …and the same run with both fractions stacked.
   const bars = await page.$('.analysis-drawer select')
   const which = await page.$$('.analysis-drawer select')
@@ -368,7 +392,7 @@ await scene('analysis', async ({ page, shot, fold, opened }) => {
   await sleep(600)
   await page.locator('.analysis-drawer button', { hasText: /^run$/i }).first().click()
   await sleep(6000)
-  await shot('39-drawer-cistrans-stacked')
+  await figureShot('39-drawer-cistrans-stacked')
 })
 
 // ---------------------------------------------------------------- deck
