@@ -763,6 +763,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **`metacooler-run reconstruct3d` writes the model rather than an empty BED (§25.7).** A model is
+  an interval set whose rows carry three coordinates each, and the shell wrote every interval set as
+  a BED6 — so a reconstruction run over a batch came out as `chrom start end region_1 0 .` per bin,
+  which is the assembly handed back with the one thing the run computed dropped for want of a column
+  to put it in, beside a TSV whose every row was blank after the coordinates. Nothing said so: the
+  files were there, the names were right, and the numbers were not in either of them. §25.7 has said
+  since there were models that **a model leaves as a bed3d**, and the export road a computed row
+  shares with called intervals is the shell's road too — so `--out` now writes `chrom start end x y
+  z` through the drawer's own writer, the haplotype column where there is one, and the file reads
+  straight back into this app and into `g3dtools`.
+
 - **Dropping several local coolers no longer gives a row of empty cells (§16.6).** Each opened a
   live panel and then, a frame later, every one of them was replaced by a vacancy reading *this cell
   held that file and it could not be re-opened* — about files the deck still had in hand. The hash

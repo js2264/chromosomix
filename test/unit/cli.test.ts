@@ -204,6 +204,43 @@ describe('running a task', () => {
     }
   })
 
+  it('writes a reconstructed model as a bed3d, coordinates and all', async () => {
+    reset()
+    // §25.7: *a model leaves as a bed3d*, from the button, from the drawer's
+    // result, and from the export road a computed row shares with called
+    // intervals — which is this one. A model is an interval set whose rows carry
+    // three coordinates each, and BED6 has nowhere to put them: the shell wrote
+    // `chrom start end region_1 0 .` per bin, which is the assembly back with the
+    // one thing the run computed dropped, beside a TSV whose every row was blank.
+    expect(
+      await main(['reconstruct3d', sample, '--out', out, '--quiet', '--iterations', '5']),
+    ).toBe(0)
+    const files = await readdir(out)
+    expect(files).toContain('sample.reconstruct3d.reconstructed-model.bed3d')
+    // And not as a BED beside it: one file per output per format, and a model's
+    // format is the one that holds it.
+    expect(files).not.toContain('sample.reconstruct3d.reconstructed-model.bed')
+    const text = await readFile(
+      join(out, 'sample.reconstruct3d.reconstructed-model.bed3d'),
+      'utf8',
+    )
+    expect(text).toMatch(/^# metacooler .*bed3d: chrom start end x y z/m)
+    const rows = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
+    expect(rows.length).toBeGreaterThan(0)
+    let moved = 0
+    for (const row of rows) {
+      const columns = row.split('\t')
+      expect(columns.length).toBe(6)
+      const [contig, start, end, x, y, z] = columns
+      expect(contig).toMatch(/^chr/)
+      expect(Number(end)).toBeGreaterThan(Number(start))
+      for (const coordinate of [x, y, z]) expect(Number.isFinite(Number(coordinate))).toBe(true)
+      if (Number(x) !== 0 || Number(y) !== 0 || Number(z) !== 0) moved += 1
+    }
+    // A file of zeroes would satisfy every check above and hold no model.
+    expect(moved).toBeGreaterThan(0)
+  })
+
   it('takes the `::` resolution its own refusal tells a reader to write', async () => {
     reset()
     // `detect.ts` refuses a multi-resolution container at its root with a

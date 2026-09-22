@@ -5197,8 +5197,9 @@ eagerly too, so both find every contig whatever those keys say — while the UCS
 exactly them. A writer that filled them with rubbish would pass a round trip and produce a file
 `bigWigInfo` cannot navigate.
 
-Interval outputs go out as BED and BEDPE, and they go out through `annotations/export.ts` — the module
-the hand-drawn marks already used. It gained a `FeatureSet`/`PairSet` writer rather than one being added
+Interval outputs go out as BED and BEDPE — and as **bed3d** where the rows are a model's beads
+(§25.7), which is an interval set with three coordinates a row and the one case BED6 cannot hold —
+and they go out through `annotations/export.ts` — the module the hand-drawn marks already used. It gained a `FeatureSet`/`PairSet` writer rather than one being added
 under `analysis/write/`, and that is the whole of the decision: two BED writers in one repository is two
 opinions about half-open ends waiting to diverge, and what varies between a hand-drawn mark and a called
 boundary is the *row*, not the format. Both round-trip through this app's own parser, which is what the
@@ -8260,6 +8261,11 @@ PNG, as it does for a map.
 `#` line naming the row, its framing and when it was made, six decimals — from the **bed3d**
 button of its row, from the drawer's result and from the export road a computed row shares with
 called intervals. It is the file §25.2 reads, so it reads straight back here and in `g3dtools`.
+
+**That road includes the shell.** `metacooler-run reconstruct3d --out` writes the bed3d beside the
+TSV every output carries (§18.7), through this same writer — because the batch is where a model
+whose coordinates went missing is least likely to be noticed, and because a reconstruction is the
+one task whose whole result is the three columns BED has nowhere to put.
 
 ### 25.8 Refused, and not yet built
 

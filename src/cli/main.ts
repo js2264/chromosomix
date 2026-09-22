@@ -106,6 +106,7 @@ import {
 } from '../annotations/parse'
 import { parseBarChart, sniffBarChart } from '../annotations/barchart'
 import { formatIntervals } from '../annotations/export'
+import { writeBed3d } from '../annotations/g3d'
 import type { StoredEntry } from '../annotations/types'
 import { looksLikeFasta, parseFasta, type SequenceStore } from '../annotations/fasta'
 import { hicProBinsNames, isHicProMatrix } from '../annotations/sidecar'
@@ -1063,14 +1064,27 @@ async function writeOutputs(
     // bigWig, a set of intervals leaves as BED. Only the first half was here, so
     // a boundary set called in a shell came out as a TSV with a provenance
     // header — readable, and not what bedtools takes.
+    //
+    // **A model leaves as a bed3d** (§25.7), and the road a computed row shares
+    // with called intervals is this one too. A reconstruction's rows carry three
+    // coordinates each and BED6 has nowhere to put them: `reconstruct3d --out`
+    // wrote `chrom start end region_1 0 .` per bin — the assembly back, and the
+    // only thing the run computed gone — beside a TSV whose every row was blank.
+    // The writer is the drawer's own, so the file a batch produces is the file
+    // its button produces, and §25.2 reads it back.
     if (output.kind === 'intervals') {
+      const payload = output.payload
+      const model = output.entryKind === 'structure' && payload.kind === 'features'
+      const context = {
+        label: output.label,
+        file: result.provenance.framing.label,
+        created: result.provenance.createdAt,
+      }
       await put(
-        `${stem}.${output.payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
-        formatIntervals(output.payload, {
-          label: output.label,
-          file: result.provenance.framing.label,
-          created: result.provenance.createdAt,
-        }),
+        `${stem}.${model ? 'bed3d' : payload.kind === 'pairs' ? 'bedpe' : 'bed'}`,
+        model && payload.kind === 'features'
+          ? writeBed3d(payload.data, context)
+          : formatIntervals(payload, context),
       )
     }
     if (output.kind === 'profile') {
