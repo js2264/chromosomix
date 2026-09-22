@@ -208,10 +208,10 @@
   "pulls": [
     {
       "number": 69,
-      "commit": "5625fbe",
+      "commit": "07754b7",
       "title": "Unify interface grammar across all reader-facing surfaces",
       "branch": "js/amazing-ritchie-ambnmn",
-      "date": "2026-09-22T10:00:53Z"
+      "date": "2026-09-22T10:37:44Z"
     },
     {
       "number": 68,
