@@ -207,6 +207,13 @@
   ],
   "pulls": [
     {
+      "number": 69,
+      "commit": "eb8ffc4",
+      "title": "Unify interface grammar across all reader-facing surfaces",
+      "branch": "js/amazing-ritchie-ambnmn",
+      "date": "2026-09-21T20:51:21Z"
+    },
+    {
       "number": 68,
       "commit": "ca7c4a7",
       "title": "Add pastis-NB likelihood method for structure modeling",
