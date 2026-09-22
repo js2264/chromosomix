@@ -24,6 +24,19 @@
  * statistic with false-discovery control and a golden built from
  * `hic_breakfinder` or `EagleC`'s own output, which is the bar a second caller
  * has to clear and which nothing here attempts.
+ *
+ * ## Why the per-sequence fractions get a picture of their own
+ *
+ * For a while the square was the only picture here and the per-sequence reading
+ * — the number in the paper's first table, the reason anybody opens this task —
+ * was a column of three-decimal numbers under it. That is the wrong way round.
+ * A square answers *which pairs touch*, and a reader who wants *is any sequence
+ * behaving unlike the rest* had to read a list of `0.99`s looking for the one
+ * that was not, which on a four-thousand-contig metagenome is not a thing a
+ * person does. One bar per sequence is that comparison drawn instead of
+ * performed, and it is offered as **fractions** because a bar of raw contacts is
+ * a picture of how long each sequence is and says nothing else (`run/cistrans.ts`
+ * argues both at length).
  */
 
 import type { AnalysisContext, AnalysisTask, CostEstimate, ParamSpec, Params } from '../types'
@@ -46,6 +59,27 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'sequences',
     label: 'sequences',
     hint: 'Which to report. The pass reads the whole file either way.',
+  },
+  {
+    kind: 'choice',
+    key: 'bars',
+    label: 'bars per sequence',
+    hint: 'Fractions of each sequence’s own contact, so a deep sequence and a shallow one compare.',
+    // The cis fraction, because it is the number the first table of every Hi-C
+    // paper quotes and the one a reader opens this task to see. The stacked
+    // pair is the same fact with a legend and a second colour around it — the
+    // two fractions sum to one, so the bar it adds is full on every sequence —
+    // so it is offered rather than opened on.
+    default: 'cis',
+    options: [
+      { value: 'cis', label: 'cis' },
+      { value: 'trans', label: 'trans' },
+      {
+        value: 'both',
+        label: 'both, stacked',
+        hint: 'The two sum to one, so every bar is full and the split is the cis fraction.',
+      },
+    ],
   },
   {
     kind: 'choice',
@@ -128,6 +162,6 @@ export const CIS_TRANS_TASK: AnalysisTask = {
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),
   params: PARAMS,
-  outputs: ['table', 'matrix'],
+  outputs: ['table', 'curve', 'matrix'],
   estimate,
 }

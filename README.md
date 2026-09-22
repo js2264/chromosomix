@@ -137,6 +137,7 @@ metacooler-run tasks
 ## cistrans
 ##     Cis and trans per sequence
 ##       --sequences  Sequences
+##       --bars (default "cis")  Bars per sequence
 ##       --normalise (default "enrichment")  Off-diagonal value
 ##       --minContacts (default 10)  Least contact worth listing
 ##       --maxEdges (default 500)  Pairs to list

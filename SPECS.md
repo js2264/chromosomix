@@ -5223,6 +5223,17 @@ summary of the file, and a call would need false-discovery control and a golden 
 `hic_breakfinder`'s own output, which is §18.9's bar and which nothing here attempts. The diagonal
 is left out of the square rather than drawn, being one to three orders of magnitude above every
 other cell and therefore the whole colour scale.
+**And the per-sequence reading is a picture as well as a table**, because it is what the task is
+opened for and it was the one output with nothing to look at: one bar per sequence, in the file's own
+order, of the cis fraction, of the trans fraction, or of both stacked — which, the two summing to
+one, is a full bar split at the cis fraction. A setting says which. **Fractions rather than
+counts**, since a bar of a sequence's raw contacts is a picture of how long the sequence is and says
+nothing else; the ordinate is a share and is written in per cent while the numbers behind it stay
+fractions (§26.2); and a sequence with no contact at all is a gap rather than a bar of height zero,
+which is the rule its row in the table already keeps. There is no ceiling on the number of bars as
+there is on the square: a square becomes a grey band because its cells shrink in both directions at
+once, while four thousand bars are a silhouette of the same shape, read the same way, and one
+control away from the line that silhouette already is.
 *Per-cell contact QC* is offered on an `.scool` and nowhere else, and it is there because the whole
 of that container's interaction is a decision nothing was helping anybody make: the Cells table ranks
 by `nnz` and `sum`, which is what the *writer* recorded and a statement about the sequencing rather

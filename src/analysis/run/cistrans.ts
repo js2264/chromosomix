@@ -8,8 +8,9 @@
  * from one comes out at exactly `1` everywhere.
  *
  * The arithmetic is `analysis/cistrans.ts`. What is here is which rows to show,
- * which normalisation to show them in, and the three sentences a reader has to
- * be told when the file does not permit the whole answer.
+ * which normalisation to show them in, which of the two fractions the bars
+ * stand for, and the three sentences a reader has to be told when the file does
+ * not permit the whole answer.
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
@@ -17,7 +18,13 @@ import { binContigMap } from '../coverage'
 import { SequenceContactAccumulator, transExpectation } from '../cistrans'
 import { boolParam, contigIdsFor, listParam, numParam, strParam, type TaskRunner } from '../job'
 import { MATRIX_SEQUENCE_LIMIT } from '../tasks/cistrans'
-import type { MatrixOutput, TableOutput, TaskOutput } from '../types'
+import type {
+  CurveOutput,
+  CurveSeries,
+  MatrixOutput,
+  TableOutput,
+  TaskOutput,
+} from '../types'
 import { validBins } from './blocks'
 
 export const runCisTrans: TaskRunner = async (job) => {
@@ -170,6 +177,7 @@ export const runCisTrans: TaskRunner = async (job) => {
       // the one the map is drawn in and this table is read beside it.
       rows,
     } satisfies TableOutput,
+    fractionBars(rows, strParam(job.params, 'bars', 'cis')),
   ]
 
   const mode = strParam(job.params, 'normalise', 'enrichment')
@@ -289,4 +297,97 @@ export const runCisTrans: TaskRunner = async (job) => {
   }
 
   return outputs
+}
+
+/** What the bars read off the per-sequence table; structurally its rows. */
+interface SequenceRow {
+  sequence: string
+  cis: number
+  trans: number
+  total: number
+}
+
+/** The stack the two fractions share, where the reader asked for both. */
+const CONTACT_STACK = 'contacts'
+
+/**
+ * The per-sequence fractions, as one bar per sequence.
+ *
+ * The numbers are the table's own and the picture is the point. A column
+ * reading `0.994, 0.991, 0.987, 0.612, 0.989` is a list a reader has to scan
+ * and subtract; the same numbers as bars in the file's order put the one
+ * sequence that is a third trans a head below its neighbours before anybody has
+ * read a digit — and on a metagenome, where the table is four thousand rows
+ * long, that is the difference between a record and an answer.
+ *
+ * **Fractions rather than counts**, and that is the whole of why this is worth
+ * drawing. A bar of each sequence's cis *contacts* is a picture of how long the
+ * sequences are: chromosome I gets a stub and chromosome IV a tower, on any file
+ * whatever, because a longer sequence holds more of everything. Dividing by what
+ * the sequence has in total takes the length back out and leaves the quantity
+ * the task is named for, which is comparable from one sequence to the next and
+ * from one library to the next.
+ *
+ * A sequence with no contact at all gets a **gap**, not a zero bar: zero of zero
+ * is not zero, which is the same rule its row in the table keeps.
+ *
+ * And there is no ceiling on the number of bars, unlike the square
+ * ({@link MATRIX_SEQUENCE_LIMIT}). A square goes from a picture to a grey band
+ * because its cells shrink in both directions at once; a row of four thousand
+ * bars is a silhouette of the same shape, still read the same way, and the mark
+ * control turns it into the line that silhouette already is.
+ */
+function fractionBars(rows: readonly SequenceRow[], which: string): CurveOutput {
+  // Each half against the sequence's own total rather than one of them against
+  // `1 - other`: the two are the same number to within a float, and computing
+  // one by subtraction would hand a sequence with no contact a fraction of 1.
+  const share = (part: number, total: number): number =>
+    total > 0 ? part / total : Number.NaN
+  // One abscissa for both series rather than two copies of it: they are the same
+  // bars, and the worker's transfer list already expects two views of one buffer
+  // (`worker/protocol.analysisTransfers`, which a profile and its extent share).
+  const at = Float64Array.from(rows, (_row, index) => index)
+  const both = which === 'both'
+  const cis: CurveSeries = {
+    name: 'cis',
+    x: at,
+    y: Float64Array.from(rows, (row) => share(row.cis, row.total)),
+    mark: 'bars',
+    ...(both ? { stack: CONTACT_STACK } : {}),
+  }
+  const trans: CurveSeries = {
+    name: 'trans',
+    x: at,
+    y: Float64Array.from(rows, (row) => share(row.trans, row.total)),
+    mark: 'bars',
+    ...(both ? { stack: CONTACT_STACK } : {}),
+  }
+  return {
+    kind: 'curve',
+    id: 'cistrans-fractions',
+    label: both
+      ? 'Cis and trans fraction per sequence'
+      : which === 'trans'
+        ? 'Trans fraction per sequence'
+        : 'Cis fraction per sequence',
+    series: both ? [cis, trans] : [which === 'trans' ? trans : cis],
+    xLabel: 'Sequence',
+    // Per cent, which is how §26.2 has a fraction said on a surface that
+    // summarises it; the values behind the axis stay fractions, so the TSV holds
+    // the `0.994` the table holds.
+    yLabel: 'Share of the sequence’s contacts (%)',
+    xScale: 'linear',
+    yScale: 'linear',
+    // The whole of a fraction, rather than the part these fractions happen to
+    // occupy. Fitted, an axis over `0.987` to `0.994` draws seven parts in a
+    // thousand as the height of the picture and two libraries that agree as two
+    // that do not — and it would put each run of this task against a ceiling of
+    // its own. A default like every other declared window (§18.7): the marquee
+    // and the boxes still move it.
+    yDomain: [0, 1],
+    // The sequences, in the file's own order, from where every other output
+    // takes them. One name per bar, so the axis names the bar under the pointer
+    // rather than counting them.
+    xTicks: rows.map((row) => row.sequence),
+  }
 }
