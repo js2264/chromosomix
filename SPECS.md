@@ -7773,14 +7773,33 @@ name, with the way out (`g3dtools` rewrites it).
 All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
 would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
 is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
-the structure it says it is. An unnamed file is asked two questions, and each exists to tell a
-structure from a BED whose columns happen to be numbers: are the coordinates **fractional**, and do
-the beads walk like a **chain** rather than scatter. A named file has been told apart already, by
-the reader who named it — so a model whose beads *are* a scatter (a randomised control, a draw from
-a null, a fragment set nobody has folded) is read as a structure rather than falling through to BED.
-It used to be spared only the first question, which put such a file on the Structures card by name
-while parsing its payload as a track: the row and what it held disagreed about what had been
-loaded. The tests pin what a BED5, a BED6, a bedGraph and a narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
+the structure it says it is. The name is read **first**, before a single row, and read the way the
+drop routing reads it: past any directories, with a `?query` or `#fragment` cut off, so a model
+published at a URL is as named as one on disk. A file whose name claims no format is asked two
+questions, and each exists to tell a structure from a BED whose columns happen to be numbers: are
+the coordinates **fractional**, and do the beads walk like a **chain** rather than scatter. A named
+file has been told apart already, by the reader who named it — so a model whose beads *are* a
+scatter (a randomised control, a draw from a null, a fragment set nobody has folded) is read as a
+structure rather than falling through to BED. A named file that turns out **not** to be one gets
+the parser's refusal, in the format's own words and on the card its name sent it to, rather than
+being quietly drawn as a lane. The tests pin what a BED5, a BED6, a bedGraph and a narrowPeak are
+not.
+
+**A bead the solver could not place is still a bead.** A solver writes `nan` — or `NA`, `inf`,
+`None`, `.`, or an empty field — in all three coordinate columns for a bin it was given nothing to
+place: a repeat, a gap in the assembly, a bin nothing mapped to. Such a row is **passed over** by
+the sniffer, which counts it neither for the file nor against it, and dropped by the parser, so a
+model of a real map opens at the beads that have places. It is not a disqualification, which it
+was: one `nan` row thirty-one rows into a 1,683-bead pastis-NB model answered *not a structure* for
+the whole file, so its `.g3d` was refused by the BED parser it fell through to — *all 1,683 lines
+failed the "contig, start, end" test* — and the `.bed3d` beside it, whose third column really is an
+integer end, was drawn as a lane of 1,683 boxes whose name is an x coordinate. A file where *every*
+bead is unplaced says **that** rather than the sentence naming the columns, because its columns are
+fine. A coordinate that is neither a number nor one of those spellings is a file that is not a
+structure at all, which is what still keeps a BED6 out: a name, a score and a strand are not three
+ways of saying *nowhere*.
+
+A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
 **The Structures card.** Every model the session holds — dropped, named by URL, or computed

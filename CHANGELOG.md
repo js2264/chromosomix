@@ -763,6 +763,31 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A model with a bin the solver could not place is a structure again (§25.2).** A solver writes
+  `nan` in all three coordinate columns for a bin it was given nothing to place — a repeat, a gap in
+  the assembly, a bin nothing mapped to — and the sniffer read the first such row as *this file is
+  not a structure* and gave up on the whole of it. A 1,683-bead pastis-NB model of a mycoplasma
+  genome has 33 of them and the first is thirty-one rows in, so **both** files it was written as
+  fell through to the BED family: the `.g3d` landed on the Structures card by name and then failed
+  with *all 1,683 lines failed the "contig, start, end" test that every BED-like format begins
+  with* — a refusal naming a format the reader never handed over — and the `.bed3d` beside it, whose
+  third column really is an integer end, was **drawn as a track**: a lane of 1,683 boxes whose name
+  is an x coordinate. A bead with no place is now passed over by the sniffer and dropped by the
+  parser, as a bead nowhere always was, and the model opens at the beads that have places. A file
+  where *every* bead is unplaced says that in those words, rather than in the sentence naming the
+  columns — its columns are fine. A coordinate that is neither a number nor one of the spellings of
+  *nowhere* (`nan`, `NA`, `inf`, `None`, `.`, empty) still says the file is not a structure, which
+  is what keeps a BED6 out.
+
+- **A file that names its format really is not sniffed (§25.2).** `.g3d`, `.3dg` and `.bed3d` were
+  spared the two content *questions* but not the shape tests underneath them, so a named file could
+  still be vetoed by one odd row — which is how the `nan` above reached the BED sniffer at all. The
+  name is now read first, before a single row, and it settles the format: a named file that turns
+  out not to be a structure is refused **as** a structure, in the format's own words and on the card
+  its name sent it to, rather than being quietly drawn as a lane. The name is also read the way the
+  drop routing reads it — past any directories, with a `?query` or `#fragment` cut off — so a model
+  published at a URL is as named as one on disk; `model.bed3d?token=1` used to be an unnamed file.
+
 - **`metacooler-run reconstruct3d` writes the model rather than an empty BED (§25.7).** A model is
   an interval set whose rows carry three coordinates each, and the shell wrote every interval set as
   a BED6 — so a reconstruction run over a batch came out as `chrom start end region_1 0 .` per bin,
