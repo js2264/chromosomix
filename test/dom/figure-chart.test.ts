@@ -190,6 +190,74 @@ describe('chartFigure', () => {
     }
   })
 
+  /**
+   * The other thing a pure test of the option cannot see.
+   *
+   * A bar chart of a list makes three claims that only a render settles: that
+   * the bars are drawn at all, that the axis prints the *names* rather than the
+   * indices the bars stand at, and that the ordinate is spelled in the per cent
+   * its own name declares. All three are formatters and series types the option
+   * can hold perfectly well while ECharts draws an empty plot with neat axes
+   * around it — which is how the violin failed.
+   */
+  it('draws a stacked bar chart, named along the abscissa and per cent up the side', async () => {
+    const output: CurveOutput = {
+      kind: 'curve',
+      id: 'cistrans-fractions',
+      label: 'Cis and trans fraction per sequence',
+      xLabel: 'Sequence',
+      yLabel: 'Share of the sequence’s contacts (%)',
+      xScale: 'linear',
+      yScale: 'linear',
+      yDomain: [0, 1],
+      xTicks: ['I', 'II', 'III'],
+      series: [
+        {
+          name: 'cis',
+          x: new Float64Array([0, 1, 2]),
+          y: new Float64Array([0.9, 0.75, 0.5]),
+          mark: 'bars',
+          stack: 'contacts',
+        },
+        {
+          name: 'trans',
+          x: new Float64Array([0, 1, 2]),
+          y: new Float64Array([0.1, 0.25, 0.5]),
+          mark: 'bars',
+          stack: 'contacts',
+        },
+      ],
+    }
+    const built = specOf(output) as XyFigureSpec
+    // The task said bars, so the figure opens on them.
+    expect(built.mark).toBe('bars')
+    const style = defaultStyle(built)
+    style.legend = 'none'
+    const figure = chartFigure({ spec: built, style })
+    document.body.append(figure.el)
+    // The host has no width in jsdom, so the chart is measured by hand.
+    Object.defineProperty(figure.el, 'clientWidth', { value: 640, configurable: true })
+    Object.defineProperty(figure.el, 'clientHeight', { value: 400, configurable: true })
+    await figure.ready
+
+    const page = new VectorPage(640, 400)
+    figure.draw(page.ctx, { width: 640, height: 400 })
+    const content = await contentOf(await pdfOf(page, 'cistrans-fractions'))
+    // Both halves of every bar, in the series' own colours — the legend is off,
+    // so nothing else on this figure is painted in them.
+    for (const colour of ['#0072B2', '#D55E00']) {
+      const [r, g, b] = pdfColour(colour)
+      expect(content).toContain(`${trim(r)} ${trim(g)} ${trim(b)} rg`)
+    }
+    // The sequences, under their own bars, rather than `0`, `1`, `2`.
+    for (const name of ['I', 'II', 'III']) expect(content).toContain(`(${name}) Tj`)
+    // And the share said as a percentage (§26.2), with no idle zeros.
+    expect(content).toMatch(/\(\d+%\) Tj/)
+    expect(content).not.toMatch(/\(\d+\.0%\) Tj/)
+
+    figure.destroy()
+  })
+
   it('takes a style change and redraws from it', async () => {
     const built = spec()
     const figure = chartFigure({ spec: built, style: defaultStyle(built) })

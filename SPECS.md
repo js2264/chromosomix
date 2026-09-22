@@ -5051,6 +5051,16 @@ same track drawn as a curve two blocks down the drawer are recognisably one quan
 requested height counts the bands, or the top one would be clipped away — which is the one part of a
 figure a reader cannot reconstruct from the rest. The only task that sets them is the APA (§18.8).
 
+**A curve's abscissa may be a list rather than a quantity.** One value per sequence, per sample,
+per MAG — which is a bar chart, and the mark that draws it is §18.13's. The x values stay numbers and
+the output carries a name for each of them, so the axis names the thing standing at each tick and the
+figure keeps the wheel, the marquee and the two typed bounds a category axis would have cost it —
+which a four-hundred-contig metagenome needs far more than a sixteen-chromosome yeast does. A tick
+that falls between two members names nothing, because there is nothing between the fourth sequence
+and the fifth. The TSV writes the names in its first column: a column of `0, 1, 2` beside a column of
+fractions asks the reader to count bars on the picture to find out which row is which, which is the
+same argument the matrix export makes for putting its ticks down the left edge.
+
 **A curve is interactive, and an interactive figure is a plain figure of a derived output.** Turning
 on a log axis produces a `CurveOutput` with `xScale: 'log'`; hiding a series produces one with fewer
 entries in `series`; dragging a rectangle across the plot produces one whose `xDomain` and `yDomain`
@@ -6115,6 +6125,15 @@ a Gaussian kernel density at Silverman's bandwidth for the violin — every viol
 by the same peak, because two violins each normalised to their own width say the two samples are
 equally concentrated. A table can be drawn as any of them: one numeric column as a distribution, or
 one against another as a scatter.
+
+**Bars stack where the series are parts of one whole.** A sequence's cis and trans fractions sum to
+one, and the reading is one bar split in two rather than two bars side by side whose sum the reader
+performs. The task says which series share a stack; **only bars** honour it, because the same
+declaration on a pair of lines would draw an upper line that is the sum of two quantities under an
+axis claiming it is one of them — so a stacked bar chart restyled to lines is two lines again. The
+all-maps overlay keeps the stacks **per map** (`analysis/combine.ts`), since four libraries in one
+stack would be a single bar four libraries tall with each one's fraction standing on the sum of the
+ones before it.
 
 **A table is a view, not a printing.** Filter, sort and choose columns, which for four thousand MAGs
 is the difference between a record and a tool. The filter is a substring over each cell's *text*,
@@ -8072,7 +8091,10 @@ no DOM, no `ui/` — so the annotations worker and the g3d parser print what the
   a **log** axis every tick is a power of ten, so the moment one needs an exponent they all take it:
   an axis that reads `0.001`, `0.0001`, `1e-5`, `1e-6` changes notation halfway down itself. An
   abscissa in base pairs takes `fmt.bp` instead, so a P(s) reaching a megabase reads `1.00 Mb`
-  rather than `1e6`.
+  rather than `1e6`, and an axis of **fractions** takes `fmt.pct` and says so in its own name —
+  *Share of the sequence's contacts (%)* — so a cis fraction reads `93.3%` where the TSV under the
+  figure holds `0.933`. That is the rule below applied to the surface rather than to the number, and
+  the places are the tick's own: a whole per cent spends none of them.
 
 - **A table cell is not a summary.** The Chromosomes table's `length` column prints `1,531,933` while
   the Sequences card beside it prints `1.53 Mb`, and both are right: a table holds the values a

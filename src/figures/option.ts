@@ -113,12 +113,21 @@ function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number]
 /**
  * How the abscissa is spelled, where the quantity on it has a unit.
  *
- * Two ways it can. A figure whose x is in **bins** carries the bin size and is
+ * Three ways it can. A figure whose x is in **bins** carries the bin size and is
  * multiplied up. A figure whose x is already in **base pairs** says so in its
  * own axis name — `Genomic separation (bp)` — and takes `fmt.bp` directly: that
  * axis used to fall through to the plain magnitude spelling, so a P(s) reaching
  * a megabase printed `4000`, `10000`, `100000`, `1e6` where the app's own units
- * read `4.0 kb`, `10.0 kb`, `100.0 kb`, `1.00 Mb` (§26.2).
+ * read `4.0 kb`, `10.0 kb`, `100.0 kb`, `1.00 Mb` (§26.2). And a figure whose x
+ * is a **list** carries the list's names, one per value, and each tick is the
+ * name of the thing standing at it — a sequence, under its own bar.
+ *
+ * A name is drawn only where the tick lands *on* one of the values, because a
+ * tick at 3.5 names nothing: there is no sequence between the fourth and the
+ * fifth. The axis is asked for whole-numbered ticks so that it usually does
+ * land on one (`minInterval`), and a list too long to label thins itself out
+ * rather than overprinting (`hideOverlap`) — which is the same bargain the
+ * cis/trans square strikes at forty sequences.
  *
  * `undefined` for anything else, and the caller falls back to
  * {@link axisNumber}.
@@ -127,7 +136,35 @@ function xFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined
   const binsize = spec.binsize
   if (binsize !== undefined) return (value: number) => fmt.bp(value * binsize)
   if (/\(bp\)/i.test(spec.xLabel ?? '')) return (value: number) => fmt.bp(value)
+  const names = spec.xTicks
+  if (names !== undefined) {
+    return (value: number) => (Number.isInteger(value) ? (names[value] ?? '') : '')
+  }
   return undefined
+}
+
+/**
+ * How the ordinate is spelled, where the quantity on it has a unit.
+ *
+ * The one case, and it is `xFormatter`'s `(bp)` rule on the other axis: an axis
+ * of **fractions** says so in its own name — `Share of the sequence’s contacts
+ * (%)` — and is spelled by `fmt.pct`, because §26.2's *a fraction takes
+ * `fmt.pct`* is about the surface rather than about the number. The values
+ * behind it stay fractions, so the TSV a reader checks the figure against holds
+ * `0.933` where the axis reads `93.3%`, exactly as a table of lengths holds
+ * `1,531,933` under a summary reading `1.53 Mb`.
+ *
+ * The places are the tick's own: a tick at a whole per cent spends none of
+ * them, one between two spends one. Four zeros after a decimal point is what
+ * {@link axisNumber} exists to prevent, and `0.0%`, `25.0%`, `50.0%` is the
+ * same complaint one order of magnitude up.
+ */
+function yFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined {
+  if (!/\(%\)/.test(spec.yLabel ?? '')) return undefined
+  return (value: number) => {
+    const per = value * 100
+    return fmt.pct(value, Math.abs(per - Math.round(per)) < 1e-9 ? 0 : 1)
+  }
 }
 
 function axisBase(theme: FigureTheme, style: FigureStyle, grid: boolean): ChartOption {
@@ -280,11 +317,15 @@ function xyOption(
   // which is the one case where the figure's own axis names are not the axes.
   const xName = style.x.label ?? (histo ? spec.yLabel : spec.xLabel)
   const yName = style.y.label ?? (histo ? 'count' : spec.yLabel)
-  // **The ordinate needs a formatter too.** It had none, so a log-scaled P(s)
+  // **Both axes need a formatter.** The ordinate had none, so a log-scaled P(s)
   // printed `0.0000001` and the slope beside it eight zeros — see
-  // `units.axisNumber`. The abscissa keeps its base-pair spelling where a bin
-  // size gives it one, and takes the magnitude spelling where it does not.
-  const formatter = histo ? undefined : xFormatter(spec)
+  // `units.axisNumber`. Each keeps the spelling its own quantity has — base
+  // pairs, a list of names, per cent — and takes the magnitude spelling where it
+  // has none. Neither on a histogram: there the abscissa is the *ordinate's*
+  // quantity and the ordinate is a count, so the figure's own units are on
+  // neither axis.
+  const xSpelling = histo ? undefined : xFormatter(spec)
+  const ySpelling = histo ? undefined : yFormatter(spec)
 
   return {
     xAxis: {
@@ -293,11 +334,16 @@ function xyOption(
       nameLocation: 'middle',
       nameGap: style.fontSize * 2.4,
       scale: true,
+      // A named abscissa is a list, so the ticks belong on its members: whole
+      // numbers, and as many of them as fit without one name printing over the
+      // next.
+      ...(spec.xTicks !== undefined && !histo ? { minInterval: 1 } : {}),
       ...axisBase(theme, style, style.x.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.x.grid).axisLabel as object),
+        ...(spec.xTicks !== undefined && !histo ? { hideOverlap: true } : {}),
         formatter:
-          formatter ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
+          xSpelling ?? ((value: number) => axisNumber(value, style.x.scale === 'log' ? 'log' : 'linear')),
       },
     },
     yAxis: {
@@ -313,7 +359,8 @@ function xyOption(
       ...axisBase(theme, style, style.y.grid),
       axisLabel: {
         ...(axisBase(theme, style, style.y.grid).axisLabel as object),
-        formatter: (value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear'),
+        formatter:
+          ySpelling ?? ((value: number) => axisNumber(value, style.y.scale === 'log' ? 'log' : 'linear')),
       },
     },
     // Wheel zooms the abscissa and drags pan it, which is the gesture a curve
@@ -365,7 +412,17 @@ function lineSeries(entry: Entry, style: FigureStyle, fillOpacity: number): Char
     }
   }
   if (mark === 'bars') {
-    return { ...common, type: 'bar', itemStyle: { color: entry.colour }, barMaxWidth: 24 }
+    return {
+      ...common,
+      type: 'bar',
+      itemStyle: { color: entry.colour },
+      barMaxWidth: 24,
+      // Only here. A stack is a statement about bars standing on each other,
+      // and the same field on a line or an area would silently redraw the upper
+      // series as the sum of two quantities (`CurveSeries.stack`) — so a reader
+      // who restyles a stacked bar chart to lines gets the two series it is of.
+      ...(entry.series.stack === undefined ? {} : { stack: entry.series.stack }),
+    }
   }
   const area = mark === 'area' || style.fillArea
   return {
