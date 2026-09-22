@@ -8176,6 +8176,13 @@ answers *why not*.
   does, because that is a second fact and the control cannot show it (*"Track names, their value
   ranges and feature names. Off leaves the lines alone."*); and **an empty state** teaches the
   gesture that fills it, which is the only thing it is for. Nothing else gets a second sentence.
+- **A hint carries a fact the control cannot show, or it does not exist.** What a number does to the
+  result, what a unit means, what a mode refuses, what an empty answer means where that is not
+  obvious, a consequence — *"Drops the near-diagonal, where unligated fragments dominate."* Restating
+  the label, the options, the unit or the default is not a fact: a column of tick boxes that opens
+  with every box ticked does not need a line saying every sequence is read, and a locus box does not
+  need its own tooltip printed again underneath it. Both of those existed, on nine controls between
+  them, and the line a reader learns to skip is the line that makes them skip the next one.
 - **A shortcut is printed on the control that performs the action**, through `withKey` — a tooltip is
   read by someone already pointing at the thing, which is exactly when "is there a faster way" is
   asked. Never on a dead control: `No next genome (])` offers a key for a thing there is none of.

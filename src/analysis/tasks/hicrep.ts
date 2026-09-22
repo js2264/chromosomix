@@ -60,7 +60,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'sequences',
     key: 'sequences',
     label: 'sequences',
-    hint: 'Empty is every sequence the maps share. Each is scored on its own as well as pooled.',
+    hint: 'Each is scored on its own as well as pooled.',
   },
   {
     kind: 'number',
@@ -87,8 +87,8 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'smoothing half-width',
     unit: 'bins',
     hint:
-      'The 2D mean filter HiCRep applies before correlating. 0 is no smoothing, which measures ' +
-      'depth as much as structure on any sparse pair of maps.',
+      'The 2D mean filter HiCRep applies before correlating; 0 measures depth as much as ' +
+      'structure on any sparse pair of maps.',
     default: 1,
     min: 0,
     max: 20,

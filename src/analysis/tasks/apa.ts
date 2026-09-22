@@ -285,8 +285,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'grid',
     label: 'grid',
     hint:
-      'Every window resampled to this many cells a side. A multiple of four puts the feature’s ' +
-      'two ends exactly on axis ticks at the default flank.',
+      'Every window resampled to this many cells a side; a multiple of four puts the feature’s ' +
+      'two ends on axis ticks.',
     default: 51,
     min: 11,
     max: 201,
@@ -298,8 +298,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'flankFraction',
     label: 'flank',
     hint:
-      'As a fraction of the feature’s own length, each side. At 0.5 the feature is the middle ' +
-      'half of the picture; at 1 it is the middle third.',
+      'As a fraction of the feature’s own length each side: at 0.5 the feature is the middle ' +
+      'half of the picture, at 1 the middle third.',
     default: 0.5,
     min: 0,
     max: 2,
@@ -400,7 +400,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'minShiftScale',
     label: 'smallest shift',
-    hint: 'As a multiple of the window’s own width. Below 1 a control overlaps the feature.',
+    hint: 'As a multiple of the window’s own width; below 1 a control overlaps the feature.',
     default: 1,
     min: 0,
     max: 20,
@@ -412,7 +412,6 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'maxShiftScale',
     label: 'largest shift',
-    hint: 'As a multiple of the window’s own width.',
     default: 3,
     min: 0.5,
     max: 50,
@@ -464,8 +463,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'byDistance',
     label: 'split by separation into',
     hint:
-      'Log-spaced bins, each piled up on its own with its own control. 0 or 1 is one pileup over ' +
-      'the lot — which averages a 30 kb contact and a 2 Mb one into a picture of neither.',
+      'Log-spaced bands, each piled up on its own with its own control; one band averages a ' +
+      '30 kb contact and a 2 Mb one into a picture of neither.',
     default: 0,
     min: 0,
     max: MAX_DISTANCE_BINS,
@@ -530,9 +529,8 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'track aggregates',
     multiple: true,
     hint:
-      'bigWigs, and anything this panel has already computed. Each is averaged over the same ' +
-      'windows the pileup is taken from and drawn along its two edges — the aggregate signal ' +
-      'above and beside the aggregate map.',
+      'Each is averaged over the same windows the pileup is taken from and drawn along its two ' +
+      'edges — the aggregate signal above and beside the aggregate map.',
     // **The figure this task could not draw.** A pileup says *these places
     // touch*; the marginal profiles say *and this is what is bound where they
     // do*, which is the figure behind most of the literature APA is used in.

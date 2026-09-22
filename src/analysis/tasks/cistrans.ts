@@ -45,7 +45,6 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'sequences',
     key: 'sequences',
     label: 'sequences',
-    hint: 'Which to report. The pass reads the whole file either way.',
   },
   {
     kind: 'choice',
@@ -68,7 +67,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'minContacts',
     label: 'least contact worth listing',
-    hint: 'Raw contacts, before any normalisation. Keeps one stray read out of the top of the table.',
+    hint: 'Raw contacts, before any normalisation, which keeps one stray read out of the table’s top.',
     default: 10,
     min: 0,
     integer: true,

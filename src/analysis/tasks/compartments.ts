@@ -102,7 +102,9 @@ const PARAMS: readonly ParamSpec[] = [
      * beside the list, since the two states worth reaching quickly are all of
      * them and one of them.
      */
-    hint: 'One correlation over all of them, cis and trans. Ticking one gives that chromosome alone.',
+    hint:
+      'One correlation over all of them, cis and trans, where ticking one gives that chromosome ' +
+      'alone.',
   },
   {
     kind: 'choice',

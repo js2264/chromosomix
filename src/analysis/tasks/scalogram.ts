@@ -111,8 +111,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'reach',
     label: 'look out to',
     hint:
-      '0 is the whole sequence, which is the only unbounded answer. A cut makes every quantile ' +
-      'a quantile of what is within it, and the lane says so.',
+      '0 is the whole sequence; a cut makes every quantile a quantile of what is within it, and ' +
+      'the lane says so.',
     default: 0,
     min: 0,
     integer: true,

@@ -24,14 +24,12 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'track',
     key: 'tracks',
     label: 'tracks',
-    hint: 'bigWigs, and anything this panel has already computed.',
     multiple: true,
   },
   {
     kind: 'featureSet',
     key: 'features',
     label: 'features',
-    hint: 'The places to average over.',
   },
   {
     kind: 'choice',
@@ -81,7 +79,6 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'number',
     key: 'body',
     label: 'body columns',
-    hint: 'Every feature body is resampled to this many columns.',
     default: 100,
     min: 10,
     integer: true,
@@ -101,7 +98,6 @@ const PARAMS: readonly ParamSpec[] = [
     from: 'features',
     optional: true,
     noneLabel: 'Do not rank',
-    hint: 'Sorts the features so they can be subset or split.',
     section: 'Ranking',
   },
   {
@@ -150,9 +146,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'zscore',
     label: 'z-score tracks first',
     hint:
-      'Centre and scale each track by its own mean and SD, across every window in ' +
-      'this run — so tracks in different units share one axis. Ranking groups are ' +
-      'standardised together, keeping their offsets.',
+      'Centre and scale each track by its own mean and SD over this run’s windows, so tracks in ' +
+      'different units share one axis.',
     default: false,
     section: 'Summary',
   },

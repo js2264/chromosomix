@@ -122,7 +122,6 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'anchor',
     label: 'anchor',
     pickable: true,
-    hint: 'The locus the profile reads from: a span, a sequence, or on a metagenome a whole genome.',
   },
   {
     kind: 'choice',
@@ -204,8 +203,8 @@ const PARAMS: readonly ParamSpec[] = [
     // What a metagenome's run *is*, so that is what its provenance says.
     settled: false,
     hint:
-      'On, this reads one sequence and costs a handful of requests. Off, it walks the pixel ' +
-      'table to reach the contacts leaving that sequence.',
+      'On, this reads one sequence and costs a handful of requests; off, it walks the pixel ' +
+      'table for the contacts leaving that sequence.',
     default: true,
   },
   BALANCE_PARAM,

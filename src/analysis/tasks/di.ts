@@ -73,8 +73,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'window',
     label: 'window',
     hint:
-      'Contacts are summed this many bins upstream and this many downstream of every bin. ' +
-      '50 is Dixon et al.’s 2 Mb at the 40 kb they worked at.',
+      'Contacts are summed this many bins each way of every bin, 50 being Dixon et al.’s 2 Mb ' +
+      'at the 40 kb they worked at.',
     default: DEFAULT_DI_WINDOW_BINS,
     min: 1,
     integer: true,

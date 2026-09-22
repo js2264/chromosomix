@@ -79,9 +79,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'diagonals',
     label: 'diagonals',
     hint:
-      'How many diagonals the bin’s line crosses, counting the main one. 3 is the main diagonal ' +
-      'and the one either side — five cells, two bins each way — the reading bacterial maps are ' +
-      'scored with at 2 kb.',
+      'How many diagonals the bin’s line crosses, counting the main one — at 3 that is five ' +
+      'cells, reaching two bins each way.',
     default: DEFAULT_HIC_SCORE_DIAGONALS,
     min: 1,
     integer: true,
@@ -96,9 +95,8 @@ const PARAMS: readonly ParamSpec[] = [
     key: 'ignoreDiags',
     label: 'diagonals to ignore',
     hint:
-      '0 counts every cell, including the bin’s contact with itself — which at three diagonals is ' +
-      'most of the score, is where self-ligation lands, and on a balanced map is the one place the ' +
-      'weights were never fitted. 1 cuts it out.',
+      '0 counts every cell, including the bin’s contact with itself, which at three diagonals is ' +
+      'most of the score and is where self-ligation lands.',
     default: 0,
     min: 0,
     integer: true,

@@ -89,7 +89,7 @@ const PARAMS: readonly ParamSpec[] = [
     kind: 'sequence',
     key: 'sequence',
     label: 'reference',
-    hint: 'The FASTA to search. Its own sequences, in its own order.',
+    hint: 'The FASTA to search — its own sequences, in its own order.',
   },
   {
     kind: 'text',
@@ -103,8 +103,8 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'motif',
     placeholder: 'GGTCANNNTGACC',
     hint:
-      'IUPAC: A C G T U, and the ambiguity codes R Y S W K M B D H V N. Spaces are ignored, ' +
-      'case is ignored, and overlapping matches all count.',
+      'IUPAC — A C G T U and the ambiguity codes R Y S W K M B D H V N — with spaces and case ' +
+      'ignored and every overlapping match counted.',
   },
   {
     kind: 'toggle',
@@ -125,7 +125,7 @@ const PARAMS: readonly ParamSpec[] = [
     // The ceiling is written from the constant rather than typed out, so a hint
     // promising a number the scan does not honour cannot come back by drift.
     hint:
-      `A backstop against a pattern like N. Up to ${MOTIF_SITE_LIMIT.toLocaleString()}; ` +
+      `A backstop against a pattern like N: up to ${MOTIF_SITE_LIMIT.toLocaleString()}, and ` +
       'the run says so when it bites.',
     default: MOTIF_SITE_LIMIT,
     min: 1,

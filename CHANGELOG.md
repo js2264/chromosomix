@@ -22,6 +22,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   0-based. §26 is now the contract for what the surfaces share — coordinates, units, toggles, words,
   colour, shapes — and this release brings the shared machinery into line with it.
 
+- **The help text under an analysis control says something, or it is gone (§26.4).** Every parameter
+  in the catalogue carried a hint and a good many of them restated the label, described a default the
+  control was already showing, or repeated the box's own tooltip a line lower down — *every one,
+  unless you say otherwise* under a column of tick boxes with every box ticked, *the places to average
+  over* under a control labelled **features**. Eight of those are deleted. A third of the rest had
+  grown a second or third sentence, which is a paragraph beside a control in a column whose **Run**
+  button it pushes down, and those are one sentence again; a toggle may still add what its *off* state
+  does, which is the one exception the rule has ever had. What is kept is what a reader cannot get
+  from the control: what a number does to the result, what a unit means, what an empty answer means,
+  what a mode refuses. A test now holds the one-sentence rule, which was written down and nothing
+  enforced.
+
 - **Every matrix setting is a number of bins, or of diagonals — never kb or Mb (§18.2).** A scan
   band, a shift, a stratum, a near-diagonal trim and the separation between two anchors are all
   counts of the file's own cells: the runner's first act on a length in base pairs was to divide it by
