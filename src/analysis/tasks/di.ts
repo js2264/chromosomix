@@ -40,12 +40,11 @@
  * border both agree on is worth more than either.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import { bandTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -68,15 +67,6 @@ export function windowBinsOf(params: Params): number {
   return Math.max(1, Math.round(value))
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
-}
-
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
@@ -91,10 +81,9 @@ const PARAMS: readonly ParamSpec[] = [
     unit: 'bins',
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'sequence',
-    sequences: true,
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'number',
@@ -194,25 +183,43 @@ const PARAMS: readonly ParamSpec[] = [
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
   const window = windowBinsOf(params)
-  const contig = regionContig(context, regionOf(params))
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
 
-  if (contig !== undefined && contig.bins <= window) {
+  // **Priced over the sequences that can carry the window, not over the ticks.**
+  // A bin needs a whole window each side, so a sequence no longer than the
+  // window contributes nothing at any cost — and the run says so rather than
+  // reading it. With one ticked that is a refusal naming it, which is the same
+  // sentence the single dropdown used to produce; with several it counts them,
+  // since a metagenome's short contigs are the ordinary case and not a mistake.
+  const long = chosen.filter((entry) => entry.bins > window)
+  if (long.length === 0) {
+    const one = chosen.length === 1 ? chosen[0] : null
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `${contig.name} is ${contig.bins.toLocaleString()} bins and the window is ` +
-        `${window.toLocaleString()}, so no bin on it has a whole window either side. Use a ` +
-        'narrower window, or a longer sequence.',
+        one !== null
+          ? `${one.name} is ${one.bins.toLocaleString()} bins and the window is ` +
+            `${window.toLocaleString()}, so no bin on it has a whole window either side. Use a ` +
+            'narrower window, or a longer sequence.'
+          : `No ticked sequence is longer than a ${window.toLocaleString()}-bin window, so no ` +
+            'bin on any of them has a whole window either side. Use a narrower window, or tick ' +
+            'a longer sequence.',
     }
   }
 
-  const extent: [number, number] =
-    contig === undefined
-      ? [0, context.nBins]
-      : [contig.startBin, contig.startBin + contig.bins]
+  const extent = extentOf(long)
 
   const framing = context.framing
   if (
@@ -236,7 +243,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // than `n²`. `bandFor` tiles it; the count below is that walk's, and it is the
   // same arithmetic `analysis/run/blocks.ts` does.
   const perTile = balance ? 5 : 4
-  if (contig !== undefined) {
+  if (long.length === 1) {
+    const contig = long[0]
     const tiles = bandTiles(contig.bins, window)
     const requests = tiles * perTile
     return {
@@ -250,7 +258,6 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  const long = context.contigs.filter((entry) => entry.bins > window)
   const tiles = long.reduce((sum, entry) => sum + bandTiles(entry.bins, window), 0)
   return {
     class: 'scan',

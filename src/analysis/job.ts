@@ -164,6 +164,28 @@ export function listParam(params: Params, key: string): string[] {
   return typeof value === 'string' && value !== '' ? [value] : []
 }
 
+/**
+ * The sequences a `kind: 'sequences'` parameter names, or `null` for every one.
+ *
+ * `null` and an empty array are **two answers**, which is why this does not
+ * reach for {@link listParam}: unanswered means the whole file — the form ticks
+ * every box on the way in, so a value that is not a list is a job that never met
+ * a form, a stored session or a `metacooler-run` line with no `--sequences` —
+ * and `[]` is a reader who pressed *None*, which is a run over nothing and is
+ * said out loud rather than widened into a genome-wide one.
+ *
+ * A bare string is one name and not a refusal to answer, because that is what a
+ * session written before the tick boxes existed carries, and `--sequences chrIV`
+ * once arrived that way too (`cli/main.ts`'s `coerce`).
+ */
+export function tickedSequences(params: Params, key: string): string[] | null {
+  const value = params[key]
+  if (Array.isArray(value)) {
+    return value.filter((name): name is string => typeof name === 'string')
+  }
+  return typeof value === 'string' && value.trim() !== '' ? [value.trim()] : null
+}
+
 /** An optional entry choice: the id, or `null` where nothing was picked. */
 export function idParam(params: Params, key: string): string | null {
   const value = params[key]

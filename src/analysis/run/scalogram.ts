@@ -25,20 +25,25 @@
  */
 
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { parseRegionString } from '../../metacooler/range'
 import { scalogram, type ScalogramTrack } from '../scalogram'
 import {
   boolParam,
-  contigIdFor,
   numParam,
   readsAsCircular,
-  strParam,
+  tickedSequences,
   type JobContext,
   type TaskRunner,
 } from '../job'
 import { quantilesOf, reachBinsFor, reachBpOf } from '../tasks/scalogram'
 import type { ProfileOutput, TaskOutput } from '../types'
-import { bandFor, displayableContigs, spanOfContig, usableBlock, type Span } from './blocks'
+import {
+  bandFor,
+  missingSequencesNote,
+  spanOfContig,
+  tickedContigIds,
+  usableBlock,
+  type Span,
+} from './blocks'
 import { formatBp } from './labels'
 
 interface Unit {
@@ -84,25 +89,21 @@ function ribbonColours(count: number): string[] {
   return out
 }
 
-function planUnits(job: JobContext, region: string): Unit[] {
+/** The sequences to band: the ticked ones, or every one where none was. */
+function planUnits(job: JobContext, names: readonly string[] | null): {
+  units: Unit[]
+  missing: string[]
+} {
   const mc = job.mc
-  const unitFor = (cid: number): Unit | null => {
+  const { ids, missing } = tickedContigIds(mc, names)
+  const units: Unit[] = []
+  for (const cid of ids) {
     const span = spanOfContig(mc, cid)
-    if (span === null) return null
+    if (span === null) continue
     const name = mc.chromnames[cid]
-    return { name, span, circular: readsAsCircular(job, name) }
+    units.push({ name, span, circular: readsAsCircular(job, name) })
   }
-  if (region !== '') {
-    const cid = contigIdFor(mc, parseRegionString(region)[0])
-    const unit = cid < 0 ? null : unitFor(cid)
-    return unit === null ? [] : [unit]
-  }
-  const out: Unit[] = []
-  for (const cid of displayableContigs(mc)) {
-    const unit = unitFor(cid)
-    if (unit !== null) out.push(unit)
-  }
-  return out
+  return { units, missing }
 }
 
 export const runScalogram: TaskRunner = async (job) => {
@@ -113,16 +114,15 @@ export const runScalogram: TaskRunner = async (job) => {
   const quantiles = quantilesOf(job.params)
   const reachBp = reachBpOf(job.params)
 
-  const region = strParam(job.params, 'region', '').trim()
-  const planned = planUnits(job, region)
-  if (region !== '' && planned.length === 0) {
-    job.note(
-      `This file has no sequence called ${parseRegionString(region)[0]}, under that spelling or ` +
-        `any this viewer knows of. It has ` +
-        `${job.mc.chromnames.slice(0, 6).join(', ')}${job.mc.chromnames.length > 6 ? ', …' : ''}.`,
-    )
+  const ticked = tickedSequences(job.params, 'sequences')
+  if (ticked !== null && ticked.length === 0) {
+    job.note('No sequence is ticked, so there is nothing to measure.')
     return []
   }
+  const { units: planned, missing } = planUnits(job, ticked)
+  const said = missingSequencesNote(job.mc, missing, planned.length)
+  if (said !== null) job.note(said)
+  if (planned.length === 0) return []
 
   // A sequence of one or two bins has no separation to distribute anything over.
   // Dropped rather than read, and counted, so a metagenome of short contigs says

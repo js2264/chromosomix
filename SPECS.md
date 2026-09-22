@@ -4802,14 +4802,28 @@ so the form shifts it by a base before it becomes a parameter. Without that, a d
 230–1042 reached the runner naming bin 231 onwards: one bin past the stretch the reader had just
 pointed at, with nothing on screen saying so, and a 4C profile is read off its anchor.
 
+**Which sequences to run on is one question and it has one shape: a column of tick boxes.** There
+were two — a column of tick boxes on four tasks, and on five others a dropdown whose first option
+read *every sequence* — and a reader met both in the same column, asked the same thing, a row apart.
+The tick boxes are the superset: *all of them* and *one of them* are two of the answers a list of
+tick boxes gives and *these three* is a third that a dropdown cannot express at all. So every task
+whose question is *which sequences* takes the list, the answer is the names written out, and three
+answers are three answers — **unanswered is every sequence** (the form ticks them all, and a stored
+session or a `metacooler-run` line with no `--sequences` means the whole file), **a subset is that
+subset**, and **nothing ticked is nothing to read**, which the estimate refuses rather than widening
+back into a genome-wide run. A ticked sequence this file has not got is named and left out, never
+silently dropped (§5.9). What stays a **locus** is what a list of names cannot answer: the 4C anchor,
+the structure tasks' *distance to*, the reconstruction's own box, each of which takes a window or a
+point on the map, and narrowing any of them to a whole sequence would remove the task's point.
+
 **The form is the cards' form.** A label is one to three lowercase words in the same column down the
 whole form, a select's options are lowercase, and one hint is one sentence beside the control it is
 about — §26.4's rules, and this is the surface that was breaking all three. A label and its control
 share a row: a single on/off button is not a group, and the full-width shape is for a group that is
 genuinely one — a checklist, a number with a slider beside it, four marks in a row — whose hint then
 goes *under* the group rather than beside the word above it. A hint never repeats what the control's
-own label or first option already says: a select whose first option reads *every sequence* does not
-need a line telling the reader to leave it empty, and it has no empty to leave.
+own label, options or state already say: a column of tick boxes that opens with every box ticked does
+not need a line saying that every sequence is read unless you say otherwise.
 
 **A control the file cannot be asked about is not shown.** The descriptor still lists it and states the
 rule — an option that needs a `/genomes` table, a switch that is only a question where there is no such
@@ -5464,10 +5478,12 @@ other sense, so the runners are unchanged and an exported TSV still says what th
 with. The same reading removes the near-diagonal trim's ambiguity (**bins, not base pairs**: the
 near-diagonal is a fact about the grid, and a number typed in base pairs meant three bins at one
 resolution and one at the next), takes P(s)'s *sequences to draw* away entirely (a run that leaves out
-sequences by default answers a question about a subset the reader did not choose), and leaves a
-**whole-sequence picker empty** rather than seeded from the map's framing, since empty is an answer
-there — *every sequence* — and seeding silently narrowed three tasks to whichever chromosome happened
-to be on screen.
+sequences by default answers a question about a subset the reader did not choose), and settles *which
+sequences* on **one shape, the tick boxes** (§18.2) — where a dropdown offering *every sequence* or
+one of them could not say *these three*, and where the seeding it used to get from the map's framing
+silently narrowed three tasks to whichever chromosome happened to be on screen. Five tasks moved onto
+it — P(s), the scalogram, insulation, the directionality index and the HiC score — and each reads
+every ticked sequence on its own, which is one lane or one curve apiece.
 
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number

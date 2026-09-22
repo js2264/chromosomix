@@ -134,7 +134,9 @@ function job(params: Params): JobContext {
 const SETTINGS: Params = {
   window: 5,
   scales: 1,
-  region: '',
+  // Unanswered, which is every sequence — the tick boxes' own convention, and
+  // what the `region: ''` this replaces used to mean.
+  sequences: null,
   ignoreDiags: 0,
   minValid: 0,
   balance: false,
@@ -223,10 +225,72 @@ describe('the domains insulation calls beside its boundaries', () => {
     // of its edges. The row is absent and the reason is said out loud, because a
     // reader who left the tickbox on is owed one.
     const said: string[] = []
-    const context = job({ ...SETTINGS, region: 'II' })
+    // One sequence is one ticked box now, where it used to be a region string.
+    const context = job({ ...SETTINGS, sequences: ['II'] })
     const outputs = await runInsulation({ ...context, note: (text) => said.push(text) })
     expect(intervals(outputs, 'insulation-boundaries')).not.toBeNull()
     expect(intervals(outputs, 'insulation-domains')).toBeNull()
     expect(said.join(' ')).toMatch(/no domain has both of its edges/)
+  })
+})
+
+/**
+ * **Which sequences a run is over, now that it is asked with tick boxes.**
+ *
+ * The five near-diagonal tasks took a region string, where `''` meant *every
+ * sequence* and a name meant one; they take a list of ticked names, and the
+ * three answers a list can give are not the two a string could. Pinned here
+ * because the two old readings have to survive the change unaltered — that is
+ * the whole claim of it — and because the third is new and is a state a reader
+ * reaches with one press of **none**.
+ */
+describe('the sequences a run is ticked for', () => {
+  const named = (outputs: TaskOutput[]): string[] => {
+    const set = intervals(outputs, 'insulation-boundaries')
+    return set === null ? [] : [...new Set(spans(set).map(([contig]) => contig))]
+  }
+
+  it('reads every sequence when nothing was answered, as an empty region did', async () => {
+    expect(named(await runInsulation(job({ ...SETTINGS, sequences: null })))).toEqual(['I', 'II'])
+  })
+
+  it('reads one ticked sequence and no other, as a named region did', async () => {
+    expect(named(await runInsulation(job({ ...SETTINGS, sequences: ['I'] })))).toEqual(['I'])
+  })
+
+  it('reads two of two, which a dropdown had no way to ask for', async () => {
+    expect(named(await runInsulation(job({ ...SETTINGS, sequences: ['II', 'I'] })))).toEqual([
+      'I',
+      'II',
+    ])
+  })
+
+  // Empty is **not** every sequence: it is a reader who pressed *none*, and the
+  // one thing it must not be is indistinguishable from a genome-wide run.
+  it('runs over nothing when the list is empty, and says so', async () => {
+    const said: string[] = []
+    const context = job({ ...SETTINGS, sequences: [] })
+    const outputs = await runInsulation({ ...context, note: (text) => said.push(text) })
+    expect(outputs).toEqual([])
+    expect(said.join(' ')).toMatch(/No sequence is ticked/)
+  })
+
+  // A deck holds files of different assemblies on purpose and a batch asks every
+  // panel of it for one reader's list (§5.9), so a name this file has not got is
+  // a fact about the pair of files. What it must never be is silently dropped.
+  it('names a ticked sequence this file has not got, and runs the rest', async () => {
+    const said: string[] = []
+    const context = job({ ...SETTINGS, sequences: ['I', 'chrZ'] })
+    const outputs = await runInsulation({ ...context, note: (text) => said.push(text) })
+    expect(named(outputs)).toEqual(['I'])
+    expect(said.join(' ')).toMatch(/chrZ/)
+  })
+
+  it('says the file has none of them when none of them is in it', async () => {
+    const said: string[] = []
+    const context = job({ ...SETTINGS, sequences: ['chrZ'] })
+    const outputs = await runInsulation({ ...context, note: (text) => said.push(text) })
+    expect(outputs).toEqual([])
+    expect(said.join(' ')).toMatch(/no sequence called chrZ/)
   })
 })

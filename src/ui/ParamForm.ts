@@ -863,14 +863,6 @@ export class ParamForm {
     for (const spec of this.specs) {
       if (spec.kind !== 'region') continue
       if (stringOr(this.params[spec.key], '') !== '') continue
-      // **A whole-sequence picker is left empty.** For those, empty is an answer
-      // — *every sequence* — and it is the one the list itself offers at the
-      // top; seeding it from the framing silently narrowed P(s), insulation and
-      // compartments to whichever chromosome the map happened to be showing,
-      // which is a run over a subset the reader never chose, reported as if they
-      // had. A spec that says empty is not an answer (`required`) still gets the
-      // framing, because there the alternative is a form that starts refused.
-      if (spec.sequences === true && spec.required !== true) continue
       const region = spec.default ?? framingRegion(this.context, spec.many === true)
       if (region !== '') this.params[spec.key] = region
     }
@@ -898,7 +890,7 @@ export class ParamForm {
       case 'sequences':
         return this.sequenceList(spec)
       case 'region':
-        return this.regionControl(spec)
+        return this.locusControl(spec)
       case 'text':
         return this.textControl(spec)
       case 'seed':
@@ -1401,63 +1393,6 @@ export class ParamForm {
       shown: false,
       sync,
       refill,
-    }
-  }
-
-  /** A locus, in the syntax the views' own boxes take. */
-  private regionControl(spec: RegionParam): Control {
-    return spec.sequences === true ? this.sequenceControl(spec) : this.locusControl(spec)
-  }
-
-  /**
-   * One of the file's own sequences, as a dropdown.
-   *
-   * Empty first where the parameter allows it, because *every sequence* is what
-   * insulation and CID do with an empty region and is the answer most readers
-   * want first. Where it does not — compartments, which is one chromosome at a
-   * time by construction — the list opens on nothing chosen and the estimate
-   * refuses the run until one is, which is a better first frame than silently
-   * picking contig zero of a four-thousand-contig metagenome.
-   */
-  private sequenceControl(spec: RegionParam): Control {
-    const id = `${this.id}-${spec.key}`
-    const select = el('select', { class: 'select', attrs: { id } })
-    const refill = (): void => {
-      select.replaceChildren()
-      select.appendChild(
-        el('option', {
-          value: '',
-          text: spec.required === true ? 'choose a sequence' : 'every sequence',
-        }),
-      )
-      for (const contig of this.context.contigs) {
-        select.appendChild(el('option', { value: contig.name, text: contig.name }))
-      }
-    }
-    select.addEventListener('change', () => this.commit(spec.key, select.value))
-    const sync = (): void => {
-      const held = stringOr(this.params[spec.key], '')
-      // A stored session can name a sequence this file does not have. Kept as a
-      // row of its own rather than snapping to empty, so the form shows what the
-      // stored run was and the reader can see why it will not run.
-      if (held !== '' && !this.context.contigs.some((contig) => contig.name === held)) {
-        select.appendChild(
-          el('option', { value: held, text: `${held} — not in this file`, attrs: { disabled: '' } }),
-        )
-      }
-      select.value = held
-    }
-    refill()
-    sync()
-    return {
-      spec,
-      wrapper: this.wrap(spec, this.labelled(spec, select, id)),
-      shown: false,
-      sync,
-      refill: () => {
-        refill()
-        sync()
-      },
     }
   }
 

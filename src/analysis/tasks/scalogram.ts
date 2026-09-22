@@ -31,12 +31,11 @@
  * lane's own label so the picture cannot be mistaken for the unbounded one.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import { bandTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -82,15 +81,6 @@ export function reachBinsFor(
   return Math.max(1, Math.min(ceiling, Math.round(reach / Math.max(1, binsize))))
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
-}
-
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'choice',
@@ -121,10 +111,9 @@ const PARAMS: readonly ParamSpec[] = [
     unit: 'bp',
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'sequence',
-    sequences: true,
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'number',
@@ -160,12 +149,18 @@ const PARAMS: readonly ParamSpec[] = [
 
 function estimate(context: AnalysisContext, params: Params): CostEstimate {
   const balance = params.balance === true
-  const contig = regionContig(context, regionOf(params))
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
 
-  const extent: [number, number] =
-    contig === undefined
-      ? [0, context.nBins]
-      : [contig.startBin, contig.startBin + contig.bins]
+  const extent = extentOf(chosen)
 
   const framing = context.framing
   if (
@@ -185,7 +180,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
   const perTile = balance ? 5 : 4
   const unbounded = reachBpOf(params) === 0
-  if (contig !== undefined) {
+  if (chosen.length === 1) {
+    const contig = chosen[0]
     const depth = reachBinsFor(params, context.binsize, contig.bins)
     const tiles = bandTiles(contig.bins, depth)
     const requests = tiles * perTile
@@ -203,7 +199,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  const tiles = context.contigs.reduce(
+  const tiles = chosen.reduce(
     (sum, entry) => sum + bandTiles(entry.bins, reachBinsFor(params, context.binsize, entry.bins)),
     0,
   )
@@ -212,7 +208,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     requests: tiles * perTile,
     bytes: null,
     note:
-      `${context.contigs.length.toLocaleString()} sequences, read along their diagonals in ` +
+      `${chosen.length.toLocaleString()} sequences, read along their diagonals in ` +
       `${tiles.toLocaleString()} ${tiles === 1 ? 'strip' : 'strips'}` +
       (unbounded ? ' — with no cut, each is read out to its own length.' : '.'),
   }

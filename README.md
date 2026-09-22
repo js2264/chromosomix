@@ -154,7 +154,7 @@ metacooler-run tasks
 ## expected
 ##     Contact probability P(s)
 ##       --scope (default "contig")  Scope
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --quantity (default "density")  Quantity
 ##       --factor (default 1.1)  Log bins per step
 ##       --minSeparation (default 0)  Minimum separation
@@ -167,7 +167,7 @@ metacooler-run tasks
 ##     Scalogram
 ##       --quantiles (default "standard")  Quantiles
 ##       --reach (default 0)  Look out to
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 1)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the distribution
 ##       --balance (default false)  Use balancing weights
@@ -183,7 +183,7 @@ metacooler-run tasks
 ##     Diamond insulation
 ##       --window (default 10)  Window
 ##       --scales (default 1)  Scales
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 2)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the diamond
 ##       --balance (default false)  Use balancing weights
@@ -195,7 +195,7 @@ metacooler-run tasks
 ## di
 ##     Directionality index
 ##       --window (default 50)  Window
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of each side
 ##       --balance (default false)  Use balancing weights
@@ -207,7 +207,7 @@ metacooler-run tasks
 ## hicscore
 ##     HiC score
 ##       --diagonals (default 3)  Diagonals
-##       --region  Sequence
+##       --sequences  Sequences
 ##       --ignoreDiags (default 0)  Diagonals to ignore
 ##       --minValid (default 0.5)  Minimum coverage of the line
 ##       --balance (default false)  Use balancing weights

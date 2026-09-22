@@ -22,6 +22,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   0-based. §26 is now the contract for what the surfaces share — coordinates, units, toggles, words,
   colour, shapes — and this release brings the shared machinery into line with it.
 
+- **One shape for *which sequences to run on*, and it is the tick boxes (§18.2).** Nine analysis
+  tasks asked that question and they asked it two ways: four with a column of tick boxes, five —
+  P(s), the scalogram, insulation, the directionality index and the HiC score — with a dropdown whose
+  first option read *every sequence*. A reader met both shapes in one column, a row apart, for one
+  question. The five moved onto the tick boxes, which is the answer the dropdown could not give:
+  **these three sequences**, where a select could only offer every one or exactly one. Every one of
+  them starts with every box ticked, so a genome-wide run is still what pressing **Run** does; one
+  ticked box is the run a named sequence used to give, bin for bin; and pressing **none** now says so
+  rather than quietly reading the whole file. On the command line the flag is `--sequences I,IV`
+  where it was `--region IV`, and a sequence a file has not got is named in the run's notes instead
+  of being dropped. What stays a locus box is what a list of names cannot answer: the 4C anchor, the
+  structure tasks' *distance to*, and the reconstruction's own box.
+
 - **Coordinates a reader sees are 1-based inclusive everywhere, and a locus box accepts what it
   shows (§26.1).** `formatPosition`, `regionLabel`, `windowLabel` and `typedLocusToRegion` join
   `formatLocus` in `genome/assembly.ts` as the only place a coordinate is formatted or read, and the

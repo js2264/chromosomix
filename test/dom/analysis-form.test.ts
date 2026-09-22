@@ -26,6 +26,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { COMPARTMENTS_TASK } from '@/analysis/tasks/compartments'
 import { EXPECTED_TASK } from '@/analysis/tasks/ps'
 import { INSULATION_TASK } from '@/analysis/tasks/insulation'
+import { DI_TASK } from '@/analysis/tasks/di'
+import { HIC_SCORE_TASK } from '@/analysis/tasks/hicscore'
+import { SCALOGRAM_TASK } from '@/analysis/tasks/scalogram'
 import { FOURC_TASK } from '@/analysis/tasks/fourc'
 import { TRACK_CORRELATION_TASK } from '@/analysis/tasks/trackcorr'
 import { COVERAGE_TASK } from '@/analysis/tasks/coverage'
@@ -173,27 +176,47 @@ describe('balancing', () => {
   })
 })
 
+/**
+ * **One shape for *which sequences to run on*, and it is the tick boxes.**
+ *
+ * These five asked it with a dropdown whose first option read *every sequence*,
+ * while four others asked it with a column of tick boxes, and a reader met both
+ * in one column. The expectations here changed with the shape: there is no
+ * `region` parameter on any of the five any more, the answer is a list of names
+ * rather than a string, and *every sequence* is every box ticked rather than an
+ * empty select. What has not changed is what the form must not do — seed the
+ * answer from the map's framing, which silently narrowed each of them to
+ * whichever chromosome was on screen.
+ */
 describe('a whole-sequence picker', () => {
   it('starts on every sequence, not on whatever the map is framed at', () => {
-    for (const task of [EXPECTED_TASK, INSULATION_TASK]) {
+    for (const task of [EXPECTED_TASK, INSULATION_TASK, DI_TASK, HIC_SCORE_TASK, SCALOGRAM_TASK]) {
       const view = form(task)
-      expect(view.value.region, task.id).toBe('')
+      expect(view.value.sequences, task.id).toEqual(['I', 'II', 'IV'])
       view.destroy()
     }
   })
 
-  it('offers “every sequence” as the choice it starts on', () => {
-    const view = form(INSULATION_TASK)
-    const options = all<HTMLOptionElement>(view.el, 'option').map((node) => node.textContent)
-    expect(options[0]).toBe('every sequence')
-    expect(options).toContain('I')
-    expect(options).toContain('IV')
-    view.destroy()
+  it('asks with tick boxes and not with a dropdown', () => {
+    for (const task of [EXPECTED_TASK, INSULATION_TASK, DI_TASK, HIC_SCORE_TASK, SCALOGRAM_TASK]) {
+      const spec = task.params.find((param) => param.key === 'sequences')
+      expect(spec?.kind, task.id).toBe('sequences')
+      expect(task.params.some((param) => param.kind === 'region'), task.id).toBe(false)
+      const view = form(task)
+      const boxes = all<HTMLInputElement>(view.el, '.param-sequences input[type="checkbox"]')
+      expect(boxes, task.id).toHaveLength(3)
+      expect(boxes.every((box) => box.checked), task.id).toBe(true)
+      expect(all<HTMLOptionElement>(view.el, 'option').map((node) => node.textContent)).not.toContain(
+        'every sequence',
+      )
+      view.destroy()
+    }
   })
 
-  // The opposite case, and the reason the rule is about `sequences` rather than
-  // about regions: an anchor is a place, and where the reader is looking is the
-  // best guess there is.
+  // The opposite case, and the reason the rule is about *which sequences* rather
+  // than about regions: an anchor is a place, and where the reader is looking is
+  // the best guess there is. A locus box is what `kind: 'region'` is now for and
+  // all it is for.
   it('does not apply to a locus box, which still starts where the map is', () => {
     const view = form(FOURC_TASK)
     expect(view.value.anchor).not.toBe('')
@@ -205,7 +228,8 @@ describe('P(s)', () => {
   it('starts per chromosome, over every sequence', () => {
     const view = form(EXPECTED_TASK)
     expect(view.value.scope).toBe('contig')
-    expect(view.value.region).toBe('')
+    // Every box ticked, which is what *over every sequence* is now spelled as.
+    expect(view.value.sequences).toEqual(['I', 'II', 'IV'])
     view.destroy()
   })
 

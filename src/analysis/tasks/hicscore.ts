@@ -35,12 +35,11 @@
  * thing a form control is for.
  */
 
-import { contigNamed, framingCovers } from '../context'
+import { extentOf, framingCovers, tickedContigs } from '../context'
 import { bandTiles } from '../tiles'
 import type {
   AnalysisContext,
   AnalysisTask,
-  ContextContig,
   CostEstimate,
   ParamSpec,
   Params,
@@ -74,15 +73,6 @@ export function reachOf(params: Params): number {
   return diagonalsOf(params) - 1
 }
 
-function regionOf(params: Params): string {
-  return typeof params.region === 'string' ? params.region.trim() : ''
-}
-
-function regionContig(context: AnalysisContext, region: string): ContextContig | undefined {
-  const name = region.split(':')[0].trim()
-  return name === '' ? undefined : contigNamed(context, name)
-}
-
 const PARAMS: readonly ParamSpec[] = [
   {
     kind: 'number',
@@ -97,10 +87,9 @@ const PARAMS: readonly ParamSpec[] = [
     integer: true,
   },
   {
-    kind: 'region',
-    key: 'region',
-    label: 'sequence',
-    sequences: true,
+    kind: 'sequences',
+    key: 'sequences',
+    label: 'sequences',
   },
   {
     kind: 'number',
@@ -136,25 +125,41 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // is how deep the band has to be read — and no deeper. The square-window
   // reading this replaced needed twice its own reach, for its corners.
   const depth = reachOf(params)
-  const contig = regionContig(context, regionOf(params))
+  const chosen = tickedContigs(context, params, 'sequences')
+  if (chosen.length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
 
-  if (contig !== undefined && contig.bins <= 2 * depth) {
+  // The line spans `2 × depth + 1` bins, so a sequence no longer than that has
+  // no bin with a whole line through it and is not read. One ticked gets the
+  // sentence naming it; several get the count, since a metagenome of short
+  // contigs is the ordinary case rather than a mistake.
+  const long = chosen.filter((entry) => entry.bins > 2 * depth)
+  if (long.length === 0) {
+    const one = chosen.length === 1 ? chosen[0] : null
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        `${contig.name} is ${contig.bins.toLocaleString()} bins and the line is ` +
-        `${(2 * depth + 1).toLocaleString()} across, so no bin on it has a whole line through ` +
-        'it. Use fewer diagonals, or a longer sequence.',
+        one !== null
+          ? `${one.name} is ${one.bins.toLocaleString()} bins and the line is ` +
+            `${(2 * depth + 1).toLocaleString()} across, so no bin on it has a whole line ` +
+            'through it. Use fewer diagonals, or a longer sequence.'
+          : `No ticked sequence is longer than the ${(2 * depth + 1).toLocaleString()} bins ` +
+            'this line spans, so no bin on any of them has a whole line through it. Use fewer ' +
+            'diagonals, or tick a longer sequence.',
     }
   }
 
-  const extent: [number, number] =
-    contig === undefined
-      ? [0, context.nBins]
-      : [contig.startBin, contig.startBin + contig.bins]
+  const extent = extentOf(long)
 
   const framing = context.framing
   if (
@@ -173,7 +178,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   const perTile = balance ? 5 : 4
-  if (contig !== undefined) {
+  if (long.length === 1) {
+    const contig = long[0]
     const tiles = bandTiles(contig.bins, depth)
     const requests = tiles * perTile
     return {
@@ -187,7 +193,6 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
-  const long = context.contigs.filter((entry) => entry.bins > 2 * depth)
   const tiles = long.reduce((sum, entry) => sum + bandTiles(entry.bins, depth), 0)
   return {
     class: 'scan',
