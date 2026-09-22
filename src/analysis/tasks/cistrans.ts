@@ -156,7 +156,7 @@ export const CIS_TRANS_TASK: AnalysisTask = {
   id: 'cistrans',
   title: 'Cis and trans per sequence',
   blurb: 'How much of each sequence’s contact stays on it, and which pairs touch.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

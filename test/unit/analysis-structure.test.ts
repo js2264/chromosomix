@@ -92,8 +92,8 @@ function contacts(table: TableOutput | undefined): string | undefined {
 }
 
 describe('model versus map', () => {
-  it('is listed under map, waiting for a map and then for a structure', () => {
-    expect(STRUCTURE_MAP_TASK.group).toBe('map')
+  it('is listed under 3D, waiting for a map and then for a structure', () => {
+    expect(STRUCTURE_MAP_TASK.group).toBe('3d')
     const base = { hasMap: false, entries: [] } as never
     expect(STRUCTURE_MAP_TASK.availability(base).state).toBe('waiting')
     const withMap = { hasMap: true, entries: [] } as never
@@ -181,8 +181,8 @@ describe('model from the map', () => {
     return { ...base, framing, inputs: { ...base.inputs, block } } as unknown as JobContext
   }
 
-  it('is listed under map and needs only a map', () => {
-    expect(RECONSTRUCT_TASK.group).toBe('map')
+  it('is listed under 3D and needs only a map', () => {
+    expect(RECONSTRUCT_TASK.group).toBe('3d')
     expect(RECONSTRUCT_TASK.availability({ hasMap: false, entries: [] } as never).state).toBe('waiting')
     expect(RECONSTRUCT_TASK.availability({ hasMap: true, entries: [] } as never).state).toBe('ready')
   })

@@ -51,7 +51,7 @@ const TASK: AnalysisTask = {
   id: 'coverage',
   title: 'Coverage and marginals',
   blurb: 'How much contact each bin carries.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: () => READY,

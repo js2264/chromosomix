@@ -239,7 +239,7 @@ export const METAPLOT_TASK: AnalysisTask = {
   id: 'metaplot',
   title: 'Metaplot over a feature set',
   blurb: 'Average track signal at a set of places, with a band and a heatmap.',
-  group: 'tracks',
+  group: '1d',
   venue: 'annotations',
   version: 1,
   // Something to average, and somewhere to average it. **No map required** —

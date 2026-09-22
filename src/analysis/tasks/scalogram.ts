@@ -233,7 +233,7 @@ export const SCALOGRAM_TASK: AnalysisTask = {
   id: 'scalogram',
   title: 'Scalogram',
   blurb: 'How far each bin’s contacts reach, as nested quantile bands.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

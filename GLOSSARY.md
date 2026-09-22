@@ -449,11 +449,12 @@ file was modelled at, inferred from its starts and independent of the map's bin 
 
 ### telomere *(on a model)*
 
-The end of a **linear** sequence, marked on the 3D model with a yellow bead (§25.5). Not the same as
-the end of a **chain**: a model of part of a chromosome has two chain ends and no telomeres, so the
-start is claimed only for a first bead at base zero and the far end only where the session knows the
-sequence's true length — the file's own, not a lower bound read off its last feature. A sequence
-ticked **circular** in the Chromosomes table (§8.15) has none at all.
+**Both ends of a chain**, marked on the 3D model with a yellow bead (§25.5). It is a *chain end* and
+claims no more: strictly a telomere is the end of a chromosome and a model of part of one has chain
+ends and no telomeres, but a model's own lengths are a lower bound and a lower bound cannot
+establish an end — a rule that tried came out with five marks on a whole yeast genome where a reader
+was looking for thirty-two. A chain of one bead gets one mark, and beads the file left unplaced are
+skipped.
 
 ### ghosted
 

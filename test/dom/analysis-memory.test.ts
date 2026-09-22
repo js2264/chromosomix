@@ -51,7 +51,7 @@ const TASK: AnalysisTask = {
   id: 'insulation',
   title: 'Diamond insulation',
   blurb: 'A boundary score per bin.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: () => READY,

@@ -342,24 +342,34 @@ describe('every descriptor', () => {
 })
 
 /**
- * The map group's reading order.
+ * Each card's reading order.
  *
- * Registry order is a reading order rather than an alphabetical one, and the map
- * group's is an argument: what every bin *has* (coverage and the marginals),
- * then how contact falls away from it (P(s)), then the same decay kept per bin
- * instead of averaged (the scalogram), then one locus's slice of it (4C), then
- * the domains it resolves into — insulation, the directionality index that reads
- * the same edge from its asymmetry, and the HiC score that says how much contact
- * is there at all — then the compartments those domains sit in — and last,
- * detection, which is the only one that makes a claim rather than a summary: it
- * needs the decay the tasks above it describe, and what it produces is what the
- * aggregation tasks take as input. Pinned because the argument is invisible in
- * an array literal and reordering it is one line.
+ * Registry order is a reading order rather than an alphabetical one, and each
+ * card's is an argument. **2D:** what every bin *has* (coverage and the
+ * marginals), then how contact falls away from it (P(s)), then the same decay
+ * kept per bin instead of averaged (the scalogram), then one locus's slice of
+ * it (4C), then the domains it resolves into — insulation, the directionality
+ * index that reads the same edge from its asymmetry, and the HiC score that
+ * says how much contact is there at all — then the compartments those domains
+ * sit in; then detection, the only one that makes a claim rather than a
+ * summary, which needs the decay the tasks above it describe and produces the
+ * loop set the pileup below it takes. **3D:** the task that *makes* a model
+ * first, because the other two read one. **1D:** the task that *makes* an
+ * interval set first, for the same reason. Pinned because the argument is
+ * invisible in an array literal and reordering it is one line.
  */
-describe('the map card', () => {
-  it('reads outward from the axis', () => {
-    const map = TASKS.filter((task) => task.group === 'map').map((task) => task.id)
-    expect(map).toEqual([
+describe('the cards', () => {
+  const idsIn = (group: string): string[] =>
+    TASKS.filter((task) => task.group === group).map((task) => task.id)
+
+  it('come out in the order the panel draws them', () => {
+    const order: string[] = []
+    for (const task of TASKS) if (!order.includes(task.group)) order.push(task.group)
+    expect(order).toEqual(['2d', '3d', '1d', 'metagenome'])
+  })
+
+  it('reads the 2D card outward from the axis', () => {
+    expect(idsIn('2d')).toEqual([
       'coverage',
       'cistrans',
       'cellqc',
@@ -372,11 +382,26 @@ describe('the map card', () => {
       'compartments',
       'chromosight',
       'hicrep',
-      // The model against the map (§25.6) reads last: it is about a file the
-      // map is compared with rather than about the map alone.
-      'structuremap',
-      'spatialtracks',
-      'reconstruct3d',
+      // The pileup is about the matrix — it piles the matrix up at a set of
+      // places — so it is 2D, beside the detection that finds the places.
+      'apa',
     ])
+  })
+
+  it('opens the 3D card with the task that makes a model', () => {
+    // A reader with no structure loaded has exactly one thing to do in this
+    // card, and it should be the first row rather than the third.
+    expect(idsIn('3d')).toEqual(['reconstruct3d', 'structuremap', 'spatialtracks'])
+  })
+
+  it('opens the 1D card with the task that makes an interval set', () => {
+    // A motif search produces exactly the input the four below it take.
+    expect(idsIn('1d')).toEqual(['motif', 'metaplot', 'trackcorr', 'frip', 'overlap'])
+  })
+
+  it('keeps the metagenome tasks together rather than cutting them by dimension', () => {
+    // A MAG is a bin of an assembly, not a dimension: *split-MAG detection*
+    // belongs beside *MAG purity* rather than beside *compartments*.
+    expect(idsIn('metagenome')).toEqual(['magqc', 'magnetwork', 'magpurity', 'magsplit'])
   })
 })

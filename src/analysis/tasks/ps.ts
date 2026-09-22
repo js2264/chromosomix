@@ -392,7 +392,7 @@ export const EXPECTED_TASK: AnalysisTask = {
   id: 'expected',
   title: 'Contact probability P(s)',
   blurb: 'How contact frequency falls with genomic separation.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 2,
   // Every contact map has a diagonal, so this is the one row that is offered on

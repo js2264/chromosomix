@@ -14,6 +14,35 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **The analysis tasks are four cards, cut by dimension (§18.8).** *2D tasks*, *3D tasks*, *1D tasks*
+  and *Metagenome*, each with the frame, mark and fold every other card in every other column has,
+  where there was one flat list under three headings. The cut is **by the dimension the question is
+  about** rather than by the file it reads: aggregate peak analysis sits with the matrix it piles up
+  rather than with the loop set that says where, and metaplot with the track it averages rather than
+  with the features it averages over. Metagenome stays a group of its own because its four tasks are
+  not about a dimension — a MAG is a bin of an assembly — and its card is absent on a file with no
+  genomes, as any card whose every task is absent now is. Within a card the task that *makes* the
+  thing the others read comes first, so **model from the map** opens the 3D card: a reader with no
+  structure loaded has exactly one thing to do in it, and it was the third row.
+
+- **A structure gets a cell of its own (§25.3).** The deck held one structure cell, so showing a
+  second model destroyed the picture of the first — which made two models something a reader could
+  only compare by swapping back and forth, and made a reconstruction landing wipe out the model it
+  was to be judged against, the commonest way to lose a picture in this application. A model that
+  arrives, dropped or computed, now opens a cell **beside** whatever was there; the eye on each
+  Structures row toggles that row's own cell and leaves the others standing; and a cell falling back
+  to a model picks the first no sibling is already drawing, so a deck restored with two structure
+  cells does not draw one picture twice. The cell's own picker still swaps a model in place, which
+  is the other question: the eye is a model asking for a cell, the picker a cell asking for a model.
+
+- **The enlarged 3D viewer carries the three settings the Map card owns (§25.3, §26.3).** `legend`,
+  `crosshair` and `tooltip` are preferences about every picture in the app, and the card that offers
+  them is in the column *behind* the dialog while a model is enlarged — so the one switch for the
+  key the reader was looking at was the one they could not reach. They appear as a *shared* row at
+  the foot of the dialog's sidebar for as long as it is up, and nowhere else. The cell also *hears*
+  them change now: turning the key off on the Map card used to leave the model's key drawn until
+  something else happened to repaint the cell.
+
 - **A second way to build a model, and it is now the default: pastis-NB (§25.6).** *Model from the
   map* gains a **method** control offering the two positions the literature actually takes on what a
   contact count *is*. **ShRec3D**, which is what the task did before and still does when picked,
@@ -106,6 +135,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   colouring by sequence or haplotype is levels and has no scale to change.
 
 ### Changed
+
+- **A structure setting is one row (§25.3).** A select sits on one line with its label wherever the
+  card is wide enough to read the value, and drops the label above it only below about 15 rem —
+  asked of the *card* through a container query rather than of the window, because this card is
+  drawn both in a 200-pixel Aesthetics column and in the enlarged dialog's sidebar, which is twice
+  that. And a slider that only **shapes** something a toggle or a select **arms** shares that
+  control's row: *fog* carries its depth, *outside the window* its opacity. Each of those was two
+  rows, and the second carried a label that repeated the first. *Overlays* moved up beside *drawn
+  as*, the two being one question asked twice — what the model is drawn as, and what is drawn over
+  it.
+
+- **A named `.g3d`, `.3dg` or `.bed3d` is not sniffed at all (§25.2).** The two content tests exist
+  to tell a structure from a BED whose columns happen to be numbers, and a file that names its
+  format has been told apart already — by the reader who named it. A name used to be spared the
+  *fractional* test but not the *chain* test, so a model whose beads are a scatter rather than a
+  walk — a randomised control, a draw from a null, a fragment set nobody has folded — fell through
+  to BED and opened as a lane of boxes whose end is a coordinate in space. The row had already been
+  sent to the Structures card by the same name, so the row and its payload disagreed about what had
+  been loaded.
 
 - **The interface has one grammar, and SPECS.md §26 states it.** A deep audit of every reader-facing
   surface found the same kinds of drift in twenty places at once — not bugs in any one panel, but
@@ -679,6 +727,20 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Removed
 
+- **The *size by* setting (§25.3).** A track whose value at each bead set the bead's size, as a
+  second channel beside the colour. The channel is gone with the control: every bead is the bead
+  radius.
+
+- **The contact chords, and their threshold (§25.5).** The map's row through a pinned bead was drawn
+  as cylinders from it to every bead above a threshold, under a *pin contacts* toggle. *Colour by
+  contacts with the pinned bead* says the same thing in the representation the model is already in,
+  and a cage of coloured cylinders over a globule was a second answer to a question the first had
+  answered. The colouring stays.
+
+- **The accent bar down a shown Structures row (§25.3, §26.3).** The lit eye already says which
+  models are drawn, and a second way of saying it in the row's left gutter is a second look for one
+  state.
+
 - **`Ctrl+W` / `⌘W` no longer closes a tab.** It is the browser's chord for closing the window, and a
   reader who missed by one key lost the session rather than a tab. The command stays in the palette.
 
@@ -700,6 +762,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   that collides never reaches that refusal.
 
 ### Fixed
+
+- **Dropping several local coolers no longer gives a row of empty cells (§16.6).** Each opened a
+  live panel and then, a frame later, every one of them was replaced by a vacancy reading *this cell
+  held that file and it could not be re-opened* — about files the deck still had in hand. The hash
+  can say no more than `~` about a local map, and what a `~` was resolved against was the stored
+  record, re-opened through a filesystem grant; a file that arrived by **drag and drop** has no
+  grant, because the browser hands over a `File` rather than a handle and nothing can ask for one
+  afterwards. A cell the deck is already holding is now the first answer for its own index, and the
+  record answers for the rest.
+
+- **A pair the map never counted is the pale end of the ramp, not the dark one (§25.5).** Colouring
+  a model by *contacts with the pinned bead* put every uncounted pair at the **top** of the scale, so
+  the darkest beads in a virtual 4C were exactly the ones with no contact at all. `log10`'s clamp
+  folds a zero to `0`, which is numpy's and right on a map whose scale starts there — but the scale
+  here is the map's *transformed* range, and a balanced map's runs from about −3.6 to about 0.
+
+- **A ghosted chromosome's dashes are ghosted too (§25.5).** The dashed run of ink across every gap
+  in a chain was flat ink at full opacity, so a model faded almost to nothing still carried a cage
+  of black dashes over it — which read as the one thing being *shown*. A gap is a fact about a
+  chain, so it fades with the chain, and a gap spanning the edge of the window thins into the ghost
+  as a stick does.
+
+- **The telomere mark is both ends of every chain (§25.5).** It asked the session before claiming an
+  end — the start only from a first bead at base zero, the far end only against a length the file
+  itself declared, neither for a sequence ticked circular — and the argument was sound: the end of a
+  chain is not the end of a chromosome. It was also useless. A model's own lengths are a lower bound,
+  a lower bound cannot establish an end, and a whole yeast genome came out with five marks where a
+  reader was looking for thirty-two. The mark is a chain end and claims no more.
 
 - **A marked bead is the colour you gave it, not black (§25.4).** Every bead drawn for one of the
   reader's own 1D annotations came out black on screen, whatever colour the Manual annotations card

@@ -125,6 +125,21 @@ describe('colouring from a pinned bead', () => {
     expect(source.colormap).toBe('fall')
     expect(contactsSource(structure, null, null).label).toMatch(/pin one/)
   })
+
+  it('puts a pair the map never counted at the bottom of the ramp, not the top', () => {
+    // `log10`'s clamp folds a zero to `0`, which is numpy's and right on a map
+    // whose scale starts there. The scale here is the map's *transformed*
+    // range, and a balanced map's runs from about −3.6 to about 0 — so the
+    // clamp drew every uncounted pair at the dark end, and the beads with no
+    // contact at all came out as the most contacted in the picture.
+    const structure = model()
+    const contacts = Float32Array.from([0, 1, 0, 0, 0, 0])
+    const scale = { vmin: -3.65, vmax: 0.031, transform: 'log10' as const, colormap: 'fall' }
+    const source = contactsSource(structure, contacts, scale)
+    expect(source.values?.[0]).toBeCloseTo(-3.65)
+    // …and a value that is really there is still on the scale.
+    expect(source.values?.[1]).toBeCloseTo(0)
+  })
 })
 
 describe('loops as chords', () => {

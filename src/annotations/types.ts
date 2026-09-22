@@ -1236,12 +1236,6 @@ export interface StructureStyle {
   /** Whether the chords of {@link loops} are drawn; the choice of set is kept while they are off. */
   chords: boolean
   /**
-   * A track whose value at each bead sets the bead's size (§25.5), by the
-   * row's id; `''` for every bead the same. A second channel beside the
-   * colour, for a reader who wants to see two things at once.
-   */
-  sizeBy: string
-  /**
    * The depth slab: 1 shows everything, smaller keeps only what lies within
    * that fraction of the model's radius of the centre of rotation, front and
    * back — a way into a dense globule.
@@ -1275,13 +1269,6 @@ export interface StructureStyle {
    */
   telomeres: boolean
   /**
-   * The map's contacts from the pinned bead as chords (§25.5): to every bead
-   * whose contact sits at least {@link contactThreshold} of the way up the
-   * map's colour scale, as thick as the contact and coloured on that scale.
-   */
-  contactChords: boolean
-  contactThreshold: number
-  /**
    * Another structure row superposed on this one (§25.5), by id; `''` for
    * none. Aligned by the beads the two share, drawn beside this model in its
    * frame, and its distance from this model reported.
@@ -1308,13 +1295,10 @@ export function defaultStructureStyle(): StructureStyle {
     fog: 0.6,
     fogOn: true,
     chords: true,
-    sizeBy: '',
     slab: 1,
     ruler: false,
     telomeres: false,
     colormap: '',
-    contactChords: false,
-    contactThreshold: 0.5,
     compare: '',
   }
 }
@@ -1381,7 +1365,6 @@ export function structureStyleOf(value: unknown): StructureStyle {
     fog: bounded(row['fog'], 0, 1, fallback.fog),
     fogOn: row['fogOn'] !== false,
     chords: row['chords'] !== false,
-    sizeBy: typeof row['sizeBy'] === 'string' && (row['sizeBy'] as string).length <= 200 ? (row['sizeBy'] as string) : '',
     slab: bounded(row['slab'], 0.02, 1, fallback.slab),
     ruler: row['ruler'] === true,
     telomeres: row['telomeres'] === true,
@@ -1389,8 +1372,6 @@ export function structureStyleOf(value: unknown): StructureStyle {
       typeof row['colormap'] === 'string' && (row['colormap'] as string).length <= 64
         ? (row['colormap'] as string)
         : '',
-    contactChords: row['contactChords'] === true,
-    contactThreshold: bounded(row['contactThreshold'], 0, 1, fallback.contactThreshold),
     compare: typeof row['compare'] === 'string' && (row['compare'] as string).length <= 200 ? (row['compare'] as string) : '',
   }
 }

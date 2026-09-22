@@ -228,7 +228,10 @@ describe('a structure cell in the deck', () => {
     expect(published.at(-1)).toBe('3d')
   })
 
-  it('is one per deck: a second press keeps the one there is, and the button says so', () => {
+  it('opens a cell each time it is pressed, because each model has one of its own', () => {
+    // It was one cell per deck and the button greyed after the first, which is
+    // the rule §25.3 dropped: a model gets a cell of its own, so a reader with
+    // two of them sees both at once rather than swapping back and forth.
     const { deck, published } = make(fakeStore([structureEntry()]))
     const button = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
     expect(button).not.toBeNull()
@@ -239,13 +242,12 @@ describe('a structure cell in the deck', () => {
     expect(button?.title).toContain('Open a cell')
     deck.add({ kind: 'structure' })
     deck.add({ kind: 'structure' })
-    expect(structureCells(deck)).toHaveLength(1)
-    expect(published).toEqual(['3d'])
-    const greyed = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
-    expect(greyed?.disabled).toBe(true)
-    // …and says why, rather than keeping the sentence promising to open a cell
-    // it can no longer open (§18.1).
-    expect(greyed?.title).toBe('The deck already holds its one structure cell.')
+    expect(structureCells(deck)).toHaveLength(2)
+    expect(published.at(-1)).toBe('3d|3d')
+    // …and it stays pressable, with the sentence it always had.
+    const again = deck.el.querySelector<HTMLButtonElement>('.deck-add-structure')
+    expect(again?.disabled).toBe(false)
+    expect(again?.title).toContain('Open a cell')
   })
 
   it('takes the first empty cell, as a map would', () => {
@@ -640,18 +642,29 @@ describe('the model, enlarged', () => {
   })
 })
 
-describe('which model the cell draws (§25.6)', () => {
+describe('which model each cell draws (§25.3, §25.6)', () => {
   const second = Array.from({ length: 8 }, (_, i) => `chr2\t${i * 5000}\t${-i}\t${i}\t0`).join('\n')
 
-  it('draws the first structure row until told otherwise, then the one it was shown', () => {
+  it('gives a second model a cell of its own rather than taking the first one\u2019s', () => {
+    // It used to be one cell per deck, so showing a second model destroyed the
+    // picture of the first — which made two models a thing you could only
+    // compare by swapping back and forth, and made a reconstruction landing
+    // wipe out the model it was to be judged against.
     const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
     const { deck } = make(fakeStore([structureEntry(), two]))
     deck.add({ kind: 'structure' })
-    expect(deck.shownStructure()).toBe('a1')
+    expect(deck.shownStructures()).toEqual(['a1'])
     deck.showStructure('a2')
-    expect(deck.shownStructure()).toBe('a2')
-    const cell = structureCells(deck)[0]
-    expect(cell.querySelector('.deck-name')?.textContent ?? cell.textContent).toContain('second.g3d')
+    expect(deck.shownStructures()).toEqual(['a1', 'a2'])
+    expect(structureCells(deck)).toHaveLength(2)
+  })
+
+  it('does nothing for a model a cell already draws', () => {
+    // The eye is a state, not a button that adds: pressing a lit one hides.
+    const { deck } = make(fakeStore([structureEntry()]))
+    deck.showStructure('a1')
+    deck.showStructure('a1')
+    expect(structureCells(deck)).toHaveLength(1)
   })
 
   it('opens the cell when there is none, and offers a picker only with two rows', () => {
@@ -660,15 +673,31 @@ describe('which model the cell draws (§25.6)', () => {
     expect(deck.hasStructure()).toBe(false)
     deck.showStructure('a2')
     expect(deck.hasStructure()).toBe(true)
-    expect(deck.shownStructure()).toBe('a2')
+    expect(deck.shownStructures()).toEqual(['a2'])
     const picker = settingsRow(deck, 'structure')
     expect(picker).toBeDefined()
     const select = picker?.querySelector<HTMLSelectElement>('select')
     expect(select?.value).toBe('a2')
     expect(Array.from(select?.options ?? []).map((o) => o.textContent)).toEqual(['model.g3d', 'second.g3d'])
+    // The picker still swaps a cell **in place**: it is the cell asking which
+    // model to draw, where the eye is a model asking for a cell.
     select!.value = 'a1'
     select!.dispatchEvent(new Event('change'))
-    expect(deck.shownStructure()).toBe('a1')
+    expect(deck.shownStructures()).toEqual(['a1'])
+    expect(structureCells(deck)).toHaveLength(1)
+  })
+
+  it('hides one model\u2019s cell and leaves the others standing', () => {
+    const two = { ...structureEntry(second), id: 'a2', label: 'second.g3d' }
+    const { deck } = make(fakeStore([structureEntry(), two]))
+    deck.showStructure('a1')
+    deck.showStructure('a2')
+    expect(deck.shownStructures()).toEqual(['a1', 'a2'])
+    deck.hideStructure('a1')
+    expect(deck.shownStructures()).toEqual(['a2'])
+    // …and with no id, every one of them goes.
+    deck.hideStructure()
+    expect(deck.hasStructure()).toBe(false)
   })
 
   it('remembers the choice per file and falls back to the first when the row is gone', () => {
@@ -678,11 +707,11 @@ describe('which model the cell draws (§25.6)', () => {
     first.deck.destroy()
     const again = make(fakeStore([structureEntry(), two]))
     again.deck.add({ kind: 'structure' })
-    expect(again.deck.shownStructure()).toBe('a2')
+    expect(again.deck.shownStructures()).toEqual(['a2'])
     again.deck.destroy()
     const without = make(fakeStore([structureEntry()]))
     without.deck.add({ kind: 'structure' })
-    expect(without.deck.shownStructure()).toBe('a1')
+    expect(without.deck.shownStructures()).toEqual(['a1'])
     expect(settingsRow(without.deck, 'structure')).toBeUndefined()
   })
 })
@@ -695,16 +724,16 @@ describe('the cell empties when the model it shows is removed (§25.3)', () => {
     const store = fakeStore([structureEntry(), two])
     const { deck } = make(store)
     deck.showStructure('a2')
-    expect(deck.shownStructure()).toBe('a2')
+    expect(deck.shownStructures()).toEqual(['a2'])
     store.entries.splice(1, 1)
     store.notify()
-    expect(deck.shownStructure()).toBeNull()
+    expect(deck.shownStructures()).toEqual([])
     expect(deck.el.querySelector('.structure-note')?.textContent).toMatch(/was removed/)
     deck.destroy()
     // The next deck on the same file: the choice was forgotten with the row.
     const again = make(fakeStore([structureEntry()]))
     again.deck.add({ kind: 'structure' })
-    expect(again.deck.shownStructure()).toBe('a1')
+    expect(again.deck.shownStructures()).toEqual(['a1'])
   })
 
   it('empties for the row it simply fell into, not only one the reader picked', () => {
@@ -716,24 +745,24 @@ describe('the cell empties when the model it shows is removed (§25.3)', () => {
     const store = fakeStore([structureEntry(), two])
     const { deck } = make(store)
     deck.add({ kind: 'structure' })
-    expect(deck.shownStructure()).toBe('a1')
+    expect(deck.shownStructures()).toEqual(['a1'])
     store.entries.splice(0, 1)
     store.notify()
-    expect(deck.shownStructure()).toBeNull()
+    expect(deck.shownStructures()).toEqual([])
     expect(deck.el.querySelector('.structure-note')?.textContent).toMatch(/was removed/)
     // …and the cell is still usable: the other row can be shown in it.
     deck.showStructure('a2')
-    expect(deck.shownStructure()).toBe('a2')
+    expect(deck.shownStructures()).toEqual(['a2'])
   })
 
   it('keeps drawing a row that was recomputed onto the same id', () => {
     const store = fakeStore([structureEntry()])
     const { deck } = make(store)
     deck.add({ kind: 'structure' })
-    expect(deck.shownStructure()).toBe('a1')
+    expect(deck.shownStructures()).toEqual(['a1'])
     store.entries[0] = { ...structureEntry(second), id: 'a1', label: 'first.g3d' }
     store.notify()
-    expect(deck.shownStructure()).toBe('a1')
+    expect(deck.shownStructures()).toEqual(['a1'])
   })
 })
 
@@ -804,20 +833,36 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     deck.add({ kind: 'structure' })
     const options = Array.from(settingsRow(deck, 'loops as chords')?.querySelectorAll('option') ?? []).map((o) => o.value)
     expect(options).toContain('manual')
-    // The toggle is the `fog` row; the depth is a row of its own, named, with
-    // the number it is at beside it — a slider wrapped under a toggle read as a
-    // setting with no name.
-    expect(settingsRow(deck, 'fog')?.querySelector('.structure-toggle')).not.toBeNull()
-    expect(settingsRow(deck, 'fog depth')?.querySelector('input')?.value).toBe('0.6')
-    expect(settingsRow(deck, 'fog depth')?.querySelector('.structure-value')?.textContent).toBe('0.6')
+    // One row for the fog: the toggle that arms it and the depth that shapes
+    // it, with the number beside the slider. Two rows meant a second label
+    // that repeated the first — `fog`, then `fog depth`.
+    const fog = settingsRow(deck, 'fog')
+    expect(fog?.querySelector('.structure-toggle')).not.toBeNull()
+    expect(fog?.querySelector('input')?.value).toBe('0.6')
+    expect(fog?.querySelector('.structure-value')?.textContent).toBe('0.6')
+    expect(settingsRow(deck, 'fog depth')).toBeUndefined()
     expect(deck.structureSettings()?.querySelector('.structure-toggle[title*="centre and axes"]')).not.toBeNull()
     // Drawn as: three toggles that combine, the tube on by default.
     const drawn = Array.from(settingsRow(deck, 'drawn as')?.querySelectorAll<HTMLButtonElement>('.structure-toggle') ?? [])
     expect(drawn.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true'])
-    // The new channels and tools are on the card too.
-    for (const label of ['size by', 'depth slab', 'camera', 'frame', 'ghost opacity']) {
+    // …and the ghost is one row the same way: the choice arms it, the opacity
+    // shapes it.
+    const ghost = settingsRow(deck, 'outside window')
+    expect(ghost?.querySelector('select')).not.toBeNull()
+    expect(ghost?.querySelector('input[type=range]')).not.toBeNull()
+    expect(settingsRow(deck, 'ghost opacity')).toBeUndefined()
+    // The tools are on the card too. *size by* is gone — a second channel
+    // nobody asked for — and so is the row it had.
+    for (const label of ['depth slab', 'camera', 'frame']) {
       expect(settingsRow(deck, label), label).toBeDefined()
     }
+    expect(settingsRow(deck, 'size by')).toBeUndefined()
+    // *overlays* sits with *drawn as*: what the model is drawn as, then what is
+    // drawn over it.
+    const labels = Array.from(deck.structureSettings()?.querySelectorAll('.field-label') ?? []).map(
+      (node) => node.textContent,
+    )
+    expect(labels.indexOf('overlays')).toBe(labels.indexOf('drawn as') + 1)
   })
 
   it('measures: two clicks are a distance kept on the card, and the cell offers its commands', () => {

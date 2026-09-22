@@ -117,7 +117,6 @@ import {
   type AssemblyOrigin,
   type Contig,
 } from '../genome/assembly'
-import type { SequenceFacts } from '../structure/scene'
 import { NameIndex } from '../genome/naming'
 import { SequenceSelection } from '../genome/selection'
 import { placementOn, type AnnotationEntry, type Placement } from '../annotations/types'
@@ -3565,9 +3564,11 @@ export class Session {
       if (known && !replaced) continue
       fresh = entry.id
     }
-    // …and it is the one the cell draws: a model that has just arrived — a
-    // file dropped, a reconstruction landing — is the one the reader is
-    // waiting to see, whichever the cell was showing before (§25.6).
+    // …and it gets a cell of its own: a model that has just arrived — a file
+    // dropped, a reconstruction landing — is the one the reader is waiting to
+    // see, and it is drawn **beside** whatever was already there rather than
+    // over it (§25.3). A run that wiped out the model it was to be compared
+    // against was the commonest way to lose a picture in this app.
     if (fresh !== null && this.deckIsPossible) this.ensureDeck().showStructure(fresh)
   }
 
@@ -3877,11 +3878,14 @@ export class Session {
               this.ensureDeck().showStructure(entry.id)
               this.structureCard?.refresh()
             },
-            onHide: () => {
-              this.deck?.hideStructure()
+            // This row's own cell, not every one: each model has a cell of its
+            // own (§25.3), so the eye on a row closes that row's picture and
+            // leaves the others where they are.
+            onHide: (entry) => {
+              this.deck?.hideStructure(entry.id)
               this.structureCard?.refresh()
             },
-            shown: () => this.deck?.shownStructure() ?? null,
+            shown: (id) => this.deck?.shownStructures().includes(id) ?? false,
           }
         : {}),
       onRecompute: (entry) => this.analysis?.recompute(entry),
@@ -4668,36 +4672,6 @@ export class Session {
    */
   private circularHeld: { key: string; store: CircularStore } | null = null
 
-  /**
-   * What is known about one sequence by name, for the structure cell's
-   * telomeres (§25.5): how long it is, whether that length is the file's own
-   * rather than a lower bound, and whether the reader declared it circular.
-   *
-   * Matched through {@link NameIndex} rather than by string equality, because a
-   * g3d written `chr4` and a cooler written `IV` are the same chromosome and
-   * the reader should not have to rename a file to see its telomeres. `null`
-   * where there is no assembly, or no sequence of that name in it — which the
-   * caller reads as *do not claim anything about this sequence's ends*.
-   */
-  private sequenceFacts(name: string): SequenceFacts | null {
-    const assembly = this.assembly
-    if (assembly === null) return null
-    if (this.sequenceNames?.from !== assembly) {
-      this.sequenceNames = { from: assembly, index: NameIndex.for(assembly.contigs.map((held) => held.name)) }
-    }
-    const matched = this.sequenceNames.index.find(name)
-    if (matched === null) return null
-    const contig = assembly.contigs.find((held) => held.name === matched.name)
-    if (contig === undefined) return null
-    return {
-      length: contig.length,
-      exact: lengthsAreExact(assembly),
-      circular: this.circularStore()?.has(contig.name) ?? false,
-    }
-  }
-
-  /** The name index of the assembly in hand, rebuilt when that assembly changes. */
-  private sequenceNames: { from: Assembly; index: NameIndex } | null = null
 
   private circularStore(): CircularStore | null {
     const key = this.sessionKey()
@@ -5627,7 +5601,6 @@ export class Session {
         manual: () => this.annotations?.manual,
         client: () => this.annotations?.client,
         bookmarks: () => this.bookmarkStore ?? undefined,
-        sequence: (name) => this.sequenceFacts(name),
         // The lead map's own block, read in place: the row through the
         // pinned bead, on the scale the map draws with (§25.5).
         contacts: (from, to) => this.current?.panel?.contactsBetween(from, to) ?? null,

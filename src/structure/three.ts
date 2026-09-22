@@ -116,8 +116,6 @@ export class StructureRenderer {
   /** The loops as chords (§25.5): one cylinder of ink per pair. */
   private chords: InstancedMesh | null = null
   /** The map's contacts from the pinned bead, one coloured cylinder each. */
-  private contactChords: InstancedMesh | null = null
-  private contactChordsFrom: ReadonlyArray<{ bead: number; weight: number; colour: string }> | null = null
   /** The reader's measurements, as dashed ink. */
   private measures: InstancedMesh | null = null
   private measuresFrom: ReadonlyArray<readonly [number, number]> | null = null
@@ -465,7 +463,7 @@ export class StructureRenderer {
       if (Array.isArray(material)) material.forEach((m) => m.dispose())
       else material.dispose()
     }
-    for (const ink of [this.chords, this.chord, this.gapDashes, this.contactChords, this.measures, this.ticks, this.marks]) {
+    for (const ink of [this.chords, this.chord, this.gapDashes, this.measures, this.ticks, this.marks]) {
       if (ink === null) continue
       this.root.remove(ink)
       ink.geometry.dispose()
@@ -474,8 +472,6 @@ export class StructureRenderer {
     this.chords = null
     this.chordsFrom = null
     this.gapDashes = null
-    this.contactChords = null
-    this.contactChordsFrom = null
     this.measures = null
     this.measuresFrom = null
     this.ticks = null
@@ -543,7 +539,7 @@ export class StructureRenderer {
       at = 0
       for (let i = 0; i < n; i++) {
         if (shown[i] === 0) continue
-        const r = beadRadius * (view.sizes === null ? 1 : view.sizes[i])
+        const r = beadRadius
         matrix.makeScale(r, r, r)
         matrix.setPosition(structure.x[i], structure.y[i], structure.z[i])
         this.beads.setMatrixAt(at, matrix)
@@ -557,12 +553,21 @@ export class StructureRenderer {
     // The dashes across every gap, whatever else is drawn: ink, a little
     // wider than a stick, so a chain that stops where a bead is missing reads
     // as one chain with a hole in it rather than as two chains.
+    //
+    // **Ghosted with the chain they belong to.** They were flat ink at full
+    // opacity, so a ghosted chromosome kept its dashes at full strength: a
+    // model faded to almost nothing still had a cage of black dashes over it,
+    // which read as the one thing being *shown*. A gap is a fact about a
+    // chain, so it fades with the chain — which means remembering, per
+    // segment, which pair of beads it crosses.
     const gaps = gapPairsOf(view, shown)
     if (gaps.length > 0) {
       const segments: Array<[Vector3, Vector3]> = []
+      const owners: number[] = []
       const dash = stickRadius * 3
       const gap = stickRadius * 2
-      for (const [a, b] of gaps) {
+      for (let g = 0; g < gaps.length; g++) {
+        const [a, b] = gaps[g]
         const from = new Vector3(structure.x[a], structure.y[a], structure.z[a])
         const to = new Vector3(structure.x[b], structure.y[b], structure.z[b])
         const length = from.distanceTo(to)
@@ -570,9 +575,13 @@ export class StructureRenderer {
         for (let at = 0; at < length; at += dash + gap) {
           const end = Math.min(length, at + dash)
           segments.push([from.clone().addScaledVector(dir, at), from.clone().addScaledVector(dir, end)])
+          owners.push(g)
         }
       }
-      this.gapDashes = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 1))
+      this.gapDashes = cylinders(segments, stickRadius * INK_SHARE, ghostable(inkMaterial(this.palette.ink, 1)))
+      this.gapDashes.geometry.setAttribute(GHOST_ALPHA, ghostAttribute(Math.max(1, segments.length), true))
+      this.gapDashes.userData['gaps'] = gaps
+      this.gapDashes.userData['owners'] = Int32Array.from(owners)
       this.root.add(this.gapDashes)
     }
 
@@ -721,6 +730,20 @@ export class StructureRenderer {
       if (this.sticks.instanceColor !== null) this.sticks.instanceColor.needsUpdate = true
       alpha.needsUpdate = true
     }
+    if (this.gapDashes !== null) {
+      // The mean of the pair it crosses, as a stick takes: a gap that spans
+      // the edge of the window thins into the ghost rather than stopping dead.
+      const gaps = this.gapDashes.userData['gaps'] as Array<[number, number]> | undefined
+      const owners = this.gapDashes.userData['owners'] as Int32Array | undefined
+      const alpha = this.gapDashes.geometry.getAttribute(GHOST_ALPHA) as BufferAttribute | undefined
+      if (gaps !== undefined && owners !== undefined && alpha !== undefined) {
+        for (let s = 0; s < owners.length; s++) {
+          const [a, b] = gaps[owners[s]]
+          alpha.setX(s, (alphaOf(a) + alphaOf(b)) / 2)
+        }
+        alpha.needsUpdate = true
+      }
+    }
     for (const tube of this.tubes) {
       const owner = tube.userData['owner'] as Int32Array
       const radial = tube.userData['radial'] as number
@@ -795,43 +818,6 @@ export class StructureRenderer {
         )
         this.chords = cylinders(segments, stickRadius * INK_SHARE, inkMaterial(this.palette.ink, 0.9))
         this.root.add(this.chords)
-      }
-    }
-
-    // The map's contacts from the pinned bead: a cylinder per contact, as
-    // thick as the contact is strong, in the map's colour for it.
-    const contacts = style.contactChords && view.pinned >= 0 && this.shown[view.pinned] === 1 ? view.contactChords : NO_CONTACTS
-    if (this.contactChordsFrom !== contacts) {
-      this.contactChordsFrom = contacts
-      if (this.contactChords !== null) {
-        this.root.remove(this.contactChords)
-        this.contactChords.geometry.dispose()
-        this.contactChords = null
-      }
-      const kept = contacts.filter((c) => this.shown[c.bead] === 1)
-      if (kept.length > 0) {
-        const p = view.pinned
-        const from = new Vector3(structure.x[p], structure.y[p], structure.z[p])
-        const mesh = new InstancedMesh(new CylinderGeometry(1, 1, 1, 8, 1, true), new MeshBasicMaterial({ transparent: true, opacity: 0.85 }), kept.length)
-        const matrix = new Matrix4()
-        const q = new Quaternion()
-        const up = new Vector3(0, 1, 0)
-        const colour = new Color()
-        kept.forEach((c, at) => {
-          const to = new Vector3(structure.x[c.bead], structure.y[c.bead], structure.z[c.bead])
-          const dir = to.clone().sub(from)
-          const length = dir.length()
-          q.setFromUnitVectors(up, length > 0 ? dir.normalize() : up)
-          const r = stickRadius * (0.3 + 1.2 * c.weight)
-          matrix.compose(from.clone().add(to).multiplyScalar(0.5), q, new Vector3(r, Math.max(length, 1e-6), r))
-          mesh.setMatrixAt(at, matrix)
-          mesh.setColorAt(at, colour.setHex(hexOf(c.colour)))
-        })
-        mesh.instanceMatrix.needsUpdate = true
-        if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true
-        mesh.frustumCulled = false
-        this.contactChords = mesh
-        this.root.add(mesh)
       }
     }
 
@@ -918,7 +904,7 @@ export class StructureRenderer {
         const matrix = new Matrix4()
         const colour = new Color()
         kept.forEach((mark, at) => {
-          const r = structure.step * style.beadRadius * (view.sizes === null ? 1 : view.sizes[mark.bead]) * MARKED_BEAD
+          const r = structure.step * style.beadRadius * MARKED_BEAD
           matrix.makeScale(r, r, r)
           matrix.setPosition(structure.x[mark.bead], structure.y[mark.bead], structure.z[mark.bead])
           mesh.setMatrixAt(at, matrix)
@@ -1194,7 +1180,6 @@ function gapPairsOf(view: StructureView, shown: Uint8Array): Array<[number, numb
 }
 
 const NO_CHORDS: ReadonlyArray<readonly [number, number]> = []
-const NO_CONTACTS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
 
 /**
  * A black line along or across the fibre — a gap's dashes, a loop's chord — as
@@ -1245,13 +1230,6 @@ function cylinders(
   return mesh
 }
 
-/** A short hash of a size array, so the key changes when the sizes do. */
-function sizesKey(sizes: Float32Array): string {
-  let hash = 0
-  for (let i = 0; i < sizes.length; i++) hash = (hash * 31 + Math.round(sizes[i] * 100)) | 0
-  return `${sizes.length}:${hash}`
-}
-
 /** Cumulative polyline length at each point, from zero. */
 function cumulative(points: Vector3[]): number[] {
   const out = [0]
@@ -1278,8 +1256,6 @@ function buildKey(view: StructureView): string {
     style.tube,
     style.beadRadius,
     style.tubeRadius,
-    // The sizes are part of the geometry: a new array is a new set of beads.
-    view.sizes === null ? '' : sizesKey(view.sizes),
     view.haplotype,
     style.others,
     litKey,

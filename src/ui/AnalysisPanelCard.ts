@@ -27,11 +27,26 @@ import { TASK_GROUP_LABELS, tasksFor } from '../analysis/registry'
 import type { AnalysisRunner, JobState } from '../analysis/runner'
 import type { AnalysisContext, AnalysisTask, TaskGroup } from '../analysis/types'
 import { el, fmt } from './dom'
-import { iconButton } from './icons'
+import { cardTitle, iconButton, type IconName } from './icons'
 import { durationText } from '../units'
 
 /** Re-exported: the text moved to `src/units.ts`, and this is where callers found it. */
 export { durationText }
+
+/**
+ * The mark on each card's heading.
+ *
+ * Borrowed rather than invented: `grid-2x2` is what the Contact maps card
+ * wears and `box` is what the Structures card wears, so a reader who has met
+ * either already knows which picture the card is about. The 1D card takes the
+ * line a track is drawn as.
+ */
+const TASK_GROUP_ICONS: Record<TaskGroup, IconName> = {
+  '2d': 'grid-2x2',
+  '3d': 'box',
+  '1d': 'chart-line',
+  metagenome: 'library',
+};
 
 export interface AnalysisPanelOptions {
   runner: AnalysisRunner
@@ -198,10 +213,12 @@ export class AnalysisPanelCard {
   private built: string | null = null
 
   constructor(private readonly options: AnalysisPanelOptions) {
-    // No card frame and no heading. The column already has both — see the
-    // stylesheet's own note above `.analysis-group` — and a card called
-    // something inside a panel called Analysis would be a second name for one
-    // list.
+    // **One card per group** (§18.8). It was one flat list under three
+    // headings, which is the shape a list has when its sections are three; at
+    // four, and with the dimension a reader came looking for written on each,
+    // they are cards — the same frame, mark and fold every other card in every
+    // other column has, so *2D tasks* folds away exactly as *Tracks* does. The
+    // panel's own name is not repeated on any of them.
     this.el = el('div', { class: 'analysis-tasks' })
     this.unsubscribe = options.runner.subscribe(() => this.refresh())
     this.refresh()
@@ -236,12 +253,14 @@ export class AnalysisPanelCard {
   // -------------------------------------------------------------------------
 
   /**
-   * The headings, in the order the tasks themselves put them in.
+   * The cards, in the order the tasks themselves put them in.
    *
    * Not `Object.keys(TASK_GROUP_LABELS)`: registry order is the catalogue order
-   * of §18.8 and is an argued reading order, so the groups appear in the order
+   * of §18.8 and is an argued reading order, so the cards appear in the order
    * their first task does. `ParamForm.sections` orders its headings by the same
-   * rule and for the same reason — the file is the document.
+   * rule and for the same reason — the file is the document. It also means a
+   * group whose every task is absent has no card at all, which is how the
+   * Metagenome card stays away from a file that has no genomes.
    */
   private groups(tasks: readonly AnalysisTask[]): TaskGroup[] {
     const out: TaskGroup[] = []
@@ -264,9 +283,9 @@ export class AnalysisPanelCard {
       )
       return
     }
-    const nodes: HTMLElement[] = []
+    const cards: HTMLElement[] = []
     for (const group of this.groups(tasks)) {
-      nodes.push(el('h3', { class: 'analysis-group', text: TASK_GROUP_LABELS[group] }))
+      const nodes: HTMLElement[] = []
       // Under the heading and above the first row, hidden until {@link paint}
       // finds that every waiting row below it is waiting on the same thing.
       const needs = el('p', { class: 'analysis-group-needs hidden' })
@@ -276,13 +295,20 @@ export class AnalysisPanelCard {
         const row = this.row(task)
         this.rows.push(row)
         // Two nodes per task, the second usually hidden. Flat siblings rather
-        // than a wrapper each, so `.analysis-group + .analysis-row` still names
-        // the first row under a heading — and so the row keeps being the thing
-        // with the border, which is what the reader is clicking.
+        // than a wrapper each, so the row keeps being the thing with the
+        // border, which is what the reader is clicking.
         nodes.push(row.el, row.needs)
       }
+      cards.push(
+        el(
+          'section',
+          { class: 'card analysis-card' },
+          cardTitle(TASK_GROUP_LABELS[group], TASK_GROUP_ICONS[group]),
+          ...nodes,
+        ),
+      )
     }
-    this.el.replaceChildren(...nodes)
+    this.el.replaceChildren(...cards)
   }
 
   /**

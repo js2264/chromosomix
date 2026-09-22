@@ -136,14 +136,14 @@ try {
   // Ghosting only shows against a window, so frame the maps on one sequence.
   await shot('g0-before')
   for (const value of [1, 0.5, 0.15, 0]) {
-    const ok = await setSlider('ghost opacity', value)
+    const ok = await setSlider('outside window', value)
     const ink = await inkShare()
-    console.log(`ghost opacity ${value}: slider ${ok ? 'set' : 'NOT FOUND'}, ink ${ink}`)
+    console.log(`outside window · ghost opacity ${value}: slider ${ok ? 'set' : 'NOT FOUND'}, ink ${ink}`)
     await shot(`g-ghost-${String(value).replace('.', '_')}`)
   }
 
   // Rotation: one long vertical drag, which used to stop dead at the pole.
-  await setSlider('ghost opacity', 0.15)
+  await setSlider('outside window', 0.15)
   // **The structure's own canvas**, by class: a bare `canvas` selector finds
   // the map's heatmap first, and a drag there is a hover the cell echoes — which
   // looks like a rotation that did nothing.
@@ -172,7 +172,7 @@ try {
   await sleep(1200)
   await shot('r2-turned-further')
   // ---- the controls added beside these two -------------------------------
-  await setSlider('ghost opacity', 1)
+  await setSlider('outside window', 1)
 
   /** A settings toggle by the start of its title. */
   const pressToggle = async (title) =>

@@ -304,7 +304,7 @@ export const FOURC_TASK: AnalysisTask = {
   id: 'fourc',
   title: '4C profile from an anchor',
   blurb: 'What one locus touches, as a track you can export.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

@@ -69,11 +69,10 @@ import {
   structureAxis,
   trackSource,
 } from '../structure/sources'
+import { rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
 import type { ColourSource } from '../structure/colour'
-import { robustRangeOf, rgbOf, usesRamp, TELOMERE_COLOUR } from '../structure/colour'
 import { COLORMAP_NAMES } from '../render/colormaps'
 import { alignTo, displacements, type Alignment } from '../structure/align'
-import { transformValue } from '../render/scale'
 import { settingsField } from '../ui/laneSettings'
 import { withKey, type Command } from '../ui/commands'
 import { featureFields, FIELD_LANE, FIELD_STRAND } from '../annotations/fields'
@@ -102,7 +101,6 @@ import {
   distanceBetween,
   lociOf,
   telomereBeads,
-  type SequenceFacts,
   type Structure,
 } from '../structure/scene'
 import type { RenderPalette, StructureRenderer } from '../structure/three'
@@ -111,7 +109,14 @@ import { cardTitle, icon, iconButton } from '../ui/icons'
 import { readCanvasPalette } from '../ui/MatrixPanel'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
-import { getPlotOptions } from '../ui/plotOptions'
+import {
+  getPlotOptions,
+  setPlotOption,
+  PLOT_OPTION_ICONS,
+  PLOT_OPTION_LABELS,
+  subscribePlotOptions,
+  type PlotOptionKey,
+} from '../ui/plotOptions'
 import { setReadout } from '../ui/readout'
 import { setHoverPlace, subscribeHoverPlace } from '../ui/hoverLocus'
 import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
@@ -141,13 +146,6 @@ export interface StructurePanelProps {
   /** The reader's bookmarks, named on the model at their beads. */
   bookmarks?(): BookmarkStore | undefined
   /**
-   * What the session knows about a sequence by name — its length, whether that
-   * length is the file's own rather than a lower bound, and whether the reader
-   * declared it circular (§8.15). `null` where it cannot say, which is what
-   * stops *mark telomeres* claiming the end of a sequence nobody measured.
-   */
-  sequence?(name: string): SequenceFacts | null
-  /**
    * The lead map's own values between one place and many — the row through
    * the pinned bead, for *colour by contacts* (§25.5). `null` where the lead
    * has no block, or is not a map.
@@ -159,6 +157,16 @@ export interface StructurePanelProps {
   /** The scale that lead draws with, so the beads agree with the picture. */
   contactsScale?(): ColorScale | null
   /** Where the camera is remembered — the session's memory key. */
+  /**
+   * The models this cell's **siblings** are drawing, so two cells do not fall
+   * to the same one.
+   *
+   * The remembered choice is the deck's, not the cell's, and so is the
+   * fallback to the first row — so a deck restored with two structure cells
+   * had both of them draw the same model, which is two copies of one picture
+   * where the link said two pictures.
+   */
+  taken?(): readonly string[]
   memoryKey(): string
   /** The × on the heading. */
   onClose(): void
@@ -183,6 +191,22 @@ export type StructureCellProps = Omit<
 
 /** Where a cell's camera is remembered in the session's memory. */
 const CAMERA_SCOPE = 'structure:camera'
+/**
+ * The settings this cell reads that are **not** the row's own (§26.3).
+ *
+ * `legend`, `crosshair` and `tooltip` are preferences about every picture in
+ * the app, kept in `ui/plotOptions.ts` and offered on the Map card — which is
+ * in the column behind the dialog while the model is enlarged, so the one
+ * control for the key the reader is looking at is the one they cannot reach.
+ * They are borrowed into the dialog's sidebar for as long as it is up, and are
+ * not repeated on the card: the Map card already offers them there, and §26.3
+ * wants a control offered once per column.
+ *
+ * Exactly the three the renderer asks for. A fourth borrowed here would be a
+ * control that does nothing to the picture it was pressed beside.
+ */
+const BORROWED_OPTIONS: readonly PlotOptionKey[] = ['legend', 'crosshair', 'tooltip']
+
 /** Where the enlarged dialog's sidebar width is kept, so a reader sets it once. */
 const SIDE_SCOPE = 'structure:side'
 /** Where the row the cell was showing is remembered, so a reload draws the same model. */
@@ -223,8 +247,6 @@ const STRUCTURE_KEYS = {
   turntable: 'r',
 } as const
 
-/** The most contact chords drawn from a pinned bead: the strongest, when more pass the threshold. */
-const MAX_CONTACT_CHORDS = 400
 
 /**
  * How far from a bead's centre, in pixels, still counts as pointing at it.
@@ -243,7 +265,6 @@ function tickLabel(bp: number): string {
   if (bp >= 1e3) return `${+(bp / 1e3).toFixed(1)} kb`
   return `${bp} bp`
 }
-const NO_CONTACT_CHORDS: ReadonlyArray<{ bead: number; weight: number; colour: string }> = []
 const NO_MARKS: ReadonlyArray<{ bead: number; colour: string }> = []
 const NO_TICKS: ReadonlyArray<{ bead: number; label: string }> = []
 /**
@@ -372,9 +393,7 @@ export class StructurePanel implements DeckCell {
   private turnFrame = 0
   /** The compared model (§25.5), aligned once per pair of rows. */
   private compared: { key: string; overlay: { structure: Structure; colours: BeadColours }; fit: Alignment } | null = null
-  private contactCache: { key: string; list: ReadonlyArray<{ bead: number; weight: number; colour: string }> } | null = null
   private rulerCache: { key: string; list: ReadonlyArray<{ bead: number; label: string }> } | null = null
-  private sizeCache: { key: string; samples: TrackSampleSet; sizes: Float32Array | null } | null = null
   /** The cell's body, where the picture lives when it is not enlarged. */
   private readonly body: HTMLElement
   /** The modal the picture is enlarged into, while it is (§25.3). */
@@ -500,6 +519,15 @@ export class StructurePanel implements DeckCell {
       window.removeEventListener('keyup', this.onKeyUp)
       window.removeEventListener('blur', this.onWindowBlur)
     })
+    // The three shared preferences this cell reads ({@link BORROWED_OPTIONS}).
+    // It never heard them change: turning the key off on the Map card left the
+    // model's key drawn until something else happened to repaint the cell.
+    this.unsubscribes.push(
+      subscribePlotOptions(() => {
+        this.paintSettings()
+        this.schedule()
+      }),
+    )
     this.body = el('div', { class: 'deck-body structure-body' }, this.wrap)
     this.el = el(
       'section',
@@ -715,7 +743,12 @@ export class StructurePanel implements DeckCell {
     // went on showing a stale name over an empty stage.
     const shown = this.entry
     const emptied = shown !== null && !rows.some((held) => held.id === shown.id)
-    const entry = emptied ? null : (chosenRow ?? rows[0] ?? null)
+    // The first row no sibling is already drawing, where this cell has no
+    // choice of its own: two cells falling to the same model is one picture
+    // drawn twice.
+    const taken = new Set(this.props.taken?.() ?? [])
+    const free = rows.find((held) => !taken.has(held.id))
+    const entry = emptied ? null : (chosenRow ?? free ?? rows[0] ?? null)
     if (emptied) {
       this.chosen = null
       remember(this.props.memoryKey(), MODEL_SCOPE, null)
@@ -1673,8 +1706,6 @@ export class StructurePanel implements DeckCell {
       chord: getPlotOptions().crosshair ? this.chord : null,
       chords: this.loopsOf(structure, style.loops),
       haplotype,
-      sizes: this.sizesOf(structure, style),
-      contactChords: style.contactChords ? this.contactChordsOf(structure, style) : NO_CONTACT_CHORDS,
       // The measurement being made, drawn with the ones already made: the
       // line follows the pointer from the bead the press landed on, so a drag
       // shows what it is about to measure rather than what it measured.
@@ -1712,93 +1743,19 @@ export class StructurePanel implements DeckCell {
   }
 
   /**
-   * The beads at a telomere, cached against the model and what the session
-   * knows, because it is asked on every frame and answers from the whole set.
+   * The beads at a chain end, cached against the model, because it is asked on
+   * every frame and answers from the whole set.
    */
   private telomeres(structure: Structure): readonly number[] {
-    const ask = this.props.sequence
-    const key = `${structure.set.length}|${structure.contigs.join(',')}|${ask === undefined ? '' : 'k'}`
+    const key = `${structure.set.length}|${structure.contigs.join(',')}`
     if (this.telomereCache?.key !== key || this.telomereCache.from !== structure) {
-      const beads = telomereBeads(structure, (name) => ask?.(name) ?? null)
+      const beads = telomereBeads(structure)
       this.telomereCache = { key, from: structure, beads }
     }
     return this.telomereCache.beads
   }
 
-  /**
-   * A size per bead from a track (§25.5): the track's value at the bead,
-   * scaled between half and nearly twice the bead radius over its robust
-   * range, so one outlier does not make every other bead a dot. `null` for
-   * every bead the same, and while the samples are on their way.
-   */
-  private sizesOf(structure: Structure, style: StructureStyle): Float32Array | null {
-    if (style.sizeBy === '') return null
-    const entry = this.props.store()?.entries.find((row) => row.id === style.sizeBy)
-    if (entry === undefined || !hasTrackControls(entry.kind)) return null
-    const samples = this.samplesOf(structure, entry)
-    if (samples === null) return null
-    // Keyed on the samples object itself: the cache hands back a new one
-    // when a fetch lands, which is when the sizes have to be read again.
-    const key = `${entry.id}:${structure.set.length}`
-    if (this.sizeCache !== null && this.sizeCache.key === key && this.sizeCache.samples === samples) return this.sizeCache.sizes
-    const source = trackSource(structure, samples, entry.label, entry.style.limits)
-    const values = source.values ?? new Float32Array(structure.set.length).fill(Number.NaN)
-    const range = source.range ?? robustRangeOf(values)
-    const span = range.max > range.min ? range.max - range.min : 1
-    const sizes = new Float32Array(values.length)
-    for (let i = 0; i < values.length; i++) {
-      const v = values[i]
-      sizes[i] = Number.isNaN(v) ? 0.7 : 0.5 + 1.3 * Math.max(0, Math.min(1, (v - range.min) / span))
-    }
-    this.sizeCache = { key, samples, sizes }
-    return sizes
-  }
 
-  /**
-   * The map's contacts from the pinned bead as chords (§25.5): every bead
-   * whose contact with it is at least the threshold of the strongest, the
-   * weight that fraction, the colour the map's own for the value — so the
-   * chords are the pinned bead's row of the map, read in space.
-   */
-  private contactChordsOf(structure: Structure, style: StructureStyle): ReadonlyArray<{ bead: number; weight: number; colour: string }> {
-    const contacts = this.props.contacts
-    if (contacts === undefined || this.pinned < 0) return NO_CONTACT_CHORDS
-    const key = `${this.pinned}:${style.contactThreshold}:${structure.set.length}`
-    if (this.contactCache !== null && this.contactCache.key === key) return this.contactCache.list
-    const from = lociOf(structure, this.pinned)
-    const values = contacts({ contig: from.contig, bp: (from.start + from.end) / 2 }, midpointsOf(structure))
-    const scale = this.props.contactsScale?.() ?? null
-    if (values === null) return NO_CONTACT_CHORDS
-    // A contact's weight is where it sits on the map's own colour scale —
-    // the transformed value between the scale's ends — because that is the
-    // scale a reader is looking at, and because on a Hi-C row read raw the
-    // two neighbours of the pin are the whole picture: everything a few
-    // beads away is under a hundredth of them, and a fraction of the
-    // strongest reaches nothing. Without a scale, the fraction of the
-    // strongest is all there is.
-    const onScale = scale !== null && scale.vmax > scale.vmin
-    let max = 0
-    for (let i = 0; i < values.length; i++) {
-      if (i === this.pinned || !Number.isFinite(values[i])) continue
-      if (values[i] > max) max = values[i]
-    }
-    if (max <= 0) return NO_CONTACT_CHORDS
-    const ink = this.palette().ink
-    const list: Array<{ bead: number; weight: number; colour: string }> = []
-    for (let i = 0; i < values.length; i++) {
-      if (i === this.pinned || !Number.isFinite(values[i])) continue
-      const weight = onScale
-        ? Math.max(0, Math.min(1, (transformValue(values[i], scale.transform) - scale.vmin) / (scale.vmax - scale.vmin)))
-        : values[i] / max
-      if (weight < style.contactThreshold || weight <= 0) continue
-      const colour = onScale ? colormapCss(scale.colormap, weight) : ink
-      list.push({ bead: i, weight, colour })
-    }
-    list.sort((p, q) => q.weight - p.weight)
-    const kept = list.slice(0, MAX_CONTACT_CHORDS)
-    this.contactCache = { key, list: kept }
-    return kept
-  }
 
   /**
    * The genomic ruler (§25.5): a tick at the first bead of every step along
@@ -2210,8 +2167,11 @@ export class StructurePanel implements DeckCell {
       onClose: () => this.collapse(),
     })
     // The letters reach the model now, so the titles that name them say so —
-    // the corner's frame button and, through it, the card's camera row.
+    // the corner's frame button and, through it, the card's camera row. The
+    // settings are repainted too, because the borrowed row is drawn only while
+    // the dialog is up.
     this.paintKeys()
+    this.paintSettings()
     // Sized once the dialog is laid out, not before: the observer answers
     // the box's new size, and the first frame should not be drawn at the
     // cell's.
@@ -2232,6 +2192,7 @@ export class StructurePanel implements DeckCell {
     }
     if (!this.destroyed) this.body.append(this.wrap)
     this.paintKeys()
+    this.paintSettings()
     requestAnimationFrame(() => this.remeasure())
   }
 
@@ -2282,8 +2243,54 @@ export class StructurePanel implements DeckCell {
       return node
     }
     const row = (...nodes: HTMLElement[]): HTMLElement => el('div', { class: 'plot-icon-row' }, ...nodes)
-    const blockField = (label: string, control: HTMLElement, hint?: string): HTMLElement =>
+    /**
+     * A label and its select **on one line**, wherever the line has room.
+     *
+     * They were block fields — label above, control below — on the argument
+     * that the label column leaves a select about seven characters wide and
+     * turns `Yeast_structure` into `Yeast_str`. True in a 200-pixel Aesthetics
+     * column and false in the enlarged dialog's sidebar, which is twice that;
+     * and a column of eleven two-line fields is a sidebar nobody can see the
+     * bottom of. So the row is one line and the *card* decides: a container
+     * query in the stylesheet drops these to two lines below the width where
+     * the value stops being legible, and nowhere above it.
+     */
+    /** A row of buttons, which needs the whole width, so its label sits above. */
+    const buttonField = (label: string, control: HTMLElement, hint?: string): HTMLElement =>
       el('label', { class: 'field ann-field field-block', title: hint ?? '' }, el('span', { class: 'field-label', text: label }), control)
+    const pickField = (label: string, control: HTMLElement, hint?: string): HTMLElement =>
+      el('label', { class: 'field ann-field structure-field-pick', title: hint ?? '' }, el('span', { class: 'field-label', text: label }), control)
+    /**
+     * A label, the control that arms a thing, and the number that shapes it,
+     * on one row.
+     *
+     * A toggle with nothing beside it leaves two thirds of its row empty and
+     * puts its own slider on the next one, under a second label that repeats
+     * what the toggle just said — *fog* then *fog depth*, *pin contacts* then
+     * *threshold*. One row says both: what is on, and how much.
+     */
+    const armedField = (
+      label: string,
+      arm: HTMLElement,
+      value: number,
+      bounds: { min: number; max: number; step: number },
+      onChange: (v: number) => void,
+      options: { hint?: string; disabled?: string } = {},
+    ): HTMLElement => {
+      const note = el('span', { class: 'clip-note structure-value', text: trimNumber(value, 2) })
+      const input = range(value, bounds.min, bounds.max, bounds.step, (next) => {
+        note.textContent = trimNumber(next, 2)
+        onChange(next)
+      })
+      input.disabled = options.disabled !== undefined
+      return el(
+        'div',
+        { class: 'field ann-field structure-field-armed', title: options.disabled ?? options.hint ?? '' },
+        el('span', { class: 'field-label', text: label }),
+        arm,
+        row(input, note),
+      )
+    }
     /**
      * A bounded fraction, with the number it is at printed beside it.
      *
@@ -2293,9 +2300,10 @@ export class StructurePanel implements DeckCell {
      * `textScaleField` already draws: the value after the control, dim, and
      * written as the slider moves rather than on release.
      *
-     * Each is on a labelled row of its own, because a slider that shared a row
-     * with the toggle above it wrapped to the next line and read as a setting
-     * with no name at all.
+     * On a labelled row of its own where the slider is the whole setting.
+     * Where it only shapes something a toggle or a select arms — the fog, the
+     * ghost, the contact chords — the two share one row ({@link armedField}),
+     * because two rows there is one setting under two labels.
      */
     const sliderField = (
       label: string,
@@ -2325,7 +2333,7 @@ export class StructurePanel implements DeckCell {
     const models = (store?.entries ?? []).filter((held) => held.kind === 'structure')
     if (models.length > 1) {
       rows.push(
-        blockField(
+        pickField(
           'structure',
           select(models.map((held) => ({ value: held.id, text: held.label })), this.entry?.id ?? '', (value) => this.showModel(value)),
           'Which structure row this cell draws; the Structures card says the same from its side.',
@@ -2344,7 +2352,7 @@ export class StructurePanel implements DeckCell {
         choices.push({ value: style.compare, text: `${style.compare} (no longer in the list)` })
       }
       rows.push(
-        blockField(
+        pickField(
           'compare with',
           select(choices, style.compare, (value) => this.restyle({ compare: value })),
           'Another structure row, aligned onto this one over the beads the two share and drawn in grey beside it; colour by displacement shows where they differ.',
@@ -2366,6 +2374,32 @@ export class StructurePanel implements DeckCell {
           toggleIcon('circle-dot', this.keyed('Beads at each place', STRUCTURE_KEYS.beads), style.beads, (on) => this.restyle({ beads: on })),
           toggleIcon('minus', this.keyed('Sticks between neighbours', STRUCTURE_KEYS.sticks), style.sticks, (on) => this.restyle({ sticks: on })),
           toggleIcon('spline', this.keyed('A tube through each run', STRUCTURE_KEYS.tube), style.tube, (on) => this.restyle({ tube: on })),
+        ),
+      ),
+    )
+
+    // Overlays: the names, the ruler, the centre. The word the Map and Tracks
+    // cards use for the same row of marks over a picture.
+    rows.push(
+      settingsField(
+        'overlays',
+        row(
+          toggleIcon(
+            'tag',
+            this.keyed(style.labels ? 'Hide the sequence names' : 'Show the sequence names', STRUCTURE_KEYS.labels),
+            style.labels,
+            (on) => this.restyle({ labels: on }),
+          ),
+          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
+          toggleIcon(
+            'unfold-horizontal',
+            style.telomeres
+              ? 'Hide the telomeres'
+              : 'Mark the telomeres: a yellow bead at both ends of every chain',
+            style.telomeres,
+            (on) => this.restyle({ telomeres: on }),
+          ),
+          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
         ),
       ),
     )
@@ -2401,13 +2435,13 @@ export class StructurePanel implements DeckCell {
     if (!colourings.some((option) => option.value === style.colourBy)) {
       colourings.push({ value: style.colourBy, text: `${style.colourBy} (no longer in the list)` })
     }
-    rows.push(blockField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
+    rows.push(pickField('colour by', select(colourings, style.colourBy, (value) => this.restyle({ colourBy: value }))))
     // The ramp, but only where the colouring is one. Sequence and haplotype are
     // levels and have no scale to change, and a control that does nothing under
     // the default colouring is one a reader tries and then distrusts.
     if (usesRamp(style.colourBy)) {
       rows.push(
-        blockField(
+        pickField(
           'colour scale',
           select(
             [
@@ -2421,17 +2455,6 @@ export class StructurePanel implements DeckCell {
         ),
       )
     }
-    const sizeChoices = [{ value: '', text: 'the same everywhere' }, ...tracks.map((held) => ({ value: held.id, text: held.label }))]
-    if (style.sizeBy !== '' && !sizeChoices.some((choice) => choice.value === style.sizeBy)) {
-      sizeChoices.push({ value: style.sizeBy, text: `${style.sizeBy} (no longer in the list)` })
-    }
-    rows.push(
-      blockField(
-        'size by',
-        select(sizeChoices, style.sizeBy, (value) => this.restyle({ sizeBy: value })),
-        'A track whose value at each bead sets the bead’s size — a second channel beside the colour.',
-      ),
-    )
     rows.push(sliderField('bead radius', style.beadRadius, { min: 0.05, max: 1.5, step: 0.05 }, (v) => this.restyle({ beadRadius: v })))
     rows.push(sliderField('tube radius', style.tubeRadius, { min: 0.05, max: 1, step: 0.05 }, (v) => this.restyle({ tubeRadius: v })))
 
@@ -2443,47 +2466,25 @@ export class StructurePanel implements DeckCell {
       rows.push(settingsField('haplotype', select(haplotypes, style.haplotype, (value) => this.restyle({ haplotype: value }))))
     }
 
-    // Overlays: the names, the ruler, the centre. The word the Map and Tracks
-    // cards use for the same row of marks over a picture.
-    rows.push(
-      settingsField(
-        'overlays',
-        row(
-          toggleIcon(
-            'tag',
-            this.keyed(style.labels ? 'Hide the sequence names' : 'Show the sequence names', STRUCTURE_KEYS.labels),
-            style.labels,
-            (on) => this.restyle({ labels: on }),
-          ),
-          toggleIcon('ruler', style.ruler ? 'Hide the genomic ruler' : 'Show the genomic ruler: a tick every step along each chain', style.ruler, (on) => this.restyle({ ruler: on })),
-          toggleIcon(
-            'unfold-horizontal',
-            style.telomeres
-              ? 'Hide the telomeres'
-              : 'Mark the telomeres: a yellow bead on each end of every linear sequence whose true length this session knows',
-            style.telomeres,
-            (on) => this.restyle({ telomeres: on }),
-          ),
-          toggleIcon('locate-fixed', style.axes ? 'Hide the centre and axes' : 'Show the centre and axes', style.axes, (on) => this.restyle({ axes: on })),
-        ),
-      ),
-    )
 
     // What is outside the window, and *then* how much of it is left: the
     // choice before the modifier, because under `hide` there is nothing for an
     // opacity to be the opacity of — which is why the slider is greyed there,
     // with the reason in its title, rather than dragged to no effect.
     rows.push(
-      settingsField(
+      armedField(
         'outside window',
         select(STRUCTURE_OTHERS.map((o) => ({ value: o, text: o })), style.others, (value) => this.restyle({ others: value as StructureStyle['others'] })),
-        'What becomes of the beads outside the window the maps are looking at.',
+        style.opacity,
+        { min: 0, max: 1, step: 0.05 },
+        (v) => this.restyle({ opacity: v }),
+        {
+          hint: 'What becomes of the beads outside the window the maps are looking at, and how faint the ghosted ones are.',
+          ...(style.others === 'hide'
+            ? { disabled: 'Nothing is ghosted while what is outside the window is hidden.' }
+            : {}),
+        },
       ),
-    )
-    rows.push(
-      sliderField('ghost opacity', style.opacity, { min: 0, max: 1, step: 0.05 }, (v) => this.restyle({ opacity: v }), {
-        disabled: style.others === 'hide' ? 'Nothing is ghosted while what is outside the window is hidden.' : undefined,
-      }),
     )
 
     // Chords: a loop set or the reader's marks, and the map's contacts from the
@@ -2512,35 +2513,43 @@ export class StructurePanel implements DeckCell {
         select(loopChoices, style.loops, (value) => this.restyle({ loops: value })),
       ),
     )
-    if (this.props.contacts !== undefined) {
-      rows.push(
-        settingsField(
-          'pin contacts',
-          toggleIcon('waypoints', style.contactChords ? 'Hide the contact chords' : 'Show the contact chords', style.contactChords, (on) => this.restyle({ contactChords: on })),
-          'The map’s contacts from the pinned bead, as chords to every bead above the threshold — as thick as the contact, in the map’s colour for it. Pin a bead with a click.',
-        ),
-      )
-      rows.push(
-        sliderField('threshold', style.contactThreshold, { min: 0, max: 1, step: 0.02 }, (v) => this.restyle({ contactThreshold: v }), {
-          hint: 'How strong a contact has to be, as a fraction of the map’s scale, to be drawn as a chord.',
-        }),
-      )
-    }
 
     // Depth: the fog and the slab.
     rows.push(
-      settingsField(
+      armedField(
         'fog',
         toggleIcon('cloud-fog', style.fogOn ? 'Turn the fog off' : 'Turn the fog on', style.fogOn, (on) => this.restyle({ fogOn: on })),
-        'The fog for depth: Space + scroll on the model moves it too.',
+        style.fog,
+        { min: 0, max: 1, step: 0.05 },
+        (v) => this.restyle({ fog: v }),
+        { hint: 'The fog for depth, and how far back it starts: Space + scroll on the model moves it too.' },
       ),
     )
-    rows.push(sliderField('fog depth', style.fog, { min: 0, max: 1, step: 0.05 }, (v) => this.restyle({ fog: v })))
     rows.push(
       sliderField('depth slab', style.slab, { min: 0.02, max: 1, step: 0.02 }, (v) => this.restyle({ slab: v }), {
         hint: 'Keep only what lies within this fraction of the model’s reach of the centre of rotation, front and back. All the way right is everything.',
       }),
     )
+
+    // Borrowed from the Map card for as long as the dialog is up (§26.3): the
+    // three shared preferences this cell reads and the column behind the
+    // dialog owns. Last, under the model's own settings, because they are
+    // about every picture rather than about this one.
+    if (this.expanded !== null) {
+      rows.push(
+        settingsField(
+          'shared',
+          row(
+            ...BORROWED_OPTIONS.map((key) => {
+              const { label, hint } = PLOT_OPTION_LABELS[key]
+              const on = getPlotOptions()[key]
+              return toggleIcon(PLOT_OPTION_ICONS[key], `${label} — ${hint}`, on, () => setPlotOption(key, !on))
+            }),
+          ),
+          'Settings the Map card owns and this picture reads, offered here because that card is behind the dialog.',
+        ),
+      )
+    }
 
     // Measurements: the list, each removable.
     if (this.measures.length > 0) {
@@ -2570,7 +2579,7 @@ export class StructurePanel implements DeckCell {
     // reader had no way of knowing the model could be put on its side without
     // hovering the word `side` and finding a tooltip.
     rows.push(
-      blockField(
+      buttonField(
         'camera',
         row(
           button('front', () => this.lookFrom(0, 0), { class: 'btn', title: 'Look from the front' }),
@@ -2586,7 +2595,7 @@ export class StructurePanel implements DeckCell {
       ),
     )
     rows.push(
-      blockField(
+      buttonField(
         'frame',
         row(
           button('the window', () => this.frameLit(), {

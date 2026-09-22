@@ -284,7 +284,7 @@ export const INSULATION_TASK: AnalysisTask = {
   id: 'insulation',
   title: 'Diamond insulation',
   blurb: 'How much contact crosses each bin, and where the boundaries are.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

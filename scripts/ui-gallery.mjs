@@ -284,7 +284,9 @@ try {
   await shot('17b-marked-bead')
   await page.click('.structure-select')
 
-  // Contacts from the pin: pin a bead, turn the chords on.
+  // Contacts from the pin: pin a bead, then colour the model by the map's row
+  // through it. The chords this used to press are gone (§25.5) — the colouring
+  // says the same thing in the representation the model is already in.
   if (bb) {
     let pinned = false
     for (let j = 2; j < 62 && !pinned; j += 2) for (let i = 2; i < 62 && !pinned; i += 2) {
@@ -294,10 +296,16 @@ try {
     }
     await page.mouse.move(10, 10)
   }
-  await page.click('.structure-settings .structure-toggle[title*="contact chords"]')
-  await sleep(2500)
-  await shot('18-contact-chords')
-  await page.click('.structure-settings .structure-toggle[title*="contact chords"]')
+  const byContacts = row('colour by').locator('select')
+  const contactOption = (await byContacts.locator('option').allTextContents()).find((v) =>
+    v.startsWith('contacts with the pinned bead'),
+  )
+  if (contactOption) {
+    await byContacts.selectOption({ label: contactOption })
+    await sleep(2500)
+  }
+  await shot('18-colour-by-contacts')
+  await byContacts.selectOption({ label: 'sequence' })
 
   // Compare: the reconstruction against the loaded model, coloured by displacement.
   const compare = row('compare with').locator('select')

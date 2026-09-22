@@ -720,7 +720,7 @@ export const APA_TASK: AnalysisTask = {
   id: 'apa',
   title: 'Aggregate peak analysis',
   blurb: 'Pile up the matrix at a set of loops or features, against a control.',
-  group: 'tracks',
+  group: '2d',
   venue: 'analysis',
   version: 2,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as

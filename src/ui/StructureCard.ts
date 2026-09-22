@@ -44,15 +44,17 @@ export interface StructureCardOptions {
    */
   onShow?(entry: AnnotationEntry): void
   /**
-   * Take the structure cell out of the deck: the eye's other half.
+   * Take **this row's** cell out of the deck: the eye's other half.
    *
    * A structure row has no lane and no track to hide, so `visible` meant
    * nothing on one — the eye toggled a flag no picture read. What a reader
-   * means by the eye on a model is *stop showing it*, which is the cell.
+   * means by the eye on a model is *stop showing it*, which is the cell. Per
+   * row, because each model has a cell of its own (§25.3): closing one leaves
+   * the others where they are.
    */
-  onHide?(): void
-  /** Which model the cell is showing, if any, so its row can say so. */
-  shown?(): string | null
+  onHide?(entry: AnnotationEntry): void
+  /** Whether a cell is drawing this row, so its eye can say so. */
+  shown?(id: string): boolean
   /** A detached computed row's way back: the task, with its recipe, in the drawer. */
   onRecompute?(entry: AnnotationEntry): void
 }
@@ -176,7 +178,7 @@ export class StructureCard {
   }
 
   private row(entry: AnnotationEntry): HTMLElement {
-    const shown = this.options.shown?.() === entry.id
+    const shown = this.options.shown?.(entry.id) === true
     const row = el('div', {
       class: `ann-row ann-${entry.status}${shown ? ' is-shown' : ''}`,
       attrs: { 'data-id': entry.id },
@@ -306,13 +308,13 @@ export class StructureCard {
     // out of there. On the way in it opens the cell; on the way out it closes
     // it, and a deck left holding nothing goes with it. It is the row's only
     // show/hide — see {@link actions} for the button that used to duplicate it.
-    const shown = this.options.shown?.() === entry.id
+    const shown = this.options.shown?.(entry.id) === true
     const ready = entry.status === 'ready' && entry.payload?.kind === 'features'
     const node = iconButton(
       shown ? 'eye' : 'eye-off',
-      shown ? 'Hide the model: take the structure cell out of the deck' : 'Show the model in the deck, opening the cell if there is none',
+      shown ? 'Hide the model: take its cell out of the deck' : 'Show the model in the deck, in a cell of its own',
       () => {
-        if (shown) this.options.onHide?.()
+        if (shown) this.options.onHide?.(entry)
         else this.options.onShow?.(entry)
       },
       { class: 'btn btn-icon ann-eye', size: 14 },

@@ -170,7 +170,18 @@ function sniffStructure(text: string, fileName: string, layout: StructureLayout)
     sample.push(row)
   }
   if (sample.length === 0) return false
-  if (!fractional && !named) return false
+  // **A named file is not asked either question.** Both tests below exist to
+  // tell a structure from a BED that happens to have numbers in the right
+  // columns, and a file called `.g3d`, `.3dg` or `.bed3d` has already been told
+  // apart — by the reader who named it. The fractional test was spared for
+  // that reason from the start; `looksCoherent` was not, and a model whose
+  // beads are a scatter rather than a chain — a randomised control, a draw
+  // from a null, a fragment set that has not been folded — was read back as a
+  // lane of boxes whose "end" is a coordinate in space. `guessOf` had already
+  // put such a file on the Structures card by the same name, so the row and its
+  // payload disagreed about what had been loaded.
+  if (named) return true
+  if (!fractional) return false
   return looksCoherent(sample)
 }
 

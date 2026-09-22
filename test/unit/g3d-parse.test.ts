@@ -143,6 +143,32 @@ describe('what a g3d is not', () => {
     expect(sniffG3d(lattice, 'lattice.g3d')).toBe(true)
   })
 
+  it('is named .bed3d and read as one even when its beads are a scatter', () => {
+    // The other half of the rule above, and the one that was missing: a name
+    // spared a file the *shape* test but not the *chain* test, so a model whose
+    // beads do not walk — a randomised control, a draw from a null, a fragment
+    // set nobody has folded — fell through to BED and opened as a lane of boxes
+    // whose end is a coordinate in space. `guessOf` had already sent it to the
+    // Structures card by the same name, so the row and its payload disagreed.
+    const scatter = rows(
+      Array.from({ length: 24 }, (_, at) => {
+        const x = Math.sin(at * 12.9898) * 43758.5453
+        const y = Math.sin(at * 78.233) * 12345.6789
+        const z = Math.sin(at * 37.719) * 9876.54321
+        const unit = (v: number): string => (2 * (v - Math.floor(v)) - 1).toExponential(18)
+        return `chrI\t${at * 8000}\t${(at + 1) * 8000}\t${unit(x)}\t${unit(y)}\t${unit(z)}`
+      }),
+    )
+    // Unnamed it is still refused: nothing but the name tells it from a BED
+    // whose every column happens to be a number.
+    expect(sniffBed3d(scatter)).toBe(false)
+    expect(sniffBed3d(scatter, 'myco.bed3d')).toBe(true)
+    expect(sniffBed3d(scatter, 'myco.bed3d.gz')).toBe(true)
+    // …and it parses as the model it says it is, one bead per row.
+    const set = parseBed3d(scatter, 'myco.bed3d')
+    expect(set.length).toBe(24)
+  })
+
   it('cannot capture the sniffers asked around it, nor they it', () => {
     expect(sniffVcf(EXAMPLE)).toBe(false)
     expect(sniffBarChart(EXAMPLE)).toBe(false)

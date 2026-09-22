@@ -4345,8 +4345,18 @@ row opened by a button saying *add* read as kinds of thing the URL box takes rat
 cells to open.
 
 In the link a structure cell is `3d` and a tracks cell `tracks`, in the `maps=` list where the
-maps and the `~` of a vacancy are. A deck holds one structure cell — a second `3d` is dropped on
-the way in — and as many tracks cells as the reader opens, named apart in the location control.
+maps and the `~` of a vacancy are. A deck holds **a structure cell per model** — a second `3d` opens
+a second cell — and as many tracks cells as the reader opens, named apart in the location control.
+
+**A `~` is resolved against the cells the deck is already holding, before the record.** The hash can
+say no more than `~` about a local map (§16.6), and what it is resolved against was the *stored*
+record, re-opened through a filesystem grant. A file that arrived by **drag and drop** has no grant:
+the browser hands over a `File` rather than a handle, and nothing can ask for one afterwards. So
+dropping four coolers opened four live panels, published, came back round, resolved none of them,
+and replaced all four with vacancies reading *this cell held that file and it could not be
+re-opened* — about files the deck still had in hand. A live cell is the best possible answer for its
+own index and is asked first; the record answers for the rest; and both only ever over a `~`, so a
+list naming a remote map or a structure cell at that index still wins.
 
 ## 17. The turn: 45°, distance up the side
 
@@ -5214,10 +5224,27 @@ exact stamp is that line's tooltip, so it is one hover from the words and identi
 
 ### 18.8 The catalogue
 
-Twenty-two tasks, in three groups. The build order is in `TASKS_PLAN.md`; what follows is what each
-one must be.
+Twenty-five tasks, in **four cards — 2D, 3D, 1D and Metagenome**. The build order is in
+`TASKS_PLAN.md`; what follows is what each one must be.
 
-**On the map.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
+**Cut by the dimension the question is about**, not by the file it reads: a task is **2D** when its
+subject is the contact matrix, **3D** when its subject is a model of beads in space, **1D** when its
+subject is a track or an interval set along the sequence. That puts *aggregate peak analysis* with
+the matrix it piles up rather than with the loop set that says where, and *metaplot* with the track
+it averages rather than with the features it averages over — each beside the thing a reader goes
+looking under. **Metagenome** is the one group that is not a dimension and stays one because its
+four tasks are not about a dimension: a MAG is a *bin of an assembly*, and *split-MAG detection*
+belongs beside *MAG purity* rather than beside *compartments*.
+
+Each is a **card** of the Analysis panel, with the frame, mark and fold every other card in every
+other column has, in the order their first task appears in the registry (§18.8's catalogue order is
+an argued reading order). A group whose every task is *absent* for the file in hand has **no card at
+all**, which is how the Metagenome card stays away from a file with no genomes. Within a card the
+task that **makes** the thing the others read comes first: *model from the map* opens the 3D card,
+because a reader with no structure loaded has exactly one thing to do in it; *find a motif* opens
+the 1D card for the same reason.
+
+**2D.** *Contact probability P(s)* per contig, genome or file, with the log-log derivative, and
 producing the **expected** curve three later tasks consume. Two quantities are called P(s) and the task
 offers both, because they answer different questions and a figure that mixes them reads a difference of
 convention as biology: the **probability density**, which is the default — contacts at a separation over
@@ -7743,10 +7770,16 @@ its finest resolution and names the others under the row. A version-1 container 
 name, with the way out (`g3dtools` rewrites it).
 
 All four are sniffed by content before the BED family sees them — a five-column g3d read as a BED
-would be a lane of boxes whose *end* is a coordinate in space — and by name as a tiebreak only:
-`.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP. A file of whole-number coordinates
-has to be *named* to be read as a structure. The tests pin what a BED5, a BED6, a bedGraph and a
-narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
+would be a lane of boxes whose *end* is a coordinate in space — and **a file that names its format
+is not sniffed at all**: `.g3d`, `.3dg`, `.bed3d`, gzipped or not, local or over HTTP, is read as
+the structure it says it is. An unnamed file is asked two questions, and each exists to tell a
+structure from a BED whose columns happen to be numbers: are the coordinates **fractional**, and do
+the beads walk like a **chain** rather than scatter. A named file has been told apart already, by
+the reader who named it — so a model whose beads *are* a scatter (a randomised control, a draw from
+a null, a fragment set nobody has folded) is read as a structure rather than falling through to BED.
+It used to be spared only the first question, which put such a file on the Structures card by name
+while parsing its payload as a track: the row and what it held disagreed about what had been
+loaded. The tests pin what a BED5, a BED6, a bedGraph and a narrowPeak are not. A structure row is **never a lane**: it is unplaced on import, offered no
 location control, and skipped by every stack; its picture is the cell.
 
 **The Structures card.** Every model the session holds — dropped, named by URL, or computed
@@ -7754,9 +7787,10 @@ location control, and skipped by every stack; its picture is the cell.
 Synthetic card leave `structure` rows out. Each row carries the head every row has (colour, name,
 eye, close), what it holds (`2,412 beads · 5 kb · 16 sequences`), the task and the framing for a
 computed one, and **bed3d**, the model out (§25.7), after the word *export*. The **eye** in the row's
-head is what shows and hides: it puts the model in the structure cell, opening the cell where the deck
-has none, and takes the cell away again, with the row's accent bar saying which row the cell is
-drawing. There is no second control for that and no button labelled with what is already true
+head is what shows and hides: it puts the model in **a cell of its own**, opening one beside whatever
+is already there, and takes that cell away again. The lit eye is the whole of the state — the row
+carried an accent bar down its left gutter as well, which was a second way of saying what the eye
+already says. There is no second control for that and no button labelled with what is already true
 (§26.3, §26.7) — a *shown in the deck* button beside the eye was two controls for one act, and a
 reader who pressed the lit one expecting it to un-show got nothing. The card's own load zone names
 the three formats and, like every other zone that asks for a file, says it takes a drop or a click.
@@ -7765,10 +7799,15 @@ recipe in the drawer, as the Synthetic card does (§18.5).
 
 ### 25.3 The deck of cells
 
-**The structure cell** draws **one** structure row — the one the reader chose from the Structures
-card or from the cell's own **structure** picker, remembered per file, or the first of the list where
-none was chosen; a model that has just arrived, dropped, computed, or **computed again onto the
-same row**, is the one it draws; and **the row the cell is drawing, removed from the card, empties
+**A structure cell** draws **one** structure row — the one the reader chose from the Structures
+card or from the cell's own **structure** picker, remembered per file, or the first of the list no
+*sibling cell* is already drawing; and **the deck holds one cell per model**. A model that arrives —
+dropped, computed, or **computed again onto the same row** — opens a cell beside whatever was there
+rather than taking it over. It used to be one cell per deck, which made two models something a
+reader could only compare by swapping back and forth, and made a reconstruction landing destroy the
+model it was to be judged against — the commonest way to lose a picture in this application. The
+cell's own picker still swaps a model **in place**, which is the other question: the eye is a model
+asking for a cell, the picker is a cell asking for a model. And **the row the cell is drawing, removed from the card, empties
 the cell**, which says so, rather than quietly showing the next model along — however the cell came
 to be drawing it, whether the reader picked it, the session restored it, or it was simply the only
 one there was (a remembered choice whose row is already gone when a session opens falls back to the
@@ -7796,14 +7835,26 @@ punching a hole in the picture; the 2D painter always had it right, so the same 
 in an exported PDF disagreed about what ghosting meant. *Outside the window* has three answers: *ghost* (the default),
 *hide*, and *show* — the window ghosts nothing, and only the key's own ghosting is left, which is
 how a whole genome is looked at while the maps look at one window of it. The map's *legend* switch (§7) hides the key here too, so one switch
-says what a figure carries. On/off settings are icon toggles, **lit when on** (§26.3): drawn as, chords, pin contacts, fog,
+says what a figure carries. On/off settings are icon toggles, **lit when on** (§26.3): drawn as, chords, fog,
 overlays. Every slider carries a **readout of the number it is at** beside it — a bead radius with
 its value nowhere on screen is a figure nobody can reproduce — and a slider whose setting does
 nothing is **greyed with its reason in its tooltip**: the ghost opacity while *outside the window*
-is *hide*. The card's rows are in one order, choices before the things that modify them: structure,
-compare with (and its RMSD note), drawn as, colour by, size by, bead radius, tube radius, haplotype,
-overlays, outside the window, ghost opacity, loops as chords, pin contacts, threshold, fog, fog
-depth, depth slab, measurements, camera, frame, export.
+is *hide*.
+
+**A setting is one row.** A select sits on one line with its label wherever the card is wide enough
+to read the value, and drops the label above it below about 15 rem — asked of the *card* through a
+container query rather than of the window, because this card is drawn both in a 200-pixel Aesthetics
+column and in the enlarged dialog's sidebar, which is twice that and resizable. And a slider that
+only **shapes** something a toggle or a select **arms** shares that control's row: *fog* carries its
+depth and *outside the window* its opacity, where each was two rows and the second carried a label
+that repeated the first. A slider that is the whole setting — bead radius, tube radius, depth slab —
+keeps a row of its own.
+
+The card's rows are in one order, choices before the things that modify them: structure,
+compare with (and its RMSD note), drawn as, overlays, colour by, colour scale, bead radius, tube
+radius, haplotype, outside the window (with its ghost opacity), loops as chords, fog (with its
+depth), depth slab, measurements, camera, frame, export. *Overlays* follows *drawn as* because the
+two are one question asked twice: what the model is drawn as, and what is drawn over it.
 
 **The settings are a card of the Aesthetics panel** — *3D structure*, in the view's own column of
 cards right after its *Map* card and before *Tracks* and *Groups*, built from the same field
@@ -7813,9 +7864,17 @@ view. The cell keeps **five corner buttons** — mark a bead, mark a loop, measu
 window, enlarge — the frame wearing the same mark the Map card's refit does and the enlarge its own,
 since two corner-bracket glyphs side by side were told apart only by hovering them; the dialog
 borrows the card into its sidebar — the card alone, its *camera* and *frame* rows being the dialog's
-camera controls — and gives it back where it was. The card also carries **size by**
-(a track whose value at each bead sets its size, half to nearly twice the radius over the track's
-robust range — a second channel beside the colour), a **depth slab** (two clipping planes either side
+camera controls — and gives it back where it was.
+
+**And it borrows three settings that are not the row's own.** `legend`, `crosshair` and `tooltip`
+are preferences about every picture in the app (§26.3), kept in one store and offered on the *Map*
+card — which is in the column *behind* the dialog while the model is enlarged, so the one switch for
+the key the reader is looking at was the one they could not reach. They appear as a **shared** row at
+the foot of the sidebar for as long as the dialog is up, and nowhere else: §26.3 wants a control
+offered once per column, and the Map card offers them there. Exactly the three this picture reads; a
+fourth would be a control that does nothing to the thing it was pressed beside.
+
+The card also carries a **depth slab** (two clipping planes either side
 of the centre of rotation along the line of sight, at a fraction of the model's reach, the way into a
 dense globule, and **the depth the fog is measured against** — see below; measured in the scene's
 own units, against the model's reach, rather than in the file's), a **genomic ruler** (a tick of ink at the first bead of every step along each chain —
@@ -7969,22 +8028,30 @@ centre marks **overlays** — the word the Map and Tracks cards use for the same
 **Telomeres.** A toggle under *overlays* puts a **yellow bead on every telomere** — the palette's own
 yellow, drawn through the same channel a reader's mark is and therefore at the same larger radius,
 in the same place under every drawing and every colouring, and in the vector export without a second
-road. What counts as one is careful, because the end of a *chain* is not the end of a *chromosome*:
-the **start** is a first bead that begins at base zero, which the model says by itself; the **end**
-takes the sequence's true length to measure against, so it is claimed only where this session knows
-one that is the file's own rather than a lower bound read off the last feature — a model of
-`IV:1,000,000–1,400,000` has two chain ends and no telomeres, and neither has a sequence the reader
-ticked **circular** in the Chromosomes table (§8.15), which has no ends at all. Names are matched as
-everywhere else, so a g3d written `chr4` finds a cooler's `IV`. Where the far end cannot be
-established it is left unmarked rather than guessed at.
+road. What counts as one is **both ends of every chain**, with nothing asked of the session: a chain of
+one bead gets one mark rather than two, and beads the file left unplaced are skipped, so a chain
+that opens with a gap is marked at the first bead that is actually somewhere.
 
-**Contacts from the pin.** With a bead pinned, the map's row through it — the same row *colour by
-contacts* reads — is drawn as **chords** from the pinned bead to every bead whose contact sits at
-least the threshold slider's fraction of the way up the map's own colour scale — the transformed
-value between the scale's ends, half by default, because a Hi-C row read raw is its two neighbours
-and nothing else (the strongest four hundred where more pass) — each as thick as its place on that
-scale and coloured on it: the virtual 4C of the pin, read in space. A toggle beside the slider turns
-them off without losing the threshold.
+An earlier rule asked, and the argument for it was sound — the end of a *chain* is not the end of a
+*chromosome*, so the start was claimed only from a first bead at base zero, the far end only against
+a length the *file itself* declared, and neither for a sequence ticked **circular** (§8.15). It was
+also useless in practice, and the reason is worth keeping: a model's own lengths are a lower bound,
+a lower bound cannot establish an end, and a whole yeast genome came out with five marks where a
+reader was looking for thirty-two. The mark is a **chain end** and claims no more than that.
+
+**Contacts from the pin.** With a bead pinned, *colour by contacts with the pinned bead* puts the
+map's row through it onto the beads: each value through the map's own transform, clipped to its
+`vmin`–`vmax`, in its colormap — the virtual 4C of the pin, read in space and agreeing with the
+picture beside it cell for cell. **A pair the map never counted is the bottom of that scale**, not
+`log10(0) → 0`: that clamp is numpy's and it is right on a map, whose scale starts at zero, but the
+scale here is the map's *transformed* range and a balanced map's runs from about −3.6 to about 0 —
+so the clamp drew every uncounted pair at the dark end, and a 4C in space came out with its darkest
+beads exactly where there was no contact at all.
+
+The same row was also drawn as **chords** from the pinned bead, under a *pin contacts* toggle and a
+threshold. That is gone: the colouring says the same thing in the representation the model is
+already in, and a cage of coloured cylinders over a globule was a second answer to a question the
+first had answered.
 
 **Compare with.** Another structure row — the loaded model against the reconstruction, or two
 solvers' models of one map — is **superposed** on this one: the beads the two share are matched by

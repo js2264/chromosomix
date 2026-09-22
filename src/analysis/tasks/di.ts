@@ -273,7 +273,7 @@ export const DI_TASK: AnalysisTask = {
   id: 'di',
   title: 'Directionality index',
   blurb: 'Which way each bin looks, and the domains the sign flips call.',
-  group: 'map',
+  group: '2d',
   venue: 'analysis',
   version: 1,
   availability: (context) => (context.hasMap ? READY : waitingFor(NEEDS_MAP)),

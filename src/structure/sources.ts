@@ -174,7 +174,13 @@ export function contactsSource(
     for (let i = 0; i < Math.min(n, contacts.length); i++) {
       const raw = contacts[i]
       if (!Number.isFinite(raw)) continue
-      values[i] = transformValue(raw, scale.transform)
+      // **A zero is the bottom of the scale, not `log10(0) → 0`.** That clamp
+      // is numpy's and it is right on a map, whose scale starts at zero; here
+      // the scale is the map's *transformed* range, and on a balanced map that
+      // runs from about −3.6 to about 0 — so the clamp put every pair the map
+      // never counted at the top of the ramp, and a 4C drawn in space came out
+      // with its darkest beads exactly where there was no contact at all.
+      values[i] = raw > 0 ? transformValue(raw, scale.transform) : scale.vmin
     }
   }
   const label =
