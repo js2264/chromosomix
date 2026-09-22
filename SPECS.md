@@ -5516,7 +5516,11 @@ sequences* on **one shape, the tick boxes** (§18.2) — where a dropdown offeri
 one of them could not say *these three*, and where the seeding it used to get from the map's framing
 silently narrowed three tasks to whichever chromosome happened to be on screen. Five tasks moved onto
 it — P(s), the scalogram, insulation, the directionality index and the HiC score — and each reads
-every ticked sequence on its own, which is one lane or one curve apiece.
+every ticked sequence on its own, which is one lane or one curve apiece. The **estimate** refuses a
+run with nothing ticked, and refuses one whose ticked sequences are all too short for the window
+rather than reading them and reporting a column of gaps; **unanswered** is every sequence, which is
+what a job that never met a form means — a stored session, or a `metacooler-run` line with no
+`--sequences`.
 
 **Over tracks and feature sets.** *Metaplot*, in both **reference-point** (a point ± a flank) and
 **scaled-region** (flank, body resampled to a fixed width, flank) modes, strand-aware, over any number

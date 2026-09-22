@@ -53,12 +53,17 @@ export type ParamValue = number | string | boolean | readonly string[] | null
 export type Params = Readonly<Record<string, ParamValue>>
 
 /**
- * A length the user types, and the unit they typed it in.
+ * The word beside a number box, which is the whole of what says what it is.
  *
- * Offered in base pairs by default, with the resolved bin count shown beneath
- * the box, because bins are a property of the file and base pairs are a property
- * of the question (§18.2). `''` is the unitless case — a count of components, a
- * number of quantiles — and `%` is drawn with its sign.
+ * **A setting about the matrix takes `bins`** — it is a count of the file's own
+ * cells, and asked in base pairs it was divided by the bin size before it meant
+ * anything, differently on every rung of an `.mcool` (§18.2). `bp` is left for
+ * the one quantity bins are not a unit of: a **1D track's** flank, sampling step
+ * or window, which is the same length of genome at every resolution and may be
+ * asked for in a session with no contact map at all.
+ *
+ * `''` is the unitless case — a count of components, a number of quantiles, a
+ * count of diagonals whose label says so — and `%` is drawn with its sign.
  */
 export type ParamUnit = '' | 'bp' | 'bins' | '%' | 'x'
 
@@ -358,8 +363,15 @@ export interface RegionParam extends ParamBase {
  * parameters read `[]` should not be indistinguishable from one that ran over
  * everything.
  *
- * Never answered at all is `null`, which the form resolves to every sequence the
- * file has — so a task with one of these starts genome-wide.
+ * Never answered at all is `null`, and it means **every sequence** — the form
+ * resolves it to every name on the way in, so a task with one of these starts
+ * genome-wide, and a job that never met a form keeps the `null` and is read the
+ * same way. That last half was the half that was missing: the runners took
+ * anything that was not an array as `[]`, so `metacooler-run compartments
+ * file.cool` refused itself for not having ticked a box in a drawer a shell has
+ * not got. `analysis/context.ts`'s `tickedContigs` and `analysis/job.ts`'s
+ * `tickedSequences` are the two readings of this value, one per side of the
+ * worker boundary, and both keep the three answers apart.
  */
 export interface SequencesParam extends ParamBase {
   kind: 'sequences'

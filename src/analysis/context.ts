@@ -194,7 +194,7 @@ function genomesOf(input: ContextInput, contigs: ContextContig[]): ContextGenome
  * The sequences a `kind: 'sequences'` parameter names, as rows of the table.
  *
  * **Never answered is every one of them**, which is the convention
- * {@link SequencesParam} states and the one the runners already read with
+ * `SequencesParam` states and the one the runners already read with
  * `Array.isArray`: the form ticks them all on the way in, so a value that is not
  * an array is a job that never went through a form — a stored session, or a
  * `metacooler-run` line with no `--sequences` — and what those mean is the whole

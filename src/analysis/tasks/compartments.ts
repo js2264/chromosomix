@@ -32,6 +32,7 @@ import type {
   Params,
 } from '../types'
 import { NEEDS_MAP, READY, waitingFor } from '../types'
+import { tickedContigs } from '../context'
 import { BALANCE_PARAM } from './shared'
 
 /**
@@ -66,16 +67,29 @@ function contactsOf(params: Params): 'cis' | 'trans' | 'both' {
   return value === 'trans' || value === 'both' ? value : 'cis'
 }
 
-/** The ticked sequence names. `[]` is a state the reader can reach — see below. */
-function tickedNames(params: Params): string[] {
+/**
+ * The ticked sequence names, or `null` for a run that was never asked.
+ *
+ * `[]` and `null` are two answers and this used to collapse them into one:
+ * anything that was not an array read as *nothing ticked*, which is right for
+ * the form — it ticks every box on the way in, so `[]` there is a reader who
+ * pressed **none** — and wrong for everything that does not go through a form.
+ * `metacooler-run compartments file.cool` with no `--sequences` refused itself,
+ * naming a control the shell has not got, and the README's own example did it.
+ * Unanswered is every sequence (§18.2), which is the genome-wide call this task
+ * exists for.
+ */
+function tickedNames(params: Params): string[] | null {
   const value = params.sequences
-  return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : []
+  if (Array.isArray(value)) {
+    return value.filter((name): name is string => typeof name === 'string')
+  }
+  return typeof value === 'string' && value.trim() !== '' ? [value.trim()] : null
 }
 
 /** The ticked sequences, as rows of the contigs table. */
 function ticked(context: AnalysisContext, params: Params): ContextContig[] {
-  const names = new Set(tickedNames(params))
-  return context.contigs.filter((contig) => names.has(contig.name))
+  return tickedContigs(context, params, 'sequences')
 }
 
 const PARAMS: readonly ParamSpec[] = [
@@ -362,7 +376,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        tickedNames(params).length === 0
+        (tickedNames(params) ?? []).length === 0
           ? 'Tick at least one sequence. All of them is the genome-wide compartment call.'
           : 'None of the ticked sequences is in this file.',
     }

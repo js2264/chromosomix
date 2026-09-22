@@ -314,6 +314,19 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     }
   }
 
+  // **Before the block is offered as free**, because nothing ticked is nothing to
+  // read even when the block is already on screen: a "no reads" price with no
+  // refusal beside it is a Run button that produces an empty figure.
+  if (scope === 'contig' && tickedContigs(context, params, 'sequences').length === 0) {
+    return {
+      class: 'free',
+      requests: 0,
+      bytes: 0,
+      note: 'Nothing to read.',
+      refusal: 'Tick at least one sequence.',
+    }
+  }
+
   // The view's block is only an honest input when it covers the whole of what
   // was asked for, was read at the file's own resolution, and was balanced the
   // way this run wants. A pooled block is coarser than the file and a P(s) taken
@@ -337,15 +350,6 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
 
   if (scope === 'contig') {
     const chosen = tickedContigs(context, params, 'sequences')
-    if (chosen.length === 0) {
-      return {
-        class: 'free',
-        requests: 0,
-        bytes: 0,
-        note: 'Nothing to read.',
-        refusal: 'Tick at least one sequence.',
-      }
-    }
     // **One square each, up to a handful.** A square per sequence is four
     // requests per sequence, which is the cheap shape while the reader has
     // ticked a few of them and is 154 k requests on a metagenome with every box

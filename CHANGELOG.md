@@ -61,6 +61,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   of being dropped. What stays a locus box is what a list of names cannot answer: the 4C anchor, the
   structure tasks' *distance to*, and the reconstruction's own box.
 
+- **An analysis run that was never asked which sequences reads every one of them.** Unanswered and
+  *none ticked* were one value, and on the command line only the first of them exists: `metacooler-run
+  compartments sample.cool` — the README's own example — refused itself with *tick at least one
+  sequence*, naming a control a shell has not got. Unanswered is now the whole file, which is the
+  genome-wide compartment call that task exists for, and an empty list is still a reader who pressed
+  **none** and is still refused.
+
 - **Coordinates a reader sees are 1-based inclusive everywhere, and a locus box accepts what it
   shows (§26.1).** `formatPosition`, `regionLabel`, `windowLabel` and `typedLocusToRegion` join
   `formatLocus` in `genome/assembly.ts` as the only place a coordinate is formatted or read, and the
